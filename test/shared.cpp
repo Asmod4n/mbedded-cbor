@@ -44,6 +44,16 @@ inline handle tag_invoke(cbor::negative_integer_decode_t, ref_host &, std::uint6
     return std::make_shared<node>(node{a});
 }
 
+inline handle tag_invoke(cbor::unsigned_bignum_decode_t, ref_host &, std::string_view m)
+{
+    return std::make_shared<node>(node{std::string(m)});
+}
+
+inline handle tag_invoke(cbor::negative_bignum_decode_t, ref_host &, std::string_view m)
+{
+    return std::make_shared<node>(node{std::string(m)});
+}
+
 inline handle tag_invoke(cbor::byte_string_decode_t, ref_host &, std::string_view b)
 {
     return std::make_shared<node>(node{std::string(b)});

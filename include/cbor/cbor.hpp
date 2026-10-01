@@ -145,6 +145,10 @@ inline constexpr struct unsigned_integer_decode_t : customization_point<unsigned
 } unsigned_integer_decode;
 inline constexpr struct negative_integer_decode_t : customization_point<negative_integer_decode_t> {
 } negative_integer_decode;
+inline constexpr struct unsigned_bignum_decode_t : customization_point<unsigned_bignum_decode_t> {
+} unsigned_bignum_decode;
+inline constexpr struct negative_bignum_decode_t : customization_point<negative_bignum_decode_t> {
+} negative_bignum_decode;
 inline constexpr struct byte_string_decode_t : customization_point<byte_string_decode_t> {
 } byte_string_decode;
 inline constexpr struct text_string_decode_t : customization_point<text_string_decode_t> {
@@ -193,10 +197,52 @@ class internal
 
     static constexpr std::uint8_t simple_value_one_byte_min = 32;
 
-    enum class tag_number : std::uint64_t { shareable = 28, sharedref = 29 };
+    enum class tag_number : std::uint64_t {
+        unsigned_bignum = 2,
+        negative_bignum = 3,
+        shareable = 28,
+        sharedref = 29
+    };
 
     template <class Host>
     using marks = std::vector<std::optional<typename Host::value>>;
+
+    static std::string_view magnitude_without_leading_zeros(std::string_view const magnitude)
+    {
+        std::size_t const first = magnitude.find_first_not_of('\0');
+        return first == std::string_view::npos ? std::string_view{} : magnitude.substr(first);
+    }
+
+    static std::uint64_t magnitude_value(std::string_view const magnitude)
+    {
+        std::uint64_t n = 0;
+        for (char const c : magnitude)
+            n = n << 8 | static_cast<std::uint8_t>(c);
+        return n;
+    }
+
+    static std::string magnitude_plus_one(std::string_view const magnitude)
+    {
+        std::string sum(1, '\0');
+        sum.append(magnitude);
+        for (auto digit = sum.rbegin(); digit != sum.rend(); ++digit) {
+            *digit = static_cast<char>(static_cast<std::uint8_t>(*digit) + 1);
+            if (*digit != '\0')
+                break;
+        }
+        return std::string(magnitude_without_leading_zeros(sum));
+    }
+
+    static std::string magnitude_minus_one(std::string_view const magnitude)
+    {
+        std::string difference(magnitude);
+        for (auto digit = difference.rbegin(); digit != difference.rend(); ++digit) {
+            *digit = static_cast<char>(static_cast<std::uint8_t>(*digit) - 1);
+            if (*digit != '\xff')
+                break;
+        }
+        return std::string(magnitude_without_leading_zeros(difference));
+    }
 
     enum class simple_float_information : std::uint8_t {
         simple_value_follows = 24,
@@ -444,6 +490,27 @@ class internal
                     shared.at(index) = *content;
                 return content;
             }
+            if (h->argument == std::to_underlying(tag_number::unsigned_bignum) ||
+                h->argument == std::to_underlying(tag_number::negative_bignum)) {
+                bool const negative = h->argument == std::to_underlying(tag_number::negative_bignum);
+                auto const r = d.head_decode();
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (r->major != major_type::byte_string) [[unlikely]]
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                auto const bytes = d.byte_string_decode(r->argument);
+                if (!bytes) [[unlikely]]
+                    return std::unexpected(bytes.error());
+                std::string_view const magnitude = magnitude_without_leading_zeros(*bytes);
+                if (magnitude.size() <= sizeof(std::uint64_t)) {
+                    if (negative)
+                        return negative_integer_decode(host, magnitude_value(magnitude));
+                    return unsigned_integer_decode(host, magnitude_value(magnitude));
+                }
+                if (negative)
+                    return negative_bignum_decode(host, std::string_view(magnitude_plus_one(magnitude)));
+                return unsigned_bignum_decode(host, magnitude);
+            }
             if (h->argument == std::to_underlying(tag_number::sharedref)) {
                 auto const r = d.head_decode();
                 if (!r) [[unlikely]]
@@ -687,6 +754,29 @@ public:
     void negative_integer(std::uint64_t const argument)
     {
         keep(out.head_encode(major_type::negative_integer, argument));
+    }
+
+    void unsigned_bignum(std::string_view const magnitude)
+    {
+        std::string_view const m = internal::magnitude_without_leading_zeros(magnitude);
+        if (m.size() <= sizeof(std::uint64_t)) {
+            keep(out.head_encode(major_type::unsigned_integer, internal::magnitude_value(m)));
+            return;
+        }
+        keep(out.head_encode(major_type::tag, std::to_underlying(internal::tag_number::unsigned_bignum)));
+        keep(out.byte_string_encode(m));
+    }
+
+    void negative_bignum(std::string_view const absolute)
+    {
+        std::string const n =
+            internal::magnitude_minus_one(internal::magnitude_without_leading_zeros(absolute));
+        if (n.size() <= sizeof(std::uint64_t)) {
+            keep(out.head_encode(major_type::negative_integer, internal::magnitude_value(n)));
+            return;
+        }
+        keep(out.head_encode(major_type::tag, std::to_underlying(internal::tag_number::negative_bignum)));
+        keep(out.byte_string_encode(n));
     }
 
     void byte_string(std::string_view const bytes)
