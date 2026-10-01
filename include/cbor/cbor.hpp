@@ -7,6 +7,7 @@
 #include <cstring>
 #include <expected>
 #include <limits>
+#include <span>
 #include <string_view>
 #if CBOR_SIMDUTF
 #include <simdutf.h>
@@ -125,21 +126,21 @@ class internal
             std::uint64_t argument;
             switch (static_cast<additional_information>(info)) {
             case additional_information::one_byte_argument:
-                argument = static_cast<std::uint8_t>(bytes[1]);
+                argument = static_cast<std::uint8_t>(bytes.at(1));
                 break;
             case additional_information::two_byte_argument: {
                 std::uint16_t v;
-                std::memcpy(&v, bytes.data() + 1, 2);
+                std::memcpy(&v, bytes.substr(1, size).data(), 2);
                 argument = std::byteswap(v);
             } break;
             case additional_information::four_byte_argument: {
                 std::uint32_t v;
-                std::memcpy(&v, bytes.data() + 1, 4);
+                std::memcpy(&v, bytes.substr(1, size).data(), 4);
                 argument = std::byteswap(v);
             } break;
             default: {
                 std::uint64_t v;
-                std::memcpy(&v, bytes.data() + 1, 8);
+                std::memcpy(&v, bytes.substr(1, size).data(), 8);
                 argument = std::byteswap(v);
             } break;
             }
@@ -357,30 +358,30 @@ struct encoder {
         std::size_t size;
         char const initial = static_cast<char>(std::to_underlying(major) << 5);
         if (argument < std::to_underlying(internal::additional_information::one_byte_argument)) {
-            head[0] = static_cast<char>(initial | argument);
+            std::get<0>(head) = static_cast<char>(initial | argument);
             size = 1;
         } else if (argument <= 0xff) {
-            head[0] = static_cast<char>(
+            std::get<0>(head) = static_cast<char>(
                 initial | std::to_underlying(internal::additional_information::one_byte_argument));
-            head[1] = static_cast<char>(argument);
+            std::get<1>(head) = static_cast<char>(argument);
             size = 2;
         } else if (argument <= 0xffff) {
-            head[0] = static_cast<char>(
+            std::get<0>(head) = static_cast<char>(
                 initial | std::to_underlying(internal::additional_information::two_byte_argument));
             auto const v = std::byteswap(static_cast<std::uint16_t>(argument));
-            std::memcpy(head.data() + 1, &v, 2);
+            std::memcpy(std::span(head).template subspan<1>().data(), &v, 2);
             size = 3;
         } else if (argument <= 0xffffffff) {
-            head[0] = static_cast<char>(
+            std::get<0>(head) = static_cast<char>(
                 initial | std::to_underlying(internal::additional_information::four_byte_argument));
             auto const v = std::byteswap(static_cast<std::uint32_t>(argument));
-            std::memcpy(head.data() + 1, &v, 4);
+            std::memcpy(std::span(head).template subspan<1>().data(), &v, 4);
             size = 5;
         } else {
-            head[0] = static_cast<char>(
+            std::get<0>(head) = static_cast<char>(
                 initial | std::to_underlying(internal::additional_information::eight_byte_argument));
             auto const v = std::byteswap(argument);
-            std::memcpy(head.data() + 1, &v, 8);
+            std::memcpy(std::span(head).template subspan<1>().data(), &v, 8);
             size = 9;
         }
         return writer.append(std::string_view(head.data(), size));
@@ -409,27 +410,27 @@ struct encoder {
         std::size_t size;
         switch (internal::preferred_float_info(value)) {
         case internal::simple_float_information::half_precision_float: {
-            item[0] = static_cast<char>(
+            std::get<0>(item) = static_cast<char>(
                 std::to_underlying(major_type::simple_float) << 5 |
                 std::to_underlying(internal::simple_float_information::half_precision_float));
             auto const v = std::byteswap(internal::float_encode_binary16(static_cast<float>(value)));
-            std::memcpy(item.data() + 1, &v, 2);
+            std::memcpy(std::span(item).template subspan<1>().data(), &v, 2);
             size = 3;
         } break;
         case internal::simple_float_information::single_precision_float: {
-            item[0] = static_cast<char>(
+            std::get<0>(item) = static_cast<char>(
                 std::to_underlying(major_type::simple_float) << 5 |
                 std::to_underlying(internal::simple_float_information::single_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
-            std::memcpy(item.data() + 1, &v, 4);
+            std::memcpy(std::span(item).template subspan<1>().data(), &v, 4);
             size = 5;
         } break;
         default: {
-            item[0] = static_cast<char>(
+            std::get<0>(item) = static_cast<char>(
                 std::to_underlying(major_type::simple_float) << 5 |
                 std::to_underlying(internal::simple_float_information::double_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint64_t>(value));
-            std::memcpy(item.data() + 1, &v, 8);
+            std::memcpy(std::span(item).template subspan<1>().data(), &v, 8);
             size = 9;
         } break;
         }
