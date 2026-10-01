@@ -162,46 +162,102 @@ struct string_writer {
 };
 
 // The way back, as a binding walks its own values.
-// The way back, as a binding writes it once for its language.
-template <class Visitor>
-inline void tag_invoke(cbor::value_encode_t, test_host &, value const &v, Visitor &visit)
+// The answers of this host to the questions of the encoder. Each answer reads the value and decides
+// nothing.
+inline cbor::kind tag_invoke(cbor::kind_of_t, test_host &, value const &v)
 {
-    std::visit(
-        [&](auto const &k) {
+    return std::visit(
+        [](auto const &k) {
             using K = std::decay_t<decltype(k)>;
-            if constexpr (std::is_same_v<K, std::uint64_t>) {
-                visit.unsigned_integer(k);
-            } else if constexpr (std::is_same_v<K, negative>) {
-                visit.negative_integer(k.argument);
-            } else if constexpr (std::is_same_v<K, bignum>) {
-                if (k.negative)
-                    visit.negative_bignum(k.magnitude);
-                else
-                    visit.unsigned_bignum(k.magnitude);
-            } else if constexpr (std::is_same_v<K, bytes>) {
-                visit.byte_string(k.b);
-            } else if constexpr (std::is_same_v<K, std::string>) {
-                visit.text_string(k);
-            } else if constexpr (std::is_same_v<K, double>) {
-                visit.floating_point(k);
-            } else if constexpr (std::is_same_v<K, simple>) {
-                visit.simple_value(k.v);
-            } else if constexpr (std::is_same_v<K, array>) {
-                visit.array(k.size());
-                for (value const &element : k)
-                    visit.value(element);
-            } else if constexpr (std::is_same_v<K, map>) {
-                visit.map(k.size());
-                for (auto const &[key, val] : k) {
-                    visit.key(key);
-                    visit.value(val);
-                }
-            } else {
-                visit.tag(k.tag);
-                visit.value(k.content.at(0));
-            }
+            if constexpr (std::is_same_v<K, std::uint64_t>)
+                return cbor::kind::unsigned_integer;
+            else if constexpr (std::is_same_v<K, negative>)
+                return cbor::kind::negative_integer;
+            else if constexpr (std::is_same_v<K, bignum>)
+                return k.negative ? cbor::kind::negative_bignum : cbor::kind::unsigned_bignum;
+            else if constexpr (std::is_same_v<K, bytes>)
+                return cbor::kind::byte_string;
+            else if constexpr (std::is_same_v<K, std::string>)
+                return cbor::kind::text_string;
+            else if constexpr (std::is_same_v<K, double>)
+                return cbor::kind::floating_point;
+            else if constexpr (std::is_same_v<K, simple>)
+                return cbor::kind::simple_value;
+            else if constexpr (std::is_same_v<K, array>)
+                return cbor::kind::array;
+            else if constexpr (std::is_same_v<K, map>)
+                return cbor::kind::map;
+            else
+                return cbor::kind::registered;
         },
         v.kind);
+}
+
+// A negative value -1 - n answers with its absolute value n + 1.
+inline std::uint64_t tag_invoke(cbor::unsigned_of_t, test_host &, value const &v)
+{
+    if (auto const *n = std::get_if<negative>(&v.kind))
+        return n->argument + 1;
+    return std::get<std::uint64_t>(v.kind);
+}
+
+inline std::string_view tag_invoke(cbor::magnitude_of_t, test_host &, value const &v)
+{
+    return std::get<bignum>(v.kind).magnitude;
+}
+
+inline std::string_view tag_invoke(cbor::bytes_of_t, test_host &, value const &v)
+{
+    return std::get<bytes>(v.kind).b;
+}
+
+inline std::string_view tag_invoke(cbor::text_of_t, test_host &, value const &v)
+{
+    return std::get<std::string>(v.kind);
+}
+
+inline double tag_invoke(cbor::float_of_t, test_host &, value const &v)
+{
+    return std::get<double>(v.kind);
+}
+
+inline std::uint8_t tag_invoke(cbor::simple_of_t, test_host &, value const &v)
+{
+    return std::get<simple>(v.kind).v;
+}
+
+inline std::uint64_t tag_invoke(cbor::array_size_t, test_host &, value const &v)
+{
+    return std::get<array>(v.kind).size();
+}
+
+inline value const &tag_invoke(cbor::array_at_t, test_host &, value const &v, std::uint64_t i)
+{
+    return std::get<array>(v.kind).at(i);
+}
+
+inline std::uint64_t tag_invoke(cbor::map_size_t, test_host &, value const &v)
+{
+    return std::get<map>(v.kind).size();
+}
+
+template <class F>
+inline void tag_invoke(cbor::map_for_each_t, test_host &, value const &v, F const &f)
+{
+    for (auto const &[key, val] : std::get<map>(v.kind))
+        f(key, val);
+}
+
+// In this host a tagged value stands for a registered object: its number is the tag, its content
+// is what before_encode gives.
+inline std::uint64_t tag_invoke(cbor::registered_tag_t, test_host &, value const &v)
+{
+    return std::get<tagged>(v.kind).tag;
+}
+
+inline value tag_invoke(cbor::before_encode_t, test_host &, value const &v)
+{
+    return std::get<tagged>(v.kind).content.at(0);
 }
 
 inline std::string encoded(value const &v)
