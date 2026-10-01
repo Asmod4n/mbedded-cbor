@@ -12,6 +12,15 @@
 #include <variant>
 #include <vector>
 
+// doctest prints an error by its message, because cbor::error converts to std::error_code.
+template <>
+struct doctest::StringMaker<cbor::error> {
+    static doctest::String convert(cbor::error const e)
+    {
+        return std::error_code(e).message().c_str();
+    }
+};
+
 // The host of the tests: a dynamic language in C++, reached only through the public interface.
 namespace test
 {
