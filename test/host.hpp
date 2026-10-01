@@ -42,6 +42,13 @@ struct bytes {
     bool operator==(bytes const &) const = default;
 };
 
+// A bignum holds the magnitude of its absolute value, most significant byte first.
+struct bignum {
+    bool negative;
+    std::string magnitude;
+    bool operator==(bignum const &) const = default;
+};
+
 struct simple {
     std::uint8_t v;
     bool operator==(simple const &) const = default;
@@ -55,7 +62,8 @@ struct tagged {
 };
 
 struct value {
-    std::variant<std::uint64_t, negative, bytes, std::string, double, simple, array, map, tagged> kind;
+    std::variant<std::uint64_t, negative, bignum, bytes, std::string, double, simple, array, map, tagged>
+        kind;
     bool operator==(value const &) const = default;
 };
 
@@ -78,6 +86,16 @@ inline value tag_invoke(cbor::unsigned_integer_decode_t, test_host &, std::uint6
 inline value tag_invoke(cbor::negative_integer_decode_t, test_host &, std::uint64_t a)
 {
     return {negative{a}};
+}
+
+inline value tag_invoke(cbor::unsigned_bignum_decode_t, test_host &, std::string_view m)
+{
+    return {bignum{false, std::string(m)}};
+}
+
+inline value tag_invoke(cbor::negative_bignum_decode_t, test_host &, std::string_view m)
+{
+    return {bignum{true, std::string(m)}};
 }
 
 inline value tag_invoke(cbor::byte_string_decode_t, test_host &, std::string_view b)
@@ -155,6 +173,11 @@ inline void tag_invoke(cbor::value_encode_t, test_host &, value const &v, Visito
                 visit.unsigned_integer(k);
             } else if constexpr (std::is_same_v<K, negative>) {
                 visit.negative_integer(k.argument);
+            } else if constexpr (std::is_same_v<K, bignum>) {
+                if (k.negative)
+                    visit.negative_bignum(k.magnitude);
+                else
+                    visit.unsigned_bignum(k.magnitude);
             } else if constexpr (std::is_same_v<K, bytes>) {
                 visit.byte_string(k.b);
             } else if constexpr (std::is_same_v<K, std::string>) {
