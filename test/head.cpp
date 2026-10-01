@@ -31,13 +31,13 @@ void check_head(std::string_view wire, std::uint8_t major, std::uint64_t argumen
 struct string_writer {
     std::string bytes;
 
-    std::errc reserve(std::size_t size)
+    std::expected<void, std::errc> reserve(std::size_t size)
     {
         bytes.reserve(bytes.size() + size);
         return {};
     }
 
-    std::errc append(std::string_view part)
+    std::expected<void, std::errc> append(std::string_view part)
     {
         bytes.append(part);
         return {};
@@ -52,9 +52,9 @@ struct string_writer {
 
 // A Writer whose language has no more space.
 struct full_writer {
-    std::errc append(std::string_view)
+    std::expected<void, std::errc> append(std::string_view)
     {
-        return std::errc::not_enough_memory;
+        return std::unexpected(std::errc::not_enough_memory);
     }
 };
 
