@@ -7,12 +7,15 @@
 #include <cstring>
 #include <expected>
 #include <string_view>
+#if CBOR_SIMDUTF
+#include <simdutf.h>
+#endif
 #include <system_error>
 
 namespace cbor::internal
 {
 
-enum class error { too_little_data, syntax_error, indefinite_length };
+enum class error { too_little_data, syntax_error, indefinite_length, invalid_utf8_string };
 
 struct head {
     std::uint8_t major;
@@ -64,6 +67,25 @@ struct decoder {
         bytes.remove_prefix(1 + size);
         return head{major, info, argument};
     }
+
+    std::expected<std::string_view, error> byte_string_decode(std::uint64_t length)
+    {
+        if (bytes.size() < length) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        std::string_view const string = bytes.substr(0, length);
+        bytes.remove_prefix(length);
+        return string;
+    }
+
+    std::expected<std::string_view, error> text_string_decode(std::uint64_t length)
+    {
+        auto const text = byte_string_decode(length);
+#if CBOR_SIMDUTF
+        if (text && !simdutf::validate_utf8(text->data(), text->size())) [[unlikely]]
+            return std::unexpected(error::invalid_utf8_string);
+#endif
+        return text;
+    }
 };
 
 template <class Writer>
@@ -98,10 +120,25 @@ struct encoder {
             std::memcpy(head.data() + 1, &v, 8);
             size = 9;
         }
-        std::errc const e = writer.append(std::string_view(head.data(), size));
-        if (e != std::errc{}) [[unlikely]]
-            return std::unexpected(e);
-        return {};
+        return writer.append(std::string_view(head.data(), size));
+    }
+
+    std::expected<void, std::errc> byte_string_encode(std::string_view bytes)
+    {
+        if (auto const r = writer.reserve(9 + bytes.size()); !r) [[unlikely]]
+            return r;
+        if (auto const r = head_encode(2, bytes.size()); !r) [[unlikely]]
+            return r;
+        return writer.append(bytes);
+    }
+
+    std::expected<void, std::errc> text_string_encode(std::string_view text)
+    {
+        if (auto const r = writer.reserve(9 + text.size()); !r) [[unlikely]]
+            return r;
+        if (auto const r = head_encode(3, text.size()); !r) [[unlikely]]
+            return r;
+        return writer.append(text);
     }
 };
 
