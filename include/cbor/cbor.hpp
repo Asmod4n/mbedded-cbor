@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstddef>
@@ -34,10 +35,13 @@ enum class error {
     sharedref_index_out_of_range,
     sharedref_not_complete,
     reserved_simple_value,
-    unsupported_value
+    unsupported_value,
+    not_indexable,
+    index_out_of_bounds,
+    key_not_found
 };
 
-enum class condition { not_well_formed = 1, not_valid, not_supported };
+enum class condition { not_well_formed = 1, not_valid, not_supported, not_found };
 
 class category final : public std::error_category
 {
@@ -74,6 +78,12 @@ public:
             return "reserved simple value";
         case error::unsupported_value:
             return "unsupported value";
+        case error::not_indexable:
+            return "not indexable";
+        case error::index_out_of_bounds:
+            return "index outside of array bounds";
+        case error::key_not_found:
+            return "key not found";
         }
         return "unknown cbor error";
     }
@@ -88,6 +98,10 @@ public:
         case error::nesting_depth_exceeded:
         case error::unsupported_value:
             return {static_cast<int>(condition::not_supported), *this};
+        case error::not_indexable:
+        case error::index_out_of_bounds:
+        case error::key_not_found:
+            return {static_cast<int>(condition::not_found), *this};
         case error::invalid_utf8_string:
         case error::inadmissible_type_for_tag_content:
         case error::sharedref_index_not_marked:
@@ -234,6 +248,20 @@ enum class kind {
 
 enum class pass;
 
+struct lazy {
+    std::string_view document;
+    std::size_t offset;
+};
+
+template <std::size_t DepthMax>
+std::expected<lazy, error> lazy_at(lazy l, std::int64_t index);
+
+template <std::size_t DepthMax>
+std::expected<lazy, error> lazy_at(lazy l, std::string_view key);
+
+template <std::size_t DepthMax, class Host>
+std::expected<typename Host::value, error> lazy_decode(Host &host, lazy l);
+
 template <std::size_t DepthMax>
 std::expected<std::size_t, error> doc_end(std::string_view bytes);
 
@@ -261,6 +289,12 @@ class internal
 
     template <class Host>
     using marks = std::vector<std::optional<typename Host::value>>;
+
+    struct prefix {
+        std::string_view document;
+        std::vector<std::size_t> offsets;
+        std::vector<bool> decoding;
+    };
 
     static std::string_view magnitude_without_leading_zeros(std::string_view const magnitude)
     {
@@ -481,9 +515,9 @@ class internal
     }
 
     template <std::size_t DepthMax, class Host>
-    static std::expected<typename Host::value, error> value_decode(decoder &d, Host &host,
-                                                                   marks<Host> &shared, std::size_t depth,
-                                                                   std::optional<std::size_t> const mark)
+    static std::expected<typename Host::value, error>
+    value_decode(decoder &d, Host &host, marks<Host> &shared, prefix *before, std::size_t depth,
+                 std::optional<std::size_t> const mark)
     {
         if (depth > DepthMax) [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
@@ -512,7 +546,7 @@ class internal
             if (mark)
                 shared.at(*mark) = array;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto element = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
+                auto element = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
                 if (!element) [[unlikely]]
                     return element;
                 array = array_append(host, std::move(array), std::move(*element));
@@ -524,10 +558,10 @@ class internal
             if (mark)
                 shared.at(*mark) = map;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto key = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
+                auto key = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
                 if (!key) [[unlikely]]
                     return key;
-                auto value = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
+                auto value = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
                 if (!value) [[unlikely]]
                     return value;
                 map = map_insert(host, std::move(map), std::move(*key), std::move(*value));
@@ -536,9 +570,16 @@ class internal
         }
         case major_type::tag: {
             if (h->argument == std::to_underlying(tag_number::shareable)) {
-                std::size_t const index = shared.size();
-                shared.emplace_back();
-                auto content = value_decode<DepthMax>(d, host, shared, depth + 1, index);
+                std::size_t index = shared.size();
+                if (before) {
+                    std::size_t const at = before->document.size() - d.bytes.size();
+                    auto const known = std::lower_bound(before->offsets.begin(), before->offsets.end(), at);
+                    if (known != before->offsets.end() && *known == at)
+                        index = static_cast<std::size_t>(known - before->offsets.begin());
+                }
+                if (index == shared.size())
+                    shared.emplace_back();
+                auto content = value_decode<DepthMax>(d, host, shared, before, depth + 1, index);
                 if (!content) [[unlikely]]
                     return content;
                 shared.at(index) = *content;
@@ -576,6 +617,16 @@ class internal
                 std::size_t const index = static_cast<std::size_t>(r->argument);
                 if (index >= shared.size()) [[unlikely]]
                     return std::unexpected(error::sharedref_index_not_marked);
+                if (!shared.at(index) && before && index < before->offsets.size() &&
+                    !before->decoding.at(index)) {
+                    decoder earlier{before->document.substr(before->offsets.at(index))};
+                    before->decoding.at(index) = true;
+                    auto content = value_decode<DepthMax>(earlier, host, shared, before, depth + 1, index);
+                    before->decoding.at(index) = false;
+                    if (!content) [[unlikely]]
+                        return content;
+                    shared.at(index) = *content;
+                }
                 if (!shared.at(index)) [[unlikely]]
                     return std::unexpected(error::sharedref_not_complete);
                 return *shared.at(index);
@@ -585,14 +636,14 @@ class internal
                 if (object) {
                     if (mark)
                         shared.at(*mark) = *object;
-                    auto content = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
+                    auto content = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
                     if (!content) [[unlikely]]
                         return content;
                     return after_decode(host,
                                         registered_decode(host, std::move(*object), std::move(*content)));
                 }
             }
-            auto content = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
+            auto content = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
             if (!content) [[unlikely]]
                 return content;
             return tag_decode(host, h->argument, std::move(*content));
@@ -629,6 +680,95 @@ class internal
 
     template <std::size_t, class, class, pass>
     friend class walker;
+
+    template <std::size_t DepthMax>
+    friend std::expected<lazy, error> lazy_at(lazy l, std::int64_t index);
+
+    template <std::size_t DepthMax>
+    friend std::expected<lazy, error> lazy_at(lazy l, std::string_view key);
+
+    template <std::size_t DepthMax, class Host>
+    friend std::expected<typename Host::value, error> lazy_decode(Host &host, lazy l);
+
+    template <std::size_t DepthMax>
+    static std::expected<void, error> marks_scan(decoder &d, std::string_view const document,
+                                                 std::size_t const end, std::vector<std::size_t> &offsets,
+                                                 std::size_t const depth)
+    {
+        if (document.size() - d.bytes.size() >= end)
+            return {};
+        if (depth > DepthMax) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
+        auto const h = d.head_decode();
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        switch (h->major) {
+        case major_type::byte_string:
+        case major_type::text_string: {
+            auto const s = d.byte_string_decode(h->argument);
+            if (!s) [[unlikely]]
+                return std::unexpected(s.error());
+            return {};
+        }
+        case major_type::array:
+        case major_type::map: {
+            std::uint64_t const items = h->major == major_type::map ? 2 * h->argument : h->argument;
+            for (std::uint64_t i = 0; i < items; ++i)
+                if (auto const r = marks_scan<DepthMax>(d, document, end, offsets, depth + 1); !r)
+                    [[unlikely]]
+                    return r;
+            return {};
+        }
+        case major_type::tag:
+            if (h->argument == std::to_underlying(tag_number::shareable))
+                offsets.push_back(document.size() - d.bytes.size());
+            return marks_scan<DepthMax>(d, document, end, offsets, depth + 1);
+        default:
+            return {};
+        }
+    }
+
+    template <std::size_t DepthMax>
+    static std::expected<std::vector<std::size_t>, error> marks_before(std::string_view const document,
+                                                                       std::size_t const end)
+    {
+        std::vector<std::size_t> offsets;
+        decoder d{document};
+        if (auto const r = marks_scan<DepthMax>(d, document, end, offsets, 0); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return offsets;
+    }
+
+    template <std::size_t DepthMax>
+    static std::expected<std::pair<head, decoder>, error> container_resolve(lazy const l)
+    {
+        std::size_t offset = l.offset;
+        for (;;) {
+            decoder d{l.document.substr(offset)};
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::tag)
+                return std::pair{*h, d};
+            if (h->argument == std::to_underlying(tag_number::shareable)) {
+                offset = l.document.size() - d.bytes.size();
+                continue;
+            }
+            if (h->argument != std::to_underlying(tag_number::sharedref))
+                return std::pair{*h, d};
+            auto const r = d.head_decode();
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (r->major != major_type::unsigned_integer) [[unlikely]]
+                return std::unexpected(error::inadmissible_type_for_tag_content);
+            auto const offsets = marks_before<DepthMax>(l.document, offset);
+            if (!offsets) [[unlikely]]
+                return std::unexpected(offsets.error());
+            if (r->argument >= offsets->size()) [[unlikely]]
+                return std::unexpected(error::sharedref_index_not_marked);
+            offset = offsets->at(static_cast<std::size_t>(r->argument));
+        }
+    }
 
     template <std::size_t DepthMax>
     friend std::expected<std::size_t, error> doc_end(std::string_view bytes);
@@ -770,7 +910,7 @@ std::expected<typename Host::value, error> decode(Host &host, std::string_view b
 {
     internal::decoder d{bytes};
     internal::marks<Host> shared;
-    return internal::value_decode<DepthMax>(d, host, shared, 0, std::nullopt);
+    return internal::value_decode<DepthMax>(d, host, shared, nullptr, 0, std::nullopt);
 }
 
 enum class pass { plain, count, write };
@@ -1039,6 +1179,91 @@ std::expected<std::size_t, error> doc_end(std::string_view const bytes)
     if (auto const r = internal::item_skip<DepthMax>(d, 0); !r) [[unlikely]]
         return std::unexpected(r.error());
     return bytes.size() - d.bytes.size();
+}
+
+template <std::size_t DepthMax>
+std::expected<lazy, error> lazy_at(lazy const l, std::int64_t const index)
+{
+    auto const found = internal::container_resolve<DepthMax>(l);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto [h, d] = *found;
+    if (h.major == major_type::array) {
+        std::int64_t const size =
+            h.argument > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
+                ? std::numeric_limits<std::int64_t>::max()
+                : static_cast<std::int64_t>(h.argument);
+        std::int64_t const position = index < 0 ? index + size : index;
+        if (position < 0 || position >= size) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        for (std::int64_t i = 0; i < position; ++i)
+            if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
+        return lazy{l.document, l.document.size() - d.bytes.size()};
+    }
+    if (h.major != major_type::map) [[unlikely]]
+        return std::unexpected(error::not_indexable);
+    for (std::uint64_t i = 0; i < h.argument; ++i) {
+        internal::decoder probe = d;
+        auto const k = probe.head_decode();
+        if (!k) [[unlikely]]
+            return std::unexpected(k.error());
+        bool const match = (k->major == major_type::unsigned_integer && index >= 0 &&
+                            k->argument == static_cast<std::uint64_t>(index)) ||
+                           (k->major == major_type::negative_integer && index < 0 &&
+                            k->argument == static_cast<std::uint64_t>(-1 - index));
+        if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (match)
+            return lazy{l.document, l.document.size() - d.bytes.size()};
+        if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+    }
+    return std::unexpected(error::key_not_found);
+}
+
+template <std::size_t DepthMax>
+std::expected<lazy, error> lazy_at(lazy const l, std::string_view const key)
+{
+    auto const found = internal::container_resolve<DepthMax>(l);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto [h, d] = *found;
+    if (h.major != major_type::map) [[unlikely]]
+        return std::unexpected(error::not_indexable);
+    for (std::uint64_t i = 0; i < h.argument; ++i) {
+        internal::decoder probe = d;
+        auto const k = probe.head_decode();
+        if (!k) [[unlikely]]
+            return std::unexpected(k.error());
+        bool match = false;
+        if (k->major == major_type::text_string || k->major == major_type::byte_string) {
+            auto const text = probe.byte_string_decode(k->argument);
+            if (!text) [[unlikely]]
+                return std::unexpected(text.error());
+            match = *text == key;
+        }
+        if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (match)
+            return lazy{l.document, l.document.size() - d.bytes.size()};
+        if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+    }
+    return std::unexpected(error::key_not_found);
+}
+
+template <std::size_t DepthMax, class Host>
+std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const l)
+{
+    auto offsets = internal::marks_before<DepthMax>(l.document, l.offset);
+    if (!offsets) [[unlikely]]
+        return std::unexpected(offsets.error());
+    internal::prefix before{l.document, std::move(*offsets), {}};
+    before.decoding.assign(before.offsets.size(), false);
+    internal::marks<Host> shared(before.offsets.size());
+    internal::decoder d{l.document.substr(l.offset)};
+    return internal::value_decode<DepthMax>(d, host, shared, &before, 0, std::nullopt);
 }
 
 } // namespace cbor
