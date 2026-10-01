@@ -3,7 +3,8 @@
 #include <bit>
 #include <cstdint>
 
-namespace cbor::internal {
+namespace cbor::internal
+{
 
 inline float float_decode_binary16(std::uint16_t half)
 {
@@ -11,14 +12,21 @@ inline float float_decode_binary16(std::uint16_t half)
 	std::uint32_t const exp = half & 0x7c00u;
 	std::uint32_t const frac = half & 0x03ffu;
 	if (exp == 0x7c00u)
-		return std::bit_cast<float>(sign << 16 | 0x7f800000u | frac << 13);
+		return std::bit_cast<float>(sign << 16 | 0x7f800000u |
+					    frac << 13);
 	if (exp != 0)
-		return std::bit_cast<float>(sign << 16 | ((exp >> 10) + (127 - 15)) << 23 | frac << 13);
+		return std::bit_cast<float>(sign << 16 |
+					    ((exp >> 10) + (127 - 15)) << 23 |
+					    frac << 13);
 	if (frac == 0)
 		return std::bit_cast<float>(sign << 16);
-	int const shift = std::countl_zero(static_cast<std::uint16_t>(frac << 5));
+	int const shift =
+		std::countl_zero(static_cast<std::uint16_t>(frac << 5));
 	std::uint32_t const mant = (frac << shift) & 0x03ffu;
-	return std::bit_cast<float>(sign << 16 | static_cast<std::uint32_t>(127 - 14 - shift) << 23 | mant << 13);
+	return std::bit_cast<float>(sign << 16 |
+				    static_cast<std::uint32_t>(127 - 14 - shift)
+					    << 23 |
+				    mant << 13);
 }
 
 inline std::uint16_t float_encode_binary16(float value)
@@ -61,8 +69,9 @@ inline std::uint8_t preferred_float_info(double value)
 	if (exp >= 1009 && exp <= 1038)
 		return (mant >> 29 & 0x1fffu) == 0 ? 25 : 26;
 	if (exp >= 999 && exp <= 1008)
-		return (mant >> 29 & ((1u << (1022 - exp)) - 1u)) == 0 ? 25 : 26;
+		return (mant >> 29 & ((1u << (1022 - exp)) - 1u)) == 0 ? 25
+								       : 26;
 	return 26;
 }
 
-}
+} // namespace cbor::internal
