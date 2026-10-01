@@ -135,3 +135,24 @@ TEST_CASE("lazy: a huge index")
     std::string const doc = encoded(A(1, 2, 3));
     CHECK_EQ(cbor::lazy_at<16>(lazy_of(doc), 0x7fffffff).error(), error::index_out_of_bounds);
 }
+
+// Found by the fuzz corpus: a reference inside the mark it names, d8 1c d8 1d 00, led the navigation
+// back to itself without end. A reference must name a mark that ends before it.
+TEST_CASE("lazy: a reference to its own enclosing mark ends")
+{
+    std::string const doc = "\xd8\x1c\xd8\x1d\x00"s;
+    CHECK_EQ(cbor::lazy_at<16>(lazy_of(doc), 0).error(), error::sharedref_not_complete);
+    test_host host;
+    CHECK_FALSE(cbor::lazy_decode<16>(host, lazy_of(doc)).has_value());
+}
+
+// Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. Before the fix the scan for
+// marks before the value of its first key went on through the claimed pairs after it reached the
+// target; now it stops there.
+TEST_CASE("lazy: a value inside a huge claimed map")
+{
+    std::string const doc = "\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s;
+    auto const a = cbor::lazy_at<16>(lazy_of(doc), "a");
+    REQUIRE(a.has_value());
+    CHECK(value_at(*a) == V(0));
+}
