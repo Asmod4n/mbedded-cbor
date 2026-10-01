@@ -123,24 +123,25 @@ class internal
                 std::size_t{1} << (info - std::to_underlying(additional_information::one_byte_argument));
             if (bytes.size() < 1 + size) [[unlikely]]
                 return std::unexpected(error::too_little_data);
+            std::string_view const rest = bytes.substr(1, size);
             std::uint64_t argument;
             switch (static_cast<additional_information>(info)) {
             case additional_information::one_byte_argument:
-                argument = static_cast<std::uint8_t>(bytes.at(1));
+                argument = static_cast<std::uint8_t>(rest.at(0));
                 break;
             case additional_information::two_byte_argument: {
                 std::uint16_t v;
-                std::memcpy(&v, bytes.substr(1, size).data(), 2);
+                std::memcpy(&v, rest.data(), 2);
                 argument = std::byteswap(v);
             } break;
             case additional_information::four_byte_argument: {
                 std::uint32_t v;
-                std::memcpy(&v, bytes.substr(1, size).data(), 4);
+                std::memcpy(&v, rest.data(), 4);
                 argument = std::byteswap(v);
             } break;
             default: {
                 std::uint64_t v;
-                std::memcpy(&v, bytes.substr(1, size).data(), 8);
+                std::memcpy(&v, rest.data(), 8);
                 argument = std::byteswap(v);
             } break;
             }
