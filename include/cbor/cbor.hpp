@@ -234,6 +234,9 @@ enum class kind {
 
 enum class pass;
 
+template <std::size_t DepthMax>
+std::expected<std::size_t, error> doc_end(std::string_view bytes);
+
 template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Host, class Writer>
 std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value);
 
@@ -626,6 +629,50 @@ class internal
 
     template <std::size_t, class, class, pass>
     friend class walker;
+
+    template <std::size_t DepthMax>
+    friend std::expected<std::size_t, error> doc_end(std::string_view bytes);
+
+    template <std::size_t DepthMax>
+    static std::expected<void, error> item_skip(decoder &d, std::size_t const depth)
+    {
+        if (depth > DepthMax) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
+        auto const h = d.head_decode();
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        switch (h->major) {
+        case major_type::byte_string:
+        case major_type::text_string: {
+            auto const s = d.byte_string_decode(h->argument);
+            if (!s) [[unlikely]]
+                return std::unexpected(s.error());
+            return {};
+        }
+        case major_type::array:
+            for (std::uint64_t i = 0; i < h->argument; ++i)
+                if (auto const r = item_skip<DepthMax>(d, depth + 1); !r) [[unlikely]]
+                    return r;
+            return {};
+        case major_type::map:
+            for (std::uint64_t i = 0; i < h->argument; ++i) {
+                if (auto const k = item_skip<DepthMax>(d, depth + 1); !k) [[unlikely]]
+                    return k;
+                if (auto const v = item_skip<DepthMax>(d, depth + 1); !v) [[unlikely]]
+                    return v;
+            }
+            return {};
+        case major_type::tag:
+            return item_skip<DepthMax>(d, depth + 1);
+        case major_type::simple_float:
+            if (h->info == std::to_underlying(simple_float_information::simple_value_follows) &&
+                h->argument < simple_value_one_byte_min) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            return {};
+        default:
+            return {};
+        }
+    }
 };
 
 template <class Writer>
@@ -983,6 +1030,15 @@ std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename
             return std::unexpected(write.failure);
     }
     return {};
+}
+
+template <std::size_t DepthMax>
+std::expected<std::size_t, error> doc_end(std::string_view const bytes)
+{
+    internal::decoder d{bytes};
+    if (auto const r = internal::item_skip<DepthMax>(d, 0); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return bytes.size() - d.bytes.size();
 }
 
 } // namespace cbor
