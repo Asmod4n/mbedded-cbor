@@ -144,36 +144,38 @@ struct string_writer {
 };
 
 // The way back, as a binding walks its own values.
-inline void encode_into(cbor::encoder<string_writer> &e, value const &v)
+// The way back, as a binding writes it once for its language.
+template <class Visitor>
+inline void tag_invoke(cbor::value_encode_t, test_host &, value const &v, Visitor &visit)
 {
     std::visit(
         [&](auto const &k) {
             using K = std::decay_t<decltype(k)>;
             if constexpr (std::is_same_v<K, std::uint64_t>) {
-                REQUIRE(e.head_encode(cbor::major_type::unsigned_integer, k).has_value());
+                visit.unsigned_integer(k);
             } else if constexpr (std::is_same_v<K, negative>) {
-                REQUIRE(e.head_encode(cbor::major_type::negative_integer, k.argument).has_value());
+                visit.negative_integer(k.argument);
             } else if constexpr (std::is_same_v<K, bytes>) {
-                REQUIRE(e.byte_string_encode(k.b).has_value());
+                visit.byte_string(k.b);
             } else if constexpr (std::is_same_v<K, std::string>) {
-                REQUIRE(e.text_string_encode(k).has_value());
+                visit.text_string(k);
             } else if constexpr (std::is_same_v<K, double>) {
-                REQUIRE(e.float_encode(k).has_value());
+                visit.floating_point(k);
             } else if constexpr (std::is_same_v<K, simple>) {
-                REQUIRE(e.head_encode(cbor::major_type::simple_float, k.v).has_value());
+                visit.simple_value(k.v);
             } else if constexpr (std::is_same_v<K, array>) {
-                REQUIRE(e.head_encode(cbor::major_type::array, k.size()).has_value());
+                visit.array(k.size());
                 for (value const &element : k)
-                    encode_into(e, element);
+                    visit.value(element);
             } else if constexpr (std::is_same_v<K, map>) {
-                REQUIRE(e.head_encode(cbor::major_type::map, k.size()).has_value());
+                visit.map(k.size());
                 for (auto const &[key, val] : k) {
-                    encode_into(e, key);
-                    encode_into(e, val);
+                    visit.value(key);
+                    visit.value(val);
                 }
             } else {
-                REQUIRE(e.head_encode(cbor::major_type::tag, k.tag).has_value());
-                encode_into(e, k.content.at(0));
+                visit.tag(k.tag);
+                visit.value(k.content.at(0));
             }
         },
         v.kind);
@@ -181,9 +183,9 @@ inline void encode_into(cbor::encoder<string_writer> &e, value const &v)
 
 inline std::string encoded(value const &v)
 {
+    test_host host;
     string_writer w;
-    cbor::encoder<string_writer> e{w};
-    encode_into(e, v);
+    REQUIRE(cbor::encode<16>(host, w, v).has_value());
     return w.bytes;
 }
 

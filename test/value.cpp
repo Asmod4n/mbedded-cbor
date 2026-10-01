@@ -41,7 +41,6 @@ TEST_CASE("major 5: empty, string, integer, nested keys")
 
 // Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError'.
 // The limit is 16 here; the limit itself must pass and one level more must fail.
-// The encode depth belongs to the binding, which walks its own values.
 TEST_CASE("depth: nested arrays and maps past the limit")
 {
     CHECK(decoded(std::string(16, '\x81') + '\x00').has_value());
@@ -91,4 +90,20 @@ TEST_CASE("major 6: a tag reaches the host with its content")
 {
     tagged t{1, array{V(1363896240)}};
     check_both("\xc1\x1a\x51\x4b\x67\xb0"sv, value{t});
+}
+
+// Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError',
+// the encode part. The core counts the depth on encode as on decode.
+TEST_CASE("depth: encode past the limit")
+{
+    value deep = V(0);
+    for (int i = 0; i < 16; ++i)
+        deep = A(deep);
+    test_host host;
+    string_writer w;
+    CHECK(cbor::encode<16>(host, w, deep).has_value());
+    string_writer w2;
+    auto const r = cbor::encode<16>(host, w2, A(deep));
+    REQUIRE_FALSE(r.has_value());
+    CHECK((r.error() == error::nesting_depth_exceeded));
 }
