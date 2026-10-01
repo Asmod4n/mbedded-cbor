@@ -1023,7 +1023,7 @@ class walker
             return;
         }
         if constexpr (Pass == pass::count) {
-            if (identity && ++shared->seen[*identity] > 1)
+            if (identity && ++shared->seen.try_emplace(*identity, 0).first->second > 1)
                 return;
         }
         if constexpr (Pass == pass::write) {
