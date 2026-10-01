@@ -33,7 +33,8 @@ enum class error {
     sharedref_index_not_marked,
     sharedref_index_out_of_range,
     sharedref_not_complete,
-    reserved_simple_value
+    reserved_simple_value,
+    unsupported_value
 };
 
 enum class condition { not_well_formed = 1, not_valid, not_supported };
@@ -71,6 +72,8 @@ public:
             return "sharedref not complete";
         case error::reserved_simple_value:
             return "reserved simple value";
+        case error::unsupported_value:
+            return "unsupported value";
         }
         return "unknown cbor error";
     }
@@ -83,6 +86,7 @@ public:
             return {static_cast<int>(condition::not_well_formed), *this};
         case error::indefinite_length:
         case error::nesting_depth_exceeded:
+        case error::unsupported_value:
             return {static_cast<int>(condition::not_supported), *this};
         case error::invalid_utf8_string:
         case error::inadmissible_type_for_tag_content:
@@ -135,6 +139,7 @@ enum class simple_value : std::uint8_t { false_value = 20, true_value, null, und
 template <class Tag>
 struct customization_point {
     template <class... Args>
+        requires requires(Tag const &tag, Args &&...args) { tag_invoke(tag, std::forward<Args>(args)...); }
     constexpr decltype(auto) operator()(Args &&...args) const
     {
         return tag_invoke(static_cast<Tag const &>(*this), std::forward<Args>(args)...);
@@ -161,8 +166,38 @@ inline constexpr struct map_decode_t : customization_point<map_decode_t> {
 } map_decode;
 inline constexpr struct map_insert_t : customization_point<map_insert_t> {
 } map_insert;
-inline constexpr struct value_encode_t : customization_point<value_encode_t> {
-} value_encode;
+inline constexpr struct kind_of_t : customization_point<kind_of_t> {
+} kind_of;
+inline constexpr struct unsigned_of_t : customization_point<unsigned_of_t> {
+} unsigned_of;
+inline constexpr struct magnitude_of_t : customization_point<magnitude_of_t> {
+} magnitude_of;
+inline constexpr struct bytes_of_t : customization_point<bytes_of_t> {
+} bytes_of;
+inline constexpr struct text_of_t : customization_point<text_of_t> {
+} text_of;
+inline constexpr struct float_of_t : customization_point<float_of_t> {
+} float_of;
+inline constexpr struct simple_of_t : customization_point<simple_of_t> {
+} simple_of;
+inline constexpr struct array_size_t : customization_point<array_size_t> {
+} array_size;
+inline constexpr struct array_at_t : customization_point<array_at_t> {
+} array_at;
+inline constexpr struct map_size_t : customization_point<map_size_t> {
+} map_size;
+inline constexpr struct map_for_each_t : customization_point<map_for_each_t> {
+} map_for_each;
+inline constexpr struct registered_tag_t : customization_point<registered_tag_t> {
+} registered_tag;
+inline constexpr struct tag_begin_t : customization_point<tag_begin_t> {
+} tag_begin;
+inline constexpr struct registered_decode_t : customization_point<registered_decode_t> {
+} registered_decode;
+inline constexpr struct after_decode_t : customization_point<after_decode_t> {
+} after_decode;
+inline constexpr struct before_encode_t : customization_point<before_encode_t> {
+} before_encode;
 inline constexpr struct value_identity_t : customization_point<value_identity_t> {
 } value_identity;
 inline constexpr struct key_identity_t : customization_point<key_identity_t> {
@@ -181,6 +216,23 @@ template <class Writer>
 struct encoder;
 
 enum class sharedrefs { off, on };
+
+enum class kind {
+    unsigned_integer,
+    negative_integer,
+    unsigned_bignum,
+    negative_bignum,
+    byte_string,
+    text_string,
+    floating_point,
+    simple_value,
+    array,
+    map,
+    registered,
+    unsupported
+};
+
+enum class pass;
 
 template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Host, class Writer>
 std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value);
@@ -486,8 +538,7 @@ class internal
                 auto content = value_decode<DepthMax>(d, host, shared, depth + 1, index);
                 if (!content) [[unlikely]]
                     return content;
-                if (!shared.at(index))
-                    shared.at(index) = *content;
+                shared.at(index) = *content;
                 return content;
             }
             if (h->argument == std::to_underlying(tag_number::unsigned_bignum) ||
@@ -526,6 +577,18 @@ class internal
                     return std::unexpected(error::sharedref_not_complete);
                 return *shared.at(index);
             }
+            if constexpr (requires { tag_begin(host, h->argument); }) {
+                std::optional<typename Host::value> object = tag_begin(host, h->argument);
+                if (object) {
+                    if (mark)
+                        shared.at(*mark) = *object;
+                    auto content = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
+                    if (!content) [[unlikely]]
+                        return content;
+                    return after_decode(host,
+                                        registered_decode(host, std::move(*object), std::move(*content)));
+                }
+            }
             auto content = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
             if (!content) [[unlikely]]
                 return content;
@@ -561,8 +624,8 @@ class internal
     friend std::expected<void, std::error_code> encode(Host &host, Writer &writer,
                                                        typename Host::value const &value);
 
-    template <std::size_t, class, class, class>
-    friend class visitor;
+    template <std::size_t, class, class, pass>
+    friend class walker;
 };
 
 template <class Writer>
@@ -681,10 +744,11 @@ template <class Host>
 struct sharing {
     std::unordered_map<typename Host::identity, std::uint64_t> seen;
     std::unordered_map<typename Host::identity, std::uint64_t> numbers;
+    std::unordered_map<typename Host::identity, typename Host::value> replaced;
 };
 
-template <std::size_t DepthMax, class Host, class Writer, class Pass>
-class visitor
+template <std::size_t DepthMax, class Host, class Writer, pass Pass>
+class walker
 {
     Host &host;
     encoder<Writer> out;
@@ -695,7 +759,7 @@ class visitor
     template <std::size_t, sharedrefs, class H, class W>
     friend std::expected<void, std::error_code> encode(H &host, W &writer, typename H::value const &value);
 
-    visitor(Host &h, Writer &w, sharing<Host> *s) : host(h), out{w}, shared(s)
+    walker(Host &h, Writer &w, sharing<Host> *s) : host(h), out{w}, shared(s)
     {
     }
 
@@ -711,6 +775,27 @@ class visitor
             failure = make_error_code(e);
     }
 
+    void head(major_type const major, std::uint64_t const argument)
+    {
+        keep(out.head_encode(major, argument));
+    }
+
+    void key(typename Host::value const &item)
+    {
+        if constexpr (Pass == pass::plain)
+            child(item, std::false_type{});
+        else
+            child(item, key_identity(host, item));
+    }
+
+    void value(typename Host::value const &item)
+    {
+        if constexpr (Pass == pass::plain)
+            child(item, std::false_type{});
+        else
+            child(item, value_identity(host, item));
+    }
+
     template <class Identity>
     void child(typename Host::value const &item, Identity const &identity)
     {
@@ -720,141 +805,179 @@ class visitor
             keep_error(error::nesting_depth_exceeded);
             return;
         }
-        if constexpr (Pass::value == pass::count) {
+        if constexpr (Pass == pass::count) {
             if (identity && ++shared->seen[*identity] > 1)
                 return;
         }
-        if constexpr (Pass::value == pass::write) {
+        if constexpr (Pass == pass::write) {
             if (identity && shared->seen.at(*identity) > 1) {
                 auto const number = shared->numbers.find(*identity);
                 if (number != shared->numbers.end()) {
-                    keep(out.head_encode(major_type::tag,
-                                         std::to_underlying(internal::tag_number::sharedref)));
-                    keep(out.head_encode(major_type::unsigned_integer, number->second));
+                    head(major_type::tag, std::to_underlying(internal::tag_number::sharedref));
+                    head(major_type::unsigned_integer, number->second);
                     return;
                 }
                 shared->numbers.emplace(*identity, shared->numbers.size());
-                keep(out.head_encode(major_type::tag, std::to_underlying(internal::tag_number::shareable)));
+                head(major_type::tag, std::to_underlying(internal::tag_number::shareable));
             }
         }
         ++depth;
-        value_encode(host, item, *this);
+        describe(item, identity);
         --depth;
     }
 
-public:
-    visitor(visitor const &) = delete;
-    visitor &operator=(visitor const &) = delete;
-
-    void unsigned_integer(std::uint64_t const n)
+    template <class Identity>
+    typename Host::value content_of(typename Host::value const &item, Identity const &identity)
     {
-        keep(out.head_encode(major_type::unsigned_integer, n));
+        if constexpr (Pass == pass::plain) {
+            return before_encode(host, item);
+        } else {
+            if (!identity)
+                return before_encode(host, item);
+            if constexpr (Pass == pass::count)
+                return shared->replaced.emplace(*identity, before_encode(host, item)).first->second;
+            else
+                return shared->replaced.at(*identity);
+        }
     }
 
-    void negative_integer(std::uint64_t const argument)
+    template <class Identity>
+    void describe(typename Host::value const &item, Identity const &identity)
     {
-        keep(out.head_encode(major_type::negative_integer, argument));
+        switch (kind_of(host, item)) {
+        case kind::unsigned_integer:
+            if constexpr (requires { unsigned_of(host, item); }) {
+                head(major_type::unsigned_integer, unsigned_of(host, item));
+                return;
+            }
+            break;
+        case kind::negative_integer:
+            if constexpr (requires { unsigned_of(host, item); }) {
+                head(major_type::negative_integer, unsigned_of(host, item) - 1);
+                return;
+            }
+            break;
+        case kind::unsigned_bignum:
+            if constexpr (requires { magnitude_of(host, item); }) {
+                bignum(false, magnitude_of(host, item));
+                return;
+            }
+            break;
+        case kind::negative_bignum:
+            if constexpr (requires { magnitude_of(host, item); }) {
+                bignum(true, magnitude_of(host, item));
+                return;
+            }
+            break;
+        case kind::byte_string:
+            if constexpr (requires { bytes_of(host, item); }) {
+                keep(out.byte_string_encode(bytes_of(host, item)));
+                return;
+            }
+            break;
+        case kind::text_string:
+            if constexpr (requires { text_of(host, item); }) {
+                keep(out.text_string_encode(text_of(host, item)));
+                return;
+            }
+            break;
+        case kind::floating_point:
+            if constexpr (requires { float_of(host, item); }) {
+                keep(out.float_encode(float_of(host, item)));
+                return;
+            }
+            break;
+        case kind::simple_value:
+            if constexpr (requires { simple_of(host, item); }) {
+                simple(simple_of(host, item));
+                return;
+            }
+            break;
+        case kind::array:
+            if constexpr (requires { array_size(host, item); }) {
+                std::uint64_t const size = array_size(host, item);
+                head(major_type::array, size);
+                for (std::uint64_t i = 0; i < size; ++i)
+                    value(array_at(host, item, i));
+                return;
+            }
+            break;
+        case kind::map:
+            if constexpr (requires { map_size(host, item); }) {
+                head(major_type::map, map_size(host, item));
+                map_for_each(host, item,
+                             [this](typename Host::value const &k, typename Host::value const &v) {
+                                 key(k);
+                                 value(v);
+                             });
+                return;
+            }
+            break;
+        case kind::registered:
+            if constexpr (requires { registered_tag(host, item); }) {
+                head(major_type::tag, registered_tag(host, item));
+                value(content_of(item, identity));
+                return;
+            }
+            break;
+        case kind::unsupported:
+            break;
+        }
+        keep_error(error::unsupported_value);
     }
 
-    void unsigned_bignum(std::string_view const magnitude)
+    void bignum(bool const negative, std::string_view const absolute)
     {
-        std::string_view const m = internal::magnitude_without_leading_zeros(magnitude);
-        if (m.size() <= sizeof(std::uint64_t)) {
-            keep(out.head_encode(major_type::unsigned_integer, internal::magnitude_value(m)));
+        std::string_view const m = internal::magnitude_without_leading_zeros(absolute);
+        if (!negative) {
+            if (m.size() <= sizeof(std::uint64_t)) {
+                head(major_type::unsigned_integer, internal::magnitude_value(m));
+                return;
+            }
+            head(major_type::tag, std::to_underlying(internal::tag_number::unsigned_bignum));
+            keep(out.byte_string_encode(m));
             return;
         }
-        keep(out.head_encode(major_type::tag, std::to_underlying(internal::tag_number::unsigned_bignum)));
-        keep(out.byte_string_encode(m));
-    }
-
-    void negative_bignum(std::string_view const absolute)
-    {
-        std::string const n =
-            internal::magnitude_minus_one(internal::magnitude_without_leading_zeros(absolute));
+        std::string const n = internal::magnitude_minus_one(m);
         if (n.size() <= sizeof(std::uint64_t)) {
-            keep(out.head_encode(major_type::negative_integer, internal::magnitude_value(n)));
+            head(major_type::negative_integer, internal::magnitude_value(n));
             return;
         }
-        keep(out.head_encode(major_type::tag, std::to_underlying(internal::tag_number::negative_bignum)));
+        head(major_type::tag, std::to_underlying(internal::tag_number::negative_bignum));
         keep(out.byte_string_encode(n));
     }
 
-    void byte_string(std::string_view const bytes)
+    void simple(std::uint8_t const v)
     {
-        keep(out.byte_string_encode(bytes));
-    }
-
-    void text_string(std::string_view const text)
-    {
-        keep(out.text_string_encode(text));
-    }
-
-    void floating_point(double const value)
-    {
-        keep(out.float_encode(value));
-    }
-
-    void simple_value(std::uint8_t const value)
-    {
-        if (value >= std::to_underlying(internal::simple_float_information::simple_value_follows) &&
-            value < internal::simple_value_one_byte_min) [[unlikely]] {
+        if (v >= std::to_underlying(internal::simple_float_information::simple_value_follows) &&
+            v < internal::simple_value_one_byte_min) [[unlikely]] {
             keep_error(error::reserved_simple_value);
             return;
         }
-        keep(out.head_encode(major_type::simple_float, value));
+        head(major_type::simple_float, v);
     }
 
-    void array(std::uint64_t const size)
-    {
-        keep(out.head_encode(major_type::array, size));
-    }
-
-    void map(std::uint64_t const size)
-    {
-        keep(out.head_encode(major_type::map, size));
-    }
-
-    void tag(std::uint64_t const number)
-    {
-        keep(out.head_encode(major_type::tag, number));
-    }
-
-    void key(typename Host::value const &item)
-    {
-        if constexpr (Pass::value == pass::plain)
-            child(item, std::false_type{});
-        else
-            child(item, key_identity(host, item));
-    }
-
-    void value(typename Host::value const &item)
-    {
-        if constexpr (Pass::value == pass::plain)
-            child(item, std::false_type{});
-        else
-            child(item, value_identity(host, item));
-    }
+public:
+    walker(walker const &) = delete;
+    walker &operator=(walker const &) = delete;
 };
 
 template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
 std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value)
 {
     if constexpr (Sharing == sharedrefs::off) {
-        visitor<DepthMax, Host, Writer, std::integral_constant<pass, pass::plain>> visit{host, writer,
-                                                                                         nullptr};
-        visit.value(value);
-        if (visit.failure) [[unlikely]]
-            return std::unexpected(visit.failure);
+        walker<DepthMax, Host, Writer, pass::plain> walk{host, writer, nullptr};
+        walk.value(value);
+        if (walk.failure) [[unlikely]]
+            return std::unexpected(walk.failure);
     } else {
         sharing<Host> shared;
         discarding_writer nothing;
-        visitor<DepthMax, Host, discarding_writer, std::integral_constant<pass, pass::count>> count{
-            host, nothing, &shared};
+        walker<DepthMax, Host, discarding_writer, pass::count> count{host, nothing, &shared};
         count.value(value);
         if (count.failure) [[unlikely]]
             return std::unexpected(count.failure);
-        visitor<DepthMax, Host, Writer, std::integral_constant<pass, pass::write>> write{host, writer,
-                                                                                         &shared};
+        walker<DepthMax, Host, Writer, pass::write> write{host, writer, &shared};
         write.value(value);
         if (write.failure) [[unlikely]]
             return std::unexpected(write.failure);

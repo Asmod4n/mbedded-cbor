@@ -24,14 +24,24 @@ namespace shared_test
 struct node;
 using handle = std::shared_ptr<node>;
 
+// A registered object of the host: its tag number and the value that before_encode gives for it.
+struct object {
+    std::uint64_t tag;
+    handle content;
+};
+
 struct node {
-    std::variant<std::uint64_t, std::string, std::vector<handle>, std::vector<std::pair<handle, handle>>>
+    std::variant<std::uint64_t, std::string, std::vector<handle>, std::vector<std::pair<handle, handle>>,
+                 object>
         kind;
 };
 
 struct ref_host {
     using value = handle;
     using identity = node const *;
+    int before_encode_calls = 0;
+    int after_decode_calls = 0;
+    handle replacement;
 };
 
 inline handle tag_invoke(cbor::unsigned_integer_decode_t, ref_host &, std::uint64_t a)
@@ -98,36 +108,88 @@ inline handle tag_invoke(cbor::map_insert_t, ref_host &, handle m, handle k, han
     return m;
 }
 
+// Tag 5000 is registered in this host: tag_begin makes the empty object before its content.
+inline std::optional<handle> tag_invoke(cbor::tag_begin_t, ref_host &, std::uint64_t tag)
+{
+    if (tag != 5000)
+        return std::nullopt;
+    return std::make_shared<node>(node{object{5000, nullptr}});
+}
+
+inline handle tag_invoke(cbor::registered_decode_t, ref_host &, handle o, handle content)
+{
+    std::get<object>(o->kind).content = std::move(content);
+    return o;
+}
+
+// The hook returns the replacement when the test set one, else the object itself.
+inline handle tag_invoke(cbor::after_decode_t, ref_host &host, handle o)
+{
+    ++host.after_decode_calls;
+    return host.replacement ? host.replacement : o;
+}
+
 inline handle tag_invoke(cbor::tag_decode_t, ref_host &, std::uint64_t, handle content)
 {
     return content;
 }
 
-// The way back for this host. A string key has no identity, as mruby copies an unfrozen String
-// key; every other node is its own identity, an integer has none.
-template <class Visitor>
-inline void tag_invoke(cbor::value_encode_t, ref_host &, handle const &v, Visitor &visit)
+// The answers of this host to the questions of the encoder. A string key has no identity, as mruby
+// copies an unfrozen String key; every other node is its own identity, an integer has none.
+inline cbor::kind tag_invoke(cbor::kind_of_t, ref_host &, handle const &v)
 {
-    std::visit(
-        [&](auto const &k) {
-            using K = std::decay_t<decltype(k)>;
-            if constexpr (std::is_same_v<K, std::uint64_t>) {
-                visit.unsigned_integer(k);
-            } else if constexpr (std::is_same_v<K, std::string>) {
-                visit.text_string(k);
-            } else if constexpr (std::is_same_v<K, std::vector<handle>>) {
-                visit.array(k.size());
-                for (handle const &element : k)
-                    visit.value(element);
-            } else {
-                visit.map(k.size());
-                for (auto const &[key, val] : k) {
-                    visit.key(key);
-                    visit.value(val);
-                }
-            }
-        },
-        v->kind);
+    if (std::holds_alternative<std::uint64_t>(v->kind))
+        return cbor::kind::unsigned_integer;
+    if (std::holds_alternative<std::string>(v->kind))
+        return cbor::kind::text_string;
+    if (std::holds_alternative<std::vector<handle>>(v->kind))
+        return cbor::kind::array;
+    if (std::holds_alternative<object>(v->kind))
+        return cbor::kind::registered;
+    return cbor::kind::map;
+}
+
+inline std::uint64_t tag_invoke(cbor::registered_tag_t, ref_host &, handle const &v)
+{
+    return std::get<object>(v->kind).tag;
+}
+
+inline handle tag_invoke(cbor::before_encode_t, ref_host &host, handle const &v)
+{
+    ++host.before_encode_calls;
+    return std::get<object>(v->kind).content;
+}
+
+inline std::uint64_t tag_invoke(cbor::unsigned_of_t, ref_host &, handle const &v)
+{
+    return std::get<std::uint64_t>(v->kind);
+}
+
+inline std::string_view tag_invoke(cbor::text_of_t, ref_host &, handle const &v)
+{
+    return std::get<std::string>(v->kind);
+}
+
+inline std::uint64_t tag_invoke(cbor::array_size_t, ref_host &, handle const &v)
+{
+    return std::get<std::vector<handle>>(v->kind).size();
+}
+
+inline handle const &tag_invoke(cbor::array_at_t, ref_host &, handle const &v, std::uint64_t i)
+{
+    return std::get<std::vector<handle>>(v->kind).at(i);
+}
+
+inline std::uint64_t tag_invoke(cbor::map_size_t, ref_host &, handle const &v)
+{
+    return std::get<std::vector<std::pair<handle, handle>>>(v->kind).size();
+}
+
+template <class F>
+inline void tag_invoke(cbor::map_for_each_t, ref_host &, handle const &v, F const &f)
+{
+    for (auto const &[key, val] : std::get<std::vector<std::pair<handle, handle>>>(v->kind))
+        f(key, val);
 }
 
 inline std::optional<node const *> tag_invoke(cbor::value_identity_t, ref_host &, handle const &v)
@@ -481,4 +543,73 @@ TEST_CASE("sharedrefs::off: values are written each time, a cycle hits the depth
     REQUIRE_FALSE(e.has_value());
     CHECK((e.error() == error::nesting_depth_exceeded));
     std::get<std::vector<handle>>(a->kind).clear();
+}
+
+// Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved' and
+// the cache of walk_count: the hook of a registered object runs once, though the encoder makes two
+// passes and meets the object three times.
+TEST_CASE("registered tag: before_encode runs once per object with two passes")
+{
+    auto const point = std::make_shared<node>(node{object{5000, arr({u(3), u(7)})}});
+    ref_host host;
+    string_writer w;
+    REQUIRE(cbor::encode<16, cbor::sharedrefs::on>(host, w, arr({point, point, point})).has_value());
+    CHECK_EQ(host.before_encode_calls, 1);
+    CHECK_EQ(w.bytes, "\x83\xd8\x1c\xd9\x13\x88\x82\x03\x07\xd8\x1d\x00\xd8\x1d\x00"sv);
+}
+
+// Ported from test.rb: 'registered tag + sharedref: distinct instances with equal fields do NOT share'.
+TEST_CASE("registered tag: distinct objects with equal content do not share")
+{
+    auto const p1 = std::make_shared<node>(node{object{5000, arr({u(1), u(2)})}});
+    auto const p2 = std::make_shared<node>(node{object{5000, arr({u(1), u(2)})}});
+    ref_host host;
+    string_writer w;
+    REQUIRE(cbor::encode<16, cbor::sharedrefs::on>(host, w, arr({p1, p2})).has_value());
+    CHECK_EQ(host.before_encode_calls, 2);
+    CHECK_EQ(w.bytes, "\x82\xd9\x13\x88\x82\x01\x02\xd9\x13\x88\x82\x01\x02"sv);
+}
+
+// Ported from test.rb: 'registered tag + sharedref: instance with self-referential field'. The object
+// exists before its content, as decode_registered_tag allocates it before the payload.
+TEST_CASE("registered tag: a reference inside the content names the object")
+{
+    ref_host host;
+    auto const r = cbor::decode<16>(host, "\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv);
+    REQUIRE(r.has_value());
+    CHECK(same(element(std::get<object>((*r)->kind).content, 0), *r));
+    CHECK_EQ(host.after_decode_calls, 1);
+    std::get<object>((*r)->kind).content = nullptr;
+}
+
+// As decode_tag_sharedrefs in mruby-cbor sets the place to the value after _after_decode: a reference
+// after the object names the replacement.
+TEST_CASE("registered tag: after_decode sets the place of the mark")
+{
+    ref_host host;
+    host.replacement = u(99);
+    auto const r = cbor::decode<16>(host, "\x82\xd8\x1c\xd9\x13\x88\x81\x01\xd8\x1d\x00"sv);
+    REQUIRE(r.has_value());
+    CHECK(same(element(*r, 0), host.replacement));
+    CHECK(same(element(*r, 1), host.replacement));
+}
+
+// Ported from test.rb: 'registered tag + sharedref: mutual recursion between two instances'.
+TEST_CASE("registered tag: two objects that name each other")
+{
+    ref_host host;
+    // 28 5000([28 5000([29 0])])
+    auto const r = cbor::decode<16>(host, "\xd8\x1c\xd9\x13\x88\x81\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv);
+    REQUIRE(r.has_value());
+    auto const peer = element(std::get<object>((*r)->kind).content, 0);
+    CHECK(same(element(std::get<object>(peer->kind).content, 0), *r));
+    std::get<object>(peer->kind).content = nullptr;
+}
+
+// A tag without registration takes the plain path: no object first and no hook.
+TEST_CASE("registered tag: no hook for a tag without registration")
+{
+    ref_host host;
+    REQUIRE(cbor::decode<16>(host, "\xc1\x01"sv).has_value());
+    CHECK_EQ(host.after_decode_calls, 0);
 }

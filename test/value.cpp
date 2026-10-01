@@ -122,3 +122,38 @@ TEST_CASE("encode: a reserved simple value is an error")
     CHECK_EQ(encoded(V(simple{23})), "\xf7"sv);
     CHECK_EQ(encoded(V(simple{32})), "\xf8\x20"sv);
 }
+
+namespace
+{
+
+// A language with text and nothing else, as bash or zsh: it answers only kind_of and text_of.
+struct text_host {
+    using value = std::string;
+};
+
+inline cbor::kind tag_invoke(cbor::kind_of_t, text_host &, std::string const &v)
+{
+    return v == "array" ? cbor::kind::array : cbor::kind::text_string;
+}
+
+inline std::string_view tag_invoke(cbor::text_of_t, text_host &, std::string const &v)
+{
+    return v;
+}
+
+} // namespace
+
+// A host answers only the questions its language has; a kind it cannot answer is an error, not a
+// failure to compile.
+TEST_CASE("encode: a kind the host cannot describe is unsupported_value")
+{
+    text_host host;
+    string_writer w;
+    CHECK(cbor::encode<16>(host, w, std::string("a")).has_value());
+    CHECK_EQ(w.bytes, "\x61"
+                      "a"sv);
+    string_writer w2;
+    auto const r = cbor::encode<16>(host, w2, std::string("array"));
+    REQUIRE_FALSE(r.has_value());
+    CHECK((r.error() == error::unsupported_value));
+}
