@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <expected>
+#include <span>
 #include <string_view>
 
 namespace cbor::internal
@@ -18,9 +19,9 @@ struct head {
     std::uint64_t argument;
 };
 
-struct reader {
+struct decoder {
     std::string_view bytes;
-    std::expected<head, error> head_read()
+    std::expected<head, error> head_decode()
     {
         if (bytes.empty()) [[unlikely]]
             return std::unexpected(error::too_little_data);
@@ -61,6 +62,42 @@ struct reader {
         }
         bytes.remove_prefix(1 + size);
         return head{major, info, argument};
+    }
+};
+
+template <class StringWriter>
+struct encoder {
+    StringWriter &string_writer;
+    std::span<char> free;
+
+    void head_encode(std::uint8_t major, std::uint64_t argument)
+    {
+        if (free.size() < 9) [[unlikely]]
+            free = string_writer.grow(free.size(), 9);
+        char const initial = static_cast<char>(major << 5);
+        if (argument < 24) {
+            free[0] = static_cast<char>(initial | argument);
+            free = free.subspan(1);
+        } else if (argument <= 0xff) {
+            free[0] = static_cast<char>(initial | 24);
+            free[1] = static_cast<char>(argument);
+            free = free.subspan(2);
+        } else if (argument <= 0xffff) {
+            free[0] = static_cast<char>(initial | 25);
+            auto const v = std::byteswap(static_cast<std::uint16_t>(argument));
+            std::memcpy(free.data() + 1, &v, 2);
+            free = free.subspan(3);
+        } else if (argument <= 0xffffffff) {
+            free[0] = static_cast<char>(initial | 26);
+            auto const v = std::byteswap(static_cast<std::uint32_t>(argument));
+            std::memcpy(free.data() + 1, &v, 4);
+            free = free.subspan(5);
+        } else {
+            free[0] = static_cast<char>(initial | 27);
+            auto const v = std::byteswap(argument);
+            std::memcpy(free.data() + 1, &v, 8);
+            free = free.subspan(9);
+        }
     }
 };
 
