@@ -1,12 +1,13 @@
 #pragma once
 
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <expected>
-#include <span>
 #include <string_view>
+#include <system_error>
 
 namespace cbor::internal
 {
@@ -65,39 +66,42 @@ struct decoder {
     }
 };
 
-template <class StringWriter>
+template <class Writer>
 struct encoder {
-    StringWriter &string_writer;
-    std::span<char> free;
+    Writer &writer;
 
-    void head_encode(std::uint8_t major, std::uint64_t argument)
+    std::expected<void, std::errc> head_encode(std::uint8_t major, std::uint64_t argument)
     {
-        if (free.size() < 9) [[unlikely]]
-            free = string_writer.grow(free.size(), 9);
+        std::array<char, 9> head;
+        std::size_t size;
         char const initial = static_cast<char>(major << 5);
         if (argument < 24) {
-            free[0] = static_cast<char>(initial | argument);
-            free = free.subspan(1);
+            head[0] = static_cast<char>(initial | argument);
+            size = 1;
         } else if (argument <= 0xff) {
-            free[0] = static_cast<char>(initial | 24);
-            free[1] = static_cast<char>(argument);
-            free = free.subspan(2);
+            head[0] = static_cast<char>(initial | 24);
+            head[1] = static_cast<char>(argument);
+            size = 2;
         } else if (argument <= 0xffff) {
-            free[0] = static_cast<char>(initial | 25);
+            head[0] = static_cast<char>(initial | 25);
             auto const v = std::byteswap(static_cast<std::uint16_t>(argument));
-            std::memcpy(free.data() + 1, &v, 2);
-            free = free.subspan(3);
+            std::memcpy(head.data() + 1, &v, 2);
+            size = 3;
         } else if (argument <= 0xffffffff) {
-            free[0] = static_cast<char>(initial | 26);
+            head[0] = static_cast<char>(initial | 26);
             auto const v = std::byteswap(static_cast<std::uint32_t>(argument));
-            std::memcpy(free.data() + 1, &v, 4);
-            free = free.subspan(5);
+            std::memcpy(head.data() + 1, &v, 4);
+            size = 5;
         } else {
-            free[0] = static_cast<char>(initial | 27);
+            head[0] = static_cast<char>(initial | 27);
             auto const v = std::byteswap(argument);
-            std::memcpy(free.data() + 1, &v, 8);
-            free = free.subspan(9);
+            std::memcpy(head.data() + 1, &v, 8);
+            size = 9;
         }
+        std::errc const e = writer.append(std::string_view(head.data(), size));
+        if (e != std::errc{}) [[unlikely]]
+            return std::unexpected(e);
+        return {};
     }
 };
 
