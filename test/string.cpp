@@ -1,5 +1,4 @@
-#include <cbor/internal/head.hpp>
-#include <doctest/doctest.h>
+#include "host.hpp"
 
 #include <cstdint>
 #include <initializer_list>
@@ -9,75 +8,33 @@
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
-using cbor::internal::error;
+using cbor::error;
 
 namespace
 {
 
-// The Writer of a test: the output lives in a std::string, as a binding keeps it in the string of its
-// language.
-struct string_writer {
-    std::string bytes;
-
-    std::expected<void, std::errc> reserve(std::size_t size)
-    {
-        bytes.reserve(bytes.size() + size);
-        return {};
-    }
-
-    std::expected<void, std::errc> append(std::string_view part)
-    {
-        bytes.append(part);
-        return {};
-    }
-};
-
-std::string encoded_byte_string(std::string_view bytes)
+std::string encoded_byte_string(std::string_view b)
 {
-    string_writer w;
-    cbor::internal::encoder<string_writer> e{w};
-    REQUIRE(e.byte_string_encode(bytes).has_value());
-    return w.bytes;
+    return encoded(value{bytes{std::string(b)}});
 }
 
-std::string encoded_text_string(std::string_view text)
+std::string encoded_text_string(std::string_view t)
 {
-    string_writer w;
-    cbor::internal::encoder<string_writer> e{w};
-    REQUIRE(e.text_string_encode(text).has_value());
-    return w.bytes;
-}
-
-std::expected<std::string_view, error> byte_string_of(std::string_view wire)
-{
-    cbor::internal::decoder d{wire};
-    auto const h = d.head_decode();
-    REQUIRE(h.has_value());
-    REQUIRE_EQ(h->major, 2);
-    return d.byte_string_decode(h->argument);
-}
-
-std::expected<std::string_view, error> text_string_of(std::string_view wire)
-{
-    cbor::internal::decoder d{wire};
-    auto const h = d.head_decode();
-    REQUIRE(h.has_value());
-    REQUIRE_EQ(h->major, 3);
-    return d.text_string_decode(h->argument);
+    return encoded(value{std::string(t)});
 }
 
 std::string decoded_byte_string(std::string_view wire)
 {
-    auto const s = byte_string_of(wire);
-    REQUIRE(s.has_value());
-    return std::string(*s);
+    auto const v = decoded(wire);
+    REQUIRE(v.has_value());
+    return std::get<bytes>(v->kind).b;
 }
 
 std::string decoded_text_string(std::string_view wire)
 {
-    auto const s = text_string_of(wire);
-    REQUIRE(s.has_value());
-    return std::string(*s);
+    auto const v = decoded(wire);
+    REQUIRE(v.has_value());
+    return std::get<std::string>(v->kind);
 }
 
 } // namespace
@@ -115,15 +72,15 @@ TEST_CASE("major 3: every length survives encode and decode")
 TEST_CASE("major 3: invalid UTF-8")
 {
 #if CBOR_SIMDUTF
-    CHECK_EQ(text_string_of("\x63\xff\xfe\xfd"sv).error(), error::invalid_utf8_string);
+    CHECK_EQ(decode_error("\x63\xff\xfe\xfd"sv), error::invalid_utf8_string);
 #else
-    CHECK_EQ(*text_string_of("\x63\xff\xfe\xfd"sv), "\xff\xfe\xfd"sv);
+    CHECK_EQ(decoded_text_string("\x63\xff\xfe\xfd"sv), "\xff\xfe\xfd"s);
 #endif
 }
 
 // Ported from the 'out of bounds' raises of decode_bytes and decode_text in src/mrb_cbor.c.
 TEST_CASE("major 2 and 3: a length past the end is too_little_data")
 {
-    CHECK_EQ(byte_string_of("\x45\x01"sv).error(), error::too_little_data);
-    CHECK_EQ(text_string_of("\x65\x61"sv).error(), error::too_little_data);
+    CHECK_EQ(decode_error("\x45\x01"sv), error::too_little_data);
+    CHECK_EQ(decode_error("\x65\x61"sv), error::too_little_data);
 }
