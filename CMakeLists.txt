@@ -15,7 +15,7 @@ include(CTest)
 if(BUILD_TESTING)
 	find_package(doctest REQUIRED)
 	include(doctest)
-	add_executable(mbedded-cbor-test test/main.cpp test/float.cpp test/head.cpp test/string.cpp test/value.cpp test/shared.cpp test/error.cpp test/bignum.cpp test/doc_end.cpp test/lazy.cpp test/path.cpp test/vectors.cpp)
+	add_executable(mbedded-cbor-test test/main.cpp test/float.cpp test/head.cpp test/string.cpp test/value.cpp test/shared.cpp test/error.cpp test/bignum.cpp test/doc_end.cpp test/lazy.cpp test/path.cpp test/vectors.cpp test/corpus.cpp)
 	target_link_libraries(mbedded-cbor-test PRIVATE mbedded-cbor doctest::doctest)
 	target_compile_definitions(mbedded-cbor-test PRIVATE TEST_VECTORS="${CMAKE_CURRENT_SOURCE_DIR}/test-vectors"
 	                                                    FUZZ_CORPUS="${CMAKE_CURRENT_SOURCE_DIR}/fuzz/corpus")
