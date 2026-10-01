@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <expected>
+#include <limits>
 #include <string_view>
 #if CBOR_SIMDUTF
 #include <simdutf.h>
@@ -166,66 +167,100 @@ class internal
         }
     };
 
+    struct precision {
+        int significand_bits;
+        int exponent_bias;
+        std::uint32_t exponent_max;
+    };
+
+    static constexpr precision half_precision{10, 15, 31};
+    static constexpr precision single_precision{std::numeric_limits<float>::digits - 1,
+                                                std::numeric_limits<float>::max_exponent - 1,
+                                                2 * std::numeric_limits<float>::max_exponent - 1};
+    static constexpr precision double_precision{std::numeric_limits<double>::digits - 1,
+                                                std::numeric_limits<double>::max_exponent - 1,
+                                                2 * std::numeric_limits<double>::max_exponent - 1};
+
     static float float_decode_binary16(std::uint16_t half)
     {
-        std::uint32_t const sign = half & 0x8000u;
-        std::uint32_t const exp = half & 0x7c00u;
-        std::uint32_t const frac = half & 0x03ffu;
-        if (exp == 0x7c00u)
-            return std::bit_cast<float>(sign << 16 | 0x7f800000u | frac << 13);
+        constexpr precision h = half_precision;
+        constexpr precision f = single_precision;
+        constexpr int widen = f.significand_bits - h.significand_bits;
+        std::uint32_t const sign =
+            static_cast<std::uint32_t>(half >> (h.significand_bits + std::bit_width(h.exponent_max)))
+            << (f.significand_bits + std::bit_width(f.exponent_max));
+        std::uint32_t const exp = half >> h.significand_bits & h.exponent_max;
+        std::uint32_t const frac = half & ((1u << h.significand_bits) - 1u);
+        if (exp == h.exponent_max)
+            return std::bit_cast<float>(sign | f.exponent_max << f.significand_bits | frac << widen);
         if (exp != 0)
-            return std::bit_cast<float>(sign << 16 | ((exp >> 10) + (127 - 15)) << 23 | frac << 13);
+            return std::bit_cast<float>(
+                sign | (exp + f.exponent_bias - h.exponent_bias) << f.significand_bits | frac << widen);
         if (frac == 0)
-            return std::bit_cast<float>(sign << 16);
-        int const shift = std::countl_zero(static_cast<std::uint16_t>(frac << 5));
-        std::uint32_t const mant = (frac << shift) & 0x03ffu;
-        return std::bit_cast<float>(sign << 16 | static_cast<std::uint32_t>(127 - 14 - shift) << 23 |
-                                    mant << 13);
+            return std::bit_cast<float>(sign);
+        int const shift = std::countl_zero(static_cast<std::uint16_t>(
+            frac << (std::numeric_limits<std::uint16_t>::digits - 1 - h.significand_bits)));
+        std::uint32_t const mant = (frac << shift) & ((1u << h.significand_bits) - 1u);
+        return std::bit_cast<float>(
+            sign |
+            static_cast<std::uint32_t>(f.exponent_bias - (h.exponent_bias - 1) - shift)
+                << f.significand_bits |
+            mant << widen);
     }
 
     static std::uint16_t float_encode_binary16(float value)
     {
+        constexpr precision h = half_precision;
+        constexpr precision f = single_precision;
+        constexpr int narrow = f.significand_bits - h.significand_bits;
         std::uint32_t const bits = std::bit_cast<std::uint32_t>(value);
-        std::uint32_t const sign = bits >> 31;
-        std::uint32_t const exp32 = bits >> 23 & 0xffu;
-        std::uint32_t const mant32 = bits & 0x7fffffu;
-        std::uint32_t exp16;
-        std::uint32_t mant16;
-        if (exp32 == 0xff) {
+        std::uint32_t const sign = bits >> (f.significand_bits + std::bit_width(f.exponent_max))
+                                               << (h.significand_bits + std::bit_width(h.exponent_max));
+        std::uint32_t const exp32 = bits >> f.significand_bits & f.exponent_max;
+        std::uint32_t const mant32 = bits & ((1u << f.significand_bits) - 1u);
+        if (exp32 == f.exponent_max) {
             if (mant32 != 0)
-                return 0x7e00u;
-            exp16 = 0x1f;
-            mant16 = 0;
-        } else if (exp32 == 0) {
-            exp16 = 0;
-            mant16 = 0;
-        } else if (exp32 >= 113) {
-            exp16 = exp32 - 112;
-            mant16 = mant32 >> 13;
-        } else {
-            exp16 = 0;
-            mant16 = (0x800000u | mant32) >> (126 - exp32);
+                return static_cast<std::uint16_t>(h.exponent_max << h.significand_bits |
+                                                  1u << (h.significand_bits - 1));
+            return static_cast<std::uint16_t>(sign | h.exponent_max << h.significand_bits);
         }
-        return static_cast<std::uint16_t>(sign << 15 | exp16 << 10 | mant16);
+        if (exp32 == 0)
+            return static_cast<std::uint16_t>(sign);
+        if (exp32 > static_cast<std::uint32_t>(f.exponent_bias - h.exponent_bias))
+            return static_cast<std::uint16_t>(
+                sign | (exp32 - (f.exponent_bias - h.exponent_bias)) << h.significand_bits |
+                mant32 >> narrow);
+        return static_cast<std::uint16_t>(sign | ((1u << f.significand_bits) | mant32) >>
+                                                     (f.exponent_bias - 1 - static_cast<int>(exp32)));
     }
 
     static simple_float_information preferred_float_info(double value)
     {
+        constexpr precision h = half_precision;
+        constexpr precision f = single_precision;
+        constexpr precision d = double_precision;
         std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
-        std::uint32_t const exp = bits >> 52 & 0x7ffu;
-        std::uint64_t const mant = bits & 0xfffffffffffffu;
-        if (exp == 0x7ff)
+        std::uint32_t const exp = bits >> d.significand_bits & d.exponent_max;
+        std::uint64_t const mant = bits & ((std::uint64_t{1} << d.significand_bits) - 1u);
+        std::uint32_t const mant32 =
+            static_cast<std::uint32_t>(mant >> (d.significand_bits - f.significand_bits));
+        if (exp == d.exponent_max)
             return simple_float_information::half_precision_float;
         if (exp == 0)
             return mant == 0 ? simple_float_information::half_precision_float
                              : simple_float_information::double_precision_float;
-        if ((mant & 0x1fffffffu) != 0 || exp < 897 || exp > 1150)
+        if ((mant & ((std::uint64_t{1} << (d.significand_bits - f.significand_bits)) - 1u)) != 0 ||
+            exp < static_cast<std::uint32_t>(d.exponent_bias - f.exponent_bias + 1) ||
+            exp > static_cast<std::uint32_t>(d.exponent_bias + f.exponent_bias))
             return simple_float_information::double_precision_float;
-        if (exp >= 1009 && exp <= 1038)
-            return (mant >> 29 & 0x1fffu) == 0 ? simple_float_information::half_precision_float
-                                               : simple_float_information::single_precision_float;
-        if (exp >= 999 && exp <= 1008)
-            return (mant >> 29 & ((1u << (1022 - exp)) - 1u)) == 0
+        if (exp >= static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias + 1) &&
+            exp <= static_cast<std::uint32_t>(d.exponent_bias + h.exponent_bias))
+            return (mant32 & ((1u << (f.significand_bits - h.significand_bits)) - 1u)) == 0
+                       ? simple_float_information::half_precision_float
+                       : simple_float_information::single_precision_float;
+        if (exp >= static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias - h.significand_bits + 1) &&
+            exp <= static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias))
+            return (mant32 & ((1u << (d.exponent_bias - 1 - static_cast<int>(exp))) - 1u)) == 0
                        ? simple_float_information::half_precision_float
                        : simple_float_information::single_precision_float;
         return simple_float_information::single_precision_float;
