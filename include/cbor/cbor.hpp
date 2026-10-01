@@ -151,6 +151,8 @@ inline constexpr struct map_decode_t : customization_point<map_decode_t> {
 } map_decode;
 inline constexpr struct map_insert_t : customization_point<map_insert_t> {
 } map_insert;
+inline constexpr struct value_encode_t : customization_point<value_encode_t> {
+} value_encode;
 inline constexpr struct tag_decode_t : customization_point<tag_decode_t> {
 } tag_decode;
 inline constexpr struct float_decode_t : customization_point<float_decode_t> {
@@ -163,6 +165,9 @@ std::expected<typename Host::value, error> decode(Host &host, std::string_view b
 
 template <class Writer>
 struct encoder;
+
+template <std::size_t DepthMax, class Host, class Writer>
+std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value);
 
 class internal
 {
@@ -470,6 +475,10 @@ class internal
 
     template <class Writer>
     friend struct encoder;
+
+    template <std::size_t DepthMax, class Host, class Writer>
+    friend std::expected<void, std::error_code> encode(Host &host, Writer &writer,
+                                                       typename Host::value const &value);
 };
 
 template <class Writer>
@@ -568,6 +577,100 @@ std::expected<typename Host::value, error> decode(Host &host, std::string_view b
     internal::decoder d{bytes};
     internal::marks<Host> shared;
     return internal::value_decode<DepthMax>(d, host, shared, 0, std::nullopt);
+}
+
+template <std::size_t DepthMax, class Host, class Writer>
+class visitor
+{
+    Host &host;
+    encoder<Writer> out;
+    std::size_t depth = 0;
+    std::error_code failure;
+
+    template <std::size_t, class H, class W>
+    friend std::expected<void, std::error_code> encode(H &host, W &writer, typename H::value const &value);
+
+    visitor(Host &h, Writer &w) : host(h), out{w}
+    {
+    }
+
+    void keep(std::expected<void, std::errc> const r)
+    {
+        if (!r && !failure) [[unlikely]]
+            failure = std::make_error_code(r.error());
+    }
+
+public:
+    visitor(visitor const &) = delete;
+    visitor &operator=(visitor const &) = delete;
+
+    void unsigned_integer(std::uint64_t const n)
+    {
+        keep(out.head_encode(major_type::unsigned_integer, n));
+    }
+
+    void negative_integer(std::uint64_t const argument)
+    {
+        keep(out.head_encode(major_type::negative_integer, argument));
+    }
+
+    void byte_string(std::string_view const bytes)
+    {
+        keep(out.byte_string_encode(bytes));
+    }
+
+    void text_string(std::string_view const text)
+    {
+        keep(out.text_string_encode(text));
+    }
+
+    void floating_point(double const value)
+    {
+        keep(out.float_encode(value));
+    }
+
+    void simple_value(std::uint8_t const value)
+    {
+        keep(out.head_encode(major_type::simple_float, value));
+    }
+
+    void array(std::uint64_t const size)
+    {
+        keep(out.head_encode(major_type::array, size));
+    }
+
+    void map(std::uint64_t const size)
+    {
+        keep(out.head_encode(major_type::map, size));
+    }
+
+    void tag(std::uint64_t const number)
+    {
+        keep(out.head_encode(major_type::tag, number));
+    }
+
+    void value(typename Host::value const &child)
+    {
+        if (failure) [[unlikely]]
+            return;
+        if (depth >= DepthMax) [[unlikely]] {
+            failure = make_error_code(error::nesting_depth_exceeded);
+            return;
+        }
+        ++depth;
+        value_encode(host, child, *this);
+        --depth;
+    }
+};
+
+template <std::size_t DepthMax, class Host, class Writer>
+std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value)
+{
+    visitor<DepthMax, Host, Writer> visit{host, writer};
+    value_encode(host, value, visit);
+    if (visit.failure) [[unlikely]]
+        return std::unexpected(visit.failure);
+    return {};
 }
 
 } // namespace cbor
