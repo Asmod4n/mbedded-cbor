@@ -230,7 +230,7 @@ value M(T... t)
     array const flat{V(std::move(t))...};
     map m;
     for (std::size_t i = 0; i < flat.size(); i += 2)
-        m.push_back(entry{flat[i], flat[i + 1]});
+        m.push_back(entry{flat.at(i), flat.at(i + 1)});
     return {std::move(m)};
 }
 
