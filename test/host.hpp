@@ -170,7 +170,7 @@ inline void tag_invoke(cbor::value_encode_t, test_host &, value const &v, Visito
             } else if constexpr (std::is_same_v<K, map>) {
                 visit.map(k.size());
                 for (auto const &[key, val] : k) {
-                    visit.value(key);
+                    visit.key(key);
                     visit.value(val);
                 }
             } else {
