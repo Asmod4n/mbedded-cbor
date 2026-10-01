@@ -3,11 +3,14 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <expected>
+#include <iterator>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -38,7 +41,8 @@ enum class error {
     unsupported_value,
     not_indexable,
     index_out_of_bounds,
-    key_not_found
+    key_not_found,
+    invalid_path
 };
 
 enum class condition { not_well_formed = 1, not_valid, not_supported, not_found };
@@ -84,6 +88,8 @@ public:
             return "index outside of array bounds";
         case error::key_not_found:
             return "key not found";
+        case error::invalid_path:
+            return "invalid path";
         }
         return "unknown cbor error";
     }
@@ -108,6 +114,7 @@ public:
         case error::sharedref_index_out_of_range:
         case error::sharedref_not_complete:
         case error::reserved_simple_value:
+        case error::invalid_path:
             return {static_cast<int>(condition::not_valid), *this};
         }
         return {value, *this};
@@ -261,6 +268,15 @@ std::expected<lazy, error> lazy_at(lazy l, std::string_view key);
 
 template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> lazy_decode(Host &host, lazy l);
+
+struct path_step {
+    enum class kind { key, index, wildcard } kind;
+    std::string_view key;
+    std::int64_t index;
+};
+
+template <std::size_t DepthMax, class Host>
+std::expected<typename Host::value, error> path_decode(Host &host, std::span<path_step const> steps, lazy l);
 
 template <std::size_t DepthMax>
 std::expected<std::size_t, error> doc_end(std::string_view bytes);
@@ -689,6 +705,10 @@ class internal
 
     template <std::size_t DepthMax, class Host>
     friend std::expected<typename Host::value, error> lazy_decode(Host &host, lazy l);
+
+    template <std::size_t DepthMax, class Host>
+    friend std::expected<typename Host::value, error> path_decode(Host &host,
+                                                                  std::span<path_step const> steps, lazy l);
 
     template <std::size_t DepthMax>
     static std::expected<void, error> marks_scan(decoder &d, std::string_view const document,
@@ -1264,6 +1284,97 @@ std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const l)
     internal::marks<Host> shared(before.offsets.size());
     internal::decoder d{l.document.substr(l.offset)};
     return internal::value_decode<DepthMax>(d, host, shared, &before, 0, std::nullopt);
+}
+
+constexpr std::expected<std::vector<path_step>, error> path_compile(std::string_view const source)
+{
+    auto const letter = [](char const c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+    };
+    auto const digit = [](char const c) { return c >= '0' && c <= '9'; };
+    std::vector<path_step> steps;
+    std::string_view rest = source;
+    if (rest.starts_with('$'))
+        rest.remove_prefix(1);
+    while (!rest.empty()) {
+        if (rest.front() == '.') {
+            rest.remove_prefix(1);
+            if (rest.empty() || !letter(rest.front())) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            std::size_t n = 1;
+            while (n < rest.size() && (letter(rest.at(n)) || digit(rest.at(n))))
+                ++n;
+            steps.push_back({path_step::kind::key, rest.substr(0, n), 0});
+            rest.remove_prefix(n);
+        } else if (rest.front() == '[') {
+            rest.remove_prefix(1);
+            if (rest.starts_with("*]")) {
+                steps.push_back({path_step::kind::wildcard, {}, 0});
+                rest.remove_prefix(2);
+            } else if (rest.starts_with('"')) {
+                std::size_t const close = rest.find('"', 1);
+                if (close == std::string_view::npos || rest.substr(close + 1).empty() ||
+                    rest.at(close + 1) != ']') [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                steps.push_back({path_step::kind::key, rest.substr(1, close - 1), 0});
+                rest.remove_prefix(close + 2);
+            } else {
+                std::int64_t index = 0;
+                auto const [end, failure] = std::from_chars(rest.data(), std::to_address(rest.end()), index);
+                std::size_t const used = static_cast<std::size_t>(std::distance(rest.data(), end));
+                if (failure != std::errc{} || used >= rest.size() || rest.at(used) != ']') [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                steps.push_back({path_step::kind::index, {}, index});
+                rest.remove_prefix(used + 1);
+            }
+        } else if (rest.front() == ' ' || rest.front() == '\t' || rest.front() == '\n' ||
+                   rest.front() == '\r') {
+            rest.remove_prefix(1);
+        } else [[unlikely]] {
+            return std::unexpected(error::invalid_path);
+        }
+    }
+    return steps;
+}
+
+template <std::size_t DepthMax, class Host>
+std::expected<typename Host::value, error> path_decode(Host &host, std::span<path_step const> const steps,
+                                                       lazy const l)
+{
+    lazy at = l;
+    for (std::size_t i = 0; i < steps.size(); ++i) {
+        path_step const &step = steps.subspan(i).front();
+        if (step.kind == path_step::kind::key) {
+            auto const next = lazy_at<DepthMax>(at, step.key);
+            if (!next) [[unlikely]]
+                return std::unexpected(next.error());
+            at = *next;
+        } else if (step.kind == path_step::kind::index) {
+            auto const next = lazy_at<DepthMax>(at, step.index);
+            if (!next) [[unlikely]]
+                return std::unexpected(next.error());
+            at = *next;
+        } else {
+            auto const found = internal::container_resolve<DepthMax>(at);
+            if (!found) [[unlikely]]
+                return std::unexpected(found.error());
+            auto [h, d] = *found;
+            if (h.major != major_type::array) [[unlikely]]
+                return std::unexpected(error::not_indexable);
+            auto array = array_decode(host);
+            for (std::uint64_t e = 0; e < h.argument; ++e) {
+                lazy const element{at.document, at.document.size() - d.bytes.size()};
+                auto value = path_decode<DepthMax>(host, steps.subspan(i + 1), element);
+                if (!value) [[unlikely]]
+                    return value;
+                array = array_append(host, std::move(array), std::move(*value));
+                if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+            }
+            return array;
+        }
+    }
+    return lazy_decode<DepthMax>(host, at);
 }
 
 } // namespace cbor
