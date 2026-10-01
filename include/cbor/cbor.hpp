@@ -32,7 +32,8 @@ enum class error {
     inadmissible_type_for_tag_content,
     sharedref_index_not_marked,
     sharedref_index_out_of_range,
-    sharedref_not_complete
+    sharedref_not_complete,
+    reserved_simple_value
 };
 
 enum class condition { not_well_formed = 1, not_valid, not_supported };
@@ -68,6 +69,8 @@ public:
             return "sharedref index out of range";
         case error::sharedref_not_complete:
             return "sharedref not complete";
+        case error::reserved_simple_value:
+            return "reserved simple value";
         }
         return "unknown cbor error";
     }
@@ -86,6 +89,7 @@ public:
         case error::sharedref_index_not_marked:
         case error::sharedref_index_out_of_range:
         case error::sharedref_not_complete:
+        case error::reserved_simple_value:
             return {static_cast<int>(condition::not_valid), *this};
         }
         return {value, *this};
@@ -186,6 +190,8 @@ class internal
         eight_byte_argument,
         indefinite_length = 31
     };
+
+    static constexpr std::uint8_t simple_value_one_byte_min = 32;
 
     enum class tag_number : std::uint64_t { shareable = 28, sharedref = 29 };
 
@@ -461,7 +467,7 @@ class internal
         default:
             switch (static_cast<simple_float_information>(h->info)) {
             case simple_float_information::simple_value_follows:
-                if (h->argument < 32) [[unlikely]]
+                if (h->argument < simple_value_one_byte_min) [[unlikely]]
                     return std::unexpected(error::syntax_error);
                 return simple_value_decode(host, static_cast<std::uint8_t>(h->argument));
             case simple_float_information::half_precision_float:
@@ -632,13 +638,19 @@ class visitor
             failure = std::make_error_code(r.error());
     }
 
+    void keep_error(error const e)
+    {
+        if (!failure)
+            failure = make_error_code(e);
+    }
+
     template <class Identity>
     void child(typename Host::value const &item, Identity const &identity)
     {
         if (failure) [[unlikely]]
             return;
         if (depth > DepthMax) [[unlikely]] {
-            failure = make_error_code(error::nesting_depth_exceeded);
+            keep_error(error::nesting_depth_exceeded);
             return;
         }
         if constexpr (Pass::value == pass::count) {
@@ -694,6 +706,11 @@ public:
 
     void simple_value(std::uint8_t const value)
     {
+        if (value >= std::to_underlying(internal::simple_float_information::simple_value_follows) &&
+            value < internal::simple_value_one_byte_min) [[unlikely]] {
+            keep_error(error::reserved_simple_value);
+            return;
+        }
         keep(out.head_encode(major_type::simple_float, value));
     }
 

@@ -107,3 +107,18 @@ TEST_CASE("depth: encode past the limit")
     REQUIRE_FALSE(r.has_value());
     CHECK((r.error() == error::nesting_depth_exceeded));
 }
+
+// RFC 8949 Table 4: the simple values 24 to 31 are reserved; Appendix F: f8 with a value below 32 is
+// not well-formed, so no encoder may write one.
+TEST_CASE("encode: a reserved simple value is an error")
+{
+    for (std::uint8_t v = 24; v < 32; ++v) {
+        test_host host;
+        string_writer w;
+        auto const r = cbor::encode<16>(host, w, V(simple{v}));
+        REQUIRE_FALSE(r.has_value());
+        CHECK((r.error() == error::reserved_simple_value));
+    }
+    CHECK_EQ(encoded(V(simple{23})), "\xf7"sv);
+    CHECK_EQ(encoded(V(simple{32})), "\xf8\x20"sv);
+}
