@@ -710,13 +710,15 @@ class internal
     friend std::expected<typename Host::value, error> path_decode(Host &host,
                                                                   std::span<path_step const> steps, lazy l);
 
+    enum class scan { go_on, done };
+
     template <std::size_t DepthMax>
-    static std::expected<void, error> marks_scan(decoder &d, std::string_view const document,
+    static std::expected<scan, error> marks_scan(decoder &d, std::string_view const document,
                                                  std::size_t const end, std::vector<std::size_t> &offsets,
                                                  std::size_t const depth)
     {
         if (document.size() - d.bytes.size() >= end)
-            return {};
+            return scan::done;
         if (depth > DepthMax) [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
         auto const h = d.head_decode();
@@ -728,23 +730,24 @@ class internal
             auto const s = d.byte_string_decode(h->argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
-            return {};
+            return scan::go_on;
         }
         case major_type::array:
-        case major_type::map: {
-            std::uint64_t const items = h->major == major_type::map ? 2 * h->argument : h->argument;
-            for (std::uint64_t i = 0; i < items; ++i)
-                if (auto const r = marks_scan<DepthMax>(d, document, end, offsets, depth + 1); !r)
-                    [[unlikely]]
-                    return r;
-            return {};
-        }
+        case major_type::map:
+            for (std::uint64_t i = 0; i < h->argument; ++i) {
+                for (int part = 0; part < (h->major == major_type::map ? 2 : 1); ++part) {
+                    auto const r = marks_scan<DepthMax>(d, document, end, offsets, depth + 1);
+                    if (!r || *r == scan::done)
+                        return r;
+                }
+            }
+            return scan::go_on;
         case major_type::tag:
             if (h->argument == std::to_underlying(tag_number::shareable))
                 offsets.push_back(document.size() - d.bytes.size());
             return marks_scan<DepthMax>(d, document, end, offsets, depth + 1);
         default:
-            return {};
+            return scan::go_on;
         }
     }
 
@@ -786,7 +789,10 @@ class internal
                 return std::unexpected(offsets.error());
             if (r->argument >= offsets->size()) [[unlikely]]
                 return std::unexpected(error::sharedref_index_not_marked);
-            offset = offsets->at(static_cast<std::size_t>(r->argument));
+            std::size_t const marked = offsets->at(static_cast<std::size_t>(r->argument));
+            if (marked >= offset) [[unlikely]]
+                return std::unexpected(error::sharedref_not_complete);
+            offset = marked;
         }
     }
 
