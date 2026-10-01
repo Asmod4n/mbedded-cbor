@@ -1,12 +1,11 @@
 #include <cbor/internal/head.hpp>
 #include <doctest/doctest.h>
 
-#include <algorithm>
 #include <cstdint>
 #include <initializer_list>
-#include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 using namespace std::string_view_literals;
 using cbor::internal::error;
@@ -27,33 +26,44 @@ void check_head(std::string_view wire, std::uint8_t major, std::uint64_t argumen
     CHECK_EQ(h->argument, argument);
 }
 
-// The StringWriter of a test: the output lives in a std::string, as a binding keeps it in the string of
-// its language.
+// The Writer of a test: the output lives in a std::string, as a binding keeps it in the string of its
+// language.
 struct string_writer {
     std::string bytes;
-    int grows = 0;
 
-    std::span<char> grow(std::size_t unused, std::size_t needed)
+    std::errc reserve(std::size_t size)
     {
-        ++grows;
-        std::size_t const written = bytes.size() - unused;
-        bytes.resize(std::max(bytes.size() * 2, written + needed));
-        return std::span<char>(bytes).subspan(written);
+        bytes.reserve(bytes.size() + size);
+        return {};
     }
 
-    std::string done(std::size_t unused)
+    std::errc append(std::string_view part)
     {
-        bytes.resize(bytes.size() - unused);
+        bytes.append(part);
+        return {};
+    }
+
+    std::string done(std::size_t size)
+    {
+        bytes.resize(size);
         return bytes;
+    }
+};
+
+// A Writer whose language has no more space.
+struct full_writer {
+    std::errc append(std::string_view)
+    {
+        return std::errc::not_enough_memory;
     }
 };
 
 std::string encoded(std::uint8_t major, std::uint64_t argument)
 {
     string_writer w;
-    cbor::internal::encoder<string_writer> e{w, {}};
-    e.head_encode(major, argument);
-    return w.done(e.free.size());
+    cbor::internal::encoder<string_writer> e{w};
+    REQUIRE(e.head_encode(major, argument).has_value());
+    return w.done(w.bytes.size());
 }
 
 } // namespace
@@ -154,11 +164,10 @@ TEST_CASE("head: every power of 2 survives head_encode and head_decode")
             check_head(encoded(major, 1ull << i), major, 1ull << i);
 }
 
-// The first head of an encoder with no space must ask the StringWriter for space.
-TEST_CASE("head: head_encode grows an empty StringWriter")
+// The error of the Writer reaches the caller unchanged, because only the language knows what it means.
+TEST_CASE("head: head_encode returns the error of the Writer")
 {
-    string_writer w;
-    cbor::internal::encoder<string_writer> e{w, {}};
-    e.head_encode(0, 0);
-    CHECK_EQ(w.grows, 1);
+    full_writer w;
+    cbor::internal::encoder<full_writer> e{w};
+    CHECK_EQ(e.head_encode(0, 0).error(), std::errc::not_enough_memory);
 }
