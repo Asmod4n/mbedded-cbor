@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.25)
+project(mbedded-cbor LANGUAGES CXX)
+
+add_library(mbedded-cbor INTERFACE)
+target_include_directories(mbedded-cbor INTERFACE include)
+target_compile_features(mbedded-cbor INTERFACE cxx_std_23)
+
+include(CTest)
+if(BUILD_TESTING)
+	find_package(doctest REQUIRED)
+	include(doctest)
+	add_executable(mbedded-cbor-test test/main.cpp test/float.cpp)
+	target_link_libraries(mbedded-cbor-test PRIVATE mbedded-cbor doctest::doctest)
+	doctest_discover_tests(mbedded-cbor-test)
+endif()
