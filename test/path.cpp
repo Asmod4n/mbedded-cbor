@@ -33,14 +33,6 @@ error path_error(std::string_view const path, value const &data)
     return r.error();
 }
 
-value users_of(std::vector<std::string> const &names)
-{
-    array a;
-    for (std::string const &n : names)
-        a.push_back(M("name"s, n));
-    return {a};
-}
-
 } // namespace
 
 // Ported from test.rb: 'path: plain point query (no wildcards)'.
