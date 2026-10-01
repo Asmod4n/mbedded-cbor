@@ -15,6 +15,8 @@
 #include <simdutf.h>
 #endif
 #include <system_error>
+#include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -153,6 +155,10 @@ inline constexpr struct map_insert_t : customization_point<map_insert_t> {
 } map_insert;
 inline constexpr struct value_encode_t : customization_point<value_encode_t> {
 } value_encode;
+inline constexpr struct value_identity_t : customization_point<value_identity_t> {
+} value_identity;
+inline constexpr struct key_identity_t : customization_point<key_identity_t> {
+} key_identity;
 inline constexpr struct tag_decode_t : customization_point<tag_decode_t> {
 } tag_decode;
 inline constexpr struct float_decode_t : customization_point<float_decode_t> {
@@ -166,7 +172,9 @@ std::expected<typename Host::value, error> decode(Host &host, std::string_view b
 template <class Writer>
 struct encoder;
 
-template <std::size_t DepthMax, class Host, class Writer>
+enum class sharedrefs { off, on };
+
+template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Host, class Writer>
 std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value);
 
 class internal
@@ -476,9 +484,12 @@ class internal
     template <class Writer>
     friend struct encoder;
 
-    template <std::size_t DepthMax, class Host, class Writer>
+    template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
     friend std::expected<void, std::error_code> encode(Host &host, Writer &writer,
                                                        typename Host::value const &value);
+
+    template <std::size_t, class, class, class>
+    friend class visitor;
 };
 
 template <class Writer>
@@ -579,18 +590,39 @@ std::expected<typename Host::value, error> decode(Host &host, std::string_view b
     return internal::value_decode<DepthMax>(d, host, shared, 0, std::nullopt);
 }
 
-template <std::size_t DepthMax, class Host, class Writer>
+enum class pass { plain, count, write };
+
+struct discarding_writer {
+    std::expected<void, std::errc> reserve(std::size_t)
+    {
+        return {};
+    }
+
+    std::expected<void, std::errc> append(std::string_view)
+    {
+        return {};
+    }
+};
+
+template <class Host>
+struct sharing {
+    std::unordered_map<typename Host::identity, std::uint64_t> seen;
+    std::unordered_map<typename Host::identity, std::uint64_t> numbers;
+};
+
+template <std::size_t DepthMax, class Host, class Writer, class Pass>
 class visitor
 {
     Host &host;
     encoder<Writer> out;
+    sharing<Host> *shared;
     std::size_t depth = 0;
     std::error_code failure;
 
-    template <std::size_t, class H, class W>
+    template <std::size_t, sharedrefs, class H, class W>
     friend std::expected<void, std::error_code> encode(H &host, W &writer, typename H::value const &value);
 
-    visitor(Host &h, Writer &w) : host(h), out{w}
+    visitor(Host &h, Writer &w, sharing<Host> *s) : host(h), out{w}, shared(s)
     {
     }
 
@@ -598,6 +630,37 @@ class visitor
     {
         if (!r && !failure) [[unlikely]]
             failure = std::make_error_code(r.error());
+    }
+
+    template <class Identity>
+    void child(typename Host::value const &item, Identity const &identity)
+    {
+        if (failure) [[unlikely]]
+            return;
+        if (depth > DepthMax) [[unlikely]] {
+            failure = make_error_code(error::nesting_depth_exceeded);
+            return;
+        }
+        if constexpr (Pass::value == pass::count) {
+            if (identity && ++shared->seen[*identity] > 1)
+                return;
+        }
+        if constexpr (Pass::value == pass::write) {
+            if (identity && shared->seen.at(*identity) > 1) {
+                auto const number = shared->numbers.find(*identity);
+                if (number != shared->numbers.end()) {
+                    keep(out.head_encode(major_type::tag,
+                                         std::to_underlying(internal::tag_number::sharedref)));
+                    keep(out.head_encode(major_type::unsigned_integer, number->second));
+                    return;
+                }
+                shared->numbers.emplace(*identity, shared->numbers.size());
+                keep(out.head_encode(major_type::tag, std::to_underlying(internal::tag_number::shareable)));
+            }
+        }
+        ++depth;
+        value_encode(host, item, *this);
+        --depth;
     }
 
 public:
@@ -649,27 +712,46 @@ public:
         keep(out.head_encode(major_type::tag, number));
     }
 
-    void value(typename Host::value const &child)
+    void key(typename Host::value const &item)
     {
-        if (failure) [[unlikely]]
-            return;
-        if (depth >= DepthMax) [[unlikely]] {
-            failure = make_error_code(error::nesting_depth_exceeded);
-            return;
-        }
-        ++depth;
-        value_encode(host, child, *this);
-        --depth;
+        if constexpr (Pass::value == pass::plain)
+            child(item, std::false_type{});
+        else
+            child(item, key_identity(host, item));
+    }
+
+    void value(typename Host::value const &item)
+    {
+        if constexpr (Pass::value == pass::plain)
+            child(item, std::false_type{});
+        else
+            child(item, value_identity(host, item));
     }
 };
 
-template <std::size_t DepthMax, class Host, class Writer>
+template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
 std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value)
 {
-    visitor<DepthMax, Host, Writer> visit{host, writer};
-    value_encode(host, value, visit);
-    if (visit.failure) [[unlikely]]
-        return std::unexpected(visit.failure);
+    if constexpr (Sharing == sharedrefs::off) {
+        visitor<DepthMax, Host, Writer, std::integral_constant<pass, pass::plain>> visit{host, writer,
+                                                                                         nullptr};
+        visit.value(value);
+        if (visit.failure) [[unlikely]]
+            return std::unexpected(visit.failure);
+    } else {
+        sharing<Host> shared;
+        discarding_writer nothing;
+        visitor<DepthMax, Host, discarding_writer, std::integral_constant<pass, pass::count>> count{
+            host, nothing, &shared};
+        count.value(value);
+        if (count.failure) [[unlikely]]
+            return std::unexpected(count.failure);
+        visitor<DepthMax, Host, Writer, std::integral_constant<pass, pass::write>> write{host, writer,
+                                                                                         &shared};
+        write.value(value);
+        if (write.failure) [[unlikely]]
+            return std::unexpected(write.failure);
+    }
     return {};
 }
 
