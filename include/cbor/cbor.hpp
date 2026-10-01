@@ -7,24 +7,111 @@
 #include <cstring>
 #include <expected>
 #include <limits>
+#include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #if CBOR_SIMDUTF
 #include <simdutf.h>
 #endif
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace cbor
 {
 
 enum class error {
-    too_little_data,
+    too_little_data = 1,
     syntax_error,
     indefinite_length,
     invalid_utf8_string,
-    nesting_depth_exceeded
+    nesting_depth_exceeded,
+    inadmissible_type_for_tag_content,
+    sharedref_index_not_marked,
+    sharedref_index_out_of_range,
+    sharedref_not_complete
 };
+
+enum class condition { not_well_formed = 1, not_valid, not_supported };
+
+class category final : public std::error_category
+{
+public:
+    constexpr category() = default;
+
+    char const *name() const noexcept override
+    {
+        return "cbor";
+    }
+
+    std::string message(int const value) const override
+    {
+        switch (static_cast<error>(value)) {
+        case error::too_little_data:
+            return "too little data";
+        case error::syntax_error:
+            return "syntax error";
+        case error::indefinite_length:
+            return "indefinite length";
+        case error::invalid_utf8_string:
+            return "invalid UTF-8 string";
+        case error::nesting_depth_exceeded:
+            return "nesting depth exceeded";
+        case error::inadmissible_type_for_tag_content:
+            return "inadmissible type for tag content";
+        case error::sharedref_index_not_marked:
+            return "sharedref index not marked";
+        case error::sharedref_index_out_of_range:
+            return "sharedref index out of range";
+        case error::sharedref_not_complete:
+            return "sharedref not complete";
+        }
+        return "unknown cbor error";
+    }
+
+    std::error_condition default_error_condition(int const value) const noexcept override
+    {
+        switch (static_cast<error>(value)) {
+        case error::too_little_data:
+        case error::syntax_error:
+            return {static_cast<int>(condition::not_well_formed), *this};
+        case error::indefinite_length:
+        case error::nesting_depth_exceeded:
+            return {static_cast<int>(condition::not_supported), *this};
+        case error::invalid_utf8_string:
+        case error::inadmissible_type_for_tag_content:
+        case error::sharedref_index_not_marked:
+        case error::sharedref_index_out_of_range:
+        case error::sharedref_not_complete:
+            return {static_cast<int>(condition::not_valid), *this};
+        }
+        return {value, *this};
+    }
+};
+
+inline constinit category const cbor_category;
+
+inline std::error_code make_error_code(error const e) noexcept
+{
+    return {static_cast<int>(e), cbor_category};
+}
+
+inline std::error_condition make_error_condition(condition const c) noexcept
+{
+    return {static_cast<int>(c), cbor_category};
+}
+
+} // namespace cbor
+
+template <>
+struct std::is_error_code_enum<cbor::error> : std::true_type {};
+
+template <>
+struct std::is_error_condition_enum<cbor::condition> : std::true_type {};
+
+namespace cbor
+{
 
 enum class major_type : std::uint8_t {
     unsigned_integer,
@@ -86,6 +173,11 @@ class internal
         eight_byte_argument,
         indefinite_length = 31
     };
+
+    enum class tag_number : std::uint64_t { shareable = 28, sharedref = 29 };
+
+    template <class Host>
+    using marks = std::vector<std::optional<typename Host::value>>;
 
     enum class simple_float_information : std::uint8_t {
         simple_value_follows = 24,
@@ -269,7 +361,9 @@ class internal
     }
 
     template <std::size_t DepthMax, class Host>
-    static std::expected<typename Host::value, error> value_decode(decoder &d, Host &host, std::size_t depth)
+    static std::expected<typename Host::value, error> value_decode(decoder &d, Host &host,
+                                                                   marks<Host> &shared, std::size_t depth,
+                                                                   std::optional<std::size_t> const mark)
     {
         if (depth > DepthMax) [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
@@ -295,8 +389,10 @@ class internal
         }
         case major_type::array: {
             auto array = array_decode(host);
+            if (mark)
+                shared.at(*mark) = array;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto element = value_decode<DepthMax>(d, host, depth + 1);
+                auto element = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
                 if (!element) [[unlikely]]
                     return element;
                 array = array_append(host, std::move(array), std::move(*element));
@@ -305,11 +401,13 @@ class internal
         }
         case major_type::map: {
             auto map = map_decode(host);
+            if (mark)
+                shared.at(*mark) = map;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto key = value_decode<DepthMax>(d, host, depth + 1);
+                auto key = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
                 if (!key) [[unlikely]]
                     return key;
-                auto value = value_decode<DepthMax>(d, host, depth + 1);
+                auto value = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
                 if (!value) [[unlikely]]
                     return value;
                 map = map_insert(host, std::move(map), std::move(*key), std::move(*value));
@@ -317,7 +415,32 @@ class internal
             return map;
         }
         case major_type::tag: {
-            auto content = value_decode<DepthMax>(d, host, depth + 1);
+            if (h->argument == std::to_underlying(tag_number::shareable)) {
+                std::size_t const index = shared.size();
+                shared.emplace_back();
+                auto content = value_decode<DepthMax>(d, host, shared, depth + 1, index);
+                if (!content) [[unlikely]]
+                    return content;
+                if (!shared.at(index))
+                    shared.at(index) = *content;
+                return content;
+            }
+            if (h->argument == std::to_underlying(tag_number::sharedref)) {
+                auto const r = d.head_decode();
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (r->major != major_type::unsigned_integer) [[unlikely]]
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                if (r->argument > std::numeric_limits<std::size_t>::max()) [[unlikely]]
+                    return std::unexpected(error::sharedref_index_out_of_range);
+                std::size_t const index = static_cast<std::size_t>(r->argument);
+                if (index >= shared.size()) [[unlikely]]
+                    return std::unexpected(error::sharedref_index_not_marked);
+                if (!shared.at(index)) [[unlikely]]
+                    return std::unexpected(error::sharedref_not_complete);
+                return *shared.at(index);
+            }
+            auto content = value_decode<DepthMax>(d, host, shared, depth + 1, std::nullopt);
             if (!content) [[unlikely]]
                 return content;
             return tag_decode(host, h->argument, std::move(*content));
@@ -443,7 +566,8 @@ template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> decode(Host &host, std::string_view bytes)
 {
     internal::decoder d{bytes};
-    return internal::value_decode<DepthMax>(d, host, 0);
+    internal::marks<Host> shared;
+    return internal::value_decode<DepthMax>(d, host, shared, 0, std::nullopt);
 }
 
 } // namespace cbor
