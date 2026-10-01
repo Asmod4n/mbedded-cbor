@@ -14,6 +14,7 @@
 
 #include "host.hpp"
 
+using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
@@ -612,4 +613,44 @@ TEST_CASE("registered tag: no hook for a tag without registration")
     ref_host host;
     REQUIRE(cbor::decode<16>(host, "\xc1\x01"sv).has_value());
     CHECK_EQ(host.after_decode_calls, 0);
+}
+
+// Ported from test.rb: 'tag 28/29: shared value preserved via lazy.value'.
+TEST_CASE("lazy: a shared value keeps its identity")
+{
+    auto const a = arr({u(1), u(2)});
+    std::string const doc = encoded_shared(arr({a, a}));
+    ref_host host;
+    auto const r = cbor::lazy_decode<16>(host, cbor::lazy{doc, 0});
+    REQUIRE(r.has_value());
+    CHECK(same(element(*r, 0), element(*r, 1)));
+}
+
+// Ported from test.rb: 'tag 28: lazy path through Tag 28 without prior registration'. The reference
+// names a mark before the target, so the core finds it and decodes it on demand.
+TEST_CASE("lazy: a reference to a mark before the target")
+{
+    std::string const doc = "\xa2\x65outer\xd8\x1c\x82\x01\x02\x63ref\xd8\x1d\x00"s;
+    auto const ref = cbor::lazy_at<16>(cbor::lazy{doc, 0}, "ref");
+    REQUIRE(ref.has_value());
+    ref_host host;
+    auto const r = cbor::lazy_decode<16>(host, *ref);
+    REQUIRE(r.has_value());
+    CHECK_EQ(std::get<std::uint64_t>(element(*r, 1)->kind), 2);
+    auto const inside = cbor::lazy_at<16>(*ref, 1);
+    REQUIRE(inside.has_value());
+    auto const two = cbor::lazy_decode<16>(host, *inside);
+    REQUIRE(two.has_value());
+    CHECK_EQ(std::get<std::uint64_t>((*two)->kind), 2);
+}
+
+// Ported from test.rb: 'tag 28/29: cyclic array materializes via lazy'.
+TEST_CASE("lazy: a cyclic array")
+{
+    std::string const doc = "\xd8\x1c\x81\xd8\x1d\x00"s;
+    ref_host host;
+    auto const r = cbor::lazy_decode<16>(host, cbor::lazy{doc, 0});
+    REQUIRE(r.has_value());
+    CHECK(same(*r, element(*r, 0)));
+    std::get<std::vector<handle>>((*r)->kind).clear();
 }
