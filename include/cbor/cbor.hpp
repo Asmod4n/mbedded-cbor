@@ -766,6 +766,7 @@ class internal
     static std::expected<std::pair<head, decoder>, error> container_resolve(lazy const l)
     {
         std::size_t offset = l.offset;
+        std::vector<std::size_t> followed;
         for (;;) {
             decoder d{l.document.substr(offset)};
             auto const h = d.head_decode();
@@ -779,6 +780,9 @@ class internal
             }
             if (h->argument != std::to_underlying(tag_number::sharedref))
                 return std::pair{*h, d};
+            if (std::ranges::find(followed, offset) != followed.end()) [[unlikely]]
+                return std::unexpected(error::sharedref_not_complete);
+            followed.push_back(offset);
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());

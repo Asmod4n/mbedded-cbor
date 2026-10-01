@@ -156,3 +156,13 @@ TEST_CASE("lazy: a value inside a huge claimed map")
     REQUIRE(a.has_value());
     CHECK(value_at(*a) == V(0));
 }
+
+// Found by the fuzzer: [28(28(29(0))), ...] leads from the reference through two marks back to the
+// same reference. A reference that the walk meets a second time ends it.
+TEST_CASE("lazy: a chain of marks back to the same reference ends")
+{
+    std::string const doc = "\x92\xd8\x1c\xd8\x1c\xd8\x1d\x00"s;
+    auto const element = cbor::lazy_at<16>(lazy_of(doc), 0);
+    REQUIRE(element.has_value());
+    CHECK_EQ(cbor::lazy_at<16>(*element, 0).error(), error::sharedref_not_complete);
+}
