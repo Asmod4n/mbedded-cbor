@@ -1,8 +1,11 @@
 #include <cbor/internal/head.hpp>
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <initializer_list>
+#include <span>
+#include <string>
 #include <string_view>
 
 using namespace std::string_view_literals;
@@ -13,7 +16,7 @@ namespace
 
 auto head_of(std::string_view wire)
 {
-    return cbor::internal::reader{wire}.head_read();
+    return cbor::internal::decoder{wire}.head_decode();
 }
 
 void check_head(std::string_view wire, std::uint8_t major, std::uint64_t argument)
@@ -22,6 +25,35 @@ void check_head(std::string_view wire, std::uint8_t major, std::uint64_t argumen
     REQUIRE(h.has_value());
     CHECK_EQ(h->major, major);
     CHECK_EQ(h->argument, argument);
+}
+
+// The StringWriter of a test: the output lives in a std::string, as a binding keeps it in the string of
+// its language.
+struct string_writer {
+    std::string bytes;
+    int grows = 0;
+
+    std::span<char> grow(std::size_t unused, std::size_t needed)
+    {
+        ++grows;
+        std::size_t const written = bytes.size() - unused;
+        bytes.resize(std::max(bytes.size() * 2, written + needed));
+        return std::span<char>(bytes).subspan(written);
+    }
+
+    std::string done(std::size_t unused)
+    {
+        bytes.resize(bytes.size() - unused);
+        return bytes;
+    }
+};
+
+std::string encoded(std::uint8_t major, std::uint64_t argument)
+{
+    string_writer w;
+    cbor::internal::encoder<string_writer> e{w, {}};
+    e.head_encode(major, argument);
+    return w.done(e.free.size());
 }
 
 } // namespace
@@ -86,4 +118,47 @@ TEST_CASE("head: an indefinite length is indefinite_length")
 {
     for (auto const w : {"\x5f"sv, "\x7f"sv, "\x9f"sv, "\xbf"sv})
         CHECK_EQ(head_of(w).error(), error::indefinite_length);
+}
+
+// Ported from test.rb: the major 0 roundtrip tests, here as the exact bytes of RFC 8949 4.1.
+TEST_CASE("major 0: head_encode writes the shortest form")
+{
+    CHECK_EQ(encoded(0, 0), "\x00"sv);
+    CHECK_EQ(encoded(0, 23), "\x17"sv);
+    CHECK_EQ(encoded(0, 24), "\x18\x18"sv);
+    CHECK_EQ(encoded(0, 255), "\x18\xff"sv);
+    CHECK_EQ(encoded(0, 256), "\x19\x01\x00"sv);
+    CHECK_EQ(encoded(0, 65535), "\x19\xff\xff"sv);
+    CHECK_EQ(encoded(0, 65536), "\x1a\x00\x01\x00\x00"sv);
+    CHECK_EQ(encoded(0, 0xffffffff), "\x1a\xff\xff\xff\xff"sv);
+    CHECK_EQ(encoded(0, 1ull << 40), "\x1b\x00\x00\x01\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(encoded(0, ~0ull), "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+}
+
+// Ported from test.rb: the major 1 wire tests, in the other direction.
+TEST_CASE("major 1: head_encode writes the shortest form")
+{
+    CHECK_EQ(encoded(1, 0), "\x20"sv);
+    CHECK_EQ(encoded(1, 24), "\x38\x18"sv);
+    CHECK_EQ(encoded(1, 0xffffffff), "\x3a\xff\xff\xff\xff"sv);
+    CHECK_EQ(encoded(1, 1ull << 63), "\x3b\x80\x00\x00\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(encoded(1, ~0ull), "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+}
+
+// Ported from test.rb: 'major 0: all powers of 2 up to 31 bits roundtrip', extended to 63 bits,
+// because the argument is 64 bits wide here.
+TEST_CASE("head: every power of 2 survives head_encode and head_decode")
+{
+    for (std::uint8_t major : {0, 1})
+        for (int i = 0; i < 64; ++i)
+            check_head(encoded(major, 1ull << i), major, 1ull << i);
+}
+
+// The first head of an encoder with no space must ask the StringWriter for space.
+TEST_CASE("head: head_encode grows an empty StringWriter")
+{
+    string_writer w;
+    cbor::internal::encoder<string_writer> e{w, {}};
+    e.head_encode(0, 0);
+    CHECK_EQ(w.grows, 1);
 }
