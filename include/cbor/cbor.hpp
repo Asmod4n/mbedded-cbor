@@ -688,8 +688,8 @@ class internal
     static void zero_initialized_copy(std::span<char> const out, std::size_t const at)
     {
         constexpr std::size_t n = fixed_size<E>();
-        std::ranges::copy(std::span<char const, n>{zero_initialized<E>().data(), n},
-                          out.subspan(at).template first<n>().begin());
+        std::span<char const, n> const from{zero_initialized<E>().data(), n};
+        std::copy(from.begin(), from.end(), out.subspan(at).template first<n>().begin());
     }
 
     static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
@@ -789,8 +789,9 @@ class internal
     {
         using U = std::remove_cv_t<T>;
         if constexpr (std::same_as<U, bool>) {
-            auto const field = out.subspan(offset).template first<1>();
-            field.front() = static_cast<char>(field.front() | static_cast<char>(value));
+            out.subspan(offset).template first<1>().front() = static_cast<char>(
+                std::to_underlying(major_type::simple_float) << 5 |
+                (std::to_underlying(simple_value::false_value) + static_cast<int>(value)));
         } else if constexpr (std::is_enum_v<U>) {
             position = value_encode<std::underlying_type_t<U>>(out, offset, std::to_underlying(value), position);
         } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
@@ -798,7 +799,9 @@ class internal
             unsigned __int128 magnitude = static_cast<unsigned __int128>(value);
             if constexpr (std::same_as<U, __int128>) {
                 unsigned __int128 const sign = static_cast<unsigned __int128>(value >> 127);
-                field.front() = static_cast<char>(field.front() | static_cast<char>(sign & 1));
+                field.front() = static_cast<char>(std::to_underlying(major_type::tag) << 5 |
+                                                  (std::to_underlying(tag_number::unsigned_bignum) +
+                                                   static_cast<int>(sign & 1)));
                 magnitude ^= sign;
             }
             std::ranges::copy(big_endian(magnitude), field.template last<sizeof(U)>().begin());
@@ -809,7 +812,9 @@ class internal
             using M = std::make_unsigned_t<U>;
             auto const field = out.subspan(offset).template first<fixed_size<U>()>();
             M const sign = static_cast<M>(value >> (8 * sizeof(U) - 1));
-            field.front() = static_cast<char>(field.front() | static_cast<char>((sign & 1) << 5));
+            field.front() = static_cast<char>((sign & 1) << 5 |
+                                              (std::to_underlying(additional_information::one_byte_argument) +
+                                               std::countr_zero(sizeof(U))));
             std::ranges::copy(big_endian(static_cast<M>(static_cast<M>(value) ^ sign)),
                               field.template last<sizeof(U)>().begin());
         } else if constexpr (std::is_floating_point_v<U>) {
