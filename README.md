@@ -112,7 +112,10 @@ throws; the library catches nothing.
 The library asks `kind_of(host, value)` and then one question for that
 kind: `unsigned_of`, `magnitude_of`, `bytes_of`, `text_of`, `float_of`,
 `simple_of`, `array_size` and `array_at`, `map_size` and
-`map_for_each`, `typed_array_of`, or `registered_tag`. A host answers only the questions
+`map_for_each`, `typed_array_of`, or `registered_tag`.
+When `embed_of(host, value)` answers true, the value is written as a
+document of its own inside tag 24 (RFC 8949 section 3.4.5.1), with its
+own shared references; a reader skips it in one step. A host answers only the questions
 its language has. A kind without an answer is `unsupported_value`.
 
 The writer belongs to the host: `reserve(n)`, `append(bytes)` and
@@ -147,6 +150,8 @@ the order of these calls.
   safe to use from two threads at the same time.
   `lazy_at` indexes an array or finds a key of a map. `lazy_decode`
   decodes the value at the offset.
+- A view passes through tag 24 into the embedded item. The item is a
+  document of its own: its tags 28 and 29 do not see the marks outside.
 - `cbor::lazy_get<T>(view)` reads the value at a view without a host:
   `std::uint64_t`, `std::int64_t`, `double`, `bool`, `std::nullptr_t`,
   a text string as `std::string_view` and a byte string as
