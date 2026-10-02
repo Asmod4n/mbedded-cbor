@@ -627,17 +627,22 @@ class internal
 
         void bytes_add(std::size_t const n)
         {
-            overflow |= ckd_add(&bytes, bytes, n);
+            bytes += n;
+        }
+
+        void block_add(std::size_t const count, std::size_t const size)
+        {
+            std::size_t block;
+            overflow |= ckd_mul(&block, count, size);
+            overflow |= ckd_add(&bytes, bytes, block);
         }
 
         template <class E, class R>
         void elements_add(R const &range)
         {
-            std::size_t block;
             items += 1;
-            overflow |= ckd_mul(&block, std::ranges::size(range), fixed_size<E>());
             bytes_add(head_size(std::ranges::size(range)));
-            bytes_add(block);
+            block_add(std::ranges::size(range), fixed_size<E>());
             if constexpr (!std::is_arithmetic_v<E> && !std::is_enum_v<E>)
                 for (auto const &e : range)
                     add<E>(e);
@@ -668,12 +673,10 @@ class internal
                 bytes_add(head_size(std::ranges::size(value)));
                 bytes_add(std::ranges::size(value));
             } else if constexpr (is_map<U>) {
-                std::size_t block;
                 items += 1;
-                overflow |= ckd_mul(&block, std::ranges::size(value),
-                                    fixed_size<typename U::key_type>() + fixed_size<typename U::mapped_type>());
                 bytes_add(head_size(std::ranges::size(value)));
-                bytes_add(block);
+                block_add(std::ranges::size(value),
+                          fixed_size<typename U::key_type>() + fixed_size<typename U::mapped_type>());
                 for (auto const &[k, v] : value) {
                     add<typename U::key_type>(k);
                     add<typename U::mapped_type>(v);
@@ -684,35 +687,21 @@ class internal
         }
     };
 
+    static constexpr std::size_t head_padding = sizeof(std::uint64_t);
+
     static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
                                   std::uint64_t const argument)
     {
-        std::size_t const size = head_size(argument);
-        auto const field = out.subspan(at, size);
-        if (size == initial_byte_size) {
-            field.front() = static_cast<char>(std::to_underlying(major) << 5 | argument);
-            return size;
-        }
-        std::size_t const width = size - initial_byte_size;
-        field.front() = static_cast<char>(std::to_underlying(major) << 5 |
-                                          (std::to_underlying(additional_information::one_byte_argument) +
-                                           std::countr_zero(width)));
-        auto const rest = field.subspan(initial_byte_size);
-        switch (width) {
-        case sizeof(std::uint8_t):
-            std::ranges::copy(big_endian(static_cast<std::uint8_t>(argument)), rest.begin());
-            break;
-        case sizeof(std::uint16_t):
-            std::ranges::copy(big_endian(static_cast<std::uint16_t>(argument)), rest.begin());
-            break;
-        case sizeof(std::uint32_t):
-            std::ranges::copy(big_endian(static_cast<std::uint32_t>(argument)), rest.begin());
-            break;
-        default:
-            std::ranges::copy(big_endian(argument), rest.begin());
-            break;
-        }
-        return size;
+        auto const field = out.subspan(at).template first<initial_byte_size + sizeof(std::uint64_t)>();
+        bool const immediate = argument < std::to_underlying(additional_information::one_byte_argument);
+        std::size_t const width = immediate ? 0 : head_size(argument) - initial_byte_size;
+        std::uint64_t const info =
+            immediate ? argument
+                      : std::to_underlying(additional_information::one_byte_argument) + std::countr_zero(width);
+        field.front() = static_cast<char>(std::to_underlying(major) << 5 | info);
+        auto const bytes = big_endian(argument << ((64 - 8 * width) & 63));
+        std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(std::uint64_t)>().begin());
+        return initial_byte_size + width;
     }
 
     template <class E>
@@ -1931,7 +1920,7 @@ std::expected<void, std::errc> encode(Writer &writer, T const &value)
     if (second.overflow || ckd_add(&second_size, internal::head_size(second.items), second.bytes) ||
         !std::in_range<std::uint32_t>(second_size) || ckd_add(&size, first, second_size)) [[unlikely]]
         return std::unexpected(std::errc::value_too_large);
-    return writer.resize_and_overwrite(size, [&](std::span<char> const out) {
+    return writer.resize_and_overwrite(size + internal::head_padding, [&](std::span<char> const out) {
         auto const root = out.template first<first>();
         internal::zero_initialized_copy<T>(root);
         std::size_t const position = first + internal::head_write(out, first, major_type::array, second.items);
