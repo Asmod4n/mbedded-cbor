@@ -1238,6 +1238,16 @@ struct encoder {
         return {};
     }
 
+    std::expected<void, std::errc> simple_value_encode(simple_value value)
+    {
+        if (auto const r = room(9); !r) [[unlikely]]
+            return r;
+        std::array<char, 9> item;
+        std::get<0>(item) = static_cast<char>(std::to_underlying(major_type::simple_float) << 5 | std::to_underlying(value));
+        item_write(item, 1);
+        return {};
+    }
+
     template <std::unsigned_integral T>
         requires(!std::is_same_v<T, bool>)
     std::expected<void, std::errc> fixed_width_unsigned_encode(T value)
