@@ -14,6 +14,7 @@
 #include <vector>
 
 using namespace std::string_literals;
+using cbor::error;
 
 namespace
 {
@@ -219,12 +220,12 @@ void check_two_items(std::string const &bytes)
 } // namespace
 
 // Item 1 is a map with every number in the width of its type; a string is 82 1a <offset> 1a <length> into item 2.
-// Item 2 is an array of one text; the offset counts from the start of item 2 and points at the data, behind the
-// head 62. The bytes are written from RFC 8949 3 by hand.
+// Item 2 is an array of one text; the offset counts from the start of the message (27 bytes of item 1, then 81 and
+// the head 62) and points at the data. The bytes are written from RFC 8949 3 by hand.
 TEST_CASE("encode: a struct with a number, a bool and a string")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
-    CHECK_EQ(bytes, "\xa3\x62id\x19\x00\x05\x62ok\xf5\x64name\x82\x1a\x00\x00\x00\x02\x1a\x00\x00\x00\x02"
+    CHECK_EQ(bytes, "\xa3\x62id\x19\x00\x05\x62ok\xf5\x64name\x82\x1a\x00\x00\x00\x1d\x1a\x00\x00\x00\x02"
                     "\x81\x62"
                     "ab"s);
     check_two_items(bytes);
@@ -237,8 +238,8 @@ TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
 {
     std::string const bytes = schema_bytes(measures{-5, 1.5f, {7, 8}, std::nullopt});
     CHECK_EQ(bytes, "\xa4\x61t\x39\x00\x04\x61\x66\xfa\x3f\xc0\x00\x00"
-                    "\x61v\x82\x1a\x00\x00\x00\x02\x1a\x00\x00\x00\x02"
-                    "\x61o\x82\x1a\x00\x00\x00\x08\x1a\x00\x00\x00\x00"
+                    "\x61v\x82\x1a\x00\x00\x00\x29\x1a\x00\x00\x00\x02"
+                    "\x61o\x82\x1a\x00\x00\x00\x2f\x1a\x00\x00\x00\x00"
                     "\x81\x82\x19\x00\x07\x19\x00\x08"s);
     check_two_items(bytes);
 }
@@ -248,12 +249,27 @@ TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
 TEST_CASE("encode: a list of structs that hold strings")
 {
     std::string const bytes = schema_bytes(people{{{"x"}, {"yz"}}});
-    CHECK_EQ(bytes, "\xa1\x66people\x82\x1a\x00\x00\x00\x02\x1a\x00\x00\x00\x02"
+    CHECK_EQ(bytes, "\xa1\x66people\x82\x1a\x00\x00\x00\x15\x1a\x00\x00\x00\x02"
                     "\x83\x82"
-                    "\xa1\x61n\x82\x1a\x00\x00\x00\x1f\x1a\x00\x00\x00\x01"
-                    "\xa1\x61n\x82\x1a\x00\x00\x00\x21\x1a\x00\x00\x00\x02"
+                    "\xa1\x61n\x82\x1a\x00\x00\x00\x32\x1a\x00\x00\x00\x01"
+                    "\xa1\x61n\x82\x1a\x00\x00\x00\x34\x1a\x00\x00\x00\x02"
                     "\x61x\x62yz"s);
     check_two_items(bytes);
+}
+
+#endif
+
+#if __cpp_impl_reflection
+
+// decode checks one thing: the first item has the size that the schema gives it. A shorter message cannot hold
+// the fixed fields, and a longer one is a newer sender or a second item.
+TEST_CASE("decode: a struct checks only the size of the first item")
+{
+    std::string const bytes = schema_bytes(login{5, true, "ab"});
+    CHECK(cbor::decode<login>(bytes).has_value());
+    CHECK(cbor::decode<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>())).has_value());
+    CHECK_EQ(cbor::decode<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>() - 1)).error(),
+             error::too_little_data);
 }
 
 #endif
