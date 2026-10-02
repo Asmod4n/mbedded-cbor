@@ -147,6 +147,12 @@ the order of these calls.
   safe to use from two threads at the same time.
   `lazy_at` indexes an array or finds a key of a map. `lazy_decode`
   decodes the value at the offset.
+- `cbor::lazy_get<T>(view)` reads the value at a view without a host:
+  `std::uint64_t`, `std::int64_t`, `double`, `bool`, `std::nullptr_t`,
+  a text string as `std::string_view` and a byte string as
+  `std::span<std::byte const>`. A string is a view into the document.
+  A value of another type is `incorrect_type`; a number the type cannot
+  hold is `number_out_of_range`.
 - `cbor::lazy_elements_of(array)` and `cbor::lazy_entries_of(map)` walk
   an array or a map once, front to back. A step gives a view, or a key
   and a value, or the error that ended the walk. Nothing is cached.

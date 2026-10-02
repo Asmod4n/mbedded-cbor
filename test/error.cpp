@@ -20,6 +20,9 @@ TEST_CASE("error: every error belongs to one condition")
         CHECK((std::error_code(e) == condition::not_valid));
     for (error const e : {error::indefinite_length, error::nesting_depth_exceeded, error::unsupported_value})
         CHECK((std::error_code(e) == condition::not_supported));
+    for (error const e : {error::not_indexable, error::index_out_of_bounds, error::key_not_found,
+                          error::incorrect_type, error::number_out_of_range})
+        CHECK((std::error_code(e) == condition::not_found));
 }
 
 // An error is never success: the value 0 of std::error_code means no error.
