@@ -292,7 +292,7 @@ template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l);
 
 template <class T>
-    requires std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t> || std::is_same_v<T, double> ||
+    requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
              std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
 std::expected<T, error> lazy_get(lazy const &l);
@@ -353,7 +353,7 @@ class internal
     friend struct lazy;
 
     template <class T>
-        requires std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t> || std::is_same_v<T, double> ||
+        requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
                  std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
     friend std::expected<T, error> lazy_get(lazy const &l);
@@ -1682,7 +1682,7 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
 }
 
 template <class T>
-    requires std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t> || std::is_same_v<T, double> ||
+    requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
              std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
 std::expected<T, error> lazy_get(lazy const &l)
@@ -1691,7 +1691,7 @@ std::expected<T, error> lazy_get(lazy const &l)
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [source, h, d] = *found;
-    if constexpr (std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t>) {
+    if constexpr (std::integral<T> && !std::is_same_v<T, bool>) {
         bool negative = h.major == major_type::negative_integer;
         std::uint64_t argument = h.argument;
         if (h.major == major_type::tag &&
@@ -1713,16 +1713,10 @@ std::expected<T, error> lazy_get(lazy const &l)
         } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
             return std::unexpected(error::incorrect_type);
         }
-        if constexpr (std::is_same_v<T, std::uint64_t>) {
-            if (negative) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
-            return argument;
-        } else {
-            if (argument > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
-            std::int64_t const magnitude = static_cast<std::int64_t>(argument);
-            return negative ? -1 - magnitude : magnitude;
-        }
+        if (!std::in_range<T>(argument) || (std::is_unsigned_v<T> && negative)) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
+        T const magnitude = static_cast<T>(argument);
+        return static_cast<T>(negative ? -1 - magnitude : magnitude);
     } else if constexpr (std::is_same_v<T, double>) {
         if (h.major != major_type::simple_float) [[unlikely]]
             return std::unexpected(error::incorrect_type);
