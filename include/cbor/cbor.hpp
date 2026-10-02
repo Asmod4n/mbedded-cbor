@@ -10,8 +10,12 @@
 #include <expected>
 #include <iterator>
 #include <limits>
+#if __cpp_impl_reflection
+#include <meta>
+#endif
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -371,6 +375,20 @@ class internal
 
     template <std::size_t DepthMax>
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes);
+
+#if __cpp_impl_reflection
+    template <class T>
+    static consteval std::span<std::meta::info const> members_in_deterministic_order()
+    {
+        auto m = std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::current());
+        std::ranges::sort(m, [](std::meta::info a, std::meta::info b) {
+            auto const x = std::meta::identifier_of(a);
+            auto const y = std::meta::identifier_of(b);
+            return x.size() != y.size() ? x.size() < y.size() : x < y;
+        });
+        return std::define_static_array(m);
+    }
+#endif
 
     struct prefix {
         std::string_view document;
@@ -1221,6 +1239,50 @@ struct encoder {
         item_write(item, size);
         return {};
     }
+#if __cpp_impl_reflection
+
+    template <class T>
+    std::expected<void, std::errc> value_encode(T const &value)
+    {
+        if constexpr (std::is_same_v<T, bool>)
+            return head_encode(major_type::simple_float,
+                               std::to_underlying(value ? simple_value::true_value : simple_value::false_value));
+        else if constexpr (std::unsigned_integral<T>)
+            return head_encode(major_type::unsigned_integer, value);
+        else if constexpr (std::signed_integral<T>)
+            return value < 0 ? head_encode(major_type::negative_integer, static_cast<std::uint64_t>(-1 - value))
+                             : head_encode(major_type::unsigned_integer, static_cast<std::uint64_t>(value));
+        else if constexpr (std::floating_point<T>)
+            return float_encode(value);
+        else if constexpr (std::convertible_to<T const &, std::string_view>)
+            return text_string_encode(value);
+        else if constexpr (std::ranges::sized_range<T>) {
+            if (auto const r = head_encode(major_type::array, std::ranges::size(value)); !r) [[unlikely]]
+                return r;
+            for (auto const &e : value)
+                if (auto const r = value_encode(e); !r) [[unlikely]]
+                    return r;
+            return {};
+        } else
+            return struct_encode(value);
+    }
+
+    template <class T>
+        requires std::is_aggregate_v<T>
+    std::expected<void, std::errc> struct_encode(T const &value)
+    {
+        constexpr auto members = internal::members_in_deterministic_order<T>();
+        if (auto const r = head_encode(major_type::map, members.size()); !r) [[unlikely]]
+            return r;
+        template for (constexpr auto m : members) {
+            if (auto const r = text_string_encode(std::meta::identifier_of(m)); !r) [[unlikely]]
+                return r;
+            if (auto const r = value_encode(value.[:m:]); !r) [[unlikely]]
+                return r;
+        }
+        return {};
+    }
+#endif
 };
 
 template <std::size_t DepthMax, class Host>
