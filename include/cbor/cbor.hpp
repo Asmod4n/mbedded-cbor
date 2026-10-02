@@ -855,61 +855,89 @@ class internal
 template <class Writer>
 struct encoder {
     Writer &writer;
+    std::array<char, 16384> block;
+    std::size_t used = 0;
+
+    explicit encoder(Writer &w) : writer(w)
+    {
+    }
+
+    std::expected<void, std::errc> flush()
+    {
+        std::size_t const size = used;
+        used = 0;
+        return writer.append(std::string_view(block.data(), size));
+    }
+
+    std::expected<void, std::errc> room(std::size_t const size)
+    {
+        if (block.size() - used < size) [[unlikely]]
+            return flush();
+        return {};
+    }
+
+    void item_write(std::array<char, 9> const &item, std::size_t const size)
+    {
+        std::memcpy(std::span(block).subspan(used).data(), item.data(), item.size());
+        used += size;
+    }
 
     std::expected<void, std::errc> head_encode(major_type major, std::uint64_t argument)
     {
+        if (auto const r = room(9); !r) [[unlikely]]
+            return r;
+        bool const immediate =
+            argument < std::to_underlying(internal::additional_information::one_byte_argument);
+        std::size_t const bytes =
+            immediate ? 0 : std::bit_ceil(std::max<std::size_t>((std::bit_width(argument) + 7) / 8, 1));
+        std::uint64_t const info =
+            immediate ? argument
+                      : std::to_underlying(internal::additional_information::one_byte_argument) +
+                            static_cast<std::uint64_t>(std::countr_zero(bytes));
+        std::uint64_t const big = std::byteswap(argument << ((64 - 8 * bytes) & 63));
         std::array<char, 9> head;
-        std::size_t size;
-        char const initial = static_cast<char>(std::to_underlying(major) << 5);
-        if (argument < std::to_underlying(internal::additional_information::one_byte_argument)) {
-            std::get<0>(head) = static_cast<char>(initial | argument);
-            size = 1;
-        } else if (argument <= 0xff) {
-            std::get<0>(head) = static_cast<char>(
-                initial | std::to_underlying(internal::additional_information::one_byte_argument));
-            std::get<1>(head) = static_cast<char>(argument);
-            size = 2;
-        } else if (argument <= 0xffff) {
-            std::get<0>(head) = static_cast<char>(
-                initial | std::to_underlying(internal::additional_information::two_byte_argument));
-            auto const v = std::byteswap(static_cast<std::uint16_t>(argument));
-            std::memcpy(std::span(head).template subspan<1>().data(), &v, 2);
-            size = 3;
-        } else if (argument <= 0xffffffff) {
-            std::get<0>(head) = static_cast<char>(
-                initial | std::to_underlying(internal::additional_information::four_byte_argument));
-            auto const v = std::byteswap(static_cast<std::uint32_t>(argument));
-            std::memcpy(std::span(head).template subspan<1>().data(), &v, 4);
-            size = 5;
-        } else {
-            std::get<0>(head) = static_cast<char>(
-                initial | std::to_underlying(internal::additional_information::eight_byte_argument));
-            auto const v = std::byteswap(argument);
-            std::memcpy(std::span(head).template subspan<1>().data(), &v, 8);
-            size = 9;
-        }
-        return writer.append(std::string_view(head.data(), size));
+        std::get<0>(head) = static_cast<char>(std::to_underlying(major) << 5 | info);
+        std::memcpy(std::span(head).template subspan<1>().data(), &big, sizeof big);
+        std::size_t const size = 1 + bytes;
+        item_write(head, size);
+        return {};
     }
 
     std::expected<void, std::errc> byte_string_encode(std::string_view bytes)
     {
-        if (auto const r = writer.reserve(9 + bytes.size()); !r) [[unlikely]]
-            return r;
         if (auto const r = head_encode(major_type::byte_string, bytes.size()); !r) [[unlikely]]
+            return r;
+        if (bytes.size() <= block.size() - used) {
+            std::memcpy(std::span(block).subspan(used).data(), bytes.data(), bytes.size());
+            used += bytes.size();
+            return {};
+        }
+        if (auto const r = flush(); !r) [[unlikely]]
+            return r;
+        if (auto const r = writer.reserve(bytes.size()); !r) [[unlikely]]
             return r;
         return writer.append(bytes);
     }
 
     std::expected<void, std::errc> text_string_encode(std::string_view text)
     {
-        if (auto const r = writer.reserve(9 + text.size()); !r) [[unlikely]]
-            return r;
         if (auto const r = head_encode(major_type::text_string, text.size()); !r) [[unlikely]]
+            return r;
+        if (text.size() <= block.size() - used) {
+            std::memcpy(std::span(block).subspan(used).data(), text.data(), text.size());
+            used += text.size();
+            return {};
+        }
+        if (auto const r = flush(); !r) [[unlikely]]
+            return r;
+        if (auto const r = writer.reserve(text.size()); !r) [[unlikely]]
             return r;
         return writer.append(text);
     }
     std::expected<void, std::errc> float_encode(double value)
     {
+        if (auto const r = room(9); !r) [[unlikely]]
+            return r;
         std::array<char, 9> item;
         std::size_t size;
         switch (internal::preferred_float_info(value)) {
@@ -938,7 +966,8 @@ struct encoder {
             size = 9;
         } break;
         }
-        return writer.append(std::string_view(item.data(), size));
+        item_write(item, size);
+        return {};
     }
 };
 
@@ -1192,6 +1221,7 @@ std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename
     if constexpr (Sharing == sharedrefs::off) {
         walker<DepthMax, Host, Writer, pass::plain> walk{host, writer, nullptr};
         walk.value(value);
+        walk.keep(walk.out.flush());
         if (walk.failure) [[unlikely]]
             return std::unexpected(walk.failure);
     } else {
@@ -1203,6 +1233,7 @@ std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename
             return std::unexpected(count.failure);
         walker<DepthMax, Host, Writer, pass::write> write{host, writer, &shared};
         write.value(value);
+        write.keep(write.out.flush());
         if (write.failure) [[unlikely]]
             return std::unexpected(write.failure);
     }

@@ -30,6 +30,11 @@ value N(std::uint64_t argument)
 
 // A Writer whose language has no more space.
 struct full_writer {
+    std::expected<void, std::errc> reserve(std::size_t)
+    {
+        return std::unexpected(std::errc::not_enough_memory);
+    }
+
     std::expected<void, std::errc> append(std::string_view)
     {
         return std::unexpected(std::errc::not_enough_memory);
@@ -136,9 +141,10 @@ TEST_CASE("head: every power of 2 survives encode and decode")
 }
 
 // The error of the Writer reaches the caller unchanged, because only the language knows what it means.
-TEST_CASE("head: head_encode returns the error of the Writer")
+// The encoder collects the bytes in a block, so the error arrives when the block goes to the Writer.
+TEST_CASE("head: encode returns the error of the Writer")
 {
     full_writer w;
-    cbor::encoder<full_writer> e{w};
-    CHECK_EQ(e.head_encode(cbor::major_type::unsigned_integer, 0).error(), std::errc::not_enough_memory);
+    test_host host;
+    CHECK_EQ(cbor::encode<16>(host, w, U(0)).error(), std::make_error_code(std::errc::not_enough_memory));
 }
