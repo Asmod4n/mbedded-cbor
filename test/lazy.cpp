@@ -1,9 +1,11 @@
 #include "host.hpp"
 
 #include <cstdint>
+#include <expected>
 #include <random>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -167,4 +169,73 @@ TEST_CASE("lazy: a chain of marks back to the same reference ends")
     auto const element = cbor::lazy_at<16>(lazy_of(doc), 0);
     REQUIRE(element.has_value());
     CHECK_EQ(cbor::lazy_at<16>(*element, 0).error(), error::sharedref_not_complete);
+}
+
+namespace
+{
+
+std::vector<value> elements_of(std::string const &document)
+{
+    auto const elements = cbor::lazy_elements_of<16>(lazy_of(document));
+    REQUIRE(elements.has_value());
+    std::vector<value> values;
+    for (auto const element : *elements) {
+        REQUIRE(element.has_value());
+        values.push_back(value_at(*element));
+    }
+    return values;
+}
+
+} // namespace
+
+// The elements of an array come in wire order, each as a view of its own.
+TEST_CASE("lazy: the elements of an array")
+{
+    CHECK(elements_of(encoded(A(1, "a"s, A(2)))) == std::vector<value>{V(1), V("a"s), A(2)});
+    CHECK(elements_of(encoded(A())).empty());
+}
+
+// A mark around the array is passed, as lazy_at passes it.
+TEST_CASE("lazy: the elements of a marked array")
+{
+    CHECK(elements_of("\xd8\x1c\x82\x01\x02"s) == std::vector<value>{V(1), V(2)});
+}
+
+// The entries of a map come in wire order, each as a pair of key and value.
+TEST_CASE("lazy: the entries of a map")
+{
+    auto const entries = cbor::lazy_entries_of<16>(lazy_of(encoded(M("a"s, 1, 2, "b"s))));
+    REQUIRE(entries.has_value());
+    std::vector<value> keys;
+    std::vector<value> values;
+    for (auto const entry : *entries) {
+        REQUIRE(entry.has_value());
+        keys.push_back(value_at(entry->first));
+        values.push_back(value_at(entry->second));
+    }
+    CHECK(keys == std::vector<value>{V("a"s), V(2)});
+    CHECK(values == std::vector<value>{V(1), V("b"s)});
+}
+
+// Only an array has elements and only a map has entries.
+TEST_CASE("lazy: elements and entries of the wrong kind")
+{
+    CHECK_EQ(cbor::lazy_elements_of<16>(lazy_of(encoded(M("a"s, 1)))).error(), error::not_indexable);
+    CHECK_EQ(cbor::lazy_entries_of<16>(lazy_of(encoded(A(1)))).error(), error::not_indexable);
+    CHECK_EQ(cbor::lazy_elements_of<16>(lazy_of(encoded(V(1)))).error(), error::not_indexable);
+}
+
+// decode reads nothing ahead, so a step finds a truncated element. The step gives the error once and
+// the walk ends after it.
+TEST_CASE("lazy: a truncated element ends the walk with its error")
+{
+    auto const elements = cbor::lazy_elements_of<16>(lazy_of("\x83\x01\x62\x61"s));
+    REQUIRE(elements.has_value());
+    std::vector<std::expected<cbor::lazy, error>> steps;
+    for (auto const step : *elements)
+        steps.push_back(step);
+    REQUIRE(steps.size() == 3);
+    CHECK(steps.at(0).has_value());
+    CHECK(steps.at(1).has_value());
+    CHECK_EQ(steps.at(2).error(), error::too_little_data);
 }

@@ -272,6 +272,18 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view key);
 template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l);
 
+template <std::size_t DepthMax>
+struct lazy_elements;
+
+template <std::size_t DepthMax>
+struct lazy_entries;
+
+template <std::size_t DepthMax>
+std::expected<lazy_elements<DepthMax>, error> lazy_elements_of(lazy const &array);
+
+template <std::size_t DepthMax>
+std::expected<lazy_entries<DepthMax>, error> lazy_entries_of(lazy const &map);
+
 struct path_step {
     enum class kind { key, index, wildcard } kind;
     std::string_view key;
@@ -310,6 +322,18 @@ class internal
     using marks = std::vector<std::optional<typename Host::value>>;
 
     friend struct lazy;
+
+    template <std::size_t>
+    friend struct lazy_elements;
+
+    template <std::size_t>
+    friend struct lazy_entries;
+
+    template <std::size_t DepthMax>
+    friend std::expected<lazy_elements<DepthMax>, error> lazy_elements_of(lazy const &array);
+
+    template <std::size_t DepthMax>
+    friend std::expected<lazy_entries<DepthMax>, error> lazy_entries_of(lazy const &map);
 
     template <std::size_t DepthMax>
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes);
@@ -863,6 +887,142 @@ struct lazy {
     std::size_t offset;
 };
 
+template <std::size_t DepthMax>
+struct lazy_elements {
+    std::shared_ptr<internal::document> document;
+    std::size_t offset;
+    std::uint64_t count;
+
+    struct iterator {
+        using value_type = std::expected<lazy, error>;
+        using difference_type = std::ptrdiff_t;
+
+        std::shared_ptr<internal::document> document;
+        std::size_t offset;
+        std::uint64_t left;
+        error failure;
+
+        value_type operator*() const
+        {
+            if (failure != error{}) [[unlikely]]
+                return std::unexpected(failure);
+            return lazy{document, offset};
+        }
+
+        iterator &operator++()
+        {
+            if (failure != error{}) [[unlikely]] {
+                left = 0;
+                return *this;
+            }
+            internal::decoder d{document->bytes.substr(offset)};
+            if (auto const r = internal::item_skip<DepthMax>(d, *document, 1); !r) [[unlikely]] {
+                failure = r.error();
+                return *this;
+            }
+            offset = document->bytes.size() - d.bytes.size();
+            --left;
+            return *this;
+        }
+
+        void operator++(int)
+        {
+            ++*this;
+        }
+
+        bool operator==(std::default_sentinel_t) const
+        {
+            return left == 0;
+        }
+    };
+
+    iterator begin() const
+    {
+        return iterator{document, offset, count, error{}};
+    }
+
+    std::default_sentinel_t end() const
+    {
+        return {};
+    }
+};
+
+template <std::size_t DepthMax>
+struct lazy_entries {
+    std::shared_ptr<internal::document> document;
+    std::size_t offset;
+    std::uint64_t count;
+
+    struct iterator {
+        using value_type = std::expected<std::pair<lazy, lazy>, error>;
+        using difference_type = std::ptrdiff_t;
+
+        std::shared_ptr<internal::document> document;
+        std::size_t key;
+        std::size_t value;
+        std::uint64_t left;
+        error failure;
+
+        void value_find()
+        {
+            if (left == 0)
+                return;
+            internal::decoder d{document->bytes.substr(key)};
+            if (auto const r = internal::item_skip<DepthMax>(d, *document, 1); !r) [[unlikely]] {
+                failure = r.error();
+                return;
+            }
+            value = document->bytes.size() - d.bytes.size();
+        }
+
+        value_type operator*() const
+        {
+            if (failure != error{}) [[unlikely]]
+                return std::unexpected(failure);
+            return std::pair{lazy{document, key}, lazy{document, value}};
+        }
+
+        iterator &operator++()
+        {
+            if (failure != error{}) [[unlikely]] {
+                left = 0;
+                return *this;
+            }
+            internal::decoder d{document->bytes.substr(value)};
+            if (auto const r = internal::item_skip<DepthMax>(d, *document, 1); !r) [[unlikely]] {
+                failure = r.error();
+                return *this;
+            }
+            key = document->bytes.size() - d.bytes.size();
+            --left;
+            value_find();
+            return *this;
+        }
+
+        void operator++(int)
+        {
+            ++*this;
+        }
+
+        bool operator==(std::default_sentinel_t) const
+        {
+            return left == 0;
+        }
+    };
+
+    iterator begin() const
+    {
+        iterator first{document, offset, offset, count, error{}};
+        first.value_find();
+        return first;
+    }
+
+    std::default_sentinel_t end() const
+    {
+        return {};
+    }
+};
+
 template <class Writer>
 struct encoder {
     Writer &writer;
@@ -1345,6 +1505,30 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
     return std::unexpected(error::key_not_found);
 }
 
+template <std::size_t DepthMax>
+std::expected<lazy_elements<DepthMax>, error> lazy_elements_of(lazy const &array)
+{
+    auto const found = internal::container_resolve<DepthMax>(*array.document, array.offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto const &[h, d] = *found;
+    if (h.major != major_type::array) [[unlikely]]
+        return std::unexpected(error::not_indexable);
+    return lazy_elements<DepthMax>{array.document, array.document->bytes.size() - d.bytes.size(), h.argument};
+}
+
+template <std::size_t DepthMax>
+std::expected<lazy_entries<DepthMax>, error> lazy_entries_of(lazy const &map)
+{
+    auto const found = internal::container_resolve<DepthMax>(*map.document, map.offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto const &[h, d] = *found;
+    if (h.major != major_type::map) [[unlikely]]
+        return std::unexpected(error::not_indexable);
+    return lazy_entries<DepthMax>{map.document, map.document->bytes.size() - d.bytes.size(), h.argument};
+}
+
 template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l)
 {
@@ -1423,21 +1607,18 @@ std::expected<typename Host::value, error> path_decode(Host &host, std::span<pat
                 return std::unexpected(next.error());
             at = *next;
         } else {
-            auto const found = internal::container_resolve<DepthMax>(*at.document, at.offset);
-            if (!found) [[unlikely]]
-                return std::unexpected(found.error());
-            auto [h, d] = *found;
-            if (h.major != major_type::array) [[unlikely]]
-                return std::unexpected(error::not_indexable);
-            auto array = array_decode(host, std::min<std::uint64_t>(h.argument, d.bytes.size()));
-            for (std::uint64_t e = 0; e < h.argument; ++e) {
-                lazy const element{at.document, at.document->bytes.size() - d.bytes.size()};
-                auto value = path_decode<DepthMax>(host, steps.subspan(i + 1), element);
+            auto const elements = lazy_elements_of<DepthMax>(at);
+            if (!elements) [[unlikely]]
+                return std::unexpected(elements.error());
+            auto array = array_decode(
+                host, std::min<std::uint64_t>(elements->count, at.document->bytes.size() - elements->offset));
+            for (auto const element : *elements) {
+                if (!element) [[unlikely]]
+                    return std::unexpected(element.error());
+                auto value = path_decode<DepthMax>(host, steps.subspan(i + 1), *element);
                 if (!value) [[unlikely]]
                     return value;
                 array = array_append(host, std::move(array), std::move(*value));
-                if (auto const r = internal::item_skip<DepthMax>(d, *at.document, 1); !r) [[unlikely]]
-                    return std::unexpected(r.error());
             }
             return array;
         }
