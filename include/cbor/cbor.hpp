@@ -826,7 +826,7 @@ class internal
     template <std::size_t DepthMax, class Marks>
     static std::expected<void, error> item_skip(decoder &d, Marks &marks, std::size_t const depth)
     {
-        std::array<std::uint64_t, DepthMax + 2> left{};
+        std::array<std::uint64_t, DepthMax + 2> left;
         std::size_t level = 0;
         left.at(0) = 1;
         for (;;) {
