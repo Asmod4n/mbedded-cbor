@@ -142,8 +142,8 @@ the order of these calls.
   owner, a view of the document and an offset. It reads nothing ahead;
   an error in the bytes shows when a view reaches it. Every view from it
   shares the owner, so the document lives until the last view ends.
-  The owner also holds the offsets of every tag 28 in the document,
-  found once when the view is made. Views of one document are not
+  The owner also holds the offsets of the tags 28 that a view has
+  passed, so a reference finds its mark by index. Views of one document are not
   safe to use from two threads at the same time.
   `lazy_at` indexes an array or finds a key of a map. `lazy_decode`
   decodes the value at the offset.
