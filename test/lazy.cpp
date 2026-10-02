@@ -311,3 +311,25 @@ TEST_CASE("lazy: lazy_get reads a string as a view")
     CHECK_EQ(get<std::span<std::byte const>>("\x64IETF"s).error(), error::incorrect_type);
     CHECK_EQ(get<std::string_view>("\x62\x61"s).error(), error::too_little_data);
 }
+
+// RFC 8746 Table 3: tags 64 to 87 carry a typed array in a byte string; 76 is reserved. The length
+// is a multiple of the element size 1 << (f + ll) of Table 2.
+TEST_CASE("lazy: lazy_get reads a typed array")
+{
+    auto const u8 = get<cbor::typed_array>("\xd8\x40\x43\x01\x02\x03"s);
+    REQUIRE(u8.has_value());
+    CHECK_EQ(u8->tag, 64u);
+    CHECK_EQ(u8->bytes.size(), 3u);
+    auto const u16 = get<cbor::typed_array>("\xd8\x41\x44\x00\x01\x00\x02"s);
+    REQUIRE(u16.has_value());
+    CHECK_EQ(u16->tag, 65u);
+    CHECK_EQ(u16->bytes.size(), 4u);
+    auto const f64 = get<cbor::typed_array>("\xd8\x56\x48\x00\x00\x00\x00\x00\x00\xf0\x3f"s);
+    REQUIRE(f64.has_value());
+    CHECK_EQ(f64->tag, 86u);
+    CHECK_EQ(get<cbor::typed_array>("\xd8\x41\x43\x00\x01\x00"s).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(get<cbor::typed_array>("\xd8\x4c\x41\x00"s).error(), error::incorrect_type);
+    CHECK_EQ(get<cbor::typed_array>("\xd8\x3f\x41\x00"s).error(), error::incorrect_type);
+    CHECK_EQ(get<cbor::typed_array>("\xd8\x40\x01"s).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(get<cbor::typed_array>("\x43\x01\x02\x03"s).error(), error::incorrect_type);
+}

@@ -165,6 +165,11 @@ enum class major_type : std::uint8_t {
 
 enum class simple_value : std::uint8_t { false_value = 20, true_value, null, undefined };
 
+struct typed_array {
+    std::uint64_t tag;
+    std::span<std::byte const> bytes;
+};
+
 template <class Tag>
 struct customization_point {
     template <class... Args>
@@ -283,7 +288,7 @@ std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l
 template <class T>
     requires std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t> || std::is_same_v<T, double> ||
              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
-             std::is_same_v<T, std::span<std::byte const>>
+             std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
 std::expected<T, error> lazy_get(lazy const &l);
 
 template <std::size_t DepthMax>
@@ -329,7 +334,10 @@ class internal
         unsigned_bignum = 2,
         negative_bignum = 3,
         shareable = 28,
-        sharedref = 29
+        sharedref = 29,
+        typed_array_first = 64,
+        typed_array_reserved = 76,
+        typed_array_last = 87
     };
 
     template <class Host>
@@ -340,7 +348,7 @@ class internal
     template <class T>
         requires std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t> || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
-                 std::is_same_v<T, std::span<std::byte const>>
+                 std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
     friend std::expected<T, error> lazy_get(lazy const &l);
 
     template <std::size_t>
@@ -1527,7 +1535,7 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
 template <class T>
     requires std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t> || std::is_same_v<T, double> ||
              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
-             std::is_same_v<T, std::span<std::byte const>>
+             std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
 std::expected<T, error> lazy_get(lazy const &l)
 {
     auto const found = internal::container_resolve(*l.document, l.offset);
@@ -1592,6 +1600,24 @@ std::expected<T, error> lazy_get(lazy const &l)
         if (h.major != major_type::text_string) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         return d.text_string_decode(h.argument);
+    } else if constexpr (std::is_same_v<T, typed_array>) {
+        if (h.major != major_type::tag || h.argument < std::to_underlying(internal::tag_number::typed_array_first) ||
+            h.argument > std::to_underlying(internal::tag_number::typed_array_last) ||
+            h.argument == std::to_underlying(internal::tag_number::typed_array_reserved)) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        auto const r = d.head_decode();
+        if (!r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (r->major != major_type::byte_string) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        auto const bytes = d.byte_string_decode(r->argument);
+        if (!bytes) [[unlikely]]
+            return std::unexpected(bytes.error());
+        std::uint64_t const f = h.argument >> 4 & 1;
+        std::uint64_t const ll = h.argument & 3;
+        if (bytes->size() % (std::uint64_t{1} << (f + ll)) != 0) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return typed_array{h.argument, std::as_bytes(std::span(*bytes))};
     } else {
         if (h.major != major_type::byte_string) [[unlikely]]
             return std::unexpected(error::incorrect_type);
