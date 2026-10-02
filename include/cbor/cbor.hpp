@@ -334,6 +334,9 @@ consteval std::size_t fixed_size();
 
 template <class T>
 consteval std::size_t no_fixed_size();
+
+template <class T, std::meta::info Member>
+consteval std::size_t member_offset();
 #endif
 
 class internal
@@ -406,22 +409,31 @@ class internal
     };
 
     template <class U>
+    static consteval std::span<std::meta::info const> data_members()
+    {
+        return std::define_static_array(
+            std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unchecked()));
+    }
+
+    template <class U>
     static consteval std::size_t struct_fixed_size()
     {
-        constexpr auto context = std::meta::access_context::unchecked();
-        if constexpr (!std::meta::bases_of(^^U, context).empty()) {
+        if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unchecked()).empty()) {
             return no_fixed_size<U>();
         } else {
-            std::size_t size = head_size(std::meta::nonstatic_data_members_of(^^U, context).size());
-            template for (constexpr auto m : std::define_static_array(std::meta::nonstatic_data_members_of(^^U, context))) {
-                if constexpr (std::meta::is_bit_field(m) || !std::meta::is_public(m))
+            std::size_t size = head_size(data_members<U>().size());
+            template for (constexpr auto m : data_members<U>()) {
+                if constexpr (!std::meta::has_identifier(m) || std::meta::is_bit_field(m) || !std::meta::is_public(m))
                     return no_fixed_size<U>();
-                constexpr std::size_t key = std::meta::identifier_of(m).size();
+                constexpr std::size_t key = std::meta::u8identifier_of(m).size();
                 size += head_size(key) + key + fixed_size<typename[:std::meta::type_of(m):]>();
             }
             return size;
         }
     }
+
+    template <class T, std::meta::info Member>
+    friend consteval std::size_t member_offset();
 
     template <class T>
     friend consteval std::size_t fixed_size();
@@ -1232,6 +1244,25 @@ consteval std::size_t fixed_size()
         return internal::dynamic_type_sizes;
     else
         return no_fixed_size<T>();
+}
+
+template <class T, std::meta::info Member>
+consteval std::size_t member_offset()
+{
+    using U = std::remove_cv_t<T>;
+    if constexpr (std::meta::parent_of(Member) != std::meta::dealias(^^U)) {
+        return no_fixed_size<T>();
+    } else {
+        std::size_t offset = internal::head_size(internal::data_members<U>().size());
+        template for (constexpr auto m : internal::data_members<U>()) {
+            constexpr std::size_t key = std::meta::u8identifier_of(m).size();
+            offset += internal::head_size(key) + key;
+            if constexpr (m == Member)
+                return offset;
+            offset += fixed_size<typename[:std::meta::type_of(m):]>();
+        }
+        return no_fixed_size<T>();
+    }
 }
 #endif
 
