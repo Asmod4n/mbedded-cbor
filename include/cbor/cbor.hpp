@@ -42,7 +42,9 @@ enum class error {
     not_indexable,
     index_out_of_bounds,
     key_not_found,
-    invalid_path
+    invalid_path,
+    incorrect_type,
+    number_out_of_range
 };
 
 enum class condition { not_well_formed = 1, not_valid, not_supported, not_found };
@@ -90,6 +92,10 @@ public:
             return "key not found";
         case error::invalid_path:
             return "invalid path";
+        case error::incorrect_type:
+            return "incorrect type";
+        case error::number_out_of_range:
+            return "number out of range";
         }
         return "unknown cbor error";
     }
@@ -107,6 +113,8 @@ public:
         case error::not_indexable:
         case error::index_out_of_bounds:
         case error::key_not_found:
+        case error::incorrect_type:
+        case error::number_out_of_range:
             return {static_cast<int>(condition::not_found), *this};
         case error::invalid_utf8_string:
         case error::inadmissible_type_for_tag_content:
@@ -272,6 +280,12 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view key);
 template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l);
 
+template <class T>
+    requires std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t> || std::is_same_v<T, double> ||
+             std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
+             std::is_same_v<T, std::span<std::byte const>>
+std::expected<T, error> lazy_get(lazy const &l);
+
 template <std::size_t DepthMax>
 struct lazy_elements;
 
@@ -322,6 +336,12 @@ class internal
     using marks = std::vector<std::optional<typename Host::value>>;
 
     friend struct lazy;
+
+    template <class T>
+        requires std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t> || std::is_same_v<T, double> ||
+                 std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
+                 std::is_same_v<T, std::span<std::byte const>>
+    friend std::expected<T, error> lazy_get(lazy const &l);
 
     template <std::size_t>
     friend struct lazy_elements;
@@ -764,7 +784,6 @@ class internal
     friend std::expected<typename Host::value, error> path_decode(Host &host,
                                                                   std::span<path_step const> steps, lazy const &l);
 
-    template <std::size_t DepthMax>
     static std::expected<std::pair<head, decoder>, error> container_resolve(document &source,
                                                                            std::size_t offset)
     {
@@ -1436,7 +1455,7 @@ std::expected<lazy, error> decode(std::string bytes)
 template <std::size_t DepthMax>
 std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
 {
-    auto const found = internal::container_resolve<DepthMax>(*l.document, l.offset);
+    auto const found = internal::container_resolve(*l.document, l.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [h, d] = *found;
@@ -1477,7 +1496,7 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
 template <std::size_t DepthMax>
 std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
 {
-    auto const found = internal::container_resolve<DepthMax>(*l.document, l.offset);
+    auto const found = internal::container_resolve(*l.document, l.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [h, d] = *found;
@@ -1505,10 +1524,88 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
     return std::unexpected(error::key_not_found);
 }
 
+template <class T>
+    requires std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t> || std::is_same_v<T, double> ||
+             std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
+             std::is_same_v<T, std::span<std::byte const>>
+std::expected<T, error> lazy_get(lazy const &l)
+{
+    auto const found = internal::container_resolve(*l.document, l.offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto [h, d] = *found;
+    if constexpr (std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t>) {
+        bool negative = h.major == major_type::negative_integer;
+        std::uint64_t argument = h.argument;
+        if (h.major == major_type::tag &&
+            (h.argument == std::to_underlying(internal::tag_number::unsigned_bignum) ||
+             h.argument == std::to_underlying(internal::tag_number::negative_bignum))) {
+            negative = h.argument == std::to_underlying(internal::tag_number::negative_bignum);
+            auto const r = d.head_decode();
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (r->major != major_type::byte_string) [[unlikely]]
+                return std::unexpected(error::inadmissible_type_for_tag_content);
+            auto const bytes = d.byte_string_decode(r->argument);
+            if (!bytes) [[unlikely]]
+                return std::unexpected(bytes.error());
+            std::string_view const magnitude = internal::magnitude_without_leading_zeros(*bytes);
+            if (magnitude.size() > sizeof(std::uint64_t)) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            argument = internal::magnitude_value(magnitude);
+        } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
+            return std::unexpected(error::incorrect_type);
+        }
+        if constexpr (std::is_same_v<T, std::uint64_t>) {
+            if (negative) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return argument;
+        } else {
+            if (argument > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            std::int64_t const magnitude = static_cast<std::int64_t>(argument);
+            return negative ? -1 - magnitude : magnitude;
+        }
+    } else if constexpr (std::is_same_v<T, double>) {
+        if (h.major != major_type::simple_float) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        switch (static_cast<internal::simple_float_information>(h.info)) {
+        case internal::simple_float_information::half_precision_float:
+            return static_cast<double>(internal::float_decode_binary16(static_cast<std::uint16_t>(h.argument)));
+        case internal::simple_float_information::single_precision_float:
+            return static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h.argument)));
+        case internal::simple_float_information::double_precision_float:
+            return std::bit_cast<double>(h.argument);
+        default:
+            return std::unexpected(error::incorrect_type);
+        }
+    } else if constexpr (std::is_same_v<T, bool>) {
+        if (h.major != major_type::simple_float || (h.info != std::to_underlying(simple_value::false_value) &&
+                                                    h.info != std::to_underlying(simple_value::true_value))) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        return h.info == std::to_underlying(simple_value::true_value);
+    } else if constexpr (std::is_same_v<T, std::nullptr_t>) {
+        if (h.major != major_type::simple_float || h.info != std::to_underlying(simple_value::null)) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        return nullptr;
+    } else if constexpr (std::is_same_v<T, std::string_view>) {
+        if (h.major != major_type::text_string) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        return d.text_string_decode(h.argument);
+    } else {
+        if (h.major != major_type::byte_string) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        auto const bytes = d.byte_string_decode(h.argument);
+        if (!bytes) [[unlikely]]
+            return std::unexpected(bytes.error());
+        return std::as_bytes(std::span(*bytes));
+    }
+}
+
 template <std::size_t DepthMax>
 std::expected<lazy_elements<DepthMax>, error> lazy_elements_of(lazy const &array)
 {
-    auto const found = internal::container_resolve<DepthMax>(*array.document, array.offset);
+    auto const found = internal::container_resolve(*array.document, array.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto const &[h, d] = *found;
@@ -1520,7 +1617,7 @@ std::expected<lazy_elements<DepthMax>, error> lazy_elements_of(lazy const &array
 template <std::size_t DepthMax>
 std::expected<lazy_entries<DepthMax>, error> lazy_entries_of(lazy const &map)
 {
-    auto const found = internal::container_resolve<DepthMax>(*map.document, map.offset);
+    auto const found = internal::container_resolve(*map.document, map.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto const &[h, d] = *found;
