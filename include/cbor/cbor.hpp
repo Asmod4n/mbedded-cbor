@@ -222,6 +222,8 @@ inline constexpr struct map_size_t : customization_point<map_size_t> {
 } map_size;
 inline constexpr struct map_for_each_t : customization_point<map_for_each_t> {
 } map_for_each;
+inline constexpr struct typed_array_of_t : customization_point<typed_array_of_t> {
+} typed_array_of;
 inline constexpr struct registered_tag_t : customization_point<registered_tag_t> {
 } registered_tag;
 inline constexpr struct tag_begin_t : customization_point<tag_begin_t> {
@@ -262,6 +264,7 @@ enum class kind {
     simple_value,
     array,
     map,
+    typed_array,
     registered,
     unsupported
 };
@@ -831,6 +834,19 @@ class internal
     template <std::size_t DepthMax>
     friend std::expected<std::size_t, error> doc_end(std::string_view bytes);
 
+    static std::expected<void, error> typed_array_check(std::uint64_t const tag, std::size_t const size)
+    {
+        if (tag < std::to_underlying(tag_number::typed_array_first) ||
+            tag > std::to_underlying(tag_number::typed_array_last) ||
+            tag == std::to_underlying(tag_number::typed_array_reserved)) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        std::uint64_t const f = tag >> 4 & 1;
+        std::uint64_t const ll = tag & 3;
+        if (size % (std::uint64_t{1} << (f + ll)) != 0) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return {};
+    }
+
     template <std::size_t DepthMax, class Marks>
     static std::expected<void, error> item_skip(decoder &d, Marks &marks, std::size_t const depth)
     {
@@ -1364,6 +1380,19 @@ class walker
                 return;
             }
             break;
+        case kind::typed_array:
+            if constexpr (requires { typed_array_of(host, item); }) {
+                cbor::typed_array const a = typed_array_of(host, item);
+                if (auto const r = internal::typed_array_check(a.tag, a.bytes.size()); !r) [[unlikely]] {
+                    keep_error(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
+                    return;
+                }
+                head(major_type::tag, a.tag);
+                keep(out.byte_string_encode(
+                    std::string_view(reinterpret_cast<char const *>(a.bytes.data()), a.bytes.size())));
+                return;
+            }
+            break;
         case kind::registered:
             if constexpr (requires { registered_tag(host, item); }) {
                 head(major_type::tag, registered_tag(host, item));
@@ -1601,10 +1630,10 @@ std::expected<T, error> lazy_get(lazy const &l)
             return std::unexpected(error::incorrect_type);
         return d.text_string_decode(h.argument);
     } else if constexpr (std::is_same_v<T, typed_array>) {
-        if (h.major != major_type::tag || h.argument < std::to_underlying(internal::tag_number::typed_array_first) ||
-            h.argument > std::to_underlying(internal::tag_number::typed_array_last) ||
-            h.argument == std::to_underlying(internal::tag_number::typed_array_reserved)) [[unlikely]]
+        if (h.major != major_type::tag) [[unlikely]]
             return std::unexpected(error::incorrect_type);
+        if (auto const r = internal::typed_array_check(h.argument, 0); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto const r = d.head_decode();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
@@ -1613,10 +1642,8 @@ std::expected<T, error> lazy_get(lazy const &l)
         auto const bytes = d.byte_string_decode(r->argument);
         if (!bytes) [[unlikely]]
             return std::unexpected(bytes.error());
-        std::uint64_t const f = h.argument >> 4 & 1;
-        std::uint64_t const ll = h.argument & 3;
-        if (bytes->size() % (std::uint64_t{1} << (f + ll)) != 0) [[unlikely]]
-            return std::unexpected(error::inadmissible_type_for_tag_content);
+        if (auto const c = internal::typed_array_check(h.argument, bytes->size()); !c) [[unlikely]]
+            return std::unexpected(c.error());
         return typed_array{h.argument, std::as_bytes(std::span(*bytes))};
     } else {
         if (h.major != major_type::byte_string) [[unlikely]]
