@@ -163,6 +163,16 @@ struct string_writer {
         bytes.append(part);
         return {};
     }
+
+    template <class Op>
+    std::expected<void, std::errc> resize_and_overwrite(std::size_t size, Op op)
+    {
+        std::size_t const at = bytes.size();
+        bytes.resize_and_overwrite(at + size, [&](char *p, std::size_t n) {
+            return at + op(std::span<char>(p, n).subspan(at, size));
+        });
+        return {};
+    }
 };
 
 // The way back, as a binding walks its own values.
