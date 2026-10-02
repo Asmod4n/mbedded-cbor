@@ -14,6 +14,10 @@
 #include <memory>
 #include <optional>
 #include <span>
+#if __cpp_impl_reflection
+#include <meta>
+#include <stdfloat>
+#endif
 #include <string>
 #include <string_view>
 #if CBOR_SIMDUTF
@@ -324,6 +328,14 @@ std::expected<std::size_t, error> doc_end(std::string_view bytes);
 template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Host, class Writer>
 std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value);
 
+#if __cpp_impl_reflection
+template <class T>
+consteval std::size_t fixed_size();
+
+template <class T>
+consteval std::size_t no_fixed_size();
+#endif
+
 class internal
 {
     enum class additional_information : std::uint8_t {
@@ -344,11 +356,76 @@ class internal
         sharedref = 29,
         typed_array_first = 64,
         typed_array_reserved = 76,
+        float128_big_endian = 83,
         typed_array_last = 87
     };
 
     template <class Host>
     using marks = std::vector<std::optional<typename Host::value>>;
+
+#if __cpp_impl_reflection
+    static constexpr std::size_t initial_byte_size = 1;
+
+    static constexpr int extended_precision_digits = 64;
+
+    static constexpr std::size_t head_size(std::uint64_t argument)
+    {
+        if (argument < std::to_underlying(additional_information::one_byte_argument))
+            return initial_byte_size;
+        if (std::in_range<std::uint8_t>(argument))
+            return initial_byte_size + sizeof(std::uint8_t);
+        if (std::in_range<std::uint16_t>(argument))
+            return initial_byte_size + sizeof(std::uint16_t);
+        if (std::in_range<std::uint32_t>(argument))
+            return initial_byte_size + sizeof(std::uint32_t);
+        return initial_byte_size + sizeof(std::uint64_t);
+    }
+
+    static constexpr std::size_t dynamic_type_sizes = head_size(2) + 2 * (initial_byte_size + sizeof(std::uint32_t));
+
+    template <class T>
+    struct fixed_length {};
+
+    template <class E, std::size_t N>
+    struct fixed_length<E[N]> {
+        using element = std::remove_cv_t<E>;
+        static constexpr std::size_t value = N;
+    };
+
+    template <class E, std::size_t N>
+    struct fixed_length<std::array<E, N>> {
+        using element = std::remove_cv_t<E>;
+        static constexpr std::size_t value = N;
+    };
+
+    template <class E, std::size_t N>
+        requires(N != std::dynamic_extent)
+    struct fixed_length<std::span<E, N>> {
+        using element = std::remove_cv_t<E>;
+        static constexpr std::size_t value = N;
+    };
+
+    template <class U>
+    static consteval std::size_t struct_fixed_size()
+    {
+        constexpr auto context = std::meta::access_context::unchecked();
+        if constexpr (!std::meta::bases_of(^^U, context).empty()) {
+            return no_fixed_size<U>();
+        } else {
+            std::size_t size = head_size(std::meta::nonstatic_data_members_of(^^U, context).size());
+            template for (constexpr auto m : std::define_static_array(std::meta::nonstatic_data_members_of(^^U, context))) {
+                if constexpr (std::meta::is_bit_field(m) || !std::meta::is_public(m))
+                    return no_fixed_size<U>();
+                constexpr std::size_t key = std::meta::identifier_of(m).size();
+                size += head_size(key) + key + fixed_size<typename[:std::meta::type_of(m):]>();
+            }
+            return size;
+        }
+    }
+
+    template <class T>
+    friend consteval std::size_t fixed_size();
+#endif
 
     friend struct lazy;
 
@@ -1104,6 +1181,59 @@ struct lazy_entries {
         return {};
     }
 };
+
+#if __cpp_impl_reflection
+template <class T>
+consteval std::size_t fixed_size()
+{
+    using U = std::remove_cv_t<T>;
+    constexpr std::size_t initial_byte_size = internal::initial_byte_size;
+    if constexpr (std::same_as<U, bool>)
+        return initial_byte_size;
+    else if constexpr (std::is_enum_v<U>)
+        return fixed_size<std::underlying_type_t<U>>();
+    else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>)
+        return internal::head_size(std::to_underlying(internal::tag_number::negative_bignum)) +
+               internal::head_size(sizeof(U)) + sizeof(U);
+    else if constexpr (std::is_integral_v<U> && std::has_single_bit(sizeof(U)) && sizeof(U) <= sizeof(std::uint64_t))
+        return initial_byte_size + sizeof(U);
+    else if constexpr (std::is_floating_point_v<U>) {
+        constexpr int digits = std::numeric_limits<U>::digits;
+        if constexpr (digits == std::numeric_limits<std::float16_t>::digits)
+            return initial_byte_size + sizeof(std::float16_t);
+        else if constexpr (digits == std::numeric_limits<std::bfloat16_t>::digits ||
+                           digits == std::numeric_limits<std::float32_t>::digits)
+            return initial_byte_size + sizeof(std::float32_t);
+        else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
+            return initial_byte_size + sizeof(std::float64_t);
+        else if constexpr (digits == internal::extended_precision_digits ||
+                           digits == std::numeric_limits<std::float128_t>::digits)
+            return internal::head_size(std::to_underlying(internal::tag_number::float128_big_endian)) +
+                   internal::head_size(sizeof(std::float128_t)) + sizeof(std::float128_t);
+        else
+            return no_fixed_size<T>();
+    } else if constexpr (requires { internal::fixed_length<U>::value; }) {
+        using E = typename internal::fixed_length<U>::element;
+        constexpr std::size_t n = internal::fixed_length<U>::value;
+        if constexpr (std::same_as<E, char> || std::same_as<E, char8_t> || std::same_as<E, unsigned char> ||
+                      std::same_as<E, std::byte>)
+            return internal::head_size(n) + n;
+        else
+            return internal::head_size(n) + n * fixed_size<E>();
+    } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>)
+        return internal::struct_fixed_size<U>();
+    else if constexpr (requires(U const &v) {
+                           v.has_value();
+                           *v;
+                           typename U::value_type;
+                       } && !requires { typename U::error_type; })
+        return internal::dynamic_type_sizes;
+    else if constexpr (std::ranges::sized_range<U>)
+        return internal::dynamic_type_sizes;
+    else
+        return no_fixed_size<T>();
+}
+#endif
 
 template <class Writer>
 struct encoder {
