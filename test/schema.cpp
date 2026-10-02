@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <optional>
 #include <span>
@@ -68,11 +69,13 @@ TEST_CASE("fixed_size: text, bytes and arrays of fixed length")
     CHECK_EQ(cbor::fixed_size<std::byte[4]>(), 5u);
     CHECK_EQ(cbor::fixed_size<unsigned char[300]>(), 303u);
     CHECK_EQ(cbor::fixed_size<std::array<std::uint16_t, 4>>(), 13u);
-    CHECK_EQ(cbor::fixed_size<std::span<std::uint8_t, 2>>(), 5u);
+    // std::uint8_t is unsigned char, so a span of it is a byte string.
+    CHECK_EQ(cbor::fixed_size<std::span<std::uint8_t, 2>>(), 3u);
+    CHECK_EQ(cbor::fixed_size<std::span<std::uint16_t, 2>>(), 7u);
     CHECK_EQ(cbor::fixed_size<std::uint32_t[2]>(), 11u);
 }
 
-// A struct is a map: its head, then for each member a text key and the fixed value. wheel: a1 head, "diameter"
+// A struct is a map: its head, then for each member a text key and the fixed value. wheel: a3 head, "diameter"
 // 9 + 3, "airPressure" 12 + 5, "snowTires" 10 + 1.
 TEST_CASE("fixed_size: a struct is a map of its members")
 {
@@ -81,7 +84,7 @@ TEST_CASE("fixed_size: a struct is a map of its members")
 }
 
 // A part of variable size lives in the second item. The first item holds 82 1a <offset> 1a <length>.
-TEST_CASE("fixed_size: a part of variable size is a reference of 11 bytes")
+TEST_CASE("fixed_size: a part of variable size takes 11 bytes")
 {
     CHECK_EQ(cbor::fixed_size<std::string>(), 11u);
     CHECK_EQ(cbor::fixed_size<std::vector<wheel>>(), 11u);

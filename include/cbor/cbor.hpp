@@ -381,7 +381,7 @@ class internal
         return initial_byte_size + sizeof(std::uint64_t);
     }
 
-    static constexpr std::size_t dynamic_type_sizes = head_size(2) + 2 * (initial_byte_size + sizeof(std::uint32_t));
+    static constexpr std::size_t dynamic_type_sizes = initial_byte_size + 2 * (initial_byte_size + sizeof(std::uint32_t));
 
     template <class T>
     struct fixed_length {};
