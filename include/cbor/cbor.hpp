@@ -621,93 +621,68 @@ class internal
     }
 
     struct second_item {
-        std::size_t items;
-        std::size_t bytes;
-    };
+        std::size_t items = 0;
+        std::size_t bytes = 0;
+        bool overflow = false;
 
-    static constexpr std::expected<second_item, std::errc> second_item_add(second_item const a, second_item const b)
-    {
-        second_item sum;
-        if (ckd_add(&sum.items, a.items, b.items) || ckd_add(&sum.bytes, a.bytes, b.bytes)) [[unlikely]]
-            return std::unexpected(std::errc::value_too_large);
-        return sum;
-    }
-
-    template <class E, class R>
-    static std::expected<second_item, std::errc> elements_of(R const &range, major_type)
-    {
-        std::size_t block;
-        if (ckd_mul(&block, std::ranges::size(range), fixed_size<E>())) [[unlikely]]
-            return std::unexpected(std::errc::value_too_large);
-        std::expected<second_item, std::errc> sum = second_item{1, head_size(std::ranges::size(range))};
-        sum = sum.and_then([&](second_item const s) { return second_item_add(s, second_item{0, block}); });
-        for (auto const &e : range) {
-            if (!sum) [[unlikely]]
-                return sum;
-            sum = sum.and_then([&](second_item const s) {
-                return second_item_of<E>(e).and_then([&](second_item const t) { return second_item_add(s, t); });
-            });
+        void bytes_add(std::size_t const n)
+        {
+            overflow |= ckd_add(&bytes, bytes, n);
         }
-        return sum;
-    }
 
-    template <class T>
-    static std::expected<second_item, std::errc> second_item_of(T const &value)
-    {
-        using U = std::remove_cv_t<T>;
-        if constexpr (std::is_arithmetic_v<U> || std::is_enum_v<U> || std::same_as<U, __int128> ||
-                      std::same_as<U, unsigned __int128>) {
-            return second_item{0, 0};
-        } else if constexpr (requires { fixed_length<U>::value; }) {
-            using E = typename fixed_length<U>::element;
-            std::expected<second_item, std::errc> sum = second_item{0, 0};
-            if constexpr (!std::is_arithmetic_v<E> && !std::same_as<E, std::byte>)
-                for (auto const &e : value)
-                    sum = sum.and_then([&](second_item const s) {
-                        return second_item_of<E>(e).and_then([&](second_item const t) { return second_item_add(s, t); });
-                    });
-            return sum;
-        } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-            std::expected<second_item, std::errc> sum = second_item{0, 0};
-            template for (constexpr auto m : data_members<U>())
-                sum = sum.and_then([&](second_item const s) {
-                    return second_item_of<typename[:std::meta::type_of(m):]>(value.[:m:])
-                        .and_then([&](second_item const t) { return second_item_add(s, t); });
-                });
-            return sum;
-        } else if constexpr (is_optional<U>) {
-            using E = typename U::value_type;
-            if (!value.has_value())
-                return second_item{0, 0};
-            return second_item_of<E>(*value).and_then(
-                [](second_item const t) { return second_item_add(second_item{1, fixed_size<E>()}, t); });
-        } else if constexpr (is_text_range<U> || is_byte_range<U>) {
-            std::size_t const n = std::ranges::size(value);
-            std::size_t bytes;
-            if (ckd_add(&bytes, head_size(n), n)) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-            return second_item{1, bytes};
-        } else if constexpr (is_map<U>) {
-            std::size_t const n = std::ranges::size(value);
+        template <class E, class R>
+        void elements_add(R const &range)
+        {
             std::size_t block;
-            if (ckd_mul(&block, n, fixed_size<typename U::key_type>() + fixed_size<typename U::mapped_type>()))
-                [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-            std::expected<second_item, std::errc> sum = second_item_add(second_item{1, head_size(n)}, second_item{0, block});
-            for (auto const &[k, v] : value)
-                sum = sum.and_then([&](second_item const s) {
-                    return second_item_of<typename U::key_type>(k)
-                        .and_then([&](second_item const t) { return second_item_add(s, t); })
-                        .and_then([&](second_item const s2) {
-                            return second_item_of<typename U::mapped_type>(v).and_then(
-                                [&](second_item const t) { return second_item_add(s2, t); });
-                        });
-                });
-            return sum;
-        } else {
-            return elements_of<std::ranges::range_value_t<U>>(value, major_type::array);
+            items += 1;
+            overflow |= ckd_mul(&block, std::ranges::size(range), fixed_size<E>());
+            bytes_add(head_size(std::ranges::size(range)));
+            bytes_add(block);
+            if constexpr (!std::is_arithmetic_v<E> && !std::is_enum_v<E>)
+                for (auto const &e : range)
+                    add<E>(e);
         }
-    }
+
+        template <class T>
+        void add(T const &value)
+        {
+            using U = std::remove_cv_t<T>;
+            if constexpr (std::is_arithmetic_v<U> || std::is_enum_v<U> || std::same_as<U, __int128> ||
+                          std::same_as<U, unsigned __int128>) {
+            } else if constexpr (requires { fixed_length<U>::value; }) {
+                using E = typename fixed_length<U>::element;
+                if constexpr (!std::is_arithmetic_v<E> && !std::same_as<E, std::byte>)
+                    for (auto const &e : value)
+                        add<E>(e);
+            } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
+                template for (constexpr auto m : data_members<U>())
+                    add<typename[:std::meta::type_of(m):]>(value.[:m:]);
+            } else if constexpr (is_optional<U>) {
+                if (value.has_value()) {
+                    items += 1;
+                    bytes_add(fixed_size<typename U::value_type>());
+                    add<typename U::value_type>(*value);
+                }
+            } else if constexpr (is_text_range<U> || is_byte_range<U>) {
+                items += 1;
+                bytes_add(head_size(std::ranges::size(value)));
+                bytes_add(std::ranges::size(value));
+            } else if constexpr (is_map<U>) {
+                std::size_t block;
+                items += 1;
+                overflow |= ckd_mul(&block, std::ranges::size(value),
+                                    fixed_size<typename U::key_type>() + fixed_size<typename U::mapped_type>());
+                bytes_add(head_size(std::ranges::size(value)));
+                bytes_add(block);
+                for (auto const &[k, v] : value) {
+                    add<typename U::key_type>(k);
+                    add<typename U::mapped_type>(v);
+                }
+            } else {
+                elements_add<std::ranges::range_value_t<U>>(value);
+            }
+        }
+    };
 
     struct cursor {
         std::span<char> out;
@@ -733,8 +708,21 @@ class internal
             field.front() = static_cast<char>(std::to_underlying(major) << 5 |
                                               (std::to_underlying(additional_information::one_byte_argument) +
                                                std::countr_zero(width)));
-            auto const big = big_endian(argument);
-            std::ranges::copy(std::span<char const>(big).last(width), field.subspan(initial_byte_size).begin());
+            auto const rest = field.subspan(initial_byte_size);
+            switch (width) {
+            case sizeof(std::uint8_t):
+                std::ranges::copy(big_endian(static_cast<std::uint8_t>(argument)), rest.begin());
+                break;
+            case sizeof(std::uint16_t):
+                std::ranges::copy(big_endian(static_cast<std::uint16_t>(argument)), rest.begin());
+                break;
+            case sizeof(std::uint32_t):
+                std::ranges::copy(big_endian(static_cast<std::uint32_t>(argument)), rest.begin());
+                break;
+            default:
+                std::ranges::copy(big_endian(argument), rest.begin());
+                break;
+            }
             return size;
         }
 
@@ -1926,19 +1914,18 @@ template <class Writer, class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
 std::expected<void, std::errc> encode(Writer &writer, T const &value)
 {
-    auto const second = internal::second_item_of(value);
-    if (!second) [[unlikely]]
-        return std::unexpected(second.error());
+    internal::second_item second;
+    second.add(value);
     constexpr std::size_t first = fixed_size<T>();
     std::size_t second_size;
     std::size_t size;
-    if (ckd_add(&second_size, internal::head_size(second->items), second->bytes) ||
+    if (second.overflow || ckd_add(&second_size, internal::head_size(second.items), second.bytes) ||
         !std::in_range<std::uint32_t>(second_size) || ckd_add(&size, first, second_size)) [[unlikely]]
         return std::unexpected(std::errc::value_too_large);
     return writer.resize_and_overwrite(size, [&](std::span<char> const out) {
         internal::cursor c{out, first};
         c.template zero_initialized_copy<T>(0);
-        c.position += c.head_write(first, major_type::array, second->items);
+        c.position += c.head_write(first, major_type::array, second.items);
         c.template value_encode<T>(0, value);
         return size;
     });
