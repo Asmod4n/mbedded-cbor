@@ -123,10 +123,10 @@ inline value tag_invoke(cbor::array_decode_t, test_host &)
     return {array{}};
 }
 
-inline value tag_invoke(cbor::array_append_t, test_host &, value a, value e)
+inline value tag_invoke(cbor::array_append_t, test_host &, value &&a, value &&e)
 {
     std::get<array>(a.kind).push_back(std::move(e));
-    return a;
+    return std::move(a);
 }
 
 inline value tag_invoke(cbor::map_decode_t, test_host &)
@@ -134,10 +134,10 @@ inline value tag_invoke(cbor::map_decode_t, test_host &)
     return {map{}};
 }
 
-inline value tag_invoke(cbor::map_insert_t, test_host &, value m, value k, value v)
+inline value tag_invoke(cbor::map_insert_t, test_host &, value &&m, value &&k, value &&v)
 {
     std::get<map>(m.kind).push_back(entry{std::move(k), std::move(v)});
-    return m;
+    return std::move(m);
 }
 
 inline value tag_invoke(cbor::tag_decode_t, test_host &, std::uint64_t tag, value content)
