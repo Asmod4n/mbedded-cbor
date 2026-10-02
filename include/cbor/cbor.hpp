@@ -684,14 +684,6 @@ class internal
         }
     };
 
-    template <class E>
-    static void zero_initialized_copy(std::span<char> const out, std::size_t const at)
-    {
-        constexpr std::size_t n = fixed_size<E>();
-        std::span<char const, n> const from{zero_initialized<E>().data(), n};
-        std::copy(from.begin(), from.end(), out.subspan(at).template first<n>().begin());
-    }
-
     static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
                                   std::uint64_t const argument)
     {
@@ -723,9 +715,32 @@ class internal
         return size;
     }
 
+    template <class E>
+    static void zero_initialized_copy(std::span<char, fixed_size<E>()> const field)
+    {
+        constexpr std::size_t n = fixed_size<E>();
+        std::span<char const, n> const from{zero_initialized<E>().data(), n};
+        std::copy(from.begin(), from.end(), field.begin());
+    }
+
+    template <class E, class R>
+    static std::size_t elements_encode(std::span<char> const out, std::size_t const data, R const &range,
+                                       std::size_t position)
+    {
+        constexpr std::size_t size = fixed_size<E>();
+        std::size_t at = data;
+        for (auto const &e : range) {
+            auto const field = out.subspan(at).template first<size>();
+            zero_initialized_copy<E>(field);
+            position = value_encode<E>(out, field, e, position);
+            at += size;
+        }
+        return position;
+    }
+
     template <class V>
-    static std::size_t reference_encode(std::span<char> const out, std::size_t const offset, V const &value,
-                                        std::size_t position)
+    static std::size_t reference_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
+                                        V const &value, std::size_t position)
     {
         using U = std::remove_cv_t<V>;
         std::size_t data = position;
@@ -734,8 +749,9 @@ class internal
             using E = typename U::value_type;
             if (value.has_value()) {
                 position += fixed_size<E>();
-                zero_initialized_copy<E>(out, data);
-                position = value_encode<E>(out, data, *value, position);
+                auto const element = out.subspan(data).template first<fixed_size<E>()>();
+                zero_initialized_copy<E>(element);
+                position = value_encode<E>(out, element, *value, position);
                 length = 1;
             }
         } else if constexpr (is_text_range<U> || is_byte_range<U>) {
@@ -743,7 +759,8 @@ class internal
             position += head_write(out, position, is_text_range<U> ? major_type::text_string : major_type::byte_string,
                                    length);
             data = position;
-            std::ranges::copy(std::as_bytes(std::span(value)), std::as_writable_bytes(out.subspan(data, length)).begin());
+            auto const from = std::as_bytes(std::span(value));
+            std::copy(from.begin(), from.end(), std::as_writable_bytes(out.subspan(data, length)).begin());
             position += length;
         } else if constexpr (is_map<U>) {
             using K = typename U::key_type;
@@ -754,48 +771,40 @@ class internal
             position += length * (fixed_size<K>() + fixed_size<M>());
             std::size_t at = data;
             for (auto const &[k, v] : value) {
-                zero_initialized_copy<K>(out, at);
-                position = value_encode<K>(out, at, k, position);
+                auto const key = out.subspan(at).template first<fixed_size<K>()>();
+                zero_initialized_copy<K>(key);
+                position = value_encode<K>(out, key, k, position);
                 at += fixed_size<K>();
-                zero_initialized_copy<M>(out, at);
-                position = value_encode<M>(out, at, v, position);
+                auto const mapped = out.subspan(at).template first<fixed_size<M>()>();
+                zero_initialized_copy<M>(mapped);
+                position = value_encode<M>(out, mapped, v, position);
                 at += fixed_size<M>();
             }
         } else {
             using E = std::ranges::range_value_t<U>;
-            constexpr std::size_t size = fixed_size<E>();
             length = std::ranges::size(value);
             position += head_write(out, position, major_type::array, length);
             data = position;
-            position += length * size;
-            std::size_t at = data;
-            for (auto const &e : value) {
-                zero_initialized_copy<E>(out, at);
-                position = value_encode<E>(out, at, e, position);
-                at += size;
-            }
+            position = elements_encode<E>(out, data, value, position + length * fixed_size<E>());
         }
-        auto const field = out.subspan(offset).template first<dynamic_type_sizes>();
-        std::ranges::copy(big_endian(static_cast<std::uint32_t>(data)),
-                          field.template subspan<2, sizeof(std::uint32_t)>().begin());
-        std::ranges::copy(big_endian(static_cast<std::uint32_t>(length)),
-                          field.template last<sizeof(std::uint32_t)>().begin());
+        auto const offset = big_endian(static_cast<std::uint32_t>(data));
+        auto const count = big_endian(static_cast<std::uint32_t>(length));
+        std::copy(offset.begin(), offset.end(), field.template subspan<2, sizeof(std::uint32_t)>().begin());
+        std::copy(count.begin(), count.end(), field.template last<sizeof(std::uint32_t)>().begin());
         return position;
     }
 
     template <class T>
-    static std::size_t value_encode(std::span<char> const out, std::size_t const offset, T const &value,
-                                    std::size_t position)
+    static std::size_t value_encode(std::span<char> const out, std::span<char, fixed_size<T>()> const field,
+                                    T const &value, std::size_t position)
     {
         using U = std::remove_cv_t<T>;
         if constexpr (std::same_as<U, bool>) {
-            out.subspan(offset).template first<1>().front() = static_cast<char>(
-                std::to_underlying(major_type::simple_float) << 5 |
-                (std::to_underlying(simple_value::false_value) + static_cast<int>(value)));
+            field.front() = static_cast<char>(std::to_underlying(major_type::simple_float) << 5 |
+                                              (std::to_underlying(simple_value::false_value) + static_cast<int>(value)));
         } else if constexpr (std::is_enum_v<U>) {
-            position = value_encode<std::underlying_type_t<U>>(out, offset, std::to_underlying(value), position);
+            position = value_encode<std::underlying_type_t<U>>(out, field, std::to_underlying(value), position);
         } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
-            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
             unsigned __int128 magnitude = static_cast<unsigned __int128>(value);
             if constexpr (std::same_as<U, __int128>) {
                 unsigned __int128 const sign = static_cast<unsigned __int128>(value >> 127);
@@ -804,43 +813,45 @@ class internal
                                                    static_cast<int>(sign & 1)));
                 magnitude ^= sign;
             }
-            std::ranges::copy(big_endian(magnitude), field.template last<sizeof(U)>().begin());
+            auto const bytes = big_endian(magnitude);
+            std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
         } else if constexpr (std::unsigned_integral<U>) {
-            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
-            std::ranges::copy(big_endian(value), field.template last<sizeof(U)>().begin());
+            auto const bytes = big_endian(value);
+            std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
         } else if constexpr (std::signed_integral<U>) {
             using M = std::make_unsigned_t<U>;
-            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
             M const sign = static_cast<M>(value >> (8 * sizeof(U) - 1));
             field.front() = static_cast<char>((sign & 1) << 5 |
                                               (std::to_underlying(additional_information::one_byte_argument) +
                                                std::countr_zero(sizeof(U))));
-            std::ranges::copy(big_endian(static_cast<M>(static_cast<M>(value) ^ sign)),
-                              field.template last<sizeof(U)>().begin());
+            auto const bytes = big_endian(static_cast<M>(static_cast<M>(value) ^ sign));
+            std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
         } else if constexpr (std::is_floating_point_v<U>) {
-            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
             auto const bits = big_endian(float_bits(value));
-            std::ranges::copy(bits, field.template last<bits.size()>().begin());
+            std::copy(bits.begin(), bits.end(), field.template last<bits.size()>().begin());
         } else if constexpr (requires { fixed_length<U>::value; }) {
             using E = typename fixed_length<U>::element;
             constexpr std::size_t n = fixed_length<U>::value;
-            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
             if constexpr (std::same_as<E, char> || std::same_as<E, char8_t> || std::same_as<E, unsigned char> ||
                           std::same_as<E, std::byte>) {
-                std::ranges::copy(std::as_bytes(std::span(value)), std::as_writable_bytes(field.template last<n>()).begin());
+                auto const from = std::as_bytes(std::span(value));
+                std::copy(from.begin(), from.end(), std::as_writable_bytes(field.template last<n>()).begin());
             } else {
-                std::size_t at = offset + head_size(n);
+                constexpr std::size_t head = head_size(n);
+                std::size_t at = head;
                 for (auto const &e : value) {
-                    position = value_encode<E>(out, at, e, position);
+                    position = value_encode<E>(out, field.subspan(at).template first<fixed_size<E>()>(), e, position);
                     at += fixed_size<E>();
                 }
             }
         } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-            template for (constexpr auto m : data_members<U>())
-                position = value_encode<typename[:std::meta::type_of(m):]>(out, offset + member_offset<U, m>(),
-                                                                          value.[:m:], position);
+            template for (constexpr auto m : data_members<U>()) {
+                using M = typename[:std::meta::type_of(m):];
+                position = value_encode<M>(out, field.template subspan<member_offset<U, m>(), fixed_size<M>()>(),
+                                           value.[:m:], position);
+            }
         } else {
-            position = reference_encode(out, offset, value, position);
+            position = reference_encode(out, field, value, position);
         }
         return position;
     }
@@ -1921,9 +1932,10 @@ std::expected<void, std::errc> encode(Writer &writer, T const &value)
         !std::in_range<std::uint32_t>(second_size) || ckd_add(&size, first, second_size)) [[unlikely]]
         return std::unexpected(std::errc::value_too_large);
     return writer.resize_and_overwrite(size, [&](std::span<char> const out) {
-        internal::zero_initialized_copy<T>(out, 0);
+        auto const root = out.template first<first>();
+        internal::zero_initialized_copy<T>(root);
         std::size_t const position = first + internal::head_write(out, first, major_type::array, second.items);
-        internal::value_encode<T>(out, 0, value, position);
+        internal::value_encode<T>(out, root, value, position);
         return size;
     });
 }
