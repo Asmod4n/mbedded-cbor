@@ -11,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <variant>
 #include <vector>
 
 using namespace std::string_literals;
@@ -384,4 +385,46 @@ TEST_CASE("encode: a typed array the host answers wrongly")
     CHECK((typed_encoded(76, "\x00"sv).error() == cbor::error::unsupported_value));
     CHECK((typed_encoded(63, "\x00"sv).error() == cbor::error::unsupported_value));
     CHECK((typed_encoded(66, "\x00\x01\x02"sv).error() == cbor::error::inadmissible_type_for_tag_content));
+}
+
+namespace
+{
+
+// A host that embeds every array as an encoded data item of its own.
+struct embedding_host : test_host {
+};
+
+bool tag_invoke(cbor::embed_of_t, embedding_host &, value const &v)
+{
+    return std::holds_alternative<test::array>(v.kind);
+}
+
+} // namespace
+
+// RFC 8949 3.4.5.1: tag 24 carries an encoded data item in a byte string. The encoder writes each embedded
+// value as a document of its own, and a view passes through the tag into it.
+TEST_CASE("tag 24: an embedded value is written as a document of its own and read through")
+{
+    embedding_host host;
+    test::string_writer w;
+    REQUIRE(cbor::encode<16>(host, w, A(1, A(2, 3))).has_value());
+    CHECK_EQ(w.bytes, "\xd8\x18\x48\x82\x01\xd8\x18\x43\x82\x02\x03"s);
+    auto const inner = cbor::lazy_at<16>(lazy_of(w.bytes), 1);
+    REQUIRE(inner.has_value());
+    auto const three = cbor::lazy_at<16>(*inner, 1);
+    REQUIRE(three.has_value());
+    CHECK_EQ(*cbor::lazy_get<std::uint64_t>(*three), 3u);
+    CHECK_EQ(get<std::uint64_t>("\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
+}
+
+// The marks of an embedded document are its own: the 29(0) inside names the 28 inside, not the one
+// outside before it.
+TEST_CASE("tag 24: an embedded document has marks of its own")
+{
+    std::string const doc = "\x82\xd8\x1c\x07\xd8\x18\x47\x82\xd8\x1c\x09\xd8\x1d\x00"s;
+    auto const embedded = cbor::lazy_at<16>(lazy_of(doc), 1);
+    REQUIRE(embedded.has_value());
+    auto const second = cbor::lazy_at<16>(*embedded, 1);
+    REQUIRE(second.has_value());
+    CHECK_EQ(*cbor::lazy_get<std::uint64_t>(*second), 9u);
 }
