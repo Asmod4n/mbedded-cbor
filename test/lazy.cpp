@@ -128,7 +128,7 @@ TEST_CASE("lazy: random access")
 TEST_CASE("lazy: a truncated item before the target")
 {
     std::string const doc = "\x82\x4a\x01\x02\x03\x18\x2a"s;
-    CHECK_EQ(cbor::decode<16>(doc).error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy_at<16>(lazy_of(doc), 1).error(), error::too_little_data);
 }
 
 // Ported from test.rb: 'lazy: huge aref index handled cleanly'.
@@ -150,18 +150,20 @@ TEST_CASE("lazy: a reference to its own enclosing mark ends")
 
 // Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. Before the fix the scan for
 // marks before the value of its first key went on through the claimed pairs after it reached the
-// target. A view now exists only for a complete document, so decode refuses this one.
+// target; now it stops there.
 TEST_CASE("lazy: a value inside a huge claimed map")
 {
     std::string const doc = "\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s;
-    CHECK_EQ(cbor::decode<16>(doc).error(), error::too_little_data);
+    auto const a = cbor::lazy_at<16>(lazy_of(doc), "a");
+    REQUIRE(a.has_value());
+    CHECK(value_at(*a) == V(0));
 }
 
 // Found by the fuzzer: [28(28(29(0))), ...] leads from the reference through two marks back to the
 // same reference. A reference that the walk meets a second time ends it.
 TEST_CASE("lazy: a chain of marks back to the same reference ends")
 {
-    std::string const doc = "\x82\xd8\x1c\xd8\x1c\xd8\x1d\x00\x00"s;
+    std::string const doc = "\x92\xd8\x1c\xd8\x1c\xd8\x1d\x00"s;
     auto const element = cbor::lazy_at<16>(lazy_of(doc), 0);
     REQUIRE(element.has_value());
     CHECK_EQ(cbor::lazy_at<16>(*element, 0).error(), error::sharedref_not_complete);
