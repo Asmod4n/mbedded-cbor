@@ -1,8 +1,13 @@
 #include "host.hpp"
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <limits>
 #include <random>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -238,4 +243,71 @@ TEST_CASE("lazy: a truncated element ends the walk with its error")
     CHECK(steps.at(0).has_value());
     CHECK(steps.at(1).has_value());
     CHECK_EQ(steps.at(2).error(), error::too_little_data);
+}
+
+namespace
+{
+
+template <class T>
+std::expected<T, error> get(std::string const &document)
+{
+    return cbor::lazy_get<T>(lazy_of(document));
+}
+
+} // namespace
+
+// The integers of RFC 8949 Appendix A, read without a host.
+TEST_CASE("lazy: lazy_get reads an integer")
+{
+    CHECK_EQ(*get<std::uint64_t>("\x00"s), 0u);
+    CHECK_EQ(*get<std::uint64_t>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s), 18446744073709551615u);
+    CHECK_EQ(*get<std::int64_t>("\x20"s), -1);
+    CHECK_EQ(*get<std::int64_t>("\x39\x03\xe7"s), -1000);
+    CHECK_EQ(*get<std::int64_t>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xff"s), std::numeric_limits<std::int64_t>::min());
+    CHECK_EQ(*get<std::uint64_t>("\xc2\x42\x01\x00"s), 256u);
+    CHECK_EQ(*get<std::int64_t>("\xc3\x41\x01"s), -2);
+    CHECK_EQ(*get<std::uint64_t>("\xd8\x1c\x05"s), 5u);
+}
+
+// A number that the type cannot hold is out of range; anything that is not a number has the wrong type.
+TEST_CASE("lazy: lazy_get refuses an integer it cannot hold")
+{
+    CHECK_EQ(get<std::uint64_t>("\x20"s).error(), error::number_out_of_range);
+    CHECK_EQ(get<std::int64_t>("\x1b\x80\x00\x00\x00\x00\x00\x00\x00"s).error(), error::number_out_of_range);
+    CHECK_EQ(get<std::int64_t>("\x3b\x80\x00\x00\x00\x00\x00\x00\x00"s).error(), error::number_out_of_range);
+    CHECK_EQ(get<std::uint64_t>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s).error(),
+             error::number_out_of_range);
+    CHECK_EQ(get<std::uint64_t>("\x61\x61"s).error(), error::incorrect_type);
+    CHECK_EQ(get<std::uint64_t>("\xf9\x3c\x00"s).error(), error::incorrect_type);
+}
+
+// Floats of the three widths of Appendix A. An integer is not a float: CBOR keeps the two apart.
+TEST_CASE("lazy: lazy_get reads a float")
+{
+    CHECK_EQ(*get<double>("\xf9\x3c\x00"s), 1.0);
+    CHECK_EQ(*get<double>("\xfa\x47\xc3\x50\x00"s), 100000.0);
+    CHECK_EQ(*get<double>("\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"s), 1.1);
+    CHECK_EQ(get<double>("\x01"s).error(), error::incorrect_type);
+}
+
+// The simple values false, true and null of Table 4.
+TEST_CASE("lazy: lazy_get reads a simple value")
+{
+    CHECK_EQ(*get<bool>("\xf4"s), false);
+    CHECK_EQ(*get<bool>("\xf5"s), true);
+    CHECK_EQ(get<bool>("\xf6"s).error(), error::incorrect_type);
+    CHECK(get<std::nullptr_t>("\xf6"s).has_value());
+    CHECK_EQ(get<std::nullptr_t>("\xf7"s).error(), error::incorrect_type);
+}
+
+// A text string and a byte string come as views into the document, each only as its own type.
+TEST_CASE("lazy: lazy_get reads a string as a view")
+{
+    CHECK_EQ(*get<std::string_view>("\x64IETF"s), "IETF"sv);
+    CHECK_EQ(get<std::string_view>("\x44\x01\x02\x03\x04"s).error(), error::incorrect_type);
+    auto const bytes = get<std::span<std::byte const>>("\x44\x01\x02\x03\x04"s);
+    REQUIRE(bytes.has_value());
+    CHECK(std::ranges::equal(*bytes, std::array{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}));
+    CHECK_EQ(get<std::span<std::byte const>>("\x64IETF"s).error(), error::incorrect_type);
+    CHECK_EQ(get<std::string_view>("\x62\x61"s).error(), error::too_little_data);
 }
