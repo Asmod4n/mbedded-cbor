@@ -78,9 +78,12 @@ the order of these calls.
 
 - `cbor::doc_end<DepthMax>(bytes)` gives the size of the first complete
   data item, or `too_little_data` when the bytes end inside it.
-- `cbor::lazy` is a view of a document and an offset. `lazy_at` indexes
-  an array or finds a key of a map. `lazy_decode` decodes the value at
-  the offset.
+- `cbor::decode<DepthMax>(bytes)` takes a `std::string` or a
+  `std::shared_ptr<std::string const>` and gives a `cbor::lazy`: an
+  owner, a view of the document and an offset. Every view from it
+  shares the owner, so the document lives until the last view ends.
+  `lazy_at` indexes an array or finds a key of a map. `lazy_decode`
+  decodes the value at the offset.
 - `cbor::path_compile("$.users[*].name")` reads a path. `path_decode`
   follows it over a lazy view; each `[*]` gives an array.
 

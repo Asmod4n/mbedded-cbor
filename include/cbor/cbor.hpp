@@ -256,18 +256,25 @@ enum class kind {
 enum class pass;
 
 struct lazy {
+    std::shared_ptr<void const> owner;
     std::string_view document;
     std::size_t offset;
 };
 
 template <std::size_t DepthMax>
-std::expected<lazy, error> lazy_at(lazy l, std::int64_t index);
+std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes);
 
 template <std::size_t DepthMax>
-std::expected<lazy, error> lazy_at(lazy l, std::string_view key);
+std::expected<lazy, error> decode(std::string bytes);
+
+template <std::size_t DepthMax>
+std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t index);
+
+template <std::size_t DepthMax>
+std::expected<lazy, error> lazy_at(lazy const &l, std::string_view key);
 
 template <std::size_t DepthMax, class Host>
-std::expected<typename Host::value, error> lazy_decode(Host &host, lazy l);
+std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l);
 
 struct path_step {
     enum class kind { key, index, wildcard } kind;
@@ -276,7 +283,7 @@ struct path_step {
 };
 
 template <std::size_t DepthMax, class Host>
-std::expected<typename Host::value, error> path_decode(Host &host, std::span<path_step const> steps, lazy l);
+std::expected<typename Host::value, error> path_decode(Host &host, std::span<path_step const> steps, lazy const &l);
 
 template <std::size_t DepthMax>
 std::expected<std::size_t, error> doc_end(std::string_view bytes);
@@ -698,17 +705,17 @@ class internal
     friend class walker;
 
     template <std::size_t DepthMax>
-    friend std::expected<lazy, error> lazy_at(lazy l, std::int64_t index);
+    friend std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t index);
 
     template <std::size_t DepthMax>
-    friend std::expected<lazy, error> lazy_at(lazy l, std::string_view key);
+    friend std::expected<lazy, error> lazy_at(lazy const &l, std::string_view key);
 
     template <std::size_t DepthMax, class Host>
-    friend std::expected<typename Host::value, error> lazy_decode(Host &host, lazy l);
+    friend std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l);
 
     template <std::size_t DepthMax, class Host>
     friend std::expected<typename Host::value, error> path_decode(Host &host,
-                                                                  std::span<path_step const> steps, lazy l);
+                                                                  std::span<path_step const> steps, lazy const &l);
 
     enum class scan { go_on, done };
 
@@ -763,7 +770,7 @@ class internal
     }
 
     template <std::size_t DepthMax>
-    static std::expected<std::pair<head, decoder>, error> container_resolve(lazy const l)
+    static std::expected<std::pair<head, decoder>, error> container_resolve(lazy const &l)
     {
         std::size_t offset = l.offset;
         std::vector<std::size_t> followed;
@@ -1212,7 +1219,21 @@ std::expected<std::size_t, error> doc_end(std::string_view const bytes)
 }
 
 template <std::size_t DepthMax>
-std::expected<lazy, error> lazy_at(lazy const l, std::int64_t const index)
+std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes)
+{
+    if (auto const r = doc_end<DepthMax>(*bytes); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return lazy{bytes, *bytes, 0};
+}
+
+template <std::size_t DepthMax>
+std::expected<lazy, error> decode(std::string bytes)
+{
+    return decode<DepthMax>(std::make_shared<std::string const>(std::move(bytes)));
+}
+
+template <std::size_t DepthMax>
+std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
 {
     auto const found = internal::container_resolve<DepthMax>(l);
     if (!found) [[unlikely]]
@@ -1229,7 +1250,7 @@ std::expected<lazy, error> lazy_at(lazy const l, std::int64_t const index)
         for (std::int64_t i = 0; i < position; ++i)
             if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
                 return std::unexpected(r.error());
-        return lazy{l.document, l.document.size() - d.bytes.size()};
+        return lazy{l.owner, l.document, l.document.size() - d.bytes.size()};
     }
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
@@ -1245,7 +1266,7 @@ std::expected<lazy, error> lazy_at(lazy const l, std::int64_t const index)
         if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (match)
-            return lazy{l.document, l.document.size() - d.bytes.size()};
+            return lazy{l.owner, l.document, l.document.size() - d.bytes.size()};
         if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
@@ -1253,7 +1274,7 @@ std::expected<lazy, error> lazy_at(lazy const l, std::int64_t const index)
 }
 
 template <std::size_t DepthMax>
-std::expected<lazy, error> lazy_at(lazy const l, std::string_view const key)
+std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
 {
     auto const found = internal::container_resolve<DepthMax>(l);
     if (!found) [[unlikely]]
@@ -1276,7 +1297,7 @@ std::expected<lazy, error> lazy_at(lazy const l, std::string_view const key)
         if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (match)
-            return lazy{l.document, l.document.size() - d.bytes.size()};
+            return lazy{l.owner, l.document, l.document.size() - d.bytes.size()};
         if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
@@ -1284,7 +1305,7 @@ std::expected<lazy, error> lazy_at(lazy const l, std::string_view const key)
 }
 
 template <std::size_t DepthMax, class Host>
-std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const l)
+std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l)
 {
     auto offsets = internal::marks_before<DepthMax>(l.document, l.offset);
     if (!offsets) [[unlikely]]
@@ -1349,7 +1370,7 @@ constexpr std::expected<std::vector<path_step>, error> path_compile(std::string_
 
 template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> path_decode(Host &host, std::span<path_step const> const steps,
-                                                       lazy const l)
+                                                       lazy const &l)
 {
     lazy at = l;
     for (std::size_t i = 0; i < steps.size(); ++i) {
@@ -1373,7 +1394,7 @@ std::expected<typename Host::value, error> path_decode(Host &host, std::span<pat
                 return std::unexpected(error::not_indexable);
             auto array = array_decode(host);
             for (std::uint64_t e = 0; e < h.argument; ++e) {
-                lazy const element{at.document, at.document.size() - d.bytes.size()};
+                lazy const element{at.owner, at.document, at.document.size() - d.bytes.size()};
                 auto value = path_decode<DepthMax>(host, steps.subspan(i + 1), element);
                 if (!value) [[unlikely]]
                     return value;
