@@ -24,6 +24,63 @@ Alpine and Nix. Each is built and run with podman.
 `-DCBOR_FUZZ=ON` with clang builds `mbedded-cbor-fuzzer`, a libFuzzer
 target. `fuzz/corpus` is its corpus.
 
+## Use
+
+CMake takes the library as a subdirectory:
+
+    add_subdirectory(mbedded-cbor)
+    target_link_libraries(my-binding PRIVATE mbedded-cbor)
+
+The binding includes `<cbor/cbor.hpp>`. It defines a host type with a
+member type `value`, and one `tag_invoke` overload for each question of
+the library. This host knows only strings, and encodes one:
+
+    #include <cbor/cbor.hpp>
+
+    #include <expected>
+    #include <string>
+    #include <string_view>
+    #include <system_error>
+
+    struct my_host {
+        using value = std::string;
+    };
+
+    cbor::kind tag_invoke(cbor::kind_of_t, my_host &, std::string const &)
+    {
+        return cbor::kind::text_string;
+    }
+
+    std::string_view tag_invoke(cbor::text_of_t, my_host &, std::string const &v)
+    {
+        return v;
+    }
+
+    struct string_writer {
+        std::string bytes;
+        std::expected<void, std::errc> reserve(std::size_t n)
+        {
+            bytes.reserve(bytes.size() + n);
+            return {};
+        }
+        std::expected<void, std::errc> append(std::string_view part)
+        {
+            bytes.append(part);
+            return {};
+        }
+    };
+
+    int main()
+    {
+        my_host host;
+        string_writer writer;
+        auto const r = cbor::encode<16>(host, writer, std::string("hello"));
+        return r && writer.bytes == "\x65hello" ? 0 : 1;
+    }
+
+Decode needs every decode question of the table below. `test/host.hpp`
+is a complete host.
+
 ## Decode
 
     std::expected<Host::value, cbor::error> cbor::decode<DepthMax>(host, bytes);
