@@ -153,6 +153,8 @@ the order of these calls.
   `std::span<std::byte const>`. A string is a view into the document.
   A value of another type is `incorrect_type`; a number the type cannot
   hold is `number_out_of_range`.
+  `cbor::typed_array` reads a typed array of RFC 8746, tags 64 to 87:
+  the tag and the bytes, which are not aligned.
 - `cbor::lazy_elements_of(array)` and `cbor::lazy_entries_of(map)` walk
   an array or a map once, front to back. A step gives a view, or a key
   and a value, or the error that ended the walk. Nothing is cached.
