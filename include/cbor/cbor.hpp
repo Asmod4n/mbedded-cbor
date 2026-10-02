@@ -565,7 +565,7 @@ class internal
             return text_string_decode(host, *s);
         }
         case major_type::array: {
-            auto array = array_decode(host);
+            auto array = array_decode(host, std::min<std::uint64_t>(h->argument, d.bytes.size()));
             if (mark)
                 shared.at(*mark) = array;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
@@ -577,7 +577,7 @@ class internal
             return array;
         }
         case major_type::map: {
-            auto map = map_decode(host);
+            auto map = map_decode(host, std::min<std::uint64_t>(h->argument, d.bytes.size() / 2));
             if (mark)
                 shared.at(*mark) = map;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
@@ -1392,7 +1392,7 @@ std::expected<typename Host::value, error> path_decode(Host &host, std::span<pat
             auto [h, d] = *found;
             if (h.major != major_type::array) [[unlikely]]
                 return std::unexpected(error::not_indexable);
-            auto array = array_decode(host);
+            auto array = array_decode(host, std::min<std::uint64_t>(h.argument, d.bytes.size()));
             for (std::uint64_t e = 0; e < h.argument; ++e) {
                 lazy const element{at.owner, at.document, at.document.size() - d.bytes.size()};
                 auto value = path_decode<DepthMax>(host, steps.subspan(i + 1), element);

@@ -118,9 +118,11 @@ inline value tag_invoke(cbor::simple_value_decode_t, test_host &, std::uint8_t s
     return {simple{s}};
 }
 
-inline value tag_invoke(cbor::array_decode_t, test_host &)
+inline value tag_invoke(cbor::array_decode_t, test_host &, std::uint64_t const size)
 {
-    return {array{}};
+    array a;
+    a.reserve(size);
+    return {std::move(a)};
 }
 
 inline value tag_invoke(cbor::array_append_t, test_host &, value &&a, value &&e)
@@ -129,9 +131,11 @@ inline value tag_invoke(cbor::array_append_t, test_host &, value &&a, value &&e)
     return std::move(a);
 }
 
-inline value tag_invoke(cbor::map_decode_t, test_host &)
+inline value tag_invoke(cbor::map_decode_t, test_host &, std::uint64_t const size)
 {
-    return {map{}};
+    map m;
+    m.reserve(size);
+    return {std::move(m)};
 }
 
 inline value tag_invoke(cbor::map_insert_t, test_host &, value &&m, value &&k, value &&v)

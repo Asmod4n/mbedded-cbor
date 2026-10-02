@@ -85,7 +85,7 @@ inline handle tag_invoke(cbor::simple_value_decode_t, ref_host &, std::uint8_t s
     return std::make_shared<node>(node{std::uint64_t{s}});
 }
 
-inline handle tag_invoke(cbor::array_decode_t, ref_host &)
+inline handle tag_invoke(cbor::array_decode_t, ref_host &, std::uint64_t)
 {
     return std::make_shared<node>(node{std::vector<handle>{}});
 }
@@ -98,7 +98,7 @@ inline handle tag_invoke(cbor::array_append_t, ref_host &, handle a, handle e)
     return a;
 }
 
-inline handle tag_invoke(cbor::map_decode_t, ref_host &)
+inline handle tag_invoke(cbor::map_decode_t, ref_host &, std::uint64_t)
 {
     return std::make_shared<node>(node{std::vector<std::pair<handle, handle>>{}});
 }
