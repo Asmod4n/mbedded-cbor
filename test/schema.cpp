@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+using namespace std::string_literals;
+
 namespace
 {
 
@@ -167,6 +169,91 @@ TEST_CASE("member_offset: a key is counted in UTF-8 bytes")
 {
     CHECK_EQ(cbor::member_offset<größe, ^^größe::höhe>(), 1u + 1u + 5u);
     CHECK_EQ(cbor::member_offset<größe, ^^größe::b>(), 7u + 2u + 2u);
+}
+
+#endif
+
+#if __cpp_impl_reflection
+
+namespace
+{
+
+struct login {
+    std::uint16_t id;
+    bool ok;
+    std::string name;
+};
+
+struct measures {
+    std::int16_t t;
+    float f;
+    std::vector<std::uint16_t> v;
+    std::optional<std::uint8_t> o;
+};
+
+struct named {
+    std::string n;
+};
+
+struct people {
+    std::vector<named> people;
+};
+
+std::string schema_bytes(auto const &value)
+{
+    string_writer w;
+    REQUIRE(cbor::encode(w, value).has_value());
+    return w.bytes;
+}
+
+// The schema encoding is two CBOR items. Every byte is well-formed, so the generic decoder finds the end of each.
+void check_two_items(std::string const &bytes)
+{
+    auto const first = cbor::doc_end<16>(bytes);
+    REQUIRE(first.has_value());
+    auto const second = cbor::doc_end<16>(std::string_view(bytes).substr(*first));
+    REQUIRE(second.has_value());
+    CHECK_EQ(*first + *second, bytes.size());
+}
+
+} // namespace
+
+// Item 1 is a map with every number in the width of its type; a string is 82 1a <offset> 1a <length> into item 2.
+// Item 2 is an array of one text; the offset counts from the start of item 2 and points at the data, behind the
+// head 62. The bytes are written from RFC 8949 3 by hand.
+TEST_CASE("encode: a struct with a number, a bool and a string")
+{
+    std::string const bytes = schema_bytes(login{5, true, "ab"});
+    CHECK_EQ(bytes, "\xa3\x62id\x19\x00\x05\x62ok\xf5\x64name\x82\x1a\x00\x00\x00\x02\x1a\x00\x00\x00\x02"
+                    "\x81\x62"
+                    "ab"s);
+    check_two_items(bytes);
+}
+
+// A negative int16 is major type 1 with -1 - n in two bytes (RFC 8949 3.1). A float stays binary32 (fa). A list of
+// uint16 is an array in item 2 whose elements keep their width. An empty optional has length 0 and puts no item
+// into item 2; its offset is the end of item 2, so it still points forward.
+TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
+{
+    std::string const bytes = schema_bytes(measures{-5, 1.5f, {7, 8}, std::nullopt});
+    CHECK_EQ(bytes, "\xa4\x61t\x39\x00\x04\x61\x66\xfa\x3f\xc0\x00\x00"
+                    "\x61v\x82\x1a\x00\x00\x00\x02\x1a\x00\x00\x00\x02"
+                    "\x61o\x82\x1a\x00\x00\x00\x08\x1a\x00\x00\x00\x00"
+                    "\x81\x82\x19\x00\x07\x19\x00\x08"s);
+    check_two_items(bytes);
+}
+
+// The elements of a list are maps of fixed size, so element i is at i times that size. A string inside an element
+// goes behind the whole block of elements, in the order the encoder meets it.
+TEST_CASE("encode: a list of structs that hold strings")
+{
+    std::string const bytes = schema_bytes(people{{{"x"}, {"yz"}}});
+    CHECK_EQ(bytes, "\xa1\x66people\x82\x1a\x00\x00\x00\x02\x1a\x00\x00\x00\x02"
+                    "\x83\x82"
+                    "\xa1\x61n\x82\x1a\x00\x00\x00\x1f\x1a\x00\x00\x00\x01"
+                    "\xa1\x61n\x82\x1a\x00\x00\x00\x21\x1a\x00\x00\x00\x02"
+                    "\x61x\x62yz"s);
+    check_two_items(bytes);
 }
 
 #endif
