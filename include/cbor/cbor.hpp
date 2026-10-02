@@ -684,168 +684,161 @@ class internal
         }
     };
 
-    struct cursor {
-        std::span<char> out;
-        std::size_t position;
+    template <class E>
+    static void zero_initialized_copy(std::span<char> const out, std::size_t const at)
+    {
+        constexpr std::size_t n = fixed_size<E>();
+        std::ranges::copy(std::span<char const, n>{zero_initialized<E>().data(), n},
+                          out.subspan(at).template first<n>().begin());
+    }
 
-        template <class E>
-        void zero_initialized_copy(std::size_t const at)
-        {
-            constexpr std::size_t n = fixed_size<E>();
-            std::ranges::copy(std::span<char const, n>{zero_initialized<E>().data(), n},
-                              out.subspan(at).template first<n>().begin());
-        }
-
-        std::size_t head_write(std::size_t const at, major_type const major, std::uint64_t const argument)
-        {
-            std::size_t const size = head_size(argument);
-            auto const field = out.subspan(at, size);
-            if (size == initial_byte_size) {
-                field.front() = static_cast<char>(std::to_underlying(major) << 5 | argument);
-                return size;
-            }
-            std::size_t const width = size - initial_byte_size;
-            field.front() = static_cast<char>(std::to_underlying(major) << 5 |
-                                              (std::to_underlying(additional_information::one_byte_argument) +
-                                               std::countr_zero(width)));
-            auto const rest = field.subspan(initial_byte_size);
-            switch (width) {
-            case sizeof(std::uint8_t):
-                std::ranges::copy(big_endian(static_cast<std::uint8_t>(argument)), rest.begin());
-                break;
-            case sizeof(std::uint16_t):
-                std::ranges::copy(big_endian(static_cast<std::uint16_t>(argument)), rest.begin());
-                break;
-            case sizeof(std::uint32_t):
-                std::ranges::copy(big_endian(static_cast<std::uint32_t>(argument)), rest.begin());
-                break;
-            default:
-                std::ranges::copy(big_endian(argument), rest.begin());
-                break;
-            }
+    static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
+                                  std::uint64_t const argument)
+    {
+        std::size_t const size = head_size(argument);
+        auto const field = out.subspan(at, size);
+        if (size == initial_byte_size) {
+            field.front() = static_cast<char>(std::to_underlying(major) << 5 | argument);
             return size;
         }
+        std::size_t const width = size - initial_byte_size;
+        field.front() = static_cast<char>(std::to_underlying(major) << 5 |
+                                          (std::to_underlying(additional_information::one_byte_argument) +
+                                           std::countr_zero(width)));
+        auto const rest = field.subspan(initial_byte_size);
+        switch (width) {
+        case sizeof(std::uint8_t):
+            std::ranges::copy(big_endian(static_cast<std::uint8_t>(argument)), rest.begin());
+            break;
+        case sizeof(std::uint16_t):
+            std::ranges::copy(big_endian(static_cast<std::uint16_t>(argument)), rest.begin());
+            break;
+        case sizeof(std::uint32_t):
+            std::ranges::copy(big_endian(static_cast<std::uint32_t>(argument)), rest.begin());
+            break;
+        default:
+            std::ranges::copy(big_endian(argument), rest.begin());
+            break;
+        }
+        return size;
+    }
 
-        template <class E, class R>
-        std::size_t elements_encode(R const &range)
-        {
-            constexpr std::size_t size = fixed_size<E>();
-            std::size_t const data = position;
-            position += std::ranges::size(range) * size;
+    template <class V>
+    static std::size_t reference_encode(std::span<char> const out, std::size_t const offset, V const &value,
+                                        std::size_t position)
+    {
+        using U = std::remove_cv_t<V>;
+        std::size_t data = position;
+        std::size_t length = 0;
+        if constexpr (is_optional<U>) {
+            using E = typename U::value_type;
+            if (value.has_value()) {
+                position += fixed_size<E>();
+                zero_initialized_copy<E>(out, data);
+                position = value_encode<E>(out, data, *value, position);
+                length = 1;
+            }
+        } else if constexpr (is_text_range<U> || is_byte_range<U>) {
+            length = std::ranges::size(value);
+            position += head_write(out, position, is_text_range<U> ? major_type::text_string : major_type::byte_string,
+                                   length);
+            data = position;
+            std::ranges::copy(std::as_bytes(std::span(value)), std::as_writable_bytes(out.subspan(data, length)).begin());
+            position += length;
+        } else if constexpr (is_map<U>) {
+            using K = typename U::key_type;
+            using M = typename U::mapped_type;
+            length = std::ranges::size(value);
+            position += head_write(out, position, major_type::map, length);
+            data = position;
+            position += length * (fixed_size<K>() + fixed_size<M>());
             std::size_t at = data;
-            for (auto const &e : range) {
-                zero_initialized_copy<E>(at);
-                value_encode<E>(at, e);
+            for (auto const &[k, v] : value) {
+                zero_initialized_copy<K>(out, at);
+                position = value_encode<K>(out, at, k, position);
+                at += fixed_size<K>();
+                zero_initialized_copy<M>(out, at);
+                position = value_encode<M>(out, at, v, position);
+                at += fixed_size<M>();
+            }
+        } else {
+            using E = std::ranges::range_value_t<U>;
+            constexpr std::size_t size = fixed_size<E>();
+            length = std::ranges::size(value);
+            position += head_write(out, position, major_type::array, length);
+            data = position;
+            position += length * size;
+            std::size_t at = data;
+            for (auto const &e : value) {
+                zero_initialized_copy<E>(out, at);
+                position = value_encode<E>(out, at, e, position);
                 at += size;
             }
-            return data;
         }
+        auto const field = out.subspan(offset).template first<dynamic_type_sizes>();
+        std::ranges::copy(big_endian(static_cast<std::uint32_t>(data)),
+                          field.template subspan<2, sizeof(std::uint32_t)>().begin());
+        std::ranges::copy(big_endian(static_cast<std::uint32_t>(length)),
+                          field.template last<sizeof(std::uint32_t)>().begin());
+        return position;
+    }
 
-        template <class V>
-        void reference_encode(std::size_t const offset, V const &value)
-        {
-            using U = std::remove_cv_t<V>;
-            std::size_t data = position;
-            std::size_t length = 0;
-            if constexpr (is_optional<U>) {
-                using E = typename U::value_type;
-                if (value.has_value()) {
-                    position += fixed_size<E>();
-                    zero_initialized_copy<E>(data);
-                    value_encode<E>(data, *value);
-                    length = 1;
-                }
-            } else if constexpr (is_text_range<U> || is_byte_range<U>) {
-                length = std::ranges::size(value);
-                position += head_write(position, is_text_range<U> ? major_type::text_string : major_type::byte_string,
-                                       length);
-                data = position;
-                std::ranges::copy(std::as_bytes(std::span(value)), std::as_writable_bytes(out.subspan(data, length)).begin());
-                position += length;
-            } else if constexpr (is_map<U>) {
-                using K = typename U::key_type;
-                using M = typename U::mapped_type;
-                length = std::ranges::size(value);
-                position += head_write(position, major_type::map, length);
-                data = position;
-                position += length * (fixed_size<K>() + fixed_size<M>());
-                std::size_t at = data;
-                for (auto const &[k, v] : value) {
-                    zero_initialized_copy<K>(at);
-                    value_encode<K>(at, k);
-                    at += fixed_size<K>();
-                    zero_initialized_copy<M>(at);
-                    value_encode<M>(at, v);
-                    at += fixed_size<M>();
-                }
-            } else {
-                length = std::ranges::size(value);
-                position += head_write(position, major_type::array, length);
-                data = elements_encode<std::ranges::range_value_t<U>>(value);
+    template <class T>
+    static std::size_t value_encode(std::span<char> const out, std::size_t const offset, T const &value,
+                                    std::size_t position)
+    {
+        using U = std::remove_cv_t<T>;
+        if constexpr (std::same_as<U, bool>) {
+            auto const field = out.subspan(offset).template first<1>();
+            field.front() = static_cast<char>(field.front() | static_cast<char>(value));
+        } else if constexpr (std::is_enum_v<U>) {
+            position = value_encode<std::underlying_type_t<U>>(out, offset, std::to_underlying(value), position);
+        } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
+            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
+            unsigned __int128 magnitude = static_cast<unsigned __int128>(value);
+            if constexpr (std::same_as<U, __int128>) {
+                unsigned __int128 const sign = static_cast<unsigned __int128>(value >> 127);
+                field.front() = static_cast<char>(field.front() | static_cast<char>(sign & 1));
+                magnitude ^= sign;
             }
-            auto const field = out.subspan(offset).template first<dynamic_type_sizes>();
-            std::ranges::copy(big_endian(static_cast<std::uint32_t>(data)),
-                              field.template subspan<2, sizeof(std::uint32_t)>().begin());
-            std::ranges::copy(big_endian(static_cast<std::uint32_t>(length)),
-                              field.template last<sizeof(std::uint32_t)>().begin());
-        }
-
-        template <class T>
-        void value_encode(std::size_t const offset, T const &value)
-        {
-            using U = std::remove_cv_t<T>;
-            if constexpr (std::same_as<U, bool>) {
-                auto const field = out.subspan(offset).template first<1>();
-                field.front() = static_cast<char>(field.front() | static_cast<char>(value));
-            } else if constexpr (std::is_enum_v<U>) {
-                value_encode<std::underlying_type_t<U>>(offset, std::to_underlying(value));
-            } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
-                auto const field = out.subspan(offset).template first<fixed_size<U>()>();
-                unsigned __int128 magnitude = static_cast<unsigned __int128>(value);
-                if constexpr (std::same_as<U, __int128>) {
-                    unsigned __int128 const sign = static_cast<unsigned __int128>(value >> 127);
-                    field.front() = static_cast<char>(field.front() | static_cast<char>(sign & 1));
-                    magnitude ^= sign;
-                }
-                std::ranges::copy(big_endian(magnitude), field.template last<sizeof(U)>().begin());
-            } else if constexpr (std::unsigned_integral<U>) {
-                auto const field = out.subspan(offset).template first<fixed_size<U>()>();
-                std::ranges::copy(big_endian(value), field.template last<sizeof(U)>().begin());
-            } else if constexpr (std::signed_integral<U>) {
-                using M = std::make_unsigned_t<U>;
-                auto const field = out.subspan(offset).template first<fixed_size<U>()>();
-                M const sign = static_cast<M>(value >> (8 * sizeof(U) - 1));
-                field.front() = static_cast<char>(field.front() | static_cast<char>((sign & 1) << 5));
-                std::ranges::copy(big_endian(static_cast<M>(static_cast<M>(value) ^ sign)),
-                                  field.template last<sizeof(U)>().begin());
-            } else if constexpr (std::is_floating_point_v<U>) {
-                auto const field = out.subspan(offset).template first<fixed_size<U>()>();
-                auto const bits = big_endian(float_bits(value));
-                std::ranges::copy(bits, field.template last<bits.size()>().begin());
-            } else if constexpr (requires { fixed_length<U>::value; }) {
-                using E = typename fixed_length<U>::element;
-                constexpr std::size_t n = fixed_length<U>::value;
-                auto const field = out.subspan(offset).template first<fixed_size<U>()>();
-                if constexpr (std::same_as<E, char> || std::same_as<E, char8_t> || std::same_as<E, unsigned char> ||
-                              std::same_as<E, std::byte>) {
-                    std::ranges::copy(std::as_bytes(std::span(value)),
-                                      std::as_writable_bytes(field.template last<n>()).begin());
-                } else {
-                    std::size_t at = offset + head_size(n);
-                    for (auto const &e : value) {
-                        value_encode<E>(at, e);
-                        at += fixed_size<E>();
-                    }
-                }
-            } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-                template for (constexpr auto m : data_members<U>())
-                    value_encode<typename[:std::meta::type_of(m):]>(offset + member_offset<U, m>(), value.[:m:]);
+            std::ranges::copy(big_endian(magnitude), field.template last<sizeof(U)>().begin());
+        } else if constexpr (std::unsigned_integral<U>) {
+            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
+            std::ranges::copy(big_endian(value), field.template last<sizeof(U)>().begin());
+        } else if constexpr (std::signed_integral<U>) {
+            using M = std::make_unsigned_t<U>;
+            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
+            M const sign = static_cast<M>(value >> (8 * sizeof(U) - 1));
+            field.front() = static_cast<char>(field.front() | static_cast<char>((sign & 1) << 5));
+            std::ranges::copy(big_endian(static_cast<M>(static_cast<M>(value) ^ sign)),
+                              field.template last<sizeof(U)>().begin());
+        } else if constexpr (std::is_floating_point_v<U>) {
+            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
+            auto const bits = big_endian(float_bits(value));
+            std::ranges::copy(bits, field.template last<bits.size()>().begin());
+        } else if constexpr (requires { fixed_length<U>::value; }) {
+            using E = typename fixed_length<U>::element;
+            constexpr std::size_t n = fixed_length<U>::value;
+            auto const field = out.subspan(offset).template first<fixed_size<U>()>();
+            if constexpr (std::same_as<E, char> || std::same_as<E, char8_t> || std::same_as<E, unsigned char> ||
+                          std::same_as<E, std::byte>) {
+                std::ranges::copy(std::as_bytes(std::span(value)), std::as_writable_bytes(field.template last<n>()).begin());
             } else {
-                reference_encode(offset, value);
+                std::size_t at = offset + head_size(n);
+                for (auto const &e : value) {
+                    position = value_encode<E>(out, at, e, position);
+                    at += fixed_size<E>();
+                }
             }
+        } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
+            template for (constexpr auto m : data_members<U>())
+                position = value_encode<typename[:std::meta::type_of(m):]>(out, offset + member_offset<U, m>(),
+                                                                          value.[:m:], position);
+        } else {
+            position = reference_encode(out, offset, value, position);
         }
-    };
-
+        return position;
+    }
 
     template <class U>
     static consteval std::meta::info member_named(std::string_view const name)
@@ -1923,10 +1916,9 @@ std::expected<void, std::errc> encode(Writer &writer, T const &value)
         !std::in_range<std::uint32_t>(second_size) || ckd_add(&size, first, second_size)) [[unlikely]]
         return std::unexpected(std::errc::value_too_large);
     return writer.resize_and_overwrite(size, [&](std::span<char> const out) {
-        internal::cursor c{out, first};
-        c.template zero_initialized_copy<T>(0);
-        c.position += c.head_write(first, major_type::array, second.items);
-        c.template value_encode<T>(0, value);
+        internal::zero_initialized_copy<T>(out, 0);
+        std::size_t const position = first + internal::head_write(out, first, major_type::array, second.items);
+        internal::value_encode<T>(out, 0, value, position);
         return size;
     });
 }
