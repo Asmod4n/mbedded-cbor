@@ -141,6 +141,9 @@ the order of these calls.
   `std::shared_ptr<std::string const>` and gives a `cbor::lazy`: an
   owner, a view of the document and an offset. Every view from it
   shares the owner, so the document lives until the last view ends.
+  The owner also holds the offsets of every tag 28 in the document,
+  found once when the view is made. Views of one document are not
+  safe to use from two threads at the same time.
   `lazy_at` indexes an array or finds a key of a map. `lazy_decode`
   decodes the value at the offset.
 - `cbor::path_compile("$.users[*].name")` reads a path. `path_decode`

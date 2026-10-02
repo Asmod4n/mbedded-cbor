@@ -255,11 +255,7 @@ enum class kind {
 
 enum class pass;
 
-struct lazy {
-    std::shared_ptr<void const> owner;
-    std::string_view document;
-    std::size_t offset;
-};
+struct lazy;
 
 template <std::size_t DepthMax>
 std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes);
@@ -313,9 +309,20 @@ class internal
     template <class Host>
     using marks = std::vector<std::optional<typename Host::value>>;
 
+    struct document {
+        std::shared_ptr<void const> owner;
+        std::string_view bytes;
+        std::vector<std::size_t> marks;
+    };
+
+    friend struct lazy;
+
+    template <std::size_t DepthMax>
+    friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes);
+
     struct prefix {
         std::string_view document;
-        std::vector<std::size_t> offsets;
+        std::vector<std::size_t> const &offsets;
         std::vector<bool> decoding;
     };
 
@@ -770,19 +777,19 @@ class internal
     }
 
     template <std::size_t DepthMax>
-    static std::expected<std::pair<head, decoder>, error> container_resolve(lazy const &l)
+    static std::expected<std::pair<head, decoder>, error> container_resolve(document const &source,
+                                                                           std::size_t offset)
     {
-        std::size_t offset = l.offset;
         std::vector<std::size_t> followed;
         for (;;) {
-            decoder d{l.document.substr(offset)};
+            decoder d{source.bytes.substr(offset)};
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
             if (h->major != major_type::tag)
                 return std::pair{*h, d};
             if (h->argument == std::to_underlying(tag_number::shareable)) {
-                offset = l.document.size() - d.bytes.size();
+                offset = source.bytes.size() - d.bytes.size();
                 continue;
             }
             if (h->argument != std::to_underlying(tag_number::sharedref))
@@ -795,12 +802,10 @@ class internal
                 return std::unexpected(r.error());
             if (r->major != major_type::unsigned_integer) [[unlikely]]
                 return std::unexpected(error::inadmissible_type_for_tag_content);
-            auto const offsets = marks_before<DepthMax>(l.document, offset);
-            if (!offsets) [[unlikely]]
-                return std::unexpected(offsets.error());
-            if (r->argument >= offsets->size()) [[unlikely]]
+            std::vector<std::size_t> const &offsets = source.marks;
+            if (r->argument >= offsets.size()) [[unlikely]]
                 return std::unexpected(error::sharedref_index_not_marked);
-            std::size_t const marked = offsets->at(static_cast<std::size_t>(r->argument));
+            std::size_t const marked = offsets.at(static_cast<std::size_t>(r->argument));
             if (marked >= offset) [[unlikely]]
                 return std::unexpected(error::sharedref_not_complete);
             offset = marked;
@@ -850,6 +855,11 @@ class internal
             return {};
         }
     }
+};
+
+struct lazy {
+    std::shared_ptr<internal::document const> document;
+    std::size_t offset;
 };
 
 template <class Writer>
@@ -1252,9 +1262,13 @@ std::expected<std::size_t, error> doc_end(std::string_view const bytes)
 template <std::size_t DepthMax>
 std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes)
 {
-    if (auto const r = doc_end<DepthMax>(*bytes); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    return lazy{bytes, *bytes, 0};
+    auto const end = doc_end<DepthMax>(*bytes);
+    if (!end) [[unlikely]]
+        return std::unexpected(end.error());
+    auto marks = internal::marks_before<DepthMax>(*bytes, *end);
+    if (!marks) [[unlikely]]
+        return std::unexpected(marks.error());
+    return lazy{std::make_shared<internal::document const>(bytes, *bytes, std::move(*marks)), 0};
 }
 
 template <std::size_t DepthMax>
@@ -1266,7 +1280,7 @@ std::expected<lazy, error> decode(std::string bytes)
 template <std::size_t DepthMax>
 std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
 {
-    auto const found = internal::container_resolve<DepthMax>(l);
+    auto const found = internal::container_resolve<DepthMax>(*l.document, l.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [h, d] = *found;
@@ -1281,7 +1295,7 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
         for (std::int64_t i = 0; i < position; ++i)
             if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
                 return std::unexpected(r.error());
-        return lazy{l.owner, l.document, l.document.size() - d.bytes.size()};
+        return lazy{l.document, l.document->bytes.size() - d.bytes.size()};
     }
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
@@ -1297,7 +1311,7 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
         if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (match)
-            return lazy{l.owner, l.document, l.document.size() - d.bytes.size()};
+            return lazy{l.document, l.document->bytes.size() - d.bytes.size()};
         if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
@@ -1307,7 +1321,7 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
 template <std::size_t DepthMax>
 std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
 {
-    auto const found = internal::container_resolve<DepthMax>(l);
+    auto const found = internal::container_resolve<DepthMax>(*l.document, l.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [h, d] = *found;
@@ -1328,7 +1342,7 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
         if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (match)
-            return lazy{l.owner, l.document, l.document.size() - d.bytes.size()};
+            return lazy{l.document, l.document->bytes.size() - d.bytes.size()};
         if (auto const r = internal::item_skip<DepthMax>(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
@@ -1338,13 +1352,9 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
 template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l)
 {
-    auto offsets = internal::marks_before<DepthMax>(l.document, l.offset);
-    if (!offsets) [[unlikely]]
-        return std::unexpected(offsets.error());
-    internal::prefix before{l.document, std::move(*offsets), {}};
-    before.decoding.assign(before.offsets.size(), false);
+    internal::prefix before{l.document->bytes, l.document->marks, std::vector<bool>(l.document->marks.size())};
     internal::marks<Host> shared(before.offsets.size());
-    internal::decoder d{l.document.substr(l.offset)};
+    internal::decoder d{l.document->bytes.substr(l.offset)};
     return internal::value_decode<DepthMax>(d, host, shared, &before, 0, std::nullopt);
 }
 
@@ -1417,7 +1427,7 @@ std::expected<typename Host::value, error> path_decode(Host &host, std::span<pat
                 return std::unexpected(next.error());
             at = *next;
         } else {
-            auto const found = internal::container_resolve<DepthMax>(at);
+            auto const found = internal::container_resolve<DepthMax>(*at.document, at.offset);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
             auto [h, d] = *found;
@@ -1425,7 +1435,7 @@ std::expected<typename Host::value, error> path_decode(Host &host, std::span<pat
                 return std::unexpected(error::not_indexable);
             auto array = array_decode(host, std::min<std::uint64_t>(h.argument, d.bytes.size()));
             for (std::uint64_t e = 0; e < h.argument; ++e) {
-                lazy const element{at.owner, at.document, at.document.size() - d.bytes.size()};
+                lazy const element{at.document, at.document->bytes.size() - d.bytes.size()};
                 auto value = path_decode<DepthMax>(host, steps.subspan(i + 1), element);
                 if (!value) [[unlikely]]
                     return value;
