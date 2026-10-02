@@ -342,6 +342,31 @@ consteval std::size_t member_offset();
 template <class Writer, class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
 std::expected<void, std::errc> encode(Writer &writer, T const &value);
+
+template <class T>
+struct document {
+    std::string_view bytes;
+    std::size_t offset;
+    std::size_t floor;
+};
+
+template <std::size_t N>
+struct fixed_string {
+    std::array<char, N> value;
+
+    consteval fixed_string(char const (&text)[N])
+    {
+        std::ranges::copy(text, value.begin());
+    }
+
+    consteval std::string_view view() const
+    {
+        return {value.data(), N - 1};
+    }
+};
+
+template <class T, fixed_string Path>
+auto at_path_compiled(document<T> const doc);
 #endif
 
 class internal
@@ -441,15 +466,25 @@ class internal
     friend consteval std::size_t member_offset();
 
     template <class U>
-    static constexpr bool is_text_range =
-        std::ranges::contiguous_range<U> && (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, char> ||
-                                             std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, char8_t>);
+    static constexpr bool is_text_range = requires {
+        requires std::ranges::contiguous_range<U>;
+        requires std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, char> ||
+                     std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, char8_t>;
+    };
 
     template <class U>
-    static constexpr bool is_byte_range =
-        std::ranges::contiguous_range<U> &&
-        (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, unsigned char> ||
-         std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>);
+    static constexpr bool is_byte_range = requires {
+        requires std::ranges::contiguous_range<U>;
+        requires std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, unsigned char> ||
+                     std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>;
+    };
+
+    template <class U>
+    static constexpr bool is_fixed_text = requires {
+        typename fixed_length<U>::element;
+        requires std::same_as<typename fixed_length<U>::element, char> ||
+                     std::same_as<typename fixed_length<U>::element, char8_t>;
+    };
 
     template <class U>
     static constexpr bool is_optional = requires(U const &v) {
@@ -823,6 +858,216 @@ class internal
         }
     };
 
+
+    template <class U>
+    static consteval std::meta::info member_named(std::string_view const name)
+    {
+        for (auto const m : data_members<U>()) {
+            auto const key = std::meta::u8identifier_of(m);
+            if (std::ranges::equal(key, name, [](char8_t a, char b) { return a == static_cast<char8_t>(b); }))
+                return m;
+        }
+        return std::meta::info{};
+    }
+
+    static consteval std::size_t step_end(std::string_view const path, std::size_t const at)
+    {
+        std::size_t end = at + 1;
+        while (end < path.size() && path.substr(end, 1) != "." && path.substr(end, 1) != "[")
+            ++end;
+        return end;
+    }
+
+    static consteval std::size_t index_of(std::string_view const digits)
+    {
+        std::size_t value = 0;
+        for (char const c : digits)
+            value = value * 10 + static_cast<std::size_t>(c - '0');
+        return value;
+    }
+
+    template <class V>
+    static V unsigned_read(std::string_view const bytes, std::size_t const at)
+    {
+        std::array<char, sizeof(V)> big;
+        std::ranges::copy(bytes.substr(at, sizeof(V)), big.begin());
+        return std::byteswap(std::bit_cast<V>(big));
+    }
+
+    static unsigned __int128 unsigned128_read(std::string_view const bytes, std::size_t const at)
+    {
+        auto const high = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(bytes, at));
+        auto const low = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(bytes, at + sizeof(std::uint64_t)));
+        return high << 64 | low;
+    }
+
+    template <class T>
+    static T fixed_value_read(std::string_view const bytes, std::size_t const at)
+    {
+        using U = std::remove_cv_t<T>;
+        auto const head = static_cast<unsigned char>(bytes.substr(at, 1).front());
+        if constexpr (std::same_as<U, bool>) {
+            return (head & 1) != 0;
+        } else if constexpr (std::is_enum_v<U>) {
+            return static_cast<U>(fixed_value_read<std::underlying_type_t<U>>(bytes, at));
+        } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
+            unsigned __int128 const magnitude = unsigned128_read(bytes, at + fixed_size<U>() - sizeof(U));
+            if constexpr (std::same_as<U, __int128>) {
+                unsigned __int128 const sign = -static_cast<unsigned __int128>(head & 1);
+                return static_cast<U>(magnitude ^ sign);
+            } else {
+                return magnitude;
+            }
+        } else if constexpr (std::unsigned_integral<U>) {
+            return unsigned_read<U>(bytes, at + initial_byte_size);
+        } else if constexpr (std::signed_integral<U>) {
+            using M = std::make_unsigned_t<U>;
+            M const sign = static_cast<M>(-static_cast<M>((head >> 5) & 1));
+            return static_cast<U>(unsigned_read<M>(bytes, at + initial_byte_size) ^ sign);
+        } else {
+            using B = decltype(float_bits(U{}));
+            if constexpr (std::same_as<B, unsigned __int128>) {
+                auto const bits = unsigned128_read(bytes, at + fixed_size<U>() - sizeof(B));
+                return static_cast<U>(std::bit_cast<std::float128_t>(bits));
+            } else {
+                auto const bits = unsigned_read<B>(bytes, at + fixed_size<U>() - sizeof(B));
+                using F = std::conditional_t<sizeof(B) == sizeof(std::uint16_t), std::float16_t,
+                                             std::conditional_t<sizeof(B) == sizeof(std::uint32_t), std::float32_t,
+                                                                std::float64_t>>;
+                return static_cast<U>(std::bit_cast<F>(bits));
+            }
+        }
+    }
+
+    struct reference {
+        std::size_t data;
+        std::size_t length;
+    };
+
+    static std::expected<reference, error> reference_read(std::string_view const bytes, std::size_t const at,
+                                                           std::size_t const floor, std::size_t const element)
+    {
+        std::size_t const data = unsigned_read<std::uint32_t>(bytes, at + 2);
+        std::size_t const length = unsigned_read<std::uint32_t>(bytes, at + 7);
+        std::size_t size;
+        std::size_t end;
+        if (data < floor || ckd_mul(&size, length, element) || ckd_add(&end, data, size) || end > bytes.size())
+            [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return reference{data, length};
+    }
+
+    template <class T, fixed_string Path, std::size_t At>
+    static consteval auto path_result()
+    {
+        using U = std::remove_cv_t<T>;
+        constexpr std::string_view path = Path.view();
+        if constexpr (At == path.size()) {
+            if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; })
+                return cbor::document<U>{};
+            else if constexpr (is_fixed_text<U>)
+                return std::string_view{};
+            else if constexpr (is_optional<U>)
+                return std::optional<typename U::value_type>{};
+            else if constexpr (is_text_range<U> || is_byte_range<U>)
+                return std::string_view{};
+            else
+                return U{};
+        } else if constexpr (path.substr(At, 1) == ".") {
+            constexpr std::size_t end = step_end(path, At);
+            constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
+            return path_result<typename[:std::meta::type_of(m):], Path, end>();
+        } else {
+            constexpr std::size_t close = path.find(']', At);
+            if constexpr (requires { fixed_length<U>::value; })
+                return path_result<typename fixed_length<U>::element, Path, close + 1>();
+            else
+                return path_result<std::ranges::range_value_t<U>, Path, close + 1>();
+        }
+    }
+
+    template <class T, fixed_string Path, std::size_t At>
+    static consteval bool path_reads_wire()
+    {
+        using U = std::remove_cv_t<T>;
+        constexpr std::string_view path = Path.view();
+        if constexpr (At == path.size()) {
+            return !(std::is_class_v<U> && std::is_aggregate_v<U>) && !requires { fixed_length<U>::value; } &&
+                   !std::is_arithmetic_v<U> && !std::is_enum_v<U> && !std::same_as<U, __int128> &&
+                   !std::same_as<U, unsigned __int128>;
+        } else if constexpr (path.substr(At, 1) == ".") {
+            constexpr std::size_t end = step_end(path, At);
+            constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
+            return path_reads_wire<typename[:std::meta::type_of(m):], Path, end>();
+        } else {
+            constexpr std::size_t close = path.find(']', At);
+            if constexpr (requires { fixed_length<U>::value; })
+                return path_reads_wire<typename fixed_length<U>::element, Path, close + 1>();
+            else
+                return true;
+        }
+    }
+
+    template <class T, fixed_string Path, std::size_t At>
+    static auto path_walk(std::string_view const bytes, std::size_t const offset, std::size_t const floor)
+        -> std::expected<decltype(path_result<T, Path, At>()), error>
+    {
+        using U = std::remove_cv_t<T>;
+        constexpr std::string_view path = Path.view();
+        if constexpr (At == path.size()) {
+            if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
+                return cbor::document<U>{bytes, offset, floor};
+            } else if constexpr (is_fixed_text<U>) {
+                return bytes.substr(offset + fixed_size<U>() - fixed_length<U>::value, fixed_length<U>::value);
+            } else if constexpr (is_optional<U>) {
+                using E = typename U::value_type;
+                auto const r = reference_read(bytes, offset, floor, fixed_size<E>());
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (r->length == 0)
+                    return std::optional<E>{};
+                return std::optional<E>{fixed_value_read<E>(bytes, r->data)};
+            } else if constexpr (is_text_range<U> || is_byte_range<U>) {
+                auto const r = reference_read(bytes, offset, floor, 1);
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return bytes.substr(r->data, r->length);
+            } else {
+                return fixed_value_read<U>(bytes, offset);
+            }
+        } else if constexpr (path.substr(At, 1) == ".") {
+            constexpr std::size_t end = step_end(path, At);
+            constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
+            if constexpr (m == std::meta::info{})
+                return no_fixed_size<T>();
+            else
+                return path_walk<typename[:std::meta::type_of(m):], Path, end>(bytes, offset + member_offset<U, m>(),
+                                                                               floor);
+        } else {
+            constexpr std::size_t close = path.find(']', At);
+            constexpr std::size_t i = index_of(path.substr(At + 1, close - At - 1));
+            if constexpr (requires { fixed_length<U>::value; }) {
+                using E = typename fixed_length<U>::element;
+                constexpr std::size_t n = fixed_length<U>::value;
+                if constexpr (i >= n)
+                    return no_fixed_size<T>();
+                else
+                    return path_walk<E, Path, close + 1>(bytes, offset + head_size(n) + i * fixed_size<E>(), floor);
+            } else {
+                using E = std::ranges::range_value_t<U>;
+                auto const r = reference_read(bytes, offset, floor, fixed_size<E>());
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (i >= r->length) [[unlikely]]
+                    return std::unexpected(error::index_out_of_bounds);
+                return path_walk<E, Path, close + 1>(bytes, r->data + i * fixed_size<E>(),
+                                                     r->data + r->length * fixed_size<E>());
+            }
+        }
+    }
+
+    template <class T, fixed_string Path>
+    friend auto at_path_compiled(cbor::document<T> const doc);
     template <class Writer, class T>
         requires std::is_class_v<T> && std::is_aggregate_v<T>
     friend std::expected<void, std::errc> encode(Writer &writer, T const &value);
@@ -1657,10 +1902,6 @@ consteval std::size_t member_offset()
     }
 }
 
-template <class T>
-struct document {
-    std::string_view bytes;
-};
 
 template <class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
@@ -1668,7 +1909,17 @@ std::expected<document<T>, error> decode(std::string_view const bytes)
 {
     if (bytes.size() < fixed_size<T>()) [[unlikely]]
         return std::unexpected(error::too_little_data);
-    return document<T>{bytes};
+    return document<T>{bytes, 0, fixed_size<T>()};
+}
+
+template <class T, fixed_string Path>
+auto at_path_compiled(document<T> const doc)
+{
+    auto const result = internal::path_walk<T, Path, 0>(doc.bytes, doc.offset, doc.floor);
+    if constexpr (internal::path_reads_wire<T, Path, 0>())
+        return result;
+    else
+        return *result;
 }
 
 template <class Writer, class T>

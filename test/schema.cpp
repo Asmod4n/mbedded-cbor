@@ -14,6 +14,7 @@
 #include <vector>
 
 using namespace std::string_literals;
+using namespace std::string_view_literals;
 using cbor::error;
 
 namespace
@@ -270,6 +271,76 @@ TEST_CASE("decode: a struct checks only the size of the first item")
     CHECK(cbor::decode<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>())).has_value());
     CHECK_EQ(cbor::decode<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>() - 1)).error(),
              error::too_little_data);
+}
+
+#endif
+
+#if __cpp_impl_reflection
+
+namespace
+{
+
+struct tire {
+    std::uint16_t diameter;
+    float airPressure;
+};
+
+struct vehicle {
+    std::string make;
+    std::int32_t balance;
+    std::array<tire, 2> spare;
+    std::vector<tire> wheels;
+    engine motor;
+    char code[4];
+    std::optional<std::uint8_t> owner;
+    std::optional<std::uint8_t> none;
+};
+
+vehicle const sample_vehicle{"Tesla", -7, {{{15, 2.5f}, {16, 2.0f}}}, {{17, 1.5f}, {18, 3.0f}, {19, 0.5f}},
+                             {300, 1800}, {'A', 'B', 'C', 'D'}, std::uint8_t{9}, std::nullopt};
+
+} // namespace
+
+// A path over fixed fields becomes one offset at compile time, so the result is the value itself.
+TEST_CASE("at_path_compiled: fixed fields give the value")
+{
+    std::string const bytes = schema_bytes(sample_vehicle);
+    auto const doc = cbor::decode<vehicle>(bytes);
+    REQUIRE(doc.has_value());
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".balance">(*doc), -7);
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".motor.cc">(*doc), 1800u);
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".spare[1].diameter">(*doc), 16u);
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".spare[0].airPressure">(*doc), 2.5f);
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".code">(*doc), "ABCD"sv);
+    auto const motor = cbor::at_path_compiled<vehicle, ".motor">(*doc);
+    CHECK_EQ(cbor::at_path_compiled<engine, ".horsepower">(motor), 300u);
+}
+
+// A step over a part of variable size reads an offset and a length from the wire, so the result is an expected.
+TEST_CASE("at_path_compiled: parts of variable size give an expected")
+{
+    std::string const bytes = schema_bytes(sample_vehicle);
+    auto const doc = cbor::decode<vehicle>(bytes);
+    REQUIRE(doc.has_value());
+    CHECK_EQ(*cbor::at_path_compiled<vehicle, ".make">(*doc), "Tesla"sv);
+    CHECK_EQ(*cbor::at_path_compiled<vehicle, ".wheels[2].diameter">(*doc), 19u);
+    CHECK_EQ(*cbor::at_path_compiled<vehicle, ".wheels[1].airPressure">(*doc), 3.0f);
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".wheels[3].diameter">(*doc).error(), error::index_out_of_bounds);
+    CHECK_EQ(**cbor::at_path_compiled<vehicle, ".owner">(*doc), 9u);
+    CHECK_FALSE(cbor::at_path_compiled<vehicle, ".none">(*doc)->has_value());
+}
+
+// An offset from the wire that points backward, or a length past the end, is refused and reads nothing.
+TEST_CASE("at_path_compiled: a broken offset is an error")
+{
+    std::string bytes = schema_bytes(sample_vehicle);
+    std::size_t const make = cbor::member_offset<vehicle, ^^vehicle::make>();
+    std::string backward = bytes;
+    backward.replace(make + 2, 4, "\x00\x00\x00\x01"s);
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".make">(*cbor::decode<vehicle>(backward)).error(), error::too_little_data);
+    std::string past = bytes;
+    past.replace(make + 7, 4, "\x00\x00\xff\xff"s);
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".make">(*cbor::decode<vehicle>(past)).error(), error::too_little_data);
 }
 
 #endif
