@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 using namespace std::string_literals;
@@ -332,4 +333,55 @@ TEST_CASE("lazy: lazy_get reads a typed array")
     CHECK_EQ(get<cbor::typed_array>("\xd8\x3f\x41\x00"s).error(), error::incorrect_type);
     CHECK_EQ(get<cbor::typed_array>("\xd8\x40\x01"s).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(get<cbor::typed_array>("\x43\x01\x02\x03"s).error(), error::incorrect_type);
+}
+
+namespace
+{
+
+// A host whose only value is a typed array, as a language with ArrayBuffers has.
+struct typed_host {
+    using value = cbor::typed_array;
+};
+
+cbor::kind tag_invoke(cbor::kind_of_t, typed_host &, cbor::typed_array const &)
+{
+    return cbor::kind::typed_array;
+}
+
+cbor::typed_array tag_invoke(cbor::typed_array_of_t, typed_host &, cbor::typed_array const &a)
+{
+    return a;
+}
+
+std::expected<std::string, std::error_code> typed_encoded(std::uint64_t const tag, std::string_view const bytes)
+{
+    typed_host host;
+    test::string_writer w;
+    auto const r = cbor::encode<16>(host, w, cbor::typed_array{tag, std::as_bytes(std::span(bytes))});
+    if (!r)
+        return std::unexpected(r.error());
+    return w.bytes;
+}
+
+} // namespace
+
+// The encoder writes the tag and one byte string, and lazy_get reads both back.
+TEST_CASE("encode: a typed array is a tag and a byte string")
+{
+    auto const wire = typed_encoded(65, "\x00\x01\x00\x02"sv);
+    REQUIRE(wire.has_value());
+    CHECK_EQ(*wire, "\xd8\x41\x44\x00\x01\x00\x02"s);
+    auto const back = get<cbor::typed_array>(*wire);
+    REQUIRE(back.has_value());
+    CHECK_EQ(back->tag, 65u);
+    CHECK(std::ranges::equal(back->bytes, std::as_bytes(std::span("\x00\x01\x00\x02"sv))));
+}
+
+// A tag outside 64 to 87, or the reserved 76, is no typed array; a length that is not a multiple of the
+// element size is inadmissible content.
+TEST_CASE("encode: a typed array the host answers wrongly")
+{
+    CHECK((typed_encoded(76, "\x00"sv).error() == cbor::error::unsupported_value));
+    CHECK((typed_encoded(63, "\x00"sv).error() == cbor::error::unsupported_value));
+    CHECK((typed_encoded(66, "\x00\x01\x02"sv).error() == cbor::error::inadmissible_type_for_tag_content));
 }

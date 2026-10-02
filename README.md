@@ -112,7 +112,7 @@ throws; the library catches nothing.
 The library asks `kind_of(host, value)` and then one question for that
 kind: `unsigned_of`, `magnitude_of`, `bytes_of`, `text_of`, `float_of`,
 `simple_of`, `array_size` and `array_at`, `map_size` and
-`map_for_each`, or `registered_tag`. A host answers only the questions
+`map_for_each`, `typed_array_of`, or `registered_tag`. A host answers only the questions
 its language has. A kind without an answer is `unsupported_value`.
 
 The writer belongs to the host: `reserve(n)`, `append(bytes)` and
