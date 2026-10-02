@@ -21,10 +21,50 @@ TEST_CASE("major 4: empty, basic, nested, mixed")
 }
 
 // Ported from test.rb: 'major 4: huge length claim (uint64) raises RangeError'.
-// No size hint reaches the host, so nothing is allocated for the claim.
+// The size that reaches the host is capped by the remaining bytes, so the claim reserves nothing.
 TEST_CASE("major 4: a huge length claim is too_little_data")
 {
     CHECK_EQ(decode_error("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv), error::too_little_data);
+}
+
+namespace
+{
+
+struct size_host : test_host {
+    std::vector<std::uint64_t> sizes;
+};
+
+value tag_invoke(cbor::array_decode_t, size_host &host, std::uint64_t const size)
+{
+    host.sizes.push_back(size);
+    return {test::array{}};
+}
+
+value tag_invoke(cbor::map_decode_t, size_host &host, std::uint64_t const size)
+{
+    host.sizes.push_back(size);
+    return {test::map{}};
+}
+
+std::vector<std::uint64_t> sizes_of(std::string_view const bytes)
+{
+    size_host host;
+    (void)cbor::decode<16>(host, bytes);
+    return host.sizes;
+}
+
+} // namespace
+
+// A host reserves with the size. A head that declares more items than the remaining bytes can
+// hold must not make it reserve more: each item takes at least one byte, each pair at least two.
+TEST_CASE("major 4 and 5: the size a host receives")
+{
+    CHECK(sizes_of("\x83\x01\x02\x03"sv) == std::vector<std::uint64_t>{3});
+    CHECK(sizes_of("\xa2\x01\x02\x03\x04"sv) == std::vector<std::uint64_t>{2});
+    CHECK(sizes_of("\x82\x80\xa0"sv) == std::vector<std::uint64_t>{2, 0, 0});
+    CHECK(sizes_of("\x9b\xff\xff\xff\xff\xff\xff\xff\xff\x01\x02"sv) == std::vector<std::uint64_t>{2});
+    CHECK(sizes_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x01\x02\x03"sv) == std::vector<std::uint64_t>{1});
+    CHECK(sizes_of("\x99\x01\x00"sv) == std::vector<std::uint64_t>{0});
 }
 
 // Ported from test.rb: 'major 5: empty, string, integer, nested keys roundtrip'.
