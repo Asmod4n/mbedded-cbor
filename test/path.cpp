@@ -17,7 +17,7 @@ value at(std::string_view const path, value const &data)
     REQUIRE(steps.has_value());
     std::string const doc = encoded(data);
     test_host host;
-    auto const r = cbor::path_decode<16>(host, *steps, cbor::lazy{doc, 0});
+    auto const r = cbor::path_decode<16>(host, *steps, *cbor::decode<16>(doc));
     REQUIRE(r.has_value());
     return *r;
 }
@@ -28,7 +28,7 @@ error path_error(std::string_view const path, value const &data)
     REQUIRE(steps.has_value());
     std::string const doc = encoded(data);
     test_host host;
-    auto const r = cbor::path_decode<16>(host, *steps, cbor::lazy{doc, 0});
+    auto const r = cbor::path_decode<16>(host, *steps, *cbor::decode<16>(doc));
     REQUIRE_FALSE(r.has_value());
     return r.error();
 }
@@ -110,8 +110,8 @@ TEST_CASE("path: one compiled path, two documents")
     std::string const d1 = encoded(M("items"s, A(M("id"s, 1), M("id"s, 2))));
     std::string const d2 = encoded(M("items"s, A(M("id"s, 9), M("id"s, 8), M("id"s, 7))));
     test_host host;
-    CHECK(*cbor::path_decode<16>(host, *steps, cbor::lazy{d1, 0}) == A(1, 2));
-    CHECK(*cbor::path_decode<16>(host, *steps, cbor::lazy{d2, 0}) == A(9, 8, 7));
+    CHECK(*cbor::path_decode<16>(host, *steps, *cbor::decode<16>(d1)) == A(1, 2));
+    CHECK(*cbor::path_decode<16>(host, *steps, *cbor::decode<16>(d2)) == A(9, 8, 7));
 }
 
 // Ported from test.rb: 'path: [*] skips untouched fields cheaply (regression for greedy decode)'.

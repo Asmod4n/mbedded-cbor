@@ -621,7 +621,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
     auto const a = arr({u(1), u(2)});
     std::string const doc = encoded_shared(arr({a, a}));
     ref_host host;
-    auto const r = cbor::lazy_decode<16>(host, cbor::lazy{doc, 0});
+    auto const r = cbor::lazy_decode<16>(host, *cbor::decode<16>(doc));
     REQUIRE(r.has_value());
     CHECK(same(element(*r, 0), element(*r, 1)));
 }
@@ -631,7 +631,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 TEST_CASE("lazy: a reference to a mark before the target")
 {
     std::string const doc = "\xa2\x65outer\xd8\x1c\x82\x01\x02\x63ref\xd8\x1d\x00"s;
-    auto const ref = cbor::lazy_at<16>(cbor::lazy{doc, 0}, "ref");
+    auto const ref = cbor::lazy_at<16>(*cbor::decode<16>(doc), "ref");
     REQUIRE(ref.has_value());
     ref_host host;
     auto const r = cbor::lazy_decode<16>(host, *ref);
@@ -649,7 +649,7 @@ TEST_CASE("lazy: a cyclic array")
 {
     std::string const doc = "\xd8\x1c\x81\xd8\x1d\x00"s;
     ref_host host;
-    auto const r = cbor::lazy_decode<16>(host, cbor::lazy{doc, 0});
+    auto const r = cbor::lazy_decode<16>(host, *cbor::decode<16>(doc));
     REQUIRE(r.has_value());
     CHECK(same(*r, element(*r, 0)));
     std::get<std::vector<handle>>((*r)->kind).clear();
@@ -665,7 +665,7 @@ TEST_CASE("path: a wildcard over a shared array")
     auto const steps = cbor::path_compile("$.backup.users[*].name");
     REQUIRE(steps.has_value());
     ref_host host;
-    auto const r = cbor::path_decode<16>(host, *steps, cbor::lazy{doc, 0});
+    auto const r = cbor::path_decode<16>(host, *steps, *cbor::decode<16>(doc));
     REQUIRE(r.has_value());
     CHECK_EQ(std::get<std::string>(element(*r, 0)->kind), "alice");
     CHECK_EQ(std::get<std::string>(element(*r, 1)->kind), "bob");
@@ -673,7 +673,7 @@ TEST_CASE("path: a wildcard over a shared array")
     std::string const leaf = encoded_shared(obj({{s("a"), shared_leaf}, {s("b"), shared_leaf}}));
     for (std::string_view const p : {"$.a[*]"sv, "$.b[*]"sv}) {
         auto const st = cbor::path_compile(p);
-        auto const v = cbor::path_decode<16>(host, *st, cbor::lazy{leaf, 0});
+        auto const v = cbor::path_decode<16>(host, *st, *cbor::decode<16>(leaf));
         REQUIRE(v.has_value());
         CHECK_EQ(std::get<std::uint64_t>(element(*v, 2)->kind), 3);
     }

@@ -28,7 +28,10 @@ inline void one_input(std::string_view const input)
             (void)cbor::decode<16>(host, w.bytes);
     }
     (void)cbor::doc_end<16>(input);
-    cbor::lazy const root{input, 0};
+    auto const decoded = cbor::decode<16>(std::string{input});
+    if (!decoded)
+        return;
+    cbor::lazy const &root = *decoded;
     (void)cbor::lazy_decode<16>(host, root);
     (void)cbor::lazy_at<16>(root, std::int64_t{0});
     (void)cbor::lazy_at<16>(root, std::int64_t{-1});
