@@ -255,6 +255,8 @@ struct encoder;
 
 enum class sharedrefs { off, on };
 
+enum class encoding { preferred, deterministic };
+
 enum class kind {
     unsigned_integer,
     negative_integer,
@@ -320,7 +322,8 @@ std::expected<typename Host::value, error> path_decode(Host &host, std::span<pat
 template <std::size_t DepthMax>
 std::expected<std::size_t, error> doc_end(std::string_view bytes);
 
-template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Host, class Writer>
+template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, encoding Encoding = encoding::preferred,
+          class Host, class Writer>
 std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value);
 
 class internal
@@ -794,11 +797,11 @@ class internal
     template <class Writer>
     friend struct encoder;
 
-    template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
+    template <std::size_t DepthMax, sharedrefs Sharing, encoding Encoding, class Host, class Writer>
     friend std::expected<void, std::error_code> encode(Host &host, Writer &writer,
                                                        typename Host::value const &value);
 
-    template <std::size_t, class, class, pass>
+    template <std::size_t, encoding, class, class, pass>
     friend class walker;
 
     template <std::size_t DepthMax>
@@ -1155,6 +1158,20 @@ struct encoder {
         return {};
     }
 
+    std::expected<void, std::errc> append(std::string_view const bytes)
+    {
+        if (bytes.size() <= block.size() - used) {
+            std::memcpy(std::span(block).subspan(used).data(), bytes.data(), bytes.size());
+            used += bytes.size();
+            return {};
+        }
+        if (auto const r = flush(); !r) [[unlikely]]
+            return r;
+        if (auto const r = writer.reserve(bytes.size()); !r) [[unlikely]]
+            return r;
+        return writer.append(bytes);
+    }
+
     std::expected<void, std::errc> byte_string_encode(std::string_view bytes)
     {
         if (auto const r = head_encode(major_type::byte_string, bytes.size()); !r) [[unlikely]]
@@ -1233,7 +1250,7 @@ std::expected<typename Host::value, error> decode(Host &host, std::string_view b
 
 enum class pass { plain, count, write };
 
-template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
+template <std::size_t DepthMax, sharedrefs Sharing, encoding Encoding, class Host, class Writer>
 std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
                                                  std::size_t depth, bool embedded);
 
@@ -1256,7 +1273,7 @@ struct sharing {
     std::unordered_map<typename Host::identity, typename Host::value> replaced;
 };
 
-template <std::size_t DepthMax, class Host, class Writer, pass Pass>
+template <std::size_t DepthMax, encoding Encoding, class Host, class Writer, pass Pass>
 class walker
 {
     Host &host;
@@ -1266,7 +1283,7 @@ class walker
     bool embedded;
     std::error_code failure;
 
-    template <std::size_t, sharedrefs, class H, class W>
+    template <std::size_t, sharedrefs, encoding, class H, class W>
     friend std::expected<void, std::error_code> encode_from(H &host, W &writer, typename H::value const &value,
                                                             std::size_t depth, bool embedded);
 
@@ -1323,7 +1340,7 @@ class walker
             if (!outer && embed_of(host, item)) {
                 if constexpr (Pass != pass::count) {
                     internal::string_sink inner;
-                    auto const r = encode_from<DepthMax, Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
+                    auto const r = encode_from<DepthMax, Pass == pass::plain ? sharedrefs::off : sharedrefs::on, Encoding>(
                         host, inner, item, depth, true);
                     if (!r) [[unlikely]] {
                         if (!failure)
@@ -1436,11 +1453,28 @@ class walker
         case kind::map:
             if constexpr (requires { map_size(host, item); }) {
                 head(major_type::map, map_size(host, item));
-                map_for_each(host, item,
-                             [this](typename Host::value const &k, typename Host::value const &v) {
-                                 key(k);
-                                 value(v);
-                             });
+                if constexpr (Encoding == encoding::deterministic) {
+                    std::vector<std::pair<std::string, typename Host::value>> pairs;
+                    map_for_each(host, item, [&](typename Host::value const &k, typename Host::value const &v) {
+                        internal::string_sink encoded;
+                        auto const r =
+                            encode_from<DepthMax, sharedrefs::off, encoding::deterministic>(host, encoded, k, depth, false);
+                        if (!r && !failure) [[unlikely]]
+                            failure = r.error();
+                        pairs.emplace_back(std::move(encoded.bytes), v);
+                    });
+                    std::ranges::sort(pairs, {}, &std::pair<std::string, typename Host::value>::first);
+                    for (auto const &[k, v] : pairs) {
+                        keep(out.append(k));
+                        value(v);
+                    }
+                } else {
+                    map_for_each(host, item,
+                                 [this](typename Host::value const &k, typename Host::value const &v) {
+                                     key(k);
+                                     value(v);
+                                 });
+                }
                 return;
             }
             break;
@@ -1506,12 +1540,12 @@ public:
     walker &operator=(walker const &) = delete;
 };
 
-template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
+template <std::size_t DepthMax, sharedrefs Sharing, encoding Encoding, class Host, class Writer>
 std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
                                                 std::size_t const depth, bool const embedded)
 {
     if constexpr (Sharing == sharedrefs::off) {
-        walker<DepthMax, Host, Writer, pass::plain> walk{host, writer, nullptr, depth, embedded};
+        walker<DepthMax, Encoding, Host, Writer, pass::plain> walk{host, writer, nullptr, depth, embedded};
         walk.value(value);
         walk.keep(walk.out.flush());
         if (walk.failure) [[unlikely]]
@@ -1519,11 +1553,11 @@ std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typ
     } else {
         sharing<Host> shared;
         discarding_writer nothing;
-        walker<DepthMax, Host, discarding_writer, pass::count> count{host, nothing, &shared, depth, embedded};
+        walker<DepthMax, Encoding, Host, discarding_writer, pass::count> count{host, nothing, &shared, depth, embedded};
         count.value(value);
         if (count.failure) [[unlikely]]
             return std::unexpected(count.failure);
-        walker<DepthMax, Host, Writer, pass::write> write{host, writer, &shared, depth, embedded};
+        walker<DepthMax, Encoding, Host, Writer, pass::write> write{host, writer, &shared, depth, embedded};
         write.value(value);
         write.keep(write.out.flush());
         if (write.failure) [[unlikely]]
@@ -1532,10 +1566,10 @@ std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typ
     return {};
 }
 
-template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
+template <std::size_t DepthMax, sharedrefs Sharing, encoding Encoding, class Host, class Writer>
 std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value)
 {
-    return encode_from<DepthMax, Sharing>(host, writer, value, 0, false);
+    return encode_from<DepthMax, Sharing, Encoding>(host, writer, value, 0, false);
 }
 
 template <std::size_t DepthMax>
