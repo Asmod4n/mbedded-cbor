@@ -676,7 +676,6 @@ class internal
 
     struct cursor {
         std::span<char> out;
-        std::size_t second;
         std::size_t position;
 
         template <class E>
@@ -762,7 +761,7 @@ class internal
                 data = elements_encode<std::ranges::range_value_t<U>>(value);
             }
             auto const field = out.subspan(offset).template first<dynamic_type_sizes>();
-            std::ranges::copy(big_endian(static_cast<std::uint32_t>(data - second)),
+            std::ranges::copy(big_endian(static_cast<std::uint32_t>(data)),
                               field.template subspan<2, sizeof(std::uint32_t)>().begin());
             std::ranges::copy(big_endian(static_cast<std::uint32_t>(length)),
                               field.template last<sizeof(std::uint32_t)>().begin());
@@ -1658,6 +1657,20 @@ consteval std::size_t member_offset()
     }
 }
 
+template <class T>
+struct document {
+    std::string_view bytes;
+};
+
+template <class T>
+    requires std::is_class_v<T> && std::is_aggregate_v<T>
+std::expected<document<T>, error> decode(std::string_view const bytes)
+{
+    if (bytes.size() < fixed_size<T>()) [[unlikely]]
+        return std::unexpected(error::too_little_data);
+    return document<T>{bytes};
+}
+
 template <class Writer, class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
 std::expected<void, std::errc> encode(Writer &writer, T const &value)
@@ -1672,7 +1685,7 @@ std::expected<void, std::errc> encode(Writer &writer, T const &value)
         !std::in_range<std::uint32_t>(second_size) || ckd_add(&size, first, second_size)) [[unlikely]]
         return std::unexpected(std::errc::value_too_large);
     return writer.resize_and_overwrite(size, [&](std::span<char> const out) {
-        internal::cursor c{out, first, first};
+        internal::cursor c{out, first};
         c.template zero_initialized_copy<T>(0);
         c.position += c.head_write(first, major_type::array, second->items);
         c.template value_encode<T>(0, value);
