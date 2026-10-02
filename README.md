@@ -128,6 +128,31 @@ encodes. `value_identity` and `key_identity` tell which values can be
 shared. With `cbor::sharedrefs::off` there is one pass and no code for
 these tags.
 
+## Encode a struct
+
+    std::expected<void, std::errc> cbor::encode(writer, value);
+
+A C++ struct is written as two CBOR items. The first item is a map with
+the names of the members as text keys. Every number has the width of
+its type, so every member is at an offset that the compiler knows. A
+member of variable size, such as a `std::string` or a `std::vector`,
+holds an offset and a length into the second item. The second item
+holds those parts as plain CBOR. Every byte is well-formed CBOR, and a
+decoder without the schema reads every value.
+
+The library finds the names of the members in this order:
+
+1. Boost.Describe, when Boost is present and the struct is described
+   with `BOOST_DESCRIBE_STRUCT`.
+2. C++26 reflection, when the compiler has it, as gcc 16 with
+   `-std=c++26 -freflection`.
+
+When neither is present, the library has no struct encoding. Every
+other part of the library needs only C++23.
+
+The writer gets `resize_and_overwrite(size, op)`, with the meaning of
+`std::string::resize_and_overwrite`.
+
 ## Registered tags
 
 A host can register a tag for its own type. On encode the library calls
