@@ -94,3 +94,79 @@ TEST_CASE("fixed_size: a part of variable size takes 11 bytes")
 }
 
 #endif
+
+#if __cpp_impl_reflection
+
+namespace
+{
+
+struct engine {
+    std::uint16_t horsepower;
+    std::uint32_t cc;
+};
+
+struct car {
+    std::uint8_t seats;
+    engine motor;
+    bool hasNavSystem;
+};
+
+struct empty {
+};
+
+struct thirty {
+    std::uint8_t m00, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11, m12, m13, m14;
+    std::uint8_t m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28, m29;
+};
+
+struct long_name {
+    std::uint8_t a_member_name_of_twenty_nine_b;
+    std::uint8_t b;
+};
+
+struct größe {
+    std::uint8_t höhe;
+    std::uint8_t b;
+};
+
+} // namespace
+
+// The offset points at the head of the value, behind the key. wheel: a3, "diameter" 9 bytes, so 10; then 3 for
+// its value and "airPressure" 12 bytes, so 25; then 5 and "snowTires" 10 bytes, so 40.
+TEST_CASE("member_offset: the head of each value, behind its key")
+{
+    CHECK_EQ(cbor::member_offset<wheel, ^^wheel::diameter>(), 10u);
+    CHECK_EQ(cbor::member_offset<wheel, ^^wheel::airPressure>(), 25u);
+    CHECK_EQ(cbor::member_offset<wheel, ^^wheel::snowTires>(), 40u);
+    CHECK_EQ(cbor::member_offset<wheel const, ^^wheel::snowTires>(), 40u);
+}
+
+// A nested struct is a map at the offset of its member, so offsets add up. car: a3 1, "seats" 6, its value 2,
+// "motor" 6, so the engine map is at 15; inside it a2, "horsepower" 11, so 12.
+TEST_CASE("member_offset: offsets of nested structs add up")
+{
+    CHECK_EQ(cbor::member_offset<car, ^^car::motor>(), 15u);
+    CHECK_EQ(cbor::member_offset<engine, ^^engine::horsepower>(), 12u);
+    CHECK_EQ(cbor::member_offset<car, ^^car::hasNavSystem>(), 15u + cbor::fixed_size<engine>() + 13u);
+}
+
+// RFC 8949 3: a map of 24 or more pairs and a text of 24 or more bytes need a head of two bytes.
+TEST_CASE("member_offset: a long map head and a long key head")
+{
+    // b8 1e, then "m00" 4 bytes, so 6; each member takes 4 + 2.
+    CHECK_EQ(cbor::member_offset<thirty, ^^thirty::m00>(), 6u);
+    CHECK_EQ(cbor::member_offset<thirty, ^^thirty::m29>(), 2u + 29u * 6u + 4u);
+    CHECK_EQ(cbor::fixed_size<thirty>(), 2u + 30u * 6u);
+    // a2, then 78 1e and the 30 bytes of the name.
+    CHECK_EQ(cbor::member_offset<long_name, ^^long_name::a_member_name_of_twenty_nine_b>(), 1u + 2u + 30u);
+    CHECK_EQ(cbor::fixed_size<empty>(), 1u);
+}
+
+// A key is CBOR text, so it is UTF-8 (RFC 8949 3.1): "höhe" has 5 bytes, not 4.
+TEST_CASE("member_offset: a key is counted in UTF-8 bytes")
+{
+    CHECK_EQ(cbor::member_offset<größe, ^^größe::höhe>(), 1u + 1u + 5u);
+    CHECK_EQ(cbor::member_offset<größe, ^^größe::b>(), 7u + 2u + 2u);
+}
+
+#endif
