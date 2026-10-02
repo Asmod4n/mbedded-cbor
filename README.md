@@ -122,6 +122,11 @@ The writer belongs to the host: `reserve(n)`, `append(bytes)` and
 `done(size)`. `reserve` and `append` return
 `std::expected<void, std::errc>`.
 
+With `cbor::encoding::deterministic` the keys of every map are sorted
+in the bytewise order of their encodings (RFC 8949 section 4.2.1); the
+library writes the preferred serialization and no indefinite length in
+either encoding. The keys are not shared in this encoding.
+
 With `cbor::sharedrefs::on` the library makes two passes and writes
 tags 28 and 29 for a value that occurs more than once, so a cycle
 encodes. `value_identity` and `key_identity` tell which values can be
