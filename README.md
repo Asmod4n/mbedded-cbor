@@ -94,12 +94,14 @@ host for each data item. The host builds its own value and returns it:
 | negative integer | `negative_integer_decode(host, n)`, the value is -1 - n |
 | bignum, tags 2 and 3 | `unsigned_bignum_decode(host, magnitude)`, `negative_bignum_decode(host, magnitude)` |
 | byte string, text string | `byte_string_decode(host, view)`, `text_string_decode(host, view)` |
-| array | `array_decode(host)`, then `array_append(host, array, element)` |
-| map | `map_decode(host)`, then `map_insert(host, map, key, value)` |
+| array | `array_decode(host, size)`, then `array_append(host, array, element)` |
+| map | `map_decode(host, size)`, then `map_insert(host, map, key, value)` |
 | tag | `tag_decode(host, number, content)` |
 | floating-point, simple value | `float_decode(host, double)`, `simple_value_decode(host, n)` |
 
-No size from the data reaches the host before the items arrive. Tags 28
+`size` is the number of items that the head of the array or map
+declares, at most the number that the remaining bytes can hold. The
+host can reserve memory with it. Tags 28
 and 29 (shared references) are always read. A host that cannot go on
 throws; the library catches nothing.
 
