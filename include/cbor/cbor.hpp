@@ -4,18 +4,15 @@
 #include <array>
 #include <bit>
 #include <charconv>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <expected>
 #include <iterator>
 #include <limits>
-#if __cpp_impl_reflection
-#include <meta>
-#endif
 #include <memory>
 #include <optional>
-#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -375,20 +372,6 @@ class internal
 
     template <std::size_t DepthMax>
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes);
-
-#if __cpp_impl_reflection
-    template <class T>
-    static consteval std::span<std::meta::info const> members_in_deterministic_order()
-    {
-        auto m = std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::current());
-        std::ranges::sort(m, [](std::meta::info a, std::meta::info b) {
-            auto const x = std::meta::identifier_of(a);
-            auto const y = std::meta::identifier_of(b);
-            return x.size() != y.size() ? x.size() < y.size() : x < y;
-        });
-        return std::define_static_array(m);
-    }
-#endif
 
     struct prefix {
         std::string_view document;
@@ -1239,50 +1222,44 @@ struct encoder {
         item_write(item, size);
         return {};
     }
-#if __cpp_impl_reflection
 
-    template <class T>
-    std::expected<void, std::errc> value_encode(T const &value)
+    template <std::unsigned_integral T>
+    std::expected<void, std::errc> fixed_width_head_encode(major_type major, T argument)
     {
-        if constexpr (std::is_same_v<T, bool>)
-            return head_encode(major_type::simple_float,
-                               std::to_underlying(value ? simple_value::true_value : simple_value::false_value));
-        else if constexpr (std::unsigned_integral<T>)
-            return head_encode(major_type::unsigned_integer, value);
-        else if constexpr (std::signed_integral<T>)
-            return value < 0 ? head_encode(major_type::negative_integer, static_cast<std::uint64_t>(-1 - value))
-                             : head_encode(major_type::unsigned_integer, static_cast<std::uint64_t>(value));
-        else if constexpr (std::floating_point<T>)
-            return float_encode(value);
-        else if constexpr (std::convertible_to<T const &, std::string_view>)
-            return text_string_encode(value);
-        else if constexpr (std::ranges::sized_range<T>) {
-            if (auto const r = head_encode(major_type::array, std::ranges::size(value)); !r) [[unlikely]]
-                return r;
-            for (auto const &e : value)
-                if (auto const r = value_encode(e); !r) [[unlikely]]
-                    return r;
-            return {};
-        } else
-            return struct_encode(value);
-    }
-
-    template <class T>
-        requires std::is_aggregate_v<T>
-    std::expected<void, std::errc> struct_encode(T const &value)
-    {
-        constexpr auto members = internal::members_in_deterministic_order<T>();
-        if (auto const r = head_encode(major_type::map, members.size()); !r) [[unlikely]]
+        if (auto const r = room(9); !r) [[unlikely]]
             return r;
-        template for (constexpr auto m : members) {
-            if (auto const r = text_string_encode(std::meta::identifier_of(m)); !r) [[unlikely]]
-                return r;
-            if (auto const r = value_encode(value.[:m:]); !r) [[unlikely]]
-                return r;
-        }
+        std::array<char, 9> head;
+        std::get<0>(head) = static_cast<char>(
+            std::to_underlying(major) << 5 |
+            (std::to_underlying(internal::additional_information::one_byte_argument) + std::countr_zero(sizeof(T))));
+        T const big = std::byteswap(argument);
+        std::memcpy(std::span(head).template subspan<1>().data(), &big, sizeof big);
+        item_write(head, 1 + sizeof(T));
         return {};
     }
-#endif
+
+    template <std::unsigned_integral T>
+        requires(!std::is_same_v<T, bool>)
+    std::expected<void, std::errc> fixed_width_unsigned_encode(T value)
+    {
+        return fixed_width_head_encode(major_type::unsigned_integer, value);
+    }
+
+    template <std::signed_integral T>
+    std::expected<void, std::errc> fixed_width_signed_encode(T value)
+    {
+        using U = std::make_unsigned_t<T>;
+        U const sign = static_cast<U>(value >> (8 * sizeof(T) - 1));
+        return fixed_width_head_encode(static_cast<major_type>(sign & 1), static_cast<U>(static_cast<U>(value) ^ sign));
+    }
+
+    template <std::floating_point T>
+        requires(sizeof(T) == 4 || sizeof(T) == 8)
+    std::expected<void, std::errc> fixed_width_float_encode(T value)
+    {
+        return fixed_width_head_encode(major_type::simple_float,
+                                       std::bit_cast<std::conditional_t<sizeof(T) == 4, std::uint32_t, std::uint64_t>>(value));
+    }
 };
 
 template <std::size_t DepthMax, class Host>
