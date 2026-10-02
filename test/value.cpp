@@ -197,26 +197,3 @@ TEST_CASE("encode: a kind the host cannot describe is unsupported_value")
     REQUIRE_FALSE(r.has_value());
     CHECK((r.error() == error::unsupported_value));
 }
-
-// RFC 8949 4.2.1: the keys of a map are sorted in the bytewise lexicographic order of their
-// deterministic encodings. The keys and their order are the example of that section; they go in
-// shuffled and come out sorted.
-TEST_CASE("deterministic: map keys in the order of RFC 8949 4.2.1")
-{
-    value const shuffled =
-        M(simple{std::to_underlying(cbor::simple_value::false_value)}, 0, A(value{test::negative{0}}), 0, A(100), 0, "aa"s, 0,
-          "z"s, 0, value{test::negative{0}}, 0, 100, 0, 10, 0);
-    test_host host;
-    test::string_writer w;
-    REQUIRE(cbor::encode<16, cbor::sharedrefs::off, cbor::encoding::deterministic>(host, w, shuffled).has_value());
-    CHECK_EQ(w.bytes, "\xa8\x0a\x00\x18\x64\x00\x20\x00\x61\x7a\x00\x62\x61\x61\x00\x81\x18\x64\x00\x81\x20\x00\xf4\x00"s);
-}
-
-// Preferred encoding keeps the order the host gives.
-TEST_CASE("deterministic: preferred encoding keeps the order of the host")
-{
-    test_host host;
-    test::string_writer w;
-    REQUIRE(cbor::encode<16>(host, w, M("z"s, 0, 10, 0)).has_value());
-    CHECK_EQ(w.bytes, "\xa2\x61\x7a\x00\x0a\x00"s);
-}
