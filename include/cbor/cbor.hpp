@@ -795,6 +795,35 @@ class internal
             --left.at(level);
             if (depth + level > DepthMax) [[unlikely]]
                 return std::unexpected(error::nesting_depth_exceeded);
+            if (d.bytes.size() >= 9) {
+                auto const initial = static_cast<std::uint8_t>(d.bytes.front());
+                auto const major = static_cast<major_type>(initial >> 5);
+                std::uint8_t const info = initial & 0x1f;
+                if (info <= std::to_underlying(additional_information::eight_byte_argument) &&
+                    major != major_type::tag && major != major_type::simple_float) {
+                    std::uint64_t word;
+                    std::memcpy(&word, d.bytes.substr(1, 8).data(), 8);
+                    bool const immediate = info < std::to_underlying(additional_information::one_byte_argument);
+                    std::size_t const size =
+                        immediate ? 0
+                                  : std::size_t{1} << (info - std::to_underlying(additional_information::one_byte_argument));
+                    std::uint64_t const argument =
+                        immediate ? info : std::byteswap(word) >> ((64 - 8 * size) & 63);
+                    d.bytes.remove_prefix(1 + size);
+                    if (major == major_type::byte_string || major == major_type::text_string) {
+                        if (argument > d.bytes.size()) [[unlikely]]
+                            return std::unexpected(error::too_little_data);
+                        d.bytes.remove_prefix(static_cast<std::size_t>(argument));
+                    } else if (major == major_type::array) {
+                        left.at(++level) = argument;
+                    } else if (major == major_type::map) {
+                        left.at(++level) = argument > std::numeric_limits<std::uint64_t>::max() / 2
+                                               ? std::numeric_limits<std::uint64_t>::max()
+                                               : argument * 2;
+                    }
+                    continue;
+                }
+            }
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
