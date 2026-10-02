@@ -65,3 +65,14 @@ TEST_CASE("fixed_width_float_encode: binary32 for float, binary64 for double")
     CHECK_EQ(encoded([](auto &e) { return e.fixed_width_float_encode(-0.0); }),
              "\xfb\x80\x00\x00\x00\x00\x00\x00\x00"sv);
 }
+
+// RFC 8949 3.3: false, true, null and undefined are the simple values 20 to 23, each one byte, 0xf4 to 0xf7.
+// The test takes every member of cbor::simple_value, because the input is that finite set.
+TEST_CASE("simple_value_encode: one byte for each simple value")
+{
+    using cbor::simple_value;
+    CHECK_EQ(encoded([](auto &e) { return e.simple_value_encode(simple_value::false_value); }), "\xf4"sv);
+    CHECK_EQ(encoded([](auto &e) { return e.simple_value_encode(simple_value::true_value); }), "\xf5"sv);
+    CHECK_EQ(encoded([](auto &e) { return e.simple_value_encode(simple_value::null); }), "\xf6"sv);
+    CHECK_EQ(encoded([](auto &e) { return e.simple_value_encode(simple_value::undefined); }), "\xf7"sv);
+}
