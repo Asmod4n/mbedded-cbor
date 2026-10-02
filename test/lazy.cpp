@@ -428,3 +428,27 @@ TEST_CASE("tag 24: an embedded document has marks of its own")
     REQUIRE(second.has_value());
     CHECK_EQ(*cbor::lazy_get<std::uint64_t>(*second), 9u);
 }
+
+// Every integer width reads its own edges. A CBOR integer has a 64-bit magnitude and a sign in the major type
+// (RFC 8949 3.1), so a narrower type refuses the first value past its edge as out of range.
+TEST_CASE("lazy: lazy_get reads every integer width up to its edge")
+{
+    CHECK_EQ(*get<std::uint8_t>("\x18\xff"s), 255u);
+    CHECK_EQ(get<std::uint8_t>("\x19\x01\x00"s).error(), error::number_out_of_range);
+    CHECK_EQ(*get<std::uint16_t>("\x19\xff\xff"s), 65535u);
+    CHECK_EQ(get<std::uint16_t>("\x1a\x00\x01\x00\x00"s).error(), error::number_out_of_range);
+    CHECK_EQ(*get<std::uint32_t>("\x1a\xff\xff\xff\xff"s), 4294967295u);
+    CHECK_EQ(get<std::uint32_t>("\x1b\x00\x00\x00\x01\x00\x00\x00\x00"s).error(), error::number_out_of_range);
+    CHECK_EQ(get<std::uint8_t>("\x20"s).error(), error::number_out_of_range);
+
+    CHECK_EQ(*get<std::int8_t>("\x18\x7f"s), 127);
+    CHECK_EQ(get<std::int8_t>("\x18\x80"s).error(), error::number_out_of_range);
+    CHECK_EQ(*get<std::int8_t>("\x38\x7f"s), -128);
+    CHECK_EQ(get<std::int8_t>("\x38\x80"s).error(), error::number_out_of_range);
+    CHECK_EQ(*get<std::int16_t>("\x19\x7f\xff"s), 32767);
+    CHECK_EQ(*get<std::int16_t>("\x39\x7f\xff"s), -32768);
+    CHECK_EQ(get<std::int16_t>("\x39\x80\x00"s).error(), error::number_out_of_range);
+    CHECK_EQ(*get<std::int32_t>("\x1a\x7f\xff\xff\xff"s), 2147483647);
+    CHECK_EQ(*get<std::int32_t>("\x3a\x7f\xff\xff\xff"s), std::numeric_limits<std::int32_t>::min());
+    CHECK_EQ(get<std::int32_t>("\x1a\x80\x00\x00\x00"s).error(), error::number_out_of_range);
+}
