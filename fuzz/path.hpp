@@ -138,7 +138,8 @@ inline std::optional<test::value> walked(test::value const &start, std::span<cbo
                 std::int64_t const position = s.index < 0 ? s.index + size : s.index;
                 if (position < 0 || position >= size)
                     return std::nullopt;
-                v = a->at(static_cast<std::size_t>(position));
+                test::value element = a->at(static_cast<std::size_t>(position));
+                v = std::move(element);
             } else if (auto const *m = std::get_if<test::map>(&v.kind)) {
                 std::optional<test::value> found;
                 for (auto const &[k, x] : *m) {
