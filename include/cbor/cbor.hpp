@@ -36,8 +36,10 @@
 
 #ifdef _MSC_VER
 #define CBOR_ALWAYS_INLINE [[msvc::forceinline]]
+#define CBOR_ASSUME(condition) __assume(condition)
 #else
 #define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
+#define CBOR_ASSUME(condition) [[assume(condition)]]
 #endif
 #include <utility>
 #include <vector>
@@ -3119,7 +3121,7 @@ CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, 
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
     std::size_t const padded = *size + internal::head_padding;
-    [[assume(padded >= fixed_size<T>())]];
+    CBOR_ASSUME(padded >= fixed_size<T>());
     if constexpr (std::same_as<U, std::string>) {
         std::size_t const at = target.size();
         target.resize_and_overwrite(at + padded, [&](char *const p, std::size_t const n) {
