@@ -30,6 +30,9 @@
 #if CBOR_SIMDUTF
 #include <simdutf.h>
 #endif
+#if __AVX512BW__ && __BMI2__
+#include <immintrin.h>
+#endif
 #include <system_error>
 #include <type_traits>
 #include <unordered_map>
@@ -749,6 +752,18 @@ class internal
         }
     };
 
+    [[gnu::always_inline]] static void bytes_copy(std::span<std::byte const> const from, std::span<std::byte> const to)
+    {
+#if __AVX512BW__ && __BMI2__
+        if (from.size() <= sizeof(__m512i)) [[likely]] {
+            __mmask64 const mask = _bzhi_u64(~std::uint64_t{0}, static_cast<unsigned>(from.size()));
+            _mm512_mask_storeu_epi8(to.data(), mask, _mm512_maskz_loadu_epi8(mask, from.data()));
+            return;
+        }
+#endif
+        std::copy(from.begin(), from.end(), to.begin());
+    }
+
     static constexpr std::size_t head_padding = sizeof(std::uint64_t);
 
     static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
@@ -811,7 +826,7 @@ class internal
                                    length);
             data = position;
             auto const from = std::as_bytes(std::span(value));
-            std::copy(from.begin(), from.end(), std::as_writable_bytes(out.subspan(data, length)).begin());
+            bytes_copy(from, std::as_writable_bytes(out.subspan(data, length)));
             position += length;
         } else if constexpr (is_map<U>) {
             using K = typename U::key_type;
@@ -2525,7 +2540,7 @@ class internal
 
     static std::size_t bytes_write(std::span<char> const out, std::size_t const at, std::span<char const> const bytes)
     {
-        std::ranges::copy(bytes, out.subspan(at, bytes.size()).begin());
+        bytes_copy(std::as_bytes(bytes), std::as_writable_bytes(out.subspan(at, bytes.size())));
         return at + bytes.size();
     }
 
@@ -2590,7 +2605,7 @@ class internal
         } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
             at += head_write(out, at, major_type::byte_string, value.size());
             if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>)
-                std::ranges::copy(value, std::as_writable_bytes(out.subspan(at, value.size())).begin());
+                bytes_copy(std::as_bytes(std::span(value)), std::as_writable_bytes(out.subspan(at, value.size())));
             else
                 std::ranges::transform(value, out.subspan(at, value.size()).begin(),
                                        [](auto const b) { return static_cast<char>(b); });
