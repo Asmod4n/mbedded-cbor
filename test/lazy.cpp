@@ -487,14 +487,14 @@ TEST_CASE("lazy: from, at and get as a chain")
 {
     std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
     char const *const data = bytes.data();
-    cbor::lazy const doc = cbor::lazy::from(std::move(bytes));
-    std::string_view const name = doc.at("statuses").at(1).at("user").at("name").get<std::string_view>();
+    cbor::lazy const doc = *cbor::lazy::from(std::move(bytes));
+    std::string_view const name = *doc.at("statuses").at(1).at("user").at("name").get<std::string_view>();
     CHECK_EQ(name, "bob"sv);
     CHECK_EQ(static_cast<void const *>(doc.document->bytes.data()), static_cast<void const *>(data));
     auto const missing = doc.at("statuses").at(5).at("user").get<std::string_view>();
     REQUIRE_FALSE(missing.has_value());
     CHECK_EQ(missing.error(), error::index_out_of_bounds);
-    CHECK_THROWS_AS(std::string_view n = doc.at("nope").get<std::string_view>(), std::system_error);
+    CHECK_FALSE(doc.at("nope").get<std::string_view>().has_value());
     std::size_t count = 0;
     for (auto const e : *doc.at("statuses").elements()) {
         REQUIRE(e.has_value());

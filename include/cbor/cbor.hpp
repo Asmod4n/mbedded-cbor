@@ -318,30 +318,6 @@ std::expected<void, std::error_code> encode(Host &host, Writer &&target, typenam
 template <class T, class E = error>
 struct result : std::expected<T, E> {
     using std::expected<T, E>::expected;
-
-#ifdef __cpp_exceptions
-    operator T() const &
-    {
-        if (!this->has_value()) [[unlikely]] {
-            if constexpr (std::same_as<E, std::errc>)
-                throw std::length_error(std::make_error_code(this->error()).message());
-            else
-                throw std::system_error(make_error_code(this->error()));
-        }
-        return **this;
-    }
-
-    operator T() &&
-    {
-        if (!this->has_value()) [[unlikely]] {
-            if constexpr (std::same_as<E, std::errc>)
-                throw std::length_error(std::make_error_code(this->error()).message());
-            else
-                throw std::system_error(make_error_code(this->error()));
-        }
-        return std::move(**this);
-    }
-#endif
 };
 
 #ifdef __cpp_impl_reflection
@@ -3695,15 +3671,6 @@ std::expected<lazy, error> decode(std::string bytes)
 template <>
 struct result<lazy, error> : std::expected<lazy, error> {
     using std::expected<lazy, cbor::error>::expected;
-
-#ifdef __cpp_exceptions
-    operator lazy() const
-    {
-        if (!has_value()) [[unlikely]]
-            throw std::system_error(make_error_code(error()));
-        return **this;
-    }
-#endif
 
     template <std::size_t DepthMax = 64>
     result at(std::string_view const key) const
