@@ -406,6 +406,9 @@ result<T> decode(std::string_view bytes);
 
 template <class T>
 result<std::string, std::errc> encode(T const &value);
+
+template <class T, class Target>
+result<std::size_t, std::errc> encode(T const &value, Target &&target);
 } // namespace generic
 #endif
 
@@ -1967,6 +1970,9 @@ class internal
     template <class T>
     friend result<std::string, std::errc> generic::encode(T const &value);
 
+    template <class T, class Target>
+    friend result<std::size_t, std::errc> generic::encode(T const &value, Target &&target);
+
     template <class U>
     static constexpr bool is_std_tuple = false;
 
@@ -2527,8 +2533,11 @@ class internal
             return bytes_write(out, at, value);
         } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
             at += head_write(out, at, major_type::byte_string, value.size());
-            std::ranges::transform(value, out.subspan(at, value.size()).begin(),
-                                   [](auto const b) { return static_cast<char>(b); });
+            if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>)
+                std::ranges::copy(value, std::as_writable_bytes(out.subspan(at, value.size())).begin());
+            else
+                std::ranges::transform(value, out.subspan(at, value.size()).begin(),
+                                       [](auto const b) { return static_cast<char>(b); });
             return at + value.size();
         } else if constexpr (is_optional<U>) {
             if (!value) {
@@ -2865,6 +2874,44 @@ result<std::string, std::errc> encode(T const &value)
         return internal::generic_write(std::span<char>(p, n), 0, value);
     });
     return out;
+}
+
+template <class T, class Target>
+result<std::size_t, std::errc> encode(T const &value, Target &&target)
+{
+    using U = std::remove_cvref_t<Target>;
+    std::size_t const size = internal::generic_size(value);
+    std::size_t const padded = size + internal::head_padding;
+    if constexpr (std::same_as<U, std::string>) {
+        std::size_t const at = target.size();
+        target.resize_and_overwrite(at + padded, [&](char *const p, std::size_t const n) {
+            return internal::generic_write(std::span<char>(p, n), at, value);
+        });
+        return size;
+    } else if constexpr (internal::byte_container<U> &&
+                         requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
+        std::size_t const at = std::ranges::size(target);
+        target.resize(at + padded);
+        internal::generic_write(std::span<char>(target), at, value);
+        target.resize(at + size);
+        return size;
+    } else if constexpr (!internal::byte_container<U> && requires { std::span<char>(target); }) {
+        std::span<char> const out(target);
+        if (out.size() >= padded) {
+            internal::generic_write(out.first(padded), 0, value);
+            return size;
+        }
+    }
+    std::string bytes;
+    bytes.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
+        return internal::generic_write(std::span<char>(p, n), 0, value);
+    });
+    decltype(auto) message = internal::message_of(target, bytes.size());
+    if (auto const r = message.append(bytes); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (auto const r = message.done(bytes.size()); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return bytes.size();
 }
 } // namespace generic
 
