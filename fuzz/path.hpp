@@ -101,6 +101,10 @@ inline std::optional<std::string> path_text(std::span<cbor::path_step const> con
     return text;
 }
 
+// The reference decodes a tag 24 document whole, and lazy reads it only up to the item a step needs. Where the
+// whole document does not decode, the reference cannot say what lazy finds.
+struct undecided {};
+
 // The reference: the path walked over the eager value with the rules of lazy::at. A key matches a text key
 // only; an index counts from the end when negative and matches an integer key of a map; tag 24 is a document
 // of its own when a step goes into it; a wildcard collects the rest of the path for every element.
@@ -115,7 +119,7 @@ inline std::optional<test::value> walked(test::value const &start, std::span<cbo
             test_host host;
             auto inner = cbor::decode<16>(host, b->b);
             if (!inner)
-                return std::nullopt;
+                throw undecided{};
             v = *inner;
         }
         cbor::path_step const &s = steps.subspan(i).front();
@@ -207,7 +211,12 @@ inline void path_target(std::string_view const input)
     auto const root = cbor::lazy::from(std::string{document});
     require(root.has_value());
     auto const found = cbor::path_decode<16>(host, *steps, *root);
-    auto const expected = walked(*eager, *steps);
+    std::optional<test::value> expected;
+    try {
+        expected = walked(*eager, *steps);
+    } catch (undecided const &) {
+        return;
+    }
     require(found.has_value() == expected.has_value());
     if (found)
         require(same(*found, *expected));
