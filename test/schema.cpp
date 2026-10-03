@@ -547,4 +547,53 @@ TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
     CHECK_EQ(writer.hint, expected.size());
 }
 
+namespace
+{
+
+struct passkey_user {
+    std::vector<std::byte> id;
+    std::string name;
+};
+
+struct passkey_login {
+    std::vector<std::byte> signature;
+    std::optional<passkey_user> user;
+    std::optional<std::string> note;
+};
+
+} // namespace
+
+// CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct is one element in the
+// second item when present and no element when absent; a path to it gives the document of the element.
+TEST_CASE("schema: an optional struct and an optional string, present and absent")
+{
+    passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
+    std::string const bytes = cbor::encode(full);
+    auto const doc = cbor::view<passkey_login>(bytes);
+    REQUIRE(doc.has_value());
+    auto const user = cbor::at_path_compiled<passkey_login, ".user">(*doc);
+    REQUIRE(user.has_value());
+    REQUIRE(user->has_value());
+    CHECK_EQ(*cbor::at_path_compiled<passkey_user, ".name">(**user), "alice"sv);
+    CHECK_EQ(cbor::at_path_compiled<passkey_user, ".id">(**user)->size(), 1u);
+    auto const note = cbor::at_path_compiled<passkey_login, ".note">(*doc);
+    REQUIRE(note.has_value());
+    CHECK_EQ(note->value(), "hello"sv);
+    passkey_login const back = cbor::decode<passkey_login>(bytes);
+    REQUIRE(back.user.has_value());
+    CHECK_EQ(back.user->name, "alice");
+    CHECK_EQ(back.note, std::optional<std::string>{"hello"});
+
+    passkey_login const empty{{std::byte{1}}, std::nullopt, std::nullopt};
+    std::string const none = cbor::encode(empty);
+    auto const doc2 = cbor::view<passkey_login>(none);
+    REQUIRE(doc2.has_value());
+    auto const absent = cbor::at_path_compiled<passkey_login, ".user">(*doc2);
+    REQUIRE(absent.has_value());
+    CHECK_FALSE(absent->has_value());
+    passkey_login const back2 = cbor::decode<passkey_login>(none);
+    CHECK_FALSE(back2.user.has_value());
+    CHECK_FALSE(back2.note.has_value());
+}
+
 #endif
