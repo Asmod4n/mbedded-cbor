@@ -558,10 +558,12 @@ class internal
             head_encode(bytes, major_type::simple_float, std::to_underlying(simple_value::false_value));
         } else if constexpr (std::is_enum_v<U>) {
             zero_initialized_encode<std::underlying_type_t<U>>(bytes);
+#ifdef __SIZEOF_INT128__
         } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
             head_encode(bytes, major_type::tag, std::to_underlying(tag_number::unsigned_bignum));
             head_encode(bytes, major_type::byte_string, sizeof(U));
             bytes.resize(bytes.size() + sizeof(U));
+#endif
         } else if constexpr (std::is_integral_v<U>) {
             fixed_width_head_encode(bytes, major_type::unsigned_integer, sizeof(U));
         } else if constexpr (std::is_floating_point_v<U>) {
@@ -626,6 +628,7 @@ class internal
         return std::bit_cast<std::array<char, sizeof(V)>>(std::byteswap(value));
     }
 
+#ifdef __SIZEOF_INT128__
     static constexpr std::array<char, sizeof(unsigned __int128)> big_endian(unsigned __int128 const value)
     {
         auto const high = big_endian(static_cast<std::uint64_t>(value >> 64));
@@ -635,6 +638,7 @@ class internal
         std::ranges::copy(low, std::ranges::next(bytes.begin(), sizeof(std::uint64_t)));
         return bytes;
     }
+#endif
 
     template <class U>
     static constexpr auto float_bits(U const value)
@@ -648,8 +652,10 @@ class internal
             return std::bit_cast<std::uint32_t>(value);
         else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
             return std::bit_cast<std::uint64_t>(value);
+#ifdef __SIZEOF_INT128__
         else
             return std::bit_cast<unsigned __int128>(static_cast<std::float128_t>(value));
+#endif
     }
 
     struct second_item {
@@ -684,8 +690,7 @@ class internal
         void add(T const &value)
         {
             using U = std::remove_cv_t<T>;
-            if constexpr (std::is_arithmetic_v<U> || std::is_enum_v<U> || std::same_as<U, __int128> ||
-                          std::same_as<U, unsigned __int128>) {
+            if constexpr (std::is_arithmetic_v<U> || std::is_enum_v<U> || is_wide_integer<U>) {
             } else if constexpr (requires { fixed_length<U>::value; }) {
                 using E = typename fixed_length<U>::element;
                 if constexpr (!std::is_arithmetic_v<E> && !std::same_as<E, std::byte>)
@@ -827,6 +832,7 @@ class internal
                                               (std::to_underlying(simple_value::false_value) + static_cast<int>(value)));
         } else if constexpr (std::is_enum_v<U>) {
             position = value_encode<std::underlying_type_t<U>>(out, field, std::to_underlying(value), position);
+#ifdef __SIZEOF_INT128__
         } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
             unsigned __int128 magnitude = static_cast<unsigned __int128>(value);
             if constexpr (std::same_as<U, __int128>) {
@@ -838,6 +844,7 @@ class internal
             }
             auto const bytes = big_endian(magnitude);
             std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
+#endif
         } else if constexpr (std::unsigned_integral<U>) {
             auto const bytes = big_endian(value);
             std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
@@ -936,12 +943,14 @@ class internal
         return std::byteswap(std::bit_cast<V>(big));
     }
 
+#ifdef __SIZEOF_INT128__
     static unsigned __int128 unsigned128_read(std::span<char const, sizeof(unsigned __int128)> const field)
     {
         auto const high = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(field.first<sizeof(std::uint64_t)>()));
         auto const low = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(field.last<sizeof(std::uint64_t)>()));
         return high << 64 | low;
     }
+#endif
 
     template <class T>
     static T fixed_value_read(std::span<char const, fixed_size<T>()> const field)
@@ -952,6 +961,7 @@ class internal
             return (head & 1) != 0;
         } else if constexpr (has_fixed_underlying_type<U>) {
             return static_cast<U>(fixed_value_read<std::underlying_type_t<U>>(field));
+#ifdef __SIZEOF_INT128__
         } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
             unsigned __int128 const magnitude = unsigned128_read(field.template last<sizeof(U)>());
             if constexpr (std::same_as<U, __int128>) {
@@ -960,6 +970,7 @@ class internal
             } else {
                 return magnitude;
             }
+#endif
         } else if constexpr (std::unsigned_integral<U>) {
             return unsigned_read<U>(field.template last<sizeof(U)>());
         } else if constexpr (std::signed_integral<U>) {
@@ -968,10 +979,13 @@ class internal
             return static_cast<U>(unsigned_read<M>(field.template last<sizeof(M)>()) ^ sign);
         } else {
             using B = decltype(float_bits(U{}));
+#ifdef __SIZEOF_INT128__
             if constexpr (std::same_as<B, unsigned __int128>) {
                 auto const bits = unsigned128_read(field.template last<sizeof(B)>());
                 return static_cast<U>(std::bit_cast<std::float128_t>(bits));
-            } else {
+            } else
+#endif
+            {
                 auto const bits = unsigned_read<B>(field.template last<sizeof(B)>());
                 using F = std::conditional_t<sizeof(B) == sizeof(std::uint16_t), std::float16_t,
                                              std::conditional_t<sizeof(B) == sizeof(std::uint32_t), std::float32_t,
@@ -1041,8 +1055,7 @@ class internal
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
             return !(std::is_class_v<U> && std::is_aggregate_v<U>) && !requires { fixed_length<U>::value; } &&
-                   !std::is_arithmetic_v<U> && !std::is_enum_v<U> && !std::same_as<U, __int128> &&
-                   !std::same_as<U, unsigned __int128>;
+                   !std::is_arithmetic_v<U> && !std::is_enum_v<U> && !is_wide_integer<U>;
         } else if constexpr (path.substr(At, 1) == ".") {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
@@ -2026,7 +2039,11 @@ class internal
     static constexpr bool is_std_variant<std::variant<E...>> = true;
 
     template <class U>
+#ifdef __SIZEOF_INT128__
     static constexpr bool is_wide_integer = std::same_as<U, __int128> || std::same_as<U, unsigned __int128>;
+#else
+    static constexpr bool is_wide_integer = false;
+#endif
 
     template <class U>
     static constexpr bool is_byte = std::same_as<U, std::byte> || std::same_as<U, unsigned char>;
@@ -2116,6 +2133,7 @@ class internal
             return h.major == major_type::map;
     }
 
+#ifdef __SIZEOF_INT128__
     template <class U>
     static std::expected<void, error> wide_integer_read(decoder &d, U &out)
     {
@@ -2157,6 +2175,7 @@ class internal
         }
         return {};
     }
+#endif
 
     template <std::size_t DepthMax, class U, std::size_t I = 0>
     static std::expected<void, error> variant_read(decoder &d, U &out, head const &h, std::size_t const depth)
@@ -2428,6 +2447,7 @@ class internal
             return initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
             return head_size(std::to_underlying(value));
+#ifdef __SIZEOF_INT128__
         } else if constexpr (is_wide_integer<U>) {
             bool negative = false;
             if constexpr (std::same_as<U, __int128>)
@@ -2438,6 +2458,7 @@ class internal
                 return head_size(static_cast<std::uint64_t>(magnitude));
             std::size_t const digits = sizeof(unsigned __int128) - std::countl_zero(magnitude) / 8;
             return initial_byte_size + head_size(digits) + digits;
+#endif
         } else if constexpr (is_std_variant<U>) {
             return std::visit([](auto const &e) { return generic_size(e); }, value);
         } else if constexpr (std::is_enum_v<U>) {
@@ -2516,6 +2537,7 @@ class internal
             return at + initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
             return at + head_write(out, at, major_type::simple_float, std::to_underlying(value));
+#ifdef __SIZEOF_INT128__
         } else if constexpr (is_wide_integer<U>) {
             bool negative = false;
             if constexpr (std::same_as<U, __int128>)
@@ -2532,6 +2554,7 @@ class internal
             at += head_write(out, at, major_type::byte_string, digits);
             auto const bytes = big_endian(magnitude);
             return bytes_write(out, at, std::span<char const>(bytes).last(digits));
+#endif
         } else if constexpr (is_std_variant<U>) {
             return std::visit([&](auto const &e) { return generic_write(out, at, e); }, value);
         } else if constexpr (std::is_enum_v<U>) {
@@ -2795,9 +2818,11 @@ consteval std::size_t fixed_size()
         return initial_byte_size;
     else if constexpr (internal::has_fixed_underlying_type<U>)
         return fixed_size<std::underlying_type_t<U>>();
+#ifdef __SIZEOF_INT128__
     else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>)
         return internal::head_size(std::to_underlying(internal::tag_number::negative_bignum)) +
                internal::head_size(sizeof(U)) + sizeof(U);
+#endif
     else if constexpr (std::is_integral_v<U> && std::has_single_bit(sizeof(U)) && sizeof(U) <= sizeof(std::uint64_t))
         return initial_byte_size + sizeof(U);
     else if constexpr (std::is_floating_point_v<U>) {

@@ -180,11 +180,13 @@ TEST_CASE("generic: a CTAP2 getAssertion response")
 // are simple values of one and two bytes.
 TEST_CASE("generic: bignums and simple values of RFC 8949 Appendix A")
 {
+#ifdef __SIZEOF_INT128__
     round_trip<unsigned __int128>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
                                   static_cast<unsigned __int128>(1) << 64);
     round_trip<__int128>("\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
                          -1 - (static_cast<__int128>(1) << 64));
     round_trip<__int128>("\x39\x03\xe7"s, -1000);
+#endif
     round_trip<cbor::simple_value>("\xf0"s, static_cast<cbor::simple_value>(16));
     round_trip<cbor::simple_value>("\xf8\xff"s, static_cast<cbor::simple_value>(255));
     CHECK_EQ(cbor::generic::decode<cbor::simple_value>("\xf8\x10"s).error(), error::syntax_error);
