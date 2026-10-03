@@ -45,6 +45,11 @@
 namespace cbor
 {
 
+#ifdef __SIZEOF_INT128__
+__extension__ typedef __int128 int128;
+__extension__ typedef unsigned __int128 uint128;
+#endif
+
 enum class error {
     too_little_data = 1,
     syntax_error,
@@ -570,7 +575,7 @@ class internal
         } else if constexpr (std::is_enum_v<U>) {
             zero_initialized_encode<std::underlying_type_t<U>>(bytes);
 #ifdef __SIZEOF_INT128__
-        } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
+        } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             head_encode(bytes, major_type::tag, std::to_underlying(tag_number::unsigned_bignum));
             head_encode(bytes, major_type::byte_string, sizeof(U));
             bytes.resize(bytes.size() + sizeof(U));
@@ -640,11 +645,11 @@ class internal
     }
 
 #ifdef __SIZEOF_INT128__
-    static constexpr std::array<char, sizeof(unsigned __int128)> big_endian(unsigned __int128 const value)
+    static constexpr std::array<char, sizeof(uint128)> big_endian(uint128 const value)
     {
         auto const high = big_endian(static_cast<std::uint64_t>(value >> 64));
         auto const low = big_endian(static_cast<std::uint64_t>(value));
-        std::array<char, sizeof(unsigned __int128)> bytes;
+        std::array<char, sizeof(uint128)> bytes;
         std::ranges::copy(high, bytes.begin());
         std::ranges::copy(low, std::ranges::next(bytes.begin(), sizeof(std::uint64_t)));
         return bytes;
@@ -665,7 +670,7 @@ class internal
             return std::bit_cast<std::uint64_t>(value);
 #ifdef __SIZEOF_INT128__
         else
-            return std::bit_cast<unsigned __int128>(static_cast<std::float128_t>(value));
+            return std::bit_cast<uint128>(static_cast<std::float128_t>(value));
 #endif
     }
 
@@ -844,10 +849,10 @@ class internal
         } else if constexpr (std::is_enum_v<U>) {
             position = value_encode<std::underlying_type_t<U>>(out, field, std::to_underlying(value), position);
 #ifdef __SIZEOF_INT128__
-        } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
-            unsigned __int128 magnitude = static_cast<unsigned __int128>(value);
-            if constexpr (std::same_as<U, __int128>) {
-                unsigned __int128 const sign = static_cast<unsigned __int128>(value >> 127);
+        } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
+            uint128 magnitude = static_cast<uint128>(value);
+            if constexpr (std::same_as<U, int128>) {
+                uint128 const sign = static_cast<uint128>(value >> 127);
                 field.front() = static_cast<char>(std::to_underlying(major_type::tag) << 5 |
                                                   (std::to_underlying(tag_number::unsigned_bignum) +
                                                    static_cast<int>(sign & 1)));
@@ -938,10 +943,10 @@ class internal
     }
 
 #ifdef __SIZEOF_INT128__
-    static unsigned __int128 unsigned128_read(std::span<char const, sizeof(unsigned __int128)> const field)
+    static uint128 unsigned128_read(std::span<char const, sizeof(uint128)> const field)
     {
-        auto const high = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(field.first<sizeof(std::uint64_t)>()));
-        auto const low = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(field.last<sizeof(std::uint64_t)>()));
+        auto const high = static_cast<uint128>(unsigned_read<std::uint64_t>(field.first<sizeof(std::uint64_t)>()));
+        auto const low = static_cast<uint128>(unsigned_read<std::uint64_t>(field.last<sizeof(std::uint64_t)>()));
         return high << 64 | low;
     }
 #endif
@@ -956,10 +961,10 @@ class internal
         } else if constexpr (has_fixed_underlying_type<U>) {
             return static_cast<U>(fixed_value_read<std::underlying_type_t<U>>(field));
 #ifdef __SIZEOF_INT128__
-        } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
-            unsigned __int128 const magnitude = unsigned128_read(field.template last<sizeof(U)>());
-            if constexpr (std::same_as<U, __int128>) {
-                unsigned __int128 const sign = -static_cast<unsigned __int128>(head & 1);
+        } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
+            uint128 const magnitude = unsigned128_read(field.template last<sizeof(U)>());
+            if constexpr (std::same_as<U, int128>) {
+                uint128 const sign = -static_cast<uint128>(head & 1);
                 return static_cast<U>(magnitude ^ sign);
             } else {
                 return magnitude;
@@ -974,7 +979,7 @@ class internal
         } else {
             using B = decltype(float_bits(U{}));
 #ifdef __SIZEOF_INT128__
-            if constexpr (std::same_as<B, unsigned __int128>) {
+            if constexpr (std::same_as<B, uint128>) {
                 auto const bits = unsigned128_read(field.template last<sizeof(B)>());
                 return static_cast<U>(std::bit_cast<std::float128_t>(bits));
             } else
@@ -2027,7 +2032,7 @@ class internal
 
     template <class U>
 #ifdef __SIZEOF_INT128__
-    static constexpr bool is_wide_integer = std::same_as<U, __int128> || std::same_as<U, unsigned __int128>;
+    static constexpr bool is_wide_integer = std::same_as<U, int128> || std::same_as<U, uint128>;
 #else
     static constexpr bool is_wide_integer = false;
 #endif
@@ -2128,7 +2133,7 @@ class internal
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         bool negative = h->major == major_type::negative_integer;
-        unsigned __int128 magnitude = h->argument;
+        uint128 magnitude = h->argument;
         if (h->major == major_type::tag) {
             if (h->argument != std::to_underlying(tag_number::unsigned_bignum) &&
                 h->argument != std::to_underlying(tag_number::negative_bignum)) [[unlikely]]
@@ -2143,7 +2148,7 @@ class internal
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             std::string_view const digits = magnitude_without_leading_zeros(*bytes);
-            if (digits.size() > sizeof(unsigned __int128)) [[unlikely]]
+            if (digits.size() > sizeof(uint128)) [[unlikely]]
                 return std::unexpected(error::number_out_of_range);
             magnitude = 0;
             for (char const c : digits)
@@ -2151,14 +2156,14 @@ class internal
         } else if (h->major != major_type::unsigned_integer && !negative) [[unlikely]] {
             return std::unexpected(error::incorrect_type);
         }
-        if constexpr (std::same_as<U, unsigned __int128>) {
+        if constexpr (std::same_as<U, uint128>) {
             if (negative) [[unlikely]]
                 return std::unexpected(error::number_out_of_range);
             out = magnitude;
         } else {
-            if (magnitude > static_cast<unsigned __int128>(std::numeric_limits<__int128>::max())) [[unlikely]]
+            if (magnitude > static_cast<uint128>(std::numeric_limits<int128>::max())) [[unlikely]]
                 return std::unexpected(error::number_out_of_range);
-            out = negative ? -1 - static_cast<__int128>(magnitude) : static_cast<__int128>(magnitude);
+            out = negative ? -1 - static_cast<int128>(magnitude) : static_cast<int128>(magnitude);
         }
         return {};
     }
@@ -2437,13 +2442,13 @@ class internal
 #ifdef __SIZEOF_INT128__
         } else if constexpr (is_wide_integer<U>) {
             bool negative = false;
-            if constexpr (std::same_as<U, __int128>)
+            if constexpr (std::same_as<U, int128>)
                 negative = value < 0;
-            unsigned __int128 const magnitude =
-                negative ? static_cast<unsigned __int128>(-1 - value) : static_cast<unsigned __int128>(value);
+            uint128 const magnitude =
+                negative ? static_cast<uint128>(-1 - value) : static_cast<uint128>(value);
             if (magnitude <= std::numeric_limits<std::uint64_t>::max())
                 return head_size(static_cast<std::uint64_t>(magnitude));
-            std::size_t const digits = sizeof(unsigned __int128) - std::countl_zero(magnitude) / 8;
+            std::size_t const digits = sizeof(uint128) - std::countl_zero(magnitude) / 8;
             return initial_byte_size + head_size(digits) + digits;
 #endif
         } else if constexpr (is_std_variant<U>) {
@@ -2527,15 +2532,15 @@ class internal
 #ifdef __SIZEOF_INT128__
         } else if constexpr (is_wide_integer<U>) {
             bool negative = false;
-            if constexpr (std::same_as<U, __int128>)
+            if constexpr (std::same_as<U, int128>)
                 negative = value < 0;
-            unsigned __int128 const magnitude =
-                negative ? static_cast<unsigned __int128>(-1 - value) : static_cast<unsigned __int128>(value);
+            uint128 const magnitude =
+                negative ? static_cast<uint128>(-1 - value) : static_cast<uint128>(value);
             if (magnitude <= std::numeric_limits<std::uint64_t>::max())
                 return at + head_write(out, at,
                                        negative ? major_type::negative_integer : major_type::unsigned_integer,
                                        static_cast<std::uint64_t>(magnitude));
-            std::size_t const digits = sizeof(unsigned __int128) - std::countl_zero(magnitude) / 8;
+            std::size_t const digits = sizeof(uint128) - std::countl_zero(magnitude) / 8;
             at += head_write(out, at, major_type::tag,
                              std::to_underlying(negative ? tag_number::negative_bignum : tag_number::unsigned_bignum));
             at += head_write(out, at, major_type::byte_string, digits);
@@ -2806,7 +2811,7 @@ consteval std::size_t fixed_size()
     else if constexpr (internal::has_fixed_underlying_type<U>)
         return fixed_size<std::underlying_type_t<U>>();
 #ifdef __SIZEOF_INT128__
-    else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>)
+    else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>)
         return internal::head_size(std::to_underlying(internal::tag_number::negative_bignum)) +
                internal::head_size(sizeof(U)) + sizeof(U);
 #endif

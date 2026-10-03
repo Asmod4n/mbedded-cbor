@@ -181,11 +181,11 @@ TEST_CASE("generic: a CTAP2 getAssertion response")
 TEST_CASE("generic: bignums and simple values of RFC 8949 Appendix A")
 {
 #ifdef __SIZEOF_INT128__
-    round_trip<unsigned __int128>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
-                                  static_cast<unsigned __int128>(1) << 64);
-    round_trip<__int128>("\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
-                         -1 - (static_cast<__int128>(1) << 64));
-    round_trip<__int128>("\x39\x03\xe7"s, -1000);
+    round_trip<cbor::uint128>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
+                                  static_cast<cbor::uint128>(1) << 64);
+    round_trip<cbor::int128>("\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
+                         -1 - (static_cast<cbor::int128>(1) << 64));
+    round_trip<cbor::int128>("\x39\x03\xe7"s, -1000);
 #endif
     round_trip<cbor::simple_value>("\xf0"s, static_cast<cbor::simple_value>(16));
     round_trip<cbor::simple_value>("\xf8\xff"s, static_cast<cbor::simple_value>(255));

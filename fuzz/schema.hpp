@@ -59,8 +59,8 @@ struct numbers {
     std::uint32_t u32;
     std::int64_t i64;
     std::uint64_t u64;
-    __int128 i128;
-    unsigned __int128 u128;
+    cbor::int128 i128;
+    cbor::uint128 u128;
     std::float16_t f16;
     float f32;
     double f64;
@@ -379,9 +379,9 @@ void fill(T &v, source &in, int const depth)
         v = std::byte{in.byte()};
     } else if constexpr (std::is_same_v<T, char>) {
         v = static_cast<char>(in.byte() & 0x7f);
-    } else if constexpr (std::is_integral_v<T> || std::is_same_v<T, __int128> ||
-                         std::is_same_v<T, unsigned __int128>) {
-        unsigned __int128 bits = 0;
+    } else if constexpr (std::is_integral_v<T> || std::is_same_v<T, cbor::int128> ||
+                         std::is_same_v<T, cbor::uint128>) {
+        cbor::uint128 bits = 0;
         for (std::size_t i = 0; i < sizeof(T); ++i)
             bits = bits << 8 | in.byte();
         v = static_cast<T>(bits);
