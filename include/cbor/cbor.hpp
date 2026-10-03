@@ -30,9 +30,6 @@
 #if CBOR_SIMDUTF
 #include <simdutf.h>
 #endif
-#if __AVX512BW__ && __BMI2__
-#include <immintrin.h>
-#endif
 #include <system_error>
 #include <type_traits>
 #include <unordered_map>
@@ -752,21 +749,9 @@ class internal
         }
     };
 
-    [[gnu::always_inline]] static void bytes_copy(std::span<std::byte const> const from, std::span<std::byte> const to)
-    {
-#if __AVX512BW__ && __BMI2__
-        if (from.size() <= sizeof(__m512i)) [[likely]] {
-            __mmask64 const mask = _bzhi_u64(~std::uint64_t{0}, static_cast<unsigned>(from.size()));
-            _mm512_mask_storeu_epi8(to.data(), mask, _mm512_maskz_loadu_epi8(mask, from.data()));
-            return;
-        }
-#endif
-        std::copy(from.begin(), from.end(), to.begin());
-    }
-
     static constexpr std::size_t head_padding = sizeof(std::uint64_t);
 
-    static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
+    [[gnu::always_inline]] static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
                                   std::uint64_t const argument)
     {
         auto const field = out.subspan(at).template first<initial_byte_size + sizeof(std::uint64_t)>();
@@ -782,7 +767,7 @@ class internal
     }
 
     template <class E>
-    static void zero_initialized_copy(std::span<char, fixed_size<E>()> const field)
+    [[gnu::always_inline]] static void zero_initialized_copy(std::span<char, fixed_size<E>()> const field)
     {
         constexpr std::size_t n = fixed_size<E>();
         std::span<char const, n> const from{zero_initialized<E>().data(), n};
@@ -790,7 +775,7 @@ class internal
     }
 
     template <class E, class R>
-    static std::size_t elements_encode(std::span<char> const out, std::size_t const data, R const &range,
+    [[gnu::always_inline]] static std::size_t elements_encode(std::span<char> const out, std::size_t const data, R const &range,
                                        std::size_t position)
     {
         constexpr std::size_t size = fixed_size<E>();
@@ -805,7 +790,7 @@ class internal
     }
 
     template <class V>
-    static std::size_t reference_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
+    [[gnu::always_inline]] static std::size_t reference_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
                                         V const &value, std::size_t position)
     {
         using U = std::remove_cv_t<V>;
@@ -826,7 +811,7 @@ class internal
                                    length);
             data = position;
             auto const from = std::as_bytes(std::span(value));
-            bytes_copy(from, std::as_writable_bytes(out.subspan(data, length)));
+            std::copy(from.begin(), from.end(), std::as_writable_bytes(out.subspan(data, length)).begin());
             position += length;
         } else if constexpr (is_map<U>) {
             using K = typename U::key_type;
@@ -861,7 +846,7 @@ class internal
     }
 
     template <class T>
-    static std::size_t value_encode(std::span<char> const out, std::span<char, fixed_size<T>()> const field,
+    [[gnu::always_inline]] static std::size_t value_encode(std::span<char> const out, std::span<char, fixed_size<T>()> const field,
                                     T const &value, std::size_t position)
     {
         using U = std::remove_cv_t<T>;
@@ -1586,7 +1571,7 @@ class internal
     }
 
     template <class T>
-    static std::size_t encoded_write(std::span<char> const bytes, T const &value, second_item const &second)
+    [[gnu::always_inline]] static std::size_t encoded_write(std::span<char> const bytes, T const &value, second_item const &second)
     {
         constexpr std::size_t first = fixed_size<T>();
         auto const root = bytes.template first<first>();
@@ -2540,7 +2525,7 @@ class internal
 
     static std::size_t bytes_write(std::span<char> const out, std::size_t const at, std::span<char const> const bytes)
     {
-        bytes_copy(std::as_bytes(bytes), std::as_writable_bytes(out.subspan(at, bytes.size())));
+        std::ranges::copy(bytes, out.subspan(at, bytes.size()).begin());
         return at + bytes.size();
     }
 
@@ -2605,7 +2590,7 @@ class internal
         } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
             at += head_write(out, at, major_type::byte_string, value.size());
             if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>)
-                bytes_copy(std::as_bytes(std::span(value)), std::as_writable_bytes(out.subspan(at, value.size())));
+                std::ranges::copy(value, std::as_writable_bytes(out.subspan(at, value.size())).begin());
             else
                 std::ranges::transform(value, out.subspan(at, value.size()).begin(),
                                        [](auto const b) { return static_cast<char>(b); });
