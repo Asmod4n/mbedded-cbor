@@ -449,7 +449,7 @@ inline bool same_float(float const a, float const b)
 // part of variable size reads an offset and a length from them, so those must stay inside the message.
 inline void schema_read(std::string_view const input)
 {
-    auto const doc = cbor::decode<vehicle>(input);
+    auto const doc = cbor::view<vehicle>(input);
     if (!doc)
         return;
     (void)cbor::at_path_compiled<vehicle, ".balance">(*doc);
@@ -511,7 +511,7 @@ inline void schema_round_trip(std::string_view const input)
     auto const second = cbor::doc_end<16>(std::string_view(w.bytes).substr(*first));
     require(second.has_value() && *first + *second == w.bytes.size());
 
-    auto const doc = cbor::decode<vehicle>(w.bytes);
+    auto const doc = cbor::view<vehicle>(w.bytes);
     require(doc.has_value());
     require(*cbor::at_path_compiled<vehicle, ".make">(*doc) == v.make);
     require(cbor::at_path_compiled<vehicle, ".balance">(*doc) == v.balance);
