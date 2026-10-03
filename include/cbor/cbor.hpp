@@ -11,6 +11,7 @@
 #include <expected>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -20,6 +21,8 @@
 #include <stdfloat>
 #endif
 #include <string>
+#include <ranges>
+#include <stdexcept>
 #include <string_view>
 #if CBOR_SIMDUTF
 #include <simdutf.h>
@@ -289,32 +292,14 @@ std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &byte
 template <std::size_t DepthMax>
 std::expected<lazy, error> decode(std::string bytes);
 
-template <std::size_t DepthMax>
-std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t index);
-
-template <std::size_t DepthMax>
-std::expected<lazy, error> lazy_at(lazy const &l, std::string_view key);
-
 template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l);
-
-template <class T>
-    requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-             std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
-             std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-std::expected<T, error> lazy_get(lazy const &l);
 
 template <std::size_t DepthMax>
 struct lazy_elements;
 
 template <std::size_t DepthMax>
 struct lazy_entries;
-
-template <std::size_t DepthMax>
-std::expected<lazy_elements<DepthMax>, error> lazy_elements_of(lazy const &array);
-
-template <std::size_t DepthMax>
-std::expected<lazy_entries<DepthMax>, error> lazy_entries_of(lazy const &map);
 
 struct path_step {
     enum class kind { key, index, wildcard } kind;
@@ -329,7 +314,36 @@ template <std::size_t DepthMax>
 std::expected<std::size_t, error> doc_end(std::string_view bytes);
 
 template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Host, class Writer>
-std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value);
+std::expected<void, std::error_code> encode(Host &host, Writer &&target, typename Host::value const &value);
+
+template <class T, class E = error>
+struct result : std::expected<T, E> {
+    using std::expected<T, E>::expected;
+
+#if __cpp_exceptions
+    operator T() const &
+    {
+        if (!this->has_value()) [[unlikely]] {
+            if constexpr (std::same_as<E, std::errc>)
+                throw std::length_error(std::make_error_code(this->error()).message());
+            else
+                throw std::system_error(make_error_code(this->error()));
+        }
+        return **this;
+    }
+
+    operator T() &&
+    {
+        if (!this->has_value()) [[unlikely]] {
+            if constexpr (std::same_as<E, std::errc>)
+                throw std::length_error(std::make_error_code(this->error()).message());
+            else
+                throw std::system_error(make_error_code(this->error()));
+        }
+        return std::move(**this);
+    }
+#endif
+};
 
 #if __cpp_impl_reflection
 template <class T>
@@ -341,14 +355,14 @@ consteval std::size_t no_fixed_size();
 template <class T, std::meta::info Member>
 consteval std::size_t member_offset();
 
-template <class Writer, class T>
+template <class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
-std::expected<void, std::errc> encode(Writer &writer, T const &value);
+result<std::string, std::errc> encode(T const &value);
 
 template <class T>
 struct document {
     std::string_view bytes;
-    std::size_t offset;
+    std::span<char const, fixed_size<T>()> field;
     std::size_t floor;
 };
 
@@ -898,31 +912,31 @@ class internal
     }
 
     template <class V>
-    static V unsigned_read(std::string_view const bytes, std::size_t const at)
+    static V unsigned_read(std::span<char const, sizeof(V)> const field)
     {
         std::array<char, sizeof(V)> big;
-        std::ranges::copy(bytes.substr(at, sizeof(V)), big.begin());
+        std::ranges::copy(field, big.begin());
         return std::byteswap(std::bit_cast<V>(big));
     }
 
-    static unsigned __int128 unsigned128_read(std::string_view const bytes, std::size_t const at)
+    static unsigned __int128 unsigned128_read(std::span<char const, sizeof(unsigned __int128)> const field)
     {
-        auto const high = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(bytes, at));
-        auto const low = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(bytes, at + sizeof(std::uint64_t)));
+        auto const high = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(field.first<sizeof(std::uint64_t)>()));
+        auto const low = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(field.last<sizeof(std::uint64_t)>()));
         return high << 64 | low;
     }
 
     template <class T>
-    static T fixed_value_read(std::string_view const bytes, std::size_t const at)
+    static T fixed_value_read(std::span<char const, fixed_size<T>()> const field)
     {
         using U = std::remove_cv_t<T>;
-        auto const head = static_cast<unsigned char>(bytes.substr(at, 1).front());
+        auto const head = static_cast<unsigned char>(field.front());
         if constexpr (std::same_as<U, bool>) {
             return (head & 1) != 0;
         } else if constexpr (has_fixed_underlying_type<U>) {
-            return static_cast<U>(fixed_value_read<std::underlying_type_t<U>>(bytes, at));
+            return static_cast<U>(fixed_value_read<std::underlying_type_t<U>>(field));
         } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
-            unsigned __int128 const magnitude = unsigned128_read(bytes, at + fixed_size<U>() - sizeof(U));
+            unsigned __int128 const magnitude = unsigned128_read(field.template last<sizeof(U)>());
             if constexpr (std::same_as<U, __int128>) {
                 unsigned __int128 const sign = -static_cast<unsigned __int128>(head & 1);
                 return static_cast<U>(magnitude ^ sign);
@@ -930,18 +944,18 @@ class internal
                 return magnitude;
             }
         } else if constexpr (std::unsigned_integral<U>) {
-            return unsigned_read<U>(bytes, at + initial_byte_size);
+            return unsigned_read<U>(field.template last<sizeof(U)>());
         } else if constexpr (std::signed_integral<U>) {
             using M = std::make_unsigned_t<U>;
             M const sign = static_cast<M>(-static_cast<M>((head >> 5) & 1));
-            return static_cast<U>(unsigned_read<M>(bytes, at + initial_byte_size) ^ sign);
+            return static_cast<U>(unsigned_read<M>(field.template last<sizeof(M)>()) ^ sign);
         } else {
             using B = decltype(float_bits(U{}));
             if constexpr (std::same_as<B, unsigned __int128>) {
-                auto const bits = unsigned128_read(bytes, at + fixed_size<U>() - sizeof(B));
+                auto const bits = unsigned128_read(field.template last<sizeof(B)>());
                 return static_cast<U>(std::bit_cast<std::float128_t>(bits));
             } else {
-                auto const bits = unsigned_read<B>(bytes, at + fixed_size<U>() - sizeof(B));
+                auto const bits = unsigned_read<B>(field.template last<sizeof(B)>());
                 using F = std::conditional_t<sizeof(B) == sizeof(std::uint16_t), std::float16_t,
                                              std::conditional_t<sizeof(B) == sizeof(std::uint32_t), std::float32_t,
                                                                 std::float64_t>>;
@@ -955,11 +969,12 @@ class internal
         std::size_t length;
     };
 
-    static std::expected<reference, error> reference_read(std::string_view const bytes, std::size_t const at,
+    static std::expected<reference, error> reference_read(std::string_view const bytes,
+                                                           std::span<char const, dynamic_type_sizes> const field,
                                                            std::size_t const floor, std::size_t const element)
     {
-        std::size_t const data = unsigned_read<std::uint32_t>(bytes, at + 2);
-        std::size_t const length = unsigned_read<std::uint32_t>(bytes, at + 7);
+        std::size_t const data = unsigned_read<std::uint32_t>(field.subspan<2, sizeof(std::uint32_t)>());
+        std::size_t const length = unsigned_read<std::uint32_t>(field.subspan<7, sizeof(std::uint32_t)>());
         std::size_t size;
         std::size_t end;
         if (data < floor || ckd_mul(&size, length, element) || ckd_add(&end, data, size) || end > bytes.size())
@@ -975,19 +990,19 @@ class internal
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; })
-                return cbor::document<U>{};
+                return std::type_identity<cbor::document<U>>{};
             else if constexpr (is_fixed_string<U>)
-                return std::string_view{};
+                return std::type_identity<std::string_view>{};
             else if constexpr (is_optional<U>)
-                return std::optional<typename U::value_type>{};
+                return std::type_identity<std::optional<typename U::value_type>>{};
             else if constexpr (is_text_range<U> || is_byte_range<U>)
-                return std::string_view{};
+                return std::type_identity<std::string_view>{};
             else if constexpr (is_map<U>)
-                return cbor::map<typename U::key_type, typename U::mapped_type>{};
+                return std::type_identity<cbor::map<typename U::key_type, typename U::mapped_type>>{};
             else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; })
-                return cbor::array<std::ranges::range_value_t<U>>{};
+                return std::type_identity<cbor::array<std::ranges::range_value_t<U>>>{};
             else
-                return U{};
+                return std::type_identity<U>{};
         } else if constexpr (path.substr(At, 1) == ".") {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
@@ -1024,53 +1039,58 @@ class internal
     }
 
     template <class T, fixed_string Path, std::size_t At>
-    static auto path_walk(std::string_view const bytes, std::size_t const offset, std::size_t const floor)
-        -> std::expected<decltype(path_result<T, Path, At>()), error>
+    static auto path_walk(std::string_view const bytes, std::span<char const, fixed_size<T>()> const field,
+                          std::size_t const floor)
+        -> std::conditional_t<path_reads_wire<T, Path, At>(),
+                              std::expected<typename decltype(path_result<T, Path, At>())::type, error>,
+                              typename decltype(path_result<T, Path, At>())::type>
     {
         using U = std::remove_cv_t<T>;
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
-                return cbor::document<U>{bytes, offset, floor};
+                return cbor::document<U>{bytes, field, floor};
             } else if constexpr (is_fixed_string<U>) {
-                return bytes.substr(offset + fixed_size<U>() - fixed_length<U>::value, fixed_length<U>::value);
+                return std::string_view(field.template last<fixed_length<U>::value>());
             } else if constexpr (is_optional<U>) {
                 using E = typename U::value_type;
-                auto const r = reference_read(bytes, offset, floor, fixed_size<E>());
+                auto const r = reference_read(bytes, field, floor, fixed_size<E>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (r->length == 0)
                     return std::optional<E>{};
-                return std::optional<E>{fixed_value_read<E>(bytes, r->data)};
+                return std::optional<E>{fixed_value_read<E>(std::span<char const>(bytes).subspan(r->data).template first<fixed_size<E>()>())};
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
-                auto const r = reference_read(bytes, offset, floor, 1);
+                auto const r = reference_read(bytes, field, floor, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return bytes.substr(r->data, r->length);
             } else if constexpr (is_map<U>) {
                 using K = typename U::key_type;
                 using V = typename U::mapped_type;
-                auto const r = reference_read(bytes, offset, floor, fixed_size<K>() + fixed_size<V>());
+                auto const r = reference_read(bytes, field, floor, fixed_size<K>() + fixed_size<V>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return cbor::map<K, V>{bytes, r->data, r->length};
             } else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; }) {
                 using E = std::ranges::range_value_t<U>;
-                auto const r = reference_read(bytes, offset, floor, fixed_size<E>());
+                auto const r = reference_read(bytes, field, floor, fixed_size<E>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return cbor::array<E>{bytes, r->data, r->length};
             } else {
-                return fixed_value_read<U>(bytes, offset);
+                return fixed_value_read<U>(field);
             }
         } else if constexpr (path.substr(At, 1) == ".") {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
             if constexpr (m == std::meta::info{})
                 return no_fixed_size<T>();
-            else
-                return path_walk<typename[:std::meta::type_of(m):], Path, end>(bytes, offset + member_offset<U, m>(),
-                                                                               floor);
+            else {
+                using M = typename[:std::meta::type_of(m):];
+                return path_walk<M, Path, end>(bytes, field.template subspan<member_offset<U, m>(), fixed_size<M>()>(),
+                                               floor);
+            }
         } else {
             constexpr std::size_t close = index_end(path, At);
             constexpr std::size_t i = index_of(path.substr(At + 1, close - At - 1));
@@ -1082,19 +1102,134 @@ class internal
                 if constexpr (i >= n)
                     return no_fixed_size<T>();
                 else
-                    return path_walk<E, Path, close + 1>(bytes, offset + head_size(n) + i * fixed_size<E>(), floor);
+                    return path_walk<E, Path, close + 1>(
+                        bytes, field.template subspan<head_size(n) + i * fixed_size<E>(), fixed_size<E>()>(), floor);
             } else {
                 using E = std::ranges::range_value_t<U>;
-                auto const r = reference_read(bytes, offset, floor, fixed_size<E>());
+                auto const r = reference_read(bytes, field, floor, fixed_size<E>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (i >= r->length) [[unlikely]]
                     return std::unexpected(error::index_out_of_bounds);
-                return path_walk<E, Path, close + 1>(bytes, r->data + i * fixed_size<E>(),
-                                                     r->data + r->length * fixed_size<E>());
+                return path_walk<E, Path, close + 1>(
+                    bytes, std::span<char const>(bytes).subspan(r->data + i * fixed_size<E>()).template first<fixed_size<E>()>(),
+                    r->data + r->length * fixed_size<E>());
             }
         }
     }
+
+    template <class T>
+    static std::expected<void, error> value_read(T &out, std::string_view const bytes,
+                                                  std::span<char const, fixed_size<T>()> const field,
+                                                  std::size_t const floor)
+    {
+        using U = std::remove_cv_t<T>;
+        if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
+            std::expected<void, error> done;
+            template for (constexpr std::meta::info m :
+                          std::define_static_array(std::meta::nonstatic_data_members_of(
+                              ^^U, std::meta::access_context::unchecked()))) {
+                using M = typename[:std::meta::type_of(m):];
+                if (done)
+                    done = value_read(out.[:m:], bytes,
+                                      field.template subspan<member_offset<U, m>(), fixed_size<M>()>(), floor);
+            }
+            return done;
+        } else if constexpr (is_fixed_string<U>) {
+            auto const text = field.template last<fixed_length<U>::value>();
+            std::ranges::transform(text, std::ranges::begin(out), [](char const c) {
+                return static_cast<typename fixed_length<U>::element>(c);
+            });
+            return {};
+        } else if constexpr (requires { fixed_length<U>::value; }) {
+            using E = typename fixed_length<U>::element;
+            constexpr std::size_t n = fixed_length<U>::value;
+            std::expected<void, error> done;
+            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, n))) {
+                if (done)
+                    done = value_read(std::span(out).template subspan<i, 1>().front(), bytes,
+                                      field.template subspan<head_size(n) + i * fixed_size<E>(), fixed_size<E>()>(),
+                                      floor);
+            }
+            return done;
+        } else if constexpr (is_optional<U>) {
+            using E = typename U::value_type;
+            auto const r = reference_read(bytes, field, floor, fixed_size<E>());
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (r->length == 0) {
+                out.reset();
+                return {};
+            }
+            E element{};
+            if (auto const e = value_read(element, bytes,
+                                          std::span<char const>(bytes).subspan(r->data).template first<fixed_size<E>()>(),
+                                          r->data + fixed_size<E>());
+                !e) [[unlikely]]
+                return e;
+            out = std::move(element);
+            return {};
+        } else if constexpr (is_text_range<U> || is_byte_range<U>) {
+            auto const r = reference_read(bytes, field, floor, 1);
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            auto const part = bytes.substr(r->data, r->length);
+            out = U(part.begin(), part.end());
+            return {};
+        } else if constexpr (is_map<U>) {
+            using K = typename U::key_type;
+            using V = typename U::mapped_type;
+            constexpr std::size_t pair = fixed_size<K>() + fixed_size<V>();
+            auto const r = reference_read(bytes, field, floor, pair);
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            std::size_t const end = r->data + r->length * pair;
+            out.clear();
+            for (std::size_t i = 0; i < r->length; ++i) {
+                auto const at = std::span<char const>(bytes).subspan(r->data + i * pair).template first<pair>();
+                K key{};
+                V value{};
+                if (auto const e = value_read(key, bytes, at.template first<fixed_size<K>()>(), end); !e) [[unlikely]]
+                    return e;
+                if (auto const e = value_read(value, bytes, at.template last<fixed_size<V>()>(), end); !e) [[unlikely]]
+                    return e;
+                out.insert_or_assign(std::move(key), std::move(value));
+            }
+            return {};
+        } else if constexpr (std::ranges::sized_range<U>) {
+            using E = std::ranges::range_value_t<U>;
+            auto const r = reference_read(bytes, field, floor, fixed_size<E>());
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            std::size_t const end = r->data + r->length * fixed_size<E>();
+            out.clear();
+            out.reserve(r->length);
+            for (std::size_t i = 0; i < r->length; ++i) {
+                E element{};
+                auto const at =
+                    std::span<char const>(bytes).subspan(r->data + i * fixed_size<E>()).template first<fixed_size<E>()>();
+                if (auto const e = value_read(element, bytes, at, end); !e) [[unlikely]]
+                    return e;
+                out.push_back(std::move(element));
+            }
+            return {};
+        } else {
+            out = fixed_value_read<U>(field);
+            return {};
+        }
+    }
+
+    template <class T>
+        requires std::is_class_v<T> && std::is_aggregate_v<T>
+    friend result<T> decode(std::string_view const bytes);
+
+    template <class T>
+        requires std::is_class_v<T> && std::is_aggregate_v<T>
+    friend result<std::string, std::errc> encode(T const &value);
+
+    template <class T, class Target>
+        requires std::is_class_v<T> && std::is_aggregate_v<T>
+    friend result<std::size_t, std::errc> encode(T const &value, Target &&target);
 
     template <class T, fixed_string Path>
     friend auto at_path_compiled(cbor::document<T> const doc);
@@ -1104,9 +1239,7 @@ class internal
 
     template <class K, class V>
     friend struct cbor::map;
-    template <class Writer, class T>
-        requires std::is_class_v<T> && std::is_aggregate_v<T>
-    friend std::expected<void, std::errc> encode(Writer &writer, T const &value);
+
 
     template <class T>
     friend consteval std::size_t fixed_size();
@@ -1114,23 +1247,11 @@ class internal
 
     friend struct lazy;
 
-    template <class T>
-        requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-                 std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
-                 std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-    friend std::expected<T, error> lazy_get(lazy const &l);
-
     template <std::size_t>
     friend struct lazy_elements;
 
     template <std::size_t>
     friend struct lazy_entries;
-
-    template <std::size_t DepthMax>
-    friend std::expected<lazy_elements<DepthMax>, error> lazy_elements_of(lazy const &array);
-
-    template <std::size_t DepthMax>
-    friend std::expected<lazy_entries<DepthMax>, error> lazy_entries_of(lazy const &map);
 
     template <std::size_t DepthMax>
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes);
@@ -1279,18 +1400,110 @@ class internal
     struct string_sink {
         std::string bytes;
 
-        std::expected<void, std::errc> reserve(std::size_t const size)
-        {
-            bytes.reserve(bytes.size() + size);
-            return {};
-        }
-
         std::expected<void, std::errc> append(std::string_view const part)
         {
             bytes.append(part);
             return {};
         }
+
+        std::expected<void, std::errc> done(std::size_t)
+        {
+            return {};
+        }
+
+        template <class Op>
+        std::expected<void, std::errc> resize_and_overwrite(std::size_t const size, Op op)
+        {
+            std::size_t const at = bytes.size();
+            bytes.resize_and_overwrite(at + size, [&](char *const p, std::size_t const n) {
+                return at + op(std::span<char>(p, n).subspan(at, size));
+            });
+            return {};
+        }
     };
+
+    template <class C>
+    struct container_message {
+        C &container;
+
+        std::expected<void, std::errc> append(std::string_view const part)
+        {
+            std::size_t const at = std::ranges::size(container);
+            container.resize(at + part.size());
+            std::ranges::transform(part, std::ranges::next(std::ranges::begin(container), at),
+                                   [](char const c) { return static_cast<std::ranges::range_value_t<C>>(c); });
+            return {};
+        }
+
+        std::expected<void, std::errc> done(std::size_t)
+        {
+            return {};
+        }
+    };
+
+    template <class B>
+    struct span_message {
+        std::span<B> out;
+        std::size_t used;
+
+        std::expected<void, std::errc> append(std::string_view const part)
+        {
+            if (part.size() > out.size() - used) [[unlikely]]
+                return std::unexpected(std::errc::no_buffer_space);
+            std::ranges::transform(part, out.subspan(used).begin(), [](char const c) { return static_cast<B>(c); });
+            used += part.size();
+            return {};
+        }
+
+        std::expected<void, std::errc> done(std::size_t)
+        {
+            return {};
+        }
+    };
+
+    template <class C>
+    static constexpr bool byte_container = requires(C &c) {
+        c.resize(std::size_t{});
+        requires sizeof(std::ranges::range_value_t<C>) == 1;
+        requires std::ranges::contiguous_range<C>;
+    };
+
+    template <class Target>
+    static decltype(auto) message_of(Target &&target, std::size_t const hint)
+    {
+        using U = std::remove_cvref_t<Target>;
+        if constexpr (requires { typename U::element_type; } && requires { std::span(target); } &&
+                      !requires { target.resize(std::size_t{}); })
+            return span_message<typename U::element_type>{target, 0};
+        else if constexpr (byte_container<U>)
+            return container_message<U>{target};
+        else
+            return target.allocate(hint);
+    }
+
+#if __cpp_impl_reflection
+    template <class T>
+    static std::expected<std::size_t, std::errc> encoded_size(second_item const &second)
+    {
+        std::size_t second_size;
+        std::size_t size;
+        if (second.overflow || ckd_add(&second_size, head_size(second.items), second.bytes) ||
+            ckd_add(&size, fixed_size<T>(), second_size) || !std::in_range<std::uint32_t>(size)) [[unlikely]]
+            return std::unexpected(std::errc::value_too_large);
+        return size;
+    }
+
+    template <class T>
+    static std::size_t encoded_write(std::span<char> const bytes, T const &value, second_item const &second)
+    {
+        constexpr std::size_t first = fixed_size<T>();
+        auto const root = bytes.template first<first>();
+        zero_initialized_copy<T>(root);
+        std::size_t const position = first + head_write(bytes, first, major_type::array, second.items);
+        value_encode<T>(bytes, root, value, position);
+        return bytes.size() - head_padding;
+    }
+#endif
 
     struct no_marks {
         void mark(decoder const &)
@@ -1562,17 +1775,13 @@ class internal
     friend struct encoder;
 
     template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-    friend std::expected<void, std::error_code> encode(Host &host, Writer &writer,
+    friend std::expected<void, std::error_code> encode(Host &host, Writer &&target,
                                                        typename Host::value const &value);
 
     template <std::size_t, class, class, pass>
     friend class walker;
 
-    template <std::size_t DepthMax>
-    friend std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t index);
-
-    template <std::size_t DepthMax>
-    friend std::expected<lazy, error> lazy_at(lazy const &l, std::string_view key);
+    friend struct lazy;
 
     template <std::size_t DepthMax, class Host>
     friend std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l);
@@ -1733,6 +1942,27 @@ class internal
 struct lazy {
     std::shared_ptr<internal::document> document;
     std::size_t offset;
+
+    static result<lazy> from(std::string &&bytes);
+    static result<lazy> from(std::shared_ptr<std::string const> bytes);
+
+    template <std::size_t DepthMax = 64>
+    result<lazy> at(std::string_view key) const;
+
+    template <std::size_t DepthMax = 64>
+    result<lazy> at(std::int64_t index) const;
+
+    template <class T>
+        requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
+                 std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
+                 std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
+    result<T> get() const;
+
+    template <std::size_t DepthMax = 64>
+    result<lazy_elements<DepthMax>> elements() const;
+
+    template <std::size_t DepthMax = 64>
+    result<lazy_entries<DepthMax>> entries() const;
 };
 
 template <std::size_t DepthMax>
@@ -1945,21 +2175,30 @@ consteval std::size_t member_offset()
 
 template <class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
-std::expected<document<T>, error> decode(std::string_view const bytes)
+std::expected<document<T>, error> view(std::string_view const bytes)
 {
     if (bytes.size() < fixed_size<T>()) [[unlikely]]
         return std::unexpected(error::too_little_data);
-    return document<T>{bytes, 0, fixed_size<T>()};
+    return document<T>{bytes, std::span<char const>(bytes).first<fixed_size<T>()>(), fixed_size<T>()};
+}
+
+template <class T>
+    requires std::is_class_v<T> && std::is_aggregate_v<T>
+result<T> decode(std::string_view const bytes)
+{
+    auto const doc = view<T>(bytes);
+    if (!doc) [[unlikely]]
+        return std::unexpected(doc.error());
+    T out{};
+    if (auto const r = internal::value_read(out, doc->bytes, doc->field, doc->floor); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return out;
 }
 
 template <class T, fixed_string Path>
 auto at_path_compiled(document<T> const doc)
 {
-    auto const result = internal::path_walk<T, Path, 0>(doc.bytes, doc.offset, doc.floor);
-    if constexpr (internal::path_reads_wire<T, Path, 0>())
-        return result;
-    else
-        return *result;
+    return internal::path_walk<T, Path, 0>(doc.bytes, doc.field, doc.floor);
 }
 
 template <class E>
@@ -1974,12 +2213,13 @@ struct array {
     }
 
     auto at(std::size_t const index) const
-        -> std::expected<decltype(internal::path_result<E, fixed_string{""}, 0>()), error>
+        -> std::expected<typename decltype(internal::path_result<E, fixed_string{""}, 0>())::type, error>
     {
         if (index >= length) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
-        return internal::path_walk<E, fixed_string{""}, 0>(bytes, data + index * fixed_size<E>(),
-                                                          data + length * fixed_size<E>());
+        return internal::path_walk<E, fixed_string{""}, 0>(
+            bytes, std::span<char const>(bytes).subspan(data + index * fixed_size<E>()).template first<fixed_size<E>()>(),
+            data + length * fixed_size<E>());
     }
 
     struct iterator {
@@ -2032,21 +2272,22 @@ struct map {
     }
 
     auto key_at(std::size_t const index) const
-        -> std::expected<decltype(internal::path_result<K, fixed_string{""}, 0>()), error>
+        -> std::expected<typename decltype(internal::path_result<K, fixed_string{""}, 0>())::type, error>
     {
         if (index >= length) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
-        return internal::path_walk<K, fixed_string{""}, 0>(bytes, data + index * pair_size,
-                                                          data + length * pair_size);
+        return internal::path_walk<K, fixed_string{""}, 0>(
+            bytes, std::span<char const>(bytes).subspan(data + index * pair_size).template first<fixed_size<K>()>(), data + length * pair_size);
     }
 
     auto value_at(std::size_t const index) const
-        -> std::expected<decltype(internal::path_result<V, fixed_string{""}, 0>()), error>
+        -> std::expected<typename decltype(internal::path_result<V, fixed_string{""}, 0>())::type, error>
     {
         if (index >= length) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
-        return internal::path_walk<V, fixed_string{""}, 0>(bytes, data + index * pair_size + fixed_size<K>(),
-                                                          data + length * pair_size);
+        return internal::path_walk<V, fixed_string{""}, 0>(
+            bytes, std::span<char const>(bytes).subspan(data + index * pair_size + fixed_size<K>()).template first<fixed_size<V>()>(),
+            data + length * pair_size);
     }
 
     struct iterator {
@@ -2086,26 +2327,64 @@ struct map {
     }
 };
 
-template <class Writer, class T>
+template <class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
-std::expected<void, std::errc> encode(Writer &writer, T const &value)
+result<std::string, std::errc> encode(T const &value)
 {
     internal::second_item second;
     second.add(value);
-    constexpr std::size_t first = fixed_size<T>();
-    std::size_t second_size;
-    std::size_t size;
-    if (second.overflow || ckd_add(&second_size, internal::head_size(second.items), second.bytes) ||
-        ckd_add(&size, first, second_size) || !std::in_range<std::uint32_t>(size)) [[unlikely]]
-        return std::unexpected(std::errc::value_too_large);
-    return writer.resize_and_overwrite(size + internal::head_padding, [&](std::span<char> const out) {
-        auto const root = out.template first<first>();
-        internal::zero_initialized_copy<T>(root);
-        std::size_t const position = first + internal::head_write(out, first, major_type::array, second.items);
-        internal::value_encode<T>(out, root, value, position);
-        return size;
+    auto const size = internal::encoded_size<T>(second);
+    if (!size) [[unlikely]]
+        return std::unexpected(size.error());
+    std::string out;
+    out.resize_and_overwrite(*size + internal::head_padding, [&](char *const p, std::size_t const n) {
+        return internal::encoded_write(std::span<char>(p, n), value, second);
     });
+    return out;
 }
+
+template <class T, class Target>
+    requires std::is_class_v<T> && std::is_aggregate_v<T>
+result<std::size_t, std::errc> encode(T const &value, Target &&target)
+{
+    using U = std::remove_cvref_t<Target>;
+    internal::second_item second;
+    second.add(value);
+    auto const size = internal::encoded_size<T>(second);
+    if (!size) [[unlikely]]
+        return std::unexpected(size.error());
+    std::size_t const padded = *size + internal::head_padding;
+    if constexpr (std::same_as<U, std::string>) {
+        std::size_t const at = target.size();
+        target.resize_and_overwrite(at + padded, [&](char *const p, std::size_t const n) {
+            return at + internal::encoded_write(std::span<char>(p, n).subspan(at), value, second);
+        });
+        return *size;
+    } else if constexpr (internal::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
+        std::size_t const at = std::ranges::size(target);
+        target.resize(at + padded);
+        internal::encoded_write(std::span<char>(target).subspan(at), value, second);
+        target.resize(at + *size);
+        return *size;
+    } else if constexpr (!internal::byte_container<U> && requires { std::span<char>(target); }) {
+        std::span<char> const out(target);
+        if (out.size() >= padded) {
+            internal::encoded_write(out.first(padded), value, second);
+            return *size;
+        }
+    }
+    std::string bytes;
+    bytes.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
+        return internal::encoded_write(std::span<char>(p, n), value, second);
+    });
+    decltype(auto) message = internal::message_of(target, bytes.size());
+    if (auto const r = message.append(bytes); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (auto const r = message.done(bytes.size()); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return bytes.size();
+}
+
 #endif
 
 template <class Writer>
@@ -2113,6 +2392,7 @@ struct encoder {
     Writer &writer;
     std::array<char, 16384> block;
     std::size_t used = 0;
+    std::size_t written = 0;
 
     explicit encoder(Writer &w) : writer(w)
     {
@@ -2122,6 +2402,7 @@ struct encoder {
     {
         std::size_t const size = used;
         used = 0;
+        written += size;
         return writer.append(std::string_view(block.data(), size));
     }
 
@@ -2170,8 +2451,7 @@ struct encoder {
         }
         if (auto const r = flush(); !r) [[unlikely]]
             return r;
-        if (auto const r = writer.reserve(bytes.size()); !r) [[unlikely]]
-            return r;
+        written += bytes.size();
         return writer.append(bytes);
     }
 
@@ -2186,8 +2466,7 @@ struct encoder {
         }
         if (auto const r = flush(); !r) [[unlikely]]
             return r;
-        if (auto const r = writer.reserve(text.size()); !r) [[unlikely]]
-            return r;
+        written += text.size();
         return writer.append(text);
     }
     std::expected<void, std::errc> float_encode(double value)
@@ -2290,16 +2569,16 @@ std::expected<typename Host::value, error> decode(Host &host, std::string_view b
 enum class pass { plain, count, write };
 
 template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
-                                                 std::size_t depth, bool embedded);
+std::expected<std::size_t, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
+                                                        std::size_t depth, bool embedded);
 
 struct discarding_writer {
-    std::expected<void, std::errc> reserve(std::size_t)
+    std::expected<void, std::errc> append(std::string_view)
     {
         return {};
     }
 
-    std::expected<void, std::errc> append(std::string_view)
+    std::expected<void, std::errc> done(std::size_t)
     {
         return {};
     }
@@ -2323,8 +2602,8 @@ class walker
     std::error_code failure;
 
     template <std::size_t, sharedrefs, class H, class W>
-    friend std::expected<void, std::error_code> encode_from(H &host, W &writer, typename H::value const &value,
-                                                            std::size_t depth, bool embedded);
+    friend std::expected<std::size_t, std::error_code> encode_from(H &host, W &writer, typename H::value const &value,
+                                                                   std::size_t depth, bool embedded);
 
     walker(Host &h, Writer &w, sharing<Host> *s, std::size_t const d, bool const e)
         : host(h), out{w}, shared(s), depth(d), embedded(e)
@@ -2579,8 +2858,8 @@ public:
 };
 
 template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
-                                                std::size_t const depth, bool const embedded)
+std::expected<std::size_t, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
+                                                        std::size_t const depth, bool const embedded)
 {
     if constexpr (Sharing == sharedrefs::off) {
         walker<DepthMax, Host, Writer, pass::plain> walk{host, writer, nullptr, depth, embedded};
@@ -2588,6 +2867,7 @@ std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typ
         walk.keep(walk.out.flush());
         if (walk.failure) [[unlikely]]
             return std::unexpected(walk.failure);
+        return walk.out.written;
     } else {
         sharing<Host> shared;
         discarding_writer nothing;
@@ -2600,14 +2880,20 @@ std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typ
         write.keep(write.out.flush());
         if (write.failure) [[unlikely]]
             return std::unexpected(write.failure);
+        return write.out.written;
     }
-    return {};
 }
 
 template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value)
+std::expected<void, std::error_code> encode(Host &host, Writer &&target, typename Host::value const &value)
 {
-    return encode_from<DepthMax, Sharing>(host, writer, value, 0, false);
+    decltype(auto) message = internal::message_of(target, 0);
+    auto const size = encode_from<DepthMax, Sharing>(host, message, value, 0, false);
+    if (!size) [[unlikely]]
+        return std::unexpected(size.error());
+    if (auto const r = message.done(*size); !r) [[unlikely]]
+        return std::unexpected(std::make_error_code(r.error()));
+    return {};
 }
 
 template <std::size_t DepthMax>
@@ -2632,51 +2918,75 @@ std::expected<lazy, error> decode(std::string bytes)
     return decode<DepthMax>(std::make_shared<std::string const>(std::move(bytes)));
 }
 
-template <std::size_t DepthMax>
-std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
+template <>
+struct result<lazy, error> : std::expected<lazy, error> {
+    using std::expected<lazy, cbor::error>::expected;
+
+#if __cpp_exceptions
+    operator lazy() const
+    {
+        if (!has_value()) [[unlikely]]
+            throw std::system_error(make_error_code(error()));
+        return **this;
+    }
+#endif
+
+    template <std::size_t DepthMax = 64>
+    result at(std::string_view const key) const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).at<DepthMax>(key);
+    }
+
+    template <std::size_t DepthMax = 64>
+    result at(std::int64_t const index) const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).at<DepthMax>(index);
+    }
+
+    template <class T>
+    cbor::result<T> get() const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).get<T>();
+    }
+
+    template <std::size_t DepthMax = 64>
+    cbor::result<lazy_elements<DepthMax>> elements() const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).elements<DepthMax>();
+    }
+
+    template <std::size_t DepthMax = 64>
+    cbor::result<lazy_entries<DepthMax>> entries() const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).entries<DepthMax>();
+    }
+};
+
+inline result<lazy> lazy::from(std::shared_ptr<std::string const> bytes)
 {
-    auto const found = internal::container_resolve(l.document, l.offset);
-    if (!found) [[unlikely]]
-        return std::unexpected(found.error());
-    auto [source, h, d] = *found;
-    if (h.major == major_type::array) {
-        std::int64_t const size =
-            h.argument > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
-                ? std::numeric_limits<std::int64_t>::max()
-                : static_cast<std::int64_t>(h.argument);
-        std::int64_t const position = index < 0 ? index + size : index;
-        if (position < 0 || position >= size) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
-        for (std::int64_t i = 0; i < position; ++i)
-            if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-                return std::unexpected(r.error());
-        return lazy{source, source->bytes.size() - d.bytes.size()};
-    }
-    if (h.major != major_type::map) [[unlikely]]
-        return std::unexpected(error::not_indexable);
-    for (std::uint64_t i = 0; i < h.argument; ++i) {
-        internal::decoder probe = d;
-        auto const k = probe.head_decode();
-        if (!k) [[unlikely]]
-            return std::unexpected(k.error());
-        bool const match = (k->major == major_type::unsigned_integer && index >= 0 &&
-                            k->argument == static_cast<std::uint64_t>(index)) ||
-                           (k->major == major_type::negative_integer && index < 0 &&
-                            k->argument == static_cast<std::uint64_t>(-1 - index));
-        if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        if (match)
-            return lazy{source, source->bytes.size() - d.bytes.size()};
-        if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-            return std::unexpected(r.error());
-    }
-    return std::unexpected(error::key_not_found);
+    std::string_view const view = *bytes;
+    return lazy{std::make_shared<internal::document>(std::move(bytes), view, std::vector<std::size_t>{}, 0), 0};
+}
+
+inline result<lazy> lazy::from(std::string &&bytes)
+{
+    return from(std::make_shared<std::string const>(std::move(bytes)));
 }
 
 template <std::size_t DepthMax>
-std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
+result<lazy> lazy::at(std::string_view const key) const
 {
-    auto const found = internal::container_resolve(l.document, l.offset);
+    auto const found = internal::container_resolve(document, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [source, h, d] = *found;
@@ -2696,21 +3006,65 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
         }
         if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
-        if (match)
-            return lazy{source, source->bytes.size() - d.bytes.size()};
+        if (match) {
+            std::size_t const value = source->bytes.size() - d.bytes.size();
+            return lazy{source, value};
+        }
         if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
     return std::unexpected(error::key_not_found);
 }
-
+template <std::size_t DepthMax>
+result<lazy> lazy::at(std::int64_t const index) const
+{
+    auto const found = internal::container_resolve(document, offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto [source, h, d] = *found;
+    if (h.major == major_type::array) {
+        std::int64_t const size =
+            h.argument > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
+                ? std::numeric_limits<std::int64_t>::max()
+                : static_cast<std::int64_t>(h.argument);
+        std::int64_t const position = index < 0 ? index + size : index;
+        if (position < 0 || position >= size) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        for (std::int64_t i = 0; i < position; ++i)
+            if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
+        std::size_t const element = source->bytes.size() - d.bytes.size();
+        return lazy{source, element};
+    }
+    if (h.major != major_type::map) [[unlikely]]
+        return std::unexpected(error::not_indexable);
+    for (std::uint64_t i = 0; i < h.argument; ++i) {
+        internal::decoder probe = d;
+        auto const k = probe.head_decode();
+        if (!k) [[unlikely]]
+            return std::unexpected(k.error());
+        bool const match = (k->major == major_type::unsigned_integer && index >= 0 &&
+                            k->argument == static_cast<std::uint64_t>(index)) ||
+                           (k->major == major_type::negative_integer && index < 0 &&
+                            k->argument == static_cast<std::uint64_t>(-1 - index));
+        if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (match) {
+            std::size_t const value = source->bytes.size() - d.bytes.size();
+            return lazy{source, value};
+        }
+        if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+    }
+    return std::unexpected(error::key_not_found);
+}
 template <class T>
     requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
              std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-std::expected<T, error> lazy_get(lazy const &l)
+result<T> lazy::get() const
 {
-    auto const found = internal::container_resolve(l.document, l.offset);
+    auto const found = internal::container_resolve(document, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [source, h, d] = *found;
@@ -2765,7 +3119,10 @@ std::expected<T, error> lazy_get(lazy const &l)
     } else if constexpr (std::is_same_v<T, std::string_view>) {
         if (h.major != major_type::text_string) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        return d.text_string_decode(h.argument);
+        auto const text = d.text_string_decode(h.argument);
+        if (!text) [[unlikely]]
+            return std::unexpected(text.error());
+        return *text;
     } else if constexpr (std::is_same_v<T, typed_array>) {
         if (h.major != major_type::tag) [[unlikely]]
             return std::unexpected(error::incorrect_type);
@@ -2791,11 +3148,10 @@ std::expected<T, error> lazy_get(lazy const &l)
         return std::as_bytes(std::span(*bytes));
     }
 }
-
 template <std::size_t DepthMax>
-std::expected<lazy_elements<DepthMax>, error> lazy_elements_of(lazy const &array)
+result<lazy_elements<DepthMax>> lazy::elements() const
 {
-    auto const found = internal::container_resolve(array.document, array.offset);
+    auto const found = internal::container_resolve(document, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto const &[source, h, d] = *found;
@@ -2803,11 +3159,10 @@ std::expected<lazy_elements<DepthMax>, error> lazy_elements_of(lazy const &array
         return std::unexpected(error::not_indexable);
     return lazy_elements<DepthMax>{source, source->bytes.size() - d.bytes.size(), h.argument};
 }
-
 template <std::size_t DepthMax>
-std::expected<lazy_entries<DepthMax>, error> lazy_entries_of(lazy const &map)
+result<lazy_entries<DepthMax>> lazy::entries() const
 {
-    auto const found = internal::container_resolve(map.document, map.offset);
+    auto const found = internal::container_resolve(document, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto const &[source, h, d] = *found;
@@ -2815,7 +3170,6 @@ std::expected<lazy_entries<DepthMax>, error> lazy_entries_of(lazy const &map)
         return std::unexpected(error::not_indexable);
     return lazy_entries<DepthMax>{source, source->bytes.size() - d.bytes.size(), h.argument};
 }
-
 template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l)
 {
@@ -2884,17 +3238,17 @@ std::expected<typename Host::value, error> path_decode(Host &host, std::span<pat
     for (std::size_t i = 0; i < steps.size(); ++i) {
         path_step const &step = steps.subspan(i).front();
         if (step.kind == path_step::kind::key) {
-            auto const next = lazy_at<DepthMax>(at, step.key);
+            auto const next = at.at<DepthMax>(step.key);
             if (!next) [[unlikely]]
                 return std::unexpected(next.error());
             at = *next;
         } else if (step.kind == path_step::kind::index) {
-            auto const next = lazy_at<DepthMax>(at, step.index);
+            auto const next = at.at<DepthMax>(step.index);
             if (!next) [[unlikely]]
                 return std::unexpected(next.error());
             at = *next;
         } else {
-            auto const elements = lazy_elements_of<DepthMax>(at);
+            auto const elements = at.elements<DepthMax>();
             if (!elements) [[unlikely]]
                 return std::unexpected(elements.error());
             auto array = array_decode(

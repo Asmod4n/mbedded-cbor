@@ -295,7 +295,7 @@ void compare(N const *native, R const &read)
                 compare(&e, read.at(i));
                 ++i;
             }
-        } else if constexpr (requires { read.bytes; read.offset; }) {
+        } else if constexpr (requires { read.bytes; read.field; }) {
         } else {
             require(same_scalar(read, *native));
         }
@@ -328,7 +328,7 @@ void consume(R const &read, std::string_view const message, source &in)
         (void)read.at(static_cast<std::size_t>(in.number()));
         if (read.size() != 0)
             consume(read.at(in.number() % read.size()), message, in);
-    } else if constexpr (requires { read.bytes; read.offset; read.floor; }) {
+    } else if constexpr (requires { read.bytes; read.field; read.floor; }) {
         read_all(read, message, in);
     }
 }
@@ -344,11 +344,23 @@ void read_all(cbor::document<T> const doc, std::string_view const message, sourc
 }
 
 template <class T>
+void compare_all(T const &native, cbor::document<T> doc);
+
+template <class T>
 void read_target(std::string_view const message, source &in)
 {
-    auto const doc = cbor::decode<T>(message);
+    auto const doc = cbor::view<T>(message);
     if (doc)
         read_all(*doc, message, in);
+    auto const value = cbor::decode<T>(message);
+    if (value) {
+        require(doc.has_value());
+        auto const again = cbor::encode(*value);
+        require(again.has_value());
+        auto const reread = cbor::view<T>(*again);
+        require(reread.has_value());
+        compare_all(*value, *reread);
+    }
 }
 
 // A native value from the bytes of the input, member by member. Text is ASCII, because the encoder writes
@@ -430,13 +442,33 @@ void round_trip(source &in)
     T native{};
     fill(native, in, 0);
     string_writer w;
-    auto const written = cbor::encode(w, native);
+    auto const written = cbor::encode(native, w);
     require(written.has_value());
+    auto const whole = cbor::encode(native);
+    require(whole.has_value() && *whole == w.bytes && *written == w.bytes.size());
+    std::string prefixed = in.string();
+    std::size_t const before = prefixed.size();
+    require(cbor::encode(native, prefixed).has_value() && std::string_view(prefixed).substr(before) == w.bytes);
+    std::vector<char> chars(in.byte() % 4);
+    std::size_t const used = chars.size();
+    require(cbor::encode(native, chars).has_value() &&
+            std::string_view(chars.data(), chars.size()).substr(used) == w.bytes);
+    std::vector<char> room(in.number() % (w.bytes.size() + 16));
+    auto const placed = cbor::encode(native, std::span(room));
+    require(placed.has_value() == (room.size() >= w.bytes.size()));
+    if (placed)
+        require(std::string_view(room.data(), *placed) == w.bytes);
+    else
+        require(placed.error() == std::errc::no_buffer_space);
+    auto const back = cbor::decode<T>(w.bytes);
+    require(back.has_value());
+    auto const again = cbor::encode(*back);
+    require(again.has_value() && *again == w.bytes);
     auto const first = cbor::doc_end<64>(w.bytes);
     require(first.has_value());
     auto const second = cbor::doc_end<64>(std::string_view(w.bytes).substr(*first));
     require(second.has_value() && *first + *second == w.bytes.size());
-    auto const doc = cbor::decode<T>(w.bytes);
+    auto const doc = cbor::view<T>(w.bytes);
     require(doc.has_value());
     compare_all(native, *doc);
 }

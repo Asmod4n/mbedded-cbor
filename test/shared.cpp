@@ -482,13 +482,13 @@ TEST_CASE("lazy: a shared value keeps its identity")
 TEST_CASE("lazy: a reference to a mark before the target")
 {
     std::string const doc = "\xa2\x65outer\xd8\x1c\x82\x01\x02\x63ref\xd8\x1d\x00"s;
-    auto const ref = cbor::lazy_at<16>(*cbor::decode<16>(doc), "ref");
+    auto const ref = (*cbor::decode<16>(doc)).at<16>("ref");
     REQUIRE(ref.has_value());
     ref_host host;
     auto const r = cbor::lazy_decode<16>(host, *ref);
     REQUIRE(r.has_value());
     CHECK_EQ(std::get<std::uint64_t>(element(*r, 1)->kind), 2);
-    auto const inside = cbor::lazy_at<16>(*ref, 1);
+    auto const inside = ref->at<16>(1);
     REQUIRE(inside.has_value());
     auto const two = cbor::lazy_decode<16>(host, *inside);
     REQUIRE(two.has_value());
