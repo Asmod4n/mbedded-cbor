@@ -45,9 +45,11 @@ TEST_CASE("fixed_size: numbers and simple values have the size of head and argum
     // An enum has the size of its underlying type.
     CHECK_EQ(cbor::fixed_size<color>(), 3u);
     CHECK_EQ(cbor::fixed_size<std::byte>(), 2u);
+#ifdef __SIZEOF_INT128__
     // A 128-bit integer is tag 2 or 3 (one byte) and a byte string of 16 bytes (RFC 8949 3.4.3).
     CHECK_EQ(cbor::fixed_size<__int128>(), 18u);
     CHECK_EQ(cbor::fixed_size<unsigned __int128>(), 18u);
+#endif
 }
 
 // RFC 8949 3.3 has binary16, binary32 and binary64. binary128 is a typed array of one element under tag 83
