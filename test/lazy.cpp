@@ -302,12 +302,15 @@ TEST_CASE("lazy: lazy_get reads a simple value")
     CHECK_EQ(get<std::nullptr_t>("\xf7"s).error(), error::incorrect_type);
 }
 
-// A text string and a byte string come as views into the document, each only as its own type.
+// A text string and a byte string come as views into the document, each only as its own type. A view lives as
+// long as a lazy of its document does, so the test keeps one.
 TEST_CASE("lazy: lazy_get reads a string as a view")
 {
-    CHECK_EQ(*get<std::string_view>("\x64IETF"s), "IETF"sv);
+    auto const text = lazy_of("\x64IETF"s);
+    CHECK_EQ(*cbor::lazy_get<std::string_view>(text), "IETF"sv);
     CHECK_EQ(get<std::string_view>("\x44\x01\x02\x03\x04"s).error(), error::incorrect_type);
-    auto const bytes = get<std::span<std::byte const>>("\x44\x01\x02\x03\x04"s);
+    auto const four = lazy_of("\x44\x01\x02\x03\x04"s);
+    auto const bytes = cbor::lazy_get<std::span<std::byte const>>(four);
     REQUIRE(bytes.has_value());
     CHECK(std::ranges::equal(*bytes, std::array{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}));
     CHECK_EQ(get<std::span<std::byte const>>("\x64IETF"s).error(), error::incorrect_type);
@@ -372,7 +375,8 @@ TEST_CASE("encode: a typed array is a tag and a byte string")
     auto const wire = typed_encoded(65, "\x00\x01\x00\x02"sv);
     REQUIRE(wire.has_value());
     CHECK_EQ(*wire, "\xd8\x41\x44\x00\x01\x00\x02"s);
-    auto const back = get<cbor::typed_array>(*wire);
+    auto const document = lazy_of(*wire);
+    auto const back = cbor::lazy_get<cbor::typed_array>(document);
     REQUIRE(back.has_value());
     CHECK_EQ(back->tag, 65u);
     CHECK(std::ranges::equal(back->bytes, std::as_bytes(std::span("\x00\x01\x00\x02"sv))));

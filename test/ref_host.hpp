@@ -3,6 +3,8 @@
 #include <cbor/cbor.hpp>
 
 #include <cstdint>
+#include <map>
+#include <set>
 #include <memory>
 #include <optional>
 #include <string>
@@ -30,57 +32,121 @@ struct node {
         kind;
 };
 
+// The host keeps a weak reference to every node it makes. When the host ends, every node that only
+// other nodes hold is garbage, as a tracing collector finds it, and is emptied; so a cycle that a
+// failed decode left behind is freed, and a value the caller still holds keeps its whole graph.
 struct ref_host {
     using value = handle;
     using identity = node const *;
     int before_encode_calls = 0;
     int after_decode_calls = 0;
     handle replacement;
+    std::vector<std::weak_ptr<node>> made;
+
+    handle make(node n)
+    {
+        auto h = std::make_shared<node>(std::move(n));
+        made.push_back(h);
+        return h;
+    }
+
+    ref_host() = default;
+    ref_host(ref_host const &) = delete;
+    ref_host &operator=(ref_host const &) = delete;
+
+    ~ref_host()
+    {
+        std::vector<handle> live;
+        for (auto const &w : made)
+            if (auto h = w.lock())
+                live.push_back(std::move(h));
+        std::map<node const *, long> inner;
+        auto const edges = [](node const &n, auto const &visit) {
+            if (auto const *a = std::get_if<std::vector<handle>>(&n.kind))
+                for (auto const &e : *a)
+                    visit(e);
+            else if (auto const *m = std::get_if<std::vector<std::pair<handle, handle>>>(&n.kind))
+                for (auto const &[k, v] : *m) {
+                    visit(k);
+                    visit(v);
+                }
+            else if (auto const *o = std::get_if<object>(&n.kind))
+                visit(o->content);
+        };
+        for (auto const &h : live)
+            edges(*h, [&](handle const &e) {
+                if (e)
+                    ++inner[e.get()];
+            });
+        std::vector<node const *> todo;
+        std::set<node const *> reached;
+        for (auto const &h : live)
+            if (h.use_count() - 1 > inner[h.get()])
+                todo.push_back(h.get());
+        while (!todo.empty()) {
+            node const *n = todo.back();
+            todo.pop_back();
+            if (!reached.insert(n).second)
+                continue;
+            edges(*n, [&](handle const &e) {
+                if (e)
+                    todo.push_back(e.get());
+            });
+        }
+        for (auto const &h : live)
+            if (!reached.contains(h.get()))
+                h->kind = std::uint64_t{0};
+    }
 };
 
-inline handle tag_invoke(cbor::unsigned_integer_decode_t, ref_host &, std::uint64_t a)
+inline bool tag_invoke(cbor::cyclic_data_structures_t, ref_host &)
 {
-    return std::make_shared<node>(node{a});
+    return true;
 }
 
-inline handle tag_invoke(cbor::negative_integer_decode_t, ref_host &, std::uint64_t a)
+inline handle tag_invoke(cbor::unsigned_integer_decode_t, ref_host &host, std::uint64_t a)
 {
-    return std::make_shared<node>(node{a});
+    return host.make(node{a});
 }
 
-inline handle tag_invoke(cbor::unsigned_bignum_decode_t, ref_host &, std::string_view m)
+inline handle tag_invoke(cbor::negative_integer_decode_t, ref_host &host, std::uint64_t a)
 {
-    return std::make_shared<node>(node{std::string(m)});
+    return host.make(node{a});
 }
 
-inline handle tag_invoke(cbor::negative_bignum_decode_t, ref_host &, std::string_view m)
+inline handle tag_invoke(cbor::unsigned_bignum_decode_t, ref_host &host, std::string_view m)
 {
-    return std::make_shared<node>(node{std::string(m)});
+    return host.make(node{std::string(m)});
 }
 
-inline handle tag_invoke(cbor::byte_string_decode_t, ref_host &, std::string_view b)
+inline handle tag_invoke(cbor::negative_bignum_decode_t, ref_host &host, std::string_view m)
 {
-    return std::make_shared<node>(node{std::string(b)});
+    return host.make(node{std::string(m)});
 }
 
-inline handle tag_invoke(cbor::text_string_decode_t, ref_host &, std::string_view t)
+inline handle tag_invoke(cbor::byte_string_decode_t, ref_host &host, std::string_view b)
 {
-    return std::make_shared<node>(node{std::string(t)});
+    return host.make(node{std::string(b)});
 }
 
-inline handle tag_invoke(cbor::float_decode_t, ref_host &, double)
+inline handle tag_invoke(cbor::text_string_decode_t, ref_host &host, std::string_view t)
 {
-    return std::make_shared<node>(node{std::uint64_t{0}});
+    return host.make(node{std::string(t)});
 }
 
-inline handle tag_invoke(cbor::simple_value_decode_t, ref_host &, std::uint8_t s)
+inline handle tag_invoke(cbor::float_decode_t, ref_host &host, double)
 {
-    return std::make_shared<node>(node{std::uint64_t{s}});
+    return host.make(node{std::uint64_t{0}});
 }
 
-inline handle tag_invoke(cbor::array_decode_t, ref_host &, std::uint64_t)
+inline handle tag_invoke(cbor::simple_value_decode_t, ref_host &host, std::uint8_t s)
 {
-    return std::make_shared<node>(node{std::vector<handle>{}});
+    return host.make(node{std::uint64_t{s}});
+}
+
+inline handle tag_invoke(cbor::array_decode_t, ref_host &host, std::uint64_t)
+{
+    return host.make(node{std::vector<handle>{}});
 }
 
 // The node changes and the same handle comes back, so a reference into a container under
@@ -91,9 +157,9 @@ inline handle tag_invoke(cbor::array_append_t, ref_host &, handle a, handle e)
     return a;
 }
 
-inline handle tag_invoke(cbor::map_decode_t, ref_host &, std::uint64_t)
+inline handle tag_invoke(cbor::map_decode_t, ref_host &host, std::uint64_t)
 {
-    return std::make_shared<node>(node{std::vector<std::pair<handle, handle>>{}});
+    return host.make(node{std::vector<std::pair<handle, handle>>{}});
 }
 
 inline handle tag_invoke(cbor::map_insert_t, ref_host &, handle m, handle k, handle v)
@@ -103,11 +169,11 @@ inline handle tag_invoke(cbor::map_insert_t, ref_host &, handle m, handle k, han
 }
 
 // Tag 5000 is registered in this host: tag_begin makes the empty object before its content.
-inline std::optional<handle> tag_invoke(cbor::tag_begin_t, ref_host &, std::uint64_t tag)
+inline std::optional<handle> tag_invoke(cbor::tag_begin_t, ref_host &host, std::uint64_t tag)
 {
     if (tag != 5000)
         return std::nullopt;
-    return std::make_shared<node>(node{object{5000, nullptr}});
+    return host.make(node{object{5000, nullptr}});
 }
 
 inline handle tag_invoke(cbor::registered_decode_t, ref_host &, handle o, handle content)
