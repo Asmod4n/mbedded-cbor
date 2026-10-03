@@ -23,7 +23,7 @@ void every_target(std::string_view const input)
     fuzz::doc_end_target(input);
     fuzz::lazy_target(input);
     fuzz::path_target(input);
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
     fuzz::schema::decode_target(input);
     fuzz::schema::encode_target(input);
 #endif
