@@ -348,7 +348,7 @@ std::expected<void, std::errc> encode(Writer &writer, T const &value);
 template <class T>
 struct document {
     std::string_view bytes;
-    std::size_t offset;
+    std::span<char const, fixed_size<T>()> field;
     std::size_t floor;
 };
 
@@ -898,31 +898,31 @@ class internal
     }
 
     template <class V>
-    static V unsigned_read(std::string_view const bytes, std::size_t const at)
+    static V unsigned_read(std::span<char const, sizeof(V)> const field)
     {
         std::array<char, sizeof(V)> big;
-        std::ranges::copy(bytes.substr(at, sizeof(V)), big.begin());
+        std::ranges::copy(field, big.begin());
         return std::byteswap(std::bit_cast<V>(big));
     }
 
-    static unsigned __int128 unsigned128_read(std::string_view const bytes, std::size_t const at)
+    static unsigned __int128 unsigned128_read(std::span<char const, sizeof(unsigned __int128)> const field)
     {
-        auto const high = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(bytes, at));
-        auto const low = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(bytes, at + sizeof(std::uint64_t)));
+        auto const high = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(field.first<sizeof(std::uint64_t)>()));
+        auto const low = static_cast<unsigned __int128>(unsigned_read<std::uint64_t>(field.last<sizeof(std::uint64_t)>()));
         return high << 64 | low;
     }
 
     template <class T>
-    static T fixed_value_read(std::string_view const bytes, std::size_t const at)
+    static T fixed_value_read(std::span<char const, fixed_size<T>()> const field)
     {
         using U = std::remove_cv_t<T>;
-        auto const head = static_cast<unsigned char>(bytes.substr(at, 1).front());
+        auto const head = static_cast<unsigned char>(field.front());
         if constexpr (std::same_as<U, bool>) {
             return (head & 1) != 0;
         } else if constexpr (has_fixed_underlying_type<U>) {
-            return static_cast<U>(fixed_value_read<std::underlying_type_t<U>>(bytes, at));
+            return static_cast<U>(fixed_value_read<std::underlying_type_t<U>>(field));
         } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
-            unsigned __int128 const magnitude = unsigned128_read(bytes, at + fixed_size<U>() - sizeof(U));
+            unsigned __int128 const magnitude = unsigned128_read(field.template last<sizeof(U)>());
             if constexpr (std::same_as<U, __int128>) {
                 unsigned __int128 const sign = -static_cast<unsigned __int128>(head & 1);
                 return static_cast<U>(magnitude ^ sign);
@@ -930,18 +930,18 @@ class internal
                 return magnitude;
             }
         } else if constexpr (std::unsigned_integral<U>) {
-            return unsigned_read<U>(bytes, at + initial_byte_size);
+            return unsigned_read<U>(field.template last<sizeof(U)>());
         } else if constexpr (std::signed_integral<U>) {
             using M = std::make_unsigned_t<U>;
             M const sign = static_cast<M>(-static_cast<M>((head >> 5) & 1));
-            return static_cast<U>(unsigned_read<M>(bytes, at + initial_byte_size) ^ sign);
+            return static_cast<U>(unsigned_read<M>(field.template last<sizeof(M)>()) ^ sign);
         } else {
             using B = decltype(float_bits(U{}));
             if constexpr (std::same_as<B, unsigned __int128>) {
-                auto const bits = unsigned128_read(bytes, at + fixed_size<U>() - sizeof(B));
+                auto const bits = unsigned128_read(field.template last<sizeof(B)>());
                 return static_cast<U>(std::bit_cast<std::float128_t>(bits));
             } else {
-                auto const bits = unsigned_read<B>(bytes, at + fixed_size<U>() - sizeof(B));
+                auto const bits = unsigned_read<B>(field.template last<sizeof(B)>());
                 using F = std::conditional_t<sizeof(B) == sizeof(std::uint16_t), std::float16_t,
                                              std::conditional_t<sizeof(B) == sizeof(std::uint32_t), std::float32_t,
                                                                 std::float64_t>>;
@@ -955,11 +955,12 @@ class internal
         std::size_t length;
     };
 
-    static std::expected<reference, error> reference_read(std::string_view const bytes, std::size_t const at,
+    static std::expected<reference, error> reference_read(std::string_view const bytes,
+                                                           std::span<char const, dynamic_type_sizes> const field,
                                                            std::size_t const floor, std::size_t const element)
     {
-        std::size_t const data = unsigned_read<std::uint32_t>(bytes, at + 2);
-        std::size_t const length = unsigned_read<std::uint32_t>(bytes, at + 7);
+        std::size_t const data = unsigned_read<std::uint32_t>(field.subspan<2, sizeof(std::uint32_t)>());
+        std::size_t const length = unsigned_read<std::uint32_t>(field.subspan<7, sizeof(std::uint32_t)>());
         std::size_t size;
         std::size_t end;
         if (data < floor || ckd_mul(&size, length, element) || ckd_add(&end, data, size) || end > bytes.size())
@@ -975,19 +976,19 @@ class internal
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; })
-                return cbor::document<U>{};
+                return std::type_identity<cbor::document<U>>{};
             else if constexpr (is_fixed_string<U>)
-                return std::string_view{};
+                return std::type_identity<std::string_view>{};
             else if constexpr (is_optional<U>)
-                return std::optional<typename U::value_type>{};
+                return std::type_identity<std::optional<typename U::value_type>>{};
             else if constexpr (is_text_range<U> || is_byte_range<U>)
-                return std::string_view{};
+                return std::type_identity<std::string_view>{};
             else if constexpr (is_map<U>)
-                return cbor::map<typename U::key_type, typename U::mapped_type>{};
+                return std::type_identity<cbor::map<typename U::key_type, typename U::mapped_type>>{};
             else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; })
-                return cbor::array<std::ranges::range_value_t<U>>{};
+                return std::type_identity<cbor::array<std::ranges::range_value_t<U>>>{};
             else
-                return U{};
+                return std::type_identity<U>{};
         } else if constexpr (path.substr(At, 1) == ".") {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
@@ -1024,53 +1025,58 @@ class internal
     }
 
     template <class T, fixed_string Path, std::size_t At>
-    static auto path_walk(std::string_view const bytes, std::size_t const offset, std::size_t const floor)
-        -> std::expected<decltype(path_result<T, Path, At>()), error>
+    static auto path_walk(std::string_view const bytes, std::span<char const, fixed_size<T>()> const field,
+                          std::size_t const floor)
+        -> std::conditional_t<path_reads_wire<T, Path, At>(),
+                              std::expected<typename decltype(path_result<T, Path, At>())::type, error>,
+                              typename decltype(path_result<T, Path, At>())::type>
     {
         using U = std::remove_cv_t<T>;
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
-                return cbor::document<U>{bytes, offset, floor};
+                return cbor::document<U>{bytes, field, floor};
             } else if constexpr (is_fixed_string<U>) {
-                return bytes.substr(offset + fixed_size<U>() - fixed_length<U>::value, fixed_length<U>::value);
+                return std::string_view(field.template last<fixed_length<U>::value>());
             } else if constexpr (is_optional<U>) {
                 using E = typename U::value_type;
-                auto const r = reference_read(bytes, offset, floor, fixed_size<E>());
+                auto const r = reference_read(bytes, field, floor, fixed_size<E>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (r->length == 0)
                     return std::optional<E>{};
-                return std::optional<E>{fixed_value_read<E>(bytes, r->data)};
+                return std::optional<E>{fixed_value_read<E>(std::span<char const>(bytes).subspan(r->data).template first<fixed_size<E>()>())};
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
-                auto const r = reference_read(bytes, offset, floor, 1);
+                auto const r = reference_read(bytes, field, floor, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return bytes.substr(r->data, r->length);
             } else if constexpr (is_map<U>) {
                 using K = typename U::key_type;
                 using V = typename U::mapped_type;
-                auto const r = reference_read(bytes, offset, floor, fixed_size<K>() + fixed_size<V>());
+                auto const r = reference_read(bytes, field, floor, fixed_size<K>() + fixed_size<V>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return cbor::map<K, V>{bytes, r->data, r->length};
             } else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; }) {
                 using E = std::ranges::range_value_t<U>;
-                auto const r = reference_read(bytes, offset, floor, fixed_size<E>());
+                auto const r = reference_read(bytes, field, floor, fixed_size<E>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return cbor::array<E>{bytes, r->data, r->length};
             } else {
-                return fixed_value_read<U>(bytes, offset);
+                return fixed_value_read<U>(field);
             }
         } else if constexpr (path.substr(At, 1) == ".") {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
             if constexpr (m == std::meta::info{})
                 return no_fixed_size<T>();
-            else
-                return path_walk<typename[:std::meta::type_of(m):], Path, end>(bytes, offset + member_offset<U, m>(),
-                                                                               floor);
+            else {
+                using M = typename[:std::meta::type_of(m):];
+                return path_walk<M, Path, end>(bytes, field.template subspan<member_offset<U, m>(), fixed_size<M>()>(),
+                                               floor);
+            }
         } else {
             constexpr std::size_t close = index_end(path, At);
             constexpr std::size_t i = index_of(path.substr(At + 1, close - At - 1));
@@ -1082,16 +1088,18 @@ class internal
                 if constexpr (i >= n)
                     return no_fixed_size<T>();
                 else
-                    return path_walk<E, Path, close + 1>(bytes, offset + head_size(n) + i * fixed_size<E>(), floor);
+                    return path_walk<E, Path, close + 1>(
+                        bytes, field.template subspan<head_size(n) + i * fixed_size<E>(), fixed_size<E>()>(), floor);
             } else {
                 using E = std::ranges::range_value_t<U>;
-                auto const r = reference_read(bytes, offset, floor, fixed_size<E>());
+                auto const r = reference_read(bytes, field, floor, fixed_size<E>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (i >= r->length) [[unlikely]]
                     return std::unexpected(error::index_out_of_bounds);
-                return path_walk<E, Path, close + 1>(bytes, r->data + i * fixed_size<E>(),
-                                                     r->data + r->length * fixed_size<E>());
+                return path_walk<E, Path, close + 1>(
+                    bytes, std::span<char const>(bytes).subspan(r->data + i * fixed_size<E>()).template first<fixed_size<E>()>(),
+                    r->data + r->length * fixed_size<E>());
             }
         }
     }
@@ -1949,17 +1957,13 @@ std::expected<document<T>, error> decode(std::string_view const bytes)
 {
     if (bytes.size() < fixed_size<T>()) [[unlikely]]
         return std::unexpected(error::too_little_data);
-    return document<T>{bytes, 0, fixed_size<T>()};
+    return document<T>{bytes, std::span<char const>(bytes).first<fixed_size<T>()>(), fixed_size<T>()};
 }
 
 template <class T, fixed_string Path>
 auto at_path_compiled(document<T> const doc)
 {
-    auto const result = internal::path_walk<T, Path, 0>(doc.bytes, doc.offset, doc.floor);
-    if constexpr (internal::path_reads_wire<T, Path, 0>())
-        return result;
-    else
-        return *result;
+    return internal::path_walk<T, Path, 0>(doc.bytes, doc.field, doc.floor);
 }
 
 template <class E>
@@ -1974,12 +1978,13 @@ struct array {
     }
 
     auto at(std::size_t const index) const
-        -> std::expected<decltype(internal::path_result<E, fixed_string{""}, 0>()), error>
+        -> std::expected<typename decltype(internal::path_result<E, fixed_string{""}, 0>())::type, error>
     {
         if (index >= length) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
-        return internal::path_walk<E, fixed_string{""}, 0>(bytes, data + index * fixed_size<E>(),
-                                                          data + length * fixed_size<E>());
+        return internal::path_walk<E, fixed_string{""}, 0>(
+            bytes, std::span<char const>(bytes).subspan(data + index * fixed_size<E>()).template first<fixed_size<E>()>(),
+            data + length * fixed_size<E>());
     }
 
     struct iterator {
@@ -2032,21 +2037,22 @@ struct map {
     }
 
     auto key_at(std::size_t const index) const
-        -> std::expected<decltype(internal::path_result<K, fixed_string{""}, 0>()), error>
+        -> std::expected<typename decltype(internal::path_result<K, fixed_string{""}, 0>())::type, error>
     {
         if (index >= length) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
-        return internal::path_walk<K, fixed_string{""}, 0>(bytes, data + index * pair_size,
-                                                          data + length * pair_size);
+        return internal::path_walk<K, fixed_string{""}, 0>(
+            bytes, std::span<char const>(bytes).subspan(data + index * pair_size).template first<fixed_size<K>()>(), data + length * pair_size);
     }
 
     auto value_at(std::size_t const index) const
-        -> std::expected<decltype(internal::path_result<V, fixed_string{""}, 0>()), error>
+        -> std::expected<typename decltype(internal::path_result<V, fixed_string{""}, 0>())::type, error>
     {
         if (index >= length) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
-        return internal::path_walk<V, fixed_string{""}, 0>(bytes, data + index * pair_size + fixed_size<K>(),
-                                                          data + length * pair_size);
+        return internal::path_walk<V, fixed_string{""}, 0>(
+            bytes, std::span<char const>(bytes).subspan(data + index * pair_size + fixed_size<K>()).template first<fixed_size<V>()>(),
+            data + length * pair_size);
     }
 
     struct iterator {
