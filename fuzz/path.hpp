@@ -101,7 +101,7 @@ inline std::optional<std::string> path_text(std::span<cbor::path_step const> con
     return text;
 }
 
-// The reference: the path walked over the eager value with the rules of lazy_at. A key matches a text key
+// The reference: the path walked over the eager value with the rules of lazy::at. A key matches a text key
 // only; an index counts from the end when negative and matches an integer key of a map; tag 24 is a document
 // of its own when a step goes into it; a wildcard collects the rest of the path for every element.
 inline std::optional<test::value> walked(test::value const &start, std::span<cbor::path_step const> const steps)
@@ -203,7 +203,7 @@ inline void path_target(std::string_view const input)
     auto const steps = cbor::path_compile(path);
     if (!steps)
         return;
-    auto const root = cbor::decode<16>(std::string{document});
+    auto const root = cbor::lazy::from(std::string{document});
     require(root.has_value());
     auto const found = cbor::path_decode<16>(host, *steps, *root);
     auto const expected = walked(*eager, *steps);

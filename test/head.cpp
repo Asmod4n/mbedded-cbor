@@ -30,14 +30,19 @@ value N(std::uint64_t argument)
 
 // A Writer whose language has no more space.
 struct full_writer {
-    std::expected<void, std::errc> reserve(std::size_t)
+    full_writer &allocate(std::size_t)
     {
-        return std::unexpected(std::errc::not_enough_memory);
+        return *this;
     }
 
     std::expected<void, std::errc> append(std::string_view)
     {
         return std::unexpected(std::errc::not_enough_memory);
+    }
+
+    std::expected<void, std::errc> done(std::size_t)
+    {
+        return {};
     }
 };
 
