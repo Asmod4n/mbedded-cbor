@@ -21,7 +21,9 @@
 #include <stdfloat>
 #endif
 #include <string>
+#include <bitset>
 #include <ranges>
+#include <tuple>
 #include <stdexcept>
 #include <string_view>
 #if CBOR_SIMDUTF
@@ -389,6 +391,21 @@ struct array;
 
 template <class K, class V>
 struct map;
+
+template <std::uint64_t Number, class T>
+struct tagged {
+    static constexpr std::uint64_t number = Number;
+    T content;
+};
+
+namespace generic
+{
+template <class T, std::size_t DepthMax = 64>
+result<T> decode(std::string_view bytes);
+
+template <class T>
+result<std::string, std::errc> encode(T const &value);
+} // namespace generic
 #endif
 
 class internal
@@ -1941,6 +1958,470 @@ class internal
             }
         }
     }
+
+#if __cpp_impl_reflection
+    template <class T, std::size_t DepthMax>
+    friend result<T> generic::decode(std::string_view bytes);
+
+    template <class T>
+    friend result<std::string, std::errc> generic::encode(T const &value);
+
+    template <class U>
+    static constexpr bool is_std_tuple = false;
+
+    template <class... E>
+    static constexpr bool is_std_tuple<std::tuple<E...>> = true;
+
+    template <class U>
+    static constexpr bool is_std_array = false;
+
+    template <class E, std::size_t N>
+    static constexpr bool is_std_array<std::array<E, N>> = true;
+
+    template <class U>
+    static constexpr bool is_tagged = false;
+
+    template <std::uint64_t N, class E>
+    static constexpr bool is_tagged<tagged<N, E>> = true;
+
+    template <class U>
+    static constexpr bool is_byte = std::same_as<U, std::byte> || std::same_as<U, unsigned char>;
+
+    template <class U>
+    static constexpr bool is_byte_container = requires {
+        typename U::value_type;
+        requires is_byte<typename U::value_type>;
+        requires std::same_as<U, std::vector<typename U::value_type>> || is_std_array<U>;
+    };
+
+    template <class U>
+    static constexpr bool has_integer_keys = requires { U::keys; };
+
+    template <class U>
+    static consteval auto members_of()
+    {
+        return std::define_static_array(
+            std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unchecked()));
+    }
+
+    template <class U, class V>
+    static std::expected<void, error> integer_read(decoder &d, V &out)
+    {
+        auto const h = d.head_decode();
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        if (h->major == major_type::unsigned_integer) {
+            if (!std::in_range<U>(h->argument)) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            out = static_cast<V>(static_cast<U>(h->argument));
+            return {};
+        }
+        if (h->major != major_type::negative_integer) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        if constexpr (std::is_unsigned_v<U>) {
+            return std::unexpected(error::number_out_of_range);
+        } else {
+            if (h->argument > static_cast<std::uint64_t>(std::numeric_limits<U>::max())) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            out = static_cast<V>(static_cast<U>(-1 - static_cast<U>(h->argument)));
+            return {};
+        }
+    }
+
+    template <std::size_t DepthMax, class U>
+    static std::expected<void, error> generic_read(decoder &d, U &out, std::size_t const depth)
+    {
+        if (depth > DepthMax) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
+        if constexpr (std::same_as<U, bool>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::simple_float || (h->info != std::to_underlying(simple_value::false_value) &&
+                                                         h->info != std::to_underlying(simple_value::true_value)))
+                [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            out = h->info == std::to_underlying(simple_value::true_value);
+            return {};
+        } else if constexpr (std::is_enum_v<U>) {
+            return integer_read<std::underlying_type_t<U>>(d, out);
+        } else if constexpr (std::is_integral_v<U>) {
+            return integer_read<U>(d, out);
+        } else if constexpr (std::is_floating_point_v<U>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::simple_float) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            switch (static_cast<simple_float_information>(h->info)) {
+            case simple_float_information::half_precision_float:
+                out = static_cast<U>(float_decode_binary16(static_cast<std::uint16_t>(h->argument)));
+                return {};
+            case simple_float_information::single_precision_float:
+                out = static_cast<U>(std::bit_cast<float>(static_cast<std::uint32_t>(h->argument)));
+                return {};
+            case simple_float_information::double_precision_float:
+                out = static_cast<U>(std::bit_cast<double>(h->argument));
+                return {};
+            default:
+                return std::unexpected(error::incorrect_type);
+            }
+        } else if constexpr (std::same_as<U, std::nullptr_t>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::simple_float || h->info != std::to_underlying(simple_value::null)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return {};
+        } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::text_string) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            auto const text = d.text_string_decode(h->argument);
+            if (!text) [[unlikely]]
+                return std::unexpected(text.error());
+            out = U(*text);
+            return {};
+        } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::byte_string) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            auto const bytes = d.byte_string_decode(h->argument);
+            if (!bytes) [[unlikely]]
+                return std::unexpected(bytes.error());
+            auto const view = std::as_bytes(std::span(*bytes));
+            if constexpr (std::same_as<U, std::span<std::byte const>>) {
+                out = view;
+            } else if constexpr (is_std_array<U>) {
+                if (view.size() != out.size()) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
+            } else {
+                out.resize(view.size());
+                std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
+            }
+            return {};
+        } else if constexpr (is_optional<U>) {
+            if (!d.bytes.empty() && static_cast<std::uint8_t>(d.bytes.front()) ==
+                                        (std::to_underlying(major_type::simple_float) << 5 |
+                                         std::to_underlying(simple_value::null))) {
+                d.bytes.remove_prefix(1);
+                out.reset();
+                return {};
+            }
+            return generic_read<DepthMax>(d, out.emplace(), depth);
+        } else if constexpr (is_tagged<U>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::tag || h->argument != U::number) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return generic_read<DepthMax>(d, out.content, depth + 1);
+        } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::array || h->argument != std::tuple_size_v<U>) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            std::expected<void, error> r;
+            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, std::tuple_size_v<U>))) {
+                if (r)
+                    r = generic_read<DepthMax>(d, std::get<i>(out), depth + 1);
+            }
+            return r;
+        } else if constexpr (is_map<U>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::map) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            for (std::uint64_t i = 0; i < h->argument; ++i) {
+                typename U::key_type key{};
+                if (auto const r = generic_read<DepthMax>(d, key, depth + 1); !r) [[unlikely]]
+                    return r;
+                typename U::mapped_type value{};
+                if (auto const r = generic_read<DepthMax>(d, value, depth + 1); !r) [[unlikely]]
+                    return r;
+                out.insert_or_assign(std::move(key), std::move(value));
+            }
+            return {};
+        } else if constexpr (requires { out.push_back(std::declval<typename U::value_type>()); }) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::array) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            out.clear();
+            out.reserve(std::min<std::uint64_t>(h->argument, d.bytes.size()));
+            for (std::uint64_t i = 0; i < h->argument; ++i) {
+                if (auto const r = generic_read<DepthMax>(d, out.emplace_back(), depth + 1); !r) [[unlikely]]
+                    return r;
+            }
+            return {};
+        } else {
+            return struct_read<DepthMax>(d, out, depth);
+        }
+    }
+
+    template <class U, std::size_t I>
+    static bool key_matches(head const &k, std::string_view const text)
+    {
+        if constexpr (has_integer_keys<U>) {
+            constexpr std::int64_t key = U::keys.at(I);
+            if constexpr (key >= 0)
+                return k.major == major_type::unsigned_integer && k.argument == static_cast<std::uint64_t>(key);
+            else
+                return k.major == major_type::negative_integer && k.argument == static_cast<std::uint64_t>(-1 - key);
+        } else {
+            constexpr std::string_view name = std::meta::identifier_of(members_of<U>()[I]);
+            return k.major == major_type::text_string && text == name;
+        }
+    }
+
+    template <std::size_t DepthMax, class U>
+    static std::expected<void, error> struct_read(decoder &d, U &out, std::size_t const depth)
+    {
+        static constexpr auto members = members_of<U>();
+        constexpr std::size_t count = members.size();
+        auto const h = d.head_decode();
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        if (h->major != major_type::map) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        std::bitset<count> found;
+        no_marks none;
+        for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
+            auto const k = d.head_decode();
+            if (!k) [[unlikely]]
+                return std::unexpected(k.error());
+            std::string_view text;
+            if (k->major == major_type::text_string) {
+                auto const t = d.text_string_decode(k->argument);
+                if (!t) [[unlikely]]
+                    return std::unexpected(t.error());
+                text = *t;
+            } else if (k->major != major_type::unsigned_integer && k->major != major_type::negative_integer) {
+                if (k->major == major_type::byte_string) {
+                    if (auto const b = d.byte_string_decode(k->argument); !b) [[unlikely]]
+                        return std::unexpected(b.error());
+                } else if (k->major == major_type::array || k->major == major_type::map ||
+                           k->major == major_type::tag) [[unlikely]] {
+                    return std::unexpected(error::unsupported_value);
+                }
+            }
+            bool matched = false;
+            std::expected<void, error> r;
+            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, count))) {
+                if (!matched && key_matches<U, i>(*k, text)) {
+                    matched = true;
+                    found.set(i);
+                    r = generic_read<DepthMax>(d, out.[:members[i]:], depth + 1);
+                }
+            }
+            if (!matched) {
+                if (auto const s = item_skip<DepthMax>(d, none, depth + 1); !s) [[unlikely]]
+                    return s;
+            } else if (!r) [[unlikely]] {
+                return r;
+            }
+        }
+        template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, count))) {
+            using M = std::remove_cvref_t<decltype(out.[:members[i]:])>;
+            if constexpr (!is_optional<M>)
+                if (!found.test(i)) [[unlikely]]
+                    return std::unexpected(error::key_not_found);
+        }
+        return {};
+    }
+
+    template <class U>
+    static bool member_present(U const &value)
+    {
+        if constexpr (is_optional<U>)
+            return value.has_value();
+        else
+            return true;
+    }
+
+    static std::size_t float_size(double const value)
+    {
+        switch (preferred_float_info(value)) {
+        case simple_float_information::half_precision_float:
+            return initial_byte_size + sizeof(std::uint16_t);
+        case simple_float_information::single_precision_float:
+            return initial_byte_size + sizeof(std::uint32_t);
+        default:
+            return initial_byte_size + sizeof(std::uint64_t);
+        }
+    }
+
+    template <class U>
+    static std::size_t generic_size(U const &value)
+    {
+        if constexpr (std::same_as<U, bool> || std::same_as<U, std::nullptr_t>) {
+            return initial_byte_size;
+        } else if constexpr (std::is_enum_v<U>) {
+            return generic_size(std::to_underlying(value));
+        } else if constexpr (std::is_integral_v<U>) {
+            if constexpr (std::is_signed_v<U>)
+                return head_size(value < 0 ? static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(value))
+                                           : static_cast<std::uint64_t>(value));
+            else
+                return head_size(value);
+        } else if constexpr (std::is_floating_point_v<U>) {
+            return float_size(static_cast<double>(value));
+        } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view> ||
+                             std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
+            return head_size(value.size()) + value.size();
+        } else if constexpr (is_optional<U>) {
+            return value ? generic_size(*value) : initial_byte_size;
+        } else if constexpr (is_tagged<U>) {
+            return head_size(U::number) + generic_size(value.content);
+        } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
+            return head_size(std::tuple_size_v<U>) +
+                   std::apply([](auto const &...e) { return (std::size_t{0} + ... + generic_size(e)); }, value);
+        } else if constexpr (is_map<U>) {
+            std::size_t size = head_size(value.size());
+            for (auto const &[k, v] : value)
+                size += generic_size(k) + generic_size(v);
+            return size;
+        } else if constexpr (requires { value.size(); typename U::value_type; }) {
+            std::size_t size = head_size(value.size());
+            for (auto const &e : value)
+                size += generic_size(e);
+            return size;
+        } else {
+            static constexpr auto members = members_of<U>();
+            std::size_t size = 0;
+            std::size_t present = 0;
+            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
+                auto const &m = value.[:members[i]:];
+                if (member_present(m)) {
+                    ++present;
+                    if constexpr (has_integer_keys<U>) {
+                        constexpr std::int64_t key = U::keys.at(i);
+                        size += generic_size(key);
+                    } else {
+                        constexpr std::string_view name = std::meta::identifier_of(members[i]);
+                        size += head_size(name.size()) + name.size();
+                    }
+                    if constexpr (is_optional<std::remove_cvref_t<decltype(m)>>)
+                        size += generic_size(*m);
+                    else
+                        size += generic_size(m);
+                }
+            }
+            return head_size(present) + size;
+        }
+    }
+
+    static std::size_t bytes_write(std::span<char> const out, std::size_t const at, std::span<char const> const bytes)
+    {
+        std::ranges::copy(bytes, out.subspan(at, bytes.size()).begin());
+        return at + bytes.size();
+    }
+
+    template <class U>
+    static std::size_t generic_write(std::span<char> const out, std::size_t at, U const &value)
+    {
+        constexpr auto simple = [](std::uint8_t const info) {
+            return static_cast<char>(std::to_underlying(major_type::simple_float) << 5 | info);
+        };
+        if constexpr (std::same_as<U, bool>) {
+            out.subspan(at).front() = simple(value ? std::to_underlying(simple_value::true_value)
+                                                   : std::to_underlying(simple_value::false_value));
+            return at + initial_byte_size;
+        } else if constexpr (std::same_as<U, std::nullptr_t>) {
+            out.subspan(at).front() = simple(std::to_underlying(simple_value::null));
+            return at + initial_byte_size;
+        } else if constexpr (std::is_enum_v<U>) {
+            return generic_write(out, at, std::to_underlying(value));
+        } else if constexpr (std::is_integral_v<U>) {
+            if constexpr (std::is_signed_v<U>) {
+                if (value < 0)
+                    return at + head_write(out, at, major_type::negative_integer,
+                                           static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(value)));
+            }
+            return at + head_write(out, at, major_type::unsigned_integer, static_cast<std::uint64_t>(value));
+        } else if constexpr (std::is_floating_point_v<U>) {
+            double const d = static_cast<double>(value);
+            switch (preferred_float_info(d)) {
+            case simple_float_information::half_precision_float:
+                out.subspan(at).front() = simple(std::to_underlying(simple_float_information::half_precision_float));
+                return bytes_write(out, at + initial_byte_size, big_endian(float_encode_binary16(static_cast<float>(d))));
+            case simple_float_information::single_precision_float:
+                out.subspan(at).front() = simple(std::to_underlying(simple_float_information::single_precision_float));
+                return bytes_write(out, at + initial_byte_size, big_endian(std::bit_cast<std::uint32_t>(static_cast<float>(d))));
+            default:
+                out.subspan(at).front() = simple(std::to_underlying(simple_float_information::double_precision_float));
+                return bytes_write(out, at + initial_byte_size, big_endian(std::bit_cast<std::uint64_t>(d)));
+            }
+        } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>) {
+            at += head_write(out, at, major_type::text_string, value.size());
+            return bytes_write(out, at, value);
+        } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
+            at += head_write(out, at, major_type::byte_string, value.size());
+            std::ranges::transform(value, out.subspan(at, value.size()).begin(),
+                                   [](auto const b) { return static_cast<char>(b); });
+            return at + value.size();
+        } else if constexpr (is_optional<U>) {
+            if (!value) {
+                out.subspan(at).front() = simple(std::to_underlying(simple_value::null));
+                return at + initial_byte_size;
+            }
+            return generic_write(out, at, *value);
+        } else if constexpr (is_tagged<U>) {
+            at += head_write(out, at, major_type::tag, U::number);
+            return generic_write(out, at, value.content);
+        } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
+            at += head_write(out, at, major_type::array, std::tuple_size_v<U>);
+            std::apply([&](auto const &...e) { ((at = generic_write(out, at, e)), ...); }, value);
+            return at;
+        } else if constexpr (is_map<U>) {
+            at += head_write(out, at, major_type::map, value.size());
+            for (auto const &[k, v] : value) {
+                at = generic_write(out, at, k);
+                at = generic_write(out, at, v);
+            }
+            return at;
+        } else if constexpr (requires { value.size(); typename U::value_type; }) {
+            at += head_write(out, at, major_type::array, value.size());
+            for (auto const &e : value)
+                at = generic_write(out, at, e);
+            return at;
+        } else {
+            static constexpr auto members = members_of<U>();
+            std::size_t present = 0;
+            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
+                if (member_present(value.[:members[i]:]))
+                    ++present;
+            }
+            at += head_write(out, at, major_type::map, present);
+            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
+                auto const &m = value.[:members[i]:];
+                if (member_present(m)) {
+                    if constexpr (has_integer_keys<U>) {
+                        constexpr std::int64_t key = U::keys.at(i);
+                        at = generic_write(out, at, key);
+                    } else {
+                        constexpr std::string_view name = std::meta::identifier_of(members[i]);
+                        at += head_write(out, at, major_type::text_string, name.size());
+                        at = bytes_write(out, at, name);
+                    }
+                    if constexpr (is_optional<std::remove_cvref_t<decltype(m)>>)
+                        at = generic_write(out, at, *m);
+                    else
+                        at = generic_write(out, at, m);
+                }
+            }
+            return at;
+        }
+    }
+#endif
 };
 
 struct lazy {
@@ -2198,6 +2679,32 @@ result<T> decode(std::string_view const bytes)
         return std::unexpected(r.error());
     return out;
 }
+
+namespace generic
+{
+template <class T, std::size_t DepthMax>
+result<T> decode(std::string_view const bytes)
+{
+    internal::decoder d{bytes};
+    T out{};
+    if (auto const r = internal::generic_read<DepthMax>(d, out, 0); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (!d.bytes.empty()) [[unlikely]]
+        return std::unexpected(error::syntax_error);
+    return out;
+}
+
+template <class T>
+result<std::string, std::errc> encode(T const &value)
+{
+    std::size_t const size = internal::generic_size(value);
+    std::string out;
+    out.resize_and_overwrite(size + internal::head_padding, [&](char *const p, std::size_t const n) {
+        return internal::generic_write(std::span<char>(p, n), 0, value);
+    });
+    return out;
+}
+} // namespace generic
 
 template <class T, fixed_string Path>
 auto at_path_compiled(document<T> const doc)
