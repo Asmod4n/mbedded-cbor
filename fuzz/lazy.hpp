@@ -10,7 +10,7 @@ inline void lazy_channels(std::string_view const input)
     test_host host;
     auto const eager = cbor::decode<16>(host, input);
     (void)cbor::doc_end<16>(input);
-    auto const decoded = cbor::decode<16>(std::string{input});
+    auto const decoded = cbor::lazy::from(std::string{input});
     if (!decoded)
         return;
     cbor::lazy const &root = *decoded;
@@ -26,14 +26,14 @@ inline void lazy_channels(std::string_view const input)
     }
     if (eager) {
         if (auto const *a = std::get_if<test::array>(&eager->kind)) {
-            if (auto const elements = cbor::lazy_elements_of<16>(root)) {
+            if (auto const elements = root.elements<16>()) {
                 std::size_t i = 0;
                 for (auto const e : *elements) {
                     if (!e || i >= a->size())
                         break;
                     if (auto const d = cbor::lazy_decode<16>(host, *e))
                         require(same(*d, a->at(i)));
-                    if (auto const at = cbor::lazy_at<16>(root, static_cast<std::int64_t>(i)))
+                    if (auto const at = root.at<16>(static_cast<std::int64_t>(i)))
                         if (auto const d = cbor::lazy_decode<16>(host, *at))
                             require(same(*d, a->at(i)));
                     ++i;
@@ -41,7 +41,7 @@ inline void lazy_channels(std::string_view const input)
             }
         }
         if (auto const *m = std::get_if<test::map>(&eager->kind)) {
-            if (auto const entries = cbor::lazy_entries_of<16>(root)) {
+            if (auto const entries = root.entries<16>()) {
                 std::size_t i = 0;
                 for (auto const e : *entries) {
                     if (!e || i >= m->size())
@@ -56,12 +56,12 @@ inline void lazy_channels(std::string_view const input)
         }
     }
     std::string_view const key = input.substr(0, 4);
-    (void)cbor::lazy_at<16>(root, std::int64_t{0});
-    (void)cbor::lazy_at<16>(root, std::int64_t{-1});
-    (void)cbor::lazy_at<16>(root, "a");
-    if (auto const a = cbor::lazy_at<16>(root, key))
-        if (auto const b = cbor::lazy_at<16>(*a, std::int64_t{0}))
-            (void)cbor::lazy_at<16>(*b, key);
+    (void)root.at<16>(std::int64_t{0});
+    (void)root.at<16>(std::int64_t{-1});
+    (void)root.at<16>("a");
+    if (auto const a = root.at<16>(key))
+        if (auto const b = a->at<16>(std::int64_t{0}))
+            (void)b->at<16>(key);
 }
 
 inline void lazy_target(std::string_view const input)

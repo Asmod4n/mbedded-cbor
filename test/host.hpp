@@ -152,10 +152,9 @@ inline value tag_invoke(cbor::tag_decode_t, test_host &, std::uint64_t tag, valu
 struct string_writer {
     std::string bytes;
 
-    std::expected<void, std::errc> reserve(std::size_t size)
+    string_writer &allocate(std::size_t)
     {
-        bytes.reserve(bytes.size() + size);
-        return {};
+        return *this;
     }
 
     std::expected<void, std::errc> append(std::string_view part)
@@ -164,13 +163,8 @@ struct string_writer {
         return {};
     }
 
-    template <class Op>
-    std::expected<void, std::errc> resize_and_overwrite(std::size_t size, Op op)
+    std::expected<void, std::errc> done(std::size_t)
     {
-        std::size_t const at = bytes.size();
-        bytes.resize_and_overwrite(at + size, [&](char *p, std::size_t n) {
-            return at + op(std::span<char>(p, n).subspan(at, size));
-        });
         return {};
     }
 };

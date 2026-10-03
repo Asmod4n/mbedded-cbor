@@ -38,14 +38,14 @@ value value_at(cbor::lazy const &l)
 
 cbor::lazy at(cbor::lazy const &l, std::string_view const key)
 {
-    auto const r = cbor::lazy_at<16>(l, key);
+    auto const r = l.at<16>(key);
     REQUIRE(r.has_value());
     return *r;
 }
 
 cbor::lazy at(cbor::lazy const &l, std::int64_t const index)
 {
-    auto const r = cbor::lazy_at<16>(l, index);
+    auto const r = l.at<16>(index);
     REQUIRE(r.has_value());
     return *r;
 }
@@ -76,12 +76,12 @@ TEST_CASE("lazy: access errors")
     std::string const one = encoded(M("a"s, 1));
     std::string const three = encoded(A(1, 2, 3));
     std::string const scalar = encoded(V(42));
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(empty_array), 0).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(empty_map), "x").error(), error::key_not_found);
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(one), "missing").error(), error::key_not_found);
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(three), 99).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(three), "invalid").error(), error::not_indexable);
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(scalar), "key").error(), error::not_indexable);
+    CHECK_EQ(lazy_of(empty_array).at<16>(0).error(), error::index_out_of_bounds);
+    CHECK_EQ(lazy_of(empty_map).at<16>("x").error(), error::key_not_found);
+    CHECK_EQ(lazy_of(one).at<16>("missing").error(), error::key_not_found);
+    CHECK_EQ(lazy_of(three).at<16>(99).error(), error::index_out_of_bounds);
+    CHECK_EQ(lazy_of(three).at<16>("invalid").error(), error::not_indexable);
+    CHECK_EQ(lazy_of(scalar).at<16>("key").error(), error::not_indexable);
 }
 
 // Ported from test.rb: 'lazy: deep nesting + wide maps'.
@@ -99,16 +99,16 @@ TEST_CASE("lazy: deep nesting and a wide map")
 }
 
 // Ported from test.rb: 'lazy: dig — missing keys return nil, negative array indices work'. dig maps
-// to a chain of lazy_at; a miss is an error value, and the binding makes nil of it.
+// to a chain of at; a miss is an error value, and the binding makes nil of it.
 TEST_CASE("lazy: negative indices and misses")
 {
     std::string const h = encoded(M("a"s, 1, "b"s, M("c"s, 42)));
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(h), "missing").error(), error::key_not_found);
+    CHECK_EQ(lazy_of(h).at<16>("missing").error(), error::key_not_found);
     CHECK(value_at(at(at(lazy_of(h), "b"), "c")) == V(42));
     std::string const a = encoded(A(10, 20, 30, 40, 50));
     CHECK(value_at(at(lazy_of(a), -1)) == V(50));
     CHECK(value_at(at(lazy_of(a), -5)) == V(10));
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(a), -99).error(), error::index_out_of_bounds);
+    CHECK_EQ(lazy_of(a).at<16>(-99).error(), error::index_out_of_bounds);
 }
 
 // Ported from test.rb: 'lazy: can still navigate child lazies after calling .value on parent'.
@@ -137,14 +137,14 @@ TEST_CASE("lazy: random access")
 TEST_CASE("lazy: a truncated item before the target")
 {
     std::string const doc = "\x82\x4a\x01\x02\x03\x18\x2a"s;
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(doc), 1).error(), error::too_little_data);
+    CHECK_EQ(lazy_of(doc).at<16>(1).error(), error::too_little_data);
 }
 
 // Ported from test.rb: 'lazy: huge aref index handled cleanly'.
 TEST_CASE("lazy: a huge index")
 {
     std::string const doc = encoded(A(1, 2, 3));
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(doc), 0x7fffffff).error(), error::index_out_of_bounds);
+    CHECK_EQ(lazy_of(doc).at<16>(0x7fffffff).error(), error::index_out_of_bounds);
 }
 
 // Found by the fuzz corpus: a reference inside the mark it names, d8 1c d8 1d 00, led the navigation
@@ -152,7 +152,7 @@ TEST_CASE("lazy: a huge index")
 TEST_CASE("lazy: a reference to its own enclosing mark ends")
 {
     std::string const doc = "\xd8\x1c\xd8\x1d\x00"s;
-    CHECK_EQ(cbor::lazy_at<16>(lazy_of(doc), 0).error(), error::sharedref_not_complete);
+    CHECK_EQ(lazy_of(doc).at<16>(0).error(), error::sharedref_not_complete);
     test_host host;
     CHECK_FALSE(cbor::lazy_decode<16>(host, lazy_of(doc)).has_value());
 }
@@ -163,7 +163,7 @@ TEST_CASE("lazy: a reference to its own enclosing mark ends")
 TEST_CASE("lazy: a value inside a huge claimed map")
 {
     std::string const doc = "\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s;
-    auto const a = cbor::lazy_at<16>(lazy_of(doc), "a");
+    auto const a = lazy_of(doc).at<16>("a");
     REQUIRE(a.has_value());
     CHECK(value_at(*a) == V(0));
 }
@@ -173,9 +173,9 @@ TEST_CASE("lazy: a value inside a huge claimed map")
 TEST_CASE("lazy: a chain of marks back to the same reference ends")
 {
     std::string const doc = "\x92\xd8\x1c\xd8\x1c\xd8\x1d\x00"s;
-    auto const element = cbor::lazy_at<16>(lazy_of(doc), 0);
+    auto const element = lazy_of(doc).at<16>(0);
     REQUIRE(element.has_value());
-    CHECK_EQ(cbor::lazy_at<16>(*element, 0).error(), error::sharedref_not_complete);
+    CHECK_EQ(element->at<16>(0).error(), error::sharedref_not_complete);
 }
 
 namespace
@@ -183,7 +183,7 @@ namespace
 
 std::vector<value> elements_of(std::string const &document)
 {
-    auto const elements = cbor::lazy_elements_of<16>(lazy_of(document));
+    auto const elements = lazy_of(document).elements<16>();
     REQUIRE(elements.has_value());
     std::vector<value> values;
     for (auto const element : *elements) {
@@ -202,7 +202,7 @@ TEST_CASE("lazy: the elements of an array")
     CHECK(elements_of(encoded(A())).empty());
 }
 
-// A mark around the array is passed, as lazy_at passes it.
+// A mark around the array is passed, as at passes it.
 TEST_CASE("lazy: the elements of a marked array")
 {
     CHECK(elements_of("\xd8\x1c\x82\x01\x02"s) == std::vector<value>{V(1), V(2)});
@@ -211,7 +211,7 @@ TEST_CASE("lazy: the elements of a marked array")
 // The entries of a map come in wire order, each as a pair of key and value.
 TEST_CASE("lazy: the entries of a map")
 {
-    auto const entries = cbor::lazy_entries_of<16>(lazy_of(encoded(M("a"s, 1, 2, "b"s))));
+    auto const entries = lazy_of(encoded(M("a"s, 1, 2, "b"s))).entries<16>();
     REQUIRE(entries.has_value());
     std::vector<value> keys;
     std::vector<value> values;
@@ -227,16 +227,16 @@ TEST_CASE("lazy: the entries of a map")
 // Only an array has elements and only a map has entries.
 TEST_CASE("lazy: elements and entries of the wrong kind")
 {
-    CHECK_EQ(cbor::lazy_elements_of<16>(lazy_of(encoded(M("a"s, 1)))).error(), error::not_indexable);
-    CHECK_EQ(cbor::lazy_entries_of<16>(lazy_of(encoded(A(1)))).error(), error::not_indexable);
-    CHECK_EQ(cbor::lazy_elements_of<16>(lazy_of(encoded(V(1)))).error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encoded(M("a"s, 1))).elements<16>().error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encoded(A(1))).entries<16>().error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encoded(V(1))).elements<16>().error(), error::not_indexable);
 }
 
 // decode reads nothing ahead, so a step finds a truncated element. The step gives the error once and
 // the walk ends after it.
 TEST_CASE("lazy: a truncated element ends the walk with its error")
 {
-    auto const elements = cbor::lazy_elements_of<16>(lazy_of("\x83\x01\x62\x61"s));
+    auto const elements = lazy_of("\x83\x01\x62\x61"s).elements<16>();
     REQUIRE(elements.has_value());
     std::vector<std::expected<cbor::lazy, error>> steps;
     for (auto const step : *elements)
@@ -251,15 +251,15 @@ namespace
 {
 
 template <class T>
-std::expected<T, error> get(std::string const &document)
+cbor::result<T> get(std::string const &document)
 {
-    return cbor::lazy_get<T>(lazy_of(document));
+    return lazy_of(document).get<T>();
 }
 
 } // namespace
 
 // The integers of RFC 8949 Appendix A, read without a host.
-TEST_CASE("lazy: lazy_get reads an integer")
+TEST_CASE("lazy: get reads an integer")
 {
     CHECK_EQ(*get<std::uint64_t>("\x00"s), 0u);
     CHECK_EQ(*get<std::uint64_t>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s), 18446744073709551615u);
@@ -272,7 +272,7 @@ TEST_CASE("lazy: lazy_get reads an integer")
 }
 
 // A number that the type cannot hold is out of range; anything that is not a number has the wrong type.
-TEST_CASE("lazy: lazy_get refuses an integer it cannot hold")
+TEST_CASE("lazy: get refuses an integer it cannot hold")
 {
     CHECK_EQ(get<std::uint64_t>("\x20"s).error(), error::number_out_of_range);
     CHECK_EQ(get<std::int64_t>("\x1b\x80\x00\x00\x00\x00\x00\x00\x00"s).error(), error::number_out_of_range);
@@ -284,7 +284,7 @@ TEST_CASE("lazy: lazy_get refuses an integer it cannot hold")
 }
 
 // Floats of the three widths of Appendix A. An integer is not a float: CBOR keeps the two apart.
-TEST_CASE("lazy: lazy_get reads a float")
+TEST_CASE("lazy: get reads a float")
 {
     CHECK_EQ(*get<double>("\xf9\x3c\x00"s), 1.0);
     CHECK_EQ(*get<double>("\xfa\x47\xc3\x50\x00"s), 100000.0);
@@ -293,7 +293,7 @@ TEST_CASE("lazy: lazy_get reads a float")
 }
 
 // The simple values false, true and null of Table 4.
-TEST_CASE("lazy: lazy_get reads a simple value")
+TEST_CASE("lazy: get reads a simple value")
 {
     CHECK_EQ(*get<bool>("\xf4"s), false);
     CHECK_EQ(*get<bool>("\xf5"s), true);
@@ -304,13 +304,13 @@ TEST_CASE("lazy: lazy_get reads a simple value")
 
 // A text string and a byte string come as views into the document, each only as its own type. A view lives as
 // long as a lazy of its document does, so the test keeps one.
-TEST_CASE("lazy: lazy_get reads a string as a view")
+TEST_CASE("lazy: get reads a string as a view")
 {
     auto const text = lazy_of("\x64IETF"s);
-    CHECK_EQ(*cbor::lazy_get<std::string_view>(text), "IETF"sv);
+    CHECK_EQ(*text.get<std::string_view>(), "IETF"sv);
     CHECK_EQ(get<std::string_view>("\x44\x01\x02\x03\x04"s).error(), error::incorrect_type);
     auto const four = lazy_of("\x44\x01\x02\x03\x04"s);
-    auto const bytes = cbor::lazy_get<std::span<std::byte const>>(four);
+    auto const bytes = four.get<std::span<std::byte const>>();
     REQUIRE(bytes.has_value());
     CHECK(std::ranges::equal(*bytes, std::array{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}));
     CHECK_EQ(get<std::span<std::byte const>>("\x64IETF"s).error(), error::incorrect_type);
@@ -319,7 +319,7 @@ TEST_CASE("lazy: lazy_get reads a string as a view")
 
 // RFC 8746 Table 3: tags 64 to 87 carry a typed array in a byte string; 76 is reserved. The length
 // is a multiple of the element size 1 << (f + ll) of Table 2.
-TEST_CASE("lazy: lazy_get reads a typed array")
+TEST_CASE("lazy: get reads a typed array")
 {
     auto const u8 = get<cbor::typed_array>("\xd8\x40\x43\x01\x02\x03"s);
     REQUIRE(u8.has_value());
@@ -369,14 +369,14 @@ std::expected<std::string, std::error_code> typed_encoded(std::uint64_t const ta
 
 } // namespace
 
-// The encoder writes the tag and one byte string, and lazy_get reads both back.
+// The encoder writes the tag and one byte string, and get reads both back.
 TEST_CASE("encode: a typed array is a tag and a byte string")
 {
     auto const wire = typed_encoded(65, "\x00\x01\x00\x02"sv);
     REQUIRE(wire.has_value());
     CHECK_EQ(*wire, "\xd8\x41\x44\x00\x01\x00\x02"s);
     auto const document = lazy_of(*wire);
-    auto const back = cbor::lazy_get<cbor::typed_array>(document);
+    auto const back = document.get<cbor::typed_array>();
     REQUIRE(back.has_value());
     CHECK_EQ(back->tag, 65u);
     CHECK(std::ranges::equal(back->bytes, std::as_bytes(std::span("\x00\x01\x00\x02"sv))));
@@ -413,11 +413,11 @@ TEST_CASE("tag 24: an embedded value is written as a document of its own and rea
     test::string_writer w;
     REQUIRE(cbor::encode<16>(host, w, A(1, A(2, 3))).has_value());
     CHECK_EQ(w.bytes, "\xd8\x18\x48\x82\x01\xd8\x18\x43\x82\x02\x03"s);
-    auto const inner = cbor::lazy_at<16>(lazy_of(w.bytes), 1);
+    auto const inner = lazy_of(w.bytes).at<16>(1);
     REQUIRE(inner.has_value());
-    auto const three = cbor::lazy_at<16>(*inner, 1);
+    auto const three = inner->at<16>(1);
     REQUIRE(three.has_value());
-    CHECK_EQ(*cbor::lazy_get<std::uint64_t>(*three), 3u);
+    CHECK_EQ(*three->get<std::uint64_t>(), 3u);
     CHECK_EQ(get<std::uint64_t>("\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
 }
 
@@ -426,16 +426,16 @@ TEST_CASE("tag 24: an embedded value is written as a document of its own and rea
 TEST_CASE("tag 24: an embedded document has marks of its own")
 {
     std::string const doc = "\x82\xd8\x1c\x07\xd8\x18\x47\x82\xd8\x1c\x09\xd8\x1d\x00"s;
-    auto const embedded = cbor::lazy_at<16>(lazy_of(doc), 1);
+    auto const embedded = lazy_of(doc).at<16>(1);
     REQUIRE(embedded.has_value());
-    auto const second = cbor::lazy_at<16>(*embedded, 1);
+    auto const second = embedded->at<16>(1);
     REQUIRE(second.has_value());
-    CHECK_EQ(*cbor::lazy_get<std::uint64_t>(*second), 9u);
+    CHECK_EQ(*second->get<std::uint64_t>(), 9u);
 }
 
 // Every integer width reads its own edges. A CBOR integer has a 64-bit magnitude and a sign in the major type
 // (RFC 8949 3.1), so a narrower type refuses the first value past its edge as out of range.
-TEST_CASE("lazy: lazy_get reads every integer width up to its edge")
+TEST_CASE("lazy: get reads every integer width up to its edge")
 {
     CHECK_EQ(*get<std::uint8_t>("\x18\xff"s), 255u);
     CHECK_EQ(get<std::uint8_t>("\x19\x01\x00"s).error(), error::number_out_of_range);
@@ -462,9 +462,9 @@ TEST_CASE("lazy: lazy_get reads every integer width up to its edge")
 TEST_CASE("lazy: a byte string key is not the text key with the same bytes")
 {
     auto const root = lazy_of("\xa2\x41\x61\x01\x61\x61\x02"s);
-    auto const a = cbor::lazy_at<16>(root, "a");
+    auto const a = root.at<16>("a");
     REQUIRE(a.has_value());
-    CHECK_EQ(*cbor::lazy_get<std::uint64_t>(*a), 2u);
+    CHECK_EQ(*a->get<std::uint64_t>(), 2u);
 }
 
 // A tag 29 reference names a mark that lies before it. A mark that navigation recorded later in the document
@@ -472,11 +472,33 @@ TEST_CASE("lazy: a byte string key is not the text key with the same bytes")
 TEST_CASE("lazy: a reference forward to a mark that navigation recorded is an error")
 {
     auto const root = lazy_of("\x82\xd8\x1d\x00\xd8\x1c\x05"s);
-    auto const second = cbor::lazy_at<16>(root, 1);
+    auto const second = root.at<16>(1);
     REQUIRE(second.has_value());
-    CHECK_EQ(*cbor::lazy_get<std::uint64_t>(*second), 5u);
-    auto const first = cbor::lazy_at<16>(root, 0);
+    CHECK_EQ(*second->get<std::uint64_t>(), 5u);
+    auto const first = root.at<16>(0);
     REQUIRE(first.has_value());
     test_host host;
     CHECK_EQ(cbor::lazy_decode<16>(host, *first).error(), error::sharedref_not_complete);
+}
+
+// The member form: lazy::from takes the bytes by move and copies nothing; each step gives a result that the next
+// step reads, so a chain needs no and_then, and an error anywhere reaches the end of the chain.
+TEST_CASE("lazy: from, at and get as a chain")
+{
+    std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
+    char const *const data = bytes.data();
+    cbor::lazy const doc = cbor::lazy::from(std::move(bytes));
+    std::string_view const name = doc.at("statuses").at(1).at("user").at("name").get<std::string_view>();
+    CHECK_EQ(name, "bob"sv);
+    CHECK_EQ(static_cast<void const *>(doc.document->bytes.data()), static_cast<void const *>(data));
+    auto const missing = doc.at("statuses").at(5).at("user").get<std::string_view>();
+    REQUIRE_FALSE(missing.has_value());
+    CHECK_EQ(missing.error(), error::index_out_of_bounds);
+    CHECK_THROWS_AS(std::string_view n = doc.at("nope").get<std::string_view>(), std::system_error);
+    std::size_t count = 0;
+    for (auto const e : *doc.at("statuses").elements()) {
+        REQUIRE(e.has_value());
+        ++count;
+    }
+    CHECK_EQ(count, 2u);
 }
