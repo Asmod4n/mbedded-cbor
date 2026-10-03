@@ -11,6 +11,7 @@
 #include <expected>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -1415,6 +1416,8 @@ class internal
         std::string_view bytes;
         std::vector<std::size_t> marks;
         std::size_t high_water_mark;
+        std::map<std::size_t, std::map<std::string, std::size_t, std::less<>>> keys;
+        std::map<std::size_t, std::map<std::int64_t, std::size_t>> indexes;
 
         void mark(decoder const &d)
         {
@@ -1951,6 +1954,24 @@ class internal
 struct lazy {
     std::shared_ptr<internal::document> document;
     std::size_t offset;
+
+    static result<lazy> from(std::string &&bytes);
+    static result<lazy> from(std::shared_ptr<std::string const> bytes);
+
+    template <std::size_t DepthMax = 64>
+    result<lazy> at(std::string_view key) const;
+
+    template <std::size_t DepthMax = 64>
+    result<lazy> at(std::int64_t index) const;
+
+    template <class T>
+    result<T> get() const;
+
+    template <std::size_t DepthMax = 64>
+    result<lazy_elements<DepthMax>> elements() const;
+
+    template <std::size_t DepthMax = 64>
+    result<lazy_entries<DepthMax>> entries() const;
 };
 
 template <std::size_t DepthMax>
@@ -2889,6 +2910,9 @@ std::expected<lazy, error> decode(std::string bytes)
 template <std::size_t DepthMax>
 std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
 {
+    auto &cached = l.document->indexes[l.offset];
+    if (auto const hit = cached.find(index); hit != cached.end())
+        return lazy{l.document, hit->second};
     auto const found = internal::container_resolve(l.document, l.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -2904,7 +2928,10 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
         for (std::int64_t i = 0; i < position; ++i)
             if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
                 return std::unexpected(r.error());
-        return lazy{source, source->bytes.size() - d.bytes.size()};
+        std::size_t const element = source->bytes.size() - d.bytes.size();
+        if (source == l.document)
+            cached.emplace(index, element);
+        return lazy{source, element};
     }
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
@@ -2919,8 +2946,12 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
                             k->argument == static_cast<std::uint64_t>(-1 - index));
         if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
-        if (match)
-            return lazy{source, source->bytes.size() - d.bytes.size()};
+        if (match) {
+            std::size_t const value = source->bytes.size() - d.bytes.size();
+            if (source == l.document)
+                cached.emplace(index, value);
+            return lazy{source, value};
+        }
         if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
@@ -2930,6 +2961,9 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
 template <std::size_t DepthMax>
 std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
 {
+    auto &cached = l.document->keys[l.offset];
+    if (auto const hit = cached.find(key); hit != cached.end())
+        return lazy{l.document, hit->second};
     auto const found = internal::container_resolve(l.document, l.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -2950,8 +2984,12 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
         }
         if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
-        if (match)
-            return lazy{source, source->bytes.size() - d.bytes.size()};
+        if (match) {
+            std::size_t const value = source->bytes.size() - d.bytes.size();
+            if (source == l.document)
+                cached.emplace(std::string(key), value);
+            return lazy{source, value};
+        }
         if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
@@ -3068,6 +3106,116 @@ std::expected<lazy_entries<DepthMax>, error> lazy_entries_of(lazy const &map)
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     return lazy_entries<DepthMax>{source, source->bytes.size() - d.bytes.size(), h.argument};
+}
+
+template <>
+struct result<lazy, error> : std::expected<lazy, error> {
+    using std::expected<lazy, cbor::error>::expected;
+
+#if __cpp_exceptions
+    operator lazy() const
+    {
+        if (!has_value()) [[unlikely]]
+            throw std::system_error(make_error_code(error()));
+        return **this;
+    }
+#endif
+
+    template <std::size_t DepthMax = 64>
+    result at(std::string_view const key) const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).at<DepthMax>(key);
+    }
+
+    template <std::size_t DepthMax = 64>
+    result at(std::int64_t const index) const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).at<DepthMax>(index);
+    }
+
+    template <class T>
+    cbor::result<T> get() const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).get<T>();
+    }
+
+    template <std::size_t DepthMax = 64>
+    cbor::result<lazy_elements<DepthMax>> elements() const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).elements<DepthMax>();
+    }
+
+    template <std::size_t DepthMax = 64>
+    cbor::result<lazy_entries<DepthMax>> entries() const
+    {
+        if (!has_value()) [[unlikely]]
+            return std::unexpected(error());
+        return (**this).entries<DepthMax>();
+    }
+};
+
+inline result<lazy> lazy::from(std::shared_ptr<std::string const> bytes)
+{
+    std::string_view const view = *bytes;
+    return lazy{std::make_shared<internal::document>(std::move(bytes), view, std::vector<std::size_t>{}, 0), 0};
+}
+
+inline result<lazy> lazy::from(std::string &&bytes)
+{
+    return from(std::make_shared<std::string const>(std::move(bytes)));
+}
+
+template <std::size_t DepthMax>
+result<lazy> lazy::at(std::string_view const key) const
+{
+    auto r = lazy_at<DepthMax>(*this, key);
+    if (!r) [[unlikely]]
+        return std::unexpected(r.error());
+    return std::move(*r);
+}
+
+template <std::size_t DepthMax>
+result<lazy> lazy::at(std::int64_t const index) const
+{
+    auto r = lazy_at<DepthMax>(*this, index);
+    if (!r) [[unlikely]]
+        return std::unexpected(r.error());
+    return std::move(*r);
+}
+
+template <class T>
+result<T> lazy::get() const
+{
+    auto r = lazy_get<T>(*this);
+    if (!r) [[unlikely]]
+        return std::unexpected(r.error());
+    return std::move(*r);
+}
+
+template <std::size_t DepthMax>
+result<lazy_elements<DepthMax>> lazy::elements() const
+{
+    auto r = lazy_elements_of<DepthMax>(*this);
+    if (!r) [[unlikely]]
+        return std::unexpected(r.error());
+    return std::move(*r);
+}
+
+template <std::size_t DepthMax>
+result<lazy_entries<DepthMax>> lazy::entries() const
+{
+    auto r = lazy_entries_of<DepthMax>(*this);
+    if (!r) [[unlikely]]
+        return std::unexpected(r.error());
+    return std::move(*r);
 }
 
 template <std::size_t DepthMax, class Host>
