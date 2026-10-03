@@ -563,8 +563,9 @@ struct passkey_login {
 
 } // namespace
 
-// CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct is one element in the
-// second item when present and no element when absent; a path to it gives the document of the element.
+// CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct lies in the
+// fixed item as an array of a presence flag and its fields, so a path to it reads no reference. Both forms stay
+// two well-formed CBOR items.
 TEST_CASE("schema: an optional struct and an optional string, present and absent")
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
@@ -591,6 +592,14 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
     auto const absent = cbor::at_path_compiled<passkey_login, ".user">(*doc2);
     REQUIRE(absent.has_value());
     CHECK_FALSE(absent->has_value());
+    for (std::string_view message : {std::string_view(bytes), std::string_view(none)}) {
+        auto const first = cbor::doc_end<64>(message);
+        REQUIRE(first.has_value());
+        auto const second = cbor::doc_end<64>(message.substr(*first));
+        REQUIRE(second.has_value());
+        CHECK_EQ(*first + *second, message.size());
+    }
+    CHECK_EQ(cbor::fixed_size<std::optional<passkey_user>>(), 2 + cbor::fixed_size<passkey_user>());
     passkey_login const back2 = cbor::decode<passkey_login>(none);
     CHECK_FALSE(back2.user.has_value());
     CHECK_FALSE(back2.note.has_value());

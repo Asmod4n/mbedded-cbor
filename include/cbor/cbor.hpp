@@ -542,6 +542,14 @@ class internal
     } && !requires { typename U::error_type; };
 
     template <class U>
+    static constexpr bool is_inline_optional = is_optional<U> && requires {
+        requires std::is_class_v<typename U::value_type> && std::is_aggregate_v<typename U::value_type>;
+        requires !requires { fixed_length<typename U::value_type>::value; };
+    };
+
+    static constexpr std::size_t inline_optional_head = 2;
+
+    template <class U>
     static constexpr bool is_map = std::ranges::sized_range<U> && requires {
         typename U::key_type;
         typename U::mapped_type;
@@ -621,6 +629,10 @@ class internal
                     bytes.push_back(static_cast<char>(c));
                 zero_initialized_encode<typename[:std::meta::type_of(m):]>(bytes);
             }
+        } else if constexpr (is_inline_optional<U>) {
+            head_encode(bytes, major_type::array, 2);
+            head_encode(bytes, major_type::simple_float, std::to_underlying(simple_value::false_value));
+            zero_initialized_encode<typename U::value_type>(bytes);
         } else {
             head_encode(bytes, major_type::array, 2);
             fixed_width_head_encode(bytes, major_type::unsigned_integer, sizeof(std::uint32_t));
@@ -710,6 +722,9 @@ class internal
             } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
                 template for (constexpr auto m : data_members<U>())
                     add<typename[:std::meta::type_of(m):]>(value.[:m:]);
+            } else if constexpr (is_inline_optional<U>) {
+                if (value.has_value())
+                    add<typename U::value_type>(*value);
             } else if constexpr (is_optional<U>) {
                 if (value.has_value()) {
                     items += 1;
@@ -885,6 +900,15 @@ class internal
                 using M = typename[:std::meta::type_of(m):];
                 position = value_encode<M>(out, field.template subspan<member_offset<U, m>(), fixed_size<M>()>(),
                                            value.[:m:], position);
+            }
+        } else if constexpr (is_inline_optional<U>) {
+            if (value.has_value()) {
+                using E = typename U::value_type;
+                field.template subspan<1, 1>().front() =
+                    static_cast<char>(std::to_underlying(major_type::simple_float) << 5 |
+                                      std::to_underlying(simple_value::true_value));
+                position = value_encode<E>(out, field.template subspan<inline_optional_head, fixed_size<E>()>(), *value,
+                                           position);
             }
         } else {
             position = reference_encode(out, field, value, position);
@@ -1074,6 +1098,14 @@ class internal
                 return cbor::document<U>{bytes, field, floor};
             } else if constexpr (is_fixed_string<U>) {
                 return std::string_view(field.template last<fixed_length<U>::value>());
+            } else if constexpr (is_inline_optional<U>) {
+                using E = typename U::value_type;
+                using X = typename decltype(path_result<E, Path, At>())::type;
+                if (static_cast<unsigned char>(field.template subspan<1, 1>().front()) !=
+                    (std::to_underlying(major_type::simple_float) << 5 | std::to_underlying(simple_value::true_value)))
+                    return std::optional<X>{};
+                return std::optional<X>{
+                    path_walk<E, Path, At>(bytes, field.template subspan<inline_optional_head, fixed_size<E>()>(), floor)};
             } else if constexpr (is_optional<U>) {
                 using E = typename U::value_type;
                 auto const r = reference_read(bytes, field, floor, fixed_size<E>());
@@ -1183,6 +1215,15 @@ class internal
                                       floor);
             }
             return done;
+        } else if constexpr (is_inline_optional<U>) {
+            if (static_cast<unsigned char>(field.template subspan<1, 1>().front()) !=
+                (std::to_underlying(major_type::simple_float) << 5 | std::to_underlying(simple_value::true_value))) {
+                out.reset();
+                return {};
+            }
+            return value_read(out.emplace(), bytes,
+                              field.template subspan<inline_optional_head, fixed_size<typename U::value_type>()>(),
+                              floor);
         } else if constexpr (is_optional<U>) {
             using E = typename U::value_type;
             auto const r = reference_read(bytes, field, floor, fixed_size<E>());
@@ -2812,6 +2853,8 @@ consteval std::size_t fixed_size()
             return internal::head_size(n) + n * fixed_size<E>();
     } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>)
         return internal::struct_fixed_size<U>();
+    else if constexpr (internal::is_inline_optional<U>)
+        return internal::inline_optional_head + fixed_size<typename U::value_type>();
     else if constexpr (requires(U const &v) {
                            v.has_value();
                            *v;
