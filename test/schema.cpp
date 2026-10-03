@@ -262,14 +262,14 @@ TEST_CASE("encode: a list of structs that hold strings")
 
 #if __cpp_impl_reflection
 
-// decode checks one thing: the first item has the size that the schema gives it. A shorter message cannot hold
+// view checks one thing: the first item has the size that the schema gives it. A shorter message cannot hold
 // the fixed fields, and a longer one is a newer sender or a second item.
-TEST_CASE("decode: a struct checks only the size of the first item")
+TEST_CASE("view: a struct checks only the size of the first item")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
-    CHECK(cbor::decode<login>(bytes).has_value());
-    CHECK(cbor::decode<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>())).has_value());
-    CHECK_EQ(cbor::decode<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>() - 1)).error(),
+    CHECK(cbor::view<login>(bytes).has_value());
+    CHECK(cbor::view<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>())).has_value());
+    CHECK_EQ(cbor::view<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>() - 1)).error(),
              error::too_little_data);
 }
 
@@ -305,7 +305,7 @@ vehicle const sample_vehicle{"Tesla", -7, {{{15, 2.5f}, {16, 2.0f}}}, {{17, 1.5f
 TEST_CASE("at_path_compiled: fixed fields give the value")
 {
     std::string const bytes = schema_bytes(sample_vehicle);
-    auto const doc = cbor::decode<vehicle>(bytes);
+    auto const doc = cbor::view<vehicle>(bytes);
     REQUIRE(doc.has_value());
     CHECK_EQ(cbor::at_path_compiled<vehicle, ".balance">(*doc), -7);
     CHECK_EQ(cbor::at_path_compiled<vehicle, ".motor.cc">(*doc), 1800u);
@@ -320,7 +320,7 @@ TEST_CASE("at_path_compiled: fixed fields give the value")
 TEST_CASE("at_path_compiled: parts of variable size give an expected")
 {
     std::string const bytes = schema_bytes(sample_vehicle);
-    auto const doc = cbor::decode<vehicle>(bytes);
+    auto const doc = cbor::view<vehicle>(bytes);
     REQUIRE(doc.has_value());
     CHECK_EQ(*cbor::at_path_compiled<vehicle, ".make">(*doc), "Tesla"sv);
     CHECK_EQ(*cbor::at_path_compiled<vehicle, ".wheels[2].diameter">(*doc), 19u);
@@ -337,10 +337,10 @@ TEST_CASE("at_path_compiled: a broken offset is an error")
     std::size_t const make = cbor::member_offset<vehicle, ^^vehicle::make>();
     std::string backward = bytes;
     backward.replace(make + 2, 4, "\x00\x00\x00\x01"s);
-    CHECK_EQ(cbor::at_path_compiled<vehicle, ".make">(*cbor::decode<vehicle>(backward)).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".make">(*cbor::view<vehicle>(backward)).error(), error::too_little_data);
     std::string past = bytes;
     past.replace(make + 7, 4, "\x00\x00\xff\xff"s);
-    CHECK_EQ(cbor::at_path_compiled<vehicle, ".make">(*cbor::decode<vehicle>(past)).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path_compiled<vehicle, ".make">(*cbor::view<vehicle>(past)).error(), error::too_little_data);
 }
 
 
@@ -363,14 +363,14 @@ TEST_CASE("at_path_compiled: a fixed byte array is read inline")
 {
     badge const b{{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}, shade::light, "x"};
     std::string const bytes = schema_bytes(b);
-    auto const doc = cbor::decode<badge>(bytes);
+    auto const doc = cbor::view<badge>(bytes);
     REQUIRE(doc.has_value());
     CHECK_EQ(cbor::at_path_compiled<badge, ".mac">(*doc), "\x01\x02\x03\x04"sv);
     CHECK_EQ(cbor::at_path_compiled<badge, ".tone">(*doc), shade::light);
     std::string zeros = bytes;
     std::size_t const mac = cbor::member_offset<badge, ^^badge::mac>();
     zeros.replace(mac + 1, 4, "\x00\x00\x00\x00"s);
-    CHECK_EQ(cbor::at_path_compiled<badge, ".mac">(*cbor::decode<badge>(zeros)), "\x00\x00\x00\x00"sv);
+    CHECK_EQ(cbor::at_path_compiled<badge, ".mac">(*cbor::view<badge>(zeros)), "\x00\x00\x00\x00"sv);
 }
 
 #endif
@@ -399,7 +399,7 @@ garage const sample_garage{{{17, 1.5f}, {18, 3.0f}, {19, 0.5f}},
 TEST_CASE("cbor::array: a list of structs, strings and lists, by index and in order")
 {
     std::string const bytes = schema_bytes(sample_garage);
-    auto const doc = cbor::decode<garage>(bytes);
+    auto const doc = cbor::view<garage>(bytes);
     REQUIRE(doc.has_value());
     auto const tires = cbor::at_path_compiled<garage, ".tires">(*doc);
     REQUIRE(tires.has_value());
@@ -429,7 +429,7 @@ TEST_CASE("cbor::array: a list of structs, strings and lists, by index and in or
 TEST_CASE("cbor::map: the pairs of a std::map in order")
 {
     std::string const bytes = schema_bytes(sample_garage);
-    auto const doc = cbor::decode<garage>(bytes);
+    auto const doc = cbor::view<garage>(bytes);
     REQUIRE(doc.has_value());
     auto const owners = cbor::at_path_compiled<garage, ".owners">(*doc);
     REQUIRE(owners.has_value());
@@ -442,6 +442,45 @@ TEST_CASE("cbor::map: the pairs of a std::map in order")
     }
     CHECK_EQ(seen, "7=seven;9=nine;");
     CHECK_EQ(owners->value_at(2).error(), error::index_out_of_bounds);
+}
+
+#endif
+
+#if __cpp_impl_reflection
+
+// The simple form: encode gives the bytes, decode gives the whole struct back. Every field takes the value it
+// went in with, the lists, the map and the optional included.
+TEST_CASE("encode and decode: a struct goes in and comes back whole")
+{
+    std::string const bytes = cbor::encode(sample_garage);
+    garage const back = cbor::decode<garage>(bytes);
+    REQUIRE_EQ(back.tires.size(), 3u);
+    CHECK_EQ(back.tires.at(2).diameter, 19u);
+    CHECK_EQ(back.tires.at(1).airPressure, 3.0f);
+    CHECK_EQ(back.names, sample_garage.names);
+    CHECK_EQ(back.rows, sample_garage.rows);
+    CHECK_EQ(back.owners, sample_garage.owners);
+
+    vehicle const v = cbor::decode<vehicle>(cbor::encode(sample_vehicle));
+    CHECK_EQ(v.make, "Tesla");
+    CHECK_EQ(v.balance, -7);
+    CHECK_EQ(v.spare.at(1).diameter, 16u);
+    CHECK_EQ(v.motor.cc, 1800u);
+    CHECK_EQ(std::string_view(v.code, 4), "ABCD"sv);
+    CHECK_EQ(v.owner, std::optional<std::uint8_t>{9});
+    CHECK_FALSE(v.none.has_value());
+}
+
+// A caller that takes the result as the struct gets an exception for broken bytes; a caller that tests the
+// result reads the error as a value, as with std::expected.
+TEST_CASE("decode: an error is thrown on conversion, or read as a value")
+{
+    std::string const bytes = cbor::encode(sample_vehicle);
+    std::string_view const cut = std::string_view(bytes).substr(0, 3);
+    CHECK_THROWS_AS(vehicle v = cbor::decode<vehicle>(cut), std::system_error);
+    auto const r = cbor::decode<vehicle>(cut);
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::too_little_data);
 }
 
 #endif
