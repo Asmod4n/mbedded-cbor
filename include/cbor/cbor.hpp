@@ -3094,7 +3094,7 @@ struct map {
 
 template <class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
-result<std::string, std::errc> encode(T const &value)
+CBOR_ALWAYS_INLINE inline result<std::string, std::errc> encode(T const &value)
 {
     internal::second_item second;
     second.add(value);
@@ -3110,7 +3110,7 @@ result<std::string, std::errc> encode(T const &value)
 
 template <class T, class Target>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
-result<std::size_t, std::errc> encode(T const &value, Target &&target)
+CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, Target &&target)
 {
     using U = std::remove_cvref_t<Target>;
     internal::second_item second;
