@@ -22,7 +22,11 @@ not checked. RFC 8949 section 5.3.1 permits both.
 Alpine and Nix. Each is built and run with podman.
 
 `-DCBOR_FUZZ=ON` with clang builds `mbedded-cbor-fuzzer`, a libFuzzer
-target. `fuzz/corpus` is its corpus.
+target. With `CXX=afl-g++-fast` and
+`-DCBOR_FUZZ_DRIVER=/usr/libexec/afl/libAFLDriver.a` the same target is
+built for AFL++ with gcc, which has reflection, so the schema is fuzzed
+too. `fuzz/corpus` is the corpus and `fuzz/cbor.dict` the dictionary of
+both.
 
 ## Use
 
