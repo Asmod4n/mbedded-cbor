@@ -1416,8 +1416,6 @@ class internal
         std::string_view bytes;
         std::vector<std::size_t> marks;
         std::size_t high_water_mark;
-        std::map<std::size_t, std::map<std::string, std::size_t, std::less<>>> keys;
-        std::map<std::size_t, std::map<std::int64_t, std::size_t>> indexes;
 
         void mark(decoder const &d)
         {
@@ -2910,9 +2908,6 @@ std::expected<lazy, error> decode(std::string bytes)
 template <std::size_t DepthMax>
 std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
 {
-    auto &cached = l.document->indexes[l.offset];
-    if (auto const hit = cached.find(index); hit != cached.end())
-        return lazy{l.document, hit->second};
     auto const found = internal::container_resolve(l.document, l.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -2929,8 +2924,6 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
             if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
                 return std::unexpected(r.error());
         std::size_t const element = source->bytes.size() - d.bytes.size();
-        if (source == l.document)
-            cached.emplace(index, element);
         return lazy{source, element};
     }
     if (h.major != major_type::map) [[unlikely]]
@@ -2948,8 +2941,6 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
             return std::unexpected(r.error());
         if (match) {
             std::size_t const value = source->bytes.size() - d.bytes.size();
-            if (source == l.document)
-                cached.emplace(index, value);
             return lazy{source, value};
         }
         if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
@@ -2961,9 +2952,6 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::int64_t const index)
 template <std::size_t DepthMax>
 std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
 {
-    auto &cached = l.document->keys[l.offset];
-    if (auto const hit = cached.find(key); hit != cached.end())
-        return lazy{l.document, hit->second};
     auto const found = internal::container_resolve(l.document, l.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -2986,8 +2974,6 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
             return std::unexpected(r.error());
         if (match) {
             std::size_t const value = source->bytes.size() - d.bytes.size();
-            if (source == l.document)
-                cached.emplace(std::string(key), value);
             return lazy{source, value};
         }
         if (auto const r = internal::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
