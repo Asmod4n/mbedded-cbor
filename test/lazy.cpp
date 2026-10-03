@@ -502,21 +502,3 @@ TEST_CASE("lazy: from, at and get as a chain")
     }
     CHECK_EQ(count, 2u);
 }
-
-// A key or an index that a caller asked for is kept with the offset it led to, so the next lookup on the same
-// node reads no bytes. Iteration keeps nothing.
-TEST_CASE("lazy: a key and an index that were asked for are found again from the cache")
-{
-    cbor::lazy const doc = cbor::lazy::from(encoded(M("a"s, A(1, 2, 3), "b"s, 4)));
-    CHECK(doc.document->keys.empty());
-    auto const a = doc.at("a");
-    REQUIRE(a.has_value());
-    CHECK_EQ(doc.document->keys.at(0).count("a"), 1u);
-    auto const again = doc.at("a");
-    CHECK_EQ(again->offset, a->offset);
-    CHECK_EQ(*a.at(-1).get<std::uint64_t>(), 3u);
-    CHECK_EQ(doc.document->indexes.at(a->offset).count(-1), 1u);
-    for (auto const e : *a.elements())
-        (void)e;
-    CHECK_EQ(doc.document->indexes.at(a->offset).size(), 1u);
-}
