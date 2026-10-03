@@ -452,8 +452,8 @@ TEST_CASE("cbor::map: the pairs of a std::map in order")
 // went in with, the lists, the map and the optional included.
 TEST_CASE("encode and decode: a struct goes in and comes back whole")
 {
-    std::string const bytes = cbor::encode(sample_garage);
-    garage const back = cbor::decode<garage>(bytes);
+    std::string const bytes = *cbor::encode(sample_garage);
+    garage const back = *cbor::decode<garage>(bytes);
     REQUIRE_EQ(back.tires.size(), 3u);
     CHECK_EQ(back.tires.at(2).diameter, 19u);
     CHECK_EQ(back.tires.at(1).airPressure, 3.0f);
@@ -461,8 +461,8 @@ TEST_CASE("encode and decode: a struct goes in and comes back whole")
     CHECK_EQ(back.rows, sample_garage.rows);
     CHECK_EQ(back.owners, sample_garage.owners);
 
-    std::string const encoded = cbor::encode(sample_vehicle);
-    vehicle const v = cbor::decode<vehicle>(encoded);
+    std::string const encoded = *cbor::encode(sample_vehicle);
+    vehicle const v = *cbor::decode<vehicle>(encoded);
     CHECK_EQ(v.make, "Tesla");
     CHECK_EQ(v.balance, -7);
     CHECK_EQ(v.spare.at(1).diameter, 16u);
@@ -472,13 +472,11 @@ TEST_CASE("encode and decode: a struct goes in and comes back whole")
     CHECK_FALSE(v.none.has_value());
 }
 
-// A caller that takes the result as the struct gets an exception for broken bytes; a caller that tests the
-// result reads the error as a value, as with std::expected.
-TEST_CASE("decode: an error is thrown on conversion, or read as a value")
+// Broken bytes give the error as a value, as with std::expected.
+TEST_CASE("decode: an error is read as a value")
 {
-    std::string const bytes = cbor::encode(sample_vehicle);
+    std::string const bytes = *cbor::encode(sample_vehicle);
     std::string_view const cut = std::string_view(bytes).substr(0, 3);
-    CHECK_THROWS_AS(vehicle v = cbor::decode<vehicle>(cut), std::system_error);
     auto const r = cbor::decode<vehicle>(cut);
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::too_little_data);
@@ -493,7 +491,7 @@ TEST_CASE("decode: an error is thrown on conversion, or read as a value")
 // final length of the message. A span that holds the message but not the padding of a head still takes it.
 TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
 {
-    std::string const expected = cbor::encode(sample_garage);
+    std::string const expected = *cbor::encode(sample_garage);
     std::string text = "x";
     CHECK_EQ(*cbor::encode(sample_garage, text), expected.size());
     CHECK_EQ(text, "x" + expected);
@@ -569,7 +567,7 @@ struct passkey_login {
 TEST_CASE("schema: an optional struct and an optional string, present and absent")
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
-    std::string const bytes = cbor::encode(full);
+    std::string const bytes = *cbor::encode(full);
     auto const doc = cbor::view<passkey_login>(bytes);
     REQUIRE(doc.has_value());
     auto const user = cbor::at_path_compiled<passkey_login, ".user">(*doc);
@@ -580,13 +578,13 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
     auto const note = cbor::at_path_compiled<passkey_login, ".note">(*doc);
     REQUIRE(note.has_value());
     CHECK_EQ(note->value(), "hello"sv);
-    passkey_login const back = cbor::decode<passkey_login>(bytes);
+    passkey_login const back = *cbor::decode<passkey_login>(bytes);
     REQUIRE(back.user.has_value());
     CHECK_EQ(back.user->name, "alice");
     CHECK_EQ(back.note, std::optional<std::string>{"hello"});
 
     passkey_login const empty{{std::byte{1}}, std::nullopt, std::nullopt};
-    std::string const none = cbor::encode(empty);
+    std::string const none = *cbor::encode(empty);
     auto const doc2 = cbor::view<passkey_login>(none);
     REQUIRE(doc2.has_value());
     auto const absent = cbor::at_path_compiled<passkey_login, ".user">(*doc2);
@@ -600,7 +598,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
         CHECK_EQ(*first + *second, message.size());
     }
     CHECK_EQ(cbor::fixed_size<std::optional<passkey_user>>(), 2 + cbor::fixed_size<passkey_user>());
-    passkey_login const back2 = cbor::decode<passkey_login>(none);
+    passkey_login const back2 = *cbor::decode<passkey_login>(none);
     CHECK_FALSE(back2.user.has_value());
     CHECK_FALSE(back2.note.has_value());
 }
