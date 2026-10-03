@@ -505,7 +505,7 @@ inline void schema_round_trip(std::string_view const input)
     v.flag = in.byte() & 1;
 
     string_writer w;
-    require(cbor::encode(w, v).has_value());
+    require(cbor::encode(v, w).has_value());
     auto const first = cbor::doc_end<16>(w.bytes);
     require(first.has_value());
     auto const second = cbor::doc_end<16>(std::string_view(w.bytes).substr(*first));
