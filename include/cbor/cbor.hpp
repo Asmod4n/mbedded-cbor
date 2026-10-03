@@ -325,7 +325,10 @@ template <class T>
 consteval std::size_t fixed_size();
 
 template <class T>
-consteval std::size_t no_fixed_size();
+consteval std::size_t no_fixed_size()
+{
+    std::unreachable();
+}
 
 template <class T, std::meta::info Member>
 consteval std::size_t member_offset();
@@ -410,6 +413,14 @@ class internal
 
     template <class Host>
     using marks = std::vector<std::optional<typename Host::value>>;
+
+    template <class V>
+    static V unsigned_read(std::span<char const, sizeof(V)> const field)
+    {
+        std::array<char, sizeof(V)> big;
+        std::ranges::copy(field, big.begin());
+        return std::byteswap(std::bit_cast<V>(big));
+    }
 
 #ifdef __cpp_impl_reflection
     static constexpr std::size_t initial_byte_size = 1;
@@ -916,21 +927,14 @@ class internal
         return std::min(path.find(']', at + 1), path.size());
     }
 
+    template <class T>
     static consteval std::size_t index_of(std::string_view const digits)
     {
         std::size_t value = 0;
         auto const [end, ec] = std::from_chars(digits.data(), std::to_address(digits.end()), value);
         if (ec != std::errc{} || end != std::to_address(digits.end())) [[unlikely]]
-            return no_fixed_size<std::size_t>();
+            return no_fixed_size<T>();
         return value;
-    }
-
-    template <class V>
-    static V unsigned_read(std::span<char const, sizeof(V)> const field)
-    {
-        std::array<char, sizeof(V)> big;
-        std::ranges::copy(field, big.begin());
-        return std::byteswap(std::bit_cast<V>(big));
     }
 
 #ifdef __SIZEOF_INT128__
@@ -1131,7 +1135,7 @@ class internal
             }
         } else {
             constexpr std::size_t close = index_end(path, At);
-            constexpr std::size_t i = index_of(path.substr(At + 1, close - At - 1));
+            constexpr std::size_t i = index_of<T>(path.substr(At + 1, close - At - 1));
             if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U>) {
                 return no_fixed_size<T>();
             } else if constexpr (requires { fixed_length<U>::value; }) {
@@ -1391,23 +1395,17 @@ class internal
             std::uint64_t argument;
             switch (static_cast<additional_information>(info)) {
             case additional_information::one_byte_argument:
-                argument = static_cast<std::uint8_t>(rest.at(0));
+                argument = static_cast<std::uint8_t>(rest.front());
                 break;
-            case additional_information::two_byte_argument: {
-                std::uint16_t v;
-                std::memcpy(&v, rest.data(), 2);
-                argument = std::byteswap(v);
-            } break;
-            case additional_information::four_byte_argument: {
-                std::uint32_t v;
-                std::memcpy(&v, rest.data(), 4);
-                argument = std::byteswap(v);
-            } break;
-            default: {
-                std::uint64_t v;
-                std::memcpy(&v, rest.data(), 8);
-                argument = std::byteswap(v);
-            } break;
+            case additional_information::two_byte_argument:
+                argument = unsigned_read<std::uint16_t>(std::span<char const>(rest).first<2>());
+                break;
+            case additional_information::four_byte_argument:
+                argument = unsigned_read<std::uint32_t>(std::span<char const>(rest).first<4>());
+                break;
+            default:
+                argument = unsigned_read<std::uint64_t>(std::span<char const>(rest).first<8>());
+                break;
             }
             bytes.remove_prefix(1 + size);
             return head{major, info, argument};
@@ -1942,9 +1940,8 @@ class internal
                     if (info == std::to_underlying(additional_information::one_byte_argument)) {
                         argument = static_cast<std::uint8_t>(d.bytes.at(1));
                     } else if (!immediate) {
-                        std::uint64_t word;
-                        std::memcpy(&word, d.bytes.substr(1, 8).data(), 8);
-                        argument = std::byteswap(word) >> ((64 - 8 * size) & 63);
+                        argument = unsigned_read<std::uint64_t>(std::span<char const>(d.bytes.substr(1, 8)).first<8>()) >>
+                                   ((64 - 8 * size) & 63);
                     }
                     d.bytes.remove_prefix(1 + size);
                     if (major == major_type::byte_string || major == major_type::text_string) {
@@ -2947,10 +2944,8 @@ CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, 
             return size;
         }
     }
-    std::string bytes;
-    bytes.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
-        return internal::generic_write(std::span<char>(p, n), 0, value);
-    });
+    std::string bytes(padded, '\0');
+    bytes.resize(internal::generic_write(std::span<char>(bytes), 0, value));
     decltype(auto) message = internal::message_of(target, bytes.size());
     if (auto const r = message.append(bytes); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -3138,10 +3133,8 @@ result<std::size_t, std::errc> encode(T const &value, Target &&target)
             return *size;
         }
     }
-    std::string bytes;
-    bytes.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
-        return internal::encoded_write(std::span<char>(p, n), value, second);
-    });
+    std::string bytes(padded, '\0');
+    bytes.resize(internal::encoded_write(std::span<char>(bytes), value, second));
     decltype(auto) message = internal::message_of(target, bytes.size());
     if (auto const r = message.append(bytes); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -3180,7 +3173,7 @@ struct encoder {
 
     void item_write(std::array<char, 9> const &item, std::size_t const size)
     {
-        std::memcpy(std::span(block).subspan(used).data(), item.data(), item.size());
+        std::ranges::copy(item, std::span(block).subspan(used).begin());
         used += size;
     }
 
@@ -3199,7 +3192,7 @@ struct encoder {
         std::uint64_t const big = std::byteswap(argument << ((64 - 8 * bytes) & 63));
         std::array<char, 9> head;
         std::get<0>(head) = static_cast<char>(std::to_underlying(major) << 5 | info);
-        std::memcpy(std::span(head).template subspan<1>().data(), &big, sizeof big);
+        std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), std::span(head).template subspan<1>().begin());
         std::size_t const size = 1 + bytes;
         item_write(head, size);
         return {};
@@ -3210,7 +3203,7 @@ struct encoder {
         if (auto const r = head_encode(major_type::byte_string, bytes.size()); !r) [[unlikely]]
             return r;
         if (bytes.size() <= block.size() - used) {
-            std::memcpy(std::span(block).subspan(used).data(), bytes.data(), bytes.size());
+            std::ranges::copy(bytes, std::span(block).subspan(used).begin());
             used += bytes.size();
             return {};
         }
@@ -3225,7 +3218,7 @@ struct encoder {
         if (auto const r = head_encode(major_type::text_string, text.size()); !r) [[unlikely]]
             return r;
         if (text.size() <= block.size() - used) {
-            std::memcpy(std::span(block).subspan(used).data(), text.data(), text.size());
+            std::ranges::copy(text, std::span(block).subspan(used).begin());
             used += text.size();
             return {};
         }
@@ -3246,7 +3239,7 @@ struct encoder {
                 std::to_underlying(major_type::simple_float) << 5 |
                 std::to_underlying(internal::simple_float_information::half_precision_float));
             auto const v = std::byteswap(internal::float_encode_binary16(static_cast<float>(value)));
-            std::memcpy(std::span(item).template subspan<1>().data(), &v, 2);
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), std::span(item).template subspan<1>().begin());
             size = 3;
         } break;
         case internal::simple_float_information::single_precision_float: {
@@ -3254,7 +3247,7 @@ struct encoder {
                 std::to_underlying(major_type::simple_float) << 5 |
                 std::to_underlying(internal::simple_float_information::single_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
-            std::memcpy(std::span(item).template subspan<1>().data(), &v, 4);
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), std::span(item).template subspan<1>().begin());
             size = 5;
         } break;
         default: {
@@ -3262,7 +3255,7 @@ struct encoder {
                 std::to_underlying(major_type::simple_float) << 5 |
                 std::to_underlying(internal::simple_float_information::double_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint64_t>(value));
-            std::memcpy(std::span(item).template subspan<1>().data(), &v, 8);
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), std::span(item).template subspan<1>().begin());
             size = 9;
         } break;
         }
@@ -3281,7 +3274,7 @@ struct encoder {
             std::to_underlying(major) << 5 |
             (std::to_underlying(internal::additional_information::one_byte_argument) + std::countr_zero(sizeof(T))));
         T const big = std::byteswap(argument);
-        std::memcpy(std::span(head).template subspan<1>().data(), &big, sizeof big);
+        std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), std::span(head).template subspan<1>().begin());
         item_write(head, 1 + sizeof(T));
         return {};
     }
