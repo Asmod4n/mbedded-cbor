@@ -3119,6 +3119,7 @@ CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, 
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
     std::size_t const padded = *size + internal::head_padding;
+    [[assume(padded >= fixed_size<T>())]];
     if constexpr (std::same_as<U, std::string>) {
         std::size_t const at = target.size();
         target.resize_and_overwrite(at + padded, [&](char *const p, std::size_t const n) {
@@ -3127,7 +3128,7 @@ CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, 
         return *size;
     } else if constexpr (internal::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
         std::size_t const at = std::ranges::size(target);
-        target.resize(at + padded);
+        target.insert(target.end(), padded, char{});
         internal::encoded_write(std::span<char>(target).subspan(at), value, second);
         target.resize(at + *size);
         return *size;
