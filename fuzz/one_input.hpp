@@ -467,6 +467,14 @@ inline void schema_read(std::string_view const input)
     (void)cbor::at_path_compiled<vehicle, ".wheels[3].airPressure">(*doc);
     (void)cbor::at_path_compiled<vehicle, ".owner">(*doc);
     (void)cbor::at_path_compiled<vehicle, ".names[1]">(*doc);
+    if (auto const wheels = cbor::at_path_compiled<vehicle, ".wheels">(*doc))
+        for (auto const w : *wheels)
+            if (w)
+                (void)cbor::at_path_compiled<tire, ".diameter">(*w);
+    if (auto const names = cbor::at_path_compiled<vehicle, ".names">(*doc))
+        for (auto const n : *names)
+            if (n)
+                require(n->data() >= input.data() && n->data() + n->size() <= input.data() + input.size());
 }
 
 // A struct from the bytes of the input, encoded and read back: every field must come back as it went in,
@@ -529,6 +537,17 @@ inline void schema_round_trip(std::string_view const input)
         require(!cbor::at_path_compiled<vehicle, ".wheels[3].diameter">(*doc).has_value());
     if (v.names.size() > 1)
         require(*cbor::at_path_compiled<vehicle, ".names[1]">(*doc) == v.names[1]);
+    auto const wheels = cbor::at_path_compiled<vehicle, ".wheels">(*doc);
+    require(wheels.has_value() && wheels->size() == v.wheels.size());
+    std::size_t i = 0;
+    for (auto const w : *wheels) {
+        require(w.has_value() && cbor::at_path_compiled<tire, ".diameter">(*w) == v.wheels.at(i).diameter);
+        ++i;
+    }
+    auto const names = cbor::at_path_compiled<vehicle, ".names">(*doc);
+    require(names.has_value() && names->size() == v.names.size());
+    for (std::size_t n = 0; n < v.names.size(); ++n)
+        require(*names->at(n) == v.names.at(n));
 
     test_host host;
     auto const generic = cbor::decode<16>(host, std::string_view(w.bytes).substr(0, *first));

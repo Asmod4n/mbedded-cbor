@@ -374,3 +374,74 @@ TEST_CASE("at_path_compiled: a fixed byte array is read inline")
 }
 
 #endif
+
+#if __cpp_impl_reflection
+
+namespace
+{
+
+struct garage {
+    std::vector<tire> tires;
+    std::vector<std::string> names;
+    std::vector<std::vector<std::uint16_t>> rows;
+    std::map<std::uint16_t, std::string> owners;
+};
+
+garage const sample_garage{{{17, 1.5f}, {18, 3.0f}, {19, 0.5f}},
+                           {"a", "bc"},
+                           {{1, 2}, {}, {3}},
+                           {{7, "seven"}, {9, "nine"}}};
+
+} // namespace
+
+// RFC 8949 3.1 major type 4: a list is an array. Each element has a fixed size, so element i lies at i times
+// that size behind the data, and at(i) reads it without walking the ones before. A list is read once, in order.
+TEST_CASE("cbor::array: a list of structs, strings and lists, by index and in order")
+{
+    std::string const bytes = schema_bytes(sample_garage);
+    auto const doc = cbor::decode<garage>(bytes);
+    REQUIRE(doc.has_value());
+    auto const tires = cbor::at_path_compiled<garage, ".tires">(*doc);
+    REQUIRE(tires.has_value());
+    CHECK_EQ(tires->size(), 3u);
+    std::uint32_t sum = 0;
+    for (auto const t : *tires)
+        sum += cbor::at_path_compiled<tire, ".diameter">(*t);
+    CHECK_EQ(sum, 17u + 18u + 19u);
+    CHECK_EQ(cbor::at_path_compiled<tire, ".airPressure">(*tires->at(1)), 3.0f);
+    CHECK_EQ(tires->at(3).error(), error::index_out_of_bounds);
+
+    auto const names = cbor::at_path_compiled<garage, ".names">(*doc);
+    REQUIRE(names.has_value());
+    CHECK_EQ(*names->at(1), "bc"sv);
+
+    auto const rows = cbor::at_path_compiled<garage, ".rows">(*doc);
+    REQUIRE(rows.has_value());
+    auto const third = rows->at(2);
+    REQUIRE(third.has_value());
+    CHECK_EQ(third->size(), 1u);
+    CHECK_EQ(*third->at(0), 3u);
+    CHECK_EQ(rows->at(1)->size(), 0u);
+}
+
+// RFC 8949 3.1 major type 5: a std::map is a map. Each pair has the fixed size of its key and its value, so the
+// pairs are read in the order the sender wrote them.
+TEST_CASE("cbor::map: the pairs of a std::map in order")
+{
+    std::string const bytes = schema_bytes(sample_garage);
+    auto const doc = cbor::decode<garage>(bytes);
+    REQUIRE(doc.has_value());
+    auto const owners = cbor::at_path_compiled<garage, ".owners">(*doc);
+    REQUIRE(owners.has_value());
+    CHECK_EQ(owners->size(), 2u);
+    std::string seen;
+    for (auto const [key, value] : *owners) {
+        REQUIRE(key.has_value());
+        REQUIRE(value.has_value());
+        seen += std::to_string(*key) + "=" + std::string(*value) + ";";
+    }
+    CHECK_EQ(seen, "7=seven;9=nine;");
+    CHECK_EQ(owners->value_at(2).error(), error::index_out_of_bounds);
+}
+
+#endif

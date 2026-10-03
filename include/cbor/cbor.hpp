@@ -369,6 +369,12 @@ struct fixed_string {
 
 template <class T, fixed_string Path>
 auto at_path_compiled(document<T> const doc);
+
+template <class E>
+struct array;
+
+template <class K, class V>
+struct map;
 #endif
 
 class internal
@@ -976,6 +982,10 @@ class internal
                 return std::optional<typename U::value_type>{};
             else if constexpr (is_text_range<U> || is_byte_range<U>)
                 return std::string_view{};
+            else if constexpr (is_map<U>)
+                return cbor::map<typename U::key_type, typename U::mapped_type>{};
+            else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; })
+                return cbor::array<std::ranges::range_value_t<U>>{};
             else
                 return U{};
         } else if constexpr (path.substr(At, 1) == ".") {
@@ -1037,6 +1047,19 @@ class internal
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return bytes.substr(r->data, r->length);
+            } else if constexpr (is_map<U>) {
+                using K = typename U::key_type;
+                using V = typename U::mapped_type;
+                auto const r = reference_read(bytes, offset, floor, fixed_size<K>() + fixed_size<V>());
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return cbor::map<K, V>{bytes, r->data, r->length};
+            } else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; }) {
+                using E = std::ranges::range_value_t<U>;
+                auto const r = reference_read(bytes, offset, floor, fixed_size<E>());
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return cbor::array<E>{bytes, r->data, r->length};
             } else {
                 return fixed_value_read<U>(bytes, offset);
             }
@@ -1075,6 +1098,12 @@ class internal
 
     template <class T, fixed_string Path>
     friend auto at_path_compiled(cbor::document<T> const doc);
+
+    template <class E>
+    friend struct cbor::array;
+
+    template <class K, class V>
+    friend struct cbor::map;
     template <class Writer, class T>
         requires std::is_class_v<T> && std::is_aggregate_v<T>
     friend std::expected<void, std::errc> encode(Writer &writer, T const &value);
@@ -1932,6 +1961,130 @@ auto at_path_compiled(document<T> const doc)
     else
         return *result;
 }
+
+template <class E>
+struct array {
+    std::string_view bytes;
+    std::size_t data;
+    std::size_t length;
+
+    std::size_t size() const
+    {
+        return length;
+    }
+
+    auto at(std::size_t const index) const
+        -> std::expected<decltype(internal::path_result<E, fixed_string{""}, 0>()), error>
+    {
+        if (index >= length) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return internal::path_walk<E, fixed_string{""}, 0>(bytes, data + index * fixed_size<E>(),
+                                                          data + length * fixed_size<E>());
+    }
+
+    struct iterator {
+        using difference_type = std::ptrdiff_t;
+        using value_type = decltype(std::declval<array const &>().at(0));
+
+        array const *over;
+        std::size_t index;
+
+        value_type operator*() const
+        {
+            return over->at(index);
+        }
+        iterator &operator++()
+        {
+            ++index;
+            return *this;
+        }
+        void operator++(int)
+        {
+            ++index;
+        }
+        bool operator==(std::default_sentinel_t) const
+        {
+            return index == over->length;
+        }
+    };
+
+    iterator begin() const
+    {
+        return iterator{this, 0};
+    }
+    std::default_sentinel_t end() const
+    {
+        return {};
+    }
+};
+
+template <class K, class V>
+struct map {
+    std::string_view bytes;
+    std::size_t data;
+    std::size_t length;
+
+    static constexpr std::size_t pair_size = fixed_size<K>() + fixed_size<V>();
+
+    std::size_t size() const
+    {
+        return length;
+    }
+
+    auto key_at(std::size_t const index) const
+        -> std::expected<decltype(internal::path_result<K, fixed_string{""}, 0>()), error>
+    {
+        if (index >= length) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return internal::path_walk<K, fixed_string{""}, 0>(bytes, data + index * pair_size,
+                                                          data + length * pair_size);
+    }
+
+    auto value_at(std::size_t const index) const
+        -> std::expected<decltype(internal::path_result<V, fixed_string{""}, 0>()), error>
+    {
+        if (index >= length) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return internal::path_walk<V, fixed_string{""}, 0>(bytes, data + index * pair_size + fixed_size<K>(),
+                                                          data + length * pair_size);
+    }
+
+    struct iterator {
+        using difference_type = std::ptrdiff_t;
+        using value_type = std::pair<decltype(std::declval<map const &>().key_at(0)),
+                                     decltype(std::declval<map const &>().value_at(0))>;
+
+        map const *over;
+        std::size_t index;
+
+        value_type operator*() const
+        {
+            return {over->key_at(index), over->value_at(index)};
+        }
+        iterator &operator++()
+        {
+            ++index;
+            return *this;
+        }
+        void operator++(int)
+        {
+            ++index;
+        }
+        bool operator==(std::default_sentinel_t) const
+        {
+            return index == over->length;
+        }
+    };
+
+    iterator begin() const
+    {
+        return iterator{this, 0};
+    }
+    std::default_sentinel_t end() const
+    {
+        return {};
+    }
+};
 
 template <class Writer, class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
