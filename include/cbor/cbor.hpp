@@ -252,6 +252,8 @@ inline constexpr struct float_decode_t : customization_point<float_decode_t> {
 } float_decode;
 inline constexpr struct simple_value_decode_t : customization_point<simple_value_decode_t> {
 } simple_value_decode;
+inline constexpr struct cyclic_data_structures_t : customization_point<cyclic_data_structures_t> {
+} cyclic_data_structures;
 
 template <std::size_t DepthMax, class Host>
 std::expected<typename Host::value, error> decode(Host &host, std::string_view bytes);
@@ -1393,8 +1395,9 @@ class internal
         }
         case major_type::array: {
             auto array = array_decode(host, std::min<std::uint64_t>(h->argument, d.bytes.size()));
-            if (mark)
-                shared.at(*mark) = array;
+            if constexpr (requires { cyclic_data_structures(host); })
+                if (mark && cyclic_data_structures(host))
+                    shared.at(*mark) = array;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto element = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
                 if (!element) [[unlikely]]
@@ -1405,8 +1408,9 @@ class internal
         }
         case major_type::map: {
             auto map = map_decode(host, std::min<std::uint64_t>(h->argument, d.bytes.size() / 2));
-            if (mark)
-                shared.at(*mark) = map;
+            if constexpr (requires { cyclic_data_structures(host); })
+                if (mark && cyclic_data_structures(host))
+                    shared.at(*mark) = map;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto key = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
                 if (!key) [[unlikely]]
@@ -1419,6 +1423,8 @@ class internal
             return map;
         }
         case major_type::tag: {
+            if (depth + 1 > DepthMax) [[unlikely]]
+                return std::unexpected(error::nesting_depth_exceeded);
             if (h->argument == std::to_underlying(tag_number::shareable)) {
                 std::size_t index = shared.size();
                 if (before) {
@@ -1485,8 +1491,9 @@ class internal
             if constexpr (requires { tag_begin(host, h->argument); }) {
                 std::optional<typename Host::value> object = tag_begin(host, h->argument);
                 if (object) {
-                    if (mark)
-                        shared.at(*mark) = *object;
+                    if constexpr (requires { cyclic_data_structures(host); })
+                        if (mark && cyclic_data_structures(host))
+                            shared.at(*mark) = *object;
                     auto content = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
                     if (!content) [[unlikely]]
                         return content;
