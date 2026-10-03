@@ -14,9 +14,10 @@ doctest:
     cmake --build build
     build/mbedded-cbor-test
 
-A clone is recursive, because `test-vectors` is a submodule. When CMake
-finds simdutf, text strings are checked for UTF-8; without it they are
-not checked. RFC 8949 section 5.3.1 permits both.
+A clone is recursive, because `test-vectors` is a submodule. Text
+strings are not checked for UTF-8. The option `CBOR_UTF8_VALIDATION`
+turns the check on; it needs simdutf. RFC 8949 section 5.3.1 permits
+both. The tests run with the check when CMake finds simdutf.
 
 `containers/` holds a Containerfile for openSUSE Tumbleweed, AlmaLinux,
 Alpine and Nix. Each is built and run with podman.
