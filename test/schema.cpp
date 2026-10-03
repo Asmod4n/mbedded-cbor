@@ -343,4 +343,34 @@ TEST_CASE("at_path_compiled: a broken offset is an error")
     CHECK_EQ(cbor::at_path_compiled<vehicle, ".make">(*cbor::decode<vehicle>(past)).error(), error::too_little_data);
 }
 
+
+namespace
+{
+
+enum class shade : std::uint8_t { dark, light };
+
+struct badge {
+    std::array<std::byte, 4> mac;
+    shade tone;
+    std::string label;
+};
+
+} // namespace
+
+// A fixed-length array of bytes is a byte string laid out inline (RFC 8949 3.1), the same as a fixed text.
+// The reader gives the bytes themselves, not an offset and a length read out of them.
+TEST_CASE("at_path_compiled: a fixed byte array is read inline")
+{
+    badge const b{{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}, shade::light, "x"};
+    std::string const bytes = schema_bytes(b);
+    auto const doc = cbor::decode<badge>(bytes);
+    REQUIRE(doc.has_value());
+    CHECK_EQ(cbor::at_path_compiled<badge, ".mac">(*doc), "\x01\x02\x03\x04"sv);
+    CHECK_EQ(cbor::at_path_compiled<badge, ".tone">(*doc), shade::light);
+    std::string zeros = bytes;
+    std::size_t const mac = cbor::member_offset<badge, ^^badge::mac>();
+    zeros.replace(mac + 1, 4, "\x00\x00\x00\x00"s);
+    CHECK_EQ(cbor::at_path_compiled<badge, ".mac">(*cbor::decode<badge>(zeros)), "\x00\x00\x00\x00"sv);
+}
+
 #endif

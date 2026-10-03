@@ -92,3 +92,14 @@ TEST_CASE("bignum: among normal integers in an array")
 {
     check_round_trip(A(1, 2, V(big(false, power_of_256(12, 0))), 4, 5));
 }
+
+// A negative bignum has a magnitude of at least one, because -1 - n needs n from zero. An empty magnitude
+// is no value and is refused.
+TEST_CASE("bignum tag 3: an empty magnitude is refused")
+{
+    test_host host;
+    string_writer w;
+    CHECK_EQ(cbor::encode<16>(host, w, big(true, "")).error(), make_error_code(error::unsupported_value));
+    CHECK_EQ(cbor::encode<16>(host, w, big(true, std::string(2, '\0'))).error(),
+             make_error_code(error::unsupported_value));
+}

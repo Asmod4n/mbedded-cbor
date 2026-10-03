@@ -127,3 +127,12 @@ TEST_CASE("§4.1 float width: re-encoding wider-wire decoded floats narrows")
     CHECK_EQ(encoded_float(float_of("\xfa\x3f\x80\x00\x00"sv)).size(), 3);
     CHECK_EQ(encoded_float(float_of("\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv)).size(), 3);
 }
+
+// RFC 8949 4.1: the shortest float that holds the value. A binary32 subnormal, down to 2^-149, is five bytes.
+TEST_CASE("§4.1 float width: binary32 subnormals use f32")
+{
+    CHECK_EQ(encoded_float(std::ldexp(1.0, -149)), "\xfa\x00\x00\x00\x01"sv);
+    CHECK_EQ(encoded_float(std::ldexp(1.0, -127)), "\xfa\x00\x40\x00\x00"sv);
+    CHECK_EQ(encoded_float(std::ldexp(1.0, -150)).size(), 9);
+    CHECK_EQ(encoded_float(std::ldexp(1.0, -149) * 1.5).size(), 9);
+}

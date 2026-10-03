@@ -452,3 +452,27 @@ TEST_CASE("lazy: lazy_get reads every integer width up to its edge")
     CHECK_EQ(*get<std::int32_t>("\x3a\x7f\xff\xff\xff"s), std::numeric_limits<std::int32_t>::min());
     CHECK_EQ(get<std::int32_t>("\x1a\x80\x00\x00\x00"s).error(), error::number_out_of_range);
 }
+
+// RFC 8949 5.6: a byte string key and a text string key with the same bytes are two different keys. A lookup
+// by text matches the text key only.
+TEST_CASE("lazy: a byte string key is not the text key with the same bytes")
+{
+    auto const root = lazy_of("\xa2\x41\x61\x01\x61\x61\x02"s);
+    auto const a = cbor::lazy_at<16>(root, "a");
+    REQUIRE(a.has_value());
+    CHECK_EQ(*cbor::lazy_get<std::uint64_t>(*a), 2u);
+}
+
+// A tag 29 reference names a mark that lies before it. A mark that navigation recorded later in the document
+// is no target, as in the full decoder.
+TEST_CASE("lazy: a reference forward to a mark that navigation recorded is an error")
+{
+    auto const root = lazy_of("\x82\xd8\x1d\x00\xd8\x1c\x05"s);
+    auto const second = cbor::lazy_at<16>(root, 1);
+    REQUIRE(second.has_value());
+    CHECK_EQ(*cbor::lazy_get<std::uint64_t>(*second), 5u);
+    auto const first = cbor::lazy_at<16>(root, 0);
+    REQUIRE(first.has_value());
+    test_host host;
+    CHECK_EQ(cbor::lazy_decode<16>(host, *first).error(), error::sharedref_not_complete);
+}

@@ -480,11 +480,16 @@ class internal
     };
 
     template <class U>
-    static constexpr bool is_fixed_text = requires {
+    static constexpr bool is_fixed_string = requires {
         typename fixed_length<U>::element;
         requires std::same_as<typename fixed_length<U>::element, char> ||
-                     std::same_as<typename fixed_length<U>::element, char8_t>;
+                     std::same_as<typename fixed_length<U>::element, char8_t> ||
+                     std::same_as<typename fixed_length<U>::element, unsigned char> ||
+                     std::same_as<typename fixed_length<U>::element, std::byte>;
     };
+
+    template <class U>
+    static constexpr bool has_fixed_underlying_type = std::is_enum_v<U> && requires { U{0}; };
 
     template <class U>
     static constexpr bool is_optional = requires(U const &v) {
@@ -627,7 +632,7 @@ class internal
 
         void bytes_add(std::size_t const n)
         {
-            bytes += n;
+            overflow |= ckd_add(&bytes, bytes, n);
         }
 
         void block_add(std::size_t const count, std::size_t const size)
@@ -670,8 +675,7 @@ class internal
                 }
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
                 items += 1;
-                bytes_add(head_size(std::ranges::size(value)));
-                bytes_add(std::ranges::size(value));
+                bytes_add(head_size(std::ranges::size(value)) + std::ranges::size(value));
             } else if constexpr (is_map<U>) {
                 items += 1;
                 bytes_add(head_size(std::ranges::size(value)));
@@ -864,11 +868,24 @@ class internal
         return end;
     }
 
+    static consteval std::size_t index_end(std::string_view const path, std::size_t const at)
+    {
+        std::size_t end = at + 1;
+        while (end < path.size() && path.substr(end, 1) != "]")
+            ++end;
+        return end;
+    }
+
     static consteval std::size_t index_of(std::string_view const digits)
     {
+        if (digits.empty())
+            return no_fixed_size<std::size_t>();
         std::size_t value = 0;
-        for (char const c : digits)
+        for (char const c : digits) {
+            if (c < '0' || c > '9')
+                return no_fixed_size<std::size_t>();
             value = value * 10 + static_cast<std::size_t>(c - '0');
+        }
         return value;
     }
 
@@ -894,7 +911,7 @@ class internal
         auto const head = static_cast<unsigned char>(bytes.substr(at, 1).front());
         if constexpr (std::same_as<U, bool>) {
             return (head & 1) != 0;
-        } else if constexpr (std::is_enum_v<U>) {
+        } else if constexpr (has_fixed_underlying_type<U>) {
             return static_cast<U>(fixed_value_read<std::underlying_type_t<U>>(bytes, at));
         } else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>) {
             unsigned __int128 const magnitude = unsigned128_read(bytes, at + fixed_size<U>() - sizeof(U));
@@ -951,7 +968,7 @@ class internal
         if constexpr (At == path.size()) {
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; })
                 return cbor::document<U>{};
-            else if constexpr (is_fixed_text<U>)
+            else if constexpr (is_fixed_string<U>)
                 return std::string_view{};
             else if constexpr (is_optional<U>)
                 return std::optional<typename U::value_type>{};
@@ -964,7 +981,7 @@ class internal
             constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
             return path_result<typename[:std::meta::type_of(m):], Path, end>();
         } else {
-            constexpr std::size_t close = path.find(']', At);
+            constexpr std::size_t close = index_end(path, At);
             if constexpr (requires { fixed_length<U>::value; })
                 return path_result<typename fixed_length<U>::element, Path, close + 1>();
             else
@@ -986,7 +1003,7 @@ class internal
             constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
             return path_reads_wire<typename[:std::meta::type_of(m):], Path, end>();
         } else {
-            constexpr std::size_t close = path.find(']', At);
+            constexpr std::size_t close = index_end(path, At);
             if constexpr (requires { fixed_length<U>::value; })
                 return path_reads_wire<typename fixed_length<U>::element, Path, close + 1>();
             else
@@ -1003,7 +1020,7 @@ class internal
         if constexpr (At == path.size()) {
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
                 return cbor::document<U>{bytes, offset, floor};
-            } else if constexpr (is_fixed_text<U>) {
+            } else if constexpr (is_fixed_string<U>) {
                 return bytes.substr(offset + fixed_size<U>() - fixed_length<U>::value, fixed_length<U>::value);
             } else if constexpr (is_optional<U>) {
                 using E = typename U::value_type;
@@ -1030,9 +1047,11 @@ class internal
                 return path_walk<typename[:std::meta::type_of(m):], Path, end>(bytes, offset + member_offset<U, m>(),
                                                                                floor);
         } else {
-            constexpr std::size_t close = path.find(']', At);
+            constexpr std::size_t close = index_end(path, At);
             constexpr std::size_t i = index_of(path.substr(At + 1, close - At - 1));
-            if constexpr (requires { fixed_length<U>::value; }) {
+            if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U>) {
+                return no_fixed_size<T>();
+            } else if constexpr (requires { fixed_length<U>::value; }) {
                 using E = typename fixed_length<U>::element;
                 constexpr std::size_t n = fixed_length<U>::value;
                 if constexpr (i >= n)
@@ -1330,9 +1349,7 @@ class internal
         if (exp == 0)
             return mant == 0 ? simple_float_information::half_precision_float
                              : simple_float_information::double_precision_float;
-        if ((mant & ((std::uint64_t{1} << (d.significand_bits - f.significand_bits)) - 1u)) != 0 ||
-            exp < static_cast<std::uint32_t>(d.exponent_bias - f.exponent_bias + 1) ||
-            exp > static_cast<std::uint32_t>(d.exponent_bias + f.exponent_bias))
+        if (static_cast<double>(static_cast<float>(value)) != value)
             return simple_float_information::double_precision_float;
         if (exp >= static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias + 1) &&
             exp <= static_cast<std::uint32_t>(d.exponent_bias + h.exponent_bias))
@@ -1451,6 +1468,7 @@ class internal
                 if (index >= shared.size()) [[unlikely]]
                     return std::unexpected(error::sharedref_index_not_marked);
                 if (!shared.at(index) && before && index < before->offsets.size() &&
+                    before->offsets.at(index) < before->document.size() - d.bytes.size() &&
                     !before->decoding.at(index)) {
                     decoder earlier{before->document.substr(before->offsets.at(index))};
                     before->decoding.at(index) = true;
@@ -1825,7 +1843,7 @@ consteval std::size_t fixed_size()
     constexpr std::size_t initial_byte_size = internal::initial_byte_size;
     if constexpr (std::same_as<U, bool>)
         return initial_byte_size;
-    else if constexpr (std::is_enum_v<U>)
+    else if constexpr (internal::has_fixed_underlying_type<U>)
         return fixed_size<std::underlying_type_t<U>>();
     else if constexpr (std::same_as<U, __int128> || std::same_as<U, unsigned __int128>)
         return internal::head_size(std::to_underlying(internal::tag_number::negative_bignum)) +
@@ -1918,7 +1936,7 @@ std::expected<void, std::errc> encode(Writer &writer, T const &value)
     std::size_t second_size;
     std::size_t size;
     if (second.overflow || ckd_add(&second_size, internal::head_size(second.items), second.bytes) ||
-        !std::in_range<std::uint32_t>(second_size) || ckd_add(&size, first, second_size)) [[unlikely]]
+        ckd_add(&size, first, second_size) || !std::in_range<std::uint32_t>(size)) [[unlikely]]
         return std::unexpected(std::errc::value_too_large);
     return writer.resize_and_overwrite(size + internal::head_padding, [&](std::span<char> const out) {
         auto const root = out.template first<first>();
@@ -2049,6 +2067,7 @@ struct encoder {
     }
 
     template <std::unsigned_integral T>
+        requires(sizeof(T) <= sizeof(std::uint64_t))
     std::expected<void, std::errc> fixed_width_head_encode(major_type major, T argument)
     {
         if (auto const r = room(9); !r) [[unlikely]]
@@ -2065,6 +2084,9 @@ struct encoder {
 
     std::expected<void, std::errc> simple_value_encode(simple_value value)
     {
+        if (std::to_underlying(value) >= std::to_underlying(internal::simple_float_information::simple_value_follows))
+            [[unlikely]]
+            return std::unexpected(std::errc::invalid_argument);
         if (auto const r = room(9); !r) [[unlikely]]
             return r;
         std::array<char, 9> item;
@@ -2152,7 +2174,7 @@ class walker
     void keep(std::expected<void, std::errc> const r)
     {
         if (!r && !failure) [[unlikely]]
-            failure = std::make_error_code(r.error());
+            failure = std::make_error_code(r.error() == std::errc{} ? std::errc::io_error : r.error());
     }
 
     void keep_error(error const e)
@@ -2356,6 +2378,10 @@ class walker
             keep(out.byte_string_encode(m));
             return;
         }
+        if (m.empty()) [[unlikely]] {
+            keep_error(error::unsupported_value);
+            return;
+        }
         std::string const n = internal::magnitude_minus_one(m);
         if (n.size() <= sizeof(std::uint64_t)) {
             head(major_type::negative_integer, internal::magnitude_value(n));
@@ -2490,7 +2516,7 @@ std::expected<lazy, error> lazy_at(lazy const &l, std::string_view const key)
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
         bool match = false;
-        if (k->major == major_type::text_string || k->major == major_type::byte_string) {
+        if (k->major == major_type::text_string) {
             auto const text = probe.byte_string_decode(k->argument);
             if (!text) [[unlikely]]
                 return std::unexpected(text.error());
