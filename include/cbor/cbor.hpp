@@ -1511,6 +1511,28 @@ class internal
             return target.allocate(hint);
     }
 
+    template <class T>
+    static std::expected<std::size_t, std::errc> encoded_size(second_item const &second)
+    {
+        std::size_t second_size;
+        std::size_t size;
+        if (second.overflow || ckd_add(&second_size, head_size(second.items), second.bytes) ||
+            ckd_add(&size, fixed_size<T>(), second_size) || !std::in_range<std::uint32_t>(size)) [[unlikely]]
+            return std::unexpected(std::errc::value_too_large);
+        return size;
+    }
+
+    template <class T>
+    static std::size_t encoded_write(std::span<char> const bytes, T const &value, second_item const &second)
+    {
+        constexpr std::size_t first = fixed_size<T>();
+        auto const root = bytes.template first<first>();
+        zero_initialized_copy<T>(root);
+        std::size_t const position = first + head_write(bytes, first, major_type::array, second.items);
+        value_encode<T>(bytes, root, value, position);
+        return bytes.size() - head_padding;
+    }
+
     struct no_marks {
         void mark(decoder const &)
         {
@@ -2340,36 +2362,56 @@ result<std::string, std::errc> encode(T const &value)
 {
     internal::second_item second;
     second.add(value);
-    constexpr std::size_t first = fixed_size<T>();
-    std::size_t second_size;
-    std::size_t size;
-    if (second.overflow || ckd_add(&second_size, internal::head_size(second.items), second.bytes) ||
-        ckd_add(&size, first, second_size) || !std::in_range<std::uint32_t>(size)) [[unlikely]]
-        return std::unexpected(std::errc::value_too_large);
-    internal::string_sink out;
-    (void)out.resize_and_overwrite(size + internal::head_padding, [&](std::span<char> const bytes) {
-        auto const root = bytes.template first<first>();
-        internal::zero_initialized_copy<T>(root);
-        std::size_t const position = first + internal::head_write(bytes, first, major_type::array, second.items);
-        internal::value_encode<T>(bytes, root, value, position);
-        return size;
+    auto const size = internal::encoded_size<T>(second);
+    if (!size) [[unlikely]]
+        return std::unexpected(size.error());
+    std::string out;
+    out.resize_and_overwrite(*size + internal::head_padding, [&](char *const p, std::size_t const n) {
+        return internal::encoded_write(std::span<char>(p, n), value, second);
     });
-    return std::move(out.bytes);
+    return out;
 }
 
 template <class T, class Target>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
 result<std::size_t, std::errc> encode(T const &value, Target &&target)
 {
-    auto const bytes = encode(value);
-    if (!bytes) [[unlikely]]
-        return std::unexpected(bytes.error());
-    decltype(auto) message = internal::message_of(target, bytes->size());
-    if (auto const r = message.append(*bytes); !r) [[unlikely]]
+    using U = std::remove_cvref_t<Target>;
+    internal::second_item second;
+    second.add(value);
+    auto const size = internal::encoded_size<T>(second);
+    if (!size) [[unlikely]]
+        return std::unexpected(size.error());
+    std::size_t const padded = *size + internal::head_padding;
+    if constexpr (std::same_as<U, std::string>) {
+        std::size_t const at = target.size();
+        target.resize_and_overwrite(at + padded, [&](char *const p, std::size_t const n) {
+            return at + internal::encoded_write(std::span<char>(p, n).subspan(at), value, second);
+        });
+        return *size;
+    } else if constexpr (internal::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
+        std::size_t const at = std::ranges::size(target);
+        target.resize(at + padded);
+        internal::encoded_write(std::span<char>(target).subspan(at), value, second);
+        target.resize(at + *size);
+        return *size;
+    } else if constexpr (!internal::byte_container<U> && requires { std::span<char>(target); }) {
+        std::span<char> const out(target);
+        if (out.size() >= padded) {
+            internal::encoded_write(out.first(padded), value, second);
+            return *size;
+        }
+    }
+    std::string bytes;
+    bytes.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
+        return internal::encoded_write(std::span<char>(p, n), value, second);
+    });
+    decltype(auto) message = internal::message_of(target, bytes.size());
+    if (auto const r = message.append(bytes); !r) [[unlikely]]
         return std::unexpected(r.error());
-    if (auto const r = message.done(bytes->size()); !r) [[unlikely]]
+    if (auto const r = message.done(bytes.size()); !r) [[unlikely]]
         return std::unexpected(r.error());
-    return bytes->size();
+    return bytes.size();
 }
 
 #endif
