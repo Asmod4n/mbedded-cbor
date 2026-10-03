@@ -2502,6 +2502,10 @@ class walker
             break;
         case kind::typed_array:
             if constexpr (requires { typed_array_of(host, item); }) {
+                if (depth > DepthMax) [[unlikely]] {
+                    keep_error(error::nesting_depth_exceeded);
+                    return;
+                }
                 cbor::typed_array const a = typed_array_of(host, item);
                 if (auto const r = internal::typed_array_check(a.tag, a.bytes.size()); !r) [[unlikely]] {
                     keep_error(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
@@ -2534,6 +2538,10 @@ class walker
                 head(major_type::unsigned_integer, internal::magnitude_value(m));
                 return;
             }
+            if (depth > DepthMax) [[unlikely]] {
+                keep_error(error::nesting_depth_exceeded);
+                return;
+            }
             head(major_type::tag, std::to_underlying(internal::tag_number::unsigned_bignum));
             keep(out.byte_string_encode(m));
             return;
@@ -2545,6 +2553,10 @@ class walker
         std::string const n = internal::magnitude_minus_one(m);
         if (n.size() <= sizeof(std::uint64_t)) {
             head(major_type::negative_integer, internal::magnitude_value(n));
+            return;
+        }
+        if (depth > DepthMax) [[unlikely]] {
+            keep_error(error::nesting_depth_exceeded);
             return;
         }
         head(major_type::tag, std::to_underlying(internal::tag_number::negative_bignum));
