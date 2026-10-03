@@ -2924,7 +2924,7 @@ result<T> decode(std::string_view const bytes)
 }
 
 template <class T>
-result<std::string, std::errc> encode(T const &value)
+[[gnu::always_inline]] inline result<std::string, std::errc> encode(T const &value)
 {
     std::size_t const size = internal::generic_size(value);
     std::string out;
@@ -2935,7 +2935,7 @@ result<std::string, std::errc> encode(T const &value)
 }
 
 template <class T, class Target>
-result<std::size_t, std::errc> encode(T const &value, Target &&target)
+[[gnu::always_inline]] inline result<std::size_t, std::errc> encode(T const &value, Target &&target)
 {
     using U = std::remove_cvref_t<Target>;
     std::size_t const size = internal::generic_size(value);
