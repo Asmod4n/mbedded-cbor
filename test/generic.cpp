@@ -161,6 +161,19 @@ TEST_CASE("generic: a CTAP2 getAssertion response")
     CHECK_EQ(r->credential_id.id.size(), 2u);
     CHECK_FALSE(r->user.has_value());
     CHECK_EQ(*cbor::generic::encode(*r), message);
+    std::array<char, 64> room{};
+    auto const placed = cbor::generic::encode(*r, std::span(room));
+    REQUIRE(placed.has_value());
+    CHECK_EQ(std::string_view(room.data(), *placed), message);
+    std::vector<char> tight(message.size());
+    auto const exact = cbor::generic::encode(*r, std::span(tight));
+    REQUIRE(exact.has_value());
+    CHECK_EQ(std::string_view(tight.data(), *exact), message);
+    std::array<char, 8> small{};
+    CHECK_EQ(cbor::generic::encode(*r, std::span(small)).error(), std::errc::no_buffer_space);
+    std::string text = "x";
+    CHECK_EQ(*cbor::generic::encode(*r, text), message.size());
+    CHECK_EQ(text, "x" + message);
 }
 
 // RFC 8949 Appendix A: 2^64 and -2^64-1 need a bignum, tag 2 or 3 on the magnitude; simple(16) and simple(255)
