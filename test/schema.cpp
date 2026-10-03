@@ -1,6 +1,6 @@
 #include "host.hpp"
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 #include <array>
 #include <cstddef>
@@ -99,7 +99,7 @@ TEST_CASE("fixed_size: a part of variable size takes 11 bytes")
 
 #endif
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 namespace
 {
@@ -175,7 +175,7 @@ TEST_CASE("member_offset: a key is counted in UTF-8 bytes")
 
 #endif
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 namespace
 {
@@ -260,7 +260,7 @@ TEST_CASE("encode: a list of structs that hold strings")
 
 #endif
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 // view checks one thing: the first item has the size that the schema gives it. A shorter message cannot hold
 // the fixed fields, and a longer one is a newer sender or a second item.
@@ -275,7 +275,7 @@ TEST_CASE("view: a struct checks only the size of the first item")
 
 #endif
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 namespace
 {
@@ -375,7 +375,7 @@ TEST_CASE("at_path_compiled: a fixed byte array is read inline")
 
 #endif
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 namespace
 {
@@ -446,7 +446,7 @@ TEST_CASE("cbor::map: the pairs of a std::map in order")
 
 #endif
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 // The simple form: encode gives the bytes, decode gives the whole struct back. Every field takes the value it
 // went in with, the lists, the map and the optional included.
@@ -486,7 +486,7 @@ TEST_CASE("decode: an error is thrown on conversion, or read as a value")
 
 #endif
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 // encode writes into a target of the caller: a growing container gets the message appended, a fixed span takes
 // it if it fits, and any other target gives an object with append and done through allocate. done carries the

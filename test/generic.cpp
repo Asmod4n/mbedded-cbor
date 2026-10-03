@@ -11,7 +11,7 @@
 #include <variant>
 #include <vector>
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;

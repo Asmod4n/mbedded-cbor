@@ -71,7 +71,7 @@ TEST_CASE("major 3: every length survives encode and decode")
 // Only a build with simdutf checks UTF-8; RFC 8949 5.3.1 permits both.
 TEST_CASE("major 3: invalid UTF-8")
 {
-#if CBOR_SIMDUTF
+#ifdef CBOR_SIMDUTF
     CHECK_EQ(decode_error("\x63\xff\xfe\xfd"sv), error::invalid_utf8_string);
 #else
     CHECK_EQ(decoded_text_string("\x63\xff\xfe\xfd"sv), "\xff\xfe\xfd"s);

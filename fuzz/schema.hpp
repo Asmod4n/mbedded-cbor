@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 
 #include <array>
 #include <bit>
