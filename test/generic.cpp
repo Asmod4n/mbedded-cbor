@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <variant>
 #include <vector>
 
 #if __cpp_impl_reflection
@@ -160,6 +161,32 @@ TEST_CASE("generic: a CTAP2 getAssertion response")
     CHECK_EQ(r->credential_id.id.size(), 2u);
     CHECK_FALSE(r->user.has_value());
     CHECK_EQ(*cbor::generic::encode(*r), message);
+}
+
+// RFC 8949 Appendix A: 2^64 and -2^64-1 need a bignum, tag 2 or 3 on the magnitude; simple(16) and simple(255)
+// are simple values of one and two bytes.
+TEST_CASE("generic: bignums and simple values of RFC 8949 Appendix A")
+{
+    round_trip<unsigned __int128>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
+                                  static_cast<unsigned __int128>(1) << 64);
+    round_trip<__int128>("\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
+                         -1 - (static_cast<__int128>(1) << 64));
+    round_trip<__int128>("\x39\x03\xe7"s, -1000);
+    round_trip<cbor::simple_value>("\xf0"s, static_cast<cbor::simple_value>(16));
+    round_trip<cbor::simple_value>("\xf8\xff"s, static_cast<cbor::simple_value>(255));
+    CHECK_EQ(cbor::generic::decode<cbor::simple_value>("\xf8\x10"s).error(), error::syntax_error);
+}
+
+// A std::variant takes the first alternative whose kind matches the item, so one array can hold several kinds,
+// as RFC 8949 allows.
+TEST_CASE("generic: a variant takes the alternative that matches the item")
+{
+    using any = std::variant<std::uint64_t, std::int64_t, std::string, double, bool, std::nullptr_t,
+                             std::vector<std::byte>>;
+    std::vector<any> const values{std::uint64_t{1}, std::int64_t{-1}, std::string("a"), 1.5, true, nullptr,
+                                  std::vector<std::byte>{std::byte{7}}};
+    round_trip<std::vector<any>>("\x87\x01\x20\x61\x61\xf9\x3e\x00\xf5\xf6\x41\x07"s, values);
+    CHECK_EQ(cbor::generic::decode<std::variant<std::string, bool>>("\x01"s).error(), error::incorrect_type);
 }
 
 #endif
