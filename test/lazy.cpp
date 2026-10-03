@@ -502,3 +502,21 @@ TEST_CASE("lazy: from, at and get as a chain")
     }
     CHECK_EQ(count, 2u);
 }
+
+// RFC 8949 3.4 and the registration of tags 28 and 29: a tag 28 marks a value as shared and leaves the value as
+// it is, and a tag 29 stands for the marked value. A key under either tag is the key it marks or names, as the
+// full decoder reads it. The path fuzzer found a key under tag 28 that lazy::at did not match.
+TEST_CASE("lazy: a key under tag 28 or tag 29 is the key it marks or names")
+{
+    auto const marked = lazy_of("\xa1\xd8\x1c\x61\x61\x01"s).at<16>("a");
+    REQUIRE(marked.has_value());
+    CHECK_EQ(*marked->get<std::uint64_t>(), 1u);
+    auto const number = lazy_of("\xa1\xd8\x1c\x07\x03"s).at<16>(7);
+    REQUIRE(number.has_value());
+    CHECK_EQ(*number->get<std::uint64_t>(), 3u);
+    auto const root = lazy_of("\x82\xd8\x1c\x61\x61\xa1\xd8\x1d\x00\x02"s);
+    REQUIRE(root.at<16>(0).has_value());
+    auto const named = root.at<16>(1)->at<16>("a");
+    REQUIRE(named.has_value());
+    CHECK_EQ(*named->get<std::uint64_t>(), 2u);
+}

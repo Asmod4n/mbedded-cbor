@@ -2994,9 +2994,19 @@ result<lazy> lazy::at(std::string_view const key) const
         return std::unexpected(error::not_indexable);
     for (std::uint64_t i = 0; i < h.argument; ++i) {
         internal::decoder probe = d;
-        auto const k = probe.head_decode();
+        auto k = probe.head_decode();
+        while (k && k->major == major_type::tag &&
+               k->argument == std::to_underlying(internal::tag_number::shareable))
+            k = probe.head_decode();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
+        if (k->major == major_type::tag && k->argument == std::to_underlying(internal::tag_number::sharedref)) {
+            auto const target = internal::container_resolve(source, source->bytes.size() - d.bytes.size());
+            if (!target) [[unlikely]]
+                return std::unexpected(target.error());
+            probe = target->d;
+            k = target->h;
+        }
         bool match = false;
         if (k->major == major_type::text_string) {
             auto const text = probe.byte_string_decode(k->argument);
@@ -3040,9 +3050,19 @@ result<lazy> lazy::at(std::int64_t const index) const
         return std::unexpected(error::not_indexable);
     for (std::uint64_t i = 0; i < h.argument; ++i) {
         internal::decoder probe = d;
-        auto const k = probe.head_decode();
+        auto k = probe.head_decode();
+        while (k && k->major == major_type::tag &&
+               k->argument == std::to_underlying(internal::tag_number::shareable))
+            k = probe.head_decode();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
+        if (k->major == major_type::tag && k->argument == std::to_underlying(internal::tag_number::sharedref)) {
+            auto const target = internal::container_resolve(source, source->bytes.size() - d.bytes.size());
+            if (!target) [[unlikely]]
+                return std::unexpected(target.error());
+            probe = target->d;
+            k = target->h;
+        }
         bool const match = (k->major == major_type::unsigned_integer && index >= 0 &&
                             k->argument == static_cast<std::uint64_t>(index)) ||
                            (k->major == major_type::negative_integer && index < 0 &&
