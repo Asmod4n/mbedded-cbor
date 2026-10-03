@@ -1481,6 +1481,7 @@ class internal
             return target.allocate(hint);
     }
 
+#if __cpp_impl_reflection
     template <class T>
     static std::expected<std::size_t, std::errc> encoded_size(second_item const &second)
     {
@@ -1502,6 +1503,7 @@ class internal
         value_encode<T>(bytes, root, value, position);
         return bytes.size() - head_padding;
     }
+#endif
 
     struct no_marks {
         void mark(decoder const &)
