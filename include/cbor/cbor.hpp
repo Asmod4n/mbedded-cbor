@@ -1015,7 +1015,8 @@ class internal
             else if constexpr (is_fixed_string<U>)
                 return std::type_identity<std::string_view>{};
             else if constexpr (is_optional<U>)
-                return std::type_identity<std::optional<typename U::value_type>>{};
+                return std::type_identity<
+                    std::optional<typename decltype(path_result<typename U::value_type, Path, At>())::type>>{};
             else if constexpr (is_text_range<U> || is_byte_range<U>)
                 return std::type_identity<std::string_view>{};
             else if constexpr (is_map<U>)
@@ -1078,9 +1079,18 @@ class internal
                 auto const r = reference_read(bytes, field, floor, fixed_size<E>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
+                using X = typename decltype(path_result<E, Path, At>())::type;
                 if (r->length == 0)
-                    return std::optional<E>{};
-                return std::optional<E>{fixed_value_read<E>(std::span<char const>(bytes).subspan(r->data).template first<fixed_size<E>()>())};
+                    return std::optional<X>{};
+                auto const element = std::span<char const>(bytes).subspan(r->data).template first<fixed_size<E>()>();
+                if constexpr (path_reads_wire<E, Path, At>()) {
+                    auto x = path_walk<E, Path, At>(bytes, element, r->data + fixed_size<E>());
+                    if (!x) [[unlikely]]
+                        return std::unexpected(x.error());
+                    return std::optional<X>{std::move(*x)};
+                } else {
+                    return std::optional<X>{path_walk<E, Path, At>(bytes, element, r->data + fixed_size<E>())};
+                }
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
                 auto const r = reference_read(bytes, field, floor, 1);
                 if (!r) [[unlikely]]
@@ -1195,7 +1205,12 @@ class internal
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
             auto const part = bytes.substr(r->data, r->length);
-            out = U(part.begin(), part.end());
+            if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>) {
+                auto const raw = std::as_bytes(std::span(part));
+                out = U(raw.begin(), raw.end());
+            } else {
+                out = U(part.begin(), part.end());
+            }
             return {};
         } else if constexpr (is_map<U>) {
             using K = typename U::key_type;
