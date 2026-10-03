@@ -990,7 +990,7 @@ class internal
         std::size_t length;
     };
 
-    static std::expected<reference, error> reference_read(std::string_view const bytes,
+    [[gnu::always_inline]] static std::expected<reference, error> reference_read(std::string_view const bytes,
                                                            std::span<char const, dynamic_type_sizes> const field,
                                                            std::size_t const floor, std::size_t const element)
     {
@@ -1061,7 +1061,7 @@ class internal
     }
 
     template <class T, fixed_string Path, std::size_t At>
-    static auto path_walk(std::string_view const bytes, std::span<char const, fixed_size<T>()> const field,
+    [[gnu::always_inline]] static auto path_walk(std::string_view const bytes, std::span<char const, fixed_size<T>()> const field,
                           std::size_t const floor)
         -> std::conditional_t<path_reads_wire<T, Path, At>(),
                               std::expected<typename decltype(path_result<T, Path, At>())::type, error>,
@@ -2931,7 +2931,7 @@ result<std::size_t, std::errc> encode(T const &value, Target &&target)
 } // namespace generic
 
 template <class T, fixed_string Path>
-auto at_path_compiled(document<T> const doc)
+[[gnu::always_inline]] inline auto at_path_compiled(document<T> const doc)
 {
     return internal::path_walk<T, Path, 0>(doc.bytes, doc.field, doc.floor);
 }
