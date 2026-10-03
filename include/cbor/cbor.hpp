@@ -331,7 +331,7 @@ template <std::size_t DepthMax>
 std::expected<std::size_t, error> doc_end(std::string_view bytes);
 
 template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Host, class Writer>
-std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value);
+std::expected<void, std::error_code> encode(Host &host, Writer &&target, typename Host::value const &value);
 
 template <class T, class E = error>
 struct result : std::expected<T, E> {
@@ -372,9 +372,9 @@ consteval std::size_t no_fixed_size();
 template <class T, std::meta::info Member>
 consteval std::size_t member_offset();
 
-template <class Writer, class T>
+template <class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
-std::expected<void, std::errc> encode(Writer &writer, T const &value);
+result<std::string, std::errc> encode(T const &value);
 
 template <class T>
 struct document {
@@ -1244,6 +1244,10 @@ class internal
         requires std::is_class_v<T> && std::is_aggregate_v<T>
     friend result<std::string, std::errc> encode(T const &value);
 
+    template <class T, class Target>
+        requires std::is_class_v<T> && std::is_aggregate_v<T>
+    friend result<std::size_t, std::errc> encode(T const &value, Target &&target);
+
     template <class T, fixed_string Path>
     friend auto at_path_compiled(cbor::document<T> const doc);
 
@@ -1252,9 +1256,7 @@ class internal
 
     template <class K, class V>
     friend struct cbor::map;
-    template <class Writer, class T>
-        requires std::is_class_v<T> && std::is_aggregate_v<T>
-    friend std::expected<void, std::errc> encode(Writer &writer, T const &value);
+
 
     template <class T>
     friend consteval std::size_t fixed_size();
@@ -1427,15 +1429,14 @@ class internal
     struct string_sink {
         std::string bytes;
 
-        std::expected<void, std::errc> reserve(std::size_t const size)
-        {
-            bytes.reserve(bytes.size() + size);
-            return {};
-        }
-
         std::expected<void, std::errc> append(std::string_view const part)
         {
             bytes.append(part);
+            return {};
+        }
+
+        std::expected<void, std::errc> done(std::size_t)
+        {
             return {};
         }
 
@@ -1449,6 +1450,65 @@ class internal
             return {};
         }
     };
+
+    template <class C>
+    struct container_message {
+        C &container;
+
+        std::expected<void, std::errc> append(std::string_view const part)
+        {
+            std::size_t const at = std::ranges::size(container);
+            container.resize(at + part.size());
+            std::ranges::transform(part, std::ranges::next(std::ranges::begin(container), at),
+                                   [](char const c) { return static_cast<std::ranges::range_value_t<C>>(c); });
+            return {};
+        }
+
+        std::expected<void, std::errc> done(std::size_t)
+        {
+            return {};
+        }
+    };
+
+    template <class B>
+    struct span_message {
+        std::span<B> out;
+        std::size_t used;
+
+        std::expected<void, std::errc> append(std::string_view const part)
+        {
+            if (part.size() > out.size() - used) [[unlikely]]
+                return std::unexpected(std::errc::no_buffer_space);
+            std::ranges::transform(part, out.subspan(used).begin(), [](char const c) { return static_cast<B>(c); });
+            used += part.size();
+            return {};
+        }
+
+        std::expected<void, std::errc> done(std::size_t)
+        {
+            return {};
+        }
+    };
+
+    template <class C>
+    static constexpr bool byte_container = requires(C &c) {
+        c.resize(std::size_t{});
+        requires sizeof(std::ranges::range_value_t<C>) == 1;
+        requires std::ranges::contiguous_range<C>;
+    };
+
+    template <class Target>
+    static decltype(auto) message_of(Target &&target, std::size_t const hint)
+    {
+        using U = std::remove_cvref_t<Target>;
+        if constexpr (requires { typename U::element_type; } && requires { std::span(target); } &&
+                      !requires { target.resize(std::size_t{}); })
+            return span_message<typename U::element_type>{target, 0};
+        else if constexpr (byte_container<U>)
+            return container_message<U>{target};
+        else
+            return target.allocate(hint);
+    }
 
     struct no_marks {
         void mark(decoder const &)
@@ -1720,7 +1780,7 @@ class internal
     friend struct encoder;
 
     template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-    friend std::expected<void, std::error_code> encode(Host &host, Writer &writer,
+    friend std::expected<void, std::error_code> encode(Host &host, Writer &&target,
                                                        typename Host::value const &value);
 
     template <std::size_t, class, class, pass>
@@ -2255,9 +2315,9 @@ struct map {
     }
 };
 
-template <class Writer, class T>
+template <class T>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
-std::expected<void, std::errc> encode(Writer &writer, T const &value)
+result<std::string, std::errc> encode(T const &value)
 {
     internal::second_item second;
     second.add(value);
@@ -2267,24 +2327,32 @@ std::expected<void, std::errc> encode(Writer &writer, T const &value)
     if (second.overflow || ckd_add(&second_size, internal::head_size(second.items), second.bytes) ||
         ckd_add(&size, first, second_size) || !std::in_range<std::uint32_t>(size)) [[unlikely]]
         return std::unexpected(std::errc::value_too_large);
-    return writer.resize_and_overwrite(size + internal::head_padding, [&](std::span<char> const out) {
-        auto const root = out.template first<first>();
+    internal::string_sink out;
+    (void)out.resize_and_overwrite(size + internal::head_padding, [&](std::span<char> const bytes) {
+        auto const root = bytes.template first<first>();
         internal::zero_initialized_copy<T>(root);
-        std::size_t const position = first + internal::head_write(out, first, major_type::array, second.items);
-        internal::value_encode<T>(out, root, value, position);
+        std::size_t const position = first + internal::head_write(bytes, first, major_type::array, second.items);
+        internal::value_encode<T>(bytes, root, value, position);
         return size;
     });
-}
-
-template <class T>
-    requires std::is_class_v<T> && std::is_aggregate_v<T>
-result<std::string, std::errc> encode(T const &value)
-{
-    internal::string_sink out;
-    if (auto const r = encode(out, value); !r) [[unlikely]]
-        return std::unexpected(r.error());
     return std::move(out.bytes);
 }
+
+template <class T, class Target>
+    requires std::is_class_v<T> && std::is_aggregate_v<T>
+result<std::size_t, std::errc> encode(T const &value, Target &&target)
+{
+    auto const bytes = encode(value);
+    if (!bytes) [[unlikely]]
+        return std::unexpected(bytes.error());
+    decltype(auto) message = internal::message_of(target, bytes->size());
+    if (auto const r = message.append(*bytes); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (auto const r = message.done(bytes->size()); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return bytes->size();
+}
+
 #endif
 
 template <class Writer>
@@ -2292,6 +2360,7 @@ struct encoder {
     Writer &writer;
     std::array<char, 16384> block;
     std::size_t used = 0;
+    std::size_t written = 0;
 
     explicit encoder(Writer &w) : writer(w)
     {
@@ -2301,6 +2370,7 @@ struct encoder {
     {
         std::size_t const size = used;
         used = 0;
+        written += size;
         return writer.append(std::string_view(block.data(), size));
     }
 
@@ -2349,8 +2419,7 @@ struct encoder {
         }
         if (auto const r = flush(); !r) [[unlikely]]
             return r;
-        if (auto const r = writer.reserve(bytes.size()); !r) [[unlikely]]
-            return r;
+        written += bytes.size();
         return writer.append(bytes);
     }
 
@@ -2365,8 +2434,7 @@ struct encoder {
         }
         if (auto const r = flush(); !r) [[unlikely]]
             return r;
-        if (auto const r = writer.reserve(text.size()); !r) [[unlikely]]
-            return r;
+        written += text.size();
         return writer.append(text);
     }
     std::expected<void, std::errc> float_encode(double value)
@@ -2469,16 +2537,16 @@ std::expected<typename Host::value, error> decode(Host &host, std::string_view b
 enum class pass { plain, count, write };
 
 template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
-                                                 std::size_t depth, bool embedded);
+std::expected<std::size_t, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
+                                                        std::size_t depth, bool embedded);
 
 struct discarding_writer {
-    std::expected<void, std::errc> reserve(std::size_t)
+    std::expected<void, std::errc> append(std::string_view)
     {
         return {};
     }
 
-    std::expected<void, std::errc> append(std::string_view)
+    std::expected<void, std::errc> done(std::size_t)
     {
         return {};
     }
@@ -2502,8 +2570,8 @@ class walker
     std::error_code failure;
 
     template <std::size_t, sharedrefs, class H, class W>
-    friend std::expected<void, std::error_code> encode_from(H &host, W &writer, typename H::value const &value,
-                                                            std::size_t depth, bool embedded);
+    friend std::expected<std::size_t, std::error_code> encode_from(H &host, W &writer, typename H::value const &value,
+                                                                   std::size_t depth, bool embedded);
 
     walker(Host &h, Writer &w, sharing<Host> *s, std::size_t const d, bool const e)
         : host(h), out{w}, shared(s), depth(d), embedded(e)
@@ -2758,8 +2826,8 @@ public:
 };
 
 template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
-                                                std::size_t const depth, bool const embedded)
+std::expected<std::size_t, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
+                                                        std::size_t const depth, bool const embedded)
 {
     if constexpr (Sharing == sharedrefs::off) {
         walker<DepthMax, Host, Writer, pass::plain> walk{host, writer, nullptr, depth, embedded};
@@ -2767,6 +2835,7 @@ std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typ
         walk.keep(walk.out.flush());
         if (walk.failure) [[unlikely]]
             return std::unexpected(walk.failure);
+        return walk.out.written;
     } else {
         sharing<Host> shared;
         discarding_writer nothing;
@@ -2779,14 +2848,20 @@ std::expected<void, std::error_code> encode_from(Host &host, Writer &writer, typ
         write.keep(write.out.flush());
         if (write.failure) [[unlikely]]
             return std::unexpected(write.failure);
+        return write.out.written;
     }
-    return {};
 }
 
 template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-std::expected<void, std::error_code> encode(Host &host, Writer &writer, typename Host::value const &value)
+std::expected<void, std::error_code> encode(Host &host, Writer &&target, typename Host::value const &value)
 {
-    return encode_from<DepthMax, Sharing>(host, writer, value, 0, false);
+    decltype(auto) message = internal::message_of(target, 0);
+    auto const size = encode_from<DepthMax, Sharing>(host, message, value, 0, false);
+    if (!size) [[unlikely]]
+        return std::unexpected(size.error());
+    if (auto const r = message.done(*size); !r) [[unlikely]]
+        return std::unexpected(std::make_error_code(r.error()));
+    return {};
 }
 
 template <std::size_t DepthMax>

@@ -204,7 +204,7 @@ struct people {
 std::string schema_bytes(auto const &value)
 {
     string_writer w;
-    REQUIRE(cbor::encode(w, value).has_value());
+    REQUIRE(cbor::encode(value, w).has_value());
     return w.bytes;
 }
 
@@ -461,7 +461,8 @@ TEST_CASE("encode and decode: a struct goes in and comes back whole")
     CHECK_EQ(back.rows, sample_garage.rows);
     CHECK_EQ(back.owners, sample_garage.owners);
 
-    vehicle const v = cbor::decode<vehicle>(cbor::encode(sample_vehicle));
+    std::string const encoded = cbor::encode(sample_vehicle);
+    vehicle const v = cbor::decode<vehicle>(encoded);
     CHECK_EQ(v.make, "Tesla");
     CHECK_EQ(v.balance, -7);
     CHECK_EQ(v.spare.at(1).diameter, 16u);
@@ -481,6 +482,62 @@ TEST_CASE("decode: an error is thrown on conversion, or read as a value")
     auto const r = cbor::decode<vehicle>(cut);
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::too_little_data);
+}
+
+#endif
+
+#if __cpp_impl_reflection
+
+// encode writes into a target of the caller: a growing container gets the message appended, a fixed span takes
+// it if it fits, and any other target gives an object with append and done through allocate. done carries the
+// final length of the message.
+TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
+{
+    std::string const expected = cbor::encode(sample_garage);
+    std::string text = "x";
+    CHECK_EQ(*cbor::encode(sample_garage, text), expected.size());
+    CHECK_EQ(text, "x" + expected);
+    std::vector<std::byte> bytes;
+    REQUIRE(cbor::encode(sample_garage, bytes).has_value());
+    CHECK_EQ(bytes.size(), expected.size());
+    std::array<char, 4096> buffer{};
+    auto const fits = cbor::encode(sample_garage, std::span(buffer));
+    REQUIRE(fits.has_value());
+    CHECK_EQ(std::string_view(buffer.data(), *fits), expected);
+    std::array<char, 8> small{};
+    auto const too_small = cbor::encode(sample_garage, std::span(small));
+    REQUIRE_FALSE(too_small.has_value());
+    CHECK_EQ(too_small.error(), std::errc::no_buffer_space);
+
+    struct counting {
+        std::string sent;
+        std::size_t finished = 0;
+        std::size_t hint = 0;
+
+        struct message {
+            counting &to;
+            std::expected<void, std::errc> append(std::string_view const part)
+            {
+                to.sent.append(part);
+                return {};
+            }
+            std::expected<void, std::errc> done(std::size_t const size)
+            {
+                to.finished = size;
+                return {};
+            }
+        };
+
+        message allocate(std::size_t const n)
+        {
+            hint = n;
+            return message{*this};
+        }
+    } writer;
+    REQUIRE(cbor::encode(sample_garage, writer).has_value());
+    CHECK_EQ(writer.sent, expected);
+    CHECK_EQ(writer.finished, expected.size());
+    CHECK_EQ(writer.hint, expected.size());
 }
 
 #endif
