@@ -490,7 +490,7 @@ TEST_CASE("decode: an error is thrown on conversion, or read as a value")
 
 // encode writes into a target of the caller: a growing container gets the message appended, a fixed span takes
 // it if it fits, and any other target gives an object with append and done through allocate. done carries the
-// final length of the message.
+// final length of the message. A span that holds the message but not the padding of a head still takes it.
 TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
 {
     std::string const expected = cbor::encode(sample_garage);
@@ -504,6 +504,13 @@ TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
     auto const fits = cbor::encode(sample_garage, std::span(buffer));
     REQUIRE(fits.has_value());
     CHECK_EQ(std::string_view(buffer.data(), *fits), expected);
+    std::vector<char> chars{'x'};
+    CHECK_EQ(*cbor::encode(sample_garage, chars), expected.size());
+    CHECK_EQ(std::string_view(chars.data(), chars.size()), "x" + expected);
+    std::vector<char> exact(expected.size());
+    auto const fits_exactly = cbor::encode(sample_garage, std::span(exact));
+    REQUIRE(fits_exactly.has_value());
+    CHECK_EQ(std::string_view(exact.data(), *fits_exactly), expected);
     std::array<char, 8> small{};
     auto const too_small = cbor::encode(sample_garage, std::span(small));
     REQUIRE_FALSE(too_small.has_value());
