@@ -242,15 +242,20 @@ inline test::value value_from(source &in, refusal &r, int const depth)
 }
 
 // A graph of the reference host is compared node by node. The map pairs the nodes already seen, so two
-// graphs are the same only when their sharing is the same.
+// graphs are the same only when their sharing is the same. An integer and a string key have no identity in
+// that host, so the encoder writes them each time; integers and strings compare by value.
 inline bool same_graph(shared_test::handle const &a, shared_test::handle const &b,
                        std::map<shared_test::node const *, shared_test::node const *> &pairs)
 {
+    if (a->kind.index() != b->kind.index())
+        return false;
+    if (auto const *x = std::get_if<std::uint64_t>(&a->kind))
+        return *x == std::get<std::uint64_t>(b->kind);
+    if (auto const *x = std::get_if<std::string>(&a->kind))
+        return *x == std::get<std::string>(b->kind);
     auto const [at, fresh] = pairs.try_emplace(a.get(), b.get());
     if (!fresh)
         return at->second == b.get();
-    if (a->kind.index() != b->kind.index())
-        return false;
     if (auto const *x = std::get_if<std::vector<shared_test::handle>>(&a->kind)) {
         auto const &y = std::get<std::vector<shared_test::handle>>(b->kind);
         if (x->size() != y.size())
@@ -274,74 +279,11 @@ inline bool same_graph(shared_test::handle const &a, shared_test::handle const &
         auto const &y = std::get<shared_test::object>(b->kind);
         return x->tag == y.tag && same_graph(x->content, y.content, pairs);
     }
-    if (auto const *x = std::get_if<std::uint64_t>(&a->kind))
-        return *x == std::get<std::uint64_t>(b->kind);
-    return std::get<std::string>(a->kind) == std::get<std::string>(b->kind);
+    return false;
 }
 
-// Tag 28 can make a node hold itself. The nodes are emptied after the run, so the shared pointers let go.
-inline void release(shared_test::handle const &root)
-{
-    std::vector<shared_test::handle> todo{root};
-    std::set<shared_test::node const *> seen;
-    std::vector<shared_test::handle> all;
-    while (!todo.empty()) {
-        shared_test::handle h = todo.back();
-        todo.pop_back();
-        if (!h || !seen.insert(h.get()).second)
-            continue;
-        all.push_back(h);
-        if (auto const *a = std::get_if<std::vector<shared_test::handle>>(&h->kind))
-            todo.insert(todo.end(), a->begin(), a->end());
-        else if (auto const *m = std::get_if<std::vector<std::pair<shared_test::handle, shared_test::handle>>>(&h->kind))
-            for (auto const &[k, v] : *m) {
-                todo.push_back(k);
-                todo.push_back(v);
-            }
-        else if (auto const *o = std::get_if<shared_test::object>(&h->kind))
-            todo.push_back(o->content);
-    }
-    for (auto const &h : all)
-        h->kind = std::uint64_t{0};
-}
-
-// A host with values in place of references cannot hold a cycle: the eager decoder gives a copy of the
-// container as it stood at the reference, the lazy one decodes it whole. Only a graph without a cycle has
-// one answer.
-inline bool has_cycle(shared_test::handle const &h, std::set<shared_test::node const *> &open,
-                      std::set<shared_test::node const *> &done)
-{
-    if (!h || done.contains(h.get()))
-        return false;
-    if (!open.insert(h.get()).second)
-        return true;
-    bool found = false;
-    if (auto const *a = std::get_if<std::vector<shared_test::handle>>(&h->kind))
-        for (auto const &e : *a)
-            found = found || has_cycle(e, open, done);
-    else if (auto const *m = std::get_if<std::vector<std::pair<shared_test::handle, shared_test::handle>>>(&h->kind))
-        for (auto const &[k, v] : *m)
-            found = found || has_cycle(k, open, done) || has_cycle(v, open, done);
-    else if (auto const *o = std::get_if<shared_test::object>(&h->kind))
-        found = has_cycle(o->content, open, done);
-    open.erase(h.get());
-    done.insert(h.get());
-    return found;
-}
-
-inline bool acyclic(std::string_view const input)
-{
-    shared_test::ref_host host;
-    auto const value = cbor::decode<16>(host, input);
-    if (!value)
-        return false;
-    std::set<shared_test::node const *> open;
-    std::set<shared_test::node const *> done;
-    bool const cycle = has_cycle(*value, open, done);
-    release(*value);
-    return !cycle;
-}
-
+// A host of values copies a shared value to each reference, so a value marked near the root and referred
+// to deep inside grows deeper than the input was; the encoder then refuses it by its depth limit.
 inline void decode_encode_decode(std::string_view const input)
 {
     test_host host;
@@ -349,7 +291,11 @@ inline void decode_encode_decode(std::string_view const input)
     if (!value)
         return;
     string_writer w;
-    require(cbor::encode<16>(host, w, *value).has_value());
+    auto const written = cbor::encode<16>(host, w, *value);
+    if (!written) {
+        require(written.error() == cbor::error::nesting_depth_exceeded);
+        return;
+    }
     auto const again = cbor::decode<16>(host, w.bytes);
     require(again.has_value() && same_number(*value, *again));
     string_writer twice;
@@ -377,7 +323,7 @@ inline void lazy_channels(std::string_view const input)
             require(again.has_value() && same_number(*whole, *again));
         }
     }
-    if (eager && acyclic(input)) {
+    if (eager) {
         if (auto const *a = std::get_if<test::array>(&eager->kind)) {
             if (auto const elements = cbor::lazy_elements_of<16>(root)) {
                 std::size_t i = 0;
@@ -438,14 +384,11 @@ inline void shared_references(std::string_view const input)
         auto const again = cbor::decode<16>(back, w.bytes);
         if (!again) {
             require(again.error() == cbor::error::invalid_utf8_string);
-            release(*value);
             return;
         }
         std::map<shared_test::node const *, shared_test::node const *> pairs;
         require(same_graph(*value, *again, pairs));
-        release(*again);
     }
-    release(*value);
 }
 
 inline void encode_from_input(std::string_view const input)

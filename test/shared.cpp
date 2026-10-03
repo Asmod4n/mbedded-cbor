@@ -141,6 +141,42 @@ TEST_CASE("tag 29: a reference to a mark that is not complete")
     CHECK_EQ(ref_decode_error("\xd8\x1c\xc1\xd8\x1d\x00"sv), error::sharedref_not_complete);
 }
 
+// value-sharing: a cyclic data structure needs a reference to a value before it is completely decoded. A host
+// that does not answer cyclic_data_structures holds values, not references, so a cycle would come back as a cut
+// copy; the decoder refuses it instead. Sharing without a cycle stays: the host gets a copy.
+TEST_CASE("tag 28/29: a host without cyclic data structures refuses a cycle")
+{
+    CHECK_EQ(decode_error("\xd8\x1c\x81\xd8\x1d\x00"sv), error::sharedref_not_complete);
+    CHECK_EQ(decode_error("\xd8\x1c\xa1\x61\x61\xd8\x1d\x00"sv), error::sharedref_not_complete);
+    CHECK_EQ(decode_error("\x81\xd8\x1c\x81\xd8\x1d\x00"sv), error::sharedref_not_complete);
+    auto const v = decoded("\x82\xd8\x1c\x80\xd8\x1d\x00"sv);
+    REQUIRE(v.has_value());
+    CHECK(*v == A(A(), A()));
+}
+
+// Found by the fuzzer: a decode that fails inside a cycle returns no value, so nobody could reach the cycle to
+// end it, and its shared pointers held each other forever. The host ends every node that only other nodes hold.
+TEST_CASE("tag 28/29: a cycle that a failed decode leaves behind is freed with the host")
+{
+    std::vector<std::weak_ptr<node>> made;
+    {
+        ref_host host;
+        CHECK_FALSE(cbor::decode<16>(host, "\xd8\x1c\xa5\x61\x61\xd8\x1d\x00"sv).has_value());
+        made = host.made;
+    }
+    REQUIRE_FALSE(made.empty());
+    for (auto const &w : made)
+        CHECK(w.expired());
+}
+
+// A value the caller still holds keeps its whole graph when the host ends, cycle included.
+TEST_CASE("tag 28/29: a held cycle outlives its host")
+{
+    handle const a = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
+    CHECK(same(a, element(a, 0)));
+    std::get<std::vector<handle>>(a->kind).clear();
+}
+
 // A chain of marks counts as nesting, as a chain of other tags does.
 TEST_CASE("tag 28: a chain past the limit")
 {
