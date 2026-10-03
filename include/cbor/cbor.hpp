@@ -15,7 +15,7 @@
 #include <memory>
 #include <optional>
 #include <span>
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 #include <meta>
 #include <stdckdint.h>
 #include <stdfloat>
@@ -27,12 +27,18 @@
 #include <variant>
 #include <stdexcept>
 #include <string_view>
-#if CBOR_SIMDUTF
+#ifdef CBOR_SIMDUTF
 #include <simdutf.h>
 #endif
 #include <system_error>
 #include <type_traits>
 #include <unordered_map>
+
+#ifdef _MSC_VER
+#define CBOR_ALWAYS_INLINE [[msvc::forceinline]]
+#else
+#define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
+#endif
 #include <utility>
 #include <vector>
 
@@ -153,16 +159,6 @@ inline std::error_condition make_error_condition(condition const c) noexcept
     return {static_cast<int>(c), cbor_category};
 }
 
-} // namespace cbor
-
-template <>
-struct std::is_error_code_enum<cbor::error> : std::true_type {};
-
-template <>
-struct std::is_error_condition_enum<cbor::condition> : std::true_type {};
-
-namespace cbor
-{
 
 enum class major_type : std::uint8_t {
     unsigned_integer,
@@ -323,7 +319,7 @@ template <class T, class E = error>
 struct result : std::expected<T, E> {
     using std::expected<T, E>::expected;
 
-#if __cpp_exceptions
+#ifdef __cpp_exceptions
     operator T() const &
     {
         if (!this->has_value()) [[unlikely]] {
@@ -348,7 +344,7 @@ struct result : std::expected<T, E> {
 #endif
 };
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 template <class T>
 consteval std::size_t fixed_size();
 
@@ -409,7 +405,7 @@ result<std::string, std::errc> encode(T const &value);
 
 template <class T, class Target>
 result<std::size_t, std::errc> encode(T const &value, Target &&target);
-} // namespace generic
+}
 #endif
 
 class internal
@@ -439,7 +435,7 @@ class internal
     template <class Host>
     using marks = std::vector<std::optional<typename Host::value>>;
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
     static constexpr std::size_t initial_byte_size = 1;
 
     static constexpr int extended_precision_digits = 64;
@@ -751,7 +747,7 @@ class internal
 
     static constexpr std::size_t head_padding = sizeof(std::uint64_t);
 
-    [[gnu::always_inline]] static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
+    CBOR_ALWAYS_INLINE static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
                                   std::uint64_t const argument)
     {
         auto const field = out.subspan(at).template first<initial_byte_size + sizeof(std::uint64_t)>();
@@ -767,7 +763,7 @@ class internal
     }
 
     template <class E>
-    [[gnu::always_inline]] static void zero_initialized_copy(std::span<char, fixed_size<E>()> const field)
+    CBOR_ALWAYS_INLINE static void zero_initialized_copy(std::span<char, fixed_size<E>()> const field)
     {
         constexpr std::size_t n = fixed_size<E>();
         std::span<char const, n> const from{zero_initialized<E>().data(), n};
@@ -775,7 +771,7 @@ class internal
     }
 
     template <class E, class R>
-    [[gnu::always_inline]] static std::size_t elements_encode(std::span<char> const out, std::size_t const data, R const &range,
+    CBOR_ALWAYS_INLINE static std::size_t elements_encode(std::span<char> const out, std::size_t const data, R const &range,
                                        std::size_t position)
     {
         constexpr std::size_t size = fixed_size<E>();
@@ -790,7 +786,7 @@ class internal
     }
 
     template <class V>
-    [[gnu::always_inline]] static std::size_t reference_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
+    CBOR_ALWAYS_INLINE static std::size_t reference_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
                                         V const &value, std::size_t position)
     {
         using U = std::remove_cv_t<V>;
@@ -846,7 +842,7 @@ class internal
     }
 
     template <class T>
-    [[gnu::always_inline]] static std::size_t value_encode(std::span<char> const out, std::span<char, fixed_size<T>()> const field,
+    CBOR_ALWAYS_INLINE static std::size_t value_encode(std::span<char> const out, std::span<char, fixed_size<T>()> const field,
                                     T const &value, std::size_t position)
     {
         using U = std::remove_cv_t<T>;
@@ -1014,7 +1010,7 @@ class internal
         std::size_t length;
     };
 
-    [[gnu::always_inline]] static std::expected<reference, error> reference_read(std::string_view const bytes,
+    CBOR_ALWAYS_INLINE static std::expected<reference, error> reference_read(std::string_view const bytes,
                                                            std::span<char const, dynamic_type_sizes> const field,
                                                            std::size_t const floor, std::size_t const element)
     {
@@ -1085,7 +1081,7 @@ class internal
     }
 
     template <class T, fixed_string Path, std::size_t At>
-    [[gnu::always_inline]] static auto path_walk(std::string_view const bytes, std::span<char const, fixed_size<T>()> const field,
+    CBOR_ALWAYS_INLINE static auto path_walk(std::string_view const bytes, std::span<char const, fixed_size<T>()> const field,
                           std::size_t const floor)
         -> std::conditional_t<path_reads_wire<T, Path, At>(),
                               std::expected<typename decltype(path_result<T, Path, At>())::type, error>,
@@ -1450,7 +1446,7 @@ class internal
         std::expected<std::string_view, error> text_string_decode(std::uint64_t length)
         {
             auto const text = byte_string_decode(length);
-#if CBOR_SIMDUTF
+#ifdef CBOR_SIMDUTF
             if (text && !simdutf::validate_utf8(text->data(), text->size())) [[unlikely]]
                 return std::unexpected(error::invalid_utf8_string);
 #endif
@@ -1558,7 +1554,7 @@ class internal
             return target.allocate(hint);
     }
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
     template <class T>
     static std::expected<std::size_t, std::errc> encoded_size(second_item const &second)
     {
@@ -1571,7 +1567,7 @@ class internal
     }
 
     template <class T>
-    [[gnu::always_inline]] static std::size_t encoded_write(std::span<char> const bytes, T const &value, second_item const &second)
+    CBOR_ALWAYS_INLINE static std::size_t encoded_write(std::span<char> const bytes, T const &value, second_item const &second)
     {
         constexpr std::size_t first = fixed_size<T>();
         auto const root = bytes.template first<first>();
@@ -2019,7 +2015,7 @@ class internal
         }
     }
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
     template <class T, std::size_t DepthMax>
     friend result<T> generic::decode(std::string_view bytes);
 
@@ -2813,7 +2809,7 @@ struct lazy_entries {
     }
 };
 
-#if __cpp_impl_reflection
+#ifdef __cpp_impl_reflection
 template <class T>
 consteval std::size_t fixed_size()
 {
@@ -2924,7 +2920,7 @@ result<T> decode(std::string_view const bytes)
 }
 
 template <class T>
-[[gnu::always_inline]] inline result<std::string, std::errc> encode(T const &value)
+CBOR_ALWAYS_INLINE inline result<std::string, std::errc> encode(T const &value)
 {
     std::size_t const size = internal::generic_size(value);
     std::string out;
@@ -2935,7 +2931,7 @@ template <class T>
 }
 
 template <class T, class Target>
-[[gnu::always_inline]] inline result<std::size_t, std::errc> encode(T const &value, Target &&target)
+CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, Target &&target)
 {
     using U = std::remove_cvref_t<Target>;
     std::size_t const size = internal::generic_size(value);
@@ -2971,10 +2967,10 @@ template <class T, class Target>
         return std::unexpected(r.error());
     return bytes.size();
 }
-} // namespace generic
+}
 
 template <class T, fixed_string Path>
-[[gnu::always_inline]] inline auto at_path_compiled(document<T> const doc)
+CBOR_ALWAYS_INLINE inline auto at_path_compiled(document<T> const doc)
 {
     return internal::path_walk<T, Path, 0>(doc.bytes, doc.field, doc.floor);
 }
@@ -3700,7 +3696,7 @@ template <>
 struct result<lazy, error> : std::expected<lazy, error> {
     using std::expected<lazy, cbor::error>::expected;
 
-#if __cpp_exceptions
+#ifdef __cpp_exceptions
     operator lazy() const
     {
         if (!has_value()) [[unlikely]]
@@ -4065,4 +4061,10 @@ std::expected<typename Host::value, error> path_decode(Host &host, std::span<pat
     return lazy_decode<DepthMax>(host, at);
 }
 
-} // namespace cbor
+}
+
+template <>
+struct std::is_error_code_enum<cbor::error> : std::true_type {};
+
+template <>
+struct std::is_error_condition_enum<cbor::condition> : std::true_type {};
