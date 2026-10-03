@@ -480,3 +480,43 @@ TEST_CASE("lazy: a reference forward to a mark that navigation recorded is an er
     test_host host;
     CHECK_EQ(cbor::lazy_decode<16>(host, *first).error(), error::sharedref_not_complete);
 }
+
+// The member form: lazy::from takes the bytes by move and copies nothing; each step gives a result that the next
+// step reads, so a chain needs no and_then, and an error anywhere reaches the end of the chain.
+TEST_CASE("lazy: from, at and get as a chain")
+{
+    std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
+    char const *const data = bytes.data();
+    cbor::lazy const doc = cbor::lazy::from(std::move(bytes));
+    std::string_view const name = doc.at("statuses").at(1).at("user").at("name").get<std::string_view>();
+    CHECK_EQ(name, "bob"sv);
+    CHECK_EQ(static_cast<void const *>(doc.document->bytes.data()), static_cast<void const *>(data));
+    auto const missing = doc.at("statuses").at(5).at("user").get<std::string_view>();
+    REQUIRE_FALSE(missing.has_value());
+    CHECK_EQ(missing.error(), error::index_out_of_bounds);
+    CHECK_THROWS_AS(std::string_view n = doc.at("nope").get<std::string_view>(), std::system_error);
+    std::size_t count = 0;
+    for (auto const e : *doc.at("statuses").elements()) {
+        REQUIRE(e.has_value());
+        ++count;
+    }
+    CHECK_EQ(count, 2u);
+}
+
+// A key or an index that a caller asked for is kept with the offset it led to, so the next lookup on the same
+// node reads no bytes. Iteration keeps nothing.
+TEST_CASE("lazy: a key and an index that were asked for are found again from the cache")
+{
+    cbor::lazy const doc = cbor::lazy::from(encoded(M("a"s, A(1, 2, 3), "b"s, 4)));
+    CHECK(doc.document->keys.empty());
+    auto const a = doc.at("a");
+    REQUIRE(a.has_value());
+    CHECK_EQ(doc.document->keys.at(0).count("a"), 1u);
+    auto const again = doc.at("a");
+    CHECK_EQ(again->offset, a->offset);
+    CHECK_EQ(*a.at(-1).get<std::uint64_t>(), 3u);
+    CHECK_EQ(doc.document->indexes.at(a->offset).count(-1), 1u);
+    for (auto const e : *a.elements())
+        (void)e;
+    CHECK_EQ(doc.document->indexes.at(a->offset).size(), 1u);
+}
