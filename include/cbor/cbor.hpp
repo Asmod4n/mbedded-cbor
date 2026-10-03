@@ -898,40 +898,30 @@ class internal
     template <class U>
     static consteval std::meta::info member_named(std::string_view const name)
     {
-        for (auto const m : data_members<U>()) {
-            auto const key = std::meta::u8identifier_of(m);
-            if (std::ranges::equal(key, name, [](char8_t a, char b) { return a == static_cast<char8_t>(b); }))
-                return m;
-        }
-        return std::meta::info{};
+        constexpr auto members = data_members<U>();
+        auto const m = std::ranges::find_if(members, [name](std::meta::info const m) {
+            return std::ranges::equal(std::meta::u8identifier_of(m), name,
+                                      [](char8_t const a, char const b) { return a == static_cast<char8_t>(b); });
+        });
+        return m == members.end() ? std::meta::info{} : *m;
     }
 
     static consteval std::size_t step_end(std::string_view const path, std::size_t const at)
     {
-        std::size_t end = at + 1;
-        while (end < path.size() && path.substr(end, 1) != "." && path.substr(end, 1) != "[")
-            ++end;
-        return end;
+        return std::min(path.find_first_of(".[", at + 1), path.size());
     }
 
     static consteval std::size_t index_end(std::string_view const path, std::size_t const at)
     {
-        std::size_t end = at + 1;
-        while (end < path.size() && path.substr(end, 1) != "]")
-            ++end;
-        return end;
+        return std::min(path.find(']', at + 1), path.size());
     }
 
     static consteval std::size_t index_of(std::string_view const digits)
     {
-        if (digits.empty())
-            return no_fixed_size<std::size_t>();
         std::size_t value = 0;
-        for (char const c : digits) {
-            if (c < '0' || c > '9')
-                return no_fixed_size<std::size_t>();
-            value = value * 10 + static_cast<std::size_t>(c - '0');
-        }
+        auto const [end, ec] = std::from_chars(digits.data(), std::to_address(digits.end()), value);
+        if (ec != std::errc{} || end != std::to_address(digits.end())) [[unlikely]]
+            return no_fixed_size<std::size_t>();
         return value;
     }
 
@@ -2244,7 +2234,7 @@ class internal
             case simple_float_information::double_precision_float:
                 out = static_cast<U>(std::bit_cast<double>(h->argument));
                 return {};
-            default:
+            [[unlikely]] default:
                 return std::unexpected(error::incorrect_type);
             }
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
@@ -3890,7 +3880,7 @@ result<T> lazy::get() const
             return static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h.argument)));
         case internal::simple_float_information::double_precision_float:
             return std::bit_cast<double>(h.argument);
-        default:
+        [[unlikely]] default:
             return std::unexpected(error::incorrect_type);
         }
     } else if constexpr (std::is_same_v<T, bool>) {
