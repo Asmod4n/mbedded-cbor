@@ -24,6 +24,7 @@
 #include <bitset>
 #include <ranges>
 #include <tuple>
+#include <variant>
 #include <stdexcept>
 #include <string_view>
 #if CBOR_SIMDUTF
@@ -1985,6 +1986,15 @@ class internal
     static constexpr bool is_tagged<tagged<N, E>> = true;
 
     template <class U>
+    static constexpr bool is_std_variant = false;
+
+    template <class... E>
+    static constexpr bool is_std_variant<std::variant<E...>> = true;
+
+    template <class U>
+    static constexpr bool is_wide_integer = std::same_as<U, __int128> || std::same_as<U, unsigned __int128>;
+
+    template <class U>
     static constexpr bool is_byte = std::same_as<U, std::byte> || std::same_as<U, unsigned char>;
 
     template <class U>
@@ -2028,6 +2038,105 @@ class internal
         }
     }
 
+    template <class U>
+    static bool head_accepted(head const &h)
+    {
+        if constexpr (std::same_as<U, bool>)
+            return h.major == major_type::simple_float && (h.info == std::to_underlying(simple_value::false_value) ||
+                                                           h.info == std::to_underlying(simple_value::true_value));
+        else if constexpr (std::same_as<U, std::nullptr_t>)
+            return h.major == major_type::simple_float && h.info == std::to_underlying(simple_value::null);
+        else if constexpr (std::same_as<U, simple_value>)
+            return h.major == major_type::simple_float &&
+                   h.info <= std::to_underlying(simple_float_information::simple_value_follows);
+        else if constexpr (std::is_floating_point_v<U>)
+            return h.major == major_type::simple_float &&
+                   h.info >= std::to_underlying(simple_float_information::half_precision_float) &&
+                   h.info <= std::to_underlying(simple_float_information::double_precision_float);
+        else if constexpr (is_wide_integer<U>)
+            return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer ||
+                   (h.major == major_type::tag && (h.argument == std::to_underlying(tag_number::unsigned_bignum) ||
+                                                   h.argument == std::to_underlying(tag_number::negative_bignum)));
+        else if constexpr (std::is_unsigned_v<U>)
+            return h.major == major_type::unsigned_integer;
+        else if constexpr (std::is_integral_v<U> || std::is_enum_v<U>)
+            return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer;
+        else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>)
+            return h.major == major_type::text_string;
+        else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>)
+            return h.major == major_type::byte_string;
+        else if constexpr (is_optional<U>)
+            return (h.major == major_type::simple_float && h.info == std::to_underlying(simple_value::null)) ||
+                   head_accepted<typename U::value_type>(h);
+        else if constexpr (is_tagged<U>)
+            return h.major == major_type::tag && h.argument == U::number;
+        else if constexpr (is_std_variant<U>)
+            return false;
+        else if constexpr (is_std_tuple<U> || is_std_array<U>)
+            return h.major == major_type::array && h.argument == std::tuple_size_v<U>;
+        else if constexpr (is_map<U>)
+            return h.major == major_type::map;
+        else if constexpr (requires { typename U::value_type; std::declval<U &>().push_back(std::declval<typename U::value_type>()); })
+            return h.major == major_type::array;
+        else
+            return h.major == major_type::map;
+    }
+
+    template <class U>
+    static std::expected<void, error> wide_integer_read(decoder &d, U &out)
+    {
+        auto const h = d.head_decode();
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        bool negative = h->major == major_type::negative_integer;
+        unsigned __int128 magnitude = h->argument;
+        if (h->major == major_type::tag) {
+            if (h->argument != std::to_underlying(tag_number::unsigned_bignum) &&
+                h->argument != std::to_underlying(tag_number::negative_bignum)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            negative = h->argument == std::to_underlying(tag_number::negative_bignum);
+            auto const b = d.head_decode();
+            if (!b) [[unlikely]]
+                return std::unexpected(b.error());
+            if (b->major != major_type::byte_string) [[unlikely]]
+                return std::unexpected(error::inadmissible_type_for_tag_content);
+            auto const bytes = d.byte_string_decode(b->argument);
+            if (!bytes) [[unlikely]]
+                return std::unexpected(bytes.error());
+            std::string_view const digits = magnitude_without_leading_zeros(*bytes);
+            if (digits.size() > sizeof(unsigned __int128)) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            magnitude = 0;
+            for (char const c : digits)
+                magnitude = magnitude << 8 | static_cast<std::uint8_t>(c);
+        } else if (h->major != major_type::unsigned_integer && !negative) [[unlikely]] {
+            return std::unexpected(error::incorrect_type);
+        }
+        if constexpr (std::same_as<U, unsigned __int128>) {
+            if (negative) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            out = magnitude;
+        } else {
+            if (magnitude > static_cast<unsigned __int128>(std::numeric_limits<__int128>::max())) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            out = negative ? -1 - static_cast<__int128>(magnitude) : static_cast<__int128>(magnitude);
+        }
+        return {};
+    }
+
+    template <std::size_t DepthMax, class U, std::size_t I = 0>
+    static std::expected<void, error> variant_read(decoder &d, U &out, head const &h, std::size_t const depth)
+    {
+        if constexpr (I == std::variant_size_v<U>) {
+            return std::unexpected(error::incorrect_type);
+        } else {
+            using A = std::variant_alternative_t<I, U>;
+            if (head_accepted<A>(h))
+                return generic_read<DepthMax>(d, out.template emplace<I>(), depth);
+            return variant_read<DepthMax, U, I + 1>(d, out, h, depth);
+        }
+    }
+
     template <std::size_t DepthMax, class U>
     static std::expected<void, error> generic_read(decoder &d, U &out, std::size_t const depth)
     {
@@ -2043,6 +2152,25 @@ class internal
                 return std::unexpected(error::incorrect_type);
             out = h->info == std::to_underlying(simple_value::true_value);
             return {};
+        } else if constexpr (std::same_as<U, simple_value>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (!head_accepted<U>(*h)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            if (h->info == std::to_underlying(simple_float_information::simple_value_follows) &&
+                h->argument < simple_value_one_byte_min) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            out = static_cast<simple_value>(h->argument);
+            return {};
+        } else if constexpr (is_wide_integer<U>) {
+            return wide_integer_read(d, out);
+        } else if constexpr (is_std_variant<U>) {
+            decoder probe = d;
+            auto const h = probe.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            return variant_read<DepthMax>(d, out, *h, depth);
         } else if constexpr (std::is_enum_v<U>) {
             return integer_read<std::underlying_type_t<U>>(d, out);
         } else if constexpr (std::is_integral_v<U>) {
@@ -2264,6 +2392,20 @@ class internal
     {
         if constexpr (std::same_as<U, bool> || std::same_as<U, std::nullptr_t>) {
             return initial_byte_size;
+        } else if constexpr (std::same_as<U, simple_value>) {
+            return head_size(std::to_underlying(value));
+        } else if constexpr (is_wide_integer<U>) {
+            bool negative = false;
+            if constexpr (std::same_as<U, __int128>)
+                negative = value < 0;
+            unsigned __int128 const magnitude =
+                negative ? static_cast<unsigned __int128>(-1 - value) : static_cast<unsigned __int128>(value);
+            if (magnitude <= std::numeric_limits<std::uint64_t>::max())
+                return head_size(static_cast<std::uint64_t>(magnitude));
+            std::size_t const digits = sizeof(unsigned __int128) - std::countl_zero(magnitude) / 8;
+            return initial_byte_size + head_size(digits) + digits;
+        } else if constexpr (is_std_variant<U>) {
+            return std::visit([](auto const &e) { return generic_size(e); }, value);
         } else if constexpr (std::is_enum_v<U>) {
             return generic_size(std::to_underlying(value));
         } else if constexpr (std::is_integral_v<U>) {
@@ -2338,6 +2480,26 @@ class internal
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
             out.subspan(at).front() = simple(std::to_underlying(simple_value::null));
             return at + initial_byte_size;
+        } else if constexpr (std::same_as<U, simple_value>) {
+            return at + head_write(out, at, major_type::simple_float, std::to_underlying(value));
+        } else if constexpr (is_wide_integer<U>) {
+            bool negative = false;
+            if constexpr (std::same_as<U, __int128>)
+                negative = value < 0;
+            unsigned __int128 const magnitude =
+                negative ? static_cast<unsigned __int128>(-1 - value) : static_cast<unsigned __int128>(value);
+            if (magnitude <= std::numeric_limits<std::uint64_t>::max())
+                return at + head_write(out, at,
+                                       negative ? major_type::negative_integer : major_type::unsigned_integer,
+                                       static_cast<std::uint64_t>(magnitude));
+            std::size_t const digits = sizeof(unsigned __int128) - std::countl_zero(magnitude) / 8;
+            at += head_write(out, at, major_type::tag,
+                             std::to_underlying(negative ? tag_number::negative_bignum : tag_number::unsigned_bignum));
+            at += head_write(out, at, major_type::byte_string, digits);
+            auto const bytes = big_endian(magnitude);
+            return bytes_write(out, at, std::span<char const>(bytes).last(digits));
+        } else if constexpr (is_std_variant<U>) {
+            return std::visit([&](auto const &e) { return generic_write(out, at, e); }, value);
         } else if constexpr (std::is_enum_v<U>) {
             return generic_write(out, at, std::to_underlying(value));
         } else if constexpr (std::is_integral_v<U>) {
