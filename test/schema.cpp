@@ -486,6 +486,82 @@ TEST_CASE("decode: an error is read as a value")
     CHECK_EQ(r.error(), error::too_little_data);
 }
 
+namespace
+{
+
+struct node {
+    std::vector<node> children;
+};
+
+void reference_append(std::string &out, std::uint32_t const value)
+{
+    out += '\x1a';
+    for (int shift = 24; shift >= 0; shift -= 8)
+        out += static_cast<char>(value >> shift);
+}
+
+void node_append(std::string &out, std::uint32_t const data, std::uint32_t const length)
+{
+    out += "\xa1\x68" "children" "\x82"sv;
+    reference_append(out, data);
+    reference_append(out, length);
+}
+
+// A chain of nodes, each with one child, as an attacker writes it by hand: every reference points forward,
+// so each passes the check of its offset. The encoder of this library cannot write it, because gcc does not
+// inline a recursive encoder.
+std::string node_chain(std::size_t const levels)
+{
+    std::string head;
+    reference_append(head, static_cast<std::uint32_t>(levels + 1));
+    head.front() = '\x9a';
+    std::string out;
+    node_append(out, static_cast<std::uint32_t>(cbor::fixed_size<node>() + head.size() + 1), levels == 0 ? 0 : 1);
+    out += head;
+    for (std::size_t k = 0; k < levels; ++k) {
+        out += '\x81';
+        auto const here = static_cast<std::uint32_t>(out.size());
+        node_append(out, here + static_cast<std::uint32_t>(cbor::fixed_size<node>()) + 1, k + 1 == levels ? 0 : 1);
+    }
+    out += '\x80';
+    return out;
+}
+
+std::size_t depth_of(node const &root)
+{
+    std::size_t depth = 0;
+    for (node const *at = &root; !at->children.empty(); at = &at->children.front())
+        ++depth;
+    return depth;
+}
+
+} // namespace
+
+// A struct that holds a list of itself is read by recursion, and the bytes decide how deep. Without a limit, a
+// chain of 100000 nodes in 2.2 MB overflowed a stack of 8 MiB. Each reference that is followed counts one
+// level, as each nested item counts one in the other decoders.
+TEST_CASE("decode: a struct that holds itself stops at DepthMax")
+{
+    REQUIRE_EQ(cbor::fixed_size<node>(), 21u);
+
+    auto const at_limit = cbor::decode<node>(node_chain(64));
+    REQUIRE(at_limit.has_value());
+    CHECK_EQ(depth_of(*at_limit), 64u);
+
+    auto const over = cbor::decode<node>(node_chain(65));
+    REQUIRE_FALSE(over.has_value());
+    CHECK_EQ(over.error(), error::nesting_depth_exceeded);
+
+    auto const small = cbor::decode<node, 3>(node_chain(3));
+    REQUIRE(small.has_value());
+    CHECK_EQ(depth_of(*small), 3u);
+    CHECK_EQ(cbor::decode<node, 3>(node_chain(4)).error(), error::nesting_depth_exceeded);
+
+    auto const deep = cbor::decode<node>(node_chain(100000));
+    REQUIRE_FALSE(deep.has_value());
+    CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
+}
+
 #endif
 
 #ifdef __cpp_impl_reflection

@@ -1,0 +1,131 @@
+{
+ "what": "cbor::decode<parking_lot> of carsales (the fields and xorshift data of Cap'n Proto), 20000 messages read in turn. Arm A: main 25a2d78. Arm B: A with a DepthMax template parameter on cbor::decode<T> (default 64), carried through value_read; a reference that is followed at DepthMax gives error::nesting_depth_exceeded. Time in ns per car.",
+ "why": "The security review found that cbor::decode<T> of a struct that holds a list of itself recursed as deep as the bytes said, and 100000 levels overflowed a stack of 8 MiB. The owner asked for the fix to be measured.",
+ "how": "Google Benchmark, one binary per arm, each built twice (a, b), 3 rounds alternating, --benchmark_min_time=0.1s --benchmark_repetitions=3, random interleaving, GLIBC_TUNABLES trim_threshold, mmap_threshold and top_pad high. The whole run was made twice.",
+ "finding": "Run 1 medians: A 117.13 / 117.35, B 118.9 / 119.96, B against A +1.9 percent, noise 0.2 and 0.9 percent. Run 2 medians: A 117.6 / 117.93, B 117.0 / 119.52, B against A +0.4 percent, noise 0.3 and 2.1 percent. The difference is not above the noise in both runs.",
+ "context": {
+  "commit": "mbedded-cbor main 25a2d78, arm B is the change of the next commit",
+  "flags": "-std=c++26 -freflection -O2 -march=x86-64-v4 -falign-functions=64 -falign-loops=64 -DNDEBUG -Wall -Wextra -Wpedantic -Werror",
+  "compiler": "g++ (SUSE Linux) 16.2.0",
+  "cxx_library": "libstdc++.so.6 of gcc 16.2",
+  "c_library": "glibc 2.44",
+  "benchmark": "1.9.5",
+  "kernel": "6.18.44-fc-v64",
+  "vm": "firecracker microVM",
+  "container": "podman, localhost/mbedded-cbor-tw-lmdb-gb, openSUSE Tumbleweed",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256_16": "39a8dd34f3afdd38",
+  "user": "uid 1000",
+  "priority": "nice 0, not raised",
+  "threads": 1,
+  "pinned": false
+ },
+ "results_ns_per_car": {
+  "run1": {
+   "A_a": [
+    115.96,
+    117.13,
+    114.27,
+    126.37,
+    124.88,
+    122.43,
+    118.71,
+    115.74,
+    114.88
+   ],
+   "A_b": [
+    121.07,
+    118.26,
+    118.65,
+    117.35,
+    114.47,
+    115.1,
+    117.94,
+    117.2,
+    117.19
+   ],
+   "B_a": [
+    118.9,
+    134.4,
+    118.16,
+    121.18,
+    125.51,
+    120.53,
+    113.85,
+    116.19,
+    118.02
+   ],
+   "B_b": [
+    135.28,
+    124.54,
+    116.14,
+    119.96,
+    121.86,
+    118.74,
+    122.42,
+    119.42,
+    119.95
+   ]
+  },
+  "run2": {
+   "A_a": [
+    120.57,
+    119.76,
+    127.26,
+    117.91,
+    115.12,
+    114.09,
+    117.6,
+    115.59,
+    115.53
+   ],
+   "A_b": [
+    119.05,
+    114.71,
+    113.79,
+    121.97,
+    126.31,
+    119.35,
+    117.78,
+    117.93,
+    117.34
+   ],
+   "B_a": [
+    119.5,
+    115.01,
+    117.71,
+    114.06,
+    114.17,
+    113.48,
+    122.79,
+    117.0,
+    118.67
+   ],
+   "B_b": [
+    120.25,
+    122.0,
+    118.72,
+    118.56,
+    119.52,
+    119.76,
+    118.0,
+    119.06,
+    119.64
+   ]
+  }
+ },
+ "medians": {
+  "run1": {
+   "A_a": 117.13,
+   "A_b": 117.35,
+   "B_a": 118.9,
+   "B_b": 119.96
+  },
+  "run2": {
+   "A_a": 117.6,
+   "A_b": 117.93,
+   "B_a": 117.0,
+   "B_b": 119.52
+  }
+ }
+}
