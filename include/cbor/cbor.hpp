@@ -517,7 +517,7 @@ class internal
     static consteval std::span<std::meta::info const> data_members()
     {
         return std::define_static_array(
-            std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unchecked()));
+            std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unprivileged()));
     }
 
     template <class U>
@@ -1292,7 +1292,7 @@ class internal
             std::expected<void, error> done;
             template for (constexpr std::meta::info m :
                           std::define_static_array(std::meta::nonstatic_data_members_of(
-                              ^^U, std::meta::access_context::unchecked()))) {
+                              ^^U, std::meta::access_context::unprivileged()))) {
                 using M = typename[:std::meta::type_of(m):];
                 if (done)
                     done = value_read<DepthMax>(out.[:m:], bytes,
@@ -2198,7 +2198,7 @@ class internal
     static consteval auto members_of()
     {
         auto const members = std::define_static_array(
-            std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unchecked()));
+            std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unprivileged()));
         if (!has_integer_keys<U> && !keys_unique(members))
             std::unreachable();
         return members;
