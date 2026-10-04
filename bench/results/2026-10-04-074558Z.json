@@ -1,0 +1,109 @@
+{
+ "what": "Encode of the decoded twitter.json value through test_binding into a new std::string per iteration, under five settings of glibc malloc.",
+ "why": "The encode arms of 2026-10-04-074304Z had two modes, near 700 and near 1450 MiB per second. This run asks where the modes come from.",
+ "how": "One binary (g++, the new arm of that run), encode_tree alone, 12 repetitions per setting. default and default2: no tunable. threshold: GLIBC_TUNABLES=glibc.malloc.mmap_threshold=16777216. toppad: glibc.malloc.top_pad=67108864. notrim: mmap_threshold=16777216 and trim_threshold=268435456.",
+ "finding": "Without a tunable each repetition reads the slow mode; with top_pad or a high trim threshold each repetition reads the fast mode. The string of the writer grows to 400 KB in each iteration and is freed at its end; glibc gives the top of the heap back to the system, and the next iteration takes fresh pages. The library is not the cause.",
+ "context": {
+  "commit": "e09c2bd",
+  "build_flags": "-std=c++26 -freflection -O2 -march=x86-64-v4 -falign-functions=64 -falign-loops=64 -DNDEBUG -Wall -Wextra -Wpedantic -Werror",
+  "compiler": "gcc (SUSE Linux) 16.2.0",
+  "libc": "glibc 2.44",
+  "kernel": "Linux 6.18.44-fc-v64",
+  "scheduler": "none",
+  "on": "podman container in a virtual machine",
+  "cpu_model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flag_count": "115",
+  "cpu_flag_digest": "c339bde104692497",
+  "ran_as": "uid 1000",
+  "priority": "not given: nice stayed 0",
+  "threads": "3 of 4 cpus, not pinned",
+  "benchmark_lib": "libbenchmark.so.1.9.5"
+ },
+ "results": {
+  "g++/new/encode_tree/default": {
+   "mib_per_second": [
+    629.0,
+    633.9,
+    626.6,
+    636.2,
+    632.0,
+    619.9,
+    641.3,
+    639.5,
+    631.7,
+    637.4,
+    632.9,
+    637.7
+   ],
+   "median": 633.9
+  },
+  "g++/new/encode_tree/default2": {
+   "mib_per_second": [
+    648.3,
+    633.3,
+    623.2,
+    642.5,
+    635.4,
+    631.3,
+    641.2,
+    645.3,
+    645.7,
+    645.0,
+    646.8,
+    637.9
+   ],
+   "median": 642.5
+  },
+  "g++/new/encode_tree/threshold": {
+   "mib_per_second": [
+    629.7,
+    635.7,
+    630.6,
+    645.8,
+    656.9,
+    656.4,
+    646.4,
+    644.8,
+    641.6,
+    647.7,
+    648.5,
+    648.3
+   ],
+   "median": 646.4
+  },
+  "g++/new/encode_tree/toppad": {
+   "mib_per_second": [
+    1246.5,
+    1246.4,
+    1264.6,
+    1266.6,
+    1277.6,
+    1279.0,
+    1275.4,
+    1295.5,
+    1250.1,
+    1264.1,
+    1273.0,
+    1266.0
+   ],
+   "median": 1266.6
+  },
+  "g++/new/encode_tree/notrim": {
+   "mib_per_second": [
+    1261.1,
+    1266.0,
+    1269.0,
+    1284.9,
+    1270.2,
+    1268.3,
+    1252.7,
+    1289.0,
+    1281.9,
+    1218.2,
+    1277.9,
+    1270.1
+   ],
+   "median": 1270.1
+  }
+ }
+}
