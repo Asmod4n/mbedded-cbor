@@ -185,6 +185,22 @@ struct typed_array {
     std::span<std::byte const> bytes;
 };
 
+enum class kind {
+    unsigned_integer,
+    negative_integer,
+    unsigned_bignum,
+    negative_bignum,
+    byte_string,
+    text_string,
+    floating_point,
+    simple_value,
+    array,
+    map,
+    typed_array,
+    registered,
+    unsupported
+};
+
 template <class Value>
 struct binding {
     using value = Value;
@@ -202,6 +218,28 @@ struct binding {
     value map_key_decode(std::string_view key) = delete;
     value map_insert(value map, value key, value item) = delete;
     value tag_decode(std::uint64_t tag, value content) = delete;
+    std::optional<value> tag_begin(std::uint64_t tag) = delete;
+    value registered_decode(value object, value content) = delete;
+    value after_decode(value object) = delete;
+    bool cyclic_data_structures() = delete;
+    kind kind_of(value const &item) = delete;
+    value before_encode(value const &item) = delete;
+    std::uint64_t unsigned_of(value const &item) = delete;
+    std::string_view magnitude_of(value const &item) = delete;
+    std::string_view bytes_of(value const &item) = delete;
+    std::string_view text_of(value const &item) = delete;
+    double float_of(value const &item) = delete;
+    std::uint8_t simple_of(value const &item) = delete;
+    std::uint64_t array_size(value const &item) = delete;
+    value const &array_at(value const &item, std::uint64_t index) = delete;
+    std::uint64_t map_size(value const &item) = delete;
+    template <class F>
+    void map_for_each(value const &item, F const &each) = delete;
+    typed_array typed_array_of(value const &item) = delete;
+    std::uint64_t registered_tag(value const &item) = delete;
+    bool embed_of(value const &item) = delete;
+    void value_identity(value const &item) = delete;
+    void key_identity(value const &item) = delete;
 };
 
 template <class B>
@@ -223,58 +261,6 @@ concept language_binding = std::derived_from<B, binding<typename B::value>> &&
     { b.tag_decode(n, std::move(v)) } -> std::same_as<typename B::value>;
 };
 
-template <class Tag>
-struct customization_point {
-    template <class... Args>
-        requires requires(Tag const &tag, Args &&...args) { tag_invoke(tag, std::forward<Args>(args)...); }
-    constexpr decltype(auto) operator()(Args &&...args) const
-    {
-        return tag_invoke(static_cast<Tag const &>(*this), std::forward<Args>(args)...);
-    }
-};
-
-inline constexpr struct kind_of_t : customization_point<kind_of_t> {
-} kind_of;
-inline constexpr struct unsigned_of_t : customization_point<unsigned_of_t> {
-} unsigned_of;
-inline constexpr struct magnitude_of_t : customization_point<magnitude_of_t> {
-} magnitude_of;
-inline constexpr struct bytes_of_t : customization_point<bytes_of_t> {
-} bytes_of;
-inline constexpr struct text_of_t : customization_point<text_of_t> {
-} text_of;
-inline constexpr struct float_of_t : customization_point<float_of_t> {
-} float_of;
-inline constexpr struct simple_of_t : customization_point<simple_of_t> {
-} simple_of;
-inline constexpr struct array_size_t : customization_point<array_size_t> {
-} array_size;
-inline constexpr struct array_at_t : customization_point<array_at_t> {
-} array_at;
-inline constexpr struct map_size_t : customization_point<map_size_t> {
-} map_size;
-inline constexpr struct map_for_each_t : customization_point<map_for_each_t> {
-} map_for_each;
-inline constexpr struct typed_array_of_t : customization_point<typed_array_of_t> {
-} typed_array_of;
-inline constexpr struct embed_of_t : customization_point<embed_of_t> {
-} embed_of;
-inline constexpr struct registered_tag_t : customization_point<registered_tag_t> {
-} registered_tag;
-inline constexpr struct tag_begin_t : customization_point<tag_begin_t> {
-} tag_begin;
-inline constexpr struct registered_decode_t : customization_point<registered_decode_t> {
-} registered_decode;
-inline constexpr struct after_decode_t : customization_point<after_decode_t> {
-} after_decode;
-inline constexpr struct before_encode_t : customization_point<before_encode_t> {
-} before_encode;
-inline constexpr struct value_identity_t : customization_point<value_identity_t> {
-} value_identity;
-inline constexpr struct key_identity_t : customization_point<key_identity_t> {
-} key_identity;
-inline constexpr struct cyclic_data_structures_t : customization_point<cyclic_data_structures_t> {
-} cyclic_data_structures;
 
 template <std::size_t DepthMax, language_binding Binding>
 std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view bytes);
@@ -283,22 +269,6 @@ template <class Writer>
 struct encoder;
 
 enum class sharedrefs { off, on };
-
-enum class kind {
-    unsigned_integer,
-    negative_integer,
-    unsigned_bignum,
-    negative_bignum,
-    byte_string,
-    text_string,
-    floating_point,
-    simple_value,
-    array,
-    map,
-    typed_array,
-    registered,
-    unsupported
-};
 
 enum class pass;
 
@@ -1706,8 +1676,8 @@ class internal
         }
         case major_type::array: {
             auto array = binding.array_decode(std::min<std::uint64_t>(h->argument, d.bytes.size()));
-            if constexpr (requires { cyclic_data_structures(binding); })
-                if (mark && cyclic_data_structures(binding))
+            if constexpr (requires { binding.cyclic_data_structures(); })
+                if (mark && binding.cyclic_data_structures())
                     shared.at(*mark) = array;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto element = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
@@ -1719,8 +1689,8 @@ class internal
         }
         case major_type::map: {
             auto map = binding.map_decode(std::min<std::uint64_t>(h->argument, d.bytes.size() / 2));
-            if constexpr (requires { cyclic_data_structures(binding); })
-                if (mark && cyclic_data_structures(binding))
+            if constexpr (requires { binding.cyclic_data_structures(); })
+                if (mark && binding.cyclic_data_structures())
                     shared.at(*mark) = map;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 if constexpr (requires(std::string_view const t) { binding.map_key_decode(t); }) {
@@ -1815,17 +1785,16 @@ class internal
                     return std::unexpected(error::sharedref_not_complete);
                 return *shared.at(index);
             }
-            if constexpr (requires { tag_begin(binding, h->argument); }) {
-                std::optional<typename Binding::value> object = tag_begin(binding, h->argument);
+            if constexpr (requires { binding.tag_begin(h->argument); }) {
+                std::optional<typename Binding::value> object = binding.tag_begin(h->argument);
                 if (object) {
-                    if constexpr (requires { cyclic_data_structures(binding); })
-                        if (mark && cyclic_data_structures(binding))
+                    if constexpr (requires { binding.cyclic_data_structures(); })
+                        if (mark && binding.cyclic_data_structures())
                             shared.at(*mark) = *object;
                     auto content = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
                     if (!content) [[unlikely]]
                         return content;
-                    return after_decode(binding,
-                                        registered_decode(binding, std::move(*object), std::move(*content)));
+                    return binding.after_decode(binding.registered_decode(std::move(*object), std::move(*content)));
                 }
             }
             auto content = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
@@ -3426,7 +3395,7 @@ class walker
         if constexpr (Pass == pass::plain)
             child(item, std::false_type{});
         else
-            child(item, key_identity(binding, item));
+            child(item, binding.key_identity(item));
     }
 
     void value(typename Binding::value const &item)
@@ -3434,7 +3403,7 @@ class walker
         if constexpr (Pass == pass::plain)
             child(item, std::false_type{});
         else
-            child(item, value_identity(binding, item));
+            child(item, binding.value_identity(item));
     }
 
     template <class Identity>
@@ -3446,10 +3415,10 @@ class walker
             keep_error(error::nesting_depth_exceeded);
             return;
         }
-        if constexpr (requires { embed_of(binding, item); }) {
+        if constexpr (requires { binding.embed_of(item); }) {
             bool const outer = embedded;
             embedded = false;
-            if (!outer && embed_of(binding, item)) {
+            if (!outer && binding.embed_of(item)) {
                 if constexpr (Pass != pass::count) {
                     internal::string_sink inner;
                     auto const r = encode_from<DepthMax, Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
@@ -3490,12 +3459,12 @@ class walker
     typename Binding::value content_of(typename Binding::value const &item, Identity const &identity)
     {
         if constexpr (Pass == pass::plain) {
-            return before_encode(binding, item);
+            return binding.before_encode(item);
         } else {
             if (!identity)
-                return before_encode(binding, item);
+                return binding.before_encode(item);
             if constexpr (Pass == pass::count)
-                return shared->replaced.emplace(*identity, before_encode(binding, item)).first->second;
+                return shared->replaced.emplace(*identity, binding.before_encode(item)).first->second;
             else
                 return shared->replaced.at(*identity);
         }
@@ -3504,68 +3473,68 @@ class walker
     template <class Identity>
     void describe(typename Binding::value const &item, Identity const &identity)
     {
-        switch (kind_of(binding, item)) {
+        switch (binding.kind_of(item)) {
         case kind::unsigned_integer:
-            if constexpr (requires { unsigned_of(binding, item); }) {
-                head(major_type::unsigned_integer, unsigned_of(binding, item));
+            if constexpr (requires { binding.unsigned_of(item); }) {
+                head(major_type::unsigned_integer, binding.unsigned_of(item));
                 return;
             }
             break;
         case kind::negative_integer:
-            if constexpr (requires { unsigned_of(binding, item); }) {
-                head(major_type::negative_integer, unsigned_of(binding, item) - 1);
+            if constexpr (requires { binding.unsigned_of(item); }) {
+                head(major_type::negative_integer, binding.unsigned_of(item) - 1);
                 return;
             }
             break;
         case kind::unsigned_bignum:
-            if constexpr (requires { magnitude_of(binding, item); }) {
-                bignum(false, magnitude_of(binding, item));
+            if constexpr (requires { binding.magnitude_of(item); }) {
+                bignum(false, binding.magnitude_of(item));
                 return;
             }
             break;
         case kind::negative_bignum:
-            if constexpr (requires { magnitude_of(binding, item); }) {
-                bignum(true, magnitude_of(binding, item));
+            if constexpr (requires { binding.magnitude_of(item); }) {
+                bignum(true, binding.magnitude_of(item));
                 return;
             }
             break;
         case kind::byte_string:
-            if constexpr (requires { bytes_of(binding, item); }) {
-                keep(out.byte_string_encode(bytes_of(binding, item)));
+            if constexpr (requires { binding.bytes_of(item); }) {
+                keep(out.byte_string_encode(binding.bytes_of(item)));
                 return;
             }
             break;
         case kind::text_string:
-            if constexpr (requires { text_of(binding, item); }) {
-                keep(out.text_string_encode(text_of(binding, item)));
+            if constexpr (requires { binding.text_of(item); }) {
+                keep(out.text_string_encode(binding.text_of(item)));
                 return;
             }
             break;
         case kind::floating_point:
-            if constexpr (requires { float_of(binding, item); }) {
-                keep(out.float_encode(float_of(binding, item)));
+            if constexpr (requires { binding.float_of(item); }) {
+                keep(out.float_encode(binding.float_of(item)));
                 return;
             }
             break;
         case kind::simple_value:
-            if constexpr (requires { simple_of(binding, item); }) {
-                simple(simple_of(binding, item));
+            if constexpr (requires { binding.simple_of(item); }) {
+                simple(binding.simple_of(item));
                 return;
             }
             break;
         case kind::array:
-            if constexpr (requires { array_size(binding, item); }) {
-                std::uint64_t const size = array_size(binding, item);
+            if constexpr (requires { binding.array_size(item); }) {
+                std::uint64_t const size = binding.array_size(item);
                 head(major_type::array, size);
                 for (std::uint64_t i = 0; i < size; ++i)
-                    value(array_at(binding, item, i));
+                    value(binding.array_at(item, i));
                 return;
             }
             break;
         case kind::map:
-            if constexpr (requires { map_size(binding, item); }) {
-                head(major_type::map, map_size(binding, item));
-                map_for_each(binding, item,
+            if constexpr (requires { binding.map_size(item); }) {
+                head(major_type::map, binding.map_size(item));
+                binding.map_for_each(item,
                              [this](typename Binding::value const &k, typename Binding::value const &v) {
                                  key(k);
                                  value(v);
@@ -3574,12 +3543,12 @@ class walker
             }
             break;
         case kind::typed_array:
-            if constexpr (requires { typed_array_of(binding, item); }) {
+            if constexpr (requires { binding.typed_array_of(item); }) {
                 if (depth > DepthMax) [[unlikely]] {
                     keep_error(error::nesting_depth_exceeded);
                     return;
                 }
-                cbor::typed_array const a = typed_array_of(binding, item);
+                cbor::typed_array const a = binding.typed_array_of(item);
                 if (auto const r = internal::typed_array_check(a.tag, a.bytes.size()); !r) [[unlikely]] {
                     keep_error(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
                     return;
@@ -3591,8 +3560,8 @@ class walker
             }
             break;
         case kind::registered:
-            if constexpr (requires { registered_tag(binding, item); }) {
-                head(major_type::tag, registered_tag(binding, item));
+            if constexpr (requires { binding.registered_tag(item); }) {
+                head(major_type::tag, binding.registered_tag(item));
                 value(content_of(item, identity));
                 return;
             }

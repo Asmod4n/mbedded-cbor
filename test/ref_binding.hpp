@@ -165,105 +165,105 @@ struct ref_binding : cbor::binding<handle> {
     {
         return content;
     }
-};
 
-inline bool tag_invoke(cbor::cyclic_data_structures_t, ref_binding &)
-{
-    return true;
-}
+    bool cyclic_data_structures()
+    {
+        return true;
+    }
+
+    std::optional<handle> tag_begin(std::uint64_t tag)
+    {
+        if (tag != 5000)
+            return std::nullopt;
+        return make(node{object{5000, nullptr}});
+    }
+
+    handle registered_decode(handle o, handle content)
+    {
+        std::get<object>(o->kind).content = std::move(content);
+        return o;
+    }
+
+    handle after_decode(handle o)
+    {
+        ++after_decode_calls;
+        return replacement ? replacement : o;
+    }
+
+    cbor::kind kind_of(handle const &v)
+    {
+        if (std::holds_alternative<std::uint64_t>(v->kind))
+            return cbor::kind::unsigned_integer;
+        if (std::holds_alternative<std::string>(v->kind))
+            return cbor::kind::text_string;
+        if (std::holds_alternative<std::vector<handle>>(v->kind))
+            return cbor::kind::array;
+        if (std::holds_alternative<object>(v->kind))
+            return cbor::kind::registered;
+        return cbor::kind::map;
+    }
+
+    std::uint64_t registered_tag(handle const &v)
+    {
+        return std::get<object>(v->kind).tag;
+    }
+
+    handle before_encode(handle const &v)
+    {
+        ++before_encode_calls;
+        return std::get<object>(v->kind).content;
+    }
+
+    std::uint64_t unsigned_of(handle const &v)
+    {
+        return std::get<std::uint64_t>(v->kind);
+    }
+
+    std::string_view text_of(handle const &v)
+    {
+        return std::get<std::string>(v->kind);
+    }
+
+    std::uint64_t array_size(handle const &v)
+    {
+        return std::get<std::vector<handle>>(v->kind).size();
+    }
+
+    handle const & array_at(handle const &v, std::uint64_t i)
+    {
+        return std::get<std::vector<handle>>(v->kind).at(i);
+    }
+
+    std::uint64_t map_size(handle const &v)
+    {
+        return std::get<std::vector<std::pair<handle, handle>>>(v->kind).size();
+    }
+
+    template <class F>
+    void map_for_each(handle const &v, F const &f)
+    {
+        for (auto const &[key, val] : std::get<std::vector<std::pair<handle, handle>>>(v->kind))
+            f(key, val);
+    }
+
+    std::optional<node const *> value_identity(handle const &v)
+    {
+        if (std::holds_alternative<std::uint64_t>(v->kind))
+            return std::nullopt;
+        return v.get();
+    }
+
+    std::optional<node const *> key_identity(handle const &v)
+    {
+        if (std::holds_alternative<std::string>(v->kind))
+            return std::nullopt;
+        return value_identity(v);
+    }
+};
 
 
 // Tag 5000 is registered in this binding: tag_begin makes the empty object before its content.
-inline std::optional<handle> tag_invoke(cbor::tag_begin_t, ref_binding &binding, std::uint64_t tag)
-{
-    if (tag != 5000)
-        return std::nullopt;
-    return binding.make(node{object{5000, nullptr}});
-}
-
-inline handle tag_invoke(cbor::registered_decode_t, ref_binding &, handle o, handle content)
-{
-    std::get<object>(o->kind).content = std::move(content);
-    return o;
-}
-
 // The hook returns the replacement when the test set one, else the object itself.
-inline handle tag_invoke(cbor::after_decode_t, ref_binding &binding, handle o)
-{
-    ++binding.after_decode_calls;
-    return binding.replacement ? binding.replacement : o;
-}
-
 // The answers of this binding to the questions of the encoder. A string key has no identity, as mruby
 // copies an unfrozen String key; every other node is its own identity, an integer has none.
-inline cbor::kind tag_invoke(cbor::kind_of_t, ref_binding &, handle const &v)
-{
-    if (std::holds_alternative<std::uint64_t>(v->kind))
-        return cbor::kind::unsigned_integer;
-    if (std::holds_alternative<std::string>(v->kind))
-        return cbor::kind::text_string;
-    if (std::holds_alternative<std::vector<handle>>(v->kind))
-        return cbor::kind::array;
-    if (std::holds_alternative<object>(v->kind))
-        return cbor::kind::registered;
-    return cbor::kind::map;
-}
-
-inline std::uint64_t tag_invoke(cbor::registered_tag_t, ref_binding &, handle const &v)
-{
-    return std::get<object>(v->kind).tag;
-}
-
-inline handle tag_invoke(cbor::before_encode_t, ref_binding &binding, handle const &v)
-{
-    ++binding.before_encode_calls;
-    return std::get<object>(v->kind).content;
-}
-
-inline std::uint64_t tag_invoke(cbor::unsigned_of_t, ref_binding &, handle const &v)
-{
-    return std::get<std::uint64_t>(v->kind);
-}
-
-inline std::string_view tag_invoke(cbor::text_of_t, ref_binding &, handle const &v)
-{
-    return std::get<std::string>(v->kind);
-}
-
-inline std::uint64_t tag_invoke(cbor::array_size_t, ref_binding &, handle const &v)
-{
-    return std::get<std::vector<handle>>(v->kind).size();
-}
-
-inline handle const &tag_invoke(cbor::array_at_t, ref_binding &, handle const &v, std::uint64_t i)
-{
-    return std::get<std::vector<handle>>(v->kind).at(i);
-}
-
-inline std::uint64_t tag_invoke(cbor::map_size_t, ref_binding &, handle const &v)
-{
-    return std::get<std::vector<std::pair<handle, handle>>>(v->kind).size();
-}
-
-template <class F>
-inline void tag_invoke(cbor::map_for_each_t, ref_binding &, handle const &v, F const &f)
-{
-    for (auto const &[key, val] : std::get<std::vector<std::pair<handle, handle>>>(v->kind))
-        f(key, val);
-}
-
-inline std::optional<node const *> tag_invoke(cbor::value_identity_t, ref_binding &, handle const &v)
-{
-    if (std::holds_alternative<std::uint64_t>(v->kind))
-        return std::nullopt;
-    return v.get();
-}
-
-inline std::optional<node const *> tag_invoke(cbor::key_identity_t, ref_binding &h, handle const &v)
-{
-    if (std::holds_alternative<std::string>(v->kind))
-        return std::nullopt;
-    return tag_invoke(cbor::value_identity, h, v);
-}
-
 } // namespace shared_test
