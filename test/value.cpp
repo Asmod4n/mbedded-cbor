@@ -32,19 +32,19 @@ namespace
 
 struct size_binding : test_binding {
     std::vector<std::uint64_t> sizes;
+
+    value array_decode(std::uint64_t const size)
+    {
+        sizes.push_back(size);
+        return {test::array{}};
+    }
+
+    value map_decode(std::uint64_t const size)
+    {
+        sizes.push_back(size);
+        return {test::map{}};
+    }
 };
-
-value tag_invoke(cbor::array_decode_t, size_binding &binding, std::uint64_t const size)
-{
-    binding.sizes.push_back(size);
-    return {test::array{}};
-}
-
-value tag_invoke(cbor::map_decode_t, size_binding &binding, std::uint64_t const size)
-{
-    binding.sizes.push_back(size);
-    return {test::map{}};
-}
 
 std::vector<std::uint64_t> sizes_of(std::string_view const bytes)
 {
