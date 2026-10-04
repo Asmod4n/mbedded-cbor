@@ -395,7 +395,7 @@ template <class T, std::size_t DepthMax = 64>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
 result<T> decode(std::string_view bytes);
 
-namespace generic
+namespace databind
 {
 template <class T, std::size_t DepthMax = 64>
 result<T> decode(std::string_view bytes);
@@ -2336,14 +2336,14 @@ class internal
 
 #ifdef __cpp_impl_reflection
     template <class T, std::size_t DepthMax>
-    friend result<T> generic::decode(std::string_view bytes);
+    friend result<T> databind::decode(std::string_view bytes);
 
     template <class T>
-    friend result<std::string, std::errc> generic::encode(T const &value);
+    friend result<std::string, std::errc> databind::encode(T const &value);
 
 
     template <class T, class Target>
-    friend result<std::size_t, std::errc> generic::encode(T const &value, Target &&target);
+    friend result<std::size_t, std::errc> databind::encode(T const &value, Target &&target);
 
     template <class U>
     static constexpr bool is_std_tuple = false;
@@ -3264,7 +3264,7 @@ result<T> decode(std::string_view const bytes)
     return out;
 }
 
-namespace generic
+namespace databind
 {
 template <class T, std::size_t DepthMax>
 result<T> decode(std::string_view const bytes)

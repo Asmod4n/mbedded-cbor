@@ -364,7 +364,7 @@ void read_target(std::string_view const message, source &in)
 }
 
 // A native value from the bytes of the input, member by member. Text is ASCII, because the encoder writes
-// it as it is and a reader of the generic form checks UTF-8.
+// it as it is and a reader of the databind form checks UTF-8.
 template <class T>
 T filled(source &in, int depth);
 

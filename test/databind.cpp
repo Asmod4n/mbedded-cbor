@@ -23,10 +23,10 @@ namespace
 template <class T>
 void round_trip(std::string const &bytes, T const &expected)
 {
-    auto const back = cbor::generic::decode<T>(bytes);
+    auto const back = cbor::databind::decode<T>(bytes);
     REQUIRE(back.has_value());
     CHECK(*back == expected);
-    auto const again = cbor::generic::encode(expected);
+    auto const again = cbor::databind::encode(expected);
     REQUIRE(again.has_value());
     CHECK_EQ(*again, bytes);
 }
@@ -79,7 +79,7 @@ struct get_assertion_response {
 } // namespace
 
 // The expectations are the examples of RFC 8949 Appendix A, each read into a C++ type and written back.
-TEST_CASE("generic: the examples of RFC 8949 Appendix A")
+TEST_CASE("databind: the examples of RFC 8949 Appendix A")
 {
     round_trip<std::uint64_t>("\x00"s, 0);
     round_trip<std::uint64_t>("\x17"s, 23);
@@ -107,24 +107,24 @@ TEST_CASE("generic: the examples of RFC 8949 Appendix A")
 
 // A map key that the struct does not name is skipped, and a key that a member needs and the map lacks is an
 // error; an optional member may be absent.
-TEST_CASE("generic: an unknown key is skipped, a missing key is an error")
+TEST_CASE("databind: an unknown key is skipped, a missing key is an error")
 {
-    auto const extra = cbor::generic::decode<pair_ab>("\xa3\x61\x63\x82\x01\x02\x61\x61\x01\x61\x62\x80"s);
+    auto const extra = cbor::databind::decode<pair_ab>("\xa3\x61\x63\x82\x01\x02\x61\x61\x01\x61\x62\x80"s);
     REQUIRE(extra.has_value());
     CHECK_EQ(extra->a, 1u);
-    CHECK_EQ(cbor::generic::decode<pair_ab>("\xa1\x61\x61\x01"s).error(), error::key_not_found);
-    CHECK_EQ(cbor::generic::decode<pair_ab>("\xa2\x61\x61\x61\x78\x61\x62\x80"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::generic::decode<std::uint8_t>("\x19\x01\x00"s).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::generic::decode<std::uint64_t>("\x00\x00"s).error(), error::syntax_error);
+    CHECK_EQ(cbor::databind::decode<pair_ab>("\xa1\x61\x61\x01"s).error(), error::key_not_found);
+    CHECK_EQ(cbor::databind::decode<pair_ab>("\xa2\x61\x61\x61\x78\x61\x62\x80"s).error(), error::incorrect_type);
+    CHECK_EQ(cbor::databind::decode<std::uint8_t>("\x19\x01\x00"s).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::databind::decode<std::uint64_t>("\x00\x00"s).error(), error::syntax_error);
 }
 
 // RFC 8428 6, the CBOR form of the example in 5.1.2: the integer labels come from the keys of the struct.
-TEST_CASE("generic: a SenML pack with integer labels")
+TEST_CASE("databind: a SenML pack with integer labels")
 {
     std::vector<senml_record> const pack{
         {"urn:dev:ow:10e2073a01080063:", 1.320067464e9, "voltage", "V", 120.1, std::nullopt},
         {std::nullopt, std::nullopt, "current", "A", 1.2, -5}};
-    auto const bytes = cbor::generic::encode(pack);
+    auto const bytes = cbor::databind::encode(pack);
     REQUIRE(bytes.has_value());
     CHECK_EQ(static_cast<std::uint8_t>(bytes->at(0)), 0x82);
     CHECK_EQ(static_cast<std::uint8_t>(bytes->at(1)), 0xa5);
@@ -134,10 +134,10 @@ TEST_CASE("generic: a SenML pack with integer labels")
 
 // RFC 8392 A.3 carries a COSE_Sign1 under tag 18 with a kid in the unprotected header; the views point into
 // the bytes, so nothing is copied.
-TEST_CASE("generic: a COSE_Sign1 under tag 18 reads as views into the message")
+TEST_CASE("databind: a COSE_Sign1 under tag 18 reads as views into the message")
 {
     std::string const message = "\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s;
-    auto const sign1 = cbor::generic::decode<cose_sign1>(message);
+    auto const sign1 = cbor::databind::decode<cose_sign1>(message);
     REQUIRE(sign1.has_value());
     auto const &[protected_header, unprotected, payload, signature] = sign1->content;
     CHECK_EQ(protected_header.size(), 3u);
@@ -146,39 +146,39 @@ TEST_CASE("generic: a COSE_Sign1 under tag 18 reads as views into the message")
     CHECK_EQ(payload.size(), 1u);
     CHECK_EQ(signature.size(), 2u);
     CHECK_EQ(reinterpret_cast<char const *>(payload.data()), message.data() + 12);
-    CHECK_EQ(*cbor::generic::encode(*sign1), message);
+    CHECK_EQ(*cbor::databind::encode(*sign1), message);
 }
 
 // CTAP 2.1 6.2.2: a nested struct under an integer key, text keys inside it, and an absent optional user.
-TEST_CASE("generic: a CTAP2 getAssertion response")
+TEST_CASE("databind: a CTAP2 getAssertion response")
 {
     std::string const message =
         "\xa3\x01\xa2\x62\x69\x64\x42\x0a\x0b\x64\x74\x79\x70\x65\x6a\x70\x75\x62\x6c\x69\x63\x2d\x6b\x65\x79"
         "\x02\x41\x25\x03\x41\x30"s;
-    auto const r = cbor::generic::decode<get_assertion_response>(message);
+    auto const r = cbor::databind::decode<get_assertion_response>(message);
     REQUIRE(r.has_value());
     CHECK_EQ(r->credential_id.type, "public-key"sv);
     CHECK_EQ(r->credential_id.id.size(), 2u);
     CHECK_FALSE(r->user.has_value());
-    CHECK_EQ(*cbor::generic::encode(*r), message);
+    CHECK_EQ(*cbor::databind::encode(*r), message);
     std::array<char, 64> room{};
-    auto const placed = cbor::generic::encode(*r, std::span(room));
+    auto const placed = cbor::databind::encode(*r, std::span(room));
     REQUIRE(placed.has_value());
     CHECK_EQ(std::string_view(room.data(), *placed), message);
     std::vector<char> tight(message.size());
-    auto const exact = cbor::generic::encode(*r, std::span(tight));
+    auto const exact = cbor::databind::encode(*r, std::span(tight));
     REQUIRE(exact.has_value());
     CHECK_EQ(std::string_view(tight.data(), *exact), message);
     std::array<char, 8> small{};
-    CHECK_EQ(cbor::generic::encode(*r, std::span(small)).error(), std::errc::no_buffer_space);
+    CHECK_EQ(cbor::databind::encode(*r, std::span(small)).error(), std::errc::no_buffer_space);
     std::string text = "x";
-    CHECK_EQ(*cbor::generic::encode(*r, text), message.size());
+    CHECK_EQ(*cbor::databind::encode(*r, text), message.size());
     CHECK_EQ(text, "x" + message);
 }
 
 // RFC 8949 Appendix A: 2^64 and -2^64-1 need a bignum, tag 2 or 3 on the magnitude; simple(16) and simple(255)
 // are simple values of one and two bytes.
-TEST_CASE("generic: bignums and simple values of RFC 8949 Appendix A")
+TEST_CASE("databind: bignums and simple values of RFC 8949 Appendix A")
 {
 #ifdef __SIZEOF_INT128__
     round_trip<cbor::uint128>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
@@ -189,19 +189,19 @@ TEST_CASE("generic: bignums and simple values of RFC 8949 Appendix A")
 #endif
     round_trip<cbor::simple_value>("\xf0"s, static_cast<cbor::simple_value>(16));
     round_trip<cbor::simple_value>("\xf8\xff"s, static_cast<cbor::simple_value>(255));
-    CHECK_EQ(cbor::generic::decode<cbor::simple_value>("\xf8\x10"s).error(), error::syntax_error);
+    CHECK_EQ(cbor::databind::decode<cbor::simple_value>("\xf8\x10"s).error(), error::syntax_error);
 }
 
 // A std::variant takes the first alternative whose kind matches the item, so one array can hold several kinds,
 // as RFC 8949 allows.
-TEST_CASE("generic: a variant takes the alternative that matches the item")
+TEST_CASE("databind: a variant takes the alternative that matches the item")
 {
     using any = std::variant<std::uint64_t, std::int64_t, std::string, double, bool, std::nullptr_t,
                              std::vector<std::byte>>;
     std::vector<any> const values{std::uint64_t{1}, std::int64_t{-1}, std::string("a"), 1.5, true, nullptr,
                                   std::vector<std::byte>{std::byte{7}}};
     round_trip<std::vector<any>>("\x87\x01\x20\x61\x61\xf9\x3e\x00\xf5\xf6\x41\x07"s, values);
-    CHECK_EQ(cbor::generic::decode<std::variant<std::string, bool>>("\x01"s).error(), error::incorrect_type);
+    CHECK_EQ(cbor::databind::decode<std::variant<std::string, bool>>("\x01"s).error(), error::incorrect_type);
 }
 
 namespace
@@ -216,15 +216,15 @@ struct annotated {
 
 // A generator gives each member a fixed name and carries the key of the other language as an annotation, so a
 // key need not be a C++ identifier and never meets a macro such as EOF. The map comes from RFC 8949 3.1 by hand.
-TEST_CASE("generic: an annotation gives the key of a member")
+TEST_CASE("databind: an annotation gives the key of a member")
 {
     std::string const bytes = "\xa2\x69x-user-id\x07\x63" "EOF\xf5"s;
-    auto const back = cbor::generic::decode<annotated>(bytes);
+    auto const back = cbor::databind::decode<annotated>(bytes);
     REQUIRE(back.has_value());
     CHECK_EQ(back->m0, 7u);
     CHECK(back->m1);
-    CHECK_EQ(*cbor::generic::encode(annotated{7, true}), bytes);
-    CHECK_EQ(cbor::generic::decode<annotated>("\xa2\x62m0\x07\x62m1\xf5"s).error(), error::key_not_found);
+    CHECK_EQ(*cbor::databind::encode(annotated{7, true}), bytes);
+    CHECK_EQ(cbor::databind::decode<annotated>("\xa2\x62m0\x07\x62m1\xf5"s).error(), error::key_not_found);
 }
 
 namespace
@@ -262,16 +262,16 @@ private:
 
 // A private or protected member is state the class keeps to itself. It never goes on the wire, and a key of its
 // name on the wire is an unknown key, so the bytes of a sender cannot set it.
-TEST_CASE("generic: only public members are written and read")
+TEST_CASE("databind: only public members are written and read")
 {
     account a;
     a.name = "ann";
     a.id = 7;
     a.hidden_set(42, 9);
-    std::string const bytes = *cbor::generic::encode(a);
+    std::string const bytes = *cbor::databind::encode(a);
     CHECK_EQ(bytes, "\xa2\x64name\x63"
                     "ann\x62id\x07"s);
-    auto const back = cbor::generic::decode<account>("\xa4\x64name\x63"
+    auto const back = cbor::databind::decode<account>("\xa4\x64name\x63"
                                                      "bob\x62id\x05\x66secret\x18\x2a\x64kept\x09"s);
     REQUIRE(back.has_value());
     CHECK_EQ(back->name, "bob");
@@ -298,11 +298,11 @@ struct [[=cbor::allowlist{}]] profile {
 
 // A public member can hold what must not leave the program, as a password hash. cbor::skip leaves it out in both
 // directions: it is never written, and a key of its name on the wire is an unknown key that sets nothing.
-TEST_CASE("generic: cbor::skip leaves a public member out")
+TEST_CASE("databind: cbor::skip leaves a public member out")
 {
-    CHECK_EQ(*cbor::generic::encode(login{"ann", "hash"}), "\xa1\x64name\x63"
+    CHECK_EQ(*cbor::databind::encode(login{"ann", "hash"}), "\xa1\x64name\x63"
                                                             "ann"s);
-    auto const back = cbor::generic::decode<login>("\xa2\x64name\x63"
+    auto const back = cbor::databind::decode<login>("\xa2\x64name\x63"
                                                    "bob\x6dpassword_hash\x61x"s);
     REQUIRE(back.has_value());
     CHECK_EQ(back->name, "bob");
@@ -311,12 +311,12 @@ TEST_CASE("generic: cbor::skip leaves a public member out")
 
 // The allowlist model of mruby-cbor: with cbor::allowlist on the type, only a member marked cbor::allow is
 // written and read, so a member added later stays out until someone allows it.
-TEST_CASE("generic: cbor::allowlist takes only the members marked cbor::allow")
+TEST_CASE("databind: cbor::allowlist takes only the members marked cbor::allow")
 {
-    CHECK_EQ(*cbor::generic::encode(profile{"ann", "a@b", 30}), "\xa2\x64name\x63"
+    CHECK_EQ(*cbor::databind::encode(profile{"ann", "a@b", 30}), "\xa2\x64name\x63"
                                                                  "ann\x63"
                                                                  "age\x18\x1e"s);
-    auto const back = cbor::generic::decode<profile>("\xa3\x64name\x63"
+    auto const back = cbor::databind::decode<profile>("\xa3\x64name\x63"
                                                      "bob\x65"
                                                      "email\x61x\x63"
                                                      "age\x05"s);
