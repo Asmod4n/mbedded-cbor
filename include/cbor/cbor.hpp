@@ -189,11 +189,37 @@ template <class Value>
 struct binding {
     using value = Value;
     value unsigned_integer_decode(std::uint64_t argument) = delete;
+    value negative_integer_decode(std::uint64_t argument) = delete;
+    value unsigned_bignum_decode(std::string_view magnitude) = delete;
+    value negative_bignum_decode(std::string_view magnitude) = delete;
+    value byte_string_decode(std::string_view bytes) = delete;
+    value text_string_decode(std::string_view text) = delete;
+    value float_decode(double number) = delete;
+    value simple_value_decode(std::uint8_t simple) = delete;
+    value array_decode(std::uint64_t size) = delete;
+    value array_append(value array, value element) = delete;
+    value map_decode(std::uint64_t size) = delete;
+    value map_insert(value map, value key, value item) = delete;
+    value tag_decode(std::uint64_t tag, value content) = delete;
 };
 
 template <class B>
-concept language_binding = std::derived_from<B, binding<typename B::value>> && requires(B &b, std::uint64_t const n) {
+concept language_binding = std::derived_from<B, binding<typename B::value>> &&
+                           requires(B &b, typename B::value v, std::uint64_t const n, std::string_view const s, double const f,
+                                    std::uint8_t const simple) {
     { b.unsigned_integer_decode(n) } -> std::same_as<typename B::value>;
+    { b.negative_integer_decode(n) } -> std::same_as<typename B::value>;
+    { b.unsigned_bignum_decode(s) } -> std::same_as<typename B::value>;
+    { b.negative_bignum_decode(s) } -> std::same_as<typename B::value>;
+    { b.byte_string_decode(s) } -> std::same_as<typename B::value>;
+    { b.text_string_decode(s) } -> std::same_as<typename B::value>;
+    { b.float_decode(f) } -> std::same_as<typename B::value>;
+    { b.simple_value_decode(simple) } -> std::same_as<typename B::value>;
+    { b.array_decode(n) } -> std::same_as<typename B::value>;
+    { b.array_append(std::move(v), std::move(v)) } -> std::same_as<typename B::value>;
+    { b.map_decode(n) } -> std::same_as<typename B::value>;
+    { b.map_insert(std::move(v), std::move(v), std::move(v)) } -> std::same_as<typename B::value>;
+    { b.tag_decode(n, std::move(v)) } -> std::same_as<typename B::value>;
 };
 
 template <class Tag>
@@ -206,24 +232,6 @@ struct customization_point {
     }
 };
 
-inline constexpr struct negative_integer_decode_t : customization_point<negative_integer_decode_t> {
-} negative_integer_decode;
-inline constexpr struct unsigned_bignum_decode_t : customization_point<unsigned_bignum_decode_t> {
-} unsigned_bignum_decode;
-inline constexpr struct negative_bignum_decode_t : customization_point<negative_bignum_decode_t> {
-} negative_bignum_decode;
-inline constexpr struct byte_string_decode_t : customization_point<byte_string_decode_t> {
-} byte_string_decode;
-inline constexpr struct text_string_decode_t : customization_point<text_string_decode_t> {
-} text_string_decode;
-inline constexpr struct array_decode_t : customization_point<array_decode_t> {
-} array_decode;
-inline constexpr struct array_append_t : customization_point<array_append_t> {
-} array_append;
-inline constexpr struct map_decode_t : customization_point<map_decode_t> {
-} map_decode;
-inline constexpr struct map_insert_t : customization_point<map_insert_t> {
-} map_insert;
 inline constexpr struct kind_of_t : customization_point<kind_of_t> {
 } kind_of;
 inline constexpr struct unsigned_of_t : customization_point<unsigned_of_t> {
@@ -264,12 +272,6 @@ inline constexpr struct value_identity_t : customization_point<value_identity_t>
 } value_identity;
 inline constexpr struct key_identity_t : customization_point<key_identity_t> {
 } key_identity;
-inline constexpr struct tag_decode_t : customization_point<tag_decode_t> {
-} tag_decode;
-inline constexpr struct float_decode_t : customization_point<float_decode_t> {
-} float_decode;
-inline constexpr struct simple_value_decode_t : customization_point<simple_value_decode_t> {
-} simple_value_decode;
 inline constexpr struct cyclic_data_structures_t : customization_point<cyclic_data_structures_t> {
 } cyclic_data_structures;
 
@@ -1688,21 +1690,21 @@ class internal
         case major_type::unsigned_integer:
             return binding.unsigned_integer_decode(h->argument);
         case major_type::negative_integer:
-            return negative_integer_decode(binding, h->argument);
+            return binding.negative_integer_decode(h->argument);
         case major_type::byte_string: {
             auto const s = d.byte_string_decode(h->argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
-            return byte_string_decode(binding, *s);
+            return binding.byte_string_decode(*s);
         }
         case major_type::text_string: {
             auto const s = d.text_string_decode(h->argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
-            return text_string_decode(binding, *s);
+            return binding.text_string_decode(*s);
         }
         case major_type::array: {
-            auto array = array_decode(binding, std::min<std::uint64_t>(h->argument, d.bytes.size()));
+            auto array = binding.array_decode(std::min<std::uint64_t>(h->argument, d.bytes.size()));
             if constexpr (requires { cyclic_data_structures(binding); })
                 if (mark && cyclic_data_structures(binding))
                     shared.at(*mark) = array;
@@ -1710,12 +1712,12 @@ class internal
                 auto element = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
                 if (!element) [[unlikely]]
                     return element;
-                array = array_append(binding, std::move(array), std::move(*element));
+                array = binding.array_append(std::move(array), std::move(*element));
             }
             return array;
         }
         case major_type::map: {
-            auto map = map_decode(binding, std::min<std::uint64_t>(h->argument, d.bytes.size() / 2));
+            auto map = binding.map_decode(std::min<std::uint64_t>(h->argument, d.bytes.size() / 2));
             if constexpr (requires { cyclic_data_structures(binding); })
                 if (mark && cyclic_data_structures(binding))
                     shared.at(*mark) = map;
@@ -1726,7 +1728,7 @@ class internal
                 auto value = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
                 if (!value) [[unlikely]]
                     return value;
-                map = map_insert(binding, std::move(map), std::move(*key), std::move(*value));
+                map = binding.map_insert(std::move(map), std::move(*key), std::move(*value));
             }
             return map;
         }
@@ -1763,12 +1765,12 @@ class internal
                 std::string_view const magnitude = magnitude_without_leading_zeros(*bytes);
                 if (magnitude.size() <= sizeof(std::uint64_t)) {
                     if (negative)
-                        return negative_integer_decode(binding, magnitude_value(magnitude));
+                        return binding.negative_integer_decode(magnitude_value(magnitude));
                     return binding.unsigned_integer_decode(magnitude_value(magnitude));
                 }
                 if (negative)
-                    return negative_bignum_decode(binding, std::string_view(magnitude_plus_one(magnitude)));
-                return unsigned_bignum_decode(binding, magnitude);
+                    return binding.negative_bignum_decode(std::string_view(magnitude_plus_one(magnitude)));
+                return binding.unsigned_bignum_decode(magnitude);
             }
             if (h->argument == std::to_underlying(tag_number::sharedref)) {
                 auto const r = d.head_decode();
@@ -1812,24 +1814,23 @@ class internal
             auto content = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
             if (!content) [[unlikely]]
                 return content;
-            return tag_decode(binding, h->argument, std::move(*content));
+            return binding.tag_decode(h->argument, std::move(*content));
         }
         default:
             switch (static_cast<simple_float_information>(h->info)) {
             case simple_float_information::simple_value_follows:
                 if (h->argument < simple_value_one_byte_min) [[unlikely]]
                     return std::unexpected(error::syntax_error);
-                return simple_value_decode(binding, static_cast<std::uint8_t>(h->argument));
+                return binding.simple_value_decode(static_cast<std::uint8_t>(h->argument));
             case simple_float_information::half_precision_float:
-                return float_decode(binding, static_cast<double>(float_decode_binary16(
+                return binding.float_decode(static_cast<double>(float_decode_binary16(
                                               static_cast<std::uint16_t>(h->argument))));
             case simple_float_information::single_precision_float:
-                return float_decode(
-                    binding, static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h->argument))));
+                return binding.float_decode(static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h->argument))));
             case simple_float_information::double_precision_float:
-                return float_decode(binding, std::bit_cast<double>(h->argument));
+                return binding.float_decode(std::bit_cast<double>(h->argument));
             default:
-                return simple_value_decode(binding, h->info);
+                return binding.simple_value_decode(h->info);
             }
         }
     }
@@ -3139,7 +3140,8 @@ CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, 
         return *size;
     } else if constexpr (internal::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
         std::size_t const at = std::ranges::size(target);
-        target.insert(target.end(), padded, char{});
+        target.reserve(at + padded);
+        std::ranges::fill_n(std::back_inserter(target), padded, char{});
         internal::encoded_write(std::span<char>(target).subspan(at), value, second);
         target.resize(at + *size);
         return *size;
@@ -4037,15 +4039,14 @@ std::expected<typename Binding::value, error> path_decode(Binding &binding, std:
             auto const elements = at.elements<DepthMax>();
             if (!elements) [[unlikely]]
                 return std::unexpected(elements.error());
-            auto array = array_decode(
-                binding, std::min<std::uint64_t>(elements->count, elements->document->bytes.size() - elements->offset));
+            auto array = binding.array_decode(std::min<std::uint64_t>(elements->count, elements->document->bytes.size() - elements->offset));
             for (auto const element : *elements) {
                 if (!element) [[unlikely]]
                     return std::unexpected(element.error());
                 auto value = path_decode<DepthMax>(binding, steps.subspan(i + 1), *element);
                 if (!value) [[unlikely]]
                     return value;
-                array = array_append(binding, std::move(array), std::move(*value));
+                array = binding.array_append(std::move(array), std::move(*value));
             }
             return array;
         }

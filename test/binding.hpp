@@ -79,73 +79,73 @@ struct test_binding : cbor::binding<test::value> {
     {
         return {a};
     }
+
+    value negative_integer_decode(std::uint64_t a)
+    {
+        return {negative{a}};
+    }
+
+    value unsigned_bignum_decode(std::string_view m)
+    {
+        return {bignum{false, std::string(m)}};
+    }
+
+    value negative_bignum_decode(std::string_view m)
+    {
+        return {bignum{true, std::string(m)}};
+    }
+
+    value byte_string_decode(std::string_view b)
+    {
+        return {bytes{std::string(b)}};
+    }
+
+    value text_string_decode(std::string_view t)
+    {
+        return {std::string(t)};
+    }
+
+    value float_decode(double f)
+    {
+        return {f};
+    }
+
+    value simple_value_decode(std::uint8_t s)
+    {
+        return {simple{s}};
+    }
+
+    value array_decode(std::uint64_t const size)
+    {
+        array a;
+        a.reserve(size);
+        return {std::move(a)};
+    }
+
+    value array_append(value &&a, value &&e)
+    {
+        std::get<array>(a.kind).push_back(std::move(e));
+        return std::move(a);
+    }
+
+    value map_decode(std::uint64_t const size)
+    {
+        map m;
+        m.reserve(size);
+        return {std::move(m)};
+    }
+
+    value map_insert(value &&m, value &&k, value &&v)
+    {
+        std::get<map>(m.kind).push_back(entry{std::move(k), std::move(v)});
+        return std::move(m);
+    }
+
+    value tag_decode(std::uint64_t tag, value content)
+    {
+        return {tagged{tag, array{std::move(content)}}};
+    }
 };
-
-inline value tag_invoke(cbor::negative_integer_decode_t, test_binding &, std::uint64_t a)
-{
-    return {negative{a}};
-}
-
-inline value tag_invoke(cbor::unsigned_bignum_decode_t, test_binding &, std::string_view m)
-{
-    return {bignum{false, std::string(m)}};
-}
-
-inline value tag_invoke(cbor::negative_bignum_decode_t, test_binding &, std::string_view m)
-{
-    return {bignum{true, std::string(m)}};
-}
-
-inline value tag_invoke(cbor::byte_string_decode_t, test_binding &, std::string_view b)
-{
-    return {bytes{std::string(b)}};
-}
-
-inline value tag_invoke(cbor::text_string_decode_t, test_binding &, std::string_view t)
-{
-    return {std::string(t)};
-}
-
-inline value tag_invoke(cbor::float_decode_t, test_binding &, double f)
-{
-    return {f};
-}
-
-inline value tag_invoke(cbor::simple_value_decode_t, test_binding &, std::uint8_t s)
-{
-    return {simple{s}};
-}
-
-inline value tag_invoke(cbor::array_decode_t, test_binding &, std::uint64_t const size)
-{
-    array a;
-    a.reserve(size);
-    return {std::move(a)};
-}
-
-inline value tag_invoke(cbor::array_append_t, test_binding &, value &&a, value &&e)
-{
-    std::get<array>(a.kind).push_back(std::move(e));
-    return std::move(a);
-}
-
-inline value tag_invoke(cbor::map_decode_t, test_binding &, std::uint64_t const size)
-{
-    map m;
-    m.reserve(size);
-    return {std::move(m)};
-}
-
-inline value tag_invoke(cbor::map_insert_t, test_binding &, value &&m, value &&k, value &&v)
-{
-    std::get<map>(m.kind).push_back(entry{std::move(k), std::move(v)});
-    return std::move(m);
-}
-
-inline value tag_invoke(cbor::tag_decode_t, test_binding &, std::uint64_t tag, value content)
-{
-    return {tagged{tag, array{std::move(content)}}};
-}
 
 struct string_writer {
     std::string bytes;

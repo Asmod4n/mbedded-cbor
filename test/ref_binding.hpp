@@ -101,6 +101,70 @@ struct ref_binding : cbor::binding<handle> {
             if (!reached.contains(h.get()))
                 h->kind = std::uint64_t{0};
     }
+
+    handle negative_integer_decode(std::uint64_t a)
+    {
+        return make(node{a});
+    }
+
+    handle unsigned_bignum_decode(std::string_view m)
+    {
+        return make(node{std::string(m)});
+    }
+
+    handle negative_bignum_decode(std::string_view m)
+    {
+        return make(node{std::string(m)});
+    }
+
+    handle byte_string_decode(std::string_view b)
+    {
+        return make(node{std::string(b)});
+    }
+
+    handle text_string_decode(std::string_view t)
+    {
+        return make(node{std::string(t)});
+    }
+
+    handle float_decode(double)
+    {
+        return make(node{std::uint64_t{0}});
+    }
+
+    handle simple_value_decode(std::uint8_t s)
+    {
+        return make(node{std::uint64_t{s}});
+    }
+
+    handle array_decode(std::uint64_t)
+    {
+        return make(node{std::vector<handle>{}});
+    }
+
+    // The node changes and the same handle comes back, so a reference into a container under
+    // construction stays valid.
+    handle array_append(handle a, handle e)
+    {
+        std::get<std::vector<handle>>(a->kind).push_back(std::move(e));
+        return a;
+    }
+
+    handle map_decode(std::uint64_t)
+    {
+        return make(node{std::vector<std::pair<handle, handle>>{}});
+    }
+
+    handle map_insert(handle m, handle k, handle v)
+    {
+        std::get<std::vector<std::pair<handle, handle>>>(m->kind).emplace_back(std::move(k), std::move(v));
+        return m;
+    }
+
+    handle tag_decode(std::uint64_t, handle content)
+    {
+        return content;
+    }
 };
 
 inline bool tag_invoke(cbor::cyclic_data_structures_t, ref_binding &)
@@ -108,65 +172,6 @@ inline bool tag_invoke(cbor::cyclic_data_structures_t, ref_binding &)
     return true;
 }
 
-
-inline handle tag_invoke(cbor::negative_integer_decode_t, ref_binding &binding, std::uint64_t a)
-{
-    return binding.make(node{a});
-}
-
-inline handle tag_invoke(cbor::unsigned_bignum_decode_t, ref_binding &binding, std::string_view m)
-{
-    return binding.make(node{std::string(m)});
-}
-
-inline handle tag_invoke(cbor::negative_bignum_decode_t, ref_binding &binding, std::string_view m)
-{
-    return binding.make(node{std::string(m)});
-}
-
-inline handle tag_invoke(cbor::byte_string_decode_t, ref_binding &binding, std::string_view b)
-{
-    return binding.make(node{std::string(b)});
-}
-
-inline handle tag_invoke(cbor::text_string_decode_t, ref_binding &binding, std::string_view t)
-{
-    return binding.make(node{std::string(t)});
-}
-
-inline handle tag_invoke(cbor::float_decode_t, ref_binding &binding, double)
-{
-    return binding.make(node{std::uint64_t{0}});
-}
-
-inline handle tag_invoke(cbor::simple_value_decode_t, ref_binding &binding, std::uint8_t s)
-{
-    return binding.make(node{std::uint64_t{s}});
-}
-
-inline handle tag_invoke(cbor::array_decode_t, ref_binding &binding, std::uint64_t)
-{
-    return binding.make(node{std::vector<handle>{}});
-}
-
-// The node changes and the same handle comes back, so a reference into a container under
-// construction stays valid.
-inline handle tag_invoke(cbor::array_append_t, ref_binding &, handle a, handle e)
-{
-    std::get<std::vector<handle>>(a->kind).push_back(std::move(e));
-    return a;
-}
-
-inline handle tag_invoke(cbor::map_decode_t, ref_binding &binding, std::uint64_t)
-{
-    return binding.make(node{std::vector<std::pair<handle, handle>>{}});
-}
-
-inline handle tag_invoke(cbor::map_insert_t, ref_binding &, handle m, handle k, handle v)
-{
-    std::get<std::vector<std::pair<handle, handle>>>(m->kind).emplace_back(std::move(k), std::move(v));
-    return m;
-}
 
 // Tag 5000 is registered in this binding: tag_begin makes the empty object before its content.
 inline std::optional<handle> tag_invoke(cbor::tag_begin_t, ref_binding &binding, std::uint64_t tag)
@@ -187,11 +192,6 @@ inline handle tag_invoke(cbor::after_decode_t, ref_binding &binding, handle o)
 {
     ++binding.after_decode_calls;
     return binding.replacement ? binding.replacement : o;
-}
-
-inline handle tag_invoke(cbor::tag_decode_t, ref_binding &, std::uint64_t, handle content)
-{
-    return content;
 }
 
 // The answers of this binding to the questions of the encoder. A string key has no identity, as mruby
