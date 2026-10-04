@@ -227,4 +227,63 @@ TEST_CASE("generic: an annotation gives the key of a member")
     CHECK_EQ(cbor::generic::decode<annotated>("\xa2\x62m0\x07\x62m1\xf5"s).error(), error::key_not_found);
 }
 
+namespace
+{
+
+struct point {
+    std::uint8_t x;
+    std::uint8_t y;
+};
+
+struct shape {
+    std::vector<point> points;
+};
+
+struct maybe {
+    std::uint8_t a;
+    std::optional<std::uint8_t> b;
+};
+
+struct many {
+    point p0;
+    maybe m1;
+};
+
+struct gap {
+    std::optional<std::uint8_t> a;
+    std::uint8_t b;
+};
+
+} // namespace
+
+// draft-ietf-cbor-packed-19 4.2: a struct in the packing table is written as its values only, behind a straight
+// reference to the record function tag 114 that holds its keys. The table is the first element of tag 113
+// (3.1). The bytes are counted from the draft and RFC 8949 by hand: 113 is d8 71, 114 is d8 72, 128 is d8 80.
+TEST_CASE("generic: a packing table writes each struct of it as a record")
+{
+    CHECK_EQ(*cbor::generic::encode<cbor::packing_table<point>>(shape{{{1, 2}, {3, 4}}}),
+             "\xd8\x71\x82"
+             "\x81\xd8\x72\x82\x61x\x61y"
+             "\xa1\x66points\x82\xd8\x80\x82\x01\x02\xd8\x80\x82\x03\x04"s);
+    CHECK_EQ(*cbor::generic::encode<cbor::packing_table<>>(point{1, 2}), "\xd8\x71\x82\x80\xa2\x61x\x01\x61y\x02"s);
+}
+
+// 4.2: values at the end that are absent are left out of the value array; an absent value before a present one
+// is undefined (f7). Table index 1 is the straight reference 129 (d8 81).
+TEST_CASE("generic: a record leaves out absent values at its end and marks others undefined")
+{
+    using table = cbor::packing_table<point, maybe>;
+    std::string const prefix = "\xd8\x71\x82\x82\xd8\x72\x82\x61x\x61y\xd8\x72\x82\x61"
+                               "a\x61"
+                               "b"s;
+    CHECK_EQ(*cbor::generic::encode<table>(maybe{1, std::nullopt}), prefix + "\xd8\x81\x81\x01"s);
+    CHECK_EQ(*cbor::generic::encode<table>(maybe{1, 5}), prefix + "\xd8\x81\x82\x01\x05"s);
+    CHECK_EQ(*cbor::generic::encode<table>(many{{1, 2}, {3, 4}}),
+             prefix + "\xa2\x62p0\xd8\x80\x82\x01\x02\x62m1\xd8\x81\x82\x03\x04"s);
+    CHECK_EQ(*cbor::generic::encode<cbor::packing_table<gap>>(gap{std::nullopt, 2}),
+             "\xd8\x71\x82\x81\xd8\x72\x82\x61"
+             "a\x61"
+             "b\xd8\x80\x82\xf7\x02"s);
+}
+
 #endif
