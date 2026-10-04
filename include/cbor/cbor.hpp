@@ -1427,7 +1427,7 @@ class internal
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
-                return cbor::document<U, Root>{owner, bytes, field, floor};
+                return cbor::document<U, Root>{{}, bytes, field, floor};
             } else if constexpr (is_fixed_string<U>) {
                 return std::string_view(field.template last<fixed_length<U>::value>());
             } else if constexpr (is_inline_optional<U>) {
@@ -1466,13 +1466,13 @@ class internal
                 auto const r = reference_read<Root, major_type::map>(bytes, field, floor, fixed_size<K, Root>() + fixed_size<V, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return cbor::map<K, V, Root>{owner, bytes, r->data, r->length, floor};
+                return cbor::map<K, V, Root>{{}, bytes, r->data, r->length, floor};
             } else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; }) {
                 using E = std::ranges::range_value_t<U>;
                 auto const r = reference_read<Root, major_type::array>(bytes, field, floor, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return cbor::array<E, Root>{owner, bytes, r->data, r->length, floor};
+                return cbor::array<E, Root>{{}, bytes, r->data, r->length, floor};
             } else {
                 if (!fixed_head_valid<U>(field)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
