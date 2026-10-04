@@ -339,4 +339,50 @@ TEST_CASE("generic: only public members are written and read")
     CHECK_EQ(back->kept_of(), 0u);
 }
 
+namespace
+{
+
+struct login {
+    std::string name;
+    [[=cbor::skip{}]] std::string password_hash;
+};
+
+struct [[=cbor::allowlist{}]] profile {
+    [[=cbor::allow{}]] std::string name;
+    std::string email;
+    [[=cbor::allow{}]] std::uint8_t age;
+};
+
+} // namespace
+
+// A public member can hold what must not leave the program, as a password hash. cbor::skip leaves it out in both
+// directions: it is never written, and a key of its name on the wire is an unknown key that sets nothing.
+TEST_CASE("generic: cbor::skip leaves a public member out")
+{
+    CHECK_EQ(*cbor::generic::encode(login{"ann", "hash"}), "\xa1\x64name\x63"
+                                                            "ann"s);
+    auto const back = cbor::generic::decode<login>("\xa2\x64name\x63"
+                                                   "bob\x6dpassword_hash\x61x"s);
+    REQUIRE(back.has_value());
+    CHECK_EQ(back->name, "bob");
+    CHECK(back->password_hash.empty());
+}
+
+// The allowlist model of mruby-cbor: with cbor::allowlist on the type, only a member marked cbor::allow is
+// written and read, so a member added later stays out until someone allows it.
+TEST_CASE("generic: cbor::allowlist takes only the members marked cbor::allow")
+{
+    CHECK_EQ(*cbor::generic::encode(profile{"ann", "a@b", 30}), "\xa2\x64name\x63"
+                                                                 "ann\x63"
+                                                                 "age\x18\x1e"s);
+    auto const back = cbor::generic::decode<profile>("\xa3\x64name\x63"
+                                                     "bob\x65"
+                                                     "email\x61x\x63"
+                                                     "age\x05"s);
+    REQUIRE(back.has_value());
+    CHECK_EQ(back->name, "bob");
+    CHECK(back->email.empty());
+    CHECK_EQ(back->age, 5u);
+}
+
 #endif

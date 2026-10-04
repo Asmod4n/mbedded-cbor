@@ -575,7 +575,23 @@ struct keyed {
     [[=cbor::key("EOF")]] bool m1;
 };
 
+struct guarded {
+    std::uint8_t id;
+    [[=cbor::skip{}]] std::uint8_t secret;
+};
+
 } // namespace
+
+// cbor::skip holds in the schema form too: the member takes no place in the message and is not read.
+TEST_CASE("schema: cbor::skip leaves a public member out")
+{
+    CHECK_EQ(cbor::fixed_size<guarded>(), 6u);
+    std::string const bytes = *cbor::encode(guarded{7, 42});
+    CHECK_EQ(bytes.substr(0, cbor::fixed_size<guarded>()), "\xa1\x62id\x18\x07"s);
+    guarded const back = *cbor::decode<guarded>(bytes);
+    CHECK_EQ(back.id, 7u);
+    CHECK_EQ(back.secret, 0u);
+}
 
 // The key of an annotation takes the place of the member name in the size, the offsets and the bytes. The
 // expectation is counted from RFC 8949 3 by hand: a map head of 1 byte, a text head of 1 and 9 bytes, the integer
