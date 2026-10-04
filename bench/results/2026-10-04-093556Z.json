@@ -1,0 +1,69 @@
+{
+ "what": "Encode of the decoded twitter.cbor through ref_binding with sharedrefs::off, microseconds per document. Arm old: main c5efb0b. Arm new: when the walk ends with nesting_depth_exceeded and the binding answers value_identity, a cold search walks the value again with the identities of the ancestors (as encoding/json of Go and json of Python keep their markers) and throws cbor::cyclic_data_structure, a std::logic_error, when a child is its own ancestor.",
+ "why": "The owner decided that encode without sharedrefs::on throws a usage error on a cycle. A first prototype kept the unwinding values in every node and cost 10 percent (295 against 266 us); this one does nothing on the path that succeeds.",
+ "how": "Google Benchmark, one binary per arm, each built twice (a, b). 3 rounds alternating, --benchmark_min_time=0.1s --benchmark_repetitions=3, random interleaving, GLIBC_TUNABLES trim_threshold, mmap_threshold and top_pad high. Behaviour checked once: 28([29(0)]) throws with off and encodes with on; 70 nested arrays give nesting_depth_exceeded as a value.",
+ "finding": "old 267.7/268.8, new 265.5/268.8: no cost.",
+ "context": {
+  "commit": "mbedded-cbor main c5efb0b, arm new is a patch on it",
+  "flags": "-std=c++26 -freflection -O2 -march=x86-64-v4 -falign-functions=64 -falign-loops=64 -DNDEBUG -Wall -Wextra -Wpedantic -Werror",
+  "compiler": "g++ (SUSE Linux) 16.2.0",
+  "cxx_library": "libstdc++.so.6 of gcc 16.2",
+  "c_library": "glibc 2.44",
+  "benchmark": "1.9.5",
+  "kernel": "6.18.44-fc-v64",
+  "vm": "firecracker microVM",
+  "container": "podman, localhost/mbedded-cbor-tw-lmdb-gb, openSUSE Tumbleweed",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256_16": "39a8dd34f3afdd38",
+  "user": "uid 1000",
+  "priority": "nice 0, not raised",
+  "threads": 1,
+  "pinned": false
+ },
+ "results": {
+  "new_b": [
+   265.7,
+   268.8,
+   264.9,
+   270.2,
+   268.0,
+   269.7,
+   269.4,
+   278.5,
+   264.0
+  ],
+  "new_a": [
+   280.4,
+   271.3,
+   267.9,
+   261.5,
+   261.3,
+   262.2,
+   277.5,
+   264.9,
+   265.5
+  ],
+  "old_a": [
+   270.3,
+   266.3,
+   265.5,
+   271.0,
+   268.6,
+   269.5,
+   263.7,
+   265.2,
+   267.7
+  ],
+  "old_b": [
+   258.9,
+   305.6,
+   269.5,
+   263.9,
+   258.4,
+   259.1,
+   269.7,
+   271.8,
+   268.8
+  ]
+ }
+}
