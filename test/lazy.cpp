@@ -343,19 +343,17 @@ namespace
 {
 
 // A binding whose only value is a typed array, as a language with ArrayBuffers has.
-struct typed_binding {
-    using value = cbor::typed_array;
+struct typed_binding : cbor::binding<cbor::typed_array> {
+    cbor::kind kind_of(cbor::typed_array const &)
+    {
+        return cbor::kind::typed_array;
+    }
+
+    cbor::typed_array typed_array_of(cbor::typed_array const &a)
+    {
+        return a;
+    }
 };
-
-cbor::kind tag_invoke(cbor::kind_of_t, typed_binding &, cbor::typed_array const &)
-{
-    return cbor::kind::typed_array;
-}
-
-cbor::typed_array tag_invoke(cbor::typed_array_of_t, typed_binding &, cbor::typed_array const &a)
-{
-    return a;
-}
 
 std::expected<std::string, std::error_code> typed_encoded(std::uint64_t const tag, std::string_view const bytes)
 {
@@ -396,12 +394,11 @@ namespace
 
 // A binding that embeds every array as an encoded data item of its own.
 struct embedding_binding : test_binding {
+    bool embed_of(value const &v)
+    {
+        return std::holds_alternative<test::array>(v.kind);
+    }
 };
-
-bool tag_invoke(cbor::embed_of_t, embedding_binding &, value const &v)
-{
-    return std::holds_alternative<test::array>(v.kind);
-}
 
 } // namespace
 
