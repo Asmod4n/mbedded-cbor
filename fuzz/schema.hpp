@@ -22,19 +22,19 @@ namespace fuzz::schema
 
 enum class shade : std::uint8_t { dark, light };
 
-struct [[=cbor::tag(1000)]] tire {
+struct [[=cbor::tag(1500)]] tire {
     std::uint16_t diameter;
     float airPressure;
     bool snowTires;
 };
 
-struct [[=cbor::tag(1001)]] engine {
+struct [[=cbor::tag(1501)]] engine {
     std::uint16_t horsepower;
     std::int32_t torque;
     bool usesGas;
 };
 
-struct [[=cbor::tag(1002)]] vehicle {
+struct [[=cbor::tag(1502)]] vehicle {
     std::string make;
     std::int32_t balance;
     std::array<tire, 2> spare;
@@ -50,7 +50,7 @@ struct [[=cbor::tag(1002)]] vehicle {
     bool flag;
 };
 
-struct [[=cbor::tag(1003)]] numbers {
+struct [[=cbor::tag(1503)]] numbers {
     std::int8_t i8;
     std::uint8_t u8;
     std::int16_t i16;
@@ -70,7 +70,7 @@ struct [[=cbor::tag(1003)]] numbers {
     std::optional<std::int64_t> maybe;
 };
 
-struct [[=cbor::tag(1004)]] garage {
+struct [[=cbor::tag(1504)]] garage {
     std::vector<vehicle> cars;
     std::map<std::uint16_t, std::string> owners;
     std::map<std::int32_t, tire> stock;
@@ -271,11 +271,8 @@ void compare(N const *native, R const &read)
         compare(native, *read);
     } else {
         require(native != nullptr);
-        if constexpr (std::is_same_v<R, std::string_view>) {
-            if constexpr (requires { native->size(); native->data(); })
-                require(read == native_bytes(*native));
-            else
-                require(read == native_bytes(*native));
+        if constexpr (std::is_same_v<R, cbor::owning_ref<std::string_view>>) {
+            require(*read == native_bytes(*native));
         } else if constexpr (optional_type<R>) {
             require(read.has_value() == native->has_value());
             if (read)
@@ -305,7 +302,7 @@ void compare(N const *native, R const &read)
 // Every value the reader gives is read: every element of a list and every pair of a map, a text must lie inside
 // the message. A document of a struct is read through every path of its type.
 template <class T, class Root>
-void read_all(cbor::schema::document<T, Root> doc, std::string_view message, source &in);
+void read_all(cbor::document<T, Root> doc, std::string_view message, source &in);
 
 template <class R>
 void consume(R const &read, std::string_view const message, source &in)
@@ -313,10 +310,10 @@ void consume(R const &read, std::string_view const message, source &in)
     if constexpr (expected_type<R>) {
         if (read)
             consume(*read, message, in);
-    } else if constexpr (std::is_same_v<R, std::string_view>) {
-        auto const begin = reinterpret_cast<std::uintptr_t>(read.data());
+    } else if constexpr (std::is_same_v<R, cbor::owning_ref<std::string_view>>) {
+        auto const begin = reinterpret_cast<std::uintptr_t>(read->data());
         auto const first = reinterpret_cast<std::uintptr_t>(message.data());
-        require(read.empty() || (begin >= first && begin + read.size() <= first + message.size()));
+        require(read->empty() || (begin >= first && begin + read->size() <= first + message.size()));
     } else if constexpr (requires { read.key_at(0); }) {
         for (auto const [k, v] : read) {
             consume(k, message, in);
@@ -334,32 +331,32 @@ void consume(R const &read, std::string_view const message, source &in)
 }
 
 template <class T, class Root>
-void read_all(cbor::schema::document<T, Root> const doc, std::string_view const message, source &in)
+void read_all(cbor::document<T, Root> const doc, std::string_view const message, source &in)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
     template for (constexpr std::meta::info text : texts) {
         if constexpr (text_of<text>().size() != 0)
-            consume(cbor::schema::at_path_compiled<T, path_text<text>>(doc), message, in);
+            consume(cbor::schema<Root>::template at_path<path_text<text>>(doc), message, in);
     }
 }
 
 template <class T, class Root>
-void compare_all(T const &native, cbor::schema::document<T, Root> doc);
+void compare_all(T const &native, cbor::document<T, Root> doc);
 
 template <class T>
 void read_target(std::string_view const message, source &in)
 {
-    auto const doc = cbor::schema::view<T>(message);
+    auto const doc = cbor::schema<T>::view(message);
     if (doc)
-        read_all(*doc, message, in);
-    auto const value = cbor::schema::decode<T>(message);
+        read_all(*doc, doc->bytes, in);
+    auto const value = cbor::schema<T>::decode(message);
     if (value) {
         require(doc.has_value());
-        auto const again = cbor::schema::encode(*value);
+        auto const again = cbor::schema<T>::encode(**value);
         require(again.has_value());
-        auto const reread = cbor::schema::view<T>(*again);
+        auto const reread = cbor::schema<T>::view(*again);
         require(reread.has_value());
-        compare_all(*value, *reread);
+        compare_all(**value, *reread);
     }
 }
 
@@ -425,12 +422,12 @@ void fill(T &v, source &in, int const depth)
 }
 
 template <class T, class Root>
-void compare_all(T const &native, cbor::schema::document<T, Root> const doc)
+void compare_all(T const &native, cbor::document<T, Root> const doc)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
     template for (constexpr std::meta::info text : texts) {
         if constexpr (text_of<text>().size() != 0)
-            compare(native_at<T, text, 0>(native), cbor::schema::at_path_compiled<T, path_text<text>>(doc));
+            compare(native_at<T, text, 0>(native), cbor::schema<Root>::template at_path<path_text<text>>(doc));
     }
 }
 
@@ -442,31 +439,31 @@ void round_trip(source &in)
     T native{};
     fill(native, in, 0);
     string_writer w;
-    auto const written = cbor::schema::encode(native, w);
+    auto const written = cbor::schema<T>::encode(native, w);
     require(written.has_value());
-    auto const whole = cbor::schema::encode(native);
+    auto const whole = cbor::schema<T>::encode(native);
     require(whole.has_value() && *whole == w.bytes && *written == w.bytes.size());
     std::string prefixed = in.string();
     std::size_t const before = prefixed.size();
-    require(cbor::schema::encode(native, prefixed).has_value() && std::string_view(prefixed).substr(before) == w.bytes);
+    require(cbor::schema<T>::encode(native, prefixed).has_value() && std::string_view(prefixed).substr(before) == w.bytes);
     std::vector<char> chars(in.byte() % 4);
     std::size_t const used = chars.size();
-    require(cbor::schema::encode(native, chars).has_value() &&
+    require(cbor::schema<T>::encode(native, chars).has_value() &&
             std::string_view(chars.data(), chars.size()).substr(used) == w.bytes);
     std::vector<char> room(in.number() % (w.bytes.size() + 16));
-    auto const placed = cbor::schema::encode(native, std::span(room));
+    auto const placed = cbor::schema<T>::encode(native, std::span(room));
     require(placed.has_value() == (room.size() >= w.bytes.size()));
     if (placed)
         require(std::string_view(room.data(), *placed) == w.bytes);
     else
         require(placed.error() == std::errc::no_buffer_space);
-    auto const back = cbor::schema::decode<T>(w.bytes);
+    auto const back = cbor::schema<T>::decode(w.bytes);
     require(back.has_value());
-    auto const again = cbor::schema::encode(*back);
+    auto const again = cbor::schema<T>::encode(**back);
     require(again.has_value() && *again == w.bytes);
     auto const end = cbor::doc_end<64>(w.bytes);
     require(end.has_value() && *end == w.bytes.size());
-    auto const doc = cbor::schema::view<T>(w.bytes);
+    auto const doc = cbor::schema<T>::view(w.bytes);
     require(doc.has_value());
     compare_all(native, *doc);
 }
