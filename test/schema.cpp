@@ -9,6 +9,7 @@
 #include <expected>
 #include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
 #include <stdfloat>
@@ -275,6 +276,40 @@ TEST_CASE("view: a struct checks only the size of the first item")
     CHECK(cbor::view<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>())).has_value());
     CHECK_EQ(cbor::view<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>() - 1)).error(),
              error::too_little_data);
+}
+
+namespace
+{
+
+struct buffer_owner {
+    std::string bytes;
+    bool *released;
+
+    ~buffer_owner()
+    {
+        *released = true;
+    }
+};
+
+} // namespace
+
+// The bytes of a view can belong to someone else, as the page of a read transaction of LMDB belongs to that
+// transaction. The document holds the owner, so the bytes live until the last copy of the document ends, and
+// a field read after the caller dropped its own handle reads memory that is still there.
+TEST_CASE("view: the document holds the owner of its bytes")
+{
+    bool released = false;
+    std::optional<cbor::document<login>> doc;
+    {
+        auto const owner = std::make_shared<buffer_owner>(schema_bytes(login{5, true, "ab"}), &released);
+        doc.emplace(*cbor::view<login>(owner, owner->bytes));
+    }
+    CHECK_FALSE(released);
+    CHECK_EQ(cbor::at_path_compiled<login, ".id">(*doc), 5u);
+    CHECK_EQ(*cbor::at_path_compiled<login, ".name">(*doc), "ab"sv);
+    CHECK_EQ(cbor::view<login>(std::make_shared<std::string const>("\xa1"s), "\xa1"sv).error(), error::too_little_data);
+    doc.reset();
+    CHECK(released);
 }
 
 #endif

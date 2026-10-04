@@ -340,6 +340,7 @@ result<std::string, std::errc> encode(T const &value);
 
 template <class T>
 struct document {
+    std::shared_ptr<void const> owner;
     std::string_view bytes;
     std::span<char const, fixed_size<T>()> field;
     std::size_t floor;
@@ -361,7 +362,7 @@ struct fixed_string {
 };
 
 template <class T, fixed_string Path>
-auto at_path_compiled(document<T> const doc);
+auto at_path_compiled(document<T> const &doc);
 
 template <class E>
 struct array;
@@ -1105,7 +1106,7 @@ class internal
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
-                return cbor::document<U>{bytes, field, floor};
+                return cbor::document<U>{{}, bytes, field, floor};
             } else if constexpr (is_fixed_string<U>) {
                 return std::string_view(field.template last<fixed_length<U>::value>());
             } else if constexpr (is_inline_optional<U>) {
@@ -1328,7 +1329,7 @@ class internal
     friend result<std::size_t, std::errc> encode(T const &value, Target &&target);
 
     template <class T, fixed_string Path>
-    friend auto at_path_compiled(cbor::document<T> const doc);
+    friend auto at_path_compiled(cbor::document<T> const &doc);
 
     template <class E>
     friend struct cbor::array;
@@ -2696,6 +2697,7 @@ struct lazy {
 
     static result<lazy> from(std::string &&bytes);
     static result<lazy> from(std::shared_ptr<std::string const> bytes);
+    static result<lazy> from(std::shared_ptr<void const> owner, std::string_view bytes);
 
     template <std::size_t DepthMax = 64>
     result<lazy> at(std::string_view key) const;
@@ -2934,7 +2936,16 @@ std::expected<document<T>, error> view(std::string_view const bytes)
 {
     if (bytes.size() < fixed_size<T>()) [[unlikely]]
         return std::unexpected(error::too_little_data);
-    return document<T>{bytes, std::span<char const>(bytes).first<fixed_size<T>()>(), fixed_size<T>()};
+    return document<T>{{}, bytes, std::span<char const>(bytes).first<fixed_size<T>()>(), fixed_size<T>()};
+}
+
+template <class T>
+    requires std::is_class_v<T> && std::is_aggregate_v<T>
+std::expected<document<T>, error> view(std::shared_ptr<void const> owner, std::string_view const bytes)
+{
+    if (bytes.size() < fixed_size<T>()) [[unlikely]]
+        return std::unexpected(error::too_little_data);
+    return document<T>{std::move(owner), bytes, std::span<char const>(bytes).first<fixed_size<T>()>(), fixed_size<T>()};
 }
 
 template <class T, std::size_t DepthMax>
@@ -3013,7 +3024,7 @@ CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, 
 }
 
 template <class T, fixed_string Path>
-CBOR_ALWAYS_INLINE inline auto at_path_compiled(document<T> const doc)
+CBOR_ALWAYS_INLINE inline auto at_path_compiled(document<T> const &doc)
 {
     return internal::path_walk<T, Path, 0>(doc.bytes, doc.field, doc.floor);
 }
@@ -3841,10 +3852,15 @@ struct result<lazy, error> : std::expected<lazy, error> {
     }
 };
 
+inline result<lazy> lazy::from(std::shared_ptr<void const> owner, std::string_view const bytes)
+{
+    return lazy{std::make_shared<internal::document>(std::move(owner), bytes, std::vector<std::size_t>{}, 0), 0};
+}
+
 inline result<lazy> lazy::from(std::shared_ptr<std::string const> bytes)
 {
     std::string_view const view = *bytes;
-    return lazy{std::make_shared<internal::document>(std::move(bytes), view, std::vector<std::size_t>{}, 0), 0};
+    return from(std::move(bytes), view);
 }
 
 inline result<lazy> lazy::from(std::string &&bytes)
