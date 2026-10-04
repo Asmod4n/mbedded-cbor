@@ -53,6 +53,16 @@ std::vector<std::uint64_t> sizes_of(std::string_view const bytes)
     return binding.sizes;
 }
 
+struct key_binding : test_binding {
+    std::vector<std::string> keys;
+
+    value map_key_decode(std::string_view const key)
+    {
+        keys.emplace_back(key);
+        return {std::string(key)};
+    }
+};
+
 } // namespace
 
 // A binding reserves with the size. A head that declares more items than the remaining bytes can
@@ -65,6 +75,26 @@ TEST_CASE("major 4 and 5: the size a binding receives")
     CHECK(sizes_of("\x9b\xff\xff\xff\xff\xff\xff\xff\xff\x01\x02"sv) == std::vector<std::uint64_t>{2});
     CHECK(sizes_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x01\x02\x03"sv) == std::vector<std::uint64_t>{1});
     CHECK(sizes_of("\x99\x01\x00"sv) == std::vector<std::uint64_t>{0});
+}
+
+// A binding with map_key_decode makes one value per key (RFC 8949 3.1, major type 5). Only a
+// text string in key position reaches it; a text string as a map value and a key of another type
+// take the usual functions, and the decoded value does not change.
+TEST_CASE("major 5: a text key goes to map_key_decode")
+{
+    std::string_view const wire = "\xa3\x61"
+                                  "a\x01\x02\x61"
+                                  "b\x61"
+                                  "c\xa1\x61"
+                                  "a\x03"sv;
+    key_binding binding;
+    auto const keyed = cbor::decode<16>(binding, wire);
+    REQUIRE(keyed.has_value());
+    CHECK(binding.keys == std::vector<std::string>{"a", "c", "a"});
+    test_binding plain;
+    auto const usual = cbor::decode<16>(plain, wire);
+    REQUIRE(usual.has_value());
+    CHECK(*keyed == *usual);
 }
 
 // Ported from test.rb: 'major 5: empty, string, integer, nested keys roundtrip'.
