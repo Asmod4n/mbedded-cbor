@@ -1,0 +1,205 @@
+{
+ "what": "Decode of twitter.cbor (402814 bytes) into Go values: map[string]any, []any, string, uint64, int64, float64, bool, nil, []byte. 1000 copies read in turn. Arm mb: a Go binding of mbedded-cbor main 75eaab5 through cgo, one call per document; a cbor::binding writes a flat list of items, and Go builds the values from it. Arm fx: fxamacker/cbor v2.9.4, DecMode with DefaultMapType map[string]any. Arm ug: ugorji/go codec v1.3.2, CborHandle with MapType map[string]any and RawToString. A test checks with reflect.DeepEqual that all three give the same value. Time in microseconds per document.",
+ "why": "The owner asked for a Go binding, measured against the best CBOR library of Go.",
+ "how": "go test -c, one binary per arm, each built twice (a, b), 3 rounds alternating, -test.benchtime=0.1s -test.count=3, b.Loop, GOAMD64=v4, GLIBC_TUNABLES trim_threshold, mmap_threshold and top_pad high (only the arm mb uses malloc). The C++ part: g++ 16.2 -std=c++23 -O2 -march=x86-64-v4 -DNDEBUG.",
+ "finding": "Medians, us per document: mb 1866.4 / 1943.8, fx 4073.6 / 3925.7, ug 3426.5 / 2933.6. mb takes about half the time of fx and about 60 to 65 percent of ug. Allocations per document: mb 28045, fx 31838, ug 35704; Go heap bytes: mb 1445 KiB, fx 1494 KiB, ug 1516 KiB, without the C++ list of items, which malloc holds for the call. Noise between the two binaries of one arm: mb 4 percent, fx 4 percent, ug 17 percent. A first run, where the binding put each map key in an any before it used it as a string, gave mb 2237 / 2175 us and 41390 allocations.",
+ "context": {
+  "commit": "mbedded-cbor main 75eaab5",
+  "go": "go1.27.1 linux/amd64",
+  "compiler": "g++ (SUSE Linux) 16.2.0",
+  "c_library": "glibc 2.44",
+  "kernel": "6.18.44-fc-v64",
+  "vm": "firecracker microVM",
+  "container": "podman, localhost/mbedded-cbor-tw-langs, openSUSE Tumbleweed",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256_16": "39a8dd34f3afdd38",
+  "user": "uid 1000",
+  "priority": "nice 0, not raised",
+  "threads": "1 goroutine; the Go runtime runs its GC on more threads",
+  "pinned": false
+ },
+ "results": {
+  "mb_a": {
+   "us": [
+    2663.6,
+    1866.4,
+    1665.2,
+    2274.0,
+    1828.2,
+    1679.0,
+    2347.0,
+    1886.6,
+    1715.6
+   ],
+   "bytes_per_op": 1480208,
+   "allocs_per_op": 28045
+  },
+  "mb_b": {
+   "us": [
+    2274.8,
+    2011.3,
+    1708.5,
+    2334.9,
+    1809.7,
+    1805.4,
+    2285.7,
+    1943.8,
+    1754.2
+   ],
+   "bytes_per_op": 1480208,
+   "allocs_per_op": 28045
+  },
+  "fx_a": {
+   "us": [
+    4299.3,
+    3787.3,
+    3830.2,
+    4509.3,
+    5610.2,
+    3932.8,
+    4182.3,
+    4073.6,
+    3872.4
+   ],
+   "bytes_per_op": 1530784,
+   "allocs_per_op": 31838
+  },
+  "fx_b": {
+   "us": [
+    4469.4,
+    3925.7,
+    3735.8,
+    4375.5,
+    3958.7,
+    3758.0,
+    5187.4,
+    3905.1,
+    3735.1
+   ],
+   "bytes_per_op": 1530784,
+   "allocs_per_op": 31838
+  },
+  "ug_a": {
+   "us": [
+    3512.7,
+    2961.7,
+    2779.4,
+    3679.9,
+    3642.4,
+    3575.4,
+    3426.5,
+    3115.0,
+    2787.1
+   ],
+   "bytes_per_op": 1552960,
+   "allocs_per_op": 35704
+  },
+  "ug_b": {
+   "us": [
+    3446.6,
+    2860.9,
+    2976.1,
+    3460.9,
+    2933.6,
+    2868.7,
+    3562.3,
+    2855.7,
+    2771.3
+   ],
+   "bytes_per_op": 1552960,
+   "allocs_per_op": 35704
+  }
+ },
+ "first_run": {
+  "mb_a": {
+   "us": [
+    2700.7,
+    2163.2,
+    2074.3,
+    2666.5,
+    2151.8,
+    1973.8,
+    2606.5,
+    2236.9,
+    2305.1
+   ],
+   "bytes_per_op": 1693728,
+   "allocs_per_op": 41390
+  },
+  "mb_b": {
+   "us": [
+    2700.5,
+    2206.5,
+    1970.5,
+    2632.5,
+    2091.2,
+    2032.6,
+    2726.5,
+    2175.1,
+    1977.8
+   ],
+   "bytes_per_op": 1693728,
+   "allocs_per_op": 41390
+  },
+  "fx_a": {
+   "us": [
+    4395.8,
+    3950.4,
+    3759.9,
+    4291.9,
+    3864.7,
+    3740.2,
+    4473.2,
+    3925.4,
+    4105.4
+   ],
+   "bytes_per_op": 1530784,
+   "allocs_per_op": 31838
+  },
+  "fx_b": {
+   "us": [
+    4891.7,
+    4260.0,
+    3891.2,
+    4516.4,
+    3883.2,
+    3998.2,
+    4401.8,
+    3911.3,
+    3538.9
+   ],
+   "bytes_per_op": 1530784,
+   "allocs_per_op": 31838
+  },
+  "ug_a": {
+   "us": [
+    3407.5,
+    2899.3,
+    2867.1,
+    3384.5,
+    2863.7,
+    2774.3,
+    3400.0,
+    2928.4,
+    2798.0
+   ],
+   "bytes_per_op": 1552960,
+   "allocs_per_op": 35704
+  },
+  "ug_b": {
+   "us": [
+    3405.2,
+    2788.3,
+    2758.6,
+    3542.2,
+    2800.1,
+    3000.5,
+    3594.1,
+    3518.9,
+    3077.3
+   ],
+   "bytes_per_op": 1552960,
+   "allocs_per_op": 35704
+  }
+ }
+}
