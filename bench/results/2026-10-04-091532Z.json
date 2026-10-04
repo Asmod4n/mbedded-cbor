@@ -1,0 +1,99 @@
+{
+ "what": "Decode of twitter.cbor (402814 bytes) into test_binding (values in a std::variant), MiB/s. Arm old: main 131934e+ba2effa, which reads tags 28 and 29 always. Arm off: decode with a template parameter sharedrefs that is off by default, so the code for tags 28 and 29 is not compiled. Arm on: the same header with sharedrefs::on.",
+ "why": "The owner asked what a default of off would gain for decode.",
+ "how": "Google Benchmark, one binary per arm, each built twice (a, b). 3 rounds alternating, --benchmark_min_time=0.1s --benchmark_repetitions=3 --benchmark_enable_random_interleaving=true. One warm buffer.",
+ "finding": "No difference is visible. old 241/237, off 235/211, on 233/240. The two builds of off differ by 10 percent, so the noise of this decode is larger than any effect of the switch.",
+ "context": {
+  "commit": "mbedded-cbor main ba2effa, dirty: decode with the parameter sharedrefs",
+  "flags": "-std=c++26 -freflection -O2 -march=x86-64-v4 -falign-functions=64 -falign-loops=64 -DNDEBUG -Wall -Wextra -Wpedantic -Werror",
+  "compiler": "g++ (SUSE Linux) 16.2.0",
+  "cxx_library": "libstdc++.so.6 of gcc 16.2",
+  "c_library": "glibc 2.44",
+  "benchmark": "1.9.5",
+  "kernel": "6.18.44-fc-v64",
+  "vm": "firecracker microVM",
+  "container": "podman, localhost/mbedded-cbor-tw-lmdb-gb, openSUSE Tumbleweed",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256_16": "39a8dd34f3afdd38",
+  "user": "uid 1000",
+  "priority": "nice 0, not raised",
+  "threads": 1,
+  "pinned": false
+ },
+ "results": {
+  "off_a": [
+   235.0,
+   236.8,
+   237.7,
+   232.0,
+   214.9,
+   234.8,
+   210.6,
+   243.1,
+   238.7
+  ],
+  "on_b": [
+   217.8,
+   232.9,
+   234.7,
+   240.6,
+   240.3,
+   239.5,
+   242.0,
+   243.5,
+   243.9
+  ],
+  "off_b": [
+   206.0,
+   206.2,
+   207.0,
+   234.8,
+   235.2,
+   235.3,
+   205.5,
+   212.0,
+   211.0
+  ],
+  "old_a": [
+   242.6,
+   242.5,
+   241.9,
+   238.7,
+   245.5,
+   240.6,
+   236.6,
+   241.3,
+   240.4
+  ],
+  "on_a": [
+   227.0,
+   230.2,
+   187.9,
+   239.6,
+   237.4,
+   239.7,
+   173.5,
+   232.7,
+   244.8
+  ],
+  "old_b": [
+   238.5,
+   234.5,
+   238.9,
+   231.8,
+   236.3,
+   237.2,
+   239.8,
+   243.0,
+   234.4
+  ]
+ },
+ "medians": {
+  "off_a": 235.0,
+  "on_b": 240.3,
+  "off_b": 211.0,
+  "old_a": 241.3,
+  "on_a": 232.7,
+  "old_b": 237.2
+ }
+}
