@@ -199,6 +199,7 @@ struct binding {
     value array_decode(std::uint64_t size) = delete;
     value array_append(value array, value element) = delete;
     value map_decode(std::uint64_t size) = delete;
+    value map_key_decode(std::string_view key) = delete;
     value map_insert(value map, value key, value item) = delete;
     value tag_decode(std::uint64_t tag, value content) = delete;
 };
@@ -1722,6 +1723,22 @@ class internal
                 if (mark && cyclic_data_structures(binding))
                     shared.at(*mark) = map;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
+                if constexpr (requires(std::string_view const t) { binding.map_key_decode(t); }) {
+                    decoder probe = d;
+                    auto const k = probe.head_decode();
+                    if (k && k->major == major_type::text_string) {
+                        auto const t = probe.text_string_decode(k->argument);
+                        if (!t) [[unlikely]]
+                            return std::unexpected(t.error());
+                        d = probe;
+                        auto key = binding.map_key_decode(*t);
+                        auto value = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
+                        if (!value) [[unlikely]]
+                            return value;
+                        map = binding.map_insert(std::move(map), std::move(key), std::move(*value));
+                        continue;
+                    }
+                }
                 auto key = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
                 if (!key) [[unlikely]]
                     return key;
