@@ -266,9 +266,9 @@ struct string_writer {
 // A negative value -1 - n answers with its absolute value n + 1.
 // In this binding a tagged value stands for a registered object: its number is the tag, its content
 // is what before_encode gives.
-inline std::string encoded(value const &v)
+inline std::string encoded([[maybe_unused]] value const &v)
 {
-    test_binding binding;
+    [[maybe_unused]] test_binding binding;
     string_writer w;
     REQUIRE(cbor::encode<16>(binding, w, v).has_value());
     return w.bytes;
@@ -330,7 +330,7 @@ value M(T... t)
     return {std::move(m)};
 }
 
-inline void check_both(std::string_view wire, value const &expected)
+inline void check_both(std::string_view wire, [[maybe_unused]] value const &expected)
 {
     auto const v = decoded(wire);
     REQUIRE(v.has_value());
