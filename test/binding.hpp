@@ -21,7 +21,7 @@ struct doctest::StringMaker<cbor::error> {
     }
 };
 
-// The host of the tests: a dynamic language in C++, reached only through the public interface.
+// The binding of the tests: a dynamic language in C++, reached only through the public interface.
 namespace test
 {
 
@@ -73,78 +73,78 @@ struct entry {
     bool operator==(entry const &) const = default;
 };
 
-// The host of a test: a dynamic language in C++. Every tag_invoke builds one kind of value.
-struct test_host {
+// The binding of a test: a dynamic language in C++. Every tag_invoke builds one kind of value.
+struct test_binding {
     using value = test::value;
 };
 
-inline value tag_invoke(cbor::unsigned_integer_decode_t, test_host &, std::uint64_t a)
+inline value tag_invoke(cbor::unsigned_integer_decode_t, test_binding &, std::uint64_t a)
 {
     return {a};
 }
 
-inline value tag_invoke(cbor::negative_integer_decode_t, test_host &, std::uint64_t a)
+inline value tag_invoke(cbor::negative_integer_decode_t, test_binding &, std::uint64_t a)
 {
     return {negative{a}};
 }
 
-inline value tag_invoke(cbor::unsigned_bignum_decode_t, test_host &, std::string_view m)
+inline value tag_invoke(cbor::unsigned_bignum_decode_t, test_binding &, std::string_view m)
 {
     return {bignum{false, std::string(m)}};
 }
 
-inline value tag_invoke(cbor::negative_bignum_decode_t, test_host &, std::string_view m)
+inline value tag_invoke(cbor::negative_bignum_decode_t, test_binding &, std::string_view m)
 {
     return {bignum{true, std::string(m)}};
 }
 
-inline value tag_invoke(cbor::byte_string_decode_t, test_host &, std::string_view b)
+inline value tag_invoke(cbor::byte_string_decode_t, test_binding &, std::string_view b)
 {
     return {bytes{std::string(b)}};
 }
 
-inline value tag_invoke(cbor::text_string_decode_t, test_host &, std::string_view t)
+inline value tag_invoke(cbor::text_string_decode_t, test_binding &, std::string_view t)
 {
     return {std::string(t)};
 }
 
-inline value tag_invoke(cbor::float_decode_t, test_host &, double f)
+inline value tag_invoke(cbor::float_decode_t, test_binding &, double f)
 {
     return {f};
 }
 
-inline value tag_invoke(cbor::simple_value_decode_t, test_host &, std::uint8_t s)
+inline value tag_invoke(cbor::simple_value_decode_t, test_binding &, std::uint8_t s)
 {
     return {simple{s}};
 }
 
-inline value tag_invoke(cbor::array_decode_t, test_host &, std::uint64_t const size)
+inline value tag_invoke(cbor::array_decode_t, test_binding &, std::uint64_t const size)
 {
     array a;
     a.reserve(size);
     return {std::move(a)};
 }
 
-inline value tag_invoke(cbor::array_append_t, test_host &, value &&a, value &&e)
+inline value tag_invoke(cbor::array_append_t, test_binding &, value &&a, value &&e)
 {
     std::get<array>(a.kind).push_back(std::move(e));
     return std::move(a);
 }
 
-inline value tag_invoke(cbor::map_decode_t, test_host &, std::uint64_t const size)
+inline value tag_invoke(cbor::map_decode_t, test_binding &, std::uint64_t const size)
 {
     map m;
     m.reserve(size);
     return {std::move(m)};
 }
 
-inline value tag_invoke(cbor::map_insert_t, test_host &, value &&m, value &&k, value &&v)
+inline value tag_invoke(cbor::map_insert_t, test_binding &, value &&m, value &&k, value &&v)
 {
     std::get<map>(m.kind).push_back(entry{std::move(k), std::move(v)});
     return std::move(m);
 }
 
-inline value tag_invoke(cbor::tag_decode_t, test_host &, std::uint64_t tag, value content)
+inline value tag_invoke(cbor::tag_decode_t, test_binding &, std::uint64_t tag, value content)
 {
     return {tagged{tag, array{std::move(content)}}};
 }
@@ -170,9 +170,9 @@ struct string_writer {
 };
 
 // The way back, as a binding walks its own values.
-// The answers of this host to the questions of the encoder. Each answer reads the value and decides
+// The answers of this binding to the questions of the encoder. Each answer reads the value and decides
 // nothing.
-inline cbor::kind tag_invoke(cbor::kind_of_t, test_host &, value const &v)
+inline cbor::kind tag_invoke(cbor::kind_of_t, test_binding &, value const &v)
 {
     return std::visit(
         [](auto const &k) {
@@ -202,85 +202,85 @@ inline cbor::kind tag_invoke(cbor::kind_of_t, test_host &, value const &v)
 }
 
 // A negative value -1 - n answers with its absolute value n + 1.
-inline std::uint64_t tag_invoke(cbor::unsigned_of_t, test_host &, value const &v)
+inline std::uint64_t tag_invoke(cbor::unsigned_of_t, test_binding &, value const &v)
 {
     if (auto const *n = std::get_if<negative>(&v.kind))
         return n->argument + 1;
     return std::get<std::uint64_t>(v.kind);
 }
 
-inline std::string_view tag_invoke(cbor::magnitude_of_t, test_host &, value const &v)
+inline std::string_view tag_invoke(cbor::magnitude_of_t, test_binding &, value const &v)
 {
     return std::get<bignum>(v.kind).magnitude;
 }
 
-inline std::string_view tag_invoke(cbor::bytes_of_t, test_host &, value const &v)
+inline std::string_view tag_invoke(cbor::bytes_of_t, test_binding &, value const &v)
 {
     return std::get<bytes>(v.kind).b;
 }
 
-inline std::string_view tag_invoke(cbor::text_of_t, test_host &, value const &v)
+inline std::string_view tag_invoke(cbor::text_of_t, test_binding &, value const &v)
 {
     return std::get<std::string>(v.kind);
 }
 
-inline double tag_invoke(cbor::float_of_t, test_host &, value const &v)
+inline double tag_invoke(cbor::float_of_t, test_binding &, value const &v)
 {
     return std::get<double>(v.kind);
 }
 
-inline std::uint8_t tag_invoke(cbor::simple_of_t, test_host &, value const &v)
+inline std::uint8_t tag_invoke(cbor::simple_of_t, test_binding &, value const &v)
 {
     return std::get<simple>(v.kind).v;
 }
 
-inline std::uint64_t tag_invoke(cbor::array_size_t, test_host &, value const &v)
+inline std::uint64_t tag_invoke(cbor::array_size_t, test_binding &, value const &v)
 {
     return std::get<array>(v.kind).size();
 }
 
-inline value const &tag_invoke(cbor::array_at_t, test_host &, value const &v, std::uint64_t i)
+inline value const &tag_invoke(cbor::array_at_t, test_binding &, value const &v, std::uint64_t i)
 {
     return std::get<array>(v.kind).at(i);
 }
 
-inline std::uint64_t tag_invoke(cbor::map_size_t, test_host &, value const &v)
+inline std::uint64_t tag_invoke(cbor::map_size_t, test_binding &, value const &v)
 {
     return std::get<map>(v.kind).size();
 }
 
 template <class F>
-inline void tag_invoke(cbor::map_for_each_t, test_host &, value const &v, F const &f)
+inline void tag_invoke(cbor::map_for_each_t, test_binding &, value const &v, F const &f)
 {
     for (auto const &[key, val] : std::get<map>(v.kind))
         f(key, val);
 }
 
-// In this host a tagged value stands for a registered object: its number is the tag, its content
+// In this binding a tagged value stands for a registered object: its number is the tag, its content
 // is what before_encode gives.
-inline std::uint64_t tag_invoke(cbor::registered_tag_t, test_host &, value const &v)
+inline std::uint64_t tag_invoke(cbor::registered_tag_t, test_binding &, value const &v)
 {
     return std::get<tagged>(v.kind).tag;
 }
 
-inline value tag_invoke(cbor::before_encode_t, test_host &, value const &v)
+inline value tag_invoke(cbor::before_encode_t, test_binding &, value const &v)
 {
     return std::get<tagged>(v.kind).content.at(0);
 }
 
 inline std::string encoded(value const &v)
 {
-    test_host host;
+    test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<16>(host, w, v).has_value());
+    REQUIRE(cbor::encode<16>(binding, w, v).has_value());
     return w.bytes;
 }
 
 template <std::size_t DepthMax = 16>
 inline std::expected<value, error> decoded(std::string_view wire)
 {
-    test_host host;
-    return cbor::decode<DepthMax>(host, wire);
+    test_binding binding;
+    return cbor::decode<DepthMax>(binding, wire);
 }
 
 template <std::size_t DepthMax = 16>

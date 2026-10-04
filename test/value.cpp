@@ -1,4 +1,4 @@
-#include "host.hpp"
+#include "binding.hpp"
 
 #include <initializer_list>
 #include <string>
@@ -21,7 +21,7 @@ TEST_CASE("major 4: empty, basic, nested, mixed")
 }
 
 // Ported from test.rb: 'major 4: huge length claim (uint64) raises RangeError'.
-// The size that reaches the host is capped by the remaining bytes, so the claim reserves nothing.
+// The size that reaches the binding is capped by the remaining bytes, so the claim reserves nothing.
 TEST_CASE("major 4: a huge length claim is too_little_data")
 {
     CHECK_EQ(decode_error("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv), error::too_little_data);
@@ -30,34 +30,34 @@ TEST_CASE("major 4: a huge length claim is too_little_data")
 namespace
 {
 
-struct size_host : test_host {
+struct size_binding : test_binding {
     std::vector<std::uint64_t> sizes;
 };
 
-value tag_invoke(cbor::array_decode_t, size_host &host, std::uint64_t const size)
+value tag_invoke(cbor::array_decode_t, size_binding &binding, std::uint64_t const size)
 {
-    host.sizes.push_back(size);
+    binding.sizes.push_back(size);
     return {test::array{}};
 }
 
-value tag_invoke(cbor::map_decode_t, size_host &host, std::uint64_t const size)
+value tag_invoke(cbor::map_decode_t, size_binding &binding, std::uint64_t const size)
 {
-    host.sizes.push_back(size);
+    binding.sizes.push_back(size);
     return {test::map{}};
 }
 
 std::vector<std::uint64_t> sizes_of(std::string_view const bytes)
 {
-    size_host host;
-    (void)cbor::decode<16>(host, bytes);
-    return host.sizes;
+    size_binding binding;
+    (void)cbor::decode<16>(binding, bytes);
+    return binding.sizes;
 }
 
 } // namespace
 
-// A host reserves with the size. A head that declares more items than the remaining bytes can
+// A binding reserves with the size. A head that declares more items than the remaining bytes can
 // hold must not make it reserve more: each item takes at least one byte, each pair at least two.
-TEST_CASE("major 4 and 5: the size a host receives")
+TEST_CASE("major 4 and 5: the size a binding receives")
 {
     CHECK(sizes_of("\x83\x01\x02\x03"sv) == std::vector<std::uint64_t>{3});
     CHECK(sizes_of("\xa2\x01\x02\x03\x04"sv) == std::vector<std::uint64_t>{2});
@@ -125,8 +125,8 @@ TEST_CASE("major 7: a one-byte simple value below 32 is syntax_error")
     check_both("\xf8\x20"sv, V(simple{32}));
 }
 
-// Every value of a tag reaches the host with its number; RFC 8949 Appendix A, tag 1.
-TEST_CASE("major 6: a tag reaches the host with its content")
+// Every value of a tag reaches the binding with its number; RFC 8949 Appendix A, tag 1.
+TEST_CASE("major 6: a tag reaches the binding with its content")
 {
     tagged t{1, array{V(1363896240)}};
     check_both("\xc1\x1a\x51\x4b\x67\xb0"sv, value{t});
@@ -139,11 +139,11 @@ TEST_CASE("depth: encode past the limit")
     value deep = V(0);
     for (int i = 0; i < 16; ++i)
         deep = A(deep);
-    test_host host;
+    test_binding binding;
     string_writer w;
-    CHECK(cbor::encode<16>(host, w, deep).has_value());
+    CHECK(cbor::encode<16>(binding, w, deep).has_value());
     string_writer w2;
-    auto const r = cbor::encode<16>(host, w2, A(deep));
+    auto const r = cbor::encode<16>(binding, w2, A(deep));
     REQUIRE_FALSE(r.has_value());
     CHECK((r.error() == error::nesting_depth_exceeded));
 }
@@ -153,9 +153,9 @@ TEST_CASE("depth: encode past the limit")
 TEST_CASE("encode: a reserved simple value is an error")
 {
     for (std::uint8_t v = 24; v < 32; ++v) {
-        test_host host;
+        test_binding binding;
         string_writer w;
-        auto const r = cbor::encode<16>(host, w, V(simple{v}));
+        auto const r = cbor::encode<16>(binding, w, V(simple{v}));
         REQUIRE_FALSE(r.has_value());
         CHECK((r.error() == error::reserved_simple_value));
     }
@@ -167,33 +167,33 @@ namespace
 {
 
 // A language with text and nothing else, as bash or zsh: it answers only kind_of and text_of.
-struct text_host {
+struct text_binding {
     using value = std::string;
 };
 
-inline cbor::kind tag_invoke(cbor::kind_of_t, text_host &, std::string const &v)
+inline cbor::kind tag_invoke(cbor::kind_of_t, text_binding &, std::string const &v)
 {
     return v == "array" ? cbor::kind::array : cbor::kind::text_string;
 }
 
-inline std::string_view tag_invoke(cbor::text_of_t, text_host &, std::string const &v)
+inline std::string_view tag_invoke(cbor::text_of_t, text_binding &, std::string const &v)
 {
     return v;
 }
 
 } // namespace
 
-// A host answers only the questions its language has; a kind it cannot answer is an error, not a
+// A binding answers only the questions its language has; a kind it cannot answer is an error, not a
 // failure to compile.
-TEST_CASE("encode: a kind the host cannot describe is unsupported_value")
+TEST_CASE("encode: a kind the binding cannot describe is unsupported_value")
 {
-    text_host host;
+    text_binding binding;
     string_writer w;
-    CHECK(cbor::encode<16>(host, w, std::string("a")).has_value());
+    CHECK(cbor::encode<16>(binding, w, std::string("a")).has_value());
     CHECK_EQ(w.bytes, "\x61"
                       "a"sv);
     string_writer w2;
-    auto const r = cbor::encode<16>(host, w2, std::string("array"));
+    auto const r = cbor::encode<16>(binding, w2, std::string("array"));
     REQUIRE_FALSE(r.has_value());
     CHECK((r.error() == error::unsupported_value));
 }

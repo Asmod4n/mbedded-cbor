@@ -1,4 +1,4 @@
-#include "host.hpp"
+#include "binding.hpp"
 
 #include <algorithm>
 #include <array>
@@ -30,8 +30,8 @@ cbor::lazy lazy_of(std::string const &document)
 
 value value_at(cbor::lazy const &l)
 {
-    test_host host;
-    auto const v = cbor::lazy_decode<16>(host, l);
+    test_binding binding;
+    auto const v = cbor::lazy_decode<16>(binding, l);
     REQUIRE(v.has_value());
     return *v;
 }
@@ -153,8 +153,8 @@ TEST_CASE("lazy: a reference to its own enclosing mark ends")
 {
     std::string const doc = "\xd8\x1c\xd8\x1d\x00"s;
     CHECK_EQ(lazy_of(doc).at<16>(0).error(), error::sharedref_not_complete);
-    test_host host;
-    CHECK_FALSE(cbor::lazy_decode<16>(host, lazy_of(doc)).has_value());
+    test_binding binding;
+    CHECK_FALSE(cbor::lazy_decode<16>(binding, lazy_of(doc)).has_value());
 }
 
 // Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. Before the fix the scan for
@@ -258,7 +258,7 @@ cbor::result<T> get(std::string const &document)
 
 } // namespace
 
-// The integers of RFC 8949 Appendix A, read without a host.
+// The integers of RFC 8949 Appendix A, read without a binding.
 TEST_CASE("lazy: get reads an integer")
 {
     CHECK_EQ(*get<std::uint64_t>("\x00"s), 0u);
@@ -342,26 +342,26 @@ TEST_CASE("lazy: get reads a typed array")
 namespace
 {
 
-// A host whose only value is a typed array, as a language with ArrayBuffers has.
-struct typed_host {
+// A binding whose only value is a typed array, as a language with ArrayBuffers has.
+struct typed_binding {
     using value = cbor::typed_array;
 };
 
-cbor::kind tag_invoke(cbor::kind_of_t, typed_host &, cbor::typed_array const &)
+cbor::kind tag_invoke(cbor::kind_of_t, typed_binding &, cbor::typed_array const &)
 {
     return cbor::kind::typed_array;
 }
 
-cbor::typed_array tag_invoke(cbor::typed_array_of_t, typed_host &, cbor::typed_array const &a)
+cbor::typed_array tag_invoke(cbor::typed_array_of_t, typed_binding &, cbor::typed_array const &a)
 {
     return a;
 }
 
 std::expected<std::string, std::error_code> typed_encoded(std::uint64_t const tag, std::string_view const bytes)
 {
-    typed_host host;
+    typed_binding binding;
     test::string_writer w;
-    auto const r = cbor::encode<16>(host, w, cbor::typed_array{tag, std::as_bytes(std::span(bytes))});
+    auto const r = cbor::encode<16>(binding, w, cbor::typed_array{tag, std::as_bytes(std::span(bytes))});
     if (!r)
         return std::unexpected(r.error());
     return w.bytes;
@@ -384,7 +384,7 @@ TEST_CASE("encode: a typed array is a tag and a byte string")
 
 // A tag outside 64 to 87, or the reserved 76, is no typed array; a length that is not a multiple of the
 // element size is inadmissible content.
-TEST_CASE("encode: a typed array the host answers wrongly")
+TEST_CASE("encode: a typed array the binding answers wrongly")
 {
     CHECK((typed_encoded(76, "\x00"sv).error() == cbor::error::unsupported_value));
     CHECK((typed_encoded(63, "\x00"sv).error() == cbor::error::unsupported_value));
@@ -394,11 +394,11 @@ TEST_CASE("encode: a typed array the host answers wrongly")
 namespace
 {
 
-// A host that embeds every array as an encoded data item of its own.
-struct embedding_host : test_host {
+// A binding that embeds every array as an encoded data item of its own.
+struct embedding_binding : test_binding {
 };
 
-bool tag_invoke(cbor::embed_of_t, embedding_host &, value const &v)
+bool tag_invoke(cbor::embed_of_t, embedding_binding &, value const &v)
 {
     return std::holds_alternative<test::array>(v.kind);
 }
@@ -409,9 +409,9 @@ bool tag_invoke(cbor::embed_of_t, embedding_host &, value const &v)
 // value as a document of its own, and a view passes through the tag into it.
 TEST_CASE("tag 24: an embedded value is written as a document of its own and read through")
 {
-    embedding_host host;
+    embedding_binding binding;
     test::string_writer w;
-    REQUIRE(cbor::encode<16>(host, w, A(1, A(2, 3))).has_value());
+    REQUIRE(cbor::encode<16>(binding, w, A(1, A(2, 3))).has_value());
     CHECK_EQ(w.bytes, "\xd8\x18\x48\x82\x01\xd8\x18\x43\x82\x02\x03"s);
     auto const inner = lazy_of(w.bytes).at<16>(1);
     REQUIRE(inner.has_value());
@@ -477,8 +477,8 @@ TEST_CASE("lazy: a reference forward to a mark that navigation recorded is an er
     CHECK_EQ(*second->get<std::uint64_t>(), 5u);
     auto const first = root.at<16>(0);
     REQUIRE(first.has_value());
-    test_host host;
-    CHECK_EQ(cbor::lazy_decode<16>(host, *first).error(), error::sharedref_not_complete);
+    test_binding binding;
+    CHECK_EQ(cbor::lazy_decode<16>(binding, *first).error(), error::sharedref_not_complete);
 }
 
 // The member form: lazy::from takes the bytes by move and copies nothing; each step gives a result that the next

@@ -148,13 +148,13 @@ inline void encoder_target(std::string_view const input)
         require(out.flush().has_value());
     }
     std::string_view rest = w.bytes;
-    test_host host;
+    test_binding binding;
     for (auto const &item : items) {
         auto const end = cbor::doc_end<16>(rest);
         require(end.has_value());
         if (item.size)
             require(*end == *item.size);
-        auto const back = cbor::decode<16>(host, rest.substr(0, *end));
+        auto const back = cbor::decode<16>(binding, rest.substr(0, *end));
         require(back.has_value() && same(*back, item.value));
         rest.remove_prefix(*end);
     }
