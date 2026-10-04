@@ -951,12 +951,13 @@ class internal
 
     static consteval std::size_t step_end(std::string_view const path, std::size_t const at)
     {
-        return std::min(path.find_first_of(".[", at + 1), path.size());
+        return static_cast<std::size_t>(std::ranges::find_first_of(path.substr(at + 1), std::string_view(".[")) -
+                                        path.begin());
     }
 
     static consteval std::size_t index_end(std::string_view const path, std::size_t const at)
     {
-        return std::min(path.find(']', at + 1), path.size());
+        return static_cast<std::size_t>(std::ranges::find(path.substr(at + 1), ']') - path.begin());
     }
 
     template <class T>
