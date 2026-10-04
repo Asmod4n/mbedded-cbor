@@ -535,7 +535,30 @@ std::size_t depth_of(node const &root)
     return depth;
 }
 
+struct keyed {
+    [[=cbor::key("x-user-id")]] std::uint8_t m0;
+    [[=cbor::key("EOF")]] bool m1;
+};
+
 } // namespace
+
+// The key of an annotation takes the place of the member name in the size, the offsets and the bytes. The
+// expectation is counted from RFC 8949 3 by hand: a map head of 1 byte, a text head of 1 and 9 bytes, the integer
+// with its fixed width of 0x18 and 1 byte, a text head of 1 and 3 bytes, and the simple value.
+TEST_CASE("schema: an annotation gives the key of a member")
+{
+    CHECK_EQ(cbor::fixed_size<keyed>(), 18u);
+    CHECK_EQ(cbor::member_offset<keyed, ^^keyed::m0>(), 11u);
+    CHECK_EQ(cbor::member_offset<keyed, ^^keyed::m1>(), 17u);
+    std::string const bytes = *cbor::encode(keyed{7, true});
+    CHECK_EQ(bytes.substr(0, 18), "\xa2\x69x-user-id\x18\x07\x63" "EOF\xf5"s);
+    keyed const back = *cbor::decode<keyed>(bytes);
+    CHECK_EQ(back.m0, 7u);
+    CHECK(back.m1);
+    auto const doc = cbor::view<keyed>(bytes);
+    REQUIRE(doc.has_value());
+    CHECK_EQ(cbor::at_path_compiled<keyed, ".EOF">(*doc), true);
+}
 
 // A struct that holds a list of itself is read by recursion, and the bytes decide how deep. Without a limit, a
 // chain of 100000 nodes in 2.2 MB overflowed a stack of 8 MiB. Each reference that is followed counts one

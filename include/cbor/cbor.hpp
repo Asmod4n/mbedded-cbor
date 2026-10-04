@@ -323,6 +323,14 @@ consteval std::size_t no_fixed_size()
     std::unreachable();
 }
 
+struct key {
+    char const *text;
+
+    consteval explicit key(char const *const s) : text(std::define_static_string(std::string_view(s)))
+    {
+    }
+};
+
 template <class T, std::meta::info Member>
 consteval std::size_t member_offset();
 
@@ -461,6 +469,24 @@ class internal
         static constexpr std::size_t value = N;
     };
 
+    static consteval std::string_view key_of(std::meta::info const member)
+    {
+        for (std::meta::info const a : std::meta::annotations_of(member))
+            if (std::meta::remove_const(std::meta::type_of(a)) == ^^cbor::key)
+                return std::meta::extract<cbor::key>(a).text;
+        auto const name = std::meta::u8identifier_of(member);
+        return std::define_static_string(std::string(name.begin(), name.end()));
+    }
+
+    static consteval bool keys_unique(std::span<std::meta::info const> const members)
+    {
+        std::vector<std::string_view> keys;
+        for (std::meta::info const m : members)
+            keys.push_back(key_of(m));
+        std::ranges::sort(keys);
+        return std::ranges::adjacent_find(keys) == keys.end();
+    }
+
     template <class U>
     static consteval std::span<std::meta::info const> data_members()
     {
@@ -471,14 +497,15 @@ class internal
     template <class U>
     static consteval std::size_t struct_fixed_size()
     {
-        if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unchecked()).empty()) {
+        if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unchecked()).empty() ||
+                      !keys_unique(data_members<U>())) {
             return no_fixed_size<U>();
         } else {
             std::size_t size = head_size(data_members<U>().size());
             template for (constexpr auto m : data_members<U>()) {
                 if constexpr (!std::meta::has_identifier(m) || std::meta::is_bit_field(m) || !std::meta::is_public(m))
                     return no_fixed_size<U>();
-                constexpr std::size_t key = std::meta::u8identifier_of(m).size();
+                constexpr std::size_t key = key_of(m).size();
                 size += head_size(key) + key + fixed_size<typename[:std::meta::type_of(m):]>();
             }
             return size;
@@ -605,10 +632,9 @@ class internal
         } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
             head_encode(bytes, major_type::map, data_members<U>().size());
             template for (constexpr auto m : data_members<U>()) {
-                constexpr auto key = std::meta::u8identifier_of(m);
+                constexpr std::string_view key = key_of(m);
                 head_encode(bytes, major_type::text_string, key.size());
-                for (char8_t const c : key)
-                    bytes.push_back(static_cast<char>(c));
+                bytes.insert(bytes.end(), key.begin(), key.end());
                 zero_initialized_encode<typename[:std::meta::type_of(m):]>(bytes);
             }
         } else if constexpr (is_inline_optional<U>) {
@@ -917,8 +943,7 @@ class internal
     {
         constexpr auto members = data_members<U>();
         auto const m = std::ranges::find_if(members, [name](std::meta::info const m) {
-            return std::ranges::equal(std::meta::u8identifier_of(m), name,
-                                      [](char8_t const a, char const b) { return a == static_cast<char8_t>(b); });
+            return key_of(m) == name;
         });
         return m == members.end() ? std::meta::info{} : *m;
     }
@@ -2077,8 +2102,11 @@ class internal
     template <class U>
     static consteval auto members_of()
     {
-        return std::define_static_array(
+        auto const members = std::define_static_array(
             std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unchecked()));
+        if (!has_integer_keys<U> && !keys_unique(members))
+            std::unreachable();
+        return members;
     }
 
     template <class U, class V>
@@ -2374,7 +2402,7 @@ class internal
             else
                 return k.major == major_type::negative_integer && k.argument == static_cast<std::uint64_t>(-1 - key);
         } else {
-            constexpr std::string_view name = std::meta::identifier_of(members_of<U>()[I]);
+            constexpr std::string_view name = key_of(members_of<U>()[I]);
             return k.major == major_type::text_string && text == name;
         }
     }
@@ -2519,7 +2547,7 @@ class internal
                         constexpr std::int64_t key = U::keys.at(i);
                         size += generic_size(key);
                     } else {
-                        constexpr std::string_view name = std::meta::identifier_of(members[i]);
+                        constexpr std::string_view name = key_of(members[i]);
                         size += head_size(name.size()) + name.size();
                     }
                     if constexpr (is_optional<std::remove_cvref_t<decltype(m)>>)
@@ -2646,7 +2674,7 @@ class internal
                         constexpr std::int64_t key = U::keys.at(i);
                         at = generic_write(out, at, key);
                     } else {
-                        constexpr std::string_view name = std::meta::identifier_of(members[i]);
+                        constexpr std::string_view name = key_of(members[i]);
                         at += head_write(out, at, major_type::text_string, name.size());
                         at = bytes_write(out, at, name);
                     }
@@ -2889,7 +2917,7 @@ consteval std::size_t member_offset()
     } else {
         std::size_t offset = internal::head_size(internal::data_members<U>().size());
         template for (constexpr auto m : internal::data_members<U>()) {
-            constexpr std::size_t key = std::meta::u8identifier_of(m).size();
+            constexpr std::size_t key = internal::key_of(m).size();
             offset += internal::head_size(key) + key;
             if constexpr (m == Member)
                 return offset;
