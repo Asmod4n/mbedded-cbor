@@ -70,7 +70,8 @@ enum class error {
     invalid_path,
     incorrect_type,
     number_out_of_range,
-    cyclic_data_structure
+    cyclic_data_structure,
+    unpopulated_table_index
 };
 
 enum class condition { not_well_formed = 1, not_valid, not_supported, not_found };
@@ -124,6 +125,8 @@ public:
             return "number out of range";
         case error::cyclic_data_structure:
             return "cyclic data structure";
+        case error::unpopulated_table_index:
+            return "unpopulated table index";
         }
         return "unknown cbor error";
     }
@@ -152,6 +155,7 @@ public:
         case error::sharedref_not_complete:
         case error::reserved_simple_value:
         case error::invalid_path:
+        case error::unpopulated_table_index:
             return {static_cast<int>(condition::not_valid), *this};
         }
         return {value, *this};
@@ -369,6 +373,9 @@ struct array;
 
 template <class K, class V>
 struct map;
+
+template <class... T>
+struct packing_table {};
 
 template <std::uint64_t Number, class T>
 struct tagged {
@@ -654,6 +661,29 @@ class internal
     {
         std::vector<char> bytes;
         zero_initialized_encode<T>(bytes);
+        return std::define_static_array(bytes);
+    }
+
+    template <class U>
+    static consteval std::span<char const> record_keys()
+    {
+        std::vector<char> bytes;
+        head_encode(bytes, major_type::tag, 114);
+        static constexpr auto members = members_of<U>();
+        head_encode(bytes, major_type::array, members.size());
+        template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, members.size()))) {
+            if constexpr (has_integer_keys<U>) {
+                constexpr std::int64_t key = U::keys.at(i);
+                if (key >= 0)
+                    head_encode(bytes, major_type::unsigned_integer, static_cast<std::uint64_t>(key));
+                else
+                    head_encode(bytes, major_type::negative_integer, static_cast<std::uint64_t>(-1 - key));
+            } else {
+                constexpr std::string_view key = key_of(members[i]);
+                head_encode(bytes, major_type::text_string, key.size());
+                bytes.insert(bytes.end(), key.begin(), key.end());
+            }
+        }
         return std::define_static_array(bytes);
     }
 
