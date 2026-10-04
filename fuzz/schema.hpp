@@ -304,8 +304,8 @@ void compare(N const *native, R const &read)
 
 // Every value the reader gives is read: every element of a list and every pair of a map, a text must lie inside
 // the message. A document of a struct is read through every path of its type.
-template <class T>
-void read_all(cbor::document<T> doc, std::string_view message, source &in);
+template <class T, class Root>
+void read_all(cbor::document<T, Root> doc, std::string_view message, source &in);
 
 template <class R>
 void consume(R const &read, std::string_view const message, source &in)
@@ -333,8 +333,8 @@ void consume(R const &read, std::string_view const message, source &in)
     }
 }
 
-template <class T>
-void read_all(cbor::document<T> const doc, std::string_view const message, source &in)
+template <class T, class Root>
+void read_all(cbor::document<T, Root> const doc, std::string_view const message, source &in)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
     template for (constexpr std::meta::info text : texts) {
@@ -343,8 +343,8 @@ void read_all(cbor::document<T> const doc, std::string_view const message, sourc
     }
 }
 
-template <class T>
-void compare_all(T const &native, cbor::document<T> doc);
+template <class T, class Root>
+void compare_all(T const &native, cbor::document<T, Root> doc);
 
 template <class T>
 void read_target(std::string_view const message, source &in)
@@ -424,8 +424,8 @@ void fill(T &v, source &in, int const depth)
     }
 }
 
-template <class T>
-void compare_all(T const &native, cbor::document<T> const doc)
+template <class T, class Root>
+void compare_all(T const &native, cbor::document<T, Root> const doc)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
     template for (constexpr std::meta::info text : texts) {
