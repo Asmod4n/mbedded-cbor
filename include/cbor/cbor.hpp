@@ -407,10 +407,6 @@ result<T> decode(std::string_view bytes);
 template <class T>
 result<std::string, std::errc> encode(T const &value);
 
-template <class Table, class T>
-    requires is_packing_table<Table>
-result<std::string, std::errc> encode(T const &value);
-
 template <class T, class Target>
 result<std::size_t, std::errc> encode(T const &value, Target &&target);
 }
@@ -2159,9 +2155,6 @@ class internal
     template <class T>
     friend result<std::string, std::errc> generic::encode(T const &value);
 
-    template <class Table, class T>
-        requires is_packing_table<Table>
-    friend result<std::string, std::errc> generic::encode(T const &value);
 
     template <class T, class Target>
     friend result<std::size_t, std::errc> generic::encode(T const &value, Target &&target);
@@ -2594,7 +2587,7 @@ class internal
         }
     }
 
-    template <class Table = packing_table<>, class U>
+    template <class U>
     static std::size_t generic_size(U const &value)
     {
         if constexpr (std::same_as<U, bool> || std::same_as<U, std::nullptr_t>) {
@@ -2614,9 +2607,9 @@ class internal
             return initial_byte_size + head_size(digits) + digits;
 #endif
         } else if constexpr (is_std_variant<U>) {
-            return std::visit([](auto const &e) { return generic_size<Table>(e); }, value);
+            return std::visit([](auto const &e) { return generic_size(e); }, value);
         } else if constexpr (std::is_enum_v<U>) {
-            return generic_size<Table>(std::to_underlying(value));
+            return generic_size(std::to_underlying(value));
         } else if constexpr (std::is_integral_v<U>) {
             if constexpr (std::is_signed_v<U>)
                 return head_size(value < 0 ? static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(value))
@@ -2629,42 +2622,21 @@ class internal
                              std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
             return head_size(value.size()) + value.size();
         } else if constexpr (is_optional<U>) {
-            return value ? generic_size<Table>(*value) : initial_byte_size;
+            return value ? generic_size(*value) : initial_byte_size;
         } else if constexpr (is_tagged<U>) {
-            return head_size(U::number) + generic_size<Table>(value.content);
+            return head_size(U::number) + generic_size(value.content);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
             return head_size(std::tuple_size_v<U>) +
-                   std::apply([](auto const &...e) { return (std::size_t{0} + ... + generic_size<Table>(e)); }, value);
+                   std::apply([](auto const &...e) { return (std::size_t{0} + ... + generic_size(e)); }, value);
         } else if constexpr (is_map<U>) {
             std::size_t size = head_size(value.size());
             for (auto const &[k, v] : value)
-                size += generic_size<Table>(k) + generic_size<Table>(v);
+                size += generic_size(k) + generic_size(v);
             return size;
         } else if constexpr (requires { value.size(); typename U::value_type; }) {
             std::size_t size = head_size(value.size());
             for (auto const &e : value)
-                size += generic_size<Table>(e);
-            return size;
-        } else if constexpr (table_index<U>(Table{}) < table_size(Table{})) {
-            static constexpr auto members = members_of<U>();
-            static constexpr auto reference = record_reference<Table, U>();
-            std::size_t length = 0;
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
-                if (member_present(value.[:members[i]:]))
-                    length = i + 1;
-            }
-            std::size_t size = reference.size() + head_size(length);
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
-                auto const &m = value.[:members[i]:];
-                if (i < length) {
-                    if (!member_present(m))
-                        size += initial_byte_size;
-                    else if constexpr (is_optional<std::remove_cvref_t<decltype(m)>>)
-                        size += generic_size<Table>(*m);
-                    else
-                        size += generic_size<Table>(m);
-                }
-            }
+                size += generic_size(e);
             return size;
         } else {
             static constexpr auto members = members_of<U>();
@@ -2676,15 +2648,15 @@ class internal
                     ++present;
                     if constexpr (has_integer_keys<U>) {
                         constexpr std::int64_t key = U::keys.at(i);
-                        size += generic_size<Table>(key);
+                        size += generic_size(key);
                     } else {
                         constexpr std::string_view name = key_of(members[i]);
                         size += head_size(name.size()) + name.size();
                     }
                     if constexpr (is_optional<std::remove_cvref_t<decltype(m)>>)
-                        size += generic_size<Table>(*m);
+                        size += generic_size(*m);
                     else
-                        size += generic_size<Table>(m);
+                        size += generic_size(m);
                 }
             }
             return head_size(present) + size;
@@ -2697,7 +2669,7 @@ class internal
         return at + bytes.size();
     }
 
-    template <class Table = packing_table<>, class U>
+    template <class U>
     static std::size_t generic_write(std::span<char> const out, std::size_t at, U const &value)
     {
         constexpr auto simple = [](std::uint8_t const info) {
@@ -2731,9 +2703,9 @@ class internal
             return bytes_write(out, at, std::span<char const>(bytes).last(digits));
 #endif
         } else if constexpr (is_std_variant<U>) {
-            return std::visit([&](auto const &e) { return generic_write<Table>(out, at, e); }, value);
+            return std::visit([&](auto const &e) { return generic_write(out, at, e); }, value);
         } else if constexpr (std::is_enum_v<U>) {
-            return generic_write<Table>(out, at, std::to_underlying(value));
+            return generic_write(out, at, std::to_underlying(value));
         } else if constexpr (std::is_integral_v<U>) {
             if constexpr (std::is_signed_v<U>) {
                 if (value < 0)
@@ -2770,49 +2742,25 @@ class internal
                 out.subspan(at).front() = simple(std::to_underlying(simple_value::null));
                 return at + initial_byte_size;
             }
-            return generic_write<Table>(out, at, *value);
+            return generic_write(out, at, *value);
         } else if constexpr (is_tagged<U>) {
             at += head_write(out, at, major_type::tag, U::number);
-            return generic_write<Table>(out, at, value.content);
+            return generic_write(out, at, value.content);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
             at += head_write(out, at, major_type::array, std::tuple_size_v<U>);
-            std::apply([&](auto const &...e) { ((at = generic_write<Table>(out, at, e)), ...); }, value);
+            std::apply([&](auto const &...e) { ((at = generic_write(out, at, e)), ...); }, value);
             return at;
         } else if constexpr (is_map<U>) {
             at += head_write(out, at, major_type::map, value.size());
             for (auto const &[k, v] : value) {
-                at = generic_write<Table>(out, at, k);
-                at = generic_write<Table>(out, at, v);
+                at = generic_write(out, at, k);
+                at = generic_write(out, at, v);
             }
             return at;
         } else if constexpr (requires { value.size(); typename U::value_type; }) {
             at += head_write(out, at, major_type::array, value.size());
             for (auto const &e : value)
-                at = generic_write<Table>(out, at, e);
-            return at;
-        } else if constexpr (table_index<U>(Table{}) < table_size(Table{})) {
-            static constexpr auto members = members_of<U>();
-            static constexpr auto reference = record_reference<Table, U>();
-            std::size_t length = 0;
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
-                if (member_present(value.[:members[i]:]))
-                    length = i + 1;
-            }
-            at = bytes_write(out, at, reference);
-            at += head_write(out, at, major_type::array, length);
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
-                auto const &m = value.[:members[i]:];
-                if (i < length) {
-                    if (!member_present(m)) {
-                        out.subspan(at).front() = simple(std::to_underlying(simple_value::undefined));
-                        at += initial_byte_size;
-                    } else if constexpr (is_optional<std::remove_cvref_t<decltype(m)>>) {
-                        at = generic_write<Table>(out, at, *m);
-                    } else {
-                        at = generic_write<Table>(out, at, m);
-                    }
-                }
-            }
+                at = generic_write(out, at, e);
             return at;
         } else {
             static constexpr auto members = members_of<U>();
@@ -2827,16 +2775,16 @@ class internal
                 if (member_present(m)) {
                     if constexpr (has_integer_keys<U>) {
                         constexpr std::int64_t key = U::keys.at(i);
-                        at = generic_write<Table>(out, at, key);
+                        at = generic_write(out, at, key);
                     } else {
                         constexpr std::string_view name = key_of(members[i]);
                         at += head_write(out, at, major_type::text_string, name.size());
                         at = bytes_write(out, at, name);
                     }
                     if constexpr (is_optional<std::remove_cvref_t<decltype(m)>>)
-                        at = generic_write<Table>(out, at, *m);
+                        at = generic_write(out, at, *m);
                     else
-                        at = generic_write<Table>(out, at, m);
+                        at = generic_write(out, at, m);
                 }
             }
             return at;
@@ -3136,20 +3084,6 @@ CBOR_ALWAYS_INLINE inline result<std::string, std::errc> encode(T const &value)
     std::string out;
     out.resize_and_overwrite(size + internal::head_padding, [&](char *const p, std::size_t const n) {
         return internal::generic_write(std::span<char>(p, n), 0, value);
-    });
-    return out;
-}
-
-template <class Table, class T>
-    requires is_packing_table<Table>
-CBOR_ALWAYS_INLINE inline result<std::string, std::errc> encode(T const &value)
-{
-    static constexpr auto prefix = internal::packing_prefix(Table{});
-    std::size_t const size = prefix.size() + internal::generic_size<Table>(value);
-    std::string out;
-    out.resize_and_overwrite(size + internal::head_padding, [&](char *const p, std::size_t const n) {
-        std::span<char> const bytes(p, n);
-        return internal::generic_write<Table>(bytes, internal::bytes_write(bytes, 0, prefix), value);
     });
     return out;
 }
