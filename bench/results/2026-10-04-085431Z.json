@@ -1,0 +1,396 @@
+{
+ "what": "The noise of one binary built twice (a, b) under five settings of --benchmark_min_time: 0.01, 0.05, 0.1, 0.2 and 0.5 s. Benchmarks: schema encode of 100000 CTAP2 responses with fixed and with variable fields into a span, and the fixed ones into LMDB through the exact writer. ns per record.",
+ "why": "The owner asked for the shortest run that gives stable results.",
+ "how": "Google Benchmark, 3 rounds alternating a and b per setting, --benchmark_repetitions=3 --benchmark_enable_random_interleaving=true. Header: main 4ac7c1a with the exact writer (template parameter Exact).",
+ "finding": "0.01 s: a and b differ by up to 6.5 percent. From 0.05 s on they differ by at most 2.7 percent, at 0.1 s by at most 1.4 percent. A setting takes about 2, 6, 9, 16 and 36 s of wall time for both binaries. The absolute LMDB figure moves between settings (128 to 150 ns), so arms are compared only inside one run.",
+ "context": {
+  "commit": "mbedded-cbor main 4ac7c1a, dirty: header with the exact writer",
+  "flags": "-std=c++26 -freflection -O2 -march=x86-64-v4 -falign-functions=64 -falign-loops=64 -DNDEBUG -Wall -Wextra -Wpedantic -Werror",
+  "compiler": "g++ (SUSE Linux) 16.2.0",
+  "cxx_library": "libstdc++.so.6 of gcc 16.2",
+  "c_library": "glibc 2.44",
+  "lmdb": "0.9.35",
+  "benchmark": "1.9.5",
+  "kernel": "6.18.44-fc-v64",
+  "vm": "firecracker microVM",
+  "container": "podman, localhost/mbedded-cbor-tw-lmdb-gb, openSUSE Tumbleweed",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256_16": "39a8dd34f3afdd38",
+  "user": "uid 1000",
+  "priority": "nice 0, not raised",
+  "threads": 1,
+  "pinned": false
+ },
+ "results": {
+  "0.1": {
+   "memory_fixed": {
+    "b": [
+     26.44,
+     27.3,
+     26.43,
+     26.83,
+     26.38,
+     26.34,
+     25.64,
+     26.84,
+     25.94
+    ],
+    "a": [
+     25.8,
+     26.32,
+     25.84,
+     25.62,
+     26.08,
+     25.73,
+     26.15,
+     26.07,
+     26.78
+    ]
+   },
+   "memory_variable": {
+    "b": [
+     47.68,
+     47.23,
+     46.82,
+     47.34,
+     47.12,
+     47.66,
+     45.35,
+     47.59,
+     46.57
+    ],
+    "a": [
+     45.83,
+     47.37,
+     46.69,
+     45.68,
+     46.82,
+     46.85,
+     45.32,
+     47.35,
+     47.15
+    ]
+   },
+   "lmdb_fixed": {
+    "b": [
+     140.54,
+     139.89,
+     125.34,
+     135.32,
+     124.24,
+     125.18,
+     140.05,
+     132.92,
+     140.57
+    ],
+    "a": [
+     135.57,
+     132.41,
+     135.74,
+     129.16,
+     133.29,
+     124.67,
+     136.22,
+     135.86,
+     136.33
+    ]
+   }
+  },
+  "0.05": {
+   "lmdb_fixed": {
+    "b": [
+     142.0,
+     135.6,
+     145.85,
+     136.59,
+     144.22,
+     138.31,
+     137.45,
+     147.64,
+     149.95
+    ],
+    "a": [
+     159.5,
+     138.37,
+     145.2,
+     155.56,
+     143.36,
+     142.76,
+     137.28,
+     139.03,
+     136.06
+    ]
+   },
+   "memory_variable": {
+    "b": [
+     48.56,
+     49.39,
+     48.81,
+     49.47,
+     46.89,
+     47.4,
+     50.26,
+     49.58,
+     54.65
+    ],
+    "a": [
+     47.41,
+     49.56,
+     52.23,
+     48.22,
+     49.35,
+     51.08,
+     47.95,
+     53.52,
+     47.81
+    ]
+   },
+   "memory_fixed": {
+    "b": [
+     27.59,
+     27.33,
+     26.65,
+     25.87,
+     27.0,
+     26.29,
+     26.94,
+     26.86,
+     27.42
+    ],
+    "a": [
+     27.01,
+     26.41,
+     27.02,
+     26.84,
+     26.56,
+     27.38,
+     26.68,
+     26.21,
+     26.43
+    ]
+   }
+  },
+  "0.01": {
+   "memory_variable": {
+    "b": [
+     66.56,
+     75.64,
+     68.54,
+     53.63,
+     60.72,
+     58.59,
+     51.5,
+     57.36,
+     50.51
+    ],
+    "a": [
+     60.36,
+     61.76,
+     69.53,
+     60.29,
+     63.39,
+     54.55,
+     68.97,
+     64.57,
+     56.08
+    ]
+   },
+   "lmdb_fixed": {
+    "b": [
+     154.09,
+     149.66,
+     154.55,
+     152.6,
+     151.78,
+     150.66,
+     150.57,
+     162.0,
+     151.75
+    ],
+    "a": [
+     149.49,
+     139.77,
+     175.03,
+     152.34,
+     149.77,
+     144.98,
+     178.68,
+     152.21,
+     147.97
+    ]
+   },
+   "memory_fixed": {
+    "b": [
+     29.36,
+     30.02,
+     31.72,
+     28.85,
+     27.71,
+     30.21,
+     29.84,
+     29.54,
+     27.92
+    ],
+    "a": [
+     27.23,
+     26.08,
+     35.4,
+     29.07,
+     29.88,
+     27.72,
+     28.56,
+     26.64,
+     27.73
+    ]
+   }
+  },
+  "0.5": {
+   "lmdb_fixed": {
+    "b": [
+     126.2,
+     127.19,
+     128.4,
+     127.65,
+     124.95,
+     124.92,
+     133.53,
+     134.24,
+     127.82
+    ],
+    "a": [
+     128.18,
+     128.58,
+     126.44,
+     126.44,
+     128.51,
+     133.79,
+     126.63,
+     131.87,
+     126.77
+    ]
+   },
+   "memory_fixed": {
+    "b": [
+     26.74,
+     26.53,
+     26.2,
+     26.58,
+     25.64,
+     25.87,
+     26.21,
+     26.25,
+     25.84
+    ],
+    "a": [
+     27.08,
+     26.02,
+     25.75,
+     26.16,
+     25.73,
+     25.94,
+     25.62,
+     25.54,
+     26.6
+    ]
+   },
+   "memory_variable": {
+    "b": [
+     47.39,
+     48.54,
+     47.47,
+     51.38,
+     45.16,
+     44.75,
+     50.19,
+     45.41,
+     45.69
+    ],
+    "a": [
+     48.24,
+     46.94,
+     45.88,
+     46.58,
+     47.53,
+     46.14,
+     46.04,
+     44.8,
+     47.97
+    ]
+   }
+  },
+  "0.2": {
+   "memory_fixed": {
+    "a": [
+     26.06,
+     26.26,
+     25.81,
+     27.95,
+     26.73,
+     27.42,
+     26.3,
+     26.89,
+     26.5
+    ],
+    "b": [
+     25.87,
+     27.12,
+     27.61,
+     25.88,
+     26.51,
+     25.81,
+     26.89,
+     26.36,
+     27.51
+    ]
+   },
+   "lmdb_fixed": {
+    "a": [
+     138.4,
+     131.03,
+     129.27,
+     135.03,
+     146.11,
+     153.89,
+     127.64,
+     143.29,
+     135.67
+    ],
+    "b": [
+     139.62,
+     131.16,
+     150.38,
+     130.76,
+     133.58,
+     134.66,
+     130.17,
+     133.68,
+     131.5
+    ]
+   },
+   "memory_variable": {
+    "a": [
+     48.01,
+     46.42,
+     45.72,
+     49.99,
+     50.98,
+     47.92,
+     49.2,
+     47.18,
+     47.12
+    ],
+    "b": [
+     49.31,
+     46.74,
+     48.48,
+     50.08,
+     46.61,
+     45.43,
+     46.38,
+     45.96,
+     45.56
+    ]
+   }
+  }
+ }
+}
