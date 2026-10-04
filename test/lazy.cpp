@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <expected>
 #include <limits>
+#include <memory>
+#include <optional>
 #include <random>
 #include <span>
 #include <string>
@@ -476,6 +478,39 @@ TEST_CASE("lazy: a reference forward to a mark that navigation recorded is an er
     REQUIRE(first.has_value());
     test_binding binding;
     CHECK_EQ(cbor::lazy_decode<16>(binding, *first).error(), error::sharedref_not_complete);
+}
+
+namespace
+{
+
+struct buffer_owner {
+    std::string bytes;
+    bool *released;
+
+    ~buffer_owner()
+    {
+        *released = true;
+    }
+};
+
+} // namespace
+
+// lazy::from with an owner reads bytes that someone else holds, as the page of a read transaction of LMDB. Each
+// lazy that a step gives holds the owner too, so the bytes live until the last lazy of the document ends.
+TEST_CASE("lazy: from an owner holds the owner until the last lazy ends")
+{
+    bool released = false;
+    std::optional<cbor::lazy> name;
+    {
+        auto const owner = std::make_shared<buffer_owner>(encoded(M("user"s, M("name"s, "ann"s))), &released);
+        auto const doc = cbor::lazy::from(owner, owner->bytes);
+        REQUIRE(doc.has_value());
+        name.emplace(*doc.at("user").at("name"));
+    }
+    CHECK_FALSE(released);
+    CHECK_EQ(*name->get<std::string_view>(), "ann"sv);
+    name.reset();
+    CHECK(released);
 }
 
 // The member form: lazy::from takes the bytes by move and copies nothing; each step gives a result that the next
