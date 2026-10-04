@@ -69,7 +69,8 @@ enum class error {
     key_not_found,
     invalid_path,
     incorrect_type,
-    number_out_of_range
+    number_out_of_range,
+    cyclic_data_structure
 };
 
 enum class condition { not_well_formed = 1, not_valid, not_supported, not_found };
@@ -121,6 +122,8 @@ public:
             return "incorrect type";
         case error::number_out_of_range:
             return "number out of range";
+        case error::cyclic_data_structure:
+            return "cyclic data structure";
         }
         return "unknown cbor error";
     }
@@ -134,6 +137,7 @@ public:
         case error::indefinite_length:
         case error::nesting_depth_exceeded:
         case error::unsupported_value:
+        case error::cyclic_data_structure:
             return {static_cast<int>(condition::not_supported), *this};
         case error::not_indexable:
         case error::index_out_of_bounds:
@@ -3639,6 +3643,40 @@ public:
     walker &operator=(walker const &) = delete;
 };
 
+template <std::size_t DepthMax, class Binding>
+bool cycle_find(Binding &binding, typename Binding::value const &item,
+                std::vector<typename Binding::identity> &path)
+{
+    auto const identity = binding.value_identity(item);
+    if (identity && std::ranges::find(path, *identity) != path.end())
+        return true;
+    if (path.size() > DepthMax)
+        return false;
+    if (identity)
+        path.push_back(*identity);
+    bool found = false;
+    switch (binding.kind_of(item)) {
+    case kind::array:
+        if constexpr (requires { binding.array_size(item); })
+            for (std::uint64_t i = 0; !found && i < binding.array_size(item); ++i)
+                found = cycle_find<DepthMax>(binding, binding.array_at(item, i), path);
+        break;
+    case kind::map:
+        if constexpr (requires { binding.map_size(item); })
+            binding.map_for_each(item,
+                                 [&](typename Binding::value const &k, typename Binding::value const &v) {
+                                     found = found || cycle_find<DepthMax>(binding, k, path) ||
+                                             cycle_find<DepthMax>(binding, v, path);
+                                 });
+        break;
+    default:
+        break;
+    }
+    if (identity)
+        path.pop_back();
+    return found;
+}
+
 template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
 std::expected<std::size_t, std::error_code> encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
                                                         std::size_t const depth, bool const embedded)
@@ -3647,8 +3685,15 @@ std::expected<std::size_t, std::error_code> encode_from(Binding &binding, Writer
         walker<DepthMax, Binding, Writer, pass::plain> walk{binding, writer, nullptr, depth, embedded};
         walk.value(value);
         walk.keep(walk.out.flush());
-        if (walk.failure) [[unlikely]]
+        if (walk.failure) [[unlikely]] {
+            if constexpr (requires { binding.value_identity(value); }) {
+                std::vector<typename Binding::identity> path;
+                if (walk.failure == make_error_code(error::nesting_depth_exceeded) &&
+                    cycle_find<DepthMax>(binding, value, path))
+                    return std::unexpected(make_error_code(error::cyclic_data_structure));
+            }
             return std::unexpected(walk.failure);
+        }
         return walk.out.written;
     } else {
         sharing<Binding> shared;
