@@ -1,0 +1,37 @@
+{
+ "what": "Encode of the decoded twitter.cbor through ref_binding with sharedrefs::on, microseconds per document. v4: as in the run before (the write pass looks only at identities seen more than once; seen.reserve(1 << 17); seen on a std::pmr::monotonic_buffer_resource). v4b: v4 without the reserve. v5: v4, and the count pass returns after the identity of a value is counted when the value is neither an array, a map nor a registered tag, so it encodes no text, bytes or number into the discarding writer.",
+ "why": "The owner asked to make encode with shared references much faster. Strings are shared by identity only, through tags 28 and 29; v5 still counts the identity of a string.",
+ "how": "Google Benchmark, one binary per arm, each built twice (a, b). 3 rounds alternating, --benchmark_min_time=0.1s --benchmark_repetitions=3, random interleaving, GLIBC_TUNABLES trim_threshold, mmap_threshold and top_pad high.",
+ "finding": "v4 1240/1219, v4b 1351/1375 (the reserve is worth 10 percent), v5 1127/1097 (-10 percent against v4). From the present library (about 1750) to v5: -37 percent; off is about 264.",
+ "context": {
+  "commit": "mbedded-cbor main 56a4c5c, arms are patches on it",
+  "flags": "-std=c++26 -freflection -O2 -march=x86-64-v4 -falign-functions=64 -falign-loops=64 -DNDEBUG -Wall -Wextra -Wpedantic -Werror",
+  "compiler": "g++ (SUSE Linux) 16.2.0",
+  "cxx_library": "libstdc++.so.6 of gcc 16.2",
+  "c_library": "glibc 2.44",
+  "benchmark": "1.9.5",
+  "kernel": "6.18.44-fc-v64",
+  "vm": "firecracker microVM",
+  "container": "podman, localhost/mbedded-cbor-tw-lmdb-gb, openSUSE Tumbleweed",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256_16": "39a8dd34f3afdd38",
+  "user": "uid 1000",
+  "priority": "nice 0, not raised",
+  "threads": 1,
+  "pinned": false
+ },
+ "medians_us": {
+  "v4": [
+   1240,
+   1219
+  ],
+  "v4b": [
+   1351,
+   1375
+  ],
+  "v5": [
+   1127,
+   1097
+  ]
+ }
+}
