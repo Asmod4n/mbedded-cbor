@@ -728,17 +728,26 @@ class internal
 
     static constexpr std::size_t head_padding = sizeof(std::uint64_t);
 
+    template <bool Exact = false>
     CBOR_ALWAYS_INLINE static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
                                   std::uint64_t const argument)
     {
-        auto const field = out.subspan(at).template first<initial_byte_size + sizeof(std::uint64_t)>();
         bool const immediate = argument < std::to_underlying(additional_information::one_byte_argument);
         std::size_t const width = immediate ? 0 : head_size(argument) - initial_byte_size;
         std::uint64_t const info =
             immediate ? argument
                       : std::to_underlying(additional_information::one_byte_argument) + std::countr_zero(width);
-        field.front() = static_cast<char>(std::to_underlying(major) << 5 | info);
         auto const bytes = big_endian(argument << ((64 - 8 * width) & 63));
+        if constexpr (Exact) {
+            if (out.size() - at < initial_byte_size + sizeof(std::uint64_t)) [[unlikely]] {
+                auto const field = out.subspan(at, initial_byte_size + width);
+                field.front() = static_cast<char>(std::to_underlying(major) << 5 | info);
+                std::copy_n(bytes.begin(), width, field.subspan(initial_byte_size).begin());
+                return initial_byte_size + width;
+            }
+        }
+        auto const field = out.subspan(at).template first<initial_byte_size + sizeof(std::uint64_t)>();
+        field.front() = static_cast<char>(std::to_underlying(major) << 5 | info);
         std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(std::uint64_t)>().begin());
         return initial_byte_size + width;
     }
@@ -751,7 +760,7 @@ class internal
         std::copy(from.begin(), from.end(), field.begin());
     }
 
-    template <class E, class R>
+    template <class E, bool Exact, class R>
     CBOR_ALWAYS_INLINE static std::size_t elements_encode(std::span<char> const out, std::size_t const data, R const &range,
                                        std::size_t position)
     {
@@ -760,13 +769,13 @@ class internal
         for (auto const &e : range) {
             auto const field = out.subspan(at).template first<size>();
             zero_initialized_copy<E>(field);
-            position = value_encode<E>(out, field, e, position);
+            position = value_encode<E, Exact>(out, field, e, position);
             at += size;
         }
         return position;
     }
 
-    template <class V>
+    template <bool Exact, class V>
     CBOR_ALWAYS_INLINE static std::size_t reference_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
                                         V const &value, std::size_t position)
     {
@@ -779,12 +788,12 @@ class internal
                 position += fixed_size<E>();
                 auto const element = out.subspan(data).template first<fixed_size<E>()>();
                 zero_initialized_copy<E>(element);
-                position = value_encode<E>(out, element, *value, position);
+                position = value_encode<E, Exact>(out, element, *value, position);
                 length = 1;
             }
         } else if constexpr (is_text_range<U> || is_byte_range<U>) {
             length = std::ranges::size(value);
-            position += head_write(out, position, is_text_range<U> ? major_type::text_string : major_type::byte_string,
+            position += head_write<Exact>(out, position, is_text_range<U> ? major_type::text_string : major_type::byte_string,
                                    length);
             data = position;
             auto const from = std::as_bytes(std::span(value));
@@ -794,26 +803,26 @@ class internal
             using K = typename U::key_type;
             using M = typename U::mapped_type;
             length = std::ranges::size(value);
-            position += head_write(out, position, major_type::map, length);
+            position += head_write<Exact>(out, position, major_type::map, length);
             data = position;
             position += length * (fixed_size<K>() + fixed_size<M>());
             std::size_t at = data;
             for (auto const &[k, v] : value) {
                 auto const key = out.subspan(at).template first<fixed_size<K>()>();
                 zero_initialized_copy<K>(key);
-                position = value_encode<K>(out, key, k, position);
+                position = value_encode<K, Exact>(out, key, k, position);
                 at += fixed_size<K>();
                 auto const mapped = out.subspan(at).template first<fixed_size<M>()>();
                 zero_initialized_copy<M>(mapped);
-                position = value_encode<M>(out, mapped, v, position);
+                position = value_encode<M, Exact>(out, mapped, v, position);
                 at += fixed_size<M>();
             }
         } else {
             using E = std::ranges::range_value_t<U>;
             length = std::ranges::size(value);
-            position += head_write(out, position, major_type::array, length);
+            position += head_write<Exact>(out, position, major_type::array, length);
             data = position;
-            position = elements_encode<E>(out, data, value, position + length * fixed_size<E>());
+            position = elements_encode<E, Exact>(out, data, value, position + length * fixed_size<E>());
         }
         auto const offset = big_endian(static_cast<std::uint32_t>(data));
         auto const count = big_endian(static_cast<std::uint32_t>(length));
@@ -822,7 +831,7 @@ class internal
         return position;
     }
 
-    template <class T>
+    template <class T, bool Exact>
     CBOR_ALWAYS_INLINE static std::size_t value_encode(std::span<char> const out, std::span<char, fixed_size<T>()> const field,
                                     T const &value, std::size_t position)
     {
@@ -831,7 +840,7 @@ class internal
             field.front() = static_cast<char>(std::to_underlying(major_type::simple_float) << 5 |
                                               (std::to_underlying(simple_value::false_value) + static_cast<int>(value)));
         } else if constexpr (std::is_enum_v<U>) {
-            position = value_encode<std::underlying_type_t<U>>(out, field, std::to_underlying(value), position);
+            position = value_encode<std::underlying_type_t<U>, Exact>(out, field, std::to_underlying(value), position);
 #ifdef __SIZEOF_INT128__
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             uint128 magnitude = static_cast<uint128>(value);
@@ -870,14 +879,14 @@ class internal
                 constexpr std::size_t head = head_size(n);
                 std::size_t at = head;
                 for (auto const &e : value) {
-                    position = value_encode<E>(out, field.subspan(at).template first<fixed_size<E>()>(), e, position);
+                    position = value_encode<E, Exact>(out, field.subspan(at).template first<fixed_size<E>()>(), e, position);
                     at += fixed_size<E>();
                 }
             }
         } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
             template for (constexpr auto m : data_members<U>()) {
                 using M = typename[:std::meta::type_of(m):];
-                position = value_encode<M>(out, field.template subspan<member_offset<U, m>(), fixed_size<M>()>(),
+                position = value_encode<M, Exact>(out, field.template subspan<member_offset<U, m>(), fixed_size<M>()>(),
                                            value.[:m:], position);
             }
         } else if constexpr (is_inline_optional<U>) {
@@ -886,11 +895,11 @@ class internal
                 field.template subspan<1, 1>().front() =
                     static_cast<char>(std::to_underlying(major_type::simple_float) << 5 |
                                       std::to_underlying(simple_value::true_value));
-                position = value_encode<E>(out, field.template subspan<inline_optional_head, fixed_size<E>()>(), *value,
+                position = value_encode<E, Exact>(out, field.template subspan<inline_optional_head, fixed_size<E>()>(), *value,
                                            position);
             }
         } else {
-            position = reference_encode(out, field, value, position);
+            position = reference_encode<Exact>(out, field, value, position);
         }
         return position;
     }
@@ -1532,14 +1541,14 @@ class internal
         return size;
     }
 
-    template <class T>
+    template <bool Exact, class T>
     CBOR_ALWAYS_INLINE static std::size_t encoded_write(std::span<char> const bytes, T const &value, second_item const &second)
     {
         constexpr std::size_t first = fixed_size<T>();
         auto const root = bytes.template first<first>();
         zero_initialized_copy<T>(root);
-        std::size_t const position = first + head_write(bytes, first, major_type::array, second.items);
-        value_encode<T>(bytes, root, value, position);
+        std::size_t const position = first + head_write<Exact>(bytes, first, major_type::array, second.items);
+        value_encode<T, Exact>(bytes, root, value, position);
         return bytes.size() - head_padding;
     }
 #endif
@@ -3101,7 +3110,7 @@ CBOR_ALWAYS_INLINE inline result<std::string, std::errc> encode(T const &value)
         return std::unexpected(size.error());
     std::string out;
     out.resize_and_overwrite(*size + internal::head_padding, [&](char *const p, std::size_t const n) {
-        return internal::encoded_write(std::span<char>(p, n), value, second);
+        return internal::encoded_write<false>(std::span<char>(p, n), value, second);
     });
     return out;
 }
@@ -3121,31 +3130,41 @@ CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, 
     if constexpr (std::same_as<U, std::string>) {
         std::size_t const at = target.size();
         target.resize_and_overwrite(at + padded, [&](char *const p, std::size_t const n) {
-            return at + internal::encoded_write(std::span<char>(p, n).subspan(at), value, second);
+            return at + internal::encoded_write<false>(std::span<char>(p, n).subspan(at), value, second);
         });
         return *size;
     } else if constexpr (internal::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
         std::size_t const at = std::ranges::size(target);
         target.reserve(at + padded);
         std::ranges::fill_n(std::back_inserter(target), padded, char{});
-        internal::encoded_write(std::span<char>(target).subspan(at), value, second);
+        internal::encoded_write<false>(std::span<char>(target).subspan(at), value, second);
         target.resize(at + *size);
         return *size;
     } else if constexpr (!internal::byte_container<U> && requires { std::span<char>(target); }) {
         std::span<char> const out(target);
         if (out.size() >= padded) {
-            internal::encoded_write(out.first(padded), value, second);
+            internal::encoded_write<false>(out.first(padded), value, second);
             return *size;
         }
     }
-    std::string bytes(padded, '\0');
-    bytes.resize(internal::encoded_write(std::span<char>(bytes), value, second));
-    decltype(auto) message = internal::message_of(target, bytes.size());
-    if (auto const r = message.append(bytes); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    if (auto const r = message.done(bytes.size()); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    return bytes.size();
+    decltype(auto) message = internal::message_of(target, *size);
+    if constexpr (requires { std::span<char>(message); }) {
+        std::span<char> const out(message);
+        if (out.size() < *size) [[unlikely]]
+            return std::unexpected(std::errc::no_buffer_space);
+        internal::encoded_write<true>(out.first(*size), value, second);
+        if (auto const r = message.done(*size); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return *size;
+    } else {
+        std::string bytes(padded, '\0');
+        bytes.resize(internal::encoded_write<false>(std::span<char>(bytes), value, second));
+        if (auto const r = message.append(bytes); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (auto const r = message.done(bytes.size()); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return bytes.size();
+    }
 }
 
 #endif
