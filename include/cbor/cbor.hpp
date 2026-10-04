@@ -327,6 +327,12 @@ consteval std::size_t no_fixed_size()
     std::unreachable();
 }
 
+struct skip {};
+
+struct allow {};
+
+struct allowlist {};
+
 struct key {
     char const *text;
 
@@ -513,11 +519,23 @@ class internal
         return std::ranges::adjacent_find(keys) == keys.end();
     }
 
+    static consteval bool annotated(std::meta::info const entity, std::meta::info const type)
+    {
+        return std::ranges::any_of(std::meta::annotations_of(entity), [type](std::meta::info const a) {
+            return std::meta::remove_const(std::meta::type_of(a)) == type;
+        });
+    }
+
     template <class U>
     static consteval std::span<std::meta::info const> data_members()
     {
-        return std::define_static_array(
-            std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unprivileged()));
+        bool const only_allowed = annotated(^^U, ^^cbor::allowlist);
+        std::vector<std::meta::info> members;
+        for (std::meta::info const m :
+             std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unprivileged()))
+            if (!annotated(m, ^^cbor::skip) && (!only_allowed || annotated(m, ^^cbor::allow)))
+                members.push_back(m);
+        return std::define_static_array(members);
     }
 
     template <class U>
@@ -1290,9 +1308,7 @@ class internal
         using U = std::remove_cv_t<T>;
         if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
             std::expected<void, error> done;
-            template for (constexpr std::meta::info m :
-                          std::define_static_array(std::meta::nonstatic_data_members_of(
-                              ^^U, std::meta::access_context::unprivileged()))) {
+            template for (constexpr std::meta::info m : data_members<U>()) {
                 using M = typename[:std::meta::type_of(m):];
                 if (done)
                     done = value_read<DepthMax>(out.[:m:], bytes,
@@ -2197,8 +2213,7 @@ class internal
     template <class U>
     static consteval auto members_of()
     {
-        auto const members = std::define_static_array(
-            std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unprivileged()));
+        auto const members = data_members<U>();
         if (!has_integer_keys<U> && !keys_unique(members))
             std::unreachable();
         return members;
