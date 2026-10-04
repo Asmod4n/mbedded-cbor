@@ -2,9 +2,11 @@
 
 #ifdef __cpp_impl_reflection
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <limits>
 #include <map>
 #include <optional>
@@ -562,6 +564,52 @@ struct passkey_login {
 };
 
 } // namespace
+
+// A store such as LMDB hands out exactly the bytes it was asked for, and the next record may sit right
+// behind them. A writer whose allocate returns a span gets the message written straight into it, and no
+// byte behind the span changes, also when the last item is a head with no content after it.
+TEST_CASE("encode: into the exact span that a writer allocates")
+{
+    struct reserving {
+        std::array<char, 4096> store{};
+        std::size_t asked = 0;
+        std::size_t finished = 0;
+
+        struct message {
+            reserving &to;
+            explicit operator std::span<char>() const
+            {
+                return std::span(to.store).first(to.asked);
+            }
+            std::expected<void, std::errc> done(std::size_t const size)
+            {
+                to.finished = size;
+                return {};
+            }
+        };
+
+        message allocate(std::size_t const n)
+        {
+            asked = n;
+            return message{*this};
+        }
+    };
+
+    auto const check = [](auto const &value) {
+        std::string const expected = *cbor::encode(value);
+        reserving writer;
+        writer.store.fill('#');
+        REQUIRE_EQ(*cbor::encode(value, writer), expected.size());
+        CHECK_EQ(writer.asked, expected.size());
+        CHECK_EQ(writer.finished, expected.size());
+        CHECK_EQ(std::string_view(writer.store.data(), expected.size()), expected);
+        auto const behind = std::span(writer.store).subspan(expected.size());
+        CHECK(std::ranges::all_of(behind, [](char const c) { return c == '#'; }));
+    };
+    check(sample_garage);
+    check(passkey_login{{std::byte{1}, std::byte{2}}, std::nullopt, std::string{}});
+    check(passkey_login{{}, passkey_user{{}, ""}, std::nullopt});
+}
 
 // CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct lies in the
 // fixed item as an array of a presence flag and its fields, so a path to it reads no reference. Both forms stay
