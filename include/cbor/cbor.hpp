@@ -1371,12 +1371,12 @@ class internal
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; })
                 return std::type_identity<cbor::document<U, Root>>{};
             else if constexpr (is_fixed_string<U>)
-                return std::type_identity<cbor::owning_ref<std::string_view>>{};
+                return std::type_identity<std::string_view>{};
             else if constexpr (is_optional<U>)
                 return std::type_identity<
                     std::optional<typename decltype(path_result<Root, typename U::value_type, Path, At>())::type>>{};
             else if constexpr (is_text_range<U> || is_byte_range<U>)
-                return std::type_identity<cbor::owning_ref<std::string_view>>{};
+                return std::type_identity<std::string_view>{};
             else if constexpr (is_map<U>)
                 return std::type_identity<cbor::map<typename U::key_type, typename U::mapped_type, Root>>{};
             else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; })
@@ -1429,9 +1429,7 @@ class internal
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
                 return cbor::document<U, Root>{owner, bytes, field, floor};
             } else if constexpr (is_fixed_string<U>) {
-                auto const holder = std::make_shared<std::pair<std::shared_ptr<void const> const, std::string_view const>>(
-                    owner, std::string_view(field.template last<fixed_length<U>::value>()));
-                return cbor::owning_ref<std::string_view>(std::shared_ptr<std::string_view const>(holder, &holder->second));
+                return std::string_view(field.template last<fixed_length<U>::value>());
             } else if constexpr (is_inline_optional<U>) {
                 using E = typename U::value_type;
                 using X = typename decltype(path_result<Root, E, Path, At>())::type;
@@ -1461,9 +1459,7 @@ class internal
                 auto const r = reference_read<Root, is_text_range<U> ? major_type::text_string : major_type::byte_string>(bytes, field, floor, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                auto const holder = std::make_shared<std::pair<std::shared_ptr<void const> const, std::string_view const>>(
-                    owner, bytes.substr(r->data, r->length));
-                return cbor::owning_ref<std::string_view>(std::shared_ptr<std::string_view const>(holder, &holder->second));
+                return bytes.substr(r->data, r->length);
             } else if constexpr (is_map<U>) {
                 using K = typename U::key_type;
                 using V = typename U::mapped_type;
@@ -3522,6 +3518,9 @@ public:
     {
         return internal::path_walk<T, U, Path, 0>(doc.bytes, doc.owner, doc.field, doc.dir);
     }
+
+    template <fixed_string Path, class U>
+    static auto at_path(document<U, T> const &&doc) = delete;
 
     static auto view(std::shared_ptr<void const> owner, std::string_view const bytes)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())

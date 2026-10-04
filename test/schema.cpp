@@ -331,7 +331,7 @@ TEST_CASE("at_path: fixed fields give the value")
     CHECK_EQ(cbor::schema<vehicle>::at_path<".spare[1].diameter">(*doc), 16u);
     CHECK_EQ(cbor::schema<vehicle>::at_path<".spare[0].airPressure">(*doc), 2.5f);
     auto const code = cbor::schema<vehicle>::at_path<".code">(*doc);
-    CHECK_EQ(*code, "ABCD"sv);
+    CHECK_EQ(code, "ABCD"sv);
     auto const motor = cbor::schema<vehicle>::at_path<".motor">(*doc);
     CHECK_EQ(cbor::schema<vehicle>::at_path<".horsepower">(motor), 300u);
 }
@@ -344,7 +344,7 @@ TEST_CASE("at_path: parts of variable size give an expected")
     REQUIRE(doc.has_value());
     auto const make = cbor::schema<vehicle>::at_path<".make">(*doc);
     REQUIRE(make.has_value());
-    CHECK_EQ(**make, "Tesla"sv);
+    CHECK_EQ(*make, "Tesla"sv);
     CHECK_EQ(*cbor::schema<vehicle>::at_path<".wheels[2].diameter">(*doc), 19u);
     CHECK_EQ(*cbor::schema<vehicle>::at_path<".wheels[1].airPressure">(*doc), 3.0f);
     CHECK_EQ(cbor::schema<vehicle>::at_path<".wheels[3].diameter">(*doc).error(), error::index_out_of_bounds);
@@ -395,14 +395,16 @@ TEST_CASE("at_path: a fixed byte array is read inline")
     auto const doc = cbor::schema<badge>::view(bytes);
     REQUIRE(doc.has_value());
     auto const mac_read = cbor::schema<badge>::at_path<".mac">(*doc);
-    CHECK_EQ(*mac_read, "\x01\x02\x03\x04"sv);
+    CHECK_EQ(mac_read, "\x01\x02\x03\x04"sv);
     CHECK_EQ(cbor::schema<badge>::at_path<".tone">(*doc), shade::light);
     std::string zeros = bytes;
     std::size_t const mac =
         static_cast<std::size_t>(doc->field.data() - doc->bytes.data()) + cbor::schema<badge>::member_offset<^^badge::mac>();
     zeros.replace(mac + 1, 4, "\x00\x00\x00\x00"s);
-    auto const zero_read = cbor::schema<badge>::at_path<".mac">(*cbor::schema<badge>::view(zeros));
-    CHECK_EQ(*zero_read, "\x00\x00\x00\x00"sv);
+    auto const zero_doc = cbor::schema<badge>::view(zeros);
+    REQUIRE(zero_doc.has_value());
+    auto const zero_read = cbor::schema<badge>::at_path<".mac">(*zero_doc);
+    CHECK_EQ(zero_read, "\x00\x00\x00\x00"sv);
 }
 
 #endif
@@ -440,14 +442,16 @@ TEST_CASE("cbor::array: a list of structs, strings and lists, by index and in or
     for (auto const t : *tires)
         sum += *cbor::schema<garage>::at_path<".diameter">(*t);
     CHECK_EQ(sum, 17u + 18u + 19u);
-    CHECK_EQ(cbor::schema<garage>::at_path<".airPressure">(*tires->at(1)), 3.0f);
+    auto const second = tires->at(1);
+    REQUIRE(second.has_value());
+    CHECK_EQ(cbor::schema<garage>::at_path<".airPressure">(*second), 3.0f);
     CHECK_EQ(tires->at(3).error(), error::index_out_of_bounds);
 
     auto const names = cbor::schema<garage>::at_path<".names">(*doc);
     REQUIRE(names.has_value());
     auto const name = names->at(1);
     REQUIRE(name.has_value());
-    CHECK_EQ(**name, "bc"sv);
+    CHECK_EQ(*name, "bc"sv);
 
     auto const rows = cbor::schema<garage>::at_path<".rows">(*doc);
     REQUIRE(rows.has_value());
@@ -472,7 +476,7 @@ TEST_CASE("cbor::map: the pairs of a std::map in order")
     for (auto const [key, value] : *owners) {
         REQUIRE(key.has_value());
         REQUIRE(value.has_value());
-        seen += std::to_string(*key) + "=" + std::string(**value) + ";";
+        seen += std::to_string(*key) + "=" + std::string(*value) + ";";
     }
     CHECK_EQ(seen, "7=seven;9=nine;");
     CHECK_EQ(owners->value_at(2).error(), error::index_out_of_bounds);
@@ -794,13 +798,13 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
     REQUIRE(user->has_value());
     auto const name = cbor::schema<passkey_login>::at_path<".name">(**user);
     REQUIRE(name.has_value());
-    CHECK_EQ(**name, "alice"sv);
+    CHECK_EQ(*name, "alice"sv);
     auto const id = cbor::schema<passkey_login>::at_path<".id">(**user);
     REQUIRE(id.has_value());
-    CHECK_EQ((*id)->size(), 1u);
+    CHECK_EQ(id->size(), 1u);
     auto const note = cbor::schema<passkey_login>::at_path<".note">(*doc);
     REQUIRE(note.has_value());
-    CHECK_EQ(*note->value(), "hello"sv);
+    CHECK_EQ(note->value(), "hello"sv);
     auto const decoded_back = *cbor::schema<passkey_login>::decode(bytes);
     passkey_login const &back = *decoded_back;
     REQUIRE(back.user.has_value());
@@ -983,12 +987,12 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
     CHECK_EQ(cbor::schema<chain0>::at_path<".next.next.next.next.next.next.next.next.next.v">(inner), 19u);
     auto const text = cbor::schema<chain0>::at_path<".next.next.next.next.next.next.next.next.next.text">(inner);
     REQUIRE(text.has_value());
-    CHECK_EQ(**text, "ab"sv);
+    CHECK_EQ(*text, "ab"sv);
     auto const words = cbor::schema<chain0>::at_path<".next.next.next.next.next.next.next.next.next.words">(inner);
     REQUIRE(words.has_value());
     auto const word = words->at(1);
     REQUIRE(word.has_value());
-    CHECK_EQ(**word, "yz"sv);
+    CHECK_EQ(*word, "yz"sv);
 }
 
 // draft-ietf-cbor-packed-19 2.2 Table 1: with 17 struct types the directory is index 17 and the first shared item
@@ -1010,7 +1014,7 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
     REQUIRE(doc.has_value());
     auto const text = cbor::schema<chain3>::at_path<".next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(*doc);
     REQUIRE(text.has_value());
-    CHECK_EQ(**text, "ab"sv);
+    CHECK_EQ(*text, "ab"sv);
 
     std::string broken = bytes;
     broken.at(broken.size() - 7) = '\x00';
@@ -1095,7 +1099,7 @@ std::string ticket_bytes()
 // the caller would read freed memory, and the address sanitizer reports that read.
 TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 {
-    auto const t = cbor::schema<ticket>::decode(ticket_bytes());
+    cbor::result<cbor::oref<ticket>> const t = cbor::schema<ticket>::decode(ticket_bytes());
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);
@@ -1118,24 +1122,21 @@ TEST_CASE("decode: the result keeps the owner after the caller releases it")
     CHECK_EQ((*t)->seats.at(1), sample_ticket.seats.at(1));
 }
 
-// view(bytes) copies the message, and a path result that points into the bytes carries the owner with it. The
-// document and the message are both gone when the text is read. The test exists because a text from a path must
-// not depend on the life of the document it came from.
-TEST_CASE("at_path: a text result outlives the document and the bytes")
+// view(bytes) copies the message once, and the document holds that copy. A text from a path is a view onto it,
+// with no allocation of its own. The test exists because the document alone must keep every text it gives valid,
+// also after the caller's string is gone. A path on a temporary document does not compile.
+TEST_CASE("at_path: a text result lives as long as its document")
 {
-    std::optional<cbor::owning_ref<std::string_view>> holder;
-    std::optional<cbor::oref<std::string_view>> seat;
+    std::optional<cbor::document<ticket>> doc;
     {
-        auto const doc = cbor::schema<ticket>::view(ticket_bytes());
-        REQUIRE(doc.has_value());
-        holder = *cbor::schema<ticket>::at_path<".holder">(*doc);
-        auto const seats = *cbor::schema<ticket>::at_path<".seats">(*doc);
-        seat = *seats.at(1);
+        auto d = cbor::schema<ticket>::view(ticket_bytes());
+        REQUIRE(d.has_value());
+        doc = std::move(*d);
     }
-    REQUIRE(holder.has_value());
-    REQUIRE(seat.has_value());
-    CHECK_EQ(**holder, sample_ticket.holder);
-    CHECK_EQ(**seat, sample_ticket.seats.at(1));
+    auto const holder = *cbor::schema<ticket>::at_path<".holder">(*doc);
+    auto const seats = *cbor::schema<ticket>::at_path<".seats">(*doc);
+    CHECK_EQ(holder, sample_ticket.holder);
+    CHECK_EQ(*seats.at(1), sample_ticket.seats.at(1));
 }
 
 #endif

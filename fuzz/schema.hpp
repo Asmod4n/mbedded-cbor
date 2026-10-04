@@ -271,8 +271,8 @@ void compare(N const *native, R const &read)
         compare(native, *read);
     } else {
         require(native != nullptr);
-        if constexpr (std::is_same_v<R, cbor::owning_ref<std::string_view>>) {
-            require(*read == native_bytes(*native));
+        if constexpr (std::is_same_v<R, std::string_view>) {
+            require(read == native_bytes(*native));
         } else if constexpr (optional_type<R>) {
             require(read.has_value() == native->has_value());
             if (read)
@@ -310,10 +310,10 @@ void consume(R const &read, std::string_view const message, source &in)
     if constexpr (expected_type<R>) {
         if (read)
             consume(*read, message, in);
-    } else if constexpr (std::is_same_v<R, cbor::owning_ref<std::string_view>>) {
-        auto const begin = reinterpret_cast<std::uintptr_t>(read->data());
+    } else if constexpr (std::is_same_v<R, std::string_view>) {
+        auto const begin = reinterpret_cast<std::uintptr_t>(read.data());
         auto const first = reinterpret_cast<std::uintptr_t>(message.data());
-        require(read->empty() || (begin >= first && begin + read->size() <= first + message.size()));
+        require(read.empty() || (begin >= first && begin + read.size() <= first + message.size()));
     } else if constexpr (requires { read.key_at(0); }) {
         for (auto const [k, v] : read) {
             consume(k, message, in);
