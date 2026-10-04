@@ -84,12 +84,13 @@ TEST_CASE("fixed_size: text, bytes and arrays of fixed length")
     CHECK_EQ(cbor::fixed_size<std::uint32_t[2]>(), 11u);
 }
 
-// A struct is a map: its head, then for each member a text key and the fixed value. wheel: a3 head, "diameter"
-// 9 + 3, "airPressure" 12 + 5, "snowTires" 10 + 1.
-TEST_CASE("fixed_size: a struct is a map of its members")
+// draft-ietf-cbor-packed-19 4.2: a struct is a record, its values behind a straight reference to the table entry
+// that holds its keys. The reference is d8 80 to d8 87, the value array has a head of 9a and 4 bytes, so 7 bytes
+// come before the values. wheel: 7, then 3 + 5 + 1.
+TEST_CASE("fixed_size: a struct is a record of its values")
 {
-    CHECK_EQ(cbor::fixed_size<wheel>(), 41u);
-    CHECK_EQ(cbor::fixed_size<std::array<wheel, 4>>(), 1u + 4u * 41u);
+    CHECK_EQ(cbor::fixed_size<wheel>(), 16u);
+    CHECK_EQ(cbor::fixed_size<std::array<wheel, 4>>(), 1u + 4u * 16u);
 }
 
 // A part of variable size lives in the second item. The first item holds 82 1a <offset> 1a <length>.
@@ -140,42 +141,35 @@ struct größe {
 
 } // namespace
 
-// The offset points at the head of the value, behind the key. wheel: a3, "diameter" 9 bytes, so 10; then 3 for
-// its value and "airPressure" 12 bytes, so 25; then 5 and "snowTires" 10 bytes, so 40.
-TEST_CASE("member_offset: the head of each value, behind its key")
+// The offset points at the head of a value. The keys are in the table, so 7 bytes of the record come first. wheel:
+// diameter at 7, airPressure behind its 3 bytes at 10, snowTires behind its 5 bytes at 15.
+TEST_CASE("member_offset: the head of each value, behind the head of the record")
 {
-    CHECK_EQ(cbor::member_offset<wheel, ^^wheel::diameter>(), 10u);
-    CHECK_EQ(cbor::member_offset<wheel, ^^wheel::airPressure>(), 25u);
-    CHECK_EQ(cbor::member_offset<wheel, ^^wheel::snowTires>(), 40u);
-    CHECK_EQ(cbor::member_offset<wheel const, ^^wheel::snowTires>(), 40u);
+    CHECK_EQ(cbor::member_offset<wheel, ^^wheel::diameter>(), 7u);
+    CHECK_EQ(cbor::member_offset<wheel, ^^wheel::airPressure>(), 10u);
+    CHECK_EQ(cbor::member_offset<wheel, ^^wheel::snowTires>(), 15u);
+    CHECK_EQ(cbor::member_offset<wheel const, ^^wheel::snowTires>(), 15u);
 }
 
-// A nested struct is a map at the offset of its member, so offsets add up. car: a3 1, "seats" 6, its value 2,
-// "motor" 6, so the engine map is at 15; inside it a2, "horsepower" 11, so 12.
+// A nested struct is a record at the offset of its member, so offsets add up. car: 7, seats 2, so the engine record
+// is at 9; inside it horsepower at 7.
 TEST_CASE("member_offset: offsets of nested structs add up")
 {
-    CHECK_EQ(cbor::member_offset<car, ^^car::motor>(), 15u);
-    CHECK_EQ(cbor::member_offset<engine, ^^engine::horsepower>(), 12u);
-    CHECK_EQ(cbor::member_offset<car, ^^car::hasNavSystem>(), 15u + cbor::fixed_size<engine>() + 13u);
+    CHECK_EQ(cbor::member_offset<car, ^^car::motor>(), 9u);
+    CHECK_EQ(cbor::member_offset<engine, ^^engine::horsepower>(), 7u);
+    CHECK_EQ(cbor::member_offset<car, ^^car::hasNavSystem>(), 9u + cbor::fixed_size<engine>());
 }
 
-// RFC 8949 3: a map of 24 or more pairs and a text of 24 or more bytes need a head of two bytes.
-TEST_CASE("member_offset: a long map head and a long key head")
+// The count of values has a head of 9a and 4 bytes whatever the count, so a member added later moves no offset, and
+// a long name or a name in UTF-8 takes no place in the record.
+TEST_CASE("member_offset: the record head has one width for any count and any name")
 {
-    // b8 1e, then "m00" 4 bytes, so 6; each member takes 4 + 2.
-    CHECK_EQ(cbor::member_offset<thirty, ^^thirty::m00>(), 6u);
-    CHECK_EQ(cbor::member_offset<thirty, ^^thirty::m29>(), 2u + 29u * 6u + 4u);
-    CHECK_EQ(cbor::fixed_size<thirty>(), 2u + 30u * 6u);
-    // a2, then 78 1e and the 30 bytes of the name.
-    CHECK_EQ(cbor::member_offset<long_name, ^^long_name::a_member_name_of_twenty_nine_b>(), 1u + 2u + 30u);
-    CHECK_EQ(cbor::fixed_size<empty>(), 1u);
-}
-
-// A key is CBOR text, so it is UTF-8 (RFC 8949 3.1): "höhe" has 5 bytes, not 4.
-TEST_CASE("member_offset: a key is counted in UTF-8 bytes")
-{
-    CHECK_EQ(cbor::member_offset<größe, ^^größe::höhe>(), 1u + 1u + 5u);
-    CHECK_EQ(cbor::member_offset<größe, ^^größe::b>(), 7u + 2u + 2u);
+    CHECK_EQ(cbor::member_offset<thirty, ^^thirty::m00>(), 7u);
+    CHECK_EQ(cbor::member_offset<thirty, ^^thirty::m29>(), 7u + 29u * 2u);
+    CHECK_EQ(cbor::fixed_size<thirty>(), 7u + 30u * 2u);
+    CHECK_EQ(cbor::member_offset<long_name, ^^long_name::a_member_name_of_twenty_nine_b>(), 7u);
+    CHECK_EQ(cbor::fixed_size<empty>(), 7u);
+    CHECK_EQ(cbor::member_offset<größe, ^^größe::b>(), 9u);
 }
 
 #endif
@@ -213,103 +207,78 @@ std::string schema_bytes(auto const &value)
     return w.bytes;
 }
 
-// The schema encoding is two CBOR items. Every byte is well-formed, so the generic decoder finds the end of each.
-void check_two_items(std::string const &bytes)
+// The schema encoding is one CBOR item, tag 113 over the table and the two parts. Every byte is well-formed, so
+// the generic decoder finds its end at the end of the message.
+void check_one_item(std::string const &bytes)
 {
-    auto const first = cbor::doc_end<16>(bytes);
-    REQUIRE(first.has_value());
-    auto const second = cbor::doc_end<16>(std::string_view(bytes).substr(*first));
-    REQUIRE(second.has_value());
-    CHECK_EQ(*first + *second, bytes.size());
+    auto const end = cbor::doc_end<16>(bytes);
+    REQUIRE(end.has_value());
+    CHECK_EQ(*end, bytes.size());
 }
 
 } // namespace
 
-// Item 1 is a map with every number in the width of its type; a string is 82 1a <offset> 1a <length> into item 2.
-// Item 2 is an array of one text; the offset counts from the start of the message (27 bytes of item 1, then 81 and
-// the head 62) and points at the data. The bytes are written from RFC 8949 3 by hand.
+// draft-ietf-cbor-packed-19 3.1 and 4.2: tag 113 holds the table, one record function tag 114 over the keys, and
+// then an array of the two parts. Part 1 is the record: d8 80, the count 9a 00 00 00 03, every number in the width of
+// its type, and a string as 82 1a <offset> 1a <length> into part 2. The table takes 19 bytes and the record 22, so
+// part 2 starts at 41 with 81 and the head 62; the offset counts from the start of the message and is 43 (2b).
+// The bytes are written from the draft and RFC 8949 3 by hand.
 TEST_CASE("encode: a struct with a number, a bool and a string")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
-    CHECK_EQ(bytes, "\xa3\x62id\x19\x00\x05\x62ok\xf5\x64name\x82\x1a\x00\x00\x00\x1d\x1a\x00\x00\x00\x02"
+    CHECK_EQ(bytes, "\xd8\x71\x82\x81\xd8\x72\x83\x62id\x62ok\x64name\x82"
+                    "\xd8\x80\x9a\x00\x00\x00\x03\x19\x00\x05\xf5\x82\x1a\x00\x00\x00\x2b\x1a\x00\x00\x00\x02"
                     "\x81\x62"
                     "ab"s);
-    check_two_items(bytes);
+    check_one_item(bytes);
 }
 
 // A negative int16 is major type 1 with -1 - n in two bytes (RFC 8949 3.1). A float stays binary32 (fa). A list of
-// uint16 is an array in item 2 whose elements keep their width. An empty optional has length 0 and puts no item
-// into item 2; its offset is the end of item 2, so it still points forward.
+// uint16 is an array in part 2 whose elements keep their width. An empty optional has length 0 and puts no item
+// into part 2; its offset is the end of part 2, so it still points forward. Table 16 bytes, record 37, so part 2
+// starts at 53: 81, the list head 82 at 54, its data at 55 (37), the end at 61 (3d).
 TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
 {
     std::string const bytes = schema_bytes(measures{-5, 1.5f, {7, 8}, std::nullopt});
-    CHECK_EQ(bytes, "\xa4\x61t\x39\x00\x04\x61\x66\xfa\x3f\xc0\x00\x00"
-                    "\x61v\x82\x1a\x00\x00\x00\x29\x1a\x00\x00\x00\x02"
-                    "\x61o\x82\x1a\x00\x00\x00\x2f\x1a\x00\x00\x00\x00"
+    CHECK_EQ(bytes, "\xd8\x71\x82\x81\xd8\x72\x84\x61t\x61\x66\x61v\x61o\x82"
+                    "\xd8\x80\x9a\x00\x00\x00\x04\x39\x00\x04\xfa\x3f\xc0\x00\x00"
+                    "\x82\x1a\x00\x00\x00\x37\x1a\x00\x00\x00\x02"
+                    "\x82\x1a\x00\x00\x00\x3d\x1a\x00\x00\x00\x00"
                     "\x81\x82\x19\x00\x07\x19\x00\x08"s);
-    check_two_items(bytes);
+    check_one_item(bytes);
 }
 
-// The elements of a list are maps of fixed size, so element i is at i times that size. A string inside an element
-// goes behind the whole block of elements, in the order the encoder meets it.
+// The elements of a list are records of fixed size, so element i is at i times that size. The table holds two
+// entries, people and named; a named record refers to entry 1 with d8 81. A string inside an element goes behind
+// the whole block of elements, in the order the encoder meets it. Table 20 bytes, record 18, part 2 at 38: 83, the
+// list head 82, the elements at 40 (28) and 58, the text "x" with its data at 77 (4d), "yz" at 79 (4f).
 TEST_CASE("encode: a list of structs that hold strings")
 {
     std::string const bytes = schema_bytes(people{{{"x"}, {"yz"}}});
-    CHECK_EQ(bytes, "\xa1\x66people\x82\x1a\x00\x00\x00\x15\x1a\x00\x00\x00\x02"
+    CHECK_EQ(bytes, "\xd8\x71\x82\x82\xd8\x72\x81\x66people\xd8\x72\x81\x61n\x82"
+                    "\xd8\x80\x9a\x00\x00\x00\x01\x82\x1a\x00\x00\x00\x28\x1a\x00\x00\x00\x02"
                     "\x83\x82"
-                    "\xa1\x61n\x82\x1a\x00\x00\x00\x32\x1a\x00\x00\x00\x01"
-                    "\xa1\x61n\x82\x1a\x00\x00\x00\x34\x1a\x00\x00\x00\x02"
+                    "\xd8\x81\x9a\x00\x00\x00\x01\x82\x1a\x00\x00\x00\x4d\x1a\x00\x00\x00\x01"
+                    "\xd8\x81\x9a\x00\x00\x00\x01\x82\x1a\x00\x00\x00\x4f\x1a\x00\x00\x00\x02"
                     "\x61x\x62yz"s);
-    check_two_items(bytes);
+    check_one_item(bytes);
 }
 
 #endif
 
 #ifdef __cpp_impl_reflection
 
-// view checks one thing: the first item has the size that the schema gives it. A shorter message cannot hold
-// the fixed fields, and a longer one is a newer sender or a second item.
-TEST_CASE("view: a struct checks only the size of the first item")
+// view checks two things: the table is the table of the type, byte for byte, and the record has the size that the
+// schema gives it. login: 19 bytes of table and 22 of record. A table of other keys is another type.
+TEST_CASE("view: a struct checks its table and the size of its record")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
     CHECK(cbor::view<login>(bytes).has_value());
-    CHECK(cbor::view<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>())).has_value());
-    CHECK_EQ(cbor::view<login>(std::string_view(bytes).substr(0, cbor::fixed_size<login>() - 1)).error(),
-             error::too_little_data);
-}
-
-namespace
-{
-
-struct buffer_owner {
-    std::string bytes;
-    bool *released;
-
-    ~buffer_owner()
-    {
-        *released = true;
-    }
-};
-
-} // namespace
-
-// The bytes of a view can belong to someone else, as the page of a read transaction of LMDB belongs to that
-// transaction. The document holds the owner, so the bytes live until the last copy of the document ends, and
-// a field read after the caller dropped its own handle reads memory that is still there.
-TEST_CASE("view: the document holds the owner of its bytes")
-{
-    bool released = false;
-    std::optional<cbor::document<login>> doc;
-    {
-        auto const owner = std::make_shared<buffer_owner>(schema_bytes(login{5, true, "ab"}), &released);
-        doc.emplace(*cbor::view<login>(owner, owner->bytes));
-    }
-    CHECK_FALSE(released);
-    CHECK_EQ(cbor::at_path_compiled<login, ".id">(*doc), 5u);
-    CHECK_EQ(*cbor::at_path_compiled<login, ".name">(*doc), "ab"sv);
-    CHECK_EQ(cbor::view<login>(std::make_shared<std::string const>("\xa1"s), "\xa1"sv).error(), error::too_little_data);
-    doc.reset();
-    CHECK(released);
+    CHECK(cbor::view<login>(std::string_view(bytes).substr(0, 41)).has_value());
+    CHECK_EQ(cbor::view<login>(std::string_view(bytes).substr(0, 40)).error(), error::too_little_data);
+    std::string other = bytes;
+    other.replace(8, 2, "ID");
+    CHECK_EQ(cbor::view<login>(other).error(), error::incorrect_type);
 }
 
 #endif
@@ -373,7 +342,8 @@ TEST_CASE("at_path_compiled: parts of variable size give an expected")
 TEST_CASE("at_path_compiled: a broken offset is an error")
 {
     std::string bytes = schema_bytes(sample_vehicle);
-    std::size_t const make = cbor::member_offset<vehicle, ^^vehicle::make>();
+    std::size_t const make = static_cast<std::size_t>(cbor::view<vehicle>(bytes)->field.data() - bytes.data()) +
+                             cbor::member_offset<vehicle, ^^vehicle::make>();
     std::string backward = bytes;
     backward.replace(make + 2, 4, "\x00\x00\x00\x01"s);
     CHECK_EQ(cbor::at_path_compiled<vehicle, ".make">(*cbor::view<vehicle>(backward)).error(), error::too_little_data);
@@ -407,7 +377,8 @@ TEST_CASE("at_path_compiled: a fixed byte array is read inline")
     CHECK_EQ(cbor::at_path_compiled<badge, ".mac">(*doc), "\x01\x02\x03\x04"sv);
     CHECK_EQ(cbor::at_path_compiled<badge, ".tone">(*doc), shade::light);
     std::string zeros = bytes;
-    std::size_t const mac = cbor::member_offset<badge, ^^badge::mac>();
+    std::size_t const mac =
+        static_cast<std::size_t>(doc->field.data() - bytes.data()) + cbor::member_offset<badge, ^^badge::mac>();
     zeros.replace(mac + 1, 4, "\x00\x00\x00\x00"s);
     CHECK_EQ(cbor::at_path_compiled<badge, ".mac">(*cbor::view<badge>(zeros)), "\x00\x00\x00\x00"sv);
 }
@@ -537,7 +508,7 @@ void reference_append(std::string &out, std::uint32_t const value)
 
 void node_append(std::string &out, std::uint32_t const data, std::uint32_t const length)
 {
-    out += "\xa1\x68" "children" "\x82"sv;
+    out += "\xd8\x80\x9a\x00\x00\x00\x01\x82"sv;
     reference_append(out, data);
     reference_append(out, length);
 }
@@ -550,8 +521,9 @@ std::string node_chain(std::size_t const levels)
     std::string head;
     reference_append(head, static_cast<std::uint32_t>(levels + 1));
     head.front() = '\x9a';
-    std::string out;
-    node_append(out, static_cast<std::uint32_t>(cbor::fixed_size<node>() + head.size() + 1), levels == 0 ? 0 : 1);
+    std::string out = "\xd8\x71\x82\x81\xd8\x72\x81\x68" "children" "\x82"s;
+    node_append(out, static_cast<std::uint32_t>(out.size() + cbor::fixed_size<node>() + head.size() + 1),
+                levels == 0 ? 0 : 1);
     out += head;
     for (std::size_t k = 0; k < levels; ++k) {
         out += '\x81';
@@ -582,27 +554,29 @@ struct guarded {
 
 } // namespace
 
-// cbor::skip holds in the schema form too: the member takes no place in the message and is not read.
+// cbor::skip holds in the schema form too: the member has no key in the table and takes no place in the record.
 TEST_CASE("schema: cbor::skip leaves a public member out")
 {
-    CHECK_EQ(cbor::fixed_size<guarded>(), 6u);
+    CHECK_EQ(cbor::fixed_size<guarded>(), 9u);
     std::string const bytes = *cbor::encode(guarded{7, 42});
-    CHECK_EQ(bytes.substr(0, cbor::fixed_size<guarded>()), "\xa1\x62id\x18\x07"s);
+    CHECK_EQ(bytes.substr(0, 20), "\xd8\x71\x82\x81\xd8\x72\x81\x62id\x82\xd8\x80\x9a\x00\x00\x00\x01\x18\x07"s);
     guarded const back = *cbor::decode<guarded>(bytes);
     CHECK_EQ(back.id, 7u);
     CHECK_EQ(back.secret, 0u);
 }
 
-// The key of an annotation takes the place of the member name in the size, the offsets and the bytes. The
-// expectation is counted from RFC 8949 3 by hand: a map head of 1 byte, a text head of 1 and 9 bytes, the integer
-// with its fixed width of 0x18 and 1 byte, a text head of 1 and 3 bytes, and the simple value.
+// The key of an annotation takes the place of the member name in the table. The expectation is counted from the
+// draft and RFC 8949 3 by hand: the table of 22 bytes with the text heads 69 and 63, then the record: 7 bytes of
+// head, the integer with its fixed width of 18 and 1 byte, and the simple value.
 TEST_CASE("schema: an annotation gives the key of a member")
 {
-    CHECK_EQ(cbor::fixed_size<keyed>(), 18u);
-    CHECK_EQ(cbor::member_offset<keyed, ^^keyed::m0>(), 11u);
-    CHECK_EQ(cbor::member_offset<keyed, ^^keyed::m1>(), 17u);
+    CHECK_EQ(cbor::fixed_size<keyed>(), 10u);
+    CHECK_EQ(cbor::member_offset<keyed, ^^keyed::m0>(), 7u);
+    CHECK_EQ(cbor::member_offset<keyed, ^^keyed::m1>(), 9u);
     std::string const bytes = *cbor::encode(keyed{7, true});
-    CHECK_EQ(bytes.substr(0, 18), "\xa2\x69x-user-id\x18\x07\x63" "EOF\xf5"s);
+    CHECK_EQ(bytes.substr(0, 32), "\xd8\x71\x82\x81\xd8\x72\x82\x69x-user-id\x63"
+                                  "EOF\x82"
+                                  "\xd8\x80\x9a\x00\x00\x00\x02\x18\x07\xf5"s);
     keyed const back = *cbor::decode<keyed>(bytes);
     CHECK_EQ(back.m0, 7u);
     CHECK(back.m1);
@@ -616,7 +590,7 @@ TEST_CASE("schema: an annotation gives the key of a member")
 // level, as each nested item counts one in the other decoders.
 TEST_CASE("decode: a struct that holds itself stops at DepthMax")
 {
-    REQUIRE_EQ(cbor::fixed_size<node>(), 21u);
+    REQUIRE_EQ(cbor::fixed_size<node>(), 18u);
 
     auto const at_limit = cbor::decode<node>(node_chain(64));
     REQUIRE(at_limit.has_value());
@@ -791,11 +765,9 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
     REQUIRE(absent.has_value());
     CHECK_FALSE(absent->has_value());
     for (std::string_view message : {std::string_view(bytes), std::string_view(none)}) {
-        auto const first = cbor::doc_end<64>(message);
-        REQUIRE(first.has_value());
-        auto const second = cbor::doc_end<64>(message.substr(*first));
-        REQUIRE(second.has_value());
-        CHECK_EQ(*first + *second, message.size());
+        auto const end = cbor::doc_end<64>(message);
+        REQUIRE(end.has_value());
+        CHECK_EQ(*end, message.size());
     }
     CHECK_EQ(cbor::fixed_size<std::optional<passkey_user>>(), 2 + cbor::fixed_size<passkey_user>());
     passkey_login const back2 = *cbor::decode<passkey_login>(none);

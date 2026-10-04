@@ -435,7 +435,7 @@ void compare_all(T const &native, cbor::document<T> const doc)
 }
 
 // A struct from the bytes of the input, written and read back through every path of its type. The message
-// must also be two well-formed CBOR items.
+// must also be one well-formed CBOR item.
 template <class T>
 void round_trip(source &in)
 {
@@ -464,10 +464,8 @@ void round_trip(source &in)
     require(back.has_value());
     auto const again = cbor::encode(*back);
     require(again.has_value() && *again == w.bytes);
-    auto const first = cbor::doc_end<64>(w.bytes);
-    require(first.has_value());
-    auto const second = cbor::doc_end<64>(std::string_view(w.bytes).substr(*first));
-    require(second.has_value() && *first + *second == w.bytes.size());
+    auto const end = cbor::doc_end<64>(w.bytes);
+    require(end.has_value() && *end == w.bytes.size());
     auto const doc = cbor::view<T>(w.bytes);
     require(doc.has_value());
     compare_all(native, *doc);
