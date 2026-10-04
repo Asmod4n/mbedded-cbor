@@ -35,8 +35,12 @@ struct node {
 // The binding keeps a weak reference to every node it makes. When the binding ends, every node that only
 // other nodes hold is garbage, as a tracing collector finds it, and is emptied; so a cycle that a
 // failed decode left behind is freed, and a value the caller still holds keeps its whole graph.
-struct ref_binding {
-    using value = handle;
+struct ref_binding : cbor::binding<handle> {
+    handle unsigned_integer_decode(std::uint64_t const a)
+    {
+        return make(node{a});
+    }
+
     using identity = node const *;
     int before_encode_calls = 0;
     int after_decode_calls = 0;
@@ -104,10 +108,6 @@ inline bool tag_invoke(cbor::cyclic_data_structures_t, ref_binding &)
     return true;
 }
 
-inline handle tag_invoke(cbor::unsigned_integer_decode_t, ref_binding &binding, std::uint64_t a)
-{
-    return binding.make(node{a});
-}
 
 inline handle tag_invoke(cbor::negative_integer_decode_t, ref_binding &binding, std::uint64_t a)
 {

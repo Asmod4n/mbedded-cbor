@@ -74,14 +74,12 @@ struct entry {
 };
 
 // The binding of a test: a dynamic language in C++. Every tag_invoke builds one kind of value.
-struct test_binding {
-    using value = test::value;
+struct test_binding : cbor::binding<test::value> {
+    value unsigned_integer_decode(std::uint64_t const a)
+    {
+        return {a};
+    }
 };
-
-inline value tag_invoke(cbor::unsigned_integer_decode_t, test_binding &, std::uint64_t a)
-{
-    return {a};
-}
 
 inline value tag_invoke(cbor::negative_integer_decode_t, test_binding &, std::uint64_t a)
 {
