@@ -279,6 +279,28 @@ TEST_CASE("tag 28/29: a cyclic array and a cyclic map")
         std::get<std::vector<std::pair<handle, handle>>>(x->kind).clear();
 }
 
+// A cycle can come from the wire, through a binding that answers cyclic_data_structures. Encode without
+// sharing then gives an error as a value and throws nothing, so bytes of an attacker cannot raise an
+// exception. A value that is only deep stays nesting_depth_exceeded.
+TEST_CASE("tag 28/29: encode without sharing refuses a cycle as a value")
+{
+    auto const a = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
+    ref_binding binding;
+    string_writer w;
+    auto const r = cbor::encode<16>(binding, w, a);
+    REQUIRE_FALSE(r.has_value());
+    CHECK((r.error() == error::cyclic_data_structure));
+    std::get<std::vector<handle>>(a->kind).clear();
+
+    handle deep = u(1);
+    for (int i = 0; i < 20; ++i)
+        deep = arr({deep});
+    string_writer d;
+    auto const too_deep = cbor::encode<16>(binding, d, deep);
+    REQUIRE_FALSE(too_deep.has_value());
+    CHECK((too_deep.error() == error::nesting_depth_exceeded));
+}
+
 // Ported from test.rb: 'tag 28/29: mutual recursion — hash↔array cycle'.
 TEST_CASE("tag 28/29: mutual recursion between a map and an array")
 {
@@ -379,8 +401,9 @@ TEST_CASE("tag 28/29: an array key with identity shares with the values")
     CHECK(same(key, at(r, "v1")));
 }
 
-// Ported from test.rb: 'no sharedref flag: values do not share, cycles hit depth limit'.
-TEST_CASE("sharedrefs::off: values are written each time, a cycle hits the depth limit")
+// Ported from test.rb: 'no sharedref flag: values do not share, cycles hit depth limit'. mruby-cbor raises
+// there; here the cycle is an error value, because a cycle can come from bytes on the wire.
+TEST_CASE("sharedrefs::off: values are written each time, a cycle is an error")
 {
     auto const shared = arr({u(1), u(2), u(3)});
     ref_binding binding;
@@ -393,7 +416,7 @@ TEST_CASE("sharedrefs::off: values are written each time, a cycle hits the depth
     string_writer w2;
     auto const e = cbor::encode<16>(binding, w2, a);
     REQUIRE_FALSE(e.has_value());
-    CHECK((e.error() == error::nesting_depth_exceeded));
+    CHECK((e.error() == error::cyclic_data_structure));
     std::get<std::vector<handle>>(a->kind).clear();
 }
 

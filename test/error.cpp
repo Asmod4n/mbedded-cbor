@@ -18,7 +18,8 @@ TEST_CASE("error: every error belongs to one condition")
                           error::sharedref_index_not_marked, error::sharedref_index_out_of_range,
                           error::sharedref_not_complete, error::reserved_simple_value})
         CHECK((std::error_code(e) == condition::not_valid));
-    for (error const e : {error::indefinite_length, error::nesting_depth_exceeded, error::unsupported_value})
+    for (error const e : {error::indefinite_length, error::nesting_depth_exceeded, error::unsupported_value,
+                          error::cyclic_data_structure})
         CHECK((std::error_code(e) == condition::not_supported));
     for (error const e : {error::not_indexable, error::index_out_of_bounds, error::key_not_found,
                           error::incorrect_type, error::number_out_of_range})
@@ -32,6 +33,7 @@ TEST_CASE("error: no error converts to success")
          {error::too_little_data, error::syntax_error, error::indefinite_length, error::invalid_utf8_string,
           error::nesting_depth_exceeded, error::inadmissible_type_for_tag_content,
           error::sharedref_index_not_marked, error::sharedref_index_out_of_range,
-          error::sharedref_not_complete, error::reserved_simple_value, error::unsupported_value})
+          error::sharedref_not_complete, error::reserved_simple_value, error::unsupported_value,
+          error::cyclic_data_structure})
         CHECK(static_cast<bool>(std::error_code(e)));
 }
