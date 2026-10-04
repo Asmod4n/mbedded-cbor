@@ -204,4 +204,27 @@ TEST_CASE("generic: a variant takes the alternative that matches the item")
     CHECK_EQ(cbor::generic::decode<std::variant<std::string, bool>>("\x01"s).error(), error::incorrect_type);
 }
 
+namespace
+{
+
+struct annotated {
+    [[=cbor::key("x-user-id")]] std::uint8_t m0;
+    [[=cbor::key("EOF")]] bool m1;
+};
+
+} // namespace
+
+// A generator gives each member a fixed name and carries the key of the other language as an annotation, so a
+// key need not be a C++ identifier and never meets a macro such as EOF. The map comes from RFC 8949 3.1 by hand.
+TEST_CASE("generic: an annotation gives the key of a member")
+{
+    std::string const bytes = "\xa2\x69x-user-id\x07\x63" "EOF\xf5"s;
+    auto const back = cbor::generic::decode<annotated>(bytes);
+    REQUIRE(back.has_value());
+    CHECK_EQ(back->m0, 7u);
+    CHECK(back->m1);
+    CHECK_EQ(*cbor::generic::encode(annotated{7, true}), bytes);
+    CHECK_EQ(cbor::generic::decode<annotated>("\xa2\x62m0\x07\x62m1\xf5"s).error(), error::key_not_found);
+}
+
 #endif
