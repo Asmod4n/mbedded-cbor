@@ -367,6 +367,10 @@ struct tagged {
     T content;
 };
 
+template <class T, std::size_t DepthMax = 64>
+    requires std::is_class_v<T> && std::is_aggregate_v<T>
+result<T> decode(std::string_view bytes);
+
 namespace generic
 {
 template <class T, std::size_t DepthMax = 64>
@@ -1162,10 +1166,10 @@ class internal
         }
     }
 
-    template <class T>
+    template <std::size_t DepthMax, class T>
     static std::expected<void, error> value_read(T &out, std::string_view const bytes,
                                                   std::span<char const, fixed_size<T>()> const field,
-                                                  std::size_t const floor)
+                                                  std::size_t const floor, std::size_t const depth)
     {
         using U = std::remove_cv_t<T>;
         if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
@@ -1175,8 +1179,9 @@ class internal
                               ^^U, std::meta::access_context::unchecked()))) {
                 using M = typename[:std::meta::type_of(m):];
                 if (done)
-                    done = value_read(out.[:m:], bytes,
-                                      field.template subspan<member_offset<U, m>(), fixed_size<M>()>(), floor);
+                    done = value_read<DepthMax>(out.[:m:], bytes,
+                                                field.template subspan<member_offset<U, m>(), fixed_size<M>()>(), floor,
+                                                depth);
             }
             return done;
         } else if constexpr (is_fixed_string<U>) {
@@ -1191,9 +1196,9 @@ class internal
             std::expected<void, error> done;
             template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, n))) {
                 if (done)
-                    done = value_read(std::span(out).template subspan<i, 1>().front(), bytes,
-                                      field.template subspan<head_size(n) + i * fixed_size<E>(), fixed_size<E>()>(),
-                                      floor);
+                    done = value_read<DepthMax>(
+                        std::span(out).template subspan<i, 1>().front(), bytes,
+                        field.template subspan<head_size(n) + i * fixed_size<E>(), fixed_size<E>()>(), floor, depth);
             }
             return done;
         } else if constexpr (is_inline_optional<U>) {
@@ -1202,9 +1207,9 @@ class internal
                 out.reset();
                 return {};
             }
-            return value_read(out.emplace(), bytes,
-                              field.template subspan<inline_optional_head, fixed_size<typename U::value_type>()>(),
-                              floor);
+            return value_read<DepthMax>(
+                out.emplace(), bytes,
+                field.template subspan<inline_optional_head, fixed_size<typename U::value_type>()>(), floor, depth);
         } else if constexpr (is_optional<U>) {
             using E = typename U::value_type;
             auto const r = reference_read(bytes, field, floor, fixed_size<E>());
@@ -1214,10 +1219,12 @@ class internal
                 out.reset();
                 return {};
             }
+            if (depth == DepthMax) [[unlikely]]
+                return std::unexpected(error::nesting_depth_exceeded);
             E element{};
-            if (auto const e = value_read(element, bytes,
-                                          std::span<char const>(bytes).subspan(r->data).template first<fixed_size<E>()>(),
-                                          r->data + fixed_size<E>());
+            if (auto const e = value_read<DepthMax>(
+                    element, bytes, std::span<char const>(bytes).subspan(r->data).template first<fixed_size<E>()>(),
+                    r->data + fixed_size<E>(), depth + 1);
                 !e) [[unlikely]]
                 return e;
             out = std::move(element);
@@ -1241,15 +1248,19 @@ class internal
             auto const r = reference_read(bytes, field, floor, pair);
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
+            if (r->length != 0 && depth == DepthMax) [[unlikely]]
+                return std::unexpected(error::nesting_depth_exceeded);
             std::size_t const end = r->data + r->length * pair;
             out.clear();
             for (std::size_t i = 0; i < r->length; ++i) {
                 auto const at = std::span<char const>(bytes).subspan(r->data + i * pair).template first<pair>();
                 K key{};
                 V value{};
-                if (auto const e = value_read(key, bytes, at.template first<fixed_size<K>()>(), end); !e) [[unlikely]]
+                if (auto const e = value_read<DepthMax>(key, bytes, at.template first<fixed_size<K>()>(), end, depth + 1);
+                    !e) [[unlikely]]
                     return e;
-                if (auto const e = value_read(value, bytes, at.template last<fixed_size<V>()>(), end); !e) [[unlikely]]
+                if (auto const e = value_read<DepthMax>(value, bytes, at.template last<fixed_size<V>()>(), end, depth + 1);
+                    !e) [[unlikely]]
                     return e;
                 out.insert_or_assign(std::move(key), std::move(value));
             }
@@ -1259,6 +1270,8 @@ class internal
             auto const r = reference_read(bytes, field, floor, fixed_size<E>());
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
+            if (r->length != 0 && depth == DepthMax) [[unlikely]]
+                return std::unexpected(error::nesting_depth_exceeded);
             std::size_t const end = r->data + r->length * fixed_size<E>();
             out.clear();
             out.reserve(r->length);
@@ -1266,7 +1279,7 @@ class internal
                 E element{};
                 auto const at =
                     std::span<char const>(bytes).subspan(r->data + i * fixed_size<E>()).template first<fixed_size<E>()>();
-                if (auto const e = value_read(element, bytes, at, end); !e) [[unlikely]]
+                if (auto const e = value_read<DepthMax>(element, bytes, at, end, depth + 1); !e) [[unlikely]]
                     return e;
                 out.push_back(std::move(element));
             }
@@ -1277,7 +1290,7 @@ class internal
         }
     }
 
-    template <class T>
+    template <class T, std::size_t DepthMax>
         requires std::is_class_v<T> && std::is_aggregate_v<T>
     friend result<T> decode(std::string_view const bytes);
 
@@ -2896,7 +2909,7 @@ std::expected<document<T>, error> view(std::string_view const bytes)
     return document<T>{bytes, std::span<char const>(bytes).first<fixed_size<T>()>(), fixed_size<T>()};
 }
 
-template <class T>
+template <class T, std::size_t DepthMax>
     requires std::is_class_v<T> && std::is_aggregate_v<T>
 result<T> decode(std::string_view const bytes)
 {
@@ -2904,7 +2917,7 @@ result<T> decode(std::string_view const bytes)
     if (!doc) [[unlikely]]
         return std::unexpected(doc.error());
     T out{};
-    if (auto const r = internal::value_read(out, doc->bytes, doc->field, doc->floor); !r) [[unlikely]]
+    if (auto const r = internal::value_read<DepthMax>(out, doc->bytes, doc->field, doc->floor, 0); !r) [[unlikely]]
         return std::unexpected(r.error());
     return out;
 }
