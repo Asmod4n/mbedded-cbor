@@ -3374,6 +3374,7 @@ template <class Binding>
 struct sharing {
     std::unordered_map<typename Binding::identity, std::uint64_t> seen;
     std::unordered_map<typename Binding::identity, std::uint64_t> numbers;
+    std::uint64_t next = 0;
     std::unordered_map<typename Binding::identity, typename Binding::value> replaced;
 };
 
@@ -3462,15 +3463,17 @@ class walker
                 return;
         }
         if constexpr (Pass == pass::write) {
-            if (identity && shared->seen.at(*identity) > 1) {
+            if (identity && !shared->numbers.empty()) {
                 auto const number = shared->numbers.find(*identity);
                 if (number != shared->numbers.end()) {
-                    head(major_type::tag, std::to_underlying(internal::tag_number::sharedref));
-                    head(major_type::unsigned_integer, number->second);
-                    return;
+                    if (number->second < shared->next) {
+                        head(major_type::tag, std::to_underlying(internal::tag_number::sharedref));
+                        head(major_type::unsigned_integer, number->second);
+                        return;
+                    }
+                    number->second = shared->next++;
+                    head(major_type::tag, std::to_underlying(internal::tag_number::shareable));
                 }
-                shared->numbers.emplace(*identity, shared->numbers.size());
-                head(major_type::tag, std::to_underlying(internal::tag_number::shareable));
             }
         }
         ++depth;
@@ -3496,7 +3499,11 @@ class walker
     template <class Identity>
     void describe(typename Binding::value const &item, Identity const &identity)
     {
-        switch (binding.kind_of(item)) {
+        kind const k = binding.kind_of(item);
+        if constexpr (Pass == pass::count)
+            if (k != kind::array && k != kind::map && k != kind::registered)
+                return;
+        switch (k) {
         case kind::unsigned_integer:
             if constexpr (requires { binding.unsigned_of(item); }) {
                 head(major_type::unsigned_integer, binding.unsigned_of(item));
@@ -3702,6 +3709,9 @@ std::expected<std::size_t, std::error_code> encode_from(Binding &binding, Writer
         count.value(value);
         if (count.failure) [[unlikely]]
             return std::unexpected(count.failure);
+        for (auto const &[identity, times] : shared.seen)
+            if (times > 1)
+                shared.numbers.emplace(identity, std::numeric_limits<std::uint64_t>::max());
         walker<DepthMax, Binding, Writer, pass::write> write{binding, writer, &shared, depth, embedded};
         write.value(value);
         write.keep(write.out.flush());
