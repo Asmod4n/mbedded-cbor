@@ -1,4 +1,4 @@
-#include "host.hpp"
+#include "binding.hpp"
 
 #include <cstdint>
 #include <initializer_list>
@@ -150,6 +150,6 @@ TEST_CASE("head: every power of 2 survives encode and decode")
 TEST_CASE("head: encode returns the error of the Writer")
 {
     full_writer w;
-    test_host host;
-    CHECK_EQ(cbor::encode<16>(host, w, U(0)).error(), std::make_error_code(std::errc::not_enough_memory));
+    test_binding binding;
+    CHECK_EQ(cbor::encode<16>(binding, w, U(0)).error(), std::make_error_code(std::errc::not_enough_memory));
 }

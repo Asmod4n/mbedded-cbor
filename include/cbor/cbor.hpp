@@ -264,8 +264,8 @@ inline constexpr struct simple_value_decode_t : customization_point<simple_value
 inline constexpr struct cyclic_data_structures_t : customization_point<cyclic_data_structures_t> {
 } cyclic_data_structures;
 
-template <std::size_t DepthMax, class Host>
-std::expected<typename Host::value, error> decode(Host &host, std::string_view bytes);
+template <std::size_t DepthMax, class Binding>
+std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view bytes);
 
 template <class Writer>
 struct encoder;
@@ -298,8 +298,8 @@ std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &byte
 template <std::size_t DepthMax>
 std::expected<lazy, error> decode(std::string bytes);
 
-template <std::size_t DepthMax, class Host>
-std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l);
+template <std::size_t DepthMax, class Binding>
+std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 
 template <std::size_t DepthMax>
 struct lazy_elements;
@@ -313,14 +313,14 @@ struct path_step {
     std::int64_t index;
 };
 
-template <std::size_t DepthMax, class Host>
-std::expected<typename Host::value, error> path_decode(Host &host, std::span<path_step const> steps, lazy const &l);
+template <std::size_t DepthMax, class Binding>
+std::expected<typename Binding::value, error> path_decode(Binding &binding, std::span<path_step const> steps, lazy const &l);
 
 template <std::size_t DepthMax>
 std::expected<std::size_t, error> doc_end(std::string_view bytes);
 
-template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Host, class Writer>
-std::expected<void, std::error_code> encode(Host &host, Writer &&target, typename Host::value const &value);
+template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
+std::expected<void, std::error_code> encode(Binding &binding, Writer &&target, typename Binding::value const &value);
 
 template <class T, class E = error>
 struct result : std::expected<T, E> {
@@ -418,8 +418,8 @@ class internal
         typed_array_last = 87
     };
 
-    template <class Host>
-    using marks = std::vector<std::optional<typename Host::value>>;
+    template <class Binding>
+    using marks = std::vector<std::optional<typename Binding::value>>;
 
     template <class V>
     static V unsigned_read(std::span<char const, sizeof(V)> const field)
@@ -1665,9 +1665,9 @@ class internal
         return simple_float_information::single_precision_float;
     }
 
-    template <std::size_t DepthMax, class Host>
-    static std::expected<typename Host::value, error>
-    value_decode(decoder &d, Host &host, marks<Host> &shared, prefix *before, std::size_t depth,
+    template <std::size_t DepthMax, class Binding>
+    static std::expected<typename Binding::value, error>
+    value_decode(decoder &d, Binding &binding, marks<Binding> &shared, prefix *before, std::size_t depth,
                  std::optional<std::size_t> const mark)
     {
         if (depth > DepthMax) [[unlikely]]
@@ -1677,47 +1677,47 @@ class internal
             return std::unexpected(h.error());
         switch (h->major) {
         case major_type::unsigned_integer:
-            return unsigned_integer_decode(host, h->argument);
+            return unsigned_integer_decode(binding, h->argument);
         case major_type::negative_integer:
-            return negative_integer_decode(host, h->argument);
+            return negative_integer_decode(binding, h->argument);
         case major_type::byte_string: {
             auto const s = d.byte_string_decode(h->argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
-            return byte_string_decode(host, *s);
+            return byte_string_decode(binding, *s);
         }
         case major_type::text_string: {
             auto const s = d.text_string_decode(h->argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
-            return text_string_decode(host, *s);
+            return text_string_decode(binding, *s);
         }
         case major_type::array: {
-            auto array = array_decode(host, std::min<std::uint64_t>(h->argument, d.bytes.size()));
-            if constexpr (requires { cyclic_data_structures(host); })
-                if (mark && cyclic_data_structures(host))
+            auto array = array_decode(binding, std::min<std::uint64_t>(h->argument, d.bytes.size()));
+            if constexpr (requires { cyclic_data_structures(binding); })
+                if (mark && cyclic_data_structures(binding))
                     shared.at(*mark) = array;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto element = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
+                auto element = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
                 if (!element) [[unlikely]]
                     return element;
-                array = array_append(host, std::move(array), std::move(*element));
+                array = array_append(binding, std::move(array), std::move(*element));
             }
             return array;
         }
         case major_type::map: {
-            auto map = map_decode(host, std::min<std::uint64_t>(h->argument, d.bytes.size() / 2));
-            if constexpr (requires { cyclic_data_structures(host); })
-                if (mark && cyclic_data_structures(host))
+            auto map = map_decode(binding, std::min<std::uint64_t>(h->argument, d.bytes.size() / 2));
+            if constexpr (requires { cyclic_data_structures(binding); })
+                if (mark && cyclic_data_structures(binding))
                     shared.at(*mark) = map;
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto key = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
+                auto key = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
                 if (!key) [[unlikely]]
                     return key;
-                auto value = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
+                auto value = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
                 if (!value) [[unlikely]]
                     return value;
-                map = map_insert(host, std::move(map), std::move(*key), std::move(*value));
+                map = map_insert(binding, std::move(map), std::move(*key), std::move(*value));
             }
             return map;
         }
@@ -1734,7 +1734,7 @@ class internal
                 }
                 if (index == shared.size())
                     shared.emplace_back();
-                auto content = value_decode<DepthMax>(d, host, shared, before, depth + 1, index);
+                auto content = value_decode<DepthMax>(d, binding, shared, before, depth + 1, index);
                 if (!content) [[unlikely]]
                     return content;
                 shared.at(index) = *content;
@@ -1754,12 +1754,12 @@ class internal
                 std::string_view const magnitude = magnitude_without_leading_zeros(*bytes);
                 if (magnitude.size() <= sizeof(std::uint64_t)) {
                     if (negative)
-                        return negative_integer_decode(host, magnitude_value(magnitude));
-                    return unsigned_integer_decode(host, magnitude_value(magnitude));
+                        return negative_integer_decode(binding, magnitude_value(magnitude));
+                    return unsigned_integer_decode(binding, magnitude_value(magnitude));
                 }
                 if (negative)
-                    return negative_bignum_decode(host, std::string_view(magnitude_plus_one(magnitude)));
-                return unsigned_bignum_decode(host, magnitude);
+                    return negative_bignum_decode(binding, std::string_view(magnitude_plus_one(magnitude)));
+                return unsigned_bignum_decode(binding, magnitude);
             }
             if (h->argument == std::to_underlying(tag_number::sharedref)) {
                 auto const r = d.head_decode();
@@ -1777,7 +1777,7 @@ class internal
                     !before->decoding.at(index)) {
                     decoder earlier{before->document.substr(before->offsets.at(index))};
                     before->decoding.at(index) = true;
-                    auto content = value_decode<DepthMax>(earlier, host, shared, before, depth + 1, index);
+                    auto content = value_decode<DepthMax>(earlier, binding, shared, before, depth + 1, index);
                     before->decoding.at(index) = false;
                     if (!content) [[unlikely]]
                         return content;
@@ -1787,64 +1787,64 @@ class internal
                     return std::unexpected(error::sharedref_not_complete);
                 return *shared.at(index);
             }
-            if constexpr (requires { tag_begin(host, h->argument); }) {
-                std::optional<typename Host::value> object = tag_begin(host, h->argument);
+            if constexpr (requires { tag_begin(binding, h->argument); }) {
+                std::optional<typename Binding::value> object = tag_begin(binding, h->argument);
                 if (object) {
-                    if constexpr (requires { cyclic_data_structures(host); })
-                        if (mark && cyclic_data_structures(host))
+                    if constexpr (requires { cyclic_data_structures(binding); })
+                        if (mark && cyclic_data_structures(binding))
                             shared.at(*mark) = *object;
-                    auto content = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
+                    auto content = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
                     if (!content) [[unlikely]]
                         return content;
-                    return after_decode(host,
-                                        registered_decode(host, std::move(*object), std::move(*content)));
+                    return after_decode(binding,
+                                        registered_decode(binding, std::move(*object), std::move(*content)));
                 }
             }
-            auto content = value_decode<DepthMax>(d, host, shared, before, depth + 1, std::nullopt);
+            auto content = value_decode<DepthMax>(d, binding, shared, before, depth + 1, std::nullopt);
             if (!content) [[unlikely]]
                 return content;
-            return tag_decode(host, h->argument, std::move(*content));
+            return tag_decode(binding, h->argument, std::move(*content));
         }
         default:
             switch (static_cast<simple_float_information>(h->info)) {
             case simple_float_information::simple_value_follows:
                 if (h->argument < simple_value_one_byte_min) [[unlikely]]
                     return std::unexpected(error::syntax_error);
-                return simple_value_decode(host, static_cast<std::uint8_t>(h->argument));
+                return simple_value_decode(binding, static_cast<std::uint8_t>(h->argument));
             case simple_float_information::half_precision_float:
-                return float_decode(host, static_cast<double>(float_decode_binary16(
+                return float_decode(binding, static_cast<double>(float_decode_binary16(
                                               static_cast<std::uint16_t>(h->argument))));
             case simple_float_information::single_precision_float:
                 return float_decode(
-                    host, static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h->argument))));
+                    binding, static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h->argument))));
             case simple_float_information::double_precision_float:
-                return float_decode(host, std::bit_cast<double>(h->argument));
+                return float_decode(binding, std::bit_cast<double>(h->argument));
             default:
-                return simple_value_decode(host, h->info);
+                return simple_value_decode(binding, h->info);
             }
         }
     }
 
-    template <std::size_t DepthMax, class Host>
-    friend std::expected<typename Host::value, error> decode(Host &host, std::string_view bytes);
+    template <std::size_t DepthMax, class Binding>
+    friend std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view bytes);
 
     template <class Writer>
     friend struct encoder;
 
-    template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-    friend std::expected<void, std::error_code> encode(Host &host, Writer &&target,
-                                                       typename Host::value const &value);
+    template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
+    friend std::expected<void, std::error_code> encode(Binding &binding, Writer &&target,
+                                                       typename Binding::value const &value);
 
     template <std::size_t, class, class, pass>
     friend class walker;
 
     friend struct lazy;
 
-    template <std::size_t DepthMax, class Host>
-    friend std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l);
+    template <std::size_t DepthMax, class Binding>
+    friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 
-    template <std::size_t DepthMax, class Host>
-    friend std::expected<typename Host::value, error> path_decode(Host &host,
+    template <std::size_t DepthMax, class Binding>
+    friend std::expected<typename Binding::value, error> path_decode(Binding &binding,
                                                                   std::span<path_step const> steps, lazy const &l);
 
     struct resolved {
@@ -3324,18 +3324,18 @@ struct encoder {
     }
 };
 
-template <std::size_t DepthMax, class Host>
-std::expected<typename Host::value, error> decode(Host &host, std::string_view bytes)
+template <std::size_t DepthMax, class Binding>
+std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view bytes)
 {
     internal::decoder d{bytes};
-    internal::marks<Host> shared;
-    return internal::value_decode<DepthMax>(d, host, shared, nullptr, 0, std::nullopt);
+    internal::marks<Binding> shared;
+    return internal::value_decode<DepthMax>(d, binding, shared, nullptr, 0, std::nullopt);
 }
 
 enum class pass { plain, count, write };
 
-template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-std::expected<std::size_t, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
+template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
+std::expected<std::size_t, std::error_code> encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
                                                         std::size_t depth, bool embedded);
 
 struct discarding_writer {
@@ -3350,29 +3350,29 @@ struct discarding_writer {
     }
 };
 
-template <class Host>
+template <class Binding>
 struct sharing {
-    std::unordered_map<typename Host::identity, std::uint64_t> seen;
-    std::unordered_map<typename Host::identity, std::uint64_t> numbers;
-    std::unordered_map<typename Host::identity, typename Host::value> replaced;
+    std::unordered_map<typename Binding::identity, std::uint64_t> seen;
+    std::unordered_map<typename Binding::identity, std::uint64_t> numbers;
+    std::unordered_map<typename Binding::identity, typename Binding::value> replaced;
 };
 
-template <std::size_t DepthMax, class Host, class Writer, pass Pass>
+template <std::size_t DepthMax, class Binding, class Writer, pass Pass>
 class walker
 {
-    Host &host;
+    Binding &binding;
     encoder<Writer> out;
-    sharing<Host> *shared;
+    sharing<Binding> *shared;
     std::size_t depth;
     bool embedded;
     std::error_code failure;
 
     template <std::size_t, sharedrefs, class H, class W>
-    friend std::expected<std::size_t, std::error_code> encode_from(H &host, W &writer, typename H::value const &value,
+    friend std::expected<std::size_t, std::error_code> encode_from(H &binding, W &writer, typename H::value const &value,
                                                                    std::size_t depth, bool embedded);
 
-    walker(Host &h, Writer &w, sharing<Host> *s, std::size_t const d, bool const e)
-        : host(h), out{w}, shared(s), depth(d), embedded(e)
+    walker(Binding &h, Writer &w, sharing<Binding> *s, std::size_t const d, bool const e)
+        : binding(h), out{w}, shared(s), depth(d), embedded(e)
     {
     }
 
@@ -3393,24 +3393,24 @@ class walker
         keep(out.head_encode(major, argument));
     }
 
-    void key(typename Host::value const &item)
+    void key(typename Binding::value const &item)
     {
         if constexpr (Pass == pass::plain)
             child(item, std::false_type{});
         else
-            child(item, key_identity(host, item));
+            child(item, key_identity(binding, item));
     }
 
-    void value(typename Host::value const &item)
+    void value(typename Binding::value const &item)
     {
         if constexpr (Pass == pass::plain)
             child(item, std::false_type{});
         else
-            child(item, value_identity(host, item));
+            child(item, value_identity(binding, item));
     }
 
     template <class Identity>
-    void child(typename Host::value const &item, Identity const &identity)
+    void child(typename Binding::value const &item, Identity const &identity)
     {
         if (failure) [[unlikely]]
             return;
@@ -3418,14 +3418,14 @@ class walker
             keep_error(error::nesting_depth_exceeded);
             return;
         }
-        if constexpr (requires { embed_of(host, item); }) {
+        if constexpr (requires { embed_of(binding, item); }) {
             bool const outer = embedded;
             embedded = false;
-            if (!outer && embed_of(host, item)) {
+            if (!outer && embed_of(binding, item)) {
                 if constexpr (Pass != pass::count) {
                     internal::string_sink inner;
                     auto const r = encode_from<DepthMax, Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
-                        host, inner, item, depth, true);
+                        binding, inner, item, depth, true);
                     if (!r) [[unlikely]] {
                         if (!failure)
                             failure = r.error();
@@ -3459,86 +3459,86 @@ class walker
     }
 
     template <class Identity>
-    typename Host::value content_of(typename Host::value const &item, Identity const &identity)
+    typename Binding::value content_of(typename Binding::value const &item, Identity const &identity)
     {
         if constexpr (Pass == pass::plain) {
-            return before_encode(host, item);
+            return before_encode(binding, item);
         } else {
             if (!identity)
-                return before_encode(host, item);
+                return before_encode(binding, item);
             if constexpr (Pass == pass::count)
-                return shared->replaced.emplace(*identity, before_encode(host, item)).first->second;
+                return shared->replaced.emplace(*identity, before_encode(binding, item)).first->second;
             else
                 return shared->replaced.at(*identity);
         }
     }
 
     template <class Identity>
-    void describe(typename Host::value const &item, Identity const &identity)
+    void describe(typename Binding::value const &item, Identity const &identity)
     {
-        switch (kind_of(host, item)) {
+        switch (kind_of(binding, item)) {
         case kind::unsigned_integer:
-            if constexpr (requires { unsigned_of(host, item); }) {
-                head(major_type::unsigned_integer, unsigned_of(host, item));
+            if constexpr (requires { unsigned_of(binding, item); }) {
+                head(major_type::unsigned_integer, unsigned_of(binding, item));
                 return;
             }
             break;
         case kind::negative_integer:
-            if constexpr (requires { unsigned_of(host, item); }) {
-                head(major_type::negative_integer, unsigned_of(host, item) - 1);
+            if constexpr (requires { unsigned_of(binding, item); }) {
+                head(major_type::negative_integer, unsigned_of(binding, item) - 1);
                 return;
             }
             break;
         case kind::unsigned_bignum:
-            if constexpr (requires { magnitude_of(host, item); }) {
-                bignum(false, magnitude_of(host, item));
+            if constexpr (requires { magnitude_of(binding, item); }) {
+                bignum(false, magnitude_of(binding, item));
                 return;
             }
             break;
         case kind::negative_bignum:
-            if constexpr (requires { magnitude_of(host, item); }) {
-                bignum(true, magnitude_of(host, item));
+            if constexpr (requires { magnitude_of(binding, item); }) {
+                bignum(true, magnitude_of(binding, item));
                 return;
             }
             break;
         case kind::byte_string:
-            if constexpr (requires { bytes_of(host, item); }) {
-                keep(out.byte_string_encode(bytes_of(host, item)));
+            if constexpr (requires { bytes_of(binding, item); }) {
+                keep(out.byte_string_encode(bytes_of(binding, item)));
                 return;
             }
             break;
         case kind::text_string:
-            if constexpr (requires { text_of(host, item); }) {
-                keep(out.text_string_encode(text_of(host, item)));
+            if constexpr (requires { text_of(binding, item); }) {
+                keep(out.text_string_encode(text_of(binding, item)));
                 return;
             }
             break;
         case kind::floating_point:
-            if constexpr (requires { float_of(host, item); }) {
-                keep(out.float_encode(float_of(host, item)));
+            if constexpr (requires { float_of(binding, item); }) {
+                keep(out.float_encode(float_of(binding, item)));
                 return;
             }
             break;
         case kind::simple_value:
-            if constexpr (requires { simple_of(host, item); }) {
-                simple(simple_of(host, item));
+            if constexpr (requires { simple_of(binding, item); }) {
+                simple(simple_of(binding, item));
                 return;
             }
             break;
         case kind::array:
-            if constexpr (requires { array_size(host, item); }) {
-                std::uint64_t const size = array_size(host, item);
+            if constexpr (requires { array_size(binding, item); }) {
+                std::uint64_t const size = array_size(binding, item);
                 head(major_type::array, size);
                 for (std::uint64_t i = 0; i < size; ++i)
-                    value(array_at(host, item, i));
+                    value(array_at(binding, item, i));
                 return;
             }
             break;
         case kind::map:
-            if constexpr (requires { map_size(host, item); }) {
-                head(major_type::map, map_size(host, item));
-                map_for_each(host, item,
-                             [this](typename Host::value const &k, typename Host::value const &v) {
+            if constexpr (requires { map_size(binding, item); }) {
+                head(major_type::map, map_size(binding, item));
+                map_for_each(binding, item,
+                             [this](typename Binding::value const &k, typename Binding::value const &v) {
                                  key(k);
                                  value(v);
                              });
@@ -3546,12 +3546,12 @@ class walker
             }
             break;
         case kind::typed_array:
-            if constexpr (requires { typed_array_of(host, item); }) {
+            if constexpr (requires { typed_array_of(binding, item); }) {
                 if (depth > DepthMax) [[unlikely]] {
                     keep_error(error::nesting_depth_exceeded);
                     return;
                 }
-                cbor::typed_array const a = typed_array_of(host, item);
+                cbor::typed_array const a = typed_array_of(binding, item);
                 if (auto const r = internal::typed_array_check(a.tag, a.bytes.size()); !r) [[unlikely]] {
                     keep_error(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
                     return;
@@ -3563,8 +3563,8 @@ class walker
             }
             break;
         case kind::registered:
-            if constexpr (requires { registered_tag(host, item); }) {
-                head(major_type::tag, registered_tag(host, item));
+            if constexpr (requires { registered_tag(binding, item); }) {
+                head(major_type::tag, registered_tag(binding, item));
                 value(content_of(item, identity));
                 return;
             }
@@ -3623,25 +3623,25 @@ public:
     walker &operator=(walker const &) = delete;
 };
 
-template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-std::expected<std::size_t, std::error_code> encode_from(Host &host, Writer &writer, typename Host::value const &value,
+template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
+std::expected<std::size_t, std::error_code> encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
                                                         std::size_t const depth, bool const embedded)
 {
     if constexpr (Sharing == sharedrefs::off) {
-        walker<DepthMax, Host, Writer, pass::plain> walk{host, writer, nullptr, depth, embedded};
+        walker<DepthMax, Binding, Writer, pass::plain> walk{binding, writer, nullptr, depth, embedded};
         walk.value(value);
         walk.keep(walk.out.flush());
         if (walk.failure) [[unlikely]]
             return std::unexpected(walk.failure);
         return walk.out.written;
     } else {
-        sharing<Host> shared;
+        sharing<Binding> shared;
         discarding_writer nothing;
-        walker<DepthMax, Host, discarding_writer, pass::count> count{host, nothing, &shared, depth, embedded};
+        walker<DepthMax, Binding, discarding_writer, pass::count> count{binding, nothing, &shared, depth, embedded};
         count.value(value);
         if (count.failure) [[unlikely]]
             return std::unexpected(count.failure);
-        walker<DepthMax, Host, Writer, pass::write> write{host, writer, &shared, depth, embedded};
+        walker<DepthMax, Binding, Writer, pass::write> write{binding, writer, &shared, depth, embedded};
         write.value(value);
         write.keep(write.out.flush());
         if (write.failure) [[unlikely]]
@@ -3650,11 +3650,11 @@ std::expected<std::size_t, std::error_code> encode_from(Host &host, Writer &writ
     }
 }
 
-template <std::size_t DepthMax, sharedrefs Sharing, class Host, class Writer>
-std::expected<void, std::error_code> encode(Host &host, Writer &&target, typename Host::value const &value)
+template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
+std::expected<void, std::error_code> encode(Binding &binding, Writer &&target, typename Binding::value const &value)
 {
     decltype(auto) message = internal::message_of(target, 0);
-    auto const size = encode_from<DepthMax, Sharing>(host, message, value, 0, false);
+    auto const size = encode_from<DepthMax, Sharing>(binding, message, value, 0, false);
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
     if (auto const r = message.done(*size); !r) [[unlikely]]
@@ -3947,13 +3947,13 @@ result<lazy_entries<DepthMax>> lazy::entries() const
         return std::unexpected(error::not_indexable);
     return lazy_entries<DepthMax>{source, source->bytes.size() - d.bytes.size(), h.argument};
 }
-template <std::size_t DepthMax, class Host>
-std::expected<typename Host::value, error> lazy_decode(Host &host, lazy const &l)
+template <std::size_t DepthMax, class Binding>
+std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {
     internal::prefix before{l.document->bytes, l.document->marks, std::vector<bool>(l.document->marks.size())};
-    internal::marks<Host> shared(before.offsets.size());
+    internal::marks<Binding> shared(before.offsets.size());
     internal::decoder d{l.document->bytes.substr(l.offset)};
-    return internal::value_decode<DepthMax>(d, host, shared, &before, 0, std::nullopt);
+    return internal::value_decode<DepthMax>(d, binding, shared, &before, 0, std::nullopt);
 }
 
 constexpr std::expected<std::vector<path_step>, error> path_compile(std::string_view const source)
@@ -4007,8 +4007,8 @@ constexpr std::expected<std::vector<path_step>, error> path_compile(std::string_
     return steps;
 }
 
-template <std::size_t DepthMax, class Host>
-std::expected<typename Host::value, error> path_decode(Host &host, std::span<path_step const> const steps,
+template <std::size_t DepthMax, class Binding>
+std::expected<typename Binding::value, error> path_decode(Binding &binding, std::span<path_step const> const steps,
                                                        lazy const &l)
 {
     lazy at = l;
@@ -4029,19 +4029,19 @@ std::expected<typename Host::value, error> path_decode(Host &host, std::span<pat
             if (!elements) [[unlikely]]
                 return std::unexpected(elements.error());
             auto array = array_decode(
-                host, std::min<std::uint64_t>(elements->count, elements->document->bytes.size() - elements->offset));
+                binding, std::min<std::uint64_t>(elements->count, elements->document->bytes.size() - elements->offset));
             for (auto const element : *elements) {
                 if (!element) [[unlikely]]
                     return std::unexpected(element.error());
-                auto value = path_decode<DepthMax>(host, steps.subspan(i + 1), *element);
+                auto value = path_decode<DepthMax>(binding, steps.subspan(i + 1), *element);
                 if (!value) [[unlikely]]
                     return value;
-                array = array_append(host, std::move(array), std::move(*value));
+                array = array_append(binding, std::move(array), std::move(*value));
             }
             return array;
         }
     }
-    return lazy_decode<DepthMax>(host, at);
+    return lazy_decode<DepthMax>(binding, at);
 }
 
 }

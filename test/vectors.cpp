@@ -1,4 +1,4 @@
-#include "host.hpp"
+#include "binding.hpp"
 
 #include <charconv>
 #include <cstdint>
@@ -54,7 +54,7 @@ std::string bytes_of_hex(std::string_view const hex)
 // Ported from test-vectors.rb: 'passes the official test vectors', the examples of RFC 8949
 // Appendix A. Indefinite lengths are refused, as in mruby-cbor. Every other example decodes, and
 // one that a generic encoder writes back identically comes back byte for byte. The skip list of
-// mruby-cbor is not needed: the test host keeps bytes, text, simple values and tags apart.
+// mruby-cbor is not needed: the test binding keeps bytes, text, simple values and tags apart.
 TEST_CASE("test vectors: RFC 8949 Appendix A")
 {
     auto const cases = cases_of(TEST_VECTORS "/appendix_a.json");

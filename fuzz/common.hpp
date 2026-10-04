@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../test/host.hpp"
-#include "../test/ref_host.hpp"
+#include "../test/binding.hpp"
+#include "../test/ref_binding.hpp"
 
 #include <array>
 #include <bit>
@@ -184,8 +184,8 @@ inline bool tag_has_meaning(std::uint64_t const tag)
     return tag == 2 || tag == 3 || tag == 24 || tag == 28 || tag == 29 || (tag >= 64 && tag <= 87);
 }
 
-// A value of the test host from the bytes of the input, with every kind the encoder knows. A text is ASCII,
-// because the host promises the encoder valid UTF-8.
+// A value of the test binding from the bytes of the input, with every kind the encoder knows. A text is ASCII,
+// because the binding promises the encoder valid UTF-8.
 inline test::value value_from(source &in, refusal &r, int const depth)
 {
     std::uint8_t const k = in.byte() % (depth > 6 ? 7 : 10);
@@ -236,9 +236,9 @@ inline test::value value_from(source &in, refusal &r, int const depth)
     }
 }
 
-// A graph of the reference host is compared node by node. The map pairs the nodes already seen, so two
+// A graph of the reference binding is compared node by node. The map pairs the nodes already seen, so two
 // graphs are the same only when their sharing is the same. An integer and a string key have no identity in
-// that host, so the encoder writes them each time; integers and strings compare by value.
+// that binding, so the encoder writes them each time; integers and strings compare by value.
 inline bool same_graph(shared_test::handle const &a, shared_test::handle const &b,
                        std::map<shared_test::node const *, shared_test::node const *> &pairs)
 {

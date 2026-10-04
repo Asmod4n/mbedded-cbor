@@ -116,8 +116,8 @@ inline std::optional<test::value> walked(test::value const &start, std::span<cbo
             auto const *b = std::get_if<test::bytes>(&t->content.at(0).kind);
             if (!b)
                 return std::nullopt;
-            test_host host;
-            auto inner = cbor::decode<16>(host, b->b);
+            test_binding binding;
+            auto inner = cbor::decode<16>(binding, b->b);
             if (!inner)
                 throw undecided{};
             v = *inner;
@@ -197,8 +197,8 @@ inline void path_target(std::string_view const input)
     std::size_t const split = std::min<std::size_t>(static_cast<unsigned char>(input.front()) % 64, input.size() - 1);
     std::string_view const path_bytes = input.substr(1, split);
     std::string_view const document = input.substr(1 + split);
-    test_host host;
-    auto const eager = cbor::decode<16>(host, document);
+    test_binding binding;
+    auto const eager = cbor::decode<16>(binding, document);
     if (!eager)
         return;
     std::vector<std::string> keys;
@@ -210,7 +210,7 @@ inline void path_target(std::string_view const input)
         return;
     auto const root = cbor::lazy::from(std::string{document});
     require(root.has_value());
-    auto const found = cbor::path_decode<16>(host, *steps, *root);
+    auto const found = cbor::path_decode<16>(binding, *steps, *root);
     std::optional<test::value> expected;
     try {
         expected = walked(*eager, *steps);
