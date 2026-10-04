@@ -185,6 +185,17 @@ struct typed_array {
     std::span<std::byte const> bytes;
 };
 
+template <class Value>
+struct binding {
+    using value = Value;
+    value unsigned_integer_decode(std::uint64_t argument) = delete;
+};
+
+template <class B>
+concept language_binding = std::derived_from<B, binding<typename B::value>> && requires(B &b, std::uint64_t const n) {
+    { b.unsigned_integer_decode(n) } -> std::same_as<typename B::value>;
+};
+
 template <class Tag>
 struct customization_point {
     template <class... Args>
@@ -195,8 +206,6 @@ struct customization_point {
     }
 };
 
-inline constexpr struct unsigned_integer_decode_t : customization_point<unsigned_integer_decode_t> {
-} unsigned_integer_decode;
 inline constexpr struct negative_integer_decode_t : customization_point<negative_integer_decode_t> {
 } negative_integer_decode;
 inline constexpr struct unsigned_bignum_decode_t : customization_point<unsigned_bignum_decode_t> {
@@ -264,7 +273,7 @@ inline constexpr struct simple_value_decode_t : customization_point<simple_value
 inline constexpr struct cyclic_data_structures_t : customization_point<cyclic_data_structures_t> {
 } cyclic_data_structures;
 
-template <std::size_t DepthMax, class Binding>
+template <std::size_t DepthMax, language_binding Binding>
 std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view bytes);
 
 template <class Writer>
@@ -1677,7 +1686,7 @@ class internal
             return std::unexpected(h.error());
         switch (h->major) {
         case major_type::unsigned_integer:
-            return unsigned_integer_decode(binding, h->argument);
+            return binding.unsigned_integer_decode(h->argument);
         case major_type::negative_integer:
             return negative_integer_decode(binding, h->argument);
         case major_type::byte_string: {
@@ -1755,7 +1764,7 @@ class internal
                 if (magnitude.size() <= sizeof(std::uint64_t)) {
                     if (negative)
                         return negative_integer_decode(binding, magnitude_value(magnitude));
-                    return unsigned_integer_decode(binding, magnitude_value(magnitude));
+                    return binding.unsigned_integer_decode(magnitude_value(magnitude));
                 }
                 if (negative)
                     return negative_bignum_decode(binding, std::string_view(magnitude_plus_one(magnitude)));
@@ -1825,7 +1834,7 @@ class internal
         }
     }
 
-    template <std::size_t DepthMax, class Binding>
+    template <std::size_t DepthMax, language_binding Binding>
     friend std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view bytes);
 
     template <class Writer>
@@ -3324,7 +3333,7 @@ struct encoder {
     }
 };
 
-template <std::size_t DepthMax, class Binding>
+template <std::size_t DepthMax, language_binding Binding>
 std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view bytes)
 {
     internal::decoder d{bytes};
