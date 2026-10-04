@@ -286,4 +286,57 @@ TEST_CASE("generic: a record leaves out absent values at its end and marks other
              "b\xd8\x80\x82\xf7\x02"s);
 }
 
+namespace
+{
+
+class account {
+public:
+    std::string name;
+    std::uint8_t id = 0;
+
+    void hidden_set(std::uint8_t const s, std::uint8_t const k)
+    {
+        secret = s;
+        kept = k;
+    }
+
+    std::uint8_t secret_of() const
+    {
+        return secret;
+    }
+
+    std::uint8_t kept_of() const
+    {
+        return kept;
+    }
+
+protected:
+    std::uint8_t kept = 0;
+
+private:
+    std::uint8_t secret = 0;
+};
+
+} // namespace
+
+// A private or protected member is state the class keeps to itself. It never goes on the wire, and a key of its
+// name on the wire is an unknown key, so the bytes of a sender cannot set it.
+TEST_CASE("generic: only public members are written and read")
+{
+    account a;
+    a.name = "ann";
+    a.id = 7;
+    a.hidden_set(42, 9);
+    std::string const bytes = *cbor::generic::encode(a);
+    CHECK_EQ(bytes, "\xa2\x64name\x63"
+                    "ann\x62id\x07"s);
+    auto const back = cbor::generic::decode<account>("\xa4\x64name\x63"
+                                                     "bob\x62id\x05\x66secret\x18\x2a\x64kept\x09"s);
+    REQUIRE(back.has_value());
+    CHECK_EQ(back->name, "bob");
+    CHECK_EQ(back->id, 5u);
+    CHECK_EQ(back->secret_of(), 0u);
+    CHECK_EQ(back->kept_of(), 0u);
+}
+
 #endif
