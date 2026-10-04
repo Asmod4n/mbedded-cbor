@@ -801,3 +801,188 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
 }
 
 #endif
+
+#ifdef __cpp_impl_reflection
+
+namespace
+{
+
+struct chain19 {
+    std::uint8_t v;
+    std::string text;
+    std::vector<std::string> words;
+};
+
+struct chain18 {
+    std::uint8_t v;
+    chain19 next;
+};
+
+struct chain17 {
+    std::uint8_t v;
+    chain18 next;
+};
+
+struct chain16 {
+    std::uint8_t v;
+    chain17 next;
+};
+
+struct chain15 {
+    std::uint8_t v;
+    chain16 next;
+};
+
+struct chain14 {
+    std::uint8_t v;
+    chain15 next;
+};
+
+struct chain13 {
+    std::uint8_t v;
+    chain14 next;
+};
+
+struct chain12 {
+    std::uint8_t v;
+    chain13 next;
+};
+
+struct chain11 {
+    std::uint8_t v;
+    chain12 next;
+};
+
+struct chain10 {
+    std::uint8_t v;
+    chain11 next;
+};
+
+struct chain9 {
+    std::uint8_t v;
+    chain10 next;
+};
+
+struct chain8 {
+    std::uint8_t v;
+    chain9 next;
+};
+
+struct chain7 {
+    std::uint8_t v;
+    chain8 next;
+};
+
+struct chain6 {
+    std::uint8_t v;
+    chain7 next;
+};
+
+struct chain5 {
+    std::uint8_t v;
+    chain6 next;
+};
+
+struct chain4 {
+    std::uint8_t v;
+    chain5 next;
+};
+
+struct chain3 {
+    std::uint8_t v;
+    chain4 next;
+};
+
+struct chain2 {
+    std::uint8_t v;
+    chain3 next;
+};
+
+struct chain1 {
+    std::uint8_t v;
+    chain2 next;
+};
+
+struct chain0 {
+    std::uint8_t v;
+    chain1 next;
+};
+
+template <class C>
+C chain_of(std::uint8_t const v)
+{
+    if constexpr (requires { C::next; })
+        return C{v, chain_of<decltype(C::next)>(static_cast<std::uint8_t>(v + 1))};
+    else
+        return C{v, "ab", {"x", "yz"}};
+}
+
+} // namespace
+
+// draft-ietf-cbor-packed-19 2.3 Table 2 gives tags 128..135 to the first 8 table indexes only. The test exists
+// because a root with 20 struct types needs record functions at indexes 8 to 19, which a record reaches with the
+// straight reference 6([N, rump]) at index 8 + N. chain19 is index 19, so N = 11 (0b): c6 82 0b, then the rump
+// 9a 00 00 00 03. The directory takes index 20, so the shared items start at 21 and no f7 is left. Table 1 maps
+// index 21 to 6(-3) = c6 3a 00 00 00 02 and index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4
+// entries. A record of index 8 or more is one byte longer, so its size depends on the root.
+TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
+{
+    CHECK_EQ(cbor::fixed_size<chain19, chain0>(), 3u + 5u + 2u + 6u + 6u);
+    CHECK_EQ(cbor::fixed_size<chain19>(), 2u + 5u + 2u + 6u + 6u);
+    CHECK_EQ(cbor::fixed_size<chain0>(), 8u * 9u + 11u * 10u + 22u);
+    CHECK_EQ((cbor::member_offset<chain8, ^^chain8::next, chain0>()), 10u);
+    CHECK_EQ(cbor::member_offset<chain8, ^^chain8::next>(), 9u);
+
+    chain0 const value = chain_of<chain0>(0);
+    std::string const bytes = *cbor::encode(value);
+    CHECK_EQ(cbor::doc_end<64>(bytes), bytes.size());
+    CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x19"s);
+    CHECK_EQ(bytes.substr(bytes.size() - 22),
+             "\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x03"s);
+    CHECK_EQ(bytes.substr(bytes.size() - cbor::fixed_size<chain0>() + 8u * 9u, 3), "\xc6\x82\x00"s);
+
+    chain0 const back = *cbor::decode<chain0>(bytes);
+    CHECK_EQ(*cbor::encode(back), bytes);
+    CHECK_EQ(back.next.next.next.next.next.next.next.next.next.v, 9u);
+
+    auto const doc = cbor::view<chain0>(bytes);
+    REQUIRE(doc.has_value());
+    CHECK_EQ(cbor::at_path_compiled<chain0, ".next.next.next.next.next.next.next.next.next.v">(*doc), 9u);
+    auto const inner = cbor::at_path_compiled<chain0, ".next.next.next.next.next.next.next.next.next.next">(*doc);
+    CHECK_EQ(cbor::at_path_compiled<chain10, ".next.next.next.next.next.next.next.next.next.v">(inner), 19u);
+    CHECK_EQ(*cbor::at_path_compiled<chain10, ".next.next.next.next.next.next.next.next.next.text">(inner), "ab"sv);
+    auto const words = cbor::at_path_compiled<chain10, ".next.next.next.next.next.next.next.next.next.words">(inner);
+    REQUIRE(words.has_value());
+    CHECK_EQ(*words->at(1), "yz"sv);
+}
+
+// draft-ietf-cbor-packed-19 2.2 Table 1: with 17 struct types the directory is index 17 and the first shared item
+// is index 18, which is 6(1) = c6 1a 00 00 00 01. The test exists because a reference below index 18 then names
+// no shared item: 6(0) is index 16, a record function, and the reader refuses it.
+TEST_CASE("schema: a root with 17 struct types starts its shared items at index 18")
+{
+    chain3 const value = chain_of<chain3>(3);
+    std::string const bytes = *cbor::encode(value);
+    CHECK_EQ(cbor::doc_end<64>(bytes), bytes.size());
+    CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x16"s);
+    CHECK_EQ(bytes.substr(bytes.size() - 22),
+             "\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x1a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"s);
+
+    chain3 const back = *cbor::decode<chain3>(bytes);
+    CHECK_EQ(*cbor::encode(back), bytes);
+    auto const doc = cbor::view<chain3>(bytes);
+    REQUIRE(doc.has_value());
+    CHECK_EQ(*cbor::at_path_compiled<chain3, ".next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(*doc),
+             "ab"sv);
+
+    std::string broken = bytes;
+    broken.at(broken.size() - 7) = '\x00';
+    CHECK_EQ(cbor::decode<chain3>(broken).error(), error::unpopulated_table_index);
+    auto const view = cbor::view<chain3>(broken);
+    REQUIRE(view.has_value());
+    CHECK_EQ(cbor::at_path_compiled<chain3, ".next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(*view)
+                 .error(),
+             error::unpopulated_table_index);
+}
+
+#endif
