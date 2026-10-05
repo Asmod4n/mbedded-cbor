@@ -56,12 +56,7 @@ struct simple {
     bool operator==(simple const &) const = default;
 };
 
-// The content of a tag is one value; a vector holds it, because a struct cannot hold its own type.
-struct tagged {
-    std::uint64_t tag;
-    array content;
-    bool operator==(tagged const &) const = default;
-};
+struct tagged;
 
 // A text that fits next to the index of the variant is held in place; a longer text is held on the heap.
 struct short_text {
@@ -134,9 +129,7 @@ struct value {
 
     value(map m);
 
-    value(tagged t) : kind(new tagged(std::move(t)))
-    {
-    }
+    value(tagged t);
 
     value(value const &o);
 
@@ -170,6 +163,16 @@ struct entry {
 };
 
 inline value::value(map m) : kind(new map(std::move(m)))
+{
+}
+
+struct tagged {
+    std::uint64_t tag;
+    value content;
+    bool operator==(tagged const &) const = default;
+};
+
+inline value::value(tagged t) : kind(new tagged(std::move(t)))
 {
 }
 
@@ -307,9 +310,7 @@ struct test_binding : cbor::binding<test::value> {
 
     value tag_decode(std::uint64_t tag, value content)
     {
-        tagged t{tag, {}};
-        t.content.push_back(std::move(content));
-        return {std::move(t)};
+        return {tagged{tag, std::move(content)}};
     }
 
     cbor::kind kind_of(value const &v)
@@ -401,7 +402,7 @@ struct test_binding : cbor::binding<test::value> {
 
     value const &before_encode(value const &v)
     {
-        return std::get<tagged *>(v.kind)->content.at(0);
+        return std::get<tagged *>(v.kind)->content;
     }
 };
 
