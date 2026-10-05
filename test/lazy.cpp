@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <random>
 #include <span>
 #include <string>
@@ -253,7 +254,7 @@ namespace
 {
 
 template <class T>
-cbor::result<T> get(std::string const &document)
+auto get(std::string const &document)
 {
     return lazy_of(document).get<T>();
 }
@@ -304,17 +305,18 @@ TEST_CASE("lazy: get reads a simple value")
     CHECK_EQ(get<std::nullptr_t>("\xf7"s).error(), error::incorrect_type);
 }
 
-// A text string and a byte string come as views into the document, each only as its own type. A view lives as
-// long as a lazy of its document does, so the test keeps one.
+// A text string and a byte string come as views into the document, each only as its own type. The view holds the
+// document, so it stays valid after the lazy that gave it ends.
 TEST_CASE("lazy: get reads a string as a view")
 {
-    auto const text = lazy_of("\x64IETF"s);
-    CHECK_EQ(*text.get<std::string_view>(), "IETF"sv);
+    auto const text = lazy_of("\x64IETF"s).get<std::string_view>();
+    REQUIRE(text.has_value());
+    CHECK_EQ(**text, "IETF"sv);
     CHECK_EQ(get<std::string_view>("\x44\x01\x02\x03\x04"s).error(), error::incorrect_type);
     auto const four = lazy_of("\x44\x01\x02\x03\x04"s);
     auto const bytes = four.get<std::span<std::byte const>>();
     REQUIRE(bytes.has_value());
-    CHECK(std::ranges::equal(*bytes, std::array{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}));
+    CHECK(std::ranges::equal(**bytes, std::array{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}));
     CHECK_EQ(get<std::span<std::byte const>>("\x64IETF"s).error(), error::incorrect_type);
     CHECK_EQ(get<std::string_view>("\x62\x61"s).error(), error::too_little_data);
 }
@@ -325,15 +327,15 @@ TEST_CASE("lazy: get reads a typed array")
 {
     auto const u8 = get<cbor::typed_array>("\xd8\x40\x43\x01\x02\x03"s);
     REQUIRE(u8.has_value());
-    CHECK_EQ(u8->tag, 64u);
-    CHECK_EQ(u8->bytes.size(), 3u);
+    CHECK_EQ((*u8)->tag, 64u);
+    CHECK_EQ((*u8)->bytes.size(), 3u);
     auto const u16 = get<cbor::typed_array>("\xd8\x41\x44\x00\x01\x00\x02"s);
     REQUIRE(u16.has_value());
-    CHECK_EQ(u16->tag, 65u);
-    CHECK_EQ(u16->bytes.size(), 4u);
+    CHECK_EQ((*u16)->tag, 65u);
+    CHECK_EQ((*u16)->bytes.size(), 4u);
     auto const f64 = get<cbor::typed_array>("\xd8\x56\x48\x00\x00\x00\x00\x00\x00\xf0\x3f"s);
     REQUIRE(f64.has_value());
-    CHECK_EQ(f64->tag, 86u);
+    CHECK_EQ((*f64)->tag, 86u);
     CHECK_EQ(get<cbor::typed_array>("\xd8\x41\x43\x00\x01\x00"s).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(get<cbor::typed_array>("\xd8\x4c\x41\x00"s).error(), error::incorrect_type);
     CHECK_EQ(get<cbor::typed_array>("\xd8\x3f\x41\x00"s).error(), error::incorrect_type);
@@ -378,8 +380,8 @@ TEST_CASE("encode: a typed array is a tag and a byte string")
     auto const document = lazy_of(*wire);
     auto const back = document.get<cbor::typed_array>();
     REQUIRE(back.has_value());
-    CHECK_EQ(back->tag, 65u);
-    CHECK(std::ranges::equal(back->bytes, std::as_bytes(std::span("\x00\x01\x00\x02"sv))));
+    CHECK_EQ((*back)->tag, 65u);
+    CHECK(std::ranges::equal((*back)->bytes, std::as_bytes(std::span("\x00\x01\x00\x02"sv))));
 }
 
 // A tag outside 64 to 87, or the reserved 76, is no typed array; a length that is not a multiple of the
@@ -508,7 +510,11 @@ TEST_CASE("lazy: from an owner holds the owner until the last lazy ends")
         name.emplace(*doc.at("user").at("name"));
     }
     CHECK_FALSE(released);
-    CHECK_EQ(*name->get<std::string_view>(), "ann"sv);
+    {
+        auto const text = name->get<std::string_view>();
+        REQUIRE(text.has_value());
+        CHECK_EQ(**text, "ann"sv);
+    }
     name.reset();
     CHECK(released);
 }
@@ -520,8 +526,9 @@ TEST_CASE("lazy: from, at and get as a chain")
     std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
     char const *const data = bytes.data();
     cbor::lazy const doc = *cbor::lazy::from(std::move(bytes));
-    std::string_view const name = *doc.at("statuses").at(1).at("user").at("name").get<std::string_view>();
-    CHECK_EQ(name, "bob"sv);
+    auto const name = doc.at("statuses").at(1).at("user").at("name").get<std::string_view>();
+    REQUIRE(name.has_value());
+    CHECK_EQ(**name, "bob"sv);
     CHECK_EQ(static_cast<void const *>(doc.document->bytes.data()), static_cast<void const *>(data));
     auto const missing = doc.at("statuses").at(5).at("user").get<std::string_view>();
     REQUIRE_FALSE(missing.has_value());
@@ -551,4 +558,42 @@ TEST_CASE("lazy: a key under tag 28 or tag 29 is the key it marks or names")
     auto const named = root.at<16>(1)->at<16>("a");
     REQUIRE(named.has_value());
     CHECK_EQ(*named->get<std::uint64_t>(), 2u);
+}
+
+namespace
+{
+
+template <class R>
+concept read_from_temporary = requires(R &&r) { *std::move(*r); };
+
+} // namespace
+
+// A view that get gives holds the bytes of the document: it outlives the lazy and the owner that made it, and it
+// cannot be read through a temporary.
+TEST_CASE("lazy: a view holds the document")
+{
+    bool released = false;
+    std::optional<cbor::owning_ref<std::string_view>> view;
+    {
+        auto const owner = std::make_shared<buffer_owner>(encoded(M("name"s, "ann"s)), &released);
+        auto const name = cbor::lazy::from(owner, owner->bytes).at("name").get<std::string_view>();
+        REQUIRE(name.has_value());
+        view.emplace(*name);
+    }
+    CHECK_FALSE(released);
+    CHECK_EQ(**view, "ann"sv);
+    view.reset();
+    CHECK(released);
+    CHECK_FALSE(read_from_temporary<cbor::result<cbor::owning_ref<std::string_view>>>);
+    CHECK_THROWS_AS((void)cbor::lazy::from(std::shared_ptr<void const>{}, "\x00"sv), std::logic_error);
+}
+
+// A shared reference may stand for the content of a tag: the magnitude of a bignum, the bytes of a typed array.
+TEST_CASE("lazy: get follows a shared reference in the content of a tag")
+{
+    auto const root = lazy_of("\x83\xd8\x1c\x41\x05\xc2\xd8\x1d\x00\xd8\x40\xd8\x1d\x00"s);
+    CHECK_EQ(*root.at(1).get<std::uint64_t>(), 5u);
+    auto const typed = root.at(2).get<cbor::typed_array>();
+    REQUIRE(typed.has_value());
+    CHECK_EQ((*typed)->bytes.size(), 1u);
 }
