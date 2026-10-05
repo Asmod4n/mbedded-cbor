@@ -35,25 +35,21 @@ arm_libraries() {
 	esac
 }
 JOBS=${JOBS:-$(nproc)}
+trap 'exit 1' TERM
+trap 'echo "a build failed" >&2; kill -TERM 0' USR1
 running=0
-fail() {
-	echo "a build failed" >&2
-	kill $(jobs -p) 2>&1
-	wait
-	exit 1
-}
 finish() {
 	while [ "$running" -gt 0 ]; do
-		wait -n || fail
+		wait -n
 		running=$((running - 1))
 	done
 }
 spawn() {
 	if [ "$running" -ge "$JOBS" ]; then
-		wait -n || fail
+		wait -n
 		running=$((running - 1))
 	fi
-	"$@" &
+	( "$@" || kill -USR1 $$ ) &
 	running=$((running + 1))
 }
 
