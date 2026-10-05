@@ -47,5 +47,59 @@ schema bench:
 Settings: `ARMS`, `SCHEMA_OPS`, `GXX`, `CLANGXX`, `JOBS` (parallel builds, default: all cpus), `PROCESSES` (default 10), `MIN_TIME`
 (default `0.2s`).
 
-msgpack-cxx cannot hold every integer of `ints.cbor`; these arms are
-listed under `failed` in the result file.
+## Every arm of the runtime bench does the same work
+
+Each read arm reads every item of the document once and sums every
+byte of every text string, byte string and map key, inside tags too.
+No read arm verifies the input before it reads it. mbedded-cbor checks
+UTF-8 in every text string while it reads; the library has no setting
+that turns this off. jsoncons delivers an end event for each array and
+map; the arm counts it as one item.
+
+Each encode arm writes every item of the document into a buffer that
+it keeps across iterations:
+
+- S (mbedded-cbor), VG_RAW, MP_REUSE and FB_REUSE walk the same
+  `bench::value` tree and call the encoder of the library item by
+  item. The msgpack-cxx `object` tree keeps the body of an ext item
+  as bytes, not as items, so MP_REUSE does not encode from it.
+- LC_PREALLOC walks the `cbor_item_t` tree that `cbor_load` built,
+  and JC_CLEAR the `jsoncons::json` tree that `decode_cbor` built.
+  Both trees hold every item of the document, and the walk is part of
+  the cost of the library. jsoncons keeps no tag it does not know, so
+  JC_CLEAR writes `cwt` without tag 18 (not checked here: jsoncons
+  has no package).
+
+msgpack and FlexBuffers have no tag. msgpack writes a tag as ext type
+1 whose body is the tag number and the content, packed item by item on
+each iteration. FlexBuffers writes a tag as a vector of the tag number
+and the content. Each read arm then sees one item more per tag than
+the CBOR arms: the tag number.
+
+Neither has an integer below -2^63. For such a CBOR negative integer
+with argument n, msgpack writes ext type 2 whose body is n as uint64,
+and FlexBuffers a vector of one UInt n. `ints.cbor` holds 135 of them,
+so these read arms see two items for each.
+
+A FlexBuffers map has string keys only. A CBOR map whose keys are all
+text strings becomes a FlexBuffers map; the builder sorts its keys. Any
+other map becomes a vector of key, value, key, value. No key is
+converted to a decimal string.
+
+A CBOR simple value false, true or null becomes the bool or nil of
+msgpack and FlexBuffers. The documents hold no other simple value.
+
+Floats: CBOR arms write the width the library chooses. mbedded-cbor
+and vladimirgamalyan/cbor write the shortest width that holds the
+value exactly (half, single or double). libcbor keeps the width of the
+loaded item. jsoncons writes single or double (not checked here).
+msgpack `pack_double` writes 8 bytes always. FlexBuffers writes 4 bytes
+where the double is exact as a float, else 8, and all elements of one
+vector take the width of the widest; `floats.cbor` is one vector, so
+every float takes 8 bytes.
+
+The item count and the string byte sum of each document, as each read
+arm sees them, were compared once outside the timed loop with a
+checker that includes `runtime.cpp`. READ and LC_READ see the CBOR
+items exactly; MP_READ and FB_READ see one item more per tag and per
+integer below -2^63, and the same string bytes.

@@ -157,29 +157,40 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
 #if defined(ARM_FB_REUSE) || defined(ARM_FB_READ)
 #define ARM_FB 1
 #include <flatbuffers/flexbuffers.h>
-static std::string fb_key(bench::value const &k)
-{
-    bench::binding b;
-    switch (b.kind_of(k)) {
-    case cbor::kind::text_string: return std::string(b.text_of(k));
-    case cbor::kind::unsigned_integer: return std::to_string(b.unsigned_of(k));
-    case cbor::kind::negative_integer: return std::to_string(-1 - std::int64_t(b.unsigned_of(k) - 1));
-    default: std::abort();
-    }
-}
 static void fb_build(flexbuffers::Builder &f, bench::value const &x)
 {
     bench::binding b;
     switch (b.kind_of(x)) {
     case cbor::kind::unsigned_integer: f.UInt(b.unsigned_of(x)); break;
-    case cbor::kind::negative_integer: f.Int(-1 - std::int64_t(b.unsigned_of(x) - 1)); break;
+    case cbor::kind::negative_integer: {
+        std::uint64_t const n = b.unsigned_of(x) - 1;
+        if (n <= std::uint64_t(INT64_MAX)) {
+            f.Int(-1 - std::int64_t(n));
+        } else {
+            auto const st = f.StartVector();
+            f.UInt(n);
+            f.EndVector(st, false, false);
+        }
+    } break;
     case cbor::kind::floating_point: f.Double(b.float_of(x)); break;
     case cbor::kind::simple_value: { auto const v = b.simple_of(x); if (v == 20 || v == 21) f.Bool(v == 21); else f.Null(); } break;
     case cbor::kind::text_string: { auto const t = b.text_of(x); f.String(t.data(), t.size()); } break;
     case cbor::kind::byte_string: { auto const t = b.bytes_of(x); f.Blob(t.data(), t.size()); } break;
     case cbor::kind::array: { auto const st = f.StartVector(); auto const n = b.array_size(x); for (std::uint64_t i = 0; i < n; ++i) fb_build(f, b.array_at(x, i)); f.EndVector(st, false, false); } break;
-    case cbor::kind::map: { auto const st = f.StartMap(); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { auto const s = fb_key(k); f.Key(s.data(), s.size()); fb_build(f, v); }); f.EndMap(st); } break;
-    case cbor::kind::registered: fb_build(f, b.before_encode(x)); break;
+    case cbor::kind::map: {
+        bool text_keys = true;
+        b.map_for_each(x, [&](bench::value const &k, bench::value const &) { text_keys = text_keys && b.kind_of(k) == cbor::kind::text_string; });
+        if (text_keys) {
+            auto const st = f.StartMap();
+            b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { std::string const t(b.text_of(k)); f.Key(t.c_str(), t.size()); fb_build(f, v); });
+            f.EndMap(st);
+        } else {
+            auto const st = f.StartVector();
+            b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { fb_build(f, k); fb_build(f, v); });
+            f.EndVector(st, false, false);
+        }
+    } break;
+    case cbor::kind::registered: { auto const st = f.StartVector(); f.UInt(b.registered_tag(x)); fb_build(f, b.before_encode(x)); f.EndVector(st, false, false); } break;
     default: std::abort();
     }
 }
@@ -206,7 +217,6 @@ static bench::value tree;
 static std::string alt;
 #endif
 #if defined(ARM_MP_REUSE)
-static msgpack::object_handle mph;
 static msgpack::sbuffer mpbuf;
 #endif
 #if defined(ARM_FB_REUSE)
@@ -245,9 +255,6 @@ static void setup()
     mp_pack(pk, tree);
     alt.assign(sb.data(), sb.size());
     bytes = &alt;
-#endif
-#if defined(ARM_MP_REUSE)
-    mph = msgpack::unpack(alt.data(), alt.size());
 #endif
 #if defined(ARM_FB)
     flexbuffers::Builder f;
@@ -311,6 +318,8 @@ static std::uint64_t op()
         c.float4 = [](void *x, float v) { *static_cast<std::uint64_t *>(x) += std::bit_cast<std::uint32_t>(v); };
         c.float8 = [](void *x, double v) { *static_cast<std::uint64_t *>(x) += std::bit_cast<std::uint64_t>(v); };
         c.boolean = [](void *x, bool v) { *static_cast<std::uint64_t *>(x) += v; };
+        c.null = [](void *x) { *static_cast<std::uint64_t *>(x) += 22; };
+        c.undefined = [](void *x) { *static_cast<std::uint64_t *>(x) += 23; };
         return c;
     }();
     auto const *p = reinterpret_cast<cbor_data>(doc.data());
@@ -357,12 +366,14 @@ static std::uint64_t op()
     return vg_read(d, 0);
 #elif defined(ARM_MP_REUSE)
     mpbuf.clear();
-    msgpack::pack(mpbuf, mph.get());
+    msgpack::packer<msgpack::sbuffer> pk(mpbuf);
+    mp_pack(pk, tree);
     benchmark::ClobberMemory();
     return mpbuf.size();
 #elif defined(ARM_MP_READ)
     struct reader : msgpack::null_visitor {
         std::uint64_t sum = 0;
+        bool visit_nil() { sum += 1; return true; }
         bool visit_boolean(bool v) { sum += v; return true; }
         bool visit_positive_integer(std::uint64_t v) { sum += v; return true; }
         bool visit_negative_integer(std::int64_t v) { sum += std::uint64_t(v); return true; }
@@ -393,8 +404,6 @@ static std::uint64_t op()
     benchmark::ClobberMemory();
     return fbb.GetSize();
 #elif defined(ARM_FB_READ)
-    if (!flexbuffers::VerifyBuffer(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size(), nullptr))
-        std::abort();
     return fb_read(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size()));
 #else
 #error no arm
