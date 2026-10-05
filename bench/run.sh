@@ -5,7 +5,7 @@
 # openSUSE Tumbleweed packages:
 #   zypper install gcc16-c++ clang benchmark-devel libcbor-devel \
 #     msgpack-cxx-devel flatbuffers-devel capnproto libcapnp-devel \
-#     nlohmann_json-devel doctest-devel python3
+#     nlohmann_json-devel python3
 # jsoncons and vladimirgamalyan/cbor have no package. Their arms run only
 # when JSONCONS_INCLUDE or VG_INCLUDE names a checkout.
 #
@@ -30,14 +30,19 @@ arms="S READ LC_PREALLOC LC_READ MP_REUSE MP_READ FB_REUSE FB_READ"
 [ -n "${VG_INCLUDE:-}" ] && arms="$arms VG_RAW VG_READ"
 schema_ops="ENC DEC PATH FB_ENC FB_READ CP_ENC CP_READ"
 
-jobs=0
+pids=""
+finish() {
+	for p in $pids; do
+		wait "$p" || { echo "a build failed" >&2; exit 1; }
+	done
+	pids=""
+}
 spawn() {
 	"$@" &
-	jobs=$((jobs + 1))
-	if [ "$jobs" -ge 4 ]; then
-		wait
-		jobs=0
-	fi
+	pids="$pids $!"
+	set -- $pids
+	[ "$#" -ge 4 ] && finish
+	return 0
 }
 
 echo "building into $build"
@@ -49,12 +54,12 @@ for cc in "$GXX" "$CLANGXX"; do
 	for a in $arms; do
 		for d in $docs; do
 			spawn "$cc" -std=c++23 $flags -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" \
-				-DDOC_PATH="\"$here/docs/$d.cbor\"" -I"$root/include" -I"$root/test" $extra \
+				-DDOC_PATH="\"$here/docs/$d.cbor\"" -I"$root/include" $extra \
 				"$here/runtime.cpp" -lcbor -lflatbuffers -lbenchmark -lpthread -o "$build/rt.$tag.$a.$d"
 		done
 	done
 done
-wait
+finish
 flatc --cpp -o "$build" "$here/carsales.fbs"
 cp "$here/carsales.capnp" "$build/"
 (cd "$build" && capnp compile -oc++ carsales.capnp)
@@ -64,7 +69,7 @@ for op in $schema_ops; do
 		-I"$root/include" -I"$build" "$here/schema.cpp" "$build/carsales.capnp.o" \
 		$(pkg-config --cflags --libs capnp) -lflatbuffers -lbenchmark -lpthread -o "$build/sc.$op"
 done
-wait
+finish
 
 echo "running $PROCESSES processes per binary"
 mkdir -p "$build/out"
