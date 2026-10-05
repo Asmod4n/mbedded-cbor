@@ -1,17 +1,15 @@
 #!/bin/sh
-# Builds every arm as its own binary, runs each binary as ten processes in
-# turn, writes one result file to bench/results/ and deletes the build.
-#
-# openSUSE Tumbleweed packages:
-#   zypper install gcc16-c++ clang benchmark-devel libcbor-devel \
-#     msgpack-cxx-devel flatbuffers-devel capnproto libcapnp-devel \
-#     nlohmann_json-devel python3
-# jsoncons and vladimirgamalyan/cbor have no package. Their arms run only
-# when JSONCONS_INCLUDE or VG_INCLUDE names a checkout.
-#
-# Environment: GXX (default g++-16), CLANGXX (default clang++),
-# PROCESSES (default 10), MIN_TIME (default 0.2s).
 set -eu
+packages="gcc16-c++ clang benchmark-devel libcbor-devel msgpack-cxx-devel flatbuffers-devel capnproto libcapnp-devel nlohmann_json-devel python3"
+missing=""
+for p in $packages; do
+	rpm -q --quiet --whatprovides "$p" || missing="$missing $p"
+done
+if [ -n "$missing" ]; then
+	echo "missing packages:$missing" >&2
+	echo "install them with: sudo zypper install$missing" >&2
+	exit 1
+fi
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(dirname "$here")
 GXX=${GXX:-g++-16}
@@ -30,6 +28,12 @@ arms="S READ LC_PREALLOC LC_READ MP_REUSE MP_READ FB_REUSE FB_READ"
 [ -n "${VG_INCLUDE:-}" ] && arms="$arms VG_RAW VG_READ"
 schema_ops="ENC DEC PATH FB_ENC FB_READ CP_ENC CP_READ"
 
+arm_libraries() {
+	case "$1" in
+	LC_*) echo -lcbor ;;
+	FB_*) echo -lflatbuffers ;;
+	esac
+}
 pids=""
 finish() {
 	for p in $pids; do
@@ -55,7 +59,7 @@ for cc in "$GXX" "$CLANGXX"; do
 		for d in $docs; do
 			spawn "$cc" -std=c++23 $flags -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" \
 				-DDOC_PATH="\"$here/docs/$d.cbor\"" -I"$root/include" $extra \
-				"$here/runtime.cpp" -lcbor -lflatbuffers -lbenchmark -lpthread -o "$build/rt.$tag.$a.$d"
+				"$here/runtime.cpp" $(arm_libraries "$a") -lbenchmark -lpthread -o "$build/rt.$tag.$a.$d"
 		done
 	done
 done

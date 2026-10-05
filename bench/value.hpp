@@ -13,7 +13,7 @@
 #include <variant>
 #include <vector>
 
-namespace test
+namespace bench
 {
 
 using cbor::error;
@@ -219,7 +219,7 @@ T const *get_if(value const &v)
     return p ? *p : nullptr;
 }
 
-struct test_binding : cbor::binding<test::value> {
+struct binding : cbor::binding<bench::value> {
     value unsigned_integer_decode(std::uint64_t const a)
     {
         return {a};
@@ -389,24 +389,4 @@ struct test_binding : cbor::binding<test::value> {
     }
 };
 
-struct string_writer {
-    std::string encoded;
-
-    string_writer &allocate(std::size_t)
-    {
-        return *this;
-    }
-
-    std::expected<void, std::errc> append(std::string_view part)
-    {
-        encoded.append(part);
-        return {};
-    }
-
-    std::expected<void, std::errc> done(std::size_t)
-    {
-        return {};
-    }
-};
-
-} // namespace test
+} // namespace bench
