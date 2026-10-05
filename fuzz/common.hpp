@@ -82,12 +82,8 @@ inline test::value canonical(test::value const &v)
             out.push_back(test::entry{canonical(k), canonical(x)});
         return {std::move(out)};
     }
-    if (auto const *t = std::get_if<test::tagged *>(&v.kind)) {
-        test::array content;
-        for (auto const &e : (*t)->content)
-            content.push_back(canonical(e));
-        return {test::tagged{(*t)->tag, std::move(content)}};
-    }
+    if (auto const *t = std::get_if<test::tagged *>(&v.kind))
+        return {test::tagged{(*t)->tag, canonical((*t)->content)}};
     return v;
 }
 
@@ -231,7 +227,7 @@ inline test::value value_from(source &in, refusal &r, int const depth)
         std::uint64_t tag = in.number();
         if (tag_has_meaning(tag))
             tag += std::uint64_t{1} << 40;
-        return {test::tagged{tag, test::array{value_from(in, r, depth + 1)}}};
+        return {test::tagged{tag, value_from(in, r, depth + 1)}};
     }
     }
 }

@@ -28,8 +28,7 @@ inline void text_keys(test::value const &v, std::vector<std::string> &keys, int 
         for (auto const &e : *a)
             text_keys(e, keys, depth + 1);
     } else if (auto const *t = test::get_if<test::tagged>(v)) {
-        for (auto const &e : t->content)
-            text_keys(e, keys, depth + 1);
+        text_keys(t->content, keys, depth + 1);
     }
 }
 
@@ -144,7 +143,7 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
         std::vector<test::value> next;
         for (test::value v : nodes) {
             if (auto const *t = test::get_if<test::tagged>(v); t && t->tag == 24) {
-                auto const *b = test::get_if<test::bytes>(t->content.at(0));
+                auto const *b = test::get_if<test::bytes>(t->content);
                 if (!b)
                     return std::nullopt;
                 test_binding binding;

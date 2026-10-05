@@ -158,7 +158,7 @@ TEST_CASE("major 7: a one-byte simple value below 32 is syntax_error")
 // Every value of a tag reaches the binding with its number; RFC 8949 Appendix A, tag 1.
 TEST_CASE("major 6: a tag reaches the binding with its content")
 {
-    tagged t{1, array{V(1363896240)}};
+    tagged t{1, V(1363896240)};
     check_both("\xc1\x1a\x51\x4b\x67\xb0"sv, value{t});
 }
 
