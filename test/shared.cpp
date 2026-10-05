@@ -549,3 +549,22 @@ TEST_CASE("path: a wildcard over a shared array")
         CHECK_EQ(std::get<std::uint64_t>(element(*v, 2)->kind), 3);
     }
 }
+
+// A binding as in mruby gives the content of a registered object by value, as a temporary that only the encoder
+// holds. The encoder of one pass writes it before the temporary ends.
+TEST_CASE("registered tag: before_encode that returns a new value by value")
+{
+    struct fresh_binding : ref_binding {
+        handle before_encode(handle const &)
+        {
+            ++before_encode_calls;
+            return arr({u(1), arr({u(2), u(3)})});
+        }
+    };
+    auto const point = std::make_shared<node>(node{object{5000, nullptr}});
+    fresh_binding binding;
+    string_writer w;
+    REQUIRE(cbor::encode<16>(binding, w, arr({point, point})).has_value());
+    CHECK_EQ(binding.before_encode_calls, 2);
+    CHECK_EQ(w.bytes, "\x82\xd9\x13\x88\x82\x01\x82\x02\x03\xd9\x13\x88\x82\x01\x82\x02\x03"sv);
+}

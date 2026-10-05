@@ -1724,4 +1724,60 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
     CHECK_EQ(differ, 0u);
 }
 
+// The value category of the bytes says what decode and path do. A moved std::string becomes the owner and is not
+// copied; an lvalue and a const rvalue are copied once. The result stays valid after the caller reuses or destroys
+// its buffer.
+TEST_CASE("decode and path: an rvalue string is moved, everything else is copied")
+{
+    std::string const name(40, 'n');
+    std::string const message = schema_bytes(login{7, true, name});
+    auto range = [](std::string_view const inner, char const *const begin, std::size_t const size) {
+        return std::less_equal<>{}(begin, inner.data()) && std::less_equal<>{}(inner.data() + inner.size(), begin + size);
+    };
+
+    auto buffer = std::make_unique<std::string>(message);
+    char const *data = buffer->data();
+    auto const moved = cbor::schema<login>::path(std::move(*buffer));
+    REQUIRE(moved.has_value());
+    auto const moved_name = moved->at<"$.name">();
+    REQUIRE(moved_name.has_value());
+    CHECK(range(*moved_name, data, message.size()));
+    buffer->assign(message.size(), '\0');
+    buffer.reset();
+    CHECK_EQ(*moved_name, name);
+
+    std::string lvalue = message;
+    auto const copied = cbor::schema<login>::path(lvalue);
+    REQUIRE(copied.has_value());
+    auto const copied_name = copied->at<"$.name">();
+    REQUIRE(copied_name.has_value());
+    CHECK_FALSE(range(*copied_name, lvalue.data(), lvalue.size()));
+    CHECK_EQ(lvalue, message);
+    lvalue.assign(message.size(), '\0');
+    CHECK_EQ(*copied_name, name);
+
+    std::string const constant = message;
+    auto const from_const = cbor::schema<login>::path(std::move(constant));
+    REQUIRE(from_const.has_value());
+    CHECK_EQ(constant, message);
+
+    auto decode_buffer = std::make_unique<std::string>(message);
+    auto const decoded = cbor::schema<login>::decode(std::move(*decode_buffer));
+    decode_buffer.reset();
+    REQUIRE(decoded.has_value());
+    CHECK_EQ((*decoded)->name, name);
+    auto const from_lvalue = cbor::schema<login>::decode(lvalue = message);
+    REQUIRE(from_lvalue.has_value());
+    CHECK_EQ((*from_lvalue)->id, 7u);
+    auto const decoded_const = cbor::schema<login>::decode(std::move(constant));
+    REQUIRE(decoded_const.has_value());
+    CHECK_EQ((*decoded_const)->id, 7u);
+    auto const from_view = cbor::schema<login>::decode(std::string_view(message));
+    REQUIRE(from_view.has_value());
+    CHECK_EQ((*from_view)->id, 7u);
+    char const *const empty = "";
+    CHECK_EQ(cbor::schema<login>::decode(empty).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<login>::path("").error(), error::too_little_data);
+}
+
 #endif

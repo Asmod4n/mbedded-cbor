@@ -295,7 +295,10 @@ template <std::size_t DepthMax>
 std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes);
 
 template <std::size_t DepthMax>
-std::expected<lazy, error> decode(std::string bytes);
+std::expected<lazy, error> decode(std::string_view bytes);
+
+template <std::size_t DepthMax, std::same_as<std::string> Bytes>
+std::expected<lazy, error> decode(Bytes &&bytes);
 
 template <std::size_t DepthMax, class Binding>
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
@@ -4395,7 +4398,9 @@ struct lazy {
     std::shared_ptr<internal::document> document;
     std::size_t offset;
 
-    static result<lazy> from(std::string &&bytes);
+    template <std::same_as<std::string> Bytes>
+    static result<lazy> from(Bytes &&bytes);
+    static result<lazy> from(std::string_view bytes);
     static result<lazy> from(std::shared_ptr<std::string const> bytes);
     static result<lazy> from(std::shared_ptr<void const> owner, std::string_view bytes);
 
@@ -4670,6 +4675,14 @@ public:
         return owning_ref<T>(std::move(copy), std::move(*value));
     }
 
+    template <std::size_t DepthMax = 64, std::same_as<std::string> Bytes>
+    static result<owning_ref<T>> decode(Bytes &&bytes)
+    {
+        auto owner = std::make_shared<std::string const>(std::move(bytes));
+        std::string_view const view = *owner;
+        return decode<DepthMax>(std::move(owner), view);
+    }
+
     template <std::size_t DepthMax = 64>
     static result<owning_ref<T>> decode(std::shared_ptr<void const> owner, std::string_view const bytes)
     {
@@ -4861,6 +4874,15 @@ public:
         return path(std::move(copy), view);
     }
 
+    template <std::same_as<std::string> Bytes>
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    static result<accessor<>> path(Bytes &&bytes)
+    {
+        auto owner = std::make_shared<std::string const>(std::move(bytes));
+        std::string_view const view = *owner;
+        return path(std::move(owner), view);
+    }
+
 
     template <std::size_t DepthMax = 64>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
@@ -4871,6 +4893,15 @@ public:
         if (auto const r = internal::root_read<T, DepthMax>(value, *copy); !r) [[unlikely]]
             return std::unexpected(r.error());
         return owning_ref<T>(std::move(copy), std::move(value));
+    }
+
+    template <std::size_t DepthMax = 64, std::same_as<std::string> Bytes>
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    static result<owning_ref<T>> decode(Bytes &&bytes)
+    {
+        auto owner = std::make_shared<std::string const>(std::move(bytes));
+        std::string_view const view = *owner;
+        return decode<DepthMax>(std::move(owner), view);
     }
 
     template <std::size_t DepthMax = 64>
@@ -5373,7 +5404,10 @@ class walker
         case kind::registered:
             if constexpr (requires { binding.registered_tag(item); }) {
                 head(major_type::tag, binding.registered_tag(item));
-                value(content_of(item, identity));
+                if constexpr (Pass == pass::plain)
+                    value(binding.before_encode(item));
+                else
+                    value(content_of(item, identity));
                 return;
             }
             break;
@@ -5533,7 +5567,13 @@ std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &byte
 }
 
 template <std::size_t DepthMax>
-std::expected<lazy, error> decode(std::string bytes)
+std::expected<lazy, error> decode(std::string_view const bytes)
+{
+    return decode<DepthMax>(std::make_shared<std::string const>(bytes));
+}
+
+template <std::size_t DepthMax, std::same_as<std::string> Bytes>
+std::expected<lazy, error> decode(Bytes &&bytes)
 {
     return decode<DepthMax>(std::make_shared<std::string const>(std::move(bytes)));
 }
@@ -5596,9 +5636,15 @@ inline result<lazy> lazy::from(std::shared_ptr<std::string const> bytes)
     return from(std::move(bytes), view);
 }
 
-inline result<lazy> lazy::from(std::string &&bytes)
+template <std::same_as<std::string> Bytes>
+result<lazy> lazy::from(Bytes &&bytes)
 {
     return from(std::make_shared<std::string const>(std::move(bytes)));
+}
+
+inline result<lazy> lazy::from(std::string_view const bytes)
+{
+    return from(std::make_shared<std::string const>(bytes));
 }
 
 template <std::size_t DepthMax>
