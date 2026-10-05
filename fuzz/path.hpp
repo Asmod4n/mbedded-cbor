@@ -18,16 +18,16 @@ inline void text_keys(test::value const &v, std::vector<std::string> &keys, int 
 {
     if (depth > 16)
         return;
-    if (auto const *m = std::get_if<test::map>(&v.kind)) {
+    if (auto const *m = test::get_if<test::map>(v)) {
         for (auto const &[k, x] : *m) {
-            if (auto const *t = std::get_if<std::string>(&k.kind))
-                keys.push_back(*t);
+            if (test::test_binding{}.kind_of(k) == cbor::kind::text_string)
+                keys.emplace_back(k.text());
             text_keys(x, keys, depth + 1);
         }
-    } else if (auto const *a = std::get_if<test::array>(&v.kind)) {
+    } else if (auto const *a = test::get_if<test::array>(v)) {
         for (auto const &e : *a)
             text_keys(e, keys, depth + 1);
-    } else if (auto const *t = std::get_if<test::tagged>(&v.kind)) {
+    } else if (auto const *t = test::get_if<test::tagged>(v)) {
         for (auto const &e : t->content)
             text_keys(e, keys, depth + 1);
     }
@@ -143,8 +143,8 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
     for (auto const &s : segments) {
         std::vector<test::value> next;
         for (test::value v : nodes) {
-            if (auto const *t = std::get_if<test::tagged>(&v.kind); t && t->tag == 24) {
-                auto const *b = std::get_if<test::bytes>(&t->content.at(0).kind);
+            if (auto const *t = test::get_if<test::tagged>(v); t && t->tag == 24) {
+                auto const *b = test::get_if<test::bytes>(t->content.at(0));
                 if (!b)
                     return std::nullopt;
                 test_binding binding;
@@ -155,9 +155,9 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
             }
             std::size_t const before = next.size();
             if (s.kind == segment::kind::wildcard) {
-                if (auto const *a = std::get_if<test::array>(&v.kind))
+                if (auto const *a = test::get_if<test::array>(v))
                     next.insert(next.end(), a->begin(), a->end());
-                else if (auto const *m = std::get_if<test::map>(&v.kind))
+                else if (auto const *m = test::get_if<test::map>(v))
                     for (auto const &[k, x] : *m)
                         next.push_back(x);
                 else if (!nodelist)
@@ -166,14 +166,14 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
                     return std::nullopt;
                 continue;
             }
-            if (auto const *m = std::get_if<test::map>(&v.kind)) {
+            if (auto const *m = test::get_if<test::map>(v)) {
                 for (auto const &[k, x] : *m) {
-                    auto const *t = std::get_if<std::string>(&k.kind);
+                    bool const t = test::test_binding{}.kind_of(k) == cbor::kind::text_string;
                     auto const *u = std::get_if<std::uint64_t>(&k.kind);
                     auto const *n = std::get_if<test::negative>(&k.kind);
                     bool const match =
                         s.kind == segment::kind::key
-                            ? t && *t == s.key
+                            ? t && k.text() == s.key
                             : (u && s.index >= 0 && *u == static_cast<std::uint64_t>(s.index)) ||
                                   (n && s.index < 0 && n->argument == static_cast<std::uint64_t>(-1 - s.index));
                     if (match) {
@@ -181,7 +181,7 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
                         break;
                     }
                 }
-            } else if (auto const *a = std::get_if<test::array>(&v.kind); a && s.kind == segment::kind::index) {
+            } else if (auto const *a = test::get_if<test::array>(v); a && s.kind == segment::kind::index) {
                 auto const size = static_cast<std::int64_t>(a->size());
                 std::int64_t const position = s.index < 0 ? s.index + size : s.index;
                 if (position >= 0 && position < size)

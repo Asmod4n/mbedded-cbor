@@ -61,32 +61,32 @@ inline std::string magnitude_minus_one(std::string m)
 
 inline test::value canonical(test::value const &v)
 {
-    if (auto const *b = std::get_if<test::bignum>(&v.kind)) {
-        std::string const m = magnitude_without_leading_zeros(b->magnitude);
-        if (!b->negative)
+    if (auto const *b = std::get_if<test::bignum *>(&v.kind)) {
+        std::string const m = magnitude_without_leading_zeros((*b)->magnitude);
+        if (!(*b)->negative)
             return m.size() <= 8 ? test::value{magnitude_value(m)} : test::value{test::bignum{false, m}};
         if (m.empty())
             return v;
         std::string const n = magnitude_minus_one(m);
         return n.size() <= 8 ? test::value{test::negative{magnitude_value(n)}} : test::value{test::bignum{true, m}};
     }
-    if (auto const *a = std::get_if<test::array>(&v.kind)) {
+    if (auto const *a = std::get_if<test::array *>(&v.kind)) {
         test::array out;
-        for (auto const &e : *a)
+        for (auto const &e : **a)
             out.push_back(canonical(e));
         return {std::move(out)};
     }
-    if (auto const *m = std::get_if<test::map>(&v.kind)) {
+    if (auto const *m = std::get_if<test::map *>(&v.kind)) {
         test::map out;
-        for (auto const &[k, x] : *m)
+        for (auto const &[k, x] : **m)
             out.push_back(test::entry{canonical(k), canonical(x)});
         return {std::move(out)};
     }
-    if (auto const *t = std::get_if<test::tagged>(&v.kind)) {
+    if (auto const *t = std::get_if<test::tagged *>(&v.kind)) {
         test::array content;
-        for (auto const &e : t->content)
+        for (auto const &e : (*t)->content)
             content.push_back(canonical(e));
-        return {test::tagged{t->tag, std::move(content)}};
+        return {test::tagged{(*t)->tag, std::move(content)}};
     }
     return v;
 }
@@ -103,27 +103,27 @@ inline bool same(test::value const &a, test::value const &b)
             return std::isnan(*x) && std::isnan(y);
         return std::bit_cast<std::uint64_t>(*x) == std::bit_cast<std::uint64_t>(y);
     }
-    if (auto const *x = std::get_if<test::array>(&a.kind)) {
-        auto const &y = std::get<test::array>(b.kind);
-        if (x->size() != y.size())
+    if (auto const *x = std::get_if<test::array *>(&a.kind)) {
+        auto const &y = *std::get<test::array *>(b.kind);
+        if ((*x)->size() != y.size())
             return false;
-        for (std::size_t i = 0; i < x->size(); ++i)
-            if (!same(x->at(i), y.at(i)))
+        for (std::size_t i = 0; i < y.size(); ++i)
+            if (!same((*x)->at(i), y.at(i)))
                 return false;
         return true;
     }
-    if (auto const *x = std::get_if<test::map>(&a.kind)) {
-        auto const &y = std::get<test::map>(b.kind);
-        if (x->size() != y.size())
+    if (auto const *x = std::get_if<test::map *>(&a.kind)) {
+        auto const &y = *std::get<test::map *>(b.kind);
+        if ((*x)->size() != y.size())
             return false;
-        for (std::size_t i = 0; i < x->size(); ++i)
-            if (!same(x->at(i).key, y.at(i).key) || !same(x->at(i).val, y.at(i).val))
+        for (std::size_t i = 0; i < y.size(); ++i)
+            if (!same((*x)->at(i).key, y.at(i).key) || !same((*x)->at(i).val, y.at(i).val))
                 return false;
         return true;
     }
-    if (auto const *x = std::get_if<test::tagged>(&a.kind)) {
-        auto const &y = std::get<test::tagged>(b.kind);
-        return x->tag == y.tag && same(test::value{x->content}, test::value{y.content});
+    if (auto const *x = std::get_if<test::tagged *>(&a.kind)) {
+        auto const &y = *std::get<test::tagged *>(b.kind);
+        return (*x)->tag == y.tag && same(test::value{(*x)->content}, test::value{y.content});
     }
     return a == b;
 }

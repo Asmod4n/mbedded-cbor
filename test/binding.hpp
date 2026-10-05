@@ -3,6 +3,8 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -61,10 +63,104 @@ struct tagged {
     bool operator==(tagged const &) const = default;
 };
 
+// A text that fits next to the index of the variant is held in place; a longer text is held on the heap.
+struct short_text {
+    std::array<char, 23> c;
+    std::uint8_t size;
+
+    std::string_view view() const
+    {
+        return {c.data(), size};
+    }
+
+    bool operator==(short_text const &o) const
+    {
+        return view() == o.view();
+    }
+};
+
+// Every alternative is trivially copyable, so a move of a value copies 32 bytes. The value owns what each
+// pointer points to.
 struct value {
-    std::variant<std::uint64_t, negative, bignum, bytes, std::string, double, simple, array, map, tagged>
-        kind;
-    bool operator==(value const &) const = default;
+    std::variant<std::uint64_t, negative, double, simple, short_text, std::string *, bytes *, bignum *, array *,
+                 map *, tagged *>
+        kind{std::uint64_t{0}};
+
+    value() = default;
+
+    value(std::uint64_t const u) : kind(u)
+    {
+    }
+
+    value(negative const n) : kind(n)
+    {
+    }
+
+    value(double const d) : kind(d)
+    {
+    }
+
+    value(simple const s) : kind(s)
+    {
+    }
+
+    value(short_text const t) : kind(t)
+    {
+    }
+
+    value(std::string t)
+    {
+        if (t.size() <= short_text{}.c.size()) {
+            short_text s{};
+            std::ranges::copy(t, s.c.begin());
+            s.size = static_cast<std::uint8_t>(t.size());
+            kind = s;
+        } else {
+            kind = new std::string(std::move(t));
+        }
+    }
+
+    value(bytes b) : kind(new bytes(std::move(b)))
+    {
+    }
+
+    value(bignum b) : kind(new bignum(std::move(b)))
+    {
+    }
+
+    value(array a) : kind(new array(std::move(a)))
+    {
+    }
+
+    value(map m);
+
+    value(tagged t) : kind(new tagged(std::move(t)))
+    {
+    }
+
+    value(value const &o);
+
+    value(value &&o) noexcept : kind(o.kind)
+    {
+        o.kind = std::uint64_t{0};
+    }
+
+    value &operator=(value o) noexcept
+    {
+        std::swap(kind, o.kind);
+        return *this;
+    }
+
+    ~value();
+
+    std::string_view text() const
+    {
+        if (auto const *s = std::get_if<short_text>(&kind))
+            return s->view();
+        return *std::get<std::string *>(kind);
+    }
+
+    bool operator==(value const &o) const;
 };
 
 struct entry {
@@ -72,6 +168,69 @@ struct entry {
     value val;
     bool operator==(entry const &) const = default;
 };
+
+inline value::value(map m) : kind(new map(std::move(m)))
+{
+}
+
+inline value::~value()
+{
+    if (auto const *t = std::get_if<std::string *>(&kind))
+        delete *t;
+    else if (auto const *b = std::get_if<bytes *>(&kind))
+        delete *b;
+    else if (auto const *n = std::get_if<bignum *>(&kind))
+        delete *n;
+    else if (auto const *a = std::get_if<array *>(&kind))
+        delete *a;
+    else if (auto const *m = std::get_if<map *>(&kind))
+        delete *m;
+    else if (auto const *g = std::get_if<tagged *>(&kind))
+        delete *g;
+}
+
+inline value::value(value const &o) : kind(o.kind)
+{
+    if (auto const *t = std::get_if<std::string *>(&o.kind))
+        kind = new std::string(**t);
+    else if (auto const *b = std::get_if<bytes *>(&o.kind))
+        kind = new bytes(**b);
+    else if (auto const *n = std::get_if<bignum *>(&o.kind))
+        kind = new bignum(**n);
+    else if (auto const *a = std::get_if<array *>(&o.kind))
+        kind = new array(**a);
+    else if (auto const *m = std::get_if<map *>(&o.kind))
+        kind = new map(**m);
+    else if (auto const *g = std::get_if<tagged *>(&o.kind))
+        kind = new tagged(**g);
+}
+
+inline bool value::operator==(value const &o) const
+{
+    if (kind.index() != o.kind.index())
+        return false;
+    if (auto const *t = std::get_if<std::string *>(&kind))
+        return **t == *std::get<std::string *>(o.kind);
+    if (auto const *b = std::get_if<bytes *>(&kind))
+        return **b == *std::get<bytes *>(o.kind);
+    if (auto const *n = std::get_if<bignum *>(&kind))
+        return **n == *std::get<bignum *>(o.kind);
+    if (auto const *a = std::get_if<array *>(&kind))
+        return **a == *std::get<array *>(o.kind);
+    if (auto const *m = std::get_if<map *>(&kind))
+        return **m == *std::get<map *>(o.kind);
+    if (auto const *g = std::get_if<tagged *>(&kind))
+        return **g == *std::get<tagged *>(o.kind);
+    return kind == o.kind;
+}
+
+// The pointee of a heap alternative, or nullptr when the value holds another alternative.
+template <class T>
+T const *get_if(value const &v)
+{
+    auto const *p = std::get_if<T *>(&v.kind);
+    return p ? *p : nullptr;
+}
 
 // The binding of a test: a dynamic language in C++. Every member function builds one kind of value.
 struct test_binding : cbor::binding<test::value> {
@@ -102,7 +261,12 @@ struct test_binding : cbor::binding<test::value> {
 
     value text_string_decode(std::string_view t)
     {
-        return {std::string(t)};
+        if (t.size() > short_text{}.c.size())
+            return {std::string(t)};
+        short_text s{};
+        std::ranges::copy(t, s.c.begin());
+        s.size = static_cast<std::uint8_t>(t.size());
+        return {s};
     }
 
     value float_decode(double f)
@@ -124,7 +288,7 @@ struct test_binding : cbor::binding<test::value> {
 
     value array_append(value &&a, value &&e)
     {
-        std::get<array>(a.kind).push_back(std::move(e));
+        std::get<array *>(a.kind)->push_back(std::move(e));
         return std::move(a);
     }
 
@@ -137,42 +301,43 @@ struct test_binding : cbor::binding<test::value> {
 
     value map_insert(value &&m, value &&k, value &&v)
     {
-        std::get<map>(m.kind).push_back(entry{std::move(k), std::move(v)});
+        std::get<map *>(m.kind)->emplace_back(std::move(k), std::move(v));
         return std::move(m);
     }
 
     value tag_decode(std::uint64_t tag, value content)
     {
-        return {tagged{tag, array{std::move(content)}}};
+        tagged t{tag, {}};
+        t.content.push_back(std::move(content));
+        return {std::move(t)};
     }
 
     cbor::kind kind_of(value const &v)
     {
-        return std::visit(
-            [](auto const &k) {
-                using K = std::decay_t<decltype(k)>;
-                if constexpr (std::is_same_v<K, std::uint64_t>)
-                    return cbor::kind::unsigned_integer;
-                else if constexpr (std::is_same_v<K, negative>)
-                    return cbor::kind::negative_integer;
-                else if constexpr (std::is_same_v<K, bignum>)
-                    return k.negative ? cbor::kind::negative_bignum : cbor::kind::unsigned_bignum;
-                else if constexpr (std::is_same_v<K, bytes>)
-                    return cbor::kind::byte_string;
-                else if constexpr (std::is_same_v<K, std::string>)
-                    return cbor::kind::text_string;
-                else if constexpr (std::is_same_v<K, double>)
-                    return cbor::kind::floating_point;
-                else if constexpr (std::is_same_v<K, simple>)
-                    return cbor::kind::simple_value;
-                else if constexpr (std::is_same_v<K, array>)
-                    return cbor::kind::array;
-                else if constexpr (std::is_same_v<K, map>)
-                    return cbor::kind::map;
-                else
-                    return cbor::kind::registered;
-            },
-            v.kind);
+        switch (v.kind.index()) {
+        case 0:
+            return cbor::kind::unsigned_integer;
+        case 1:
+            return cbor::kind::negative_integer;
+        case 2:
+            return cbor::kind::floating_point;
+        case 3:
+            return cbor::kind::simple_value;
+        case 4:
+        case 5:
+            return cbor::kind::text_string;
+        case 6:
+            return cbor::kind::byte_string;
+        case 7:
+            return std::get<bignum *>(v.kind)->negative ? cbor::kind::negative_bignum
+                                                        : cbor::kind::unsigned_bignum;
+        case 8:
+            return cbor::kind::array;
+        case 9:
+            return cbor::kind::map;
+        default:
+            return cbor::kind::registered;
+        }
     }
 
     std::uint64_t unsigned_of(value const &v)
@@ -184,17 +349,17 @@ struct test_binding : cbor::binding<test::value> {
 
     std::string_view magnitude_of(value const &v)
     {
-        return std::get<bignum>(v.kind).magnitude;
+        return std::get<bignum *>(v.kind)->magnitude;
     }
 
     std::string_view bytes_of(value const &v)
     {
-        return std::get<bytes>(v.kind).b;
+        return std::get<bytes *>(v.kind)->b;
     }
 
     std::string_view text_of(value const &v)
     {
-        return std::get<std::string>(v.kind);
+        return v.text();
     }
 
     double float_of(value const &v)
@@ -209,34 +374,34 @@ struct test_binding : cbor::binding<test::value> {
 
     std::uint64_t array_size(value const &v)
     {
-        return std::get<array>(v.kind).size();
+        return std::get<array *>(v.kind)->size();
     }
 
     value const & array_at(value const &v, std::uint64_t i)
     {
-        return std::get<array>(v.kind).at(i);
+        return std::get<array *>(v.kind)->at(i);
     }
 
     std::uint64_t map_size(value const &v)
     {
-        return std::get<map>(v.kind).size();
+        return std::get<map *>(v.kind)->size();
     }
 
     template <class F>
     void map_for_each(value const &v, F const &f)
     {
-        for (auto const &[key, val] : std::get<map>(v.kind))
+        for (auto const &[key, val] : *std::get<map *>(v.kind))
             f(key, val);
     }
 
     std::uint64_t registered_tag(value const &v)
     {
-        return std::get<tagged>(v.kind).tag;
+        return std::get<tagged *>(v.kind)->tag;
     }
 
     value before_encode(value const &v)
     {
-        return std::get<tagged>(v.kind).content.at(0);
+        return std::get<tagged *>(v.kind)->content.at(0);
     }
 };
 
