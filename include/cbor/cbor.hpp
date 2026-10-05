@@ -374,26 +374,25 @@ class internal;
 template <class T>
 class owning_ref
 {
-    std::shared_ptr<T const> pointer;
+    std::shared_ptr<void const> owner;
+    T value;
 
-    explicit owning_ref(std::shared_ptr<T const> p) : pointer(std::move(p))
+    owning_ref(std::shared_ptr<void const> o, T v) : owner(std::move(o)), value(std::move(v))
     {
     }
 
     template <class>
     friend class schema;
 
-    friend class internal;
-
 public:
     T const &operator*() const &
     {
-        return *pointer;
+        return value;
     }
 
     T const *operator->() const &
     {
-        return pointer.get();
+        return &value;
     }
 
     T const &operator*() const && = delete;
@@ -407,23 +406,6 @@ struct directory {
     std::size_t at;
     std::size_t count;
 };
-
-template <class T, class Root = T>
-    requires(tags_registered<Root>())
-struct document {
-    std::shared_ptr<void const> owner;
-    std::string_view bytes;
-    std::span<char const, schema<Root>::template fixed_size<T>()> field;
-    directory dir;
-};
-
-template <class E, class Root = E>
-    requires(tags_registered<Root>())
-struct array;
-
-template <class K, class V, class Root = K>
-    requires(tags_registered<Root>())
-struct map;
 
 namespace databind
 {
@@ -625,6 +607,10 @@ class internal
         typename U::key_type;
         typename U::mapped_type;
     };
+
+    template <class U>
+    static constexpr bool is_list = std::ranges::sized_range<U> && !is_text_range<U> && !is_byte_range<U> && !is_optional<U> &&
+                                    !is_map<U> && !requires { fixed_length<U>::value; };
 
     static constexpr void head_encode(std::vector<char> &bytes, major_type major, std::uint64_t argument)
     {
@@ -1293,7 +1279,7 @@ class internal
         return length;
     }
 
-    static std::size_t directory_entry(std::string_view const bytes, cbor::directory const dir, std::size_t const j)
+    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const bytes, cbor::directory const dir, std::size_t const j)
     {
         return unsigned_read<std::uint32_t>(
             std::span<char const>(bytes).subspan(dir.at + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());
@@ -1307,10 +1293,22 @@ class internal
         auto const j = shared_index_read<Root>(field);
         if (!j) [[unlikely]]
             return std::unexpected(j.error());
-        if (*j >= dir.count) [[unlikely]]
+        return item_read<Root, Major>(bytes, dir, *j, element);
+    }
+
+    template <class Root, major_type Major>
+    CBOR_ALWAYS_INLINE static std::expected<reference, error> item_read(std::string_view const bytes, cbor::directory const dir,
+                                                                        std::size_t const j, std::size_t const element)
+    {
+        if (j >= dir.count) [[unlikely]]
             return std::unexpected(error::unpopulated_table_index);
-        std::size_t const item = directory_entry(bytes, dir, *j);
-        std::size_t const end = *j + 1 < dir.count ? directory_entry(bytes, dir, *j + 1) : bytes.size();
+        constexpr std::size_t fillers = shared_first_of<Root>() - 1 - packing_table_of<Root>().size();
+        std::size_t const items_at = dir.at + sizeof(std::uint32_t) * dir.count + fillers;
+        std::size_t const items_end = bytes.size() - fixed_size<Root, Root>();
+        std::size_t const item = directory_entry(bytes, dir, j);
+        std::size_t const end = j + 1 < dir.count ? directory_entry(bytes, dir, j + 1) : items_end;
+        if (item < items_at || end > items_end) [[unlikely]]
+            return std::unexpected(error::syntax_error);
         auto const length = item_length_read<Major>(bytes, item, end, element);
         if (!length) [[unlikely]]
             return std::unexpected(length.error());
@@ -1362,25 +1360,76 @@ class internal
         return cbor::directory{directory_at<T>(), count};
     }
 
+    template <fixed_string Path>
+    static consteval std::size_t index_slots()
+    {
+        return static_cast<std::size_t>(std::ranges::count_if(Path.view() | std::views::pairwise, [](auto const pair) {
+            return std::get<0>(pair) == '[' && std::get<1>(pair) == ']';
+        }));
+    }
+
+    template <fixed_string Path, std::size_t At>
+    static consteval std::size_t index_slot()
+    {
+        return index_slots<Path>() - static_cast<std::size_t>(std::ranges::count_if(
+                                          Path.view().substr(At) | std::views::pairwise, [](auto const pair) {
+                                              return std::get<0>(pair) == '[' && std::get<1>(pair) == ']';
+                                          }));
+    }
+
+    template <class T, fixed_string Path, std::size_t At>
+    static consteval bool path_valid()
+    {
+        using U = std::remove_cv_t<T>;
+        constexpr std::string_view path = Path.view();
+        if constexpr (At == path.size()) {
+            if constexpr (is_optional<U>)
+                return path_valid<typename U::value_type, Path, At>();
+            else
+                return true;
+        } else if constexpr (path.substr(At, 1) == ".") {
+            if constexpr (!(std::is_class_v<U> && std::is_aggregate_v<U>) || requires { fixed_length<U>::value; } || is_optional<U>) {
+                return false;
+            } else {
+                constexpr std::size_t end = step_end(path, At);
+                constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
+                if constexpr (m == std::meta::info{})
+                    return false;
+                else
+                    return path_valid<typename[:std::meta::type_of(m):], Path, end>();
+            }
+        } else if constexpr (path.substr(At, 1) == "[" && index_end(path, At) < path.size()) {
+            constexpr std::size_t close = index_end(path, At);
+            if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U> || is_map<U> || is_optional<U>) {
+                return false;
+            } else if constexpr (requires { fixed_length<U>::value; }) {
+                if constexpr (close != At + 1 && index_of<T>(path.substr(At + 1, close - At - 1)) >= fixed_length<U>::value)
+                    return false;
+                else
+                    return path_valid<typename fixed_length<U>::element, Path, close + 1>();
+            } else if constexpr (std::ranges::sized_range<U>) {
+                return path_valid<std::ranges::range_value_t<U>, Path, close + 1>();
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
     template <class Root, class T, fixed_string Path, std::size_t At>
     static consteval auto path_result()
     {
         using U = std::remove_cv_t<T>;
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
-            if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; })
-                return std::type_identity<cbor::document<U, Root>>{};
-            else if constexpr (is_fixed_string<U>)
-                return std::type_identity<std::string_view>{};
-            else if constexpr (is_optional<U>)
+            if constexpr (is_optional<U>)
                 return std::type_identity<
                     std::optional<typename decltype(path_result<Root, typename U::value_type, Path, At>())::type>>{};
-            else if constexpr (is_text_range<U> || is_byte_range<U>)
+            else if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U>)
                 return std::type_identity<std::string_view>{};
-            else if constexpr (is_map<U>)
-                return std::type_identity<cbor::map<typename U::key_type, typename U::mapped_type, Root>>{};
-            else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; })
-                return std::type_identity<cbor::array<std::ranges::range_value_t<U>, Root>>{};
+            else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> && !std::same_as<U, uint128>)
+                return std::type_identity<typename cbor::schema<Root>::template accessor<U>>{};
             else
                 return std::type_identity<U>{};
         } else if constexpr (path.substr(At, 1) == ".") {
@@ -1396,83 +1445,66 @@ class internal
         }
     }
 
-    template <class T, fixed_string Path, std::size_t At>
-    static consteval bool path_reads_wire()
-    {
-        using U = std::remove_cv_t<T>;
-        constexpr std::string_view path = Path.view();
-        if constexpr (At == path.size()) {
-            return !(std::is_class_v<U> && std::is_aggregate_v<U>) && !requires { fixed_length<U>::value; };
-        } else if constexpr (path.substr(At, 1) == ".") {
-            constexpr std::size_t end = step_end(path, At);
-            constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
-            return path_reads_wire<typename[:std::meta::type_of(m):], Path, end>();
-        } else {
-            constexpr std::size_t close = index_end(path, At);
-            if constexpr (requires { fixed_length<U>::value; })
-                return path_reads_wire<typename fixed_length<U>::element, Path, close + 1>();
-            else
-                return true;
-        }
-    }
-
     template <class Root, class T, fixed_string Path, std::size_t At>
-    CBOR_ALWAYS_INLINE static auto path_walk(std::string_view const bytes, std::shared_ptr<void const> const &owner, std::span<char const, fixed_size<T, Root>()> const field,
-                          cbor::directory const floor)
-        -> std::conditional_t<path_reads_wire<T, Path, At>(),
-                              std::expected<typename decltype(path_result<Root, T, Path, At>())::type, error>,
-                              typename decltype(path_result<Root, T, Path, At>())::type>
+    CBOR_ALWAYS_INLINE static auto path_walk(std::string_view const bytes, std::span<char const, fixed_size<T, Root>()> const field,
+                                             cbor::directory const floor,
+                                             std::array<std::size_t, index_slots<Path>()> const &indexes)
+        -> cbor::result<typename decltype(path_result<Root, T, Path, At>())::type>
     {
         using U = std::remove_cv_t<T>;
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
-            if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
-                return cbor::document<U, Root>{{}, bytes, field, floor};
-            } else if constexpr (is_fixed_string<U>) {
-                return std::string_view(field.template last<fixed_length<U>::value>());
+            if constexpr (is_fixed_string<U>) {
+                constexpr std::size_t n = fixed_length<U>::value;
+                constexpr std::size_t head = fixed_size<U, Root>() - n;
+                std::span<char const, head> const expected{zero_initialized<Root, U>().data(), head};
+                if (!std::ranges::equal(field.template first<head>(), expected)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                return std::string_view(field.template last<n>());
             } else if constexpr (is_inline_optional<U>) {
                 using E = typename U::value_type;
                 using X = typename decltype(path_result<Root, E, Path, At>())::type;
                 if (static_cast<unsigned char>(field.template subspan<1, 1>().front()) !=
                     (std::to_underlying(major_type::simple_float) << 5 | std::to_underlying(simple_value::true_value)))
                     return std::optional<X>{};
-                return std::optional<X>{
-                    path_walk<Root, E, Path, At>(bytes, owner, field.template subspan<inline_optional_head, fixed_size<E, Root>()>(), floor)};
+                auto const x = path_walk<Root, E, Path, At>(bytes, field.template subspan<inline_optional_head, fixed_size<E, Root>()>(),
+                                                            floor, indexes);
+                if (!x) [[unlikely]]
+                    return std::unexpected(x.error());
+                return std::optional<X>{*x};
             } else if constexpr (is_optional<U>) {
                 using E = typename U::value_type;
                 auto const r = reference_read<Root, major_type::array>(bytes, field, floor, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
+                if (r->length > 1) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
                 using X = typename decltype(path_result<Root, E, Path, At>())::type;
                 if (r->length == 0)
                     return std::optional<X>{};
-                auto const element = std::span<char const>(bytes).subspan(r->data).template first<fixed_size<E, Root>()>();
-                if constexpr (path_reads_wire<E, Path, At>()) {
-                    auto x = path_walk<Root, E, Path, At>(bytes, owner, element, floor);
-                    if (!x) [[unlikely]]
-                        return std::unexpected(x.error());
-                    return std::optional<X>{std::move(*x)};
-                } else {
-                    return std::optional<X>{path_walk<Root, E, Path, At>(bytes, owner, element, floor)};
-                }
+                auto const x = path_walk<Root, E, Path, At>(
+                    bytes, std::span<char const>(bytes).subspan(r->data).template first<fixed_size<E, Root>()>(), floor, indexes);
+                if (!x) [[unlikely]]
+                    return std::unexpected(x.error());
+                return std::optional<X>{*x};
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
                 auto const r = reference_read<Root, is_text_range<U> ? major_type::text_string : major_type::byte_string>(bytes, field, floor, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return bytes.substr(r->data, r->length);
             } else if constexpr (is_map<U>) {
-                using K = typename U::key_type;
-                using V = typename U::mapped_type;
-                auto const r = reference_read<Root, major_type::map>(bytes, field, floor, fixed_size<K, Root>() + fixed_size<V, Root>());
+                auto const r = reference_read<Root, major_type::map>(
+                    bytes, field, floor, fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return cbor::map<K, V, Root>{{}, bytes, r->data, r->length, floor};
-            } else if constexpr (std::ranges::sized_range<U> && !requires { fixed_length<U>::value; }) {
-                using E = std::ranges::range_value_t<U>;
-                auto const r = reference_read<Root, major_type::array>(bytes, field, floor, fixed_size<E, Root>());
+                return typename cbor::schema<Root>::template accessor<U>(bytes, field, floor, *r);
+            } else if constexpr (is_list<U>) {
+                auto const r = reference_read<Root, major_type::array>(bytes, field, floor, fixed_size<std::ranges::range_value_t<U>, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return cbor::array<E, Root>{{}, bytes, r->data, r->length, floor};
+                return typename cbor::schema<Root>::template accessor<U>(bytes, field, floor, *r);
+            } else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> && !std::same_as<U, uint128>) {
+                return typename cbor::schema<Root>::template accessor<U>(bytes, field, floor);
             } else {
                 if (!fixed_head_valid<U>(field)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
@@ -1481,39 +1513,46 @@ class internal
         } else if constexpr (path.substr(At, 1) == ".") {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
-            if constexpr (m == std::meta::info{})
-                return no_fixed_size<T, Root>();
-            else {
-                using M = typename[:std::meta::type_of(m):];
-                if constexpr (path_reads_wire<T, Path, At>())
-                    if (!class_tag_valid<Root, U>(field)) [[unlikely]]
-                        return std::unexpected(error::incorrect_type);
-                return path_walk<Root, M, Path, end>(bytes, owner, field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(),
-                                               floor);
-            }
+            using M = typename[:std::meta::type_of(m):];
+            if (!class_tag_valid<Root, U>(field)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return path_walk<Root, M, Path, end>(bytes, field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(),
+                                                 floor, indexes);
         } else {
             constexpr std::size_t close = index_end(path, At);
-            constexpr std::size_t i = index_of<T>(path.substr(At + 1, close - At - 1));
-            if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U>) {
-                return no_fixed_size<T, Root>();
-            } else if constexpr (requires { fixed_length<U>::value; }) {
+            if constexpr (requires { fixed_length<U>::value; }) {
                 using E = typename fixed_length<U>::element;
                 constexpr std::size_t n = fixed_length<U>::value;
-                if constexpr (i >= n)
-                    return no_fixed_size<T, Root>();
-                else
+                constexpr std::size_t head = head_size(n);
+                std::span<char const, head> const expected{zero_initialized<Root, U>().data(), head};
+                if (!std::ranges::equal(field.template first<head>(), expected)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                if constexpr (close == At + 1) {
+                    std::size_t const i = std::get<index_slot<Path, At>()>(indexes);
+                    if (i >= n) [[unlikely]]
+                        return std::unexpected(error::index_out_of_bounds);
                     return path_walk<Root, E, Path, close + 1>(
-                        bytes, owner, field.template subspan<head_size(n) + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(), floor);
+                        bytes, field.subspan(head + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(), floor, indexes);
+                } else {
+                    constexpr std::size_t i = index_of<T>(path.substr(At + 1, close - At - 1));
+                    return path_walk<Root, E, Path, close + 1>(
+                        bytes, field.template subspan<head + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(), floor, indexes);
+                }
             } else {
                 using E = std::ranges::range_value_t<U>;
+                std::size_t i;
+                if constexpr (close == At + 1)
+                    i = std::get<index_slot<Path, At>()>(indexes);
+                else
+                    i = index_of<T>(path.substr(At + 1, close - At - 1));
                 auto const r = reference_read<Root, major_type::array>(bytes, field, floor, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (i >= r->length) [[unlikely]]
                     return std::unexpected(error::index_out_of_bounds);
                 return path_walk<Root, E, Path, close + 1>(
-                    bytes, owner, std::span<char const>(bytes).subspan(r->data + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(),
-                    floor);
+                    bytes, std::span<char const>(bytes).subspan(r->data + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(),
+                    floor, indexes);
             }
         }
     }
@@ -1666,13 +1705,6 @@ class internal
     template <class>
     friend class cbor::schema;
 
-    template <class E, class Root>
-        requires(tags_registered<Root>())
-    friend struct cbor::array;
-
-    template <class K, class V, class Root>
-        requires(tags_registered<Root>())
-    friend struct cbor::map;
 #endif
 
     friend struct lazy;
@@ -3360,140 +3392,6 @@ CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, 
 }
 }
 
-template <class E, class Root>
-    requires(tags_registered<Root>())
-struct array {
-    std::shared_ptr<void const> owner;
-    std::string_view bytes;
-    std::size_t data;
-    std::size_t length;
-    cbor::directory dir;
-
-    std::size_t size() const
-    {
-        return length;
-    }
-
-    auto at(std::size_t const index) const
-        -> std::expected<typename decltype(internal::path_result<Root, E, fixed_string{""}, 0>())::type, error>
-    {
-        if (index >= length) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
-        return internal::path_walk<Root, E, fixed_string{""}, 0>(
-            bytes, owner, std::span<char const>(bytes).subspan(data + index * internal::fixed_size<E, Root>()).template first<internal::fixed_size<E, Root>()>(),
-            dir);
-    }
-
-    struct iterator {
-        using difference_type = std::ptrdiff_t;
-        using value_type = decltype(std::declval<array const &>().at(0));
-
-        array const *over;
-        std::size_t index;
-
-        value_type operator*() const
-        {
-            return over->at(index);
-        }
-        iterator &operator++()
-        {
-            ++index;
-            return *this;
-        }
-        void operator++(int)
-        {
-            ++index;
-        }
-        bool operator==(std::default_sentinel_t) const
-        {
-            return index == over->length;
-        }
-    };
-
-    iterator begin() const &
-    {
-        return iterator{this, 0};
-    }
-    iterator begin() const && = delete;
-    std::default_sentinel_t end() const
-    {
-        return {};
-    }
-};
-
-template <class K, class V, class Root>
-    requires(tags_registered<Root>())
-struct map {
-    std::shared_ptr<void const> owner;
-    std::string_view bytes;
-    std::size_t data;
-    std::size_t length;
-    cbor::directory dir;
-
-    static constexpr std::size_t pair_size = internal::fixed_size<K, Root>() + internal::fixed_size<V, Root>();
-
-    std::size_t size() const
-    {
-        return length;
-    }
-
-    auto key_at(std::size_t const index) const
-        -> std::expected<typename decltype(internal::path_result<Root, K, fixed_string{""}, 0>())::type, error>
-    {
-        if (index >= length) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
-        return internal::path_walk<Root, K, fixed_string{""}, 0>(
-            bytes, owner, std::span<char const>(bytes).subspan(data + index * pair_size).template first<internal::fixed_size<K, Root>()>(), dir);
-    }
-
-    auto value_at(std::size_t const index) const
-        -> std::expected<typename decltype(internal::path_result<Root, V, fixed_string{""}, 0>())::type, error>
-    {
-        if (index >= length) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
-        return internal::path_walk<Root, V, fixed_string{""}, 0>(
-            bytes, owner, std::span<char const>(bytes).subspan(data + index * pair_size + internal::fixed_size<K, Root>()).template first<internal::fixed_size<V, Root>()>(),
-            dir);
-    }
-
-    struct iterator {
-        using difference_type = std::ptrdiff_t;
-        using value_type = std::pair<decltype(std::declval<map const &>().key_at(0)),
-                                     decltype(std::declval<map const &>().value_at(0))>;
-
-        map const *over;
-        std::size_t index;
-
-        value_type operator*() const
-        {
-            return {over->key_at(index), over->value_at(index)};
-        }
-        iterator &operator++()
-        {
-            ++index;
-            return *this;
-        }
-        void operator++(int)
-        {
-            ++index;
-        }
-        bool operator==(std::default_sentinel_t) const
-        {
-            return index == over->length;
-        }
-    };
-
-    iterator begin() const &
-    {
-        return iterator{this, 0};
-    }
-    iterator begin() const && = delete;
-    std::default_sentinel_t end() const
-    {
-        return {};
-    }
-};
-
 template <class T>
 class schema
 {
@@ -3512,53 +3410,122 @@ public:
         return internal::member_offset<U, Member, T>();
     }
 
-    template <fixed_string Path, class U>
+    template <class U = T>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static auto at_path(document<U, T> const &doc)
+    class accessor
     {
-        return internal::path_walk<T, U, Path, 0>(doc.bytes, doc.owner, doc.field, doc.dir);
-    }
+        static constexpr bool listed = internal::is_list<U> || internal::is_map<U>;
 
-    template <fixed_string Path, class U>
-    static auto at_path(document<U, T> const &&doc) = delete;
+        std::shared_ptr<void const> owner;
+        std::string_view bytes;
+        std::span<char const, internal::fixed_size<U, T>()> field;
+        cbor::directory dir;
+        [[no_unique_address]] std::conditional_t<listed, internal::reference, std::monostate> items;
 
-    static auto view(std::shared_ptr<void const> owner, std::string_view const bytes)
+        accessor(std::string_view const b, std::span<char const, internal::fixed_size<U, T>()> const f, cbor::directory const d)
+            requires(!listed)
+            : bytes(b), field(f), dir(d)
+        {
+        }
+
+        accessor(std::string_view const b, std::span<char const, internal::fixed_size<U, T>()> const f, cbor::directory const d,
+                 internal::reference const r)
+            requires(listed)
+            : bytes(b), field(f), dir(d), items(r)
+        {
+        }
+
+        accessor(std::shared_ptr<void const> o, std::string_view const b, std::span<char const, internal::fixed_size<U, T>()> const f,
+                 cbor::directory const d)
+            requires(!listed)
+            : owner(std::move(o)), bytes(b), field(f), dir(d)
+        {
+        }
+
+        friend class schema;
+
+        friend class internal;
+
+    public:
+        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+            requires(internal::path_valid<U, Path, 0>() && sizeof...(Index) == internal::index_slots<Path>())
+        CBOR_ALWAYS_INLINE auto at(Index const... indexes) const &
+        {
+            std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
+            constexpr std::string_view path = Path.view();
+            if constexpr (internal::is_list<U> && !path.empty()) {
+                using E = std::ranges::range_value_t<U>;
+                constexpr std::size_t close = internal::index_end(path, 0);
+                using X = typename decltype(internal::path_result<T, E, Path, close + 1>())::type;
+                std::size_t at;
+                if constexpr (close == 1)
+                    at = std::get<0>(i);
+                else
+                    at = internal::index_of<U>(path.substr(1, close - 1));
+                if (at >= items.length) [[unlikely]]
+                    return result<X>(std::unexpect, error::index_out_of_bounds);
+                return internal::path_walk<T, E, Path, close + 1>(
+                    bytes, std::span<char const>(bytes).subspan(items.data + at * internal::fixed_size<E, T>()).template first<internal::fixed_size<E, T>()>(),
+                    dir, i);
+            } else {
+                return internal::path_walk<T, U, Path, 0>(bytes, field, dir, i);
+            }
+        }
+
+        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+        auto at(Index const... indexes) const && = delete;
+
+        std::size_t size() const
+            requires(listed)
+        {
+            return items.length;
+        }
+    };
+
+    static result<accessor<>> path(std::shared_ptr<void const> owner, std::string_view const bytes)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
+        if (!owner) [[unlikely]]
+            throw std::logic_error("cbor::schema::path: the owner of the bytes is empty");
         auto const dir = internal::directory_read<T>(bytes);
         if (!dir) [[unlikely]]
-            return std::expected<document<T>, error>(std::unexpect, dir.error());
+            return std::unexpected(dir.error());
         auto const root = std::span<char const>(bytes).subspan(bytes.size() - fixed_size()).template first<fixed_size()>();
         if (!internal::class_tag_valid<T, T>(root)) [[unlikely]]
-            return std::expected<document<T>, error>(std::unexpect, error::incorrect_type);
-        return std::expected<document<T>, error>(document<T>{std::move(owner), bytes, root, *dir});
+            return std::unexpected(error::incorrect_type);
+        return accessor<>(std::move(owner), bytes, root, *dir);
     }
 
-    static auto view(std::string_view const bytes)
+    static result<accessor<>> path(std::string_view const bytes)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        auto const copy = std::make_shared<std::string const>(bytes);
-        return view(copy, *copy);
+        auto copy = std::make_shared<std::string const>(bytes);
+        std::string_view const view = *copy;
+        return path(std::move(copy), view);
     }
+
 
     template <std::size_t DepthMax = 64>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static result<owning_ref<T>> decode(std::string_view const bytes)
     {
-        auto const holder = std::make_shared<std::pair<std::string const, T>>(bytes, T{});
-        if (auto const r = internal::root_read<T, DepthMax>(holder->second, holder->first); !r) [[unlikely]]
+        auto copy = std::make_shared<std::string const>(bytes);
+        T value{};
+        if (auto const r = internal::root_read<T, DepthMax>(value, *copy); !r) [[unlikely]]
             return std::unexpected(r.error());
-        return owning_ref<T>(std::shared_ptr<T const>(holder, &holder->second));
+        return owning_ref<T>(std::move(copy), std::move(value));
     }
 
     template <std::size_t DepthMax = 64>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static result<owning_ref<T>> decode(std::shared_ptr<void const> owner, std::string_view const bytes)
     {
-        auto const holder = std::make_shared<std::pair<std::shared_ptr<void const> const, T>>(std::move(owner), T{});
-        if (auto const r = internal::root_read<T, DepthMax>(holder->second, bytes); !r) [[unlikely]]
+        if (!owner) [[unlikely]]
+            throw std::logic_error("cbor::schema::decode: the owner of the bytes is empty");
+        T value{};
+        if (auto const r = internal::root_read<T, DepthMax>(value, bytes); !r) [[unlikely]]
             return std::unexpected(r.error());
-        return owning_ref<T>(std::shared_ptr<T const>(holder, &holder->second));
+        return owning_ref<T>(std::move(owner), std::move(value));
     }
 
     CBOR_ALWAYS_INLINE static result<std::string, std::errc> encode(T const &value)
