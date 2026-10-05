@@ -10,6 +10,10 @@ Two benches measure mbedded-cbor against other libraries:
   carsales (`cars.json`, 1000 cars). Each arm encodes the lot, or reads
   every field of every car.
 
+- `cwt.cpp`: the CWT of RFC 8392 A.3 read and written as structs
+  through `cbor::databind<T>`: COSE_Sign1 under tag 18, then the claims
+  in its payload. `CWT_OPS` chooses `READ` and `ENC`.
+
 ## Install (openSUSE Tumbleweed)
 
     sudo zypper install gcc16-c++ clang benchmark-devel libcbor-devel \

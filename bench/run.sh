@@ -67,6 +67,10 @@ for cc in "$GXX" "$CLANGXX"; do
 		done
 	done
 done
+for op in ${CWT_OPS-READ ENC}; do
+	spawn "$GXX" -std=c++26 -freflection $flags -DOP_$op -DDOC_PATH="\"$here/docs/cwt.cbor\"" \
+		-I"$root/include" "$here/cwt.cpp" -lbenchmark -lpthread -o "$build/cw.$op"
+done
 finish
 flatc --cpp -o "$build" "$here/carsales.fbs"
 cp "$here/carsales.capnp" "$build/"
@@ -83,7 +87,7 @@ echo "running $PROCESSES processes per binary"
 mkdir -p "$build/out"
 i=1
 while [ "$i" -le "$PROCESSES" ]; do
-	for b in "$build"/rt.* "$build"/sc.*; do
+	for b in "$build"/rt.* "$build"/cw.* "$build"/sc.*; do
 		[ -e "$b" ] || continue
 		n=$(basename "$b")
 		"$b" --benchmark_min_time="$MIN_TIME" --benchmark_out_format=json \
