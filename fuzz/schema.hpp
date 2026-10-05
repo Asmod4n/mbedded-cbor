@@ -8,7 +8,9 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <memory>
 #include <meta>
 #include <optional>
 #include <span>
@@ -94,9 +96,10 @@ consteval std::string decimal(std::size_t n)
     return s;
 }
 
-// Every path into a type, as path_compile would read it: each member, each element of a fixed array, the
-// first elements of a list, and the list, the map, the optional and the text themselves. A fixed string is
-// one leaf; an index into it does not compile.
+// Every leaf path into a type, as an accessor reads it: each member, each element of a fixed array, the first
+// elements of a list, down to a number, a bool, a float, a text or an optional of one. A path to a struct, a list or
+// a map gives an accessor and is not listed here, and a map has no element path. A fixed string is one leaf; an
+// index into it does not compile.
 consteval void paths_of(std::meta::info type, std::string const &prefix, std::vector<std::string> &out, int depth)
 {
     type = std::meta::remove_cv(type);
@@ -128,20 +131,21 @@ consteval void paths_of(std::meta::info type, std::string const &prefix, std::ve
             return;
         }
         if (kind == ^^std::vector) {
-            out.push_back(prefix);
             std::meta::info const element = arguments.at(0);
-            if (character_p(element))
+            if (character_p(element)) {
+                out.push_back(prefix);
                 return;
+            }
             for (std::size_t const i : {0uz, 1uz, 2uz, 7uz})
                 paths_of(element, prefix + "[" + decimal(i) + "]", out, depth + 1);
             return;
         }
+        if (kind == ^^std::map)
+            return;
         out.push_back(prefix);
         return;
     }
     if (std::meta::is_class_type(type) && std::meta::is_aggregate_type(type)) {
-        if (!prefix.empty())
-            out.push_back(prefix);
         for (std::meta::info const m :
              std::meta::nonstatic_data_members_of(type, std::meta::access_context::unchecked()))
             paths_of(std::meta::type_of(m), prefix + "." + std::string(std::meta::identifier_of(m)), out, depth + 1);
@@ -273,90 +277,60 @@ void compare(N const *native, R const &read)
         require(native != nullptr);
         if constexpr (std::is_same_v<R, std::string_view>) {
             require(read == native_bytes(*native));
+        } else if constexpr (std::is_same_v<R, std::optional<std::string_view>>) {
+            require(read.has_value() == native->has_value());
+            if (read)
+                require(*read == native_bytes(**native));
         } else if constexpr (optional_type<R>) {
             require(read.has_value() == native->has_value());
             if (read)
                 require(same_scalar(*read, **native));
-        } else if constexpr (requires { read.key_at(0); }) {
-            require(read.size() == native->size());
-            std::size_t i = 0;
-            for (auto const &[k, v] : *native) {
-                compare(&k, read.key_at(i));
-                compare(&v, read.value_at(i));
-                ++i;
-            }
-        } else if constexpr (requires { read.size(); read.at(0); }) {
-            require(read.size() == std::size(*native));
-            std::size_t i = 0;
-            for (auto const &e : *native) {
-                compare(&e, read.at(i));
-                ++i;
-            }
-        } else if constexpr (requires { read.bytes; read.field; }) {
         } else {
             require(same_scalar(read, *native));
         }
     }
 }
 
-// Every value the reader gives is read: every element of a list and every pair of a map, a text must lie inside
-// the message. A document of a struct is read through every path of its type.
-template <class T, class Root>
-void read_all(cbor::document<T, Root> doc, std::string_view message, source &in);
-
+// A text must lie inside the message.
 template <class R>
-void consume(R const &read, std::string_view const message, source &in)
+void consume(R const &read, std::string_view const message)
 {
-    if constexpr (expected_type<R>) {
+    if constexpr (expected_type<R> || optional_type<R>) {
         if (read)
-            consume(*read, message, in);
+            consume(*read, message);
     } else if constexpr (std::is_same_v<R, std::string_view>) {
-        auto const begin = reinterpret_cast<std::uintptr_t>(read.data());
-        auto const first = reinterpret_cast<std::uintptr_t>(message.data());
-        require(read.empty() || (begin >= first && begin + read.size() <= first + message.size()));
-    } else if constexpr (requires { read.key_at(0); }) {
-        for (auto const [k, v] : read) {
-            consume(k, message, in);
-            consume(v, message, in);
-        }
-    } else if constexpr (requires { read.size(); read.at(0); }) {
-        for (auto const e : read)
-            consume(e, message, in);
-        (void)read.at(static_cast<std::size_t>(in.number()));
-        if (read.size() != 0)
-            consume(read.at(in.number() % read.size()), message, in);
-    } else if constexpr (requires { read.bytes; read.field; read.floor; }) {
-        read_all(read, message, in);
+        std::string_view const part = read;
+        std::less<char const *> const before;
+        require(part.empty() || (!before(part.data(), message.data()) &&
+                                 !before(message.data() + message.size(), part.data() + part.size())));
     }
 }
 
-template <class T, class Root>
-void read_all(cbor::document<T, Root> const doc, std::string_view const message, source &in)
+// Every leaf path of the type is read from the message through one accessor.
+template <class T>
+void read_all(std::string_view const message)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
-    template for (constexpr std::meta::info text : texts) {
-        if constexpr (text_of<text>().size() != 0)
-            consume(cbor::schema<Root>::template at_path<path_text<text>>(doc), message, in);
-    }
+    auto const owner = std::make_shared<int const>(0);
+    auto lot = cbor::schema<T>::path(owner, message);
+    if (!lot)
+        return;
+    template for (constexpr std::meta::info text : texts)
+        consume(lot->template at<path_text<text>>(), message);
 }
 
-template <class T, class Root>
-void compare_all(T const &native, cbor::document<T, Root> doc);
+template <class T>
+void compare_all(T const &native, std::string_view message);
 
 template <class T>
-void read_target(std::string_view const message, source &in)
+void read_target(std::string_view const message)
 {
-    auto const doc = cbor::schema<T>::view(message);
-    if (doc)
-        read_all(*doc, doc->bytes, in);
+    read_all<T>(message);
     auto const value = cbor::schema<T>::decode(message);
     if (value) {
-        require(doc.has_value());
         auto const again = cbor::schema<T>::encode(**value);
         require(again.has_value());
-        auto const reread = cbor::schema<T>::view(*again);
-        require(reread.has_value());
-        compare_all(**value, *reread);
+        compare_all(**value, *again);
     }
 }
 
@@ -421,14 +395,14 @@ void fill(T &v, source &in, int const depth)
     }
 }
 
-template <class T, class Root>
-void compare_all(T const &native, cbor::document<T, Root> const doc)
+template <class T>
+void compare_all(T const &native, std::string_view const message)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
-    template for (constexpr std::meta::info text : texts) {
-        if constexpr (text_of<text>().size() != 0)
-            compare(native_at<T, text, 0>(native), cbor::schema<Root>::template at_path<path_text<text>>(doc));
-    }
+    auto lot = cbor::schema<T>::path(message);
+    require(lot.has_value());
+    template for (constexpr std::meta::info text : texts)
+        compare(native_at<T, text, 0>(native), lot->template at<path_text<text>>());
 }
 
 // A struct from the bytes of the input, written and read back through every path of its type. The message
@@ -463,18 +437,15 @@ void round_trip(source &in)
     require(again.has_value() && *again == w.bytes);
     auto const end = cbor::doc_end<64>(w.bytes);
     require(end.has_value() && *end == w.bytes.size());
-    auto const doc = cbor::schema<T>::view(w.bytes);
-    require(doc.has_value());
-    compare_all(native, *doc);
+    compare_all(native, w.bytes);
 }
 
 inline void decode_target(std::string_view const input)
 {
-    source in{input.substr(0, 16)};
     std::string_view const message = input.size() > 16 ? input.substr(16) : std::string_view{};
-    read_target<vehicle>(message, in);
-    read_target<numbers>(message, in);
-    read_target<garage>(message, in);
+    read_target<vehicle>(message);
+    read_target<numbers>(message);
+    read_target<garage>(message);
 }
 
 inline void encode_target(std::string_view const input)
