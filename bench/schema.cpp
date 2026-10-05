@@ -170,11 +170,11 @@ static void run(benchmark::State &state)
         double s = 0;
         for (auto const *r : *fbcar::GetParkingLot(fbmsg.data())->cars()) {
             s += double(r->make()->size()) + double(r->model()->size()) + r->color() + r->seats() + r->doors();
-            for (auto const *w : *r->wheels()) s += w->diameter() + double(w->airPressure()) + w->snowTires();
+            for (auto const *w : *r->wheels()) s += w->diameter() + double(w->air_pressure()) + w->snow_tires();
             s += r->length() + r->width() + r->height() + r->weight();
             auto const *e = r->engine();
-            s += e->horsepower() + e->cylinders() + e->cc() + e->usesGas() + e->usesElectric();
-            s += double(r->fuelCapacity()) + double(r->fuelLevel()) + r->hasPowerWindows() + r->hasPowerSteering() + r->hasCruiseControl() + r->cupHolders() + r->hasNavSystem();
+            s += e->horsepower() + e->cylinders() + e->cc() + e->uses_gas() + e->uses_electric();
+            s += double(r->fuel_capacity()) + double(r->fuel_level()) + r->has_power_windows() + r->has_power_steering() + r->has_cruise_control() + r->cup_holders() + r->has_nav_system();
         }
         benchmark::DoNotOptimize(s);
 #elif defined(OP_CP_ENC)
