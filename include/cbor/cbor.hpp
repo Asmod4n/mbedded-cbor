@@ -1791,7 +1791,7 @@ class internal
 
     struct decoder {
         std::string_view encoded;
-        std::expected<head, error> head_decode()
+        CBOR_ALWAYS_INLINE std::expected<head, error> head_decode()
         {
             if (encoded.empty()) [[unlikely]]
                 return std::unexpected(error::too_little_data);
