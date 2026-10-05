@@ -1,0 +1,11 @@
+namespace fbcar;
+struct Wheel { diameter:ushort; airPressure:float; snowTires:bool; }
+struct Engine { horsepower:ushort; cylinders:ubyte; cc:uint; usesGas:bool; usesElectric:bool; }
+table Car {
+  make:string; model:string; color:ubyte; seats:ubyte; doors:ubyte; wheels:[Wheel];
+  length:ushort; width:ushort; height:ushort; weight:uint; engine:Engine;
+  fuelCapacity:float; fuelLevel:float; hasPowerWindows:bool; hasPowerSteering:bool;
+  hasCruiseControl:bool; cupHolders:ubyte; hasNavSystem:bool;
+}
+table ParkingLot { cars:[Car]; }
+root_type ParkingLot;

@@ -1,0 +1,85 @@
+#!/bin/sh
+# Builds every arm as its own binary, runs each binary as ten processes in
+# turn, writes one result file to bench/results/ and deletes the build.
+#
+# openSUSE Tumbleweed packages:
+#   zypper install gcc16-c++ clang benchmark-devel libcbor-devel \
+#     msgpack-cxx-devel flatbuffers-devel capnproto libcapnp-devel \
+#     nlohmann_json-devel doctest-devel python3
+# jsoncons and vladimirgamalyan/cbor have no package. Their arms run only
+# when JSONCONS_INCLUDE or VG_INCLUDE names a checkout.
+#
+# Environment: GXX (default g++-16), CLANGXX (default clang++),
+# PROCESSES (default 10), MIN_TIME (default 0.2s).
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(dirname "$here")
+GXX=${GXX:-g++-16}
+CLANGXX=${CLANGXX:-clang++}
+PROCESSES=${PROCESSES:-10}
+MIN_TIME=${MIN_TIME:-0.2s}
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+build=$(mktemp -d "${TMPDIR:-/tmp}/mbedded-cbor-bench.XXXXXX")
+trap 'rm -rf "$build"' EXIT
+flags="-O2 -march=native -DNDEBUG"
+export GLIBC_TUNABLES=glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456
+
+docs="cwt senml floats ints strings records twitter"
+arms="S READ LC_PREALLOC LC_READ MP_REUSE MP_READ FB_REUSE FB_READ"
+[ -n "${JSONCONS_INCLUDE:-}" ] && arms="$arms JC_CLEAR JC_READ"
+[ -n "${VG_INCLUDE:-}" ] && arms="$arms VG_RAW VG_READ"
+schema_ops="ENC DEC PATH FB_ENC FB_READ CP_ENC CP_READ"
+
+jobs=0
+spawn() {
+	"$@" &
+	jobs=$((jobs + 1))
+	if [ "$jobs" -ge 4 ]; then
+		wait
+		jobs=0
+	fi
+}
+
+echo "building into $build"
+extra=""
+[ -n "${JSONCONS_INCLUDE:-}" ] && extra="$extra -I$JSONCONS_INCLUDE"
+[ -n "${VG_INCLUDE:-}" ] && extra="$extra -I$VG_INCLUDE"
+for cc in "$GXX" "$CLANGXX"; do
+	tag=$(basename "$cc")
+	for a in $arms; do
+		for d in $docs; do
+			spawn "$cc" -std=c++23 $flags -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" \
+				-DDOC_PATH="\"$here/docs/$d.cbor\"" -I"$root/include" -I"$root/test" $extra \
+				"$here/runtime.cpp" -lcbor -lflatbuffers -lbenchmark -lpthread -o "$build/rt.$tag.$a.$d"
+		done
+	done
+done
+wait
+flatc --cpp -o "$build" "$here/carsales.fbs"
+cp "$here/carsales.capnp" "$build/"
+(cd "$build" && capnp compile -oc++ carsales.capnp)
+"$GXX" -std=c++26 $flags -c "$build/carsales.capnp.c++" $(pkg-config --cflags capnp) -o "$build/carsales.capnp.o"
+for op in $schema_ops; do
+	spawn "$GXX" -std=c++26 -freflection $flags -DOP_$op -DCARS_JSON="\"$here/cars.json\"" \
+		-I"$root/include" -I"$build" "$here/schema.cpp" "$build/carsales.capnp.o" \
+		$(pkg-config --cflags --libs capnp) -lflatbuffers -lbenchmark -lpthread -o "$build/sc.$op"
+done
+wait
+
+echo "running $PROCESSES processes per binary"
+mkdir -p "$build/out"
+i=1
+while [ "$i" -le "$PROCESSES" ]; do
+	for b in "$build"/rt.* "$build"/sc.*; do
+		n=$(basename "$b")
+		"$b" --benchmark_min_time="$MIN_TIME" --benchmark_out_format=json \
+			--benchmark_out="$build/out/$i.$n.json" > "$build/out/last.txt" 2>> "$build/out/err.txt" ||
+			echo "$n" >> "$build/out/failed.txt"
+	done
+	i=$((i + 1))
+done
+
+mkdir -p "$here/results"
+python3 "$here/summarize.py" "$build" "$root" "$stamp" "$GXX" "$CLANGXX" "$flags" "$PROCESSES" "$MIN_TIME" \
+	> "$here/results/$stamp.json"
+echo "wrote $here/results/$stamp.json"
