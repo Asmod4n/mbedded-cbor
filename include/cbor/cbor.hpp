@@ -4987,40 +4987,54 @@ public:
 
 template <class Writer>
 struct encoder {
+    static constexpr bool direct = std::same_as<Writer, internal::span_message<char>>;
     Writer &writer;
-    std::array<char, 16384> block;
+    std::conditional_t<direct, std::span<char>, std::array<char, 16384>> block;
     std::size_t used = 0;
     std::size_t written = 0;
 
     explicit encoder(Writer &w) : writer(w)
     {
+        if constexpr (direct) {
+            block = w.out;
+            used = w.used;
+        }
     }
 
     std::expected<void, std::errc> flush()
     {
-        std::size_t const size = used;
-        used = 0;
-        written += size;
-        return writer.append(std::string_view(block.data(), size));
+        if constexpr (direct) {
+            written += used - writer.used;
+            writer.used = used;
+            return {};
+        } else {
+            std::size_t const size = used;
+            used = 0;
+            written += size;
+            return writer.append(std::string_view(block.data(), size));
+        }
     }
 
-    std::expected<void, std::errc> room(std::size_t const size)
+    std::expected<void, std::errc> item_write(std::array<char, 9> const &item, std::size_t const size)
     {
-        if (block.size() - used < size) [[unlikely]]
-            return flush();
-        return {};
-    }
-
-    void item_write(std::array<char, 9> const &item, std::size_t const size)
-    {
+        if (block.size() - used < item.size()) [[unlikely]] {
+            if constexpr (direct) {
+                if (block.size() - used < size) [[unlikely]]
+                    return std::unexpected(std::errc::no_buffer_space);
+                std::ranges::copy(std::span(item).first(size), block.subspan(used).begin());
+                used += size;
+                return {};
+            } else if (auto const r = flush(); !r) [[unlikely]] {
+                return r;
+            }
+        }
         std::ranges::copy(item, std::span(block).subspan(used).begin());
         used += size;
+        return {};
     }
 
     std::expected<void, std::errc> head_encode(major_type major, std::uint64_t argument)
     {
-        if (auto const r = room(9); !r) [[unlikely]]
-            return r;
         bool const immediate =
             argument < std::to_underlying(internal::additional_information::one_byte_argument);
         std::size_t const bytes =
@@ -5030,48 +5044,85 @@ struct encoder {
                       : std::to_underlying(internal::additional_information::one_byte_argument) +
                             static_cast<std::uint64_t>(std::countr_zero(bytes));
         std::uint64_t const big = std::byteswap(argument << ((64 - 8 * bytes) & 63));
-        std::array<char, 9> head;
-        std::get<0>(head) = static_cast<char>(std::to_underlying(major) << 5 | info);
-        std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), std::span(head).template subspan<1>().begin());
-        std::size_t const size = 1 + bytes;
-        item_write(head, size);
-        return {};
+        if constexpr (!direct) {
+            if (block.size() - used < 9) [[unlikely]]
+                if (auto const r = flush(); !r) [[unlikely]]
+                    return r;
+            std::array<char, 9> head;
+            std::get<0>(head) = static_cast<char>(std::to_underlying(major) << 5 | info);
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), std::span(head).template subspan<1>().begin());
+            std::ranges::copy(head, std::span(block).subspan(used).begin());
+            used += 1 + bytes;
+            return {};
+        } else {
+            std::span<char> const out = block;
+            std::size_t const at = used;
+            std::array<char, 9> tail;
+            bool const near_end = out.size() - at < tail.size();
+            std::span<char, 9> const item = near_end ? std::span(tail) : out.subspan(at).template first<9>();
+            item.front() = static_cast<char>(std::to_underlying(major) << 5 | info);
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), item.template subspan<1>().begin());
+            if (near_end) [[unlikely]]
+                return item_write(tail, 1 + bytes);
+            used = at + 1 + bytes;
+            return {};
+        }
     }
 
     std::expected<void, std::errc> byte_string_encode(std::string_view bytes)
     {
         if (auto const r = head_encode(major_type::byte_string, bytes.size()); !r) [[unlikely]]
             return r;
-        if (bytes.size() <= block.size() - used) {
-            std::ranges::copy(bytes, std::span(block).subspan(used).begin());
-            used += bytes.size();
+        std::span<char> const out = block;
+        std::size_t const at = used;
+        if (bytes.size() <= out.size() - at) {
+            std::ranges::copy(bytes, out.subspan(at).begin());
+            used = at + bytes.size();
             return {};
         }
-        if (auto const r = flush(); !r) [[unlikely]]
-            return r;
-        written += bytes.size();
-        return writer.append(bytes);
+        if constexpr (direct) {
+            return std::unexpected(std::errc::no_buffer_space);
+        } else {
+            if (auto const r = flush(); !r) [[unlikely]]
+                return r;
+            written += bytes.size();
+            return writer.append(bytes);
+        }
     }
 
     std::expected<void, std::errc> text_string_encode(std::string_view text)
     {
         if (auto const r = head_encode(major_type::text_string, text.size()); !r) [[unlikely]]
             return r;
-        if (text.size() <= block.size() - used) {
-            std::ranges::copy(text, std::span(block).subspan(used).begin());
-            used += text.size();
+        std::span<char> const out = block;
+        std::size_t const at = used;
+        if (text.size() <= out.size() - at) {
+            std::ranges::copy(text, out.subspan(at).begin());
+            used = at + text.size();
             return {};
         }
-        if (auto const r = flush(); !r) [[unlikely]]
-            return r;
-        written += text.size();
-        return writer.append(text);
+        if constexpr (direct) {
+            return std::unexpected(std::errc::no_buffer_space);
+        } else {
+            if (auto const r = flush(); !r) [[unlikely]]
+                return r;
+            written += text.size();
+            return writer.append(text);
+        }
     }
+
     std::expected<void, std::errc> float_encode(double value)
     {
-        if (auto const r = room(9); !r) [[unlikely]]
-            return r;
-        auto const item = std::span(block).subspan(used).template first<9>();
+        std::array<char, 9> tail;
+        bool const near_end = block.size() - used < tail.size();
+        if constexpr (!direct)
+            if (near_end) [[unlikely]]
+                if (auto const r = flush(); !r) [[unlikely]]
+                    return r;
+        std::span<char> const out = block;
+        std::size_t const at = used;
+        std::span<char, 9> const item =
+            direct && near_end ? std::span(tail) : out.subspan(at).template first<9>();
         std::size_t size;
         switch (internal::preferred_float_info(value)) {
         case internal::simple_float_information::half_precision_float: {
@@ -5099,7 +5150,10 @@ struct encoder {
             size = 9;
         } break;
         }
-        used += size;
+        if constexpr (direct)
+            if (near_end) [[unlikely]]
+                return item_write(tail, size);
+        used = at + size;
         return {};
     }
 
@@ -5107,15 +5161,25 @@ struct encoder {
         requires(sizeof(T) <= sizeof(std::uint64_t))
     std::expected<void, std::errc> fixed_width_head_encode(major_type major, T argument)
     {
-        if (auto const r = room(9); !r) [[unlikely]]
-            return r;
-        std::array<char, 9> head;
-        std::get<0>(head) = static_cast<char>(
+        std::array<char, 9> tail;
+        bool const near_end = block.size() - used < tail.size();
+        if constexpr (!direct)
+            if (near_end) [[unlikely]]
+                if (auto const r = flush(); !r) [[unlikely]]
+                    return r;
+        std::span<char> const out = block;
+        std::size_t const at = used;
+        std::span<char, 9> const item =
+            direct && near_end ? std::span(tail) : out.subspan(at).template first<9>();
+        item.front() = static_cast<char>(
             std::to_underlying(major) << 5 |
             (std::to_underlying(internal::additional_information::one_byte_argument) + std::countr_zero(sizeof(T))));
         T const big = std::byteswap(argument);
-        std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), std::span(head).template subspan<1>().begin());
-        item_write(head, 1 + sizeof(T));
+        std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), item.template subspan<1>().begin());
+        if constexpr (direct)
+            if (near_end) [[unlikely]]
+                return item_write(tail, 1 + sizeof(T));
+        used = at + 1 + sizeof(T);
         return {};
     }
 
@@ -5124,11 +5188,21 @@ struct encoder {
         if (std::to_underlying(value) >= std::to_underlying(internal::simple_float_information::simple_value_follows))
             [[unlikely]]
             return std::unexpected(std::errc::invalid_argument);
-        if (auto const r = room(9); !r) [[unlikely]]
-            return r;
-        std::array<char, 9> item;
-        std::get<0>(item) = static_cast<char>(std::to_underlying(major_type::simple_float) << 5 | std::to_underlying(value));
-        item_write(item, 1);
+        std::array<char, 9> tail;
+        bool const near_end = block.size() - used < tail.size();
+        if constexpr (!direct)
+            if (near_end) [[unlikely]]
+                if (auto const r = flush(); !r) [[unlikely]]
+                    return r;
+        std::span<char> const out = block;
+        std::size_t const at = used;
+        std::span<char, 9> const item =
+            direct && near_end ? std::span(tail) : out.subspan(at).template first<9>();
+        item.front() = static_cast<char>(std::to_underlying(major_type::simple_float) << 5 | std::to_underlying(value));
+        if constexpr (direct)
+            if (near_end) [[unlikely]]
+                return item_write(tail, 1);
+        used = at + 1;
         return {};
     }
 
