@@ -19,10 +19,10 @@ inline void decode_encode_decode(std::string_view const input)
         require(written.error() == cbor::error::nesting_depth_exceeded);
         return;
     }
-    auto const again = cbor::decode<16>(binding, w.bytes);
+    auto const again = cbor::decode<16>(binding, w.encoded);
     require(again.has_value() && same_number(*value, *again));
     string_writer twice;
-    require(cbor::encode<16>(binding, twice, *again).has_value() && twice.bytes == w.bytes);
+    require(cbor::encode<16>(binding, twice, *again).has_value() && twice.encoded == w.encoded);
     auto const end = cbor::doc_end<16>(input);
     require(end.has_value() && *end <= input.size());
 }
@@ -36,7 +36,7 @@ inline void shared_references(std::string_view const input)
     string_writer w;
     if (cbor::encode<16, cbor::sharedrefs::on>(binding, w, *value)) {
         shared_test::ref_binding back;
-        auto const again = cbor::decode<16>(back, w.bytes);
+        auto const again = cbor::decode<16>(back, w.encoded);
         if (!again) {
             require(again.error() == cbor::error::invalid_utf8_string);
             return;

@@ -211,7 +211,7 @@ std::string encoded_shared(handle const &v)
     ref_binding binding;
     string_writer w;
     REQUIRE(cbor::encode<16, cbor::sharedrefs::on>(binding, w, v).has_value());
-    return w.bytes;
+    return w.encoded;
 }
 
 handle round_trip(handle const &v)
@@ -409,7 +409,7 @@ TEST_CASE("sharedrefs::off: values are written each time, a cycle is an error")
     ref_binding binding;
     string_writer w;
     REQUIRE(cbor::encode<16>(binding, w, obj({{s("a"), shared}, {s("b"), shared}})).has_value());
-    auto const r = decoded_ref(w.bytes);
+    auto const r = decoded_ref(w.encoded);
     CHECK_FALSE(same(at(r, "a"), at(r, "b")));
     auto const a = arr({});
     std::get<std::vector<handle>>(a->kind).push_back(a);
@@ -430,7 +430,7 @@ TEST_CASE("registered tag: before_encode runs once per object with two passes")
     string_writer w;
     REQUIRE(cbor::encode<16, cbor::sharedrefs::on>(binding, w, arr({point, point, point})).has_value());
     CHECK_EQ(binding.before_encode_calls, 1);
-    CHECK_EQ(w.bytes, "\x83\xd8\x1c\xd9\x13\x88\x82\x03\x07\xd8\x1d\x00\xd8\x1d\x00"sv);
+    CHECK_EQ(w.encoded, "\x83\xd8\x1c\xd9\x13\x88\x82\x03\x07\xd8\x1d\x00\xd8\x1d\x00"sv);
 }
 
 // Ported from test.rb: 'registered tag + sharedref: distinct instances with equal fields do NOT share'.
@@ -442,7 +442,7 @@ TEST_CASE("registered tag: distinct objects with equal content do not share")
     string_writer w;
     REQUIRE(cbor::encode<16, cbor::sharedrefs::on>(binding, w, arr({p1, p2})).has_value());
     CHECK_EQ(binding.before_encode_calls, 2);
-    CHECK_EQ(w.bytes, "\x82\xd9\x13\x88\x82\x01\x02\xd9\x13\x88\x82\x01\x02"sv);
+    CHECK_EQ(w.encoded, "\x82\xd9\x13\x88\x82\x01\x02\xd9\x13\x88\x82\x01\x02"sv);
 }
 
 // Ported from test.rb: 'registered tag + sharedref: instance with self-referential field'. The object
@@ -566,5 +566,5 @@ TEST_CASE("registered tag: before_encode that returns a new value by value")
     string_writer w;
     REQUIRE(cbor::encode<16>(binding, w, arr({point, point})).has_value());
     CHECK_EQ(binding.before_encode_calls, 2);
-    CHECK_EQ(w.bytes, "\x82\xd9\x13\x88\x82\x01\x82\x02\x03\xd9\x13\x88\x82\x01\x82\x02\x03"sv);
+    CHECK_EQ(w.encoded, "\x82\xd9\x13\x88\x82\x01\x82\x02\x03\xd9\x13\x88\x82\x01\x82\x02\x03"sv);
 }

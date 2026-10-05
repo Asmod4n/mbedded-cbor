@@ -121,5 +121,5 @@ TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
         shallow = A(shallow);
     string_writer ok;
     REQUIRE(cbor::encode<16>(binding, ok, shallow).has_value());
-    CHECK(decoded<16>(ok.bytes).has_value());
+    CHECK(decoded<16>(ok.encoded).has_value());
 }

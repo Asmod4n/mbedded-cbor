@@ -218,7 +218,7 @@ TEST_CASE("encode: a kind the binding cannot describe is unsupported_value")
     text_binding binding;
     string_writer w;
     CHECK(cbor::encode<16>(binding, w, std::string("a")).has_value());
-    CHECK_EQ(w.bytes, "\x61"
+    CHECK_EQ(w.encoded, "\x61"
                       "a"sv);
     string_writer w2;
     auto const r = cbor::encode<16>(binding, w2, std::string("array"));
