@@ -400,7 +400,7 @@ namespace
 struct embedding_binding : test_binding {
     bool embed_of(value const &v)
     {
-        return std::holds_alternative<test::array>(v.kind);
+        return std::holds_alternative<test::array *>(v.kind);
     }
 };
 

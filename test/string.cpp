@@ -27,14 +27,14 @@ std::string decoded_byte_string(std::string_view wire)
 {
     auto const v = decoded(wire);
     REQUIRE(v.has_value());
-    return std::get<bytes>(v->kind).b;
+    return std::get<bytes *>(v->kind)->b;
 }
 
 std::string decoded_text_string(std::string_view wire)
 {
     auto const v = decoded(wire);
     REQUIRE(v.has_value());
-    return std::get<std::string>(v->kind);
+    return std::string(v->text());
 }
 
 } // namespace

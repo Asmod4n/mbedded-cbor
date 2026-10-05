@@ -25,7 +25,7 @@ inline void lazy_channels(std::string_view const input)
         }
     }
     if (eager) {
-        if (auto const *a = std::get_if<test::array>(&eager->kind)) {
+        if (auto const *a = test::get_if<test::array>(*eager)) {
             if (auto const elements = root.elements<16>()) {
                 std::size_t i = 0;
                 for (auto const e : *elements) {
@@ -40,7 +40,7 @@ inline void lazy_channels(std::string_view const input)
                 }
             }
         }
-        if (auto const *m = std::get_if<test::map>(&eager->kind)) {
+        if (auto const *m = test::get_if<test::map>(*eager)) {
             if (auto const entries = root.entries<16>()) {
                 std::size_t i = 0;
                 for (auto const e : *entries) {
