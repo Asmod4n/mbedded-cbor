@@ -1950,7 +1950,7 @@ class internal
         {
             if (part.size() > out.size() - used) [[unlikely]]
                 return std::unexpected(std::errc::no_buffer_space);
-            std::ranges::transform(part, out.subspan(used).begin(), [](char const c) { return static_cast<B>(c); });
+            std::ranges::copy(std::as_bytes(std::span(part)), std::as_writable_bytes(out.subspan(used)).begin());
             used += part.size();
             return {};
         }
@@ -5071,35 +5071,35 @@ struct encoder {
     {
         if (auto const r = room(9); !r) [[unlikely]]
             return r;
-        std::array<char, 9> item;
+        auto const item = std::span(block).subspan(used).template first<9>();
         std::size_t size;
         switch (internal::preferred_float_info(value)) {
         case internal::simple_float_information::half_precision_float: {
-            std::get<0>(item) = static_cast<char>(
+            item.front() = static_cast<char>(
                 std::to_underlying(major_type::simple_float) << 5 |
                 std::to_underlying(internal::simple_float_information::half_precision_float));
             auto const v = std::byteswap(internal::float_encode_binary16(static_cast<float>(value)));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), std::span(item).template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
             size = 3;
         } break;
         case internal::simple_float_information::single_precision_float: {
-            std::get<0>(item) = static_cast<char>(
+            item.front() = static_cast<char>(
                 std::to_underlying(major_type::simple_float) << 5 |
                 std::to_underlying(internal::simple_float_information::single_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), std::span(item).template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
             size = 5;
         } break;
         default: {
-            std::get<0>(item) = static_cast<char>(
+            item.front() = static_cast<char>(
                 std::to_underlying(major_type::simple_float) << 5 |
                 std::to_underlying(internal::simple_float_information::double_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint64_t>(value));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), std::span(item).template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
             size = 9;
         } break;
         }
-        item_write(item, size);
+        used += size;
         return {};
     }
 
