@@ -36,15 +36,21 @@ arm_libraries() {
 }
 JOBS=${JOBS:-$(nproc)}
 running=0
+fail() {
+	echo "a build failed" >&2
+	kill $(jobs -p) 2>&1
+	wait
+	exit 1
+}
 finish() {
 	while [ "$running" -gt 0 ]; do
-		wait -n || { echo "a build failed" >&2; exit 1; }
+		wait -n || fail
 		running=$((running - 1))
 	done
 }
 spawn() {
 	if [ "$running" -ge "$JOBS" ]; then
-		wait -n || { echo "a build failed" >&2; exit 1; }
+		wait -n || fail
 		running=$((running - 1))
 	fi
 	"$@" &
