@@ -23,10 +23,10 @@ flags="-O2 -march=native -DNDEBUG"
 export GLIBC_TUNABLES=glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456
 
 docs="cwt senml floats ints strings records twitter"
-arms="S READ LC_PREALLOC LC_READ MP_REUSE MP_READ FB_REUSE FB_READ"
+arms=${ARMS:-"S READ LC_PREALLOC LC_READ MP_REUSE MP_READ FB_REUSE FB_READ"}
 [ -n "${JSONCONS_INCLUDE:-}" ] && arms="$arms JC_CLEAR JC_READ"
 [ -n "${VG_INCLUDE:-}" ] && arms="$arms VG_RAW VG_READ"
-schema_ops="ENC DEC PATH FB_ENC FB_READ CP_ENC CP_READ"
+schema_ops=${SCHEMA_OPS-"ENC DEC PATH FB_ENC FB_READ CP_ENC CP_READ"}
 
 arm_libraries() {
 	case "$1" in
@@ -82,6 +82,7 @@ mkdir -p "$build/out"
 i=1
 while [ "$i" -le "$PROCESSES" ]; do
 	for b in "$build"/rt.* "$build"/sc.*; do
+		[ -e "$b" ] || continue
 		n=$(basename "$b")
 		"$b" --benchmark_min_time="$MIN_TIME" --benchmark_out_format=json \
 			--benchmark_out="$build/out/$i.$n.json" > "$build/out/last.txt" 2>> "$build/out/err.txt" ||
