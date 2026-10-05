@@ -33,6 +33,12 @@ other, and takes the median over the processes. It writes one file to
 `bench/results/<UTC time>.json` with every repetition and the context of
 the run, and deletes the build.
 
+Show a result as tables:
+
+    python3 bench/show.py bench/results/<file>.json
+
+`summarize.py` is called by `run.sh` and writes the result file.
+
 Settings: `GXX`, `CLANGXX`, `JOBS` (parallel builds, default: all cpus), `PROCESSES` (default 10), `MIN_TIME`
 (default `0.2s`).
 
