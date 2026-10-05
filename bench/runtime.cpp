@@ -124,14 +124,31 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
     bench::binding b;
     switch (b.kind_of(x)) {
     case cbor::kind::unsigned_integer: pk.pack_uint64(b.unsigned_of(x)); break;
-    case cbor::kind::negative_integer: pk.pack_int64(-1 - std::int64_t(b.unsigned_of(x) - 1)); break;
+    case cbor::kind::negative_integer: {
+        std::uint64_t const n = b.unsigned_of(x) - 1;
+        if (n <= std::uint64_t(INT64_MAX)) {
+            pk.pack_int64(-1 - std::int64_t(n));
+        } else {
+            msgpack::sbuffer body;
+            msgpack::packer<msgpack::sbuffer>(body).pack_uint64(n);
+            pk.pack_ext(body.size(), 2);
+            pk.pack_ext_body(body.data(), body.size());
+        }
+    } break;
     case cbor::kind::floating_point: pk.pack_double(b.float_of(x)); break;
     case cbor::kind::simple_value: { auto const v = b.simple_of(x); if (v == 20) pk.pack_false(); else if (v == 21) pk.pack_true(); else pk.pack_nil(); } break;
     case cbor::kind::text_string: { auto const t = b.text_of(x); pk.pack_str(std::uint32_t(t.size())); pk.pack_str_body(t.data(), std::uint32_t(t.size())); } break;
     case cbor::kind::byte_string: { auto const t = b.bytes_of(x); pk.pack_bin(std::uint32_t(t.size())); pk.pack_bin_body(t.data(), std::uint32_t(t.size())); } break;
     case cbor::kind::array: { auto const n = b.array_size(x); pk.pack_array(std::uint32_t(n)); for (std::uint64_t i = 0; i < n; ++i) mp_pack(pk, b.array_at(x, i)); } break;
     case cbor::kind::map: pk.pack_map(std::uint32_t(b.map_size(x))); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { mp_pack(pk, k); mp_pack(pk, v); }); break;
-    case cbor::kind::registered: mp_pack(pk, b.before_encode(x)); break;
+    case cbor::kind::registered: {
+        msgpack::sbuffer body;
+        msgpack::packer<msgpack::sbuffer> inner(body);
+        inner.pack_uint64(b.registered_tag(x));
+        mp_pack(inner, b.before_encode(x));
+        pk.pack_ext(body.size(), 1);
+        pk.pack_ext_body(body.data(), body.size());
+    } break;
     default: std::abort();
     }
 }
@@ -355,6 +372,15 @@ static std::uint64_t op()
         bool visit_bin(char const *v, std::uint32_t n) { sum += bytes_sum(std::string_view(v, n)); return true; }
         bool start_array(std::uint32_t n) { sum += n; return true; }
         bool start_map(std::uint32_t n) { sum += n; return true; }
+        bool visit_ext(char const *v, std::uint32_t n)
+        {
+            sum += std::uint8_t(v[0]);
+            std::size_t off = 1;
+            while (off < n)
+                if (!msgpack::parse(v, n, off, *this))
+                    std::abort();
+            return true;
+        }
     } v;
     std::size_t off = 0;
     if (!msgpack::parse(alt.data(), alt.size(), off, v))

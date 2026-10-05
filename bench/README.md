@@ -39,7 +39,12 @@ Show a result as tables:
 
 `summarize.py` is called by `run.sh` and writes the result file.
 
-Settings: `GXX`, `CLANGXX`, `JOBS` (parallel builds, default: all cpus), `PROCESSES` (default 10), `MIN_TIME`
+Only some arms, for example mbedded-cbor and msgpack-cxx without the
+schema bench:
+
+    ARMS="S READ MP_REUSE MP_READ" SCHEMA_OPS="" bash bench/run.sh
+
+Settings: `ARMS`, `SCHEMA_OPS`, `GXX`, `CLANGXX`, `JOBS` (parallel builds, default: all cpus), `PROCESSES` (default 10), `MIN_TIME`
 (default `0.2s`).
 
 msgpack-cxx cannot hold every integer of `ints.cbor`; these arms are
