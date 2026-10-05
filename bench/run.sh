@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
 packages="gcc16-c++ clang benchmark-devel libcbor-devel msgpack-cxx-devel flatbuffers-devel capnproto libcapnp-devel nlohmann_json-devel python3"
 missing=""
@@ -34,19 +34,21 @@ arm_libraries() {
 	FB_*) echo -lflatbuffers ;;
 	esac
 }
-pids=""
+JOBS=${JOBS:-$(nproc)}
+running=0
 finish() {
-	for p in $pids; do
-		wait "$p" || { echo "a build failed" >&2; exit 1; }
+	while [ "$running" -gt 0 ]; do
+		wait -n || { echo "a build failed" >&2; exit 1; }
+		running=$((running - 1))
 	done
-	pids=""
 }
 spawn() {
+	if [ "$running" -ge "$JOBS" ]; then
+		wait -n || { echo "a build failed" >&2; exit 1; }
+		running=$((running - 1))
+	fi
 	"$@" &
-	pids="$pids $!"
-	set -- $pids
-	[ "$#" -ge 4 ] && finish
-	return 0
+	running=$((running + 1))
 }
 
 echo "building into $build"

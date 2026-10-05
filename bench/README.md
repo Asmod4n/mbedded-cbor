@@ -33,7 +33,7 @@ other, and takes the median over the processes. It writes one file to
 `bench/results/<UTC time>.json` with every repetition and the context of
 the run, and deletes the build.
 
-Settings: `GXX`, `CLANGXX`, `PROCESSES` (default 10), `MIN_TIME`
+Settings: `GXX`, `CLANGXX`, `JOBS` (parallel builds, default: all cpus), `PROCESSES` (default 10), `MIN_TIME`
 (default `0.2s`).
 
 msgpack-cxx cannot hold every integer of `ints.cbor`; these arms are
