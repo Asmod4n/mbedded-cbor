@@ -1,8 +1,11 @@
 #include "binding.hpp"
 
 #include <initializer_list>
+#include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <vector>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -224,4 +227,21 @@ TEST_CASE("encode: a kind the binding cannot describe is unsupported_value")
     auto const r = cbor::encode<16>(binding, w2, std::string("array"));
     REQUIRE_FALSE(r.has_value());
     CHECK((r.error() == error::unsupported_value));
+}
+
+// A span target is written in place. The last items of a document lie closer to the end than the
+// widest head, so each kind is checked as the last item of a span of exact size and of one byte less.
+TEST_CASE("encode: a span of exact size holds the document, one byte less is no_buffer_space")
+{
+    test_binding binding;
+    for (value const &v : {A(1, 24), A(1, 1.5), A(1, 100000.25), A(1, 0.1), A(1, "abc"s),
+                           A(1, simple{std::to_underlying(cbor::simple_value::null)}), A(1, value{std::uint64_t{4294967296}})}) {
+        std::string const expected = encoded(v);
+        std::vector<char> exact(expected.size());
+        CHECK(cbor::encode<16>(binding, std::span<char>(exact), v).has_value());
+        CHECK_EQ(std::string_view(exact.data(), exact.size()), expected);
+        std::vector<char> short_by_one(expected.size() - 1);
+        CHECK_EQ(cbor::encode<16>(binding, std::span<char>(short_by_one), v).error(),
+                 std::make_error_code(std::errc::no_buffer_space));
+    }
 }
