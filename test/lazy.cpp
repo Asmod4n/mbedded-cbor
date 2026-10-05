@@ -597,3 +597,51 @@ TEST_CASE("lazy: get follows a shared reference in the content of a tag")
     REQUIRE(typed.has_value());
     CHECK_EQ((*typed)->bytes.size(), 1u);
 }
+
+// The value category of the bytes says what cbor::decode and lazy::from do. A moved std::string becomes the owner and
+// is not copied; an lvalue, a const rvalue and a literal are copied once. The document stays valid after the caller
+// reuses or destroys its buffer.
+TEST_CASE("lazy: decode and from move an rvalue string and copy everything else")
+{
+    auto text_of = [](cbor::lazy const &l) {
+        auto const r = l.get<std::string_view>();
+        REQUIRE(r.has_value());
+        return std::string(**r);
+    };
+    std::string const text(40, 't');
+    std::string const message = encoded(M("k"s, text));
+    auto buffer = std::make_unique<std::string>(message);
+    char const *const data = buffer->data();
+    auto const moved = cbor::decode<16>(std::move(*buffer));
+    REQUIRE(moved.has_value());
+    CHECK_EQ(static_cast<void const *>(moved->document->bytes.data()), static_cast<void const *>(data));
+    buffer->assign(message.size(), '\0');
+    buffer.reset();
+    CHECK_EQ(text_of(*moved->at("k")), text);
+
+    std::string lvalue = message;
+    auto const copied = cbor::decode<16>(lvalue);
+    REQUIRE(copied.has_value());
+    CHECK_NE(static_cast<void const *>(copied->document->bytes.data()), static_cast<void const *>(lvalue.data()));
+    CHECK_EQ(lvalue, message);
+    lvalue.assign(message.size(), '\0');
+    CHECK_EQ(text_of(*copied->at("k")), text);
+
+    std::string const constant = message;
+    auto const from_const = cbor::lazy::from(std::move(constant));
+    REQUIRE(from_const.has_value());
+    CHECK_NE(static_cast<void const *>(from_const->document->bytes.data()), static_cast<void const *>(constant.data()));
+    CHECK_EQ(constant, message);
+
+    std::string again = message;
+    char const *const again_data = again.data();
+    auto const from_moved = cbor::lazy::from(std::move(again));
+    CHECK_EQ(static_cast<void const *>(from_moved->document->bytes.data()), static_cast<void const *>(again_data));
+    auto const from_lvalue = cbor::lazy::from(message);
+    CHECK_NE(static_cast<void const *>(from_lvalue->document->bytes.data()), static_cast<void const *>(message.data()));
+
+    CHECK_EQ(text_of(*cbor::decode<16>("\x63" "abc")), "abc");
+    char const *const pointer = "\x62" "ab";
+    CHECK_EQ(text_of(*cbor::lazy::from(pointer)), "ab");
+    CHECK_EQ(text_of(*cbor::decode<16>("\x61" "a"sv)), "a");
+}

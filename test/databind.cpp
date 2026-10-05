@@ -359,4 +359,46 @@ TEST_CASE("databind: a shared reference reads as the item it names")
     CHECK(**skipped == pair_ab{2, {2}});
 }
 
+// The value category of the bytes says what decode does. A moved std::string becomes the owner and is not copied:
+// the view points into the buffer that was moved. An lvalue, a const rvalue and a literal are copied once, so the
+// result does not depend on the buffer that the caller reuses or destroys.
+TEST_CASE("databind: decode moves an rvalue string and copies everything else")
+{
+    std::string const text(40, 'x');
+    std::string const message = "\x78\x28"s + text;
+    auto buffer = std::make_unique<std::string>(message);
+    char const *const data = buffer->data();
+    auto const moved = cbor::databind<std::string_view>::decode(std::move(*buffer));
+    REQUIRE(moved.has_value());
+    CHECK_EQ(static_cast<void const *>((*moved)->data()), static_cast<void const *>(data + 2));
+    buffer->assign(message.size(), '\0');
+    buffer.reset();
+    CHECK_EQ(**moved, text);
+
+    std::string lvalue = message;
+    auto const copied = cbor::databind<std::string_view>::decode(lvalue);
+    REQUIRE(copied.has_value());
+    CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(lvalue.data() + 2));
+    CHECK_EQ(lvalue, message);
+    lvalue.assign(message.size(), '\0');
+    CHECK_EQ(**copied, text);
+
+    std::string const constant = message;
+    auto const from_const = cbor::databind<std::string_view>::decode(std::move(constant));
+    REQUIRE(from_const.has_value());
+    CHECK_NE(static_cast<void const *>((*from_const)->data()), static_cast<void const *>(constant.data() + 2));
+    CHECK_EQ(constant, message);
+
+    auto const literal = cbor::databind<std::string_view>::decode("\x63" "abc");
+    REQUIRE(literal.has_value());
+    CHECK_EQ(**literal, "abc"sv);
+    char const *const pointer = "\x62" "ab";
+    auto const from_pointer = cbor::databind<std::string_view>::decode(pointer);
+    REQUIRE(from_pointer.has_value());
+    CHECK_EQ(**from_pointer, "ab"sv);
+    auto const view = cbor::databind<std::string_view>::decode("\x61" "a"sv);
+    REQUIRE(view.has_value());
+    CHECK_EQ(**view, "a"sv);
+}
+
 #endif

@@ -399,7 +399,7 @@ struct test_binding : cbor::binding<test::value> {
         return std::get<tagged *>(v.kind)->tag;
     }
 
-    value before_encode(value const &v)
+    value const &before_encode(value const &v)
     {
         return std::get<tagged *>(v.kind)->content.at(0);
     }
