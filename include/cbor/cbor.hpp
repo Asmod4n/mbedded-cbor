@@ -2096,16 +2096,24 @@ class internal
         constexpr precision d = double_precision;
         std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
         std::uint32_t const exp = bits >> d.significand_bits & d.exponent_max;
+        constexpr int narrow = d.significand_bits - f.significand_bits;
         std::uint64_t const mant = bits & ((std::uint64_t{1} << d.significand_bits) - 1u);
-        std::uint32_t const mant32 =
-            static_cast<std::uint32_t>(mant >> (d.significand_bits - f.significand_bits));
         if (exp == d.exponent_max)
             return simple_float_information::half_precision_float;
+        if ((mant & ((std::uint64_t{1} << narrow) - 1u)) != 0)
+            return simple_float_information::double_precision_float;
         if (exp == 0)
             return mant == 0 ? simple_float_information::half_precision_float
                              : simple_float_information::double_precision_float;
-        if (static_cast<double>(static_cast<float>(value)) != value)
+        constexpr std::uint32_t normal_min = d.exponent_bias - f.exponent_bias + 1;
+        if (exp < normal_min)
+            return exp + f.significand_bits >= normal_min &&
+                           (mant & ((std::uint64_t{1} << (narrow + normal_min - exp)) - 1u)) == 0
+                       ? simple_float_information::single_precision_float
+                       : simple_float_information::double_precision_float;
+        if (exp > static_cast<std::uint32_t>(d.exponent_bias + f.exponent_bias))
             return simple_float_information::double_precision_float;
+        std::uint32_t const mant32 = static_cast<std::uint32_t>(mant >> narrow);
         if (exp >= static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias + 1) &&
             exp <= static_cast<std::uint32_t>(d.exponent_bias + h.exponent_bias))
             return (mant32 & ((1u << (f.significand_bits - h.significand_bits)) - 1u)) == 0
