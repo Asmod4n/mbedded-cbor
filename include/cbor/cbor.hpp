@@ -4,6 +4,7 @@
 #include <array>
 #include <bit>
 #include <charconv>
+#include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -71,7 +72,9 @@ enum class error {
     incorrect_type,
     number_out_of_range,
     cyclic_data_structure,
-    unpopulated_table_index
+    unpopulated_table_index,
+    nodelist_too_long,
+    duplicate_key
 };
 
 enum class condition { not_well_formed = 1, not_valid, not_supported, not_found };
@@ -127,6 +130,10 @@ public:
             return "cyclic data structure";
         case error::unpopulated_table_index:
             return "unpopulated table index";
+        case error::nodelist_too_long:
+            return "nodelist too long";
+        case error::duplicate_key:
+            return "duplicate key";
         }
         return "unknown cbor error";
     }
@@ -141,6 +148,7 @@ public:
         case error::nesting_depth_exceeded:
         case error::unsupported_value:
         case error::cyclic_data_structure:
+        case error::nodelist_too_long:
             return {static_cast<int>(condition::not_supported), *this};
         case error::not_indexable:
         case error::index_out_of_bounds:
@@ -156,6 +164,7 @@ public:
         case error::reserved_simple_value:
         case error::invalid_path:
         case error::unpopulated_table_index:
+        case error::duplicate_key:
             return {static_cast<int>(condition::not_valid), *this};
         }
         return {value, *this};
@@ -297,22 +306,81 @@ struct lazy_elements;
 template <std::size_t DepthMax>
 struct lazy_entries;
 
-struct path_step {
-    enum class kind { key, index, wildcard } kind;
-    std::string_view key;
-    std::int64_t index;
-};
-
-template <std::size_t DepthMax, class Binding>
-std::expected<typename Binding::value, error> path_decode(Binding &binding, std::span<path_step const> steps, lazy const &l);
-
 template <std::size_t DepthMax>
 std::expected<std::size_t, error> doc_end(std::string_view bytes);
+
+template <class T, class E>
+struct result;
+
+template <std::size_t DepthMax = 64>
+result<std::string, error> inspect(std::string_view bytes);
 
 template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
 std::expected<void, std::error_code> encode(Binding &binding, Writer &&target, typename Binding::value const &value);
 
+template <std::size_t N>
+struct fixed_string {
+    std::array<char, N> value;
+
+    consteval fixed_string(char const (&text)[N])
+    {
+        std::ranges::copy(text, value.begin());
+    }
+
+    consteval std::string_view view() const
+    {
+        return {value.data(), N - 1};
+    }
+};
+
+template <class T>
+class schema;
+
+template <class T>
+class databind;
+
+struct lazy;
+
+template <class T>
+class owning_ref
+{
+    std::shared_ptr<void const> owner;
+    T value;
+
+    owning_ref(std::shared_ptr<void const> o, T v) : owner(std::move(o)), value(std::move(v))
+    {
+    }
+
+    template <class>
+    friend class schema;
+
+    template <class>
+    friend class databind;
+
+    friend struct lazy;
+
+public:
+    T const &operator*() const &
+    {
+        return value;
+    }
+
+    T const *operator->() const &
+    {
+        return &value;
+    }
+
+    T const &operator*() const && = delete;
+    T const *operator->() const && = delete;
+};
+
+template <class T>
+using oref = owning_ref<T>;
+
 template <class T, class E = error>
+struct result;
+
+template <class T, class E>
 struct result : std::expected<T, E> {
     using std::expected<T, E>::expected;
 };
@@ -342,21 +410,6 @@ struct tag {
     std::uint64_t number;
 };
 
-template <std::size_t N>
-struct fixed_string {
-    std::array<char, N> value;
-
-    consteval fixed_string(char const (&text)[N])
-    {
-        std::ranges::copy(text, value.begin());
-    }
-
-    consteval std::string_view view() const
-    {
-        return {value.data(), N - 1};
-    }
-};
-
 template <std::uint64_t Number, class T>
 struct tagged {
     static constexpr std::uint64_t number = Number;
@@ -371,53 +424,11 @@ class schema;
 
 class internal;
 
-template <class T>
-class owning_ref
-{
-    std::shared_ptr<void const> owner;
-    T value;
-
-    owning_ref(std::shared_ptr<void const> o, T v) : owner(std::move(o)), value(std::move(v))
-    {
-    }
-
-    template <class>
-    friend class schema;
-
-public:
-    T const &operator*() const &
-    {
-        return value;
-    }
-
-    T const *operator->() const &
-    {
-        return &value;
-    }
-
-    T const &operator*() const && = delete;
-    T const *operator->() const && = delete;
-};
-
-template <class T>
-using oref = owning_ref<T>;
-
 struct directory {
     std::size_t at;
     std::size_t count;
 };
 
-namespace databind
-{
-template <class T, std::size_t DepthMax = 64>
-result<T> decode(std::string_view bytes);
-
-template <class T>
-result<std::string, std::errc> encode(T const &value);
-
-template <class T, class Target>
-result<std::size_t, std::errc> encode(T const &value, Target &&target);
-}
 #endif
 
 class internal
@@ -1837,6 +1848,36 @@ class internal
         }
     };
 
+    struct sharing_decoder : decoder {
+        std::string_view message;
+        std::vector<std::size_t> marks;
+        std::size_t high_water_mark;
+
+        void mark(decoder const &at)
+        {
+            std::size_t const offset = message.size() - at.bytes.size();
+            if (offset > high_water_mark) {
+                marks.push_back(offset);
+                high_water_mark = offset;
+            }
+        }
+
+        std::expected<std::size_t, error> reference_follow(std::size_t const tag_at)
+        {
+            auto const n = head_decode();
+            if (!n) [[unlikely]]
+                return std::unexpected(n.error());
+            if (n->major != major_type::unsigned_integer) [[unlikely]]
+                return std::unexpected(error::inadmissible_type_for_tag_content);
+            if (n->argument >= marks.size()) [[unlikely]]
+                return std::unexpected(error::sharedref_index_not_marked);
+            std::size_t const marked = marks.at(static_cast<std::size_t>(n->argument));
+            if (marked >= tag_at) [[unlikely]]
+                return std::unexpected(error::sharedref_not_complete);
+            return marked;
+        }
+    };
+
     struct document {
         std::shared_ptr<void const> owner;
         std::string_view bytes;
@@ -1992,7 +2033,7 @@ class internal
                                                 std::numeric_limits<double>::max_exponent - 1,
                                                 2 * std::numeric_limits<double>::max_exponent - 1};
 
-    static float float_decode_binary16(std::uint16_t half)
+    static constexpr float float_decode_binary16(std::uint16_t half)
     {
         constexpr precision h = half_precision;
         constexpr precision f = single_precision;
@@ -2019,7 +2060,7 @@ class internal
             mant << widen);
     }
 
-    static std::uint16_t float_encode_binary16(float value)
+    static constexpr std::uint16_t float_encode_binary16(float value)
     {
         constexpr precision h = half_precision;
         constexpr precision f = single_precision;
@@ -2045,7 +2086,7 @@ class internal
                                                      (f.exponent_bias - 1 - static_cast<int>(exp32)));
     }
 
-    static simple_float_information preferred_float_info(double value)
+    static constexpr simple_float_information preferred_float_info(double value)
     {
         constexpr precision h = half_precision;
         constexpr precision f = single_precision;
@@ -2267,9 +2308,978 @@ class internal
     template <std::size_t DepthMax, class Binding>
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 
+public:
+    struct selector {
+        enum class kind { key, index, wildcard } kind;
+        std::size_t key_at;
+        std::size_t key_size;
+        std::int64_t index;
+    };
+
+    struct query {
+        std::vector<selector> selectors;
+        std::string keys;
+    };
+
+    struct parsed {
+        std::size_t at;
+        bool separated;
+    };
+
+    static constexpr int no_indicator = -1;
+    static constexpr int immediate_indicator = -2;
+
+    static constexpr bool blank(char const c)
+    {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+    }
+
+    static constexpr std::size_t blank_end(std::string_view const text, std::size_t at)
+    {
+        while (at < text.size() && blank(text.at(at)))
+            ++at;
+        return at;
+    }
+
+    static constexpr bool digit(char const c)
+    {
+        return c >= '0' && c <= '9';
+    }
+
+    static constexpr int hex_digit_value(char const c)
+    {
+        if (c >= '0' && c <= '9')
+            return c - '0';
+        if (c >= 'a' && c <= 'f')
+            return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F')
+            return c - 'A' + 10;
+        return -1;
+    }
+
+    static constexpr std::expected<void, error> head_append(std::string &out, major_type const major,
+                                                            std::uint64_t const argument, int const indicator)
+    {
+        int info;
+        if (indicator == no_indicator)
+            info = argument < 24 ? 0 : 24 + std::countr_zero(std::bit_ceil(static_cast<unsigned>((std::bit_width(argument) + 7) / 8)));
+        else if (indicator == immediate_indicator)
+            info = 0;
+        else
+            info = indicator;
+        if (info == 0) {
+            if (argument >= 24) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            out.push_back(static_cast<char>(std::to_underlying(major) << 5 | static_cast<int>(argument)));
+            return {};
+        }
+        if (info < 24 || info > 27) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        std::size_t const size = std::size_t{1} << (info - 24);
+        if (size < 8 && argument >> (8 * size) != 0) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        out.push_back(static_cast<char>(std::to_underlying(major) << 5 | info));
+        for (std::size_t i = size; i > 0; --i)
+            out.push_back(static_cast<char>(argument >> (8 * (i - 1))));
+        return {};
+    }
+
+    struct indicated {
+        std::size_t at;
+        int indicator;
+    };
+
+    static constexpr std::expected<indicated, error> indicator_parse(std::string_view const text, std::size_t const at)
+    {
+        if (at >= text.size() || text.at(at) != '_')
+            return indicated{at, no_indicator};
+        if (at + 1 < text.size() && text.at(at + 1) == 'i')
+            return indicated{at + 2, immediate_indicator};
+        if (at + 1 < text.size() && text.at(at + 1) >= '0' && text.at(at + 1) <= '3')
+            return indicated{at + 2, 24 + (text.at(at + 1) - '0')};
+        if (at + 1 < text.size() && digit(text.at(at + 1))) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        return indicated{at + 1, std::to_underlying(additional_information::indefinite_length)};
+    }
+
+    static constexpr void utf8_append(std::string &out, std::uint32_t const c)
+    {
+        if (c < 0x80) {
+            out.push_back(static_cast<char>(c));
+        } else if (c < 0x800) {
+            out.push_back(static_cast<char>(0xc0 | c >> 6));
+            out.push_back(static_cast<char>(0x80 | (c & 0x3f)));
+        } else if (c < 0x10000) {
+            out.push_back(static_cast<char>(0xe0 | c >> 12));
+            out.push_back(static_cast<char>(0x80 | (c >> 6 & 0x3f)));
+            out.push_back(static_cast<char>(0x80 | (c & 0x3f)));
+        } else {
+            out.push_back(static_cast<char>(0xf0 | c >> 18));
+            out.push_back(static_cast<char>(0x80 | (c >> 12 & 0x3f)));
+            out.push_back(static_cast<char>(0x80 | (c >> 6 & 0x3f)));
+            out.push_back(static_cast<char>(0x80 | (c & 0x3f)));
+        }
+    }
+
+    struct code_unit {
+        std::size_t at;
+        std::uint32_t value;
+    };
+
+    static constexpr std::expected<code_unit, error> hex4_parse(std::string_view const text, std::size_t const at)
+    {
+        if (at + 4 > text.size()) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        std::uint32_t value = 0;
+        for (char const c : text.substr(at, 4)) {
+            int const v = hex_digit_value(c);
+            if (v < 0) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            value = value << 4 | static_cast<std::uint32_t>(v);
+        }
+        return code_unit{at + 4, value};
+    }
+
+    static constexpr std::expected<std::size_t, error> quoted_parse(std::string_view const text, std::size_t at,
+                                                                    std::string &out)
+    {
+        char const quote = text.at(at++);
+        for (;;) {
+            if (at >= text.size()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            char const c = text.at(at++);
+            if (c == quote)
+                return at;
+            if (static_cast<unsigned char>(c) < 0x20) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            if (c != '\\') {
+                out.push_back(c);
+                continue;
+            }
+            if (at >= text.size()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            char const e = text.at(at++);
+            switch (e) {
+            case 'b':
+                out.push_back('\b');
+                break;
+            case 'f':
+                out.push_back('\f');
+                break;
+            case 'n':
+                out.push_back('\n');
+                break;
+            case 'r':
+                out.push_back('\r');
+                break;
+            case 't':
+                out.push_back('\t');
+                break;
+            case '/':
+            case '\\':
+            case '\'':
+            case '"':
+                out.push_back(e);
+                break;
+            case 'u': {
+                std::uint32_t c1 = 0;
+                if (at < text.size() && text.at(at) == '{') {
+                    std::size_t const close = text.find('}', at);
+                    if (close == std::string_view::npos || close == at + 1 || close > at + 9) [[unlikely]]
+                        return std::unexpected(error::invalid_path);
+                    for (char const h : text.substr(at + 1, close - at - 1)) {
+                        int const v = hex_digit_value(h);
+                        if (v < 0) [[unlikely]]
+                            return std::unexpected(error::invalid_path);
+                        c1 = c1 << 4 | static_cast<std::uint32_t>(v);
+                    }
+                    at = close + 1;
+                    if (c1 > 0x10ffff || (c1 >= 0xd800 && c1 < 0xe000)) [[unlikely]]
+                        return std::unexpected(error::invalid_path);
+                    utf8_append(out, c1);
+                    break;
+                }
+                auto const next = hex4_parse(text, at);
+                if (!next) [[unlikely]]
+                    return std::unexpected(next.error());
+                at = next->at;
+                c1 = next->value;
+                if (c1 >= 0xdc00 && c1 < 0xe000) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                if (c1 >= 0xd800 && c1 < 0xdc00) {
+                    if (at + 2 > text.size() || text.at(at) != '\\' || text.at(at + 1) != 'u') [[unlikely]]
+                        return std::unexpected(error::invalid_path);
+                    auto const low = hex4_parse(text, at + 2);
+                    if (!low || low->value < 0xdc00 || low->value >= 0xe000) [[unlikely]]
+                        return std::unexpected(error::invalid_path);
+                    std::uint32_t const c2 = low->value;
+                    at = low->at;
+                    c1 = 0x10000 + ((c1 - 0xd800) << 10) + (c2 - 0xdc00);
+                }
+                utf8_append(out, c1);
+                break;
+            }
+            [[unlikely]] default:
+                return std::unexpected(error::invalid_path);
+            }
+        }
+    }
+
+    static constexpr std::expected<std::size_t, error> hex_string_parse(std::string_view const text, std::size_t at,
+                                                                        std::string &out)
+    {
+        int high = -1;
+        for (;; ++at) {
+            if (at >= text.size()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            char const c = text.at(at);
+            if (c == '\'')
+                break;
+            if (blank(c))
+                continue;
+            int const v = hex_digit_value(c);
+            if (v < 0) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            if (high < 0) {
+                high = v;
+            } else {
+                out.push_back(static_cast<char>(high << 4 | v));
+                high = -1;
+            }
+        }
+        if (high >= 0) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        return at + 1;
+    }
+
+    static constexpr std::expected<std::size_t, error> base64_string_parse(std::string_view const text, std::size_t at,
+                                                                           std::string &out)
+    {
+        std::uint32_t bits = 0;
+        int count = 0;
+        int padding = 0;
+        for (;; ++at) {
+            if (at >= text.size()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            char const c = text.at(at);
+            if (c == '\'')
+                break;
+            if (blank(c))
+                continue;
+            int v;
+            if (c >= 'A' && c <= 'Z')
+                v = c - 'A';
+            else if (c >= 'a' && c <= 'z')
+                v = c - 'a' + 26;
+            else if (digit(c))
+                v = c - '0' + 52;
+            else if (c == '+' || c == '-')
+                v = 62;
+            else if (c == '/' || c == '_')
+                v = 63;
+            else if (c == '=') {
+                ++padding;
+                continue;
+            } else [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            if (padding != 0) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            bits = bits << 6 | static_cast<std::uint32_t>(v);
+            if (++count == 4) {
+                out.push_back(static_cast<char>(bits >> 16));
+                out.push_back(static_cast<char>(bits >> 8));
+                out.push_back(static_cast<char>(bits));
+                bits = 0;
+                count = 0;
+            }
+        }
+        if (count == 1 || (padding != 0 && count + padding != 4)) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        if (count == 2)
+            out.push_back(static_cast<char>(bits >> 4));
+        if (count == 3) {
+            out.push_back(static_cast<char>(bits >> 10));
+            out.push_back(static_cast<char>(bits >> 2));
+        }
+        return at + 1;
+    }
+
+    static constexpr std::expected<void, error> float_append(std::string &out, double const value, int const indicator)
+    {
+        bool const nan = value != value;
+        bool const infinite = !nan && (value > std::numeric_limits<double>::max() || value < -std::numeric_limits<double>::max());
+        simple_float_information const preferred = preferred_float_info(value);
+        int info;
+        if (indicator == no_indicator)
+            info = std::to_underlying(preferred);
+        else if (indicator >= std::to_underlying(simple_float_information::half_precision_float) &&
+                 indicator <= std::to_underlying(simple_float_information::double_precision_float))
+            info = indicator;
+        else [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        bool const exact =
+            nan || infinite || info >= std::to_underlying(preferred) ||
+            (info == std::to_underlying(simple_float_information::single_precision_float) &&
+             static_cast<double>(static_cast<float>(value)) == value);
+        if (!exact) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        std::uint64_t argument;
+        if (info == std::to_underlying(simple_float_information::half_precision_float))
+            argument = nan ? 0x7e00 : float_encode_binary16(static_cast<float>(value));
+        else if (info == std::to_underlying(simple_float_information::single_precision_float))
+            argument = nan ? 0x7fc00000 : std::bit_cast<std::uint32_t>(static_cast<float>(value));
+        else
+            argument = nan ? 0x7ff8000000000000 : std::bit_cast<std::uint64_t>(value);
+        return head_append(out, major_type::simple_float, argument, info);
+    }
+
+    static constexpr std::expected<std::size_t, error> number_parse(std::string_view const text, std::size_t at,
+                                                                    std::string &out)
+    {
+        bool negative = false;
+        char const sign = text.at(at);
+        if (sign == '+' || sign == '-')
+            negative = text.at(at++) == '-';
+        auto const word = [&](std::string_view const w) { return text.substr(at).starts_with(w); };
+        if (word("Infinity") || word("NaN")) {
+            bool const nan = word("NaN");
+            if (sign == '+' || (nan && sign == '-')) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            at += nan ? 3 : 8;
+            auto const next = indicator_parse(text, at);
+            if (!next) [[unlikely]]
+                return std::unexpected(next.error());
+            int const indicator = next->indicator;
+            double const infinity = std::numeric_limits<double>::infinity();
+            auto const r = float_append(out, nan ? std::numeric_limits<double>::quiet_NaN() : negative ? -infinity : infinity,
+                                        indicator);
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            return next->at;
+        }
+        int base = 10;
+        if (word("0x") || word("0X")) {
+            base = 16;
+            at += 2;
+        } else if (word("0o")) {
+            base = 8;
+            at += 2;
+        } else if (word("0b")) {
+            base = 2;
+            at += 2;
+        }
+        std::uint64_t mantissa = 0;
+        std::size_t digits = 0;
+        int exponent = 0;
+        bool overflow = false;
+        bool fraction = false;
+        bool real = false;
+        std::size_t const first = at;
+        for (; at < text.size(); ++at) {
+            char const c = text.at(at);
+            if (c == '.' && !fraction && (base == 10 || base == 16)) {
+                fraction = true;
+                real = true;
+                continue;
+            }
+            int const v = hex_digit_value(c);
+            if (v < 0 || v >= base)
+                break;
+            ++digits;
+            if (mantissa > (std::numeric_limits<std::uint64_t>::max() - static_cast<std::uint64_t>(v)) / static_cast<std::uint64_t>(base)) {
+                overflow = true;
+                continue;
+            }
+            mantissa = mantissa * static_cast<std::uint64_t>(base) + static_cast<std::uint64_t>(v);
+            if (fraction)
+                --exponent;
+        }
+        if (digits == 0) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        if (base == 10 && text.at(first) == '0' && first + 1 < at && digit(text.at(first + 1))) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        bool const exponent_part = at < text.size() && ((base == 10 && (text.at(at) == 'e' || text.at(at) == 'E')) ||
+                                                        (base == 16 && (text.at(at) == 'p' || text.at(at) == 'P')));
+        if (base == 16 && real && !exponent_part) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        if (exponent_part) {
+            real = true;
+            ++at;
+            bool exponent_negative = false;
+            if (at < text.size() && (text.at(at) == '+' || text.at(at) == '-'))
+                exponent_negative = text.at(at++) == '-';
+            int e = 0;
+            std::size_t const e_first = at;
+            while (at < text.size() && digit(text.at(at)) && e < 100000)
+                e = e * 10 + (text.at(at++) - '0');
+            if (at == e_first || (at < text.size() && digit(text.at(at)))) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            if (base == 16)
+                exponent = 4 * exponent + (exponent_negative ? -e : e);
+            else
+                exponent += exponent_negative ? -e : e;
+        } else if (base == 16) {
+            exponent *= 4;
+        }
+        auto const next = indicator_parse(text, at);
+        if (!next) [[unlikely]]
+            return std::unexpected(next.error());
+        int const indicator = next->indicator;
+        if (overflow) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        if (!real) {
+            if (negative && mantissa != 0) {
+                if (auto const r = head_append(out, major_type::negative_integer, mantissa - 1, indicator); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+            } else if (auto const r = head_append(out, major_type::unsigned_integer, mantissa, indicator); !r) [[unlikely]] {
+                return std::unexpected(r.error());
+            }
+            return next->at;
+        }
+        constexpr std::uint64_t exact_max = std::uint64_t{1} << std::numeric_limits<double>::digits;
+        double value;
+        if (mantissa == 0) {
+            value = 0.0;
+        } else if (base == 16) {
+            if (mantissa > exact_max) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            value = static_cast<double>(mantissa);
+            for (int i = 0; i < exponent; ++i)
+                value *= 2.0;
+            for (int i = 0; i > exponent; --i)
+                value *= 0.5;
+        } else {
+            constexpr std::array<double, 23> powers{1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
+                                                    1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
+            while (exponent > 22 && mantissa <= exact_max / 10) {
+                mantissa *= 10;
+                --exponent;
+            }
+            while (exponent < 0 && mantissa % 10 == 0) {
+                mantissa /= 10;
+                ++exponent;
+            }
+            if (mantissa > exact_max || exponent > 22 || exponent < -22) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            value = exponent >= 0 ? static_cast<double>(mantissa) * powers.at(static_cast<std::size_t>(exponent))
+                                  : static_cast<double>(mantissa) / powers.at(static_cast<std::size_t>(-exponent));
+        }
+        if (auto const r = float_append(out, negative ? -value : value, indicator); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return next->at;
+    }
+
+    static constexpr std::expected<parsed, error> separator_parse(std::string_view const text, std::size_t const at)
+    {
+        std::size_t next = blank_end(text, at);
+        bool separated = next != at;
+        if (next < text.size() && text.at(next) == ',') {
+            next = blank_end(text, next + 1);
+            separated = true;
+        }
+        return parsed{next, separated};
+    }
+
+    static constexpr std::expected<std::size_t, error> container_parse(std::string_view const text, std::size_t at,
+                                                                       std::string &out, std::size_t const depth,
+                                                                       std::size_t const depth_max)
+    {
+        bool const map = text.at(at++) == '{';
+        char const close = map ? '}' : ']';
+        auto const after = indicator_parse(text, at);
+        if (!after) [[unlikely]]
+            return std::unexpected(after.error());
+        int const indicator = after->indicator;
+        at = blank_end(text, after->at);
+        std::string items;
+        std::uint64_t count = 0;
+        bool separated = true;
+        while (at < text.size() && text.at(at) != close) {
+            if (!separated) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            auto next = literal_parse(text, at, items, depth + 1, depth_max);
+            if (!next) [[unlikely]]
+                return next;
+            if (map) {
+                std::size_t const colon = blank_end(text, *next);
+                if (colon >= text.size() || text.at(colon) != ':') [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                next = literal_parse(text, blank_end(text, colon + 1), items, depth + 1, depth_max);
+                if (!next) [[unlikely]]
+                    return next;
+            }
+            ++count;
+            auto const s = separator_parse(text, *next);
+            if (!s) [[unlikely]]
+                return std::unexpected(s.error());
+            at = s->at;
+            separated = s->separated;
+        }
+        if (at >= text.size()) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        major_type const major = map ? major_type::map : major_type::array;
+        if (indicator == std::to_underlying(additional_information::indefinite_length)) {
+            out.push_back(static_cast<char>(std::to_underlying(major) << 5 | indicator));
+            out += items;
+            out.push_back('\xff');
+        } else {
+            if (auto const r = head_append(out, major, count, indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            out += items;
+        }
+        return at + 1;
+    }
+
+    static constexpr std::expected<std::size_t, error> string_finish(std::string_view const text, std::size_t const at,
+                                                                     std::string &out, major_type const major,
+                                                                     std::string_view const content)
+    {
+        auto const next = indicator_parse(text, at);
+        if (!next) [[unlikely]]
+            return std::unexpected(next.error());
+        int const indicator = next->indicator;
+        if (indicator == std::to_underlying(additional_information::indefinite_length)) {
+            if (!content.empty()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            out.push_back(static_cast<char>(std::to_underlying(major) << 5 | indicator));
+            out.push_back('\xff');
+            return next->at;
+        }
+        if (auto const r = head_append(out, major, content.size(), indicator); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        out += content;
+        return next->at;
+    }
+
+    static constexpr std::expected<std::size_t, error> literal_parse(std::string_view const text, std::size_t const at,
+                                                                     std::string &out, std::size_t const depth,
+                                                                     std::size_t const depth_max)
+    {
+        if (depth > depth_max) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
+        if (at >= text.size()) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        std::string_view const rest = text.substr(at);
+        char const c = rest.front();
+        if (c == '[' || c == '{')
+            return container_parse(text, at, out, depth, depth_max);
+        if (c == '"' || c == '\'') {
+            std::string content;
+            auto const next = quoted_parse(text, at, content);
+            if (!next) [[unlikely]]
+                return next;
+            return string_finish(text, *next, out, c == '"' ? major_type::text_string : major_type::byte_string, content);
+        }
+        if (rest.starts_with("h'") || rest.starts_with("b64'")) {
+            std::string content;
+            bool const hex = rest.front() == 'h';
+            auto const next = hex ? hex_string_parse(text, at + 2, content) : base64_string_parse(text, at + 4, content);
+            if (!next) [[unlikely]]
+                return next;
+            return string_finish(text, *next, out, major_type::byte_string, content);
+        }
+        if (rest.starts_with("<<")) {
+            std::string content;
+            std::size_t next = blank_end(text, at + 2);
+            bool separated = true;
+            while (!text.substr(next).starts_with(">>")) {
+                if (!separated || next >= text.size()) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                auto const item = literal_parse(text, next, content, depth + 1, depth_max);
+                if (!item) [[unlikely]]
+                    return item;
+                auto const s = separator_parse(text, *item);
+                if (!s) [[unlikely]]
+                    return std::unexpected(s.error());
+                next = s->at;
+                separated = s->separated;
+            }
+            return string_finish(text, next + 2, out, major_type::byte_string, content);
+        }
+        constexpr std::array<std::string_view, 4> names{"false", "true", "null", "undefined"};
+        for (std::size_t i = 0; i < names.size(); ++i)
+            if (rest.starts_with(names.at(i))) {
+                out.push_back(static_cast<char>(std::to_underlying(major_type::simple_float) << 5 |
+                                                (std::to_underlying(simple_value::false_value) + i)));
+                return at + names.at(i).size();
+            }
+        if (rest.starts_with("simple(")) {
+            std::size_t next = blank_end(text, at + 7);
+            std::size_t const first = next;
+            unsigned value = 0;
+            while (next < text.size() && digit(text.at(next)) && value < 1000)
+                value = value * 10 + static_cast<unsigned>(text.at(next++) - '0');
+            if (next == first || (text.at(first) == '0' && next > first + 1)) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            next = blank_end(text, next);
+            if (next >= text.size() || text.at(next) != ')' || value > 255 ||
+                (value >= 24 && value < simple_value_one_byte_min)) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            if (auto const r = head_append(out, major_type::simple_float, value, no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return next + 1;
+        }
+        if (!(digit(c) || c == '-' || c == '+' || c == '.' || rest.starts_with("Infinity") || rest.starts_with("NaN")))
+            [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        std::size_t digits_end = at;
+        while (digits_end < text.size() && digit(text.at(digits_end)))
+            ++digits_end;
+        auto const tag_open = indicator_parse(text, digits_end);
+        int const indicator = tag_open ? tag_open->indicator : no_indicator;
+        if (digits_end != at && tag_open && tag_open->at < text.size() && text.at(tag_open->at) == '(' &&
+            indicator != std::to_underlying(additional_information::indefinite_length)) {
+            if (text.at(at) == '0' && digits_end > at + 1) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            std::uint64_t number = 0;
+            for (char const d : text.substr(at, digits_end - at)) {
+                if (number > (std::numeric_limits<std::uint64_t>::max() - static_cast<std::uint64_t>(d - '0')) / 10) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                number = number * 10 + static_cast<std::uint64_t>(d - '0');
+            }
+            if (auto const r = head_append(out, major_type::tag, number, indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            auto const content = literal_parse(text, blank_end(text, tag_open->at + 1), out, depth + 1, depth_max);
+            if (!content) [[unlikely]]
+                return content;
+            std::size_t const close = blank_end(text, *content);
+            if (close >= text.size() || text.at(close) != ')') [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            return close + 1;
+        }
+        return number_parse(text, at, out);
+    }
+
+    struct raw_head {
+        major_type major;
+        std::uint8_t info;
+        std::uint64_t argument;
+        std::size_t at;
+    };
+
+    static constexpr std::expected<raw_head, error> raw_head_read(std::string_view const bytes, std::size_t const at)
+    {
+        if (at >= bytes.size()) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        auto const initial = static_cast<std::uint8_t>(bytes.at(at));
+        auto const major = static_cast<major_type>(initial >> 5);
+        std::uint8_t const info = initial & 0x1f;
+        if (info < std::to_underlying(additional_information::one_byte_argument) ||
+            info == std::to_underlying(additional_information::indefinite_length))
+            return raw_head{major, info, info, at + 1};
+        if (info > std::to_underlying(additional_information::eight_byte_argument)) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        std::size_t const size = std::size_t{1} << (info - std::to_underlying(additional_information::one_byte_argument));
+        if (bytes.size() - at - 1 < size) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        std::uint64_t argument = 0;
+        for (char const c : bytes.substr(at + 1, size))
+            argument = argument << 8 | static_cast<std::uint8_t>(c);
+        return raw_head{major, info, argument, at + 1 + size};
+    }
+
+    static constexpr bool break_at(std::string_view const bytes, std::size_t const at)
+    {
+        return at < bytes.size() && static_cast<std::uint8_t>(bytes.at(at)) == 0xff;
+    }
+
+    static constexpr std::expected<std::size_t, error> canonical_append(std::string &out, std::string_view const bytes,
+                                                                        std::size_t const at, std::size_t const depth,
+                                                                        std::size_t const depth_max)
+    {
+        if (depth > depth_max) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
+        auto const h = raw_head_read(bytes, at);
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        bool const indefinite = h->info == std::to_underlying(additional_information::indefinite_length);
+        std::size_t next = h->at;
+        switch (h->major) {
+        case major_type::unsigned_integer:
+        case major_type::negative_integer:
+            if (indefinite) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            if (auto const r = head_append(out, h->major, h->argument, no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return next;
+        case major_type::byte_string:
+        case major_type::text_string: {
+            std::string content;
+            if (!indefinite) {
+                if (bytes.size() - next < h->argument) [[unlikely]]
+                    return std::unexpected(error::too_little_data);
+                content = bytes.substr(next, static_cast<std::size_t>(h->argument));
+                next += static_cast<std::size_t>(h->argument);
+            } else {
+                while (!break_at(bytes, next)) {
+                    auto const chunk = raw_head_read(bytes, next);
+                    if (!chunk) [[unlikely]]
+                        return std::unexpected(chunk.error());
+                    if (chunk->major != h->major || chunk->info == std::to_underlying(additional_information::indefinite_length) ||
+                        bytes.size() - chunk->at < chunk->argument) [[unlikely]]
+                        return std::unexpected(error::syntax_error);
+                    content += bytes.substr(chunk->at, static_cast<std::size_t>(chunk->argument));
+                    next = chunk->at + static_cast<std::size_t>(chunk->argument);
+                }
+                ++next;
+            }
+            if (auto const r = head_append(out, h->major, content.size(), no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            out += content;
+            return next;
+        }
+        case major_type::array:
+        case major_type::map: {
+            bool const map = h->major == major_type::map;
+            std::vector<std::pair<std::string, std::string>> items;
+            for (std::uint64_t i = 0; indefinite ? !break_at(bytes, next) : i < h->argument; ++i) {
+                std::pair<std::string, std::string> item;
+                auto const first = canonical_append(item.first, bytes, next, depth + 1, depth_max);
+                if (!first) [[unlikely]]
+                    return first;
+                next = *first;
+                if (map) {
+                    auto const second = canonical_append(item.second, bytes, next, depth + 1, depth_max);
+                    if (!second) [[unlikely]]
+                        return second;
+                    next = *second;
+                }
+                items.push_back(std::move(item));
+            }
+            if (indefinite)
+                ++next;
+            if (map) {
+                std::ranges::sort(items);
+                if (std::ranges::adjacent_find(items, {}, &std::pair<std::string, std::string>::first) != items.end()) [[unlikely]]
+                    return std::unexpected(error::duplicate_key);
+            }
+            if (auto const r = head_append(out, h->major, items.size(), no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            for (auto const &[first, second] : items)
+                out += first + second;
+            return next;
+        }
+        case major_type::tag:
+            if (indefinite) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            if (auto const r = head_append(out, major_type::tag, h->argument, no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return canonical_append(out, bytes, next, depth + 1, depth_max);
+        default:
+            break;
+        }
+        constexpr std::uint8_t half = std::to_underlying(simple_float_information::half_precision_float);
+        constexpr std::uint8_t single = std::to_underlying(simple_float_information::single_precision_float);
+        constexpr std::uint8_t twice = std::to_underlying(simple_float_information::double_precision_float);
+        if (h->info < half) {
+            if (h->info == std::to_underlying(simple_float_information::simple_value_follows) && h->argument < simple_value_one_byte_min)
+                [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            if (auto const r = head_append(out, major_type::simple_float, h->argument, no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return next;
+        }
+        if (h->info > twice) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        std::uint64_t sign;
+        std::uint64_t exponent_all_ones;
+        std::uint64_t significand;
+        double value;
+        if (h->info == half) {
+            sign = h->argument >> 15;
+            exponent_all_ones = (h->argument >> 10 & 0x1f) == 0x1f;
+            significand = (h->argument & 0x3ff) << 42;
+            value = static_cast<double>(float_decode_binary16(static_cast<std::uint16_t>(h->argument)));
+        } else if (h->info == single) {
+            sign = h->argument >> 31;
+            exponent_all_ones = (h->argument >> 23 & 0xff) == 0xff;
+            significand = (h->argument & 0x7fffff) << 29;
+            value = static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h->argument)));
+        } else {
+            sign = h->argument >> 63;
+            exponent_all_ones = (h->argument >> 52 & 0x7ff) == 0x7ff;
+            significand = h->argument & 0xfffffffffffff;
+            value = std::bit_cast<double>(h->argument);
+        }
+        if (exponent_all_ones && significand != 0) {
+            if (auto const r = head_append(out, major_type::simple_float, sign << 63 | std::uint64_t{0x7ff} << 52 | significand, twice);
+                !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return next;
+        }
+        if (auto const r = float_append(out, value == 0 ? 0.0 : value, no_indicator); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return next;
+    }
+
+    static constexpr std::expected<query, error> query_parse(std::string_view const text, bool const literals,
+                                                             std::size_t const depth_max)
+    {
+        query q;
+        if (text.empty() || text.front() != '$') [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        std::size_t at = 1;
+        auto const name_first = [](char const c) {
+            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || static_cast<unsigned char>(c) >= 0x80;
+        };
+        for (;;) {
+            std::size_t const segment = blank_end(text, at);
+            if (segment == text.size()) {
+                if (segment != at) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                break;
+            }
+            at = segment;
+            std::size_t const key_at = q.keys.size();
+            if (text.at(at) == '.') {
+                ++at;
+                if (at < text.size() && text.at(at) == '*') {
+                    q.selectors.push_back({selector::kind::wildcard, 0, 0, 0});
+                    ++at;
+                    continue;
+                }
+                std::size_t end = at;
+                while (end < text.size() && (name_first(text.at(end)) || (end != at && digit(text.at(end)))))
+                    ++end;
+                if (end == at) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                if (auto const r = head_append(q.keys, major_type::text_string, end - at, no_indicator); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                q.keys += text.substr(at, end - at);
+                q.selectors.push_back({selector::kind::key, key_at, q.keys.size() - key_at, 0});
+                at = end;
+                continue;
+            }
+            if (text.at(at) != '[') [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            at = blank_end(text, at + 1);
+            if (at >= text.size()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            char const c = text.at(at);
+            std::size_t end;
+            if (c == '*') {
+                q.selectors.push_back({selector::kind::wildcard, 0, 0, 0});
+                end = at + 1;
+            } else if (c == '\'' || c == '"') {
+                std::string name;
+                auto const next = quoted_parse(text, at, name);
+                if (!next) [[unlikely]]
+                    return std::unexpected(next.error());
+                if (auto const r = head_append(q.keys, major_type::text_string, name.size(), no_indicator); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                q.keys += name;
+                q.selectors.push_back({selector::kind::key, key_at, q.keys.size() - key_at, 0});
+                end = *next;
+            } else {
+                std::size_t digits_at = at + (c == '-' ? 1 : 0);
+                std::size_t digits_end = digits_at;
+                while (digits_end < text.size() && digit(text.at(digits_end)))
+                    ++digits_end;
+                std::size_t const close = blank_end(text, digits_end);
+                bool const integer = digits_end != digits_at && digits_end - digits_at <= 16 && close < text.size() &&
+                                     text.at(close) == ']' &&
+                                     !(text.at(digits_at) == '0' && (digits_end > digits_at + 1 || c == '-'));
+                if (integer) {
+                    std::int64_t value = 0;
+                    for (char const d : text.substr(digits_at, digits_end - digits_at))
+                        value = value * 10 + (d - '0');
+                    constexpr std::int64_t exact_max = (std::int64_t{1} << 53) - 1;
+                    if (value > exact_max) [[unlikely]]
+                        return std::unexpected(error::invalid_path);
+                    q.selectors.push_back({selector::kind::index, 0, 0, c == '-' ? -value : value});
+                    end = digits_end;
+                } else if (literals) {
+                    std::string literal;
+                    auto const next = literal_parse(text, at, literal, 0, depth_max);
+                    if (!next) [[unlikely]]
+                        return std::unexpected(next.error());
+                    if (auto const r = canonical_append(q.keys, literal, 0, 0, depth_max); !r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    q.selectors.push_back({selector::kind::key, key_at, q.keys.size() - key_at, 0});
+                    end = *next;
+                } else [[unlikely]] {
+                    return std::unexpected(error::invalid_path);
+                }
+            }
+            at = blank_end(text, end);
+            if (at >= text.size() || text.at(at) != ']') [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            ++at;
+        }
+        if (q.selectors.size() > depth_max) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
+        return q;
+    }
+
+    template <std::size_t DepthMax>
+    static result<lazy, error> key_find(lazy const &node, std::string_view key);
+
+    template <std::size_t DepthMax>
+    static std::expected<std::size_t, error> shared_resolve(document const &doc, std::size_t at);
+
+    static constexpr std::expected<std::size_t, error> literal_end(std::string_view const literal, std::size_t const at,
+                                                                   std::size_t const depth, std::size_t const depth_max)
+    {
+        if (depth > depth_max) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
+        auto const h = raw_head_read(literal, at);
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        std::size_t next = h->at;
+        switch (h->major) {
+        case major_type::byte_string:
+        case major_type::text_string:
+            if (literal.size() - next < h->argument) [[unlikely]]
+                return std::unexpected(error::too_little_data);
+            return next + static_cast<std::size_t>(h->argument);
+        case major_type::array:
+        case major_type::map:
+            for (std::uint64_t i = 0; i < (h->major == major_type::map ? 2 : 1) * h->argument; ++i) {
+                auto const end = literal_end(literal, next, depth + 1, depth_max);
+                if (!end) [[unlikely]]
+                    return end;
+                next = *end;
+            }
+            return next;
+        case major_type::tag:
+            return literal_end(literal, next, depth + 1, depth_max);
+        default:
+            return next;
+        }
+    }
+
+    struct float_key {
+        bool nan;
+        std::uint64_t widened;
+        double value;
+    };
+
+    static float_key float_key_of(std::uint8_t const info, std::uint64_t const argument)
+    {
+        if (info == std::to_underlying(simple_float_information::half_precision_float))
+            return {(argument >> 10 & 0x1f) == 0x1f && (argument & 0x3ff) != 0,
+                    (argument >> 15) << 63 | (argument & 0x3ff) << 42,
+                    static_cast<double>(float_decode_binary16(static_cast<std::uint16_t>(argument)))};
+        if (info == std::to_underlying(simple_float_information::single_precision_float))
+            return {(argument >> 23 & 0xff) == 0xff && (argument & 0x7fffff) != 0,
+                    (argument >> 31) << 63 | (argument & 0x7fffff) << 29,
+                    static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(argument)))};
+        return {(argument >> 52 & 0x7ff) == 0x7ff && (argument & 0xfffffffffffff) != 0,
+                (argument >> 63) << 63 | (argument & 0xfffffffffffff), std::bit_cast<double>(argument)};
+    }
+
+    template <std::size_t DepthMax>
+    static std::expected<std::size_t, error> document_item_end(document &doc, std::size_t at, std::size_t depth);
+
+    template <std::size_t DepthMax>
+    static std::expected<bool, error> key_equal(document &doc, std::size_t at, std::string_view literal, std::size_t literal_at,
+                                                std::size_t depth);
+
     template <std::size_t DepthMax, class Binding>
-    friend std::expected<typename Binding::value, error> path_decode(Binding &binding,
-                                                                  std::span<path_step const> steps, lazy const &l);
+    static result<typename Binding::value, error> query_walk(Binding &binding, std::span<selector const> selectors,
+                                                             std::string_view keys, lazy const &root);
+
+private:
 
     struct resolved {
         std::shared_ptr<document> source;
@@ -2329,6 +3339,273 @@ class internal
     template <std::size_t DepthMax>
     friend std::expected<std::size_t, error> doc_end(std::string_view bytes);
 
+    template <std::size_t DepthMax>
+    friend result<std::string, error> inspect(std::string_view bytes);
+
+    static std::string encoding_indicator(std::uint8_t const info, std::uint64_t const argument)
+    {
+        if (info < std::to_underlying(additional_information::one_byte_argument))
+            return {};
+        std::uint8_t const preferred =
+            argument < std::to_underlying(additional_information::one_byte_argument)
+                ? 0
+                : static_cast<std::uint8_t>(std::to_underlying(additional_information::one_byte_argument) +
+                                            std::countr_zero(std::bit_ceil(static_cast<unsigned>((std::bit_width(argument) + 7) / 8))));
+        if (info == preferred)
+            return {};
+        return {'_', static_cast<char>('0' + info - std::to_underlying(additional_information::one_byte_argument))};
+    }
+
+    static std::string decimal_of(std::uint64_t const n)
+    {
+        std::array<char, std::numeric_limits<std::uint64_t>::digits10 + 1> text;
+        auto const end = std::to_chars(text.data(), std::to_address(text.end()), n).ptr;
+        return std::string(text.data(), end);
+    }
+
+    static std::string hex_of(std::string_view const bytes)
+    {
+        constexpr std::string_view digits = "0123456789abcdef";
+        std::string out;
+        out.reserve(2 * bytes.size());
+        for (char const c : bytes) {
+            out.push_back(digits.at(static_cast<std::uint8_t>(c) >> 4));
+            out.push_back(digits.at(static_cast<std::uint8_t>(c) & 0xf));
+        }
+        return out;
+    }
+
+    static std::string quoted_of(std::string_view const text)
+    {
+        constexpr std::string_view digits = "0123456789abcdef";
+        std::string out = "\"";
+        for (char const c : text) {
+            switch (c) {
+            case '"':
+                out += "\\\"";
+                break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\b':
+                out += "\\b";
+                break;
+            case '\f':
+                out += "\\f";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            default:
+                if (static_cast<std::uint8_t>(c) < 0x20) {
+                    out += "\\u00";
+                    out.push_back(digits.at(static_cast<std::uint8_t>(c) >> 4));
+                    out.push_back(digits.at(static_cast<std::uint8_t>(c) & 0xf));
+                } else {
+                    out.push_back(c);
+                }
+                break;
+            }
+        }
+        out.push_back('"');
+        return out;
+    }
+
+    static std::string number_of(double const value)
+    {
+        if (std::isinf(value))
+            return value > 0 ? "Infinity" : "-Infinity";
+        std::array<char, 400> text;
+        double const magnitude = std::fabs(value);
+        auto const end = std::to_chars(text.data(), std::to_address(text.end()), value,
+                                       magnitude == 0 || (magnitude >= 1e-7 && magnitude < 1e21) ? std::chars_format::fixed
+                                                                                               : std::chars_format::scientific)
+                             .ptr;
+        std::string out(text.data(), end);
+        std::size_t const e = out.find('e');
+        std::string mantissa = out.substr(0, e);
+        if (mantissa.find('.') == std::string::npos)
+            mantissa += ".0";
+        if (e == std::string::npos)
+            return mantissa;
+        std::string_view exponent = std::string_view(out).substr(e + 1);
+        char const sign = exponent.front();
+        exponent.remove_prefix(1);
+        exponent.remove_prefix(std::min(exponent.find_first_not_of('0'), exponent.size() - 1));
+        return mantissa + "e" + sign + std::string(exponent);
+    }
+
+    static std::string float_of(std::uint8_t const info, std::uint64_t const argument)
+    {
+        constexpr std::array<std::uint64_t, 3> quiet_nan{0x7e00, 0x7fc00000, 0x7ff8000000000000};
+        std::size_t const width = info - std::to_underlying(simple_float_information::half_precision_float);
+        double value;
+        if (info == std::to_underlying(simple_float_information::half_precision_float))
+            value = static_cast<double>(float_decode_binary16(static_cast<std::uint16_t>(argument)));
+        else if (info == std::to_underlying(simple_float_information::single_precision_float))
+            value = static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(argument)));
+        else
+            value = std::bit_cast<double>(argument);
+        std::string const indicator =
+            width == 0 ? std::string{} : std::string{'_', static_cast<char>('1' + width)};
+        if (std::isnan(value)) {
+            if (argument == quiet_nan.at(width))
+                return "NaN" + indicator;
+            std::string bytes(std::size_t{2} << width, '\0');
+            for (std::size_t i = 0; i < bytes.size(); ++i)
+                bytes.at(i) = static_cast<char>(argument >> (8 * (bytes.size() - 1 - i)));
+            return "float'" + hex_of(bytes) + "'";
+        }
+        std::size_t const preferred = std::to_underlying(preferred_float_info(value)) -
+                                      std::to_underlying(simple_float_information::half_precision_float);
+        return number_of(value) + (width == preferred ? std::string{} : indicator);
+    }
+
+    struct diagnostic_head {
+        major_type major;
+        std::uint8_t info;
+        std::uint64_t argument;
+    };
+
+    static std::expected<diagnostic_head, error> diagnostic_head_decode(decoder &d)
+    {
+        if (d.bytes.empty()) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        auto const initial = static_cast<std::uint8_t>(d.bytes.front());
+        auto const major = static_cast<major_type>(initial >> 5);
+        std::uint8_t const info = initial & 0x1f;
+        if (info != std::to_underlying(additional_information::indefinite_length))
+            return d.head_decode().transform([](head const h) { return diagnostic_head{h.major, h.info, h.argument}; });
+        if (major == major_type::unsigned_integer || major == major_type::negative_integer || major == major_type::tag)
+            [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        d.bytes.remove_prefix(1);
+        return diagnostic_head{major, info, 0};
+    }
+
+    static bool break_found(decoder &d)
+    {
+        if (d.bytes.empty() || static_cast<std::uint8_t>(d.bytes.front()) != 0xff)
+            return false;
+        d.bytes.remove_prefix(1);
+        return true;
+    }
+
+    template <std::size_t DepthMax>
+    static std::expected<void, error> diagnostic_write(std::string &out, decoder &d, std::size_t const depth)
+    {
+        if (depth > DepthMax) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
+        auto const h = diagnostic_head_decode(d);
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        bool const indefinite = h->info == std::to_underlying(additional_information::indefinite_length);
+        switch (h->major) {
+        case major_type::unsigned_integer:
+            out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument);
+            return {};
+        case major_type::negative_integer:
+            out += h->argument == std::numeric_limits<std::uint64_t>::max() ? std::string("-18446744073709551616")
+                                                                            : "-" + decimal_of(h->argument + 1);
+            out += encoding_indicator(h->info, h->argument);
+            return {};
+        case major_type::byte_string:
+        case major_type::text_string: {
+            bool const text = h->major == major_type::text_string;
+            if (!indefinite) {
+                auto const s = text ? d.text_string_decode(h->argument) : d.byte_string_decode(h->argument);
+                if (!s) [[unlikely]]
+                    return std::unexpected(s.error());
+                out += text ? quoted_of(*s) : "h'" + hex_of(*s) + "'";
+                out += encoding_indicator(h->info, h->argument);
+                return {};
+            }
+            if (break_found(d)) {
+                out += text ? "\"\"_" : "''_";
+                return {};
+            }
+            out += "(_ ";
+            for (bool first = true; !break_found(d); first = false) {
+                if (!first)
+                    out += ", ";
+                if (d.bytes.empty() || static_cast<major_type>(static_cast<std::uint8_t>(d.bytes.front()) >> 5) != h->major ||
+                    (static_cast<std::uint8_t>(d.bytes.front()) & 0x1f) == std::to_underlying(additional_information::indefinite_length))
+                    [[unlikely]]
+                    return std::unexpected(d.bytes.empty() ? error::too_little_data : error::syntax_error);
+                if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                    return r;
+            }
+            out += ")";
+            return {};
+        }
+        case major_type::array:
+        case major_type::map: {
+            bool const map = h->major == major_type::map;
+            out += map ? "{" : "[";
+            std::string const indicator = indefinite ? std::string("_") : encoding_indicator(h->info, h->argument);
+            if (!indicator.empty())
+                out += indicator + " ";
+            for (std::uint64_t i = 0; indefinite ? !break_found(d) : i < h->argument; ++i) {
+                if (i != 0)
+                    out += ", ";
+                if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                    return r;
+                if (map) {
+                    out += ": ";
+                    if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                        return r;
+                }
+            }
+            out += map ? "}" : "]";
+            return {};
+        }
+        case major_type::tag: {
+            out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument) + "(";
+            if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                return r;
+            out += ")";
+            return {};
+        }
+        default:
+            break;
+        }
+        switch (h->info) {
+        case std::to_underlying(simple_value::false_value):
+            out += "false";
+            return {};
+        case std::to_underlying(simple_value::true_value):
+            out += "true";
+            return {};
+        case std::to_underlying(simple_value::null):
+            out += "null";
+            return {};
+        case std::to_underlying(simple_value::undefined):
+            out += "undefined";
+            return {};
+        case std::to_underlying(simple_float_information::simple_value_follows):
+            if (h->argument < simple_value_one_byte_min) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            out += "simple(" + decimal_of(h->argument) + ")";
+            return {};
+        case std::to_underlying(simple_float_information::half_precision_float):
+        case std::to_underlying(simple_float_information::single_precision_float):
+        case std::to_underlying(simple_float_information::double_precision_float):
+            out += float_of(h->info, h->argument);
+            return {};
+        [[unlikely]] case std::to_underlying(additional_information::indefinite_length):
+            return std::unexpected(error::syntax_error);
+        default:
+            out += "simple(" + decimal_of(h->argument) + ")";
+            return {};
+        }
+    }
+
     static std::expected<void, error> typed_array_check(std::uint64_t const tag, std::size_t const size)
     {
         if (tag < std::to_underlying(tag_number::typed_array_first) ||
@@ -2362,7 +3639,8 @@ class internal
                 auto const major = static_cast<major_type>(initial >> 5);
                 std::uint8_t const info = initial & 0x1f;
                 if (info <= std::to_underlying(additional_information::eight_byte_argument) &&
-                    major != major_type::tag && major != major_type::simple_float) {
+                    major != major_type::tag &&
+                    (major != major_type::simple_float || info != std::to_underlying(additional_information::one_byte_argument))) {
                     bool const immediate = info < std::to_underlying(additional_information::one_byte_argument);
                     std::size_t const size =
                         immediate ? 0
@@ -2423,15 +3701,8 @@ class internal
     }
 
 #ifdef __cpp_impl_reflection
-    template <class T, std::size_t DepthMax>
-    friend result<T> databind::decode(std::string_view bytes);
-
-    template <class T>
-    friend result<std::string, std::errc> databind::encode(T const &value);
-
-
-    template <class T, class Target>
-    friend result<std::size_t, std::errc> databind::encode(T const &value, Target &&target);
+    template <class>
+    friend class databind;
 
     template <class U>
     static constexpr bool is_std_tuple = false;
@@ -2599,20 +3870,51 @@ class internal
 #endif
 
     template <std::size_t DepthMax, class U, std::size_t I = 0>
-    static std::expected<void, error> variant_read(decoder &d, U &out, head const &h, std::size_t const depth)
+    static std::expected<void, error> variant_read(sharing_decoder &d, U &out, head const &h, std::size_t const depth)
     {
         if constexpr (I == std::variant_size_v<U>) {
             return std::unexpected(error::incorrect_type);
         } else {
             using A = std::variant_alternative_t<I, U>;
             if (head_accepted<A>(h))
-                return generic_read<DepthMax>(d, out.template emplace<I>(), depth);
+                return generic_value_read<DepthMax>(d, out.template emplace<I>(), depth);
             return variant_read<DepthMax, U, I + 1>(d, out, h, depth);
         }
     }
 
     template <std::size_t DepthMax, class U>
-    static std::expected<void, error> generic_read(decoder &d, U &out, std::size_t const depth)
+    static std::expected<void, error> generic_read(sharing_decoder &d, U &out, std::size_t const depth)
+    {
+        for (;;) {
+            std::size_t const tag_at = d.message.size() - d.bytes.size();
+            decoder look = d;
+            auto const h = look.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::tag)
+                break;
+            if (h->argument == std::to_underlying(tag_number::shareable)) {
+                d.bytes = look.bytes;
+                d.mark(d);
+                continue;
+            }
+            if (h->argument != std::to_underlying(tag_number::sharedref))
+                break;
+            d.bytes = look.bytes;
+            auto const target = d.reference_follow(tag_at);
+            if (!target) [[unlikely]]
+                return std::unexpected(target.error());
+            std::string_view const rest = d.bytes;
+            d.bytes = d.message.substr(*target);
+            auto const r = generic_value_read<DepthMax>(d, out, depth + 1);
+            d.bytes = rest;
+            return r;
+        }
+        return generic_value_read<DepthMax>(d, out, depth);
+    }
+
+    template <std::size_t DepthMax, class U>
+    static std::expected<void, error> generic_value_read(sharing_decoder &d, U &out, std::size_t const depth)
     {
         if (depth > DepthMax) [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
@@ -2785,7 +4087,7 @@ class internal
     }
 
     template <std::size_t DepthMax, class U>
-    static std::expected<void, error> struct_read(decoder &d, U &out, std::size_t const depth)
+    static std::expected<void, error> struct_read(sharing_decoder &d, U &out, std::size_t const depth)
     {
         static constexpr auto members = members_of<U>();
         constexpr std::size_t count = members.size();
@@ -2795,20 +4097,35 @@ class internal
         if (h->major != major_type::map) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         std::bitset<count> found;
-        no_marks none;
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
-            auto const k = d.head_decode();
+            std::size_t key_at = d.message.size() - d.bytes.size();
+            auto k = d.head_decode();
+            while (k && k->major == major_type::tag && k->argument == std::to_underlying(tag_number::shareable)) {
+                d.mark(d);
+                key_at = d.message.size() - d.bytes.size();
+                k = d.head_decode();
+            }
+            decoder referenced{};
+            bool const indirect = k && k->major == major_type::tag && k->argument == std::to_underlying(tag_number::sharedref);
+            if (indirect) {
+                auto const target = d.reference_follow(key_at);
+                if (!target) [[unlikely]]
+                    return std::unexpected(target.error());
+                referenced = decoder{d.message.substr(*target)};
+                k = referenced.head_decode();
+            }
+            decoder &from = indirect ? referenced : d;
             if (!k) [[unlikely]]
                 return std::unexpected(k.error());
             std::string_view text;
             if (k->major == major_type::text_string) {
-                auto const t = d.text_string_decode(k->argument);
+                auto const t = from.text_string_decode(k->argument);
                 if (!t) [[unlikely]]
                     return std::unexpected(t.error());
                 text = *t;
             } else if (k->major != major_type::unsigned_integer && k->major != major_type::negative_integer) {
                 if (k->major == major_type::byte_string) {
-                    if (auto const b = d.byte_string_decode(k->argument); !b) [[unlikely]]
+                    if (auto const b = from.byte_string_decode(k->argument); !b) [[unlikely]]
                         return std::unexpected(b.error());
                 } else if (k->major == major_type::array || k->major == major_type::map ||
                            k->major == major_type::tag) [[unlikely]] {
@@ -2825,7 +4142,7 @@ class internal
                 }
             }
             if (!matched) {
-                if (auto const s = item_skip<DepthMax>(d, none, depth + 1); !s) [[unlikely]]
+                if (auto const s = item_skip<DepthMax>(d, d, depth + 1); !s) [[unlikely]]
                     return s;
             } else if (!r) [[unlikely]] {
                 return r;
@@ -3067,6 +4384,13 @@ class internal
 #endif
 };
 
+template <std::size_t DepthMax = 64, class Binding>
+result<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
+
+template <fixed_string Path, std::size_t DepthMax = 64, class Binding>
+    requires(internal::query_parse(Path.view(), true, DepthMax).has_value())
+result<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
+
 struct lazy {
     std::shared_ptr<internal::document> document;
     std::size_t offset;
@@ -3085,7 +4409,9 @@ struct lazy {
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
                  std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-    result<T> get() const;
+    result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                                   std::is_same_v<T, typed_array>,
+                               owning_ref<T>, T>> get() const;
 
     template <std::size_t DepthMax = 64>
     result<lazy_elements<DepthMax>> elements() const;
@@ -3330,67 +4656,90 @@ consteval std::size_t internal::member_offset()
     }
 }
 
-namespace databind
-{
-template <class T, std::size_t DepthMax>
-result<T> decode(std::string_view const bytes)
-{
-    internal::decoder d{bytes};
-    T out{};
-    if (auto const r = internal::generic_read<DepthMax>(d, out, 0); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    if (!d.bytes.empty()) [[unlikely]]
-        return std::unexpected(error::syntax_error);
-    return out;
-}
-
 template <class T>
-CBOR_ALWAYS_INLINE inline result<std::string, std::errc> encode(T const &value)
+class databind
 {
-    std::size_t const size = internal::generic_size(value);
-    std::string out;
-    out.resize_and_overwrite(size + internal::head_padding, [&](char *const p, std::size_t const n) {
-        return internal::generic_write(std::span<char>(p, n), 0, value);
-    });
-    return out;
-}
-
-template <class T, class Target>
-CBOR_ALWAYS_INLINE inline result<std::size_t, std::errc> encode(T const &value, Target &&target)
-{
-    using U = std::remove_cvref_t<Target>;
-    std::size_t const size = internal::generic_size(value);
-    std::size_t const padded = size + internal::head_padding;
-    if constexpr (std::same_as<U, std::string>) {
-        std::size_t const at = target.size();
-        target.resize_and_overwrite(at + padded, [&](char *const p, std::size_t const n) {
-            return internal::generic_write(std::span<char>(p, n), at, value);
-        });
-        return size;
-    } else if constexpr (internal::byte_container<U> &&
-                         requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
-        std::size_t const at = std::ranges::size(target);
-        target.resize(at + padded);
-        internal::generic_write(std::span<char>(target), at, value);
-        target.resize(at + size);
-        return size;
-    } else if constexpr (!internal::byte_container<U> && requires { std::span<char>(target); }) {
-        std::span<char> const out(target);
-        if (out.size() >= padded) {
-            internal::generic_write(out.first(padded), 0, value);
-            return size;
-        }
+public:
+    template <std::size_t DepthMax = 64>
+    static result<owning_ref<T>> decode(std::string_view const bytes)
+    {
+        auto copy = std::make_shared<std::string const>(bytes);
+        auto value = read<DepthMax>(*copy);
+        if (!value) [[unlikely]]
+            return std::unexpected(value.error());
+        return owning_ref<T>(std::move(copy), std::move(*value));
     }
-    std::string bytes(padded, '\0');
-    bytes.resize(internal::generic_write(std::span<char>(bytes), 0, value));
-    decltype(auto) message = internal::message_of(target, bytes.size());
-    if (auto const r = message.append(bytes); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    if (auto const r = message.done(bytes.size()); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    return bytes.size();
-}
-}
+
+    template <std::size_t DepthMax = 64>
+    static result<owning_ref<T>> decode(std::shared_ptr<void const> owner, std::string_view const bytes)
+    {
+        if (!owner) [[unlikely]]
+            throw std::logic_error("cbor::databind::decode: the owner of the bytes is empty");
+        auto value = read<DepthMax>(bytes);
+        if (!value) [[unlikely]]
+            return std::unexpected(value.error());
+        return owning_ref<T>(std::move(owner), std::move(*value));
+    }
+
+    CBOR_ALWAYS_INLINE static result<std::string, std::errc> encode(T const &value)
+    {
+        std::size_t const size = internal::generic_size(value);
+        std::string out;
+        out.resize_and_overwrite(size + internal::head_padding, [&](char *const p, std::size_t const n) {
+            return internal::generic_write(std::span<char>(p, n), 0, value);
+        });
+        return out;
+    }
+
+    template <class Target>
+    CBOR_ALWAYS_INLINE static result<std::size_t, std::errc> encode(T const &value, Target &&target)
+    {
+        using U = std::remove_cvref_t<Target>;
+        std::size_t const size = internal::generic_size(value);
+        std::size_t const padded = size + internal::head_padding;
+        if constexpr (std::same_as<U, std::string>) {
+            std::size_t const at = target.size();
+            target.resize_and_overwrite(at + padded, [&](char *const p, std::size_t const n) {
+                return internal::generic_write(std::span<char>(p, n), at, value);
+            });
+            return size;
+        } else if constexpr (internal::byte_container<U> &&
+                             requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
+            std::size_t const at = std::ranges::size(target);
+            target.resize(at + padded);
+            internal::generic_write(std::span<char>(target), at, value);
+            target.resize(at + size);
+            return size;
+        } else if constexpr (!internal::byte_container<U> && requires { std::span<char>(target); }) {
+            std::span<char> const out(target);
+            if (out.size() >= padded) {
+                internal::generic_write(out.first(padded), 0, value);
+                return size;
+            }
+        }
+        std::string bytes(padded, '\0');
+        bytes.resize(internal::generic_write(std::span<char>(bytes), 0, value));
+        decltype(auto) message = internal::message_of(target, bytes.size());
+        if (auto const r = message.append(bytes); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (auto const r = message.done(bytes.size()); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return bytes.size();
+    }
+
+private:
+    template <std::size_t DepthMax>
+    static result<T> read(std::string_view const bytes)
+    {
+        internal::sharing_decoder d{{bytes}, bytes, {}, 0};
+        T out{};
+        if (auto const r = internal::generic_read<DepthMax>(d, out, 0); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (!d.bytes.empty()) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return out;
+    }
+};
 
 template <class T>
 class schema
@@ -3448,27 +4797,35 @@ public:
 
     public:
         template <fixed_string Path, std::convertible_to<std::size_t>... Index>
-            requires(internal::path_valid<U, Path, 0>() && sizeof...(Index) == internal::index_slots<Path>())
+            requires(((Path.view().starts_with('@') && internal::path_valid<U, Path, 1>()) ||
+                      (Path.view().starts_with('$') && internal::path_valid<T, Path, 1>())) &&
+                     sizeof...(Index) == internal::index_slots<Path>())
         CBOR_ALWAYS_INLINE auto at(Index const... indexes) const &
         {
             std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
             constexpr std::string_view path = Path.view();
-            if constexpr (internal::is_list<U> && !path.empty()) {
+            if constexpr (path.starts_with('$') && std::same_as<U, T>) {
+                return internal::path_walk<T, T, Path, 1>(bytes, field, dir, i);
+            } else if constexpr (path.starts_with('$')) {
+                constexpr std::size_t root = internal::fixed_size<T, T>();
+                return internal::path_walk<T, T, Path, 1>(
+                    bytes, std::span<char const>(bytes).subspan(bytes.size() - root).template first<root>(), dir, i);
+            } else if constexpr (internal::is_list<U> && path.size() > 1) {
                 using E = std::ranges::range_value_t<U>;
-                constexpr std::size_t close = internal::index_end(path, 0);
+                constexpr std::size_t close = internal::index_end(path, 1);
                 using X = typename decltype(internal::path_result<T, E, Path, close + 1>())::type;
                 std::size_t at;
-                if constexpr (close == 1)
+                if constexpr (close == 2)
                     at = std::get<0>(i);
                 else
-                    at = internal::index_of<U>(path.substr(1, close - 1));
+                    at = internal::index_of<U>(path.substr(2, close - 2));
                 if (at >= items.length) [[unlikely]]
                     return result<X>(std::unexpect, error::index_out_of_bounds);
                 return internal::path_walk<T, E, Path, close + 1>(
                     bytes, std::span<char const>(bytes).subspan(items.data + at * internal::fixed_size<E, T>()).template first<internal::fixed_size<E, T>()>(),
                     dir, i);
             } else {
-                return internal::path_walk<T, U, Path, 0>(bytes, field, dir, i);
+                return internal::path_walk<T, U, Path, 1>(bytes, field, dir, i);
             }
         }
 
@@ -4170,6 +5527,8 @@ std::expected<std::size_t, error> doc_end(std::string_view const bytes)
 template <std::size_t DepthMax>
 std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &bytes)
 {
+    if (!bytes) [[unlikely]]
+        throw std::logic_error("cbor::decode: the bytes are empty");
     return lazy{std::make_shared<internal::document>(bytes, *bytes, std::vector<std::size_t>{}, 0), 0};
 }
 
@@ -4200,7 +5559,7 @@ struct result<lazy, error> : std::expected<lazy, error> {
     }
 
     template <class T>
-    cbor::result<T> get() const
+    auto get() const -> decltype((**this).template get<T>())
     {
         if (!has_value()) [[unlikely]]
             return std::unexpected(error());
@@ -4226,6 +5585,8 @@ struct result<lazy, error> : std::expected<lazy, error> {
 
 inline result<lazy> lazy::from(std::shared_ptr<void const> owner, std::string_view const bytes)
 {
+    if (!owner) [[unlikely]]
+        throw std::logic_error("cbor::lazy::from: the owner of the bytes is empty");
     return lazy{std::make_shared<internal::document>(std::move(owner), bytes, std::vector<std::size_t>{}, 0), 0};
 }
 
@@ -4339,7 +5700,9 @@ template <class T>
     requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
              std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-result<T> lazy::get() const
+result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                               std::is_same_v<T, typed_array>,
+                           owning_ref<T>, T>> lazy::get() const
 {
     auto const found = internal::container_resolve(document, offset);
     if (!found) [[unlikely]]
@@ -4352,6 +5715,10 @@ result<T> lazy::get() const
             (h.argument == std::to_underlying(internal::tag_number::unsigned_bignum) ||
              h.argument == std::to_underlying(internal::tag_number::negative_bignum))) {
             negative = h.argument == std::to_underlying(internal::tag_number::negative_bignum);
+            auto const content = internal::shared_resolve<64>(*source, source->bytes.size() - d.bytes.size());
+            if (!content) [[unlikely]]
+                return std::unexpected(content.error());
+            d = internal::decoder{source->bytes.substr(*content)};
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -4399,12 +5766,16 @@ result<T> lazy::get() const
         auto const text = d.text_string_decode(h.argument);
         if (!text) [[unlikely]]
             return std::unexpected(text.error());
-        return *text;
+        return owning_ref<T>(source->owner, *text);
     } else if constexpr (std::is_same_v<T, typed_array>) {
         if (h.major != major_type::tag) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         if (auto const r = internal::typed_array_check(h.argument, 0); !r) [[unlikely]]
             return std::unexpected(r.error());
+        auto const content = internal::shared_resolve<64>(*source, source->bytes.size() - d.bytes.size());
+        if (!content) [[unlikely]]
+            return std::unexpected(content.error());
+        d = internal::decoder{source->bytes.substr(*content)};
         auto const r = d.head_decode();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
@@ -4415,14 +5786,14 @@ result<T> lazy::get() const
             return std::unexpected(bytes.error());
         if (auto const c = internal::typed_array_check(h.argument, bytes->size()); !c) [[unlikely]]
             return std::unexpected(c.error());
-        return typed_array{h.argument, std::as_bytes(std::span(*bytes))};
+        return owning_ref<T>(source->owner, typed_array{h.argument, std::as_bytes(std::span(*bytes))});
     } else {
         if (h.major != major_type::byte_string) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         auto const bytes = d.byte_string_decode(h.argument);
         if (!bytes) [[unlikely]]
             return std::unexpected(bytes.error());
-        return std::as_bytes(std::span(*bytes));
+        return owning_ref<T>(source->owner, std::as_bytes(std::span(*bytes)));
     }
 }
 template <std::size_t DepthMax>
@@ -4456,91 +5827,349 @@ std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy
     return internal::value_decode<DepthMax>(d, binding, shared, &before, 0, std::nullopt);
 }
 
-constexpr std::expected<std::vector<path_step>, error> path_compile(std::string_view const source)
+template <std::size_t DepthMax>
+result<std::string, error> inspect(std::string_view const bytes)
 {
-    auto const letter = [](char const c) {
-        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-    };
-    auto const digit = [](char const c) { return c >= '0' && c <= '9'; };
-    std::vector<path_step> steps;
-    std::string_view rest = source;
-    if (rest.starts_with('$'))
-        rest.remove_prefix(1);
-    while (!rest.empty()) {
-        if (rest.front() == '.') {
-            rest.remove_prefix(1);
-            if (rest.empty() || !letter(rest.front())) [[unlikely]]
-                return std::unexpected(error::invalid_path);
-            std::size_t n = 1;
-            while (n < rest.size() && (letter(rest.at(n)) || digit(rest.at(n))))
-                ++n;
-            steps.push_back({path_step::kind::key, rest.substr(0, n), 0});
-            rest.remove_prefix(n);
-        } else if (rest.front() == '[') {
-            rest.remove_prefix(1);
-            if (rest.starts_with("*]")) {
-                steps.push_back({path_step::kind::wildcard, {}, 0});
-                rest.remove_prefix(2);
-            } else if (rest.starts_with('"')) {
-                std::size_t const close = rest.find('"', 1);
-                if (close == std::string_view::npos || rest.substr(close + 1).empty() ||
-                    rest.at(close + 1) != ']') [[unlikely]]
-                    return std::unexpected(error::invalid_path);
-                steps.push_back({path_step::kind::key, rest.substr(1, close - 1), 0});
-                rest.remove_prefix(close + 2);
-            } else {
-                std::int64_t index = 0;
-                auto const [end, failure] = std::from_chars(rest.data(), std::to_address(rest.end()), index);
-                std::size_t const used = static_cast<std::size_t>(std::distance(rest.data(), end));
-                if (failure != std::errc{} || used >= rest.size() || rest.at(used) != ']') [[unlikely]]
-                    return std::unexpected(error::invalid_path);
-                steps.push_back({path_step::kind::index, {}, index});
-                rest.remove_prefix(used + 1);
-            }
-        } else if (rest.front() == ' ' || rest.front() == '\t' || rest.front() == '\n' ||
-                   rest.front() == '\r') {
-            rest.remove_prefix(1);
-        } else [[unlikely]] {
-            return std::unexpected(error::invalid_path);
+    internal::decoder d{bytes};
+    std::string out;
+    if (auto const r = internal::diagnostic_write<DepthMax>(out, d, 0); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (!d.bytes.empty()) [[unlikely]]
+        return std::unexpected(error::syntax_error);
+    return out;
+}
+
+template <std::size_t DepthMax>
+std::expected<std::size_t, error> internal::shared_resolve(document const &doc, std::size_t at)
+{
+    for (;;) {
+        auto const h = raw_head_read(doc.bytes, at);
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        if (h->major != major_type::tag || h->info == std::to_underlying(additional_information::indefinite_length))
+            return at;
+        if (h->argument == std::to_underlying(tag_number::shareable)) {
+            at = h->at;
+            continue;
         }
+        if (h->argument != std::to_underlying(tag_number::sharedref))
+            return at;
+        auto const n = raw_head_read(doc.bytes, h->at);
+        if (!n) [[unlikely]]
+            return std::unexpected(n.error());
+        if (n->major != major_type::unsigned_integer) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        if (n->argument >= doc.marks.size()) [[unlikely]]
+            return std::unexpected(error::sharedref_index_not_marked);
+        std::size_t const marked = doc.marks.at(static_cast<std::size_t>(n->argument));
+        if (marked >= at) [[unlikely]]
+            return std::unexpected(error::sharedref_not_complete);
+        at = marked;
     }
-    return steps;
+}
+
+template <std::size_t DepthMax>
+std::expected<std::size_t, error> internal::document_item_end(document &doc, std::size_t const at, std::size_t const depth)
+{
+    decoder d{doc.bytes.substr(at)};
+    if (auto const r = item_skip<DepthMax>(d, doc, depth); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return doc.bytes.size() - d.bytes.size();
+}
+
+template <std::size_t DepthMax>
+std::expected<bool, error> internal::key_equal(document &doc, std::size_t const start, std::string_view const literal,
+                                               std::size_t const literal_at, std::size_t const depth)
+{
+    if (depth > DepthMax) [[unlikely]]
+        return std::unexpected(error::nesting_depth_exceeded);
+    auto const at = shared_resolve<DepthMax>(doc, start);
+    if (!at) [[unlikely]]
+        return std::unexpected(at.error());
+    auto const h = raw_head_read(doc.bytes, *at);
+    if (!h) [[unlikely]]
+        return std::unexpected(h.error());
+    auto const l = raw_head_read(literal, literal_at);
+    if (!l) [[unlikely]]
+        return std::unexpected(l.error());
+    if (h->info == std::to_underlying(additional_information::indefinite_length)) [[unlikely]]
+        return std::unexpected(error::indefinite_length);
+    if (h->major != l->major)
+        return false;
+    switch (h->major) {
+    case major_type::unsigned_integer:
+    case major_type::negative_integer:
+        return h->argument == l->argument;
+    case major_type::byte_string:
+    case major_type::text_string:
+        if (doc.bytes.size() - h->at < h->argument) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return h->argument == l->argument &&
+               doc.bytes.substr(h->at, static_cast<std::size_t>(h->argument)) ==
+                   literal.substr(l->at, static_cast<std::size_t>(l->argument));
+    case major_type::array: {
+        if (h->argument != l->argument)
+            return false;
+        std::size_t d = h->at;
+        std::size_t k = l->at;
+        for (std::uint64_t i = 0; i < h->argument; ++i) {
+            auto const equal = key_equal<DepthMax>(doc, d, literal, k, depth + 1);
+            if (!equal || !*equal)
+                return equal;
+            auto const d_end = document_item_end<DepthMax>(doc, d, depth + 1);
+            if (!d_end) [[unlikely]]
+                return std::unexpected(d_end.error());
+            auto const k_end = literal_end(literal, k, depth + 1, DepthMax);
+            if (!k_end) [[unlikely]]
+                return std::unexpected(k_end.error());
+            d = *d_end;
+            k = *k_end;
+        }
+        return true;
+    }
+    case major_type::map: {
+        if (h->argument != l->argument)
+            return false;
+        std::size_t d = h->at;
+        for (std::uint64_t i = 0; i < h->argument; ++i) {
+            auto const value_at = document_item_end<DepthMax>(doc, d, depth + 1);
+            if (!value_at) [[unlikely]]
+                return std::unexpected(value_at.error());
+            auto const pair_end = document_item_end<DepthMax>(doc, *value_at, depth + 1);
+            if (!pair_end) [[unlikely]]
+                return std::unexpected(pair_end.error());
+            bool paired = false;
+            std::size_t k = l->at;
+            for (std::uint64_t j = 0; j < l->argument && !paired; ++j) {
+                auto const k_value = literal_end(literal, k, depth + 1, DepthMax);
+                if (!k_value) [[unlikely]]
+                    return std::unexpected(k_value.error());
+                auto const k_end = literal_end(literal, *k_value, depth + 1, DepthMax);
+                if (!k_end) [[unlikely]]
+                    return std::unexpected(k_end.error());
+                auto const key_same = key_equal<DepthMax>(doc, d, literal, k, depth + 1);
+                if (!key_same) [[unlikely]]
+                    return key_same;
+                if (*key_same) {
+                    for (std::size_t earlier = h->at; earlier < d;) {
+                        auto const twin = key_equal<DepthMax>(doc, earlier, literal, k, depth + 1);
+                        if (!twin) [[unlikely]]
+                            return twin;
+                        if (*twin) [[unlikely]]
+                            return std::unexpected(error::duplicate_key);
+                        auto const earlier_value = document_item_end<DepthMax>(doc, earlier, depth + 1);
+                        if (!earlier_value) [[unlikely]]
+                            return std::unexpected(earlier_value.error());
+                        auto const earlier_end = document_item_end<DepthMax>(doc, *earlier_value, depth + 1);
+                        if (!earlier_end) [[unlikely]]
+                            return std::unexpected(earlier_end.error());
+                        earlier = *earlier_end;
+                    }
+                    auto const value_same = key_equal<DepthMax>(doc, *value_at, literal, *k_value, depth + 1);
+                    if (!value_same) [[unlikely]]
+                        return value_same;
+                    paired = *value_same;
+                }
+                k = *k_end;
+            }
+            if (!paired)
+                return false;
+            d = *pair_end;
+        }
+        return true;
+    }
+    case major_type::tag:
+        if (h->argument != l->argument)
+            return false;
+        return key_equal<DepthMax>(doc, h->at, literal, l->at, depth + 1);
+    default:
+        break;
+    }
+    constexpr std::uint8_t half = std::to_underlying(simple_float_information::half_precision_float);
+    constexpr std::uint8_t twice = std::to_underlying(simple_float_information::double_precision_float);
+    bool const h_float = h->info >= half && h->info <= twice;
+    bool const l_float = l->info >= half && l->info <= twice;
+    if (h_float != l_float)
+        return false;
+    if (!h_float)
+        return h->argument == l->argument;
+    float_key const a = float_key_of(h->info, h->argument);
+    float_key const b = float_key_of(l->info, l->argument);
+    if (a.nan || b.nan)
+        return a.nan && b.nan && a.widened == b.widened;
+    return a.value == b.value;
+}
+
+template <std::size_t DepthMax>
+result<lazy, error> internal::key_find(lazy const &node, std::string_view const key)
+{
+    auto const found = container_resolve(node.document, node.offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto [source, h, d] = *found;
+    if (h.major != major_type::map) [[unlikely]]
+        return std::unexpected(error::not_indexable);
+    decoder text_key{key};
+    auto const literal = text_key.head_decode();
+    bool const text = literal && literal->major == major_type::text_string;
+    for (std::uint64_t i = 0; i < h.argument; ++i) {
+        std::size_t const start = source->bytes.size() - d.bytes.size();
+        decoder probe = d;
+        for (;;) {
+            decoder look = probe;
+            auto const k = look.head_decode();
+            if (!k) [[unlikely]]
+                return std::unexpected(k.error());
+            if (k->major == major_type::tag && k->argument == std::to_underlying(tag_number::shareable)) {
+                probe = look;
+                continue;
+            }
+            if (k->major == major_type::tag && k->argument == std::to_underlying(tag_number::sharedref)) {
+                auto const n = look.head_decode();
+                if (!n) [[unlikely]]
+                    return std::unexpected(n.error());
+                if (n->major != major_type::unsigned_integer) [[unlikely]]
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                if (n->argument >= source->marks.size()) [[unlikely]]
+                    return std::unexpected(error::sharedref_index_not_marked);
+                std::size_t const marked = source->marks.at(static_cast<std::size_t>(n->argument));
+                if (marked >= start) [[unlikely]]
+                    return std::unexpected(error::sharedref_not_complete);
+                probe = decoder{source->bytes.substr(marked)};
+            }
+            break;
+        }
+        bool match = false;
+        decoder look = probe;
+        auto const k = look.head_decode();
+        if (!k) [[unlikely]]
+            return std::unexpected(k.error());
+        if (text && k->major == major_type::text_string) {
+            auto const content = look.byte_string_decode(k->argument);
+            if (!content) [[unlikely]]
+                return std::unexpected(content.error());
+            match = *content == text_key.bytes;
+        }
+        if (auto const r = item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (!text) {
+            auto const equal = key_equal<DepthMax>(*source, start, key, 0, 0);
+            if (!equal) [[unlikely]]
+                return std::unexpected(equal.error());
+            match = *equal;
+        }
+        if (match)
+            return lazy{source, source->bytes.size() - d.bytes.size()};
+        if (auto const r = item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+    }
+    return std::unexpected(error::key_not_found);
 }
 
 template <std::size_t DepthMax, class Binding>
-std::expected<typename Binding::value, error> path_decode(Binding &binding, std::span<path_step const> const steps,
-                                                       lazy const &l)
+result<typename Binding::value, error> internal::query_walk(Binding &binding, std::span<selector const> const selectors,
+                                                            std::string_view const keys, lazy const &root)
 {
-    lazy at = l;
-    for (std::size_t i = 0; i < steps.size(); ++i) {
-        path_step const &step = steps.subspan(i).front();
-        if (step.kind == path_step::kind::key) {
-            auto const next = at.at<DepthMax>(step.key);
-            if (!next) [[unlikely]]
-                return std::unexpected(next.error());
-            at = *next;
-        } else if (step.kind == path_step::kind::index) {
-            auto const next = at.at<DepthMax>(step.index);
-            if (!next) [[unlikely]]
-                return std::unexpected(next.error());
-            at = *next;
-        } else {
-            auto const elements = at.elements<DepthMax>();
-            if (!elements) [[unlikely]]
-                return std::unexpected(elements.error());
-            auto array = binding.array_decode(std::min<std::uint64_t>(elements->count, elements->document->bytes.size() - elements->offset));
-            for (auto const element : *elements) {
-                if (!element) [[unlikely]]
-                    return std::unexpected(element.error());
-                auto value = path_decode<DepthMax>(binding, steps.subspan(i + 1), *element);
-                if (!value) [[unlikely]]
-                    return value;
-                array = binding.array_append(std::move(array), std::move(*value));
+    if (!root.document) [[unlikely]]
+        throw std::logic_error("cbor::at_path: the lazy holds no document");
+    bool const nodelist =
+        std::ranges::any_of(selectors, [](selector const &s) { return s.kind == selector::kind::wildcard; });
+    std::size_t const limit = root.document->bytes.size();
+    std::vector<lazy> nodes{root};
+    std::vector<lazy> next;
+    for (selector const &s : selectors) {
+        next.clear();
+        for (lazy const &node : nodes) {
+            error failure{};
+            if (s.kind == selector::kind::wildcard) {
+                auto const found = container_resolve(node.document, node.offset);
+                if (!found) [[unlikely]]
+                    return std::unexpected(found.error());
+                if (found->h.major == major_type::array) {
+                    auto const elements = node.elements<DepthMax>();
+                    if (!elements) [[unlikely]]
+                        return std::unexpected(elements.error());
+                    for (auto const element : *elements) {
+                        if (!element) [[unlikely]]
+                            return std::unexpected(element.error());
+                        if (next.size() == limit) [[unlikely]]
+                            return std::unexpected(error::nodelist_too_long);
+                        next.push_back(*element);
+                    }
+                } else if (found->h.major == major_type::map) {
+                    auto const entries = node.entries<DepthMax>();
+                    if (!entries) [[unlikely]]
+                        return std::unexpected(entries.error());
+                    for (auto const entry : *entries) {
+                        if (!entry) [[unlikely]]
+                            return std::unexpected(entry.error());
+                        if (next.size() == limit) [[unlikely]]
+                            return std::unexpected(error::nodelist_too_long);
+                        next.push_back(entry->second);
+                    }
+                } else {
+                    failure = error::not_indexable;
+                }
+            } else {
+                auto const child = s.kind == selector::kind::index
+                                       ? node.at<DepthMax>(s.index)
+                                       : key_find<DepthMax>(node, keys.substr(s.key_at, s.key_size));
+                if (child) {
+                    if (next.size() == limit) [[unlikely]]
+                        return std::unexpected(error::nodelist_too_long);
+                    next.push_back(*child);
+                } else {
+                    failure = child.error();
+                }
             }
-            return array;
+            if (failure == error{})
+                continue;
+            if (!nodelist || (failure != error::not_indexable && failure != error::index_out_of_bounds &&
+                              failure != error::key_not_found)) [[unlikely]]
+                return std::unexpected(failure);
         }
+        std::swap(nodes, next);
     }
-    return lazy_decode<DepthMax>(binding, at);
+    if (!nodelist) {
+        auto value = lazy_decode<DepthMax>(binding, nodes.front());
+        if (!value) [[unlikely]]
+            return std::unexpected(value.error());
+        return std::move(*value);
+    }
+    auto array = binding.array_decode(nodes.size());
+    for (lazy const &node : nodes) {
+        auto value = lazy_decode<DepthMax>(binding, node);
+        if (!value) [[unlikely]]
+            return std::unexpected(value.error());
+        array = binding.array_append(std::move(array), std::move(*value));
+    }
+    return array;
+}
+
+template <std::size_t DepthMax, class Binding>
+result<typename Binding::value, error> at_path(Binding &binding, std::string_view const path, lazy const &l)
+{
+    auto const q = internal::query_parse(path, false, DepthMax);
+    if (!q) [[unlikely]]
+        return std::unexpected(q.error());
+    return internal::query_walk<DepthMax>(binding, q->selectors, q->keys, l);
+}
+
+template <fixed_string Path, std::size_t DepthMax, class Binding>
+    requires(internal::query_parse(Path.view(), true, DepthMax).has_value())
+result<typename Binding::value, error> at_path(Binding &binding, lazy const &l)
+{
+    constexpr std::size_t count = internal::query_parse(Path.view(), true, DepthMax)->selectors.size();
+    constexpr std::size_t size = internal::query_parse(Path.view(), true, DepthMax)->keys.size();
+    constexpr auto compiled = [] {
+        auto const q = *internal::query_parse(Path.view(), true, DepthMax);
+        std::pair<std::array<internal::selector, count>, std::array<char, size>> c{};
+        std::ranges::copy(q.selectors, c.first.begin());
+        std::ranges::copy(q.keys, c.second.begin());
+        return c;
+    }();
+    return internal::query_walk<DepthMax>(binding, std::span<internal::selector const>(compiled.first),
+                                          std::string_view(compiled.second.data(), size), l);
 }
 
 }

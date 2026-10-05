@@ -536,18 +536,15 @@ TEST_CASE("path: a wildcard over a shared array")
     auto const users = arr({obj({{s("name"), s("alice")}}), obj({{s("name"), s("bob")}})});
     std::string const doc = encoded_shared(
         obj({{s("primary"), obj({{s("users"), users}})}, {s("backup"), obj({{s("users"), users}})}}));
-    auto const steps = cbor::path_compile("$.backup.users[*].name");
-    REQUIRE(steps.has_value());
     ref_binding binding;
-    auto const r = cbor::path_decode<16>(binding, *steps, *cbor::decode<16>(doc));
+    auto const r = cbor::at_path<16>(binding, "$.backup.users[*].name", *cbor::decode<16>(doc));
     REQUIRE(r.has_value());
     CHECK_EQ(std::get<std::string>(element(*r, 0)->kind), "alice");
     CHECK_EQ(std::get<std::string>(element(*r, 1)->kind), "bob");
     auto const shared_leaf = arr({u(1), u(2), u(3)});
     std::string const leaf = encoded_shared(obj({{s("a"), shared_leaf}, {s("b"), shared_leaf}}));
     for (std::string_view const p : {"$.a[*]"sv, "$.b[*]"sv}) {
-        auto const st = cbor::path_compile(p);
-        auto const v = cbor::path_decode<16>(binding, *st, *cbor::decode<16>(leaf));
+        auto const v = cbor::at_path<16>(binding, p, *cbor::decode<16>(leaf));
         REQUIRE(v.has_value());
         CHECK_EQ(std::get<std::uint64_t>(element(*v, 2)->kind), 3);
     }

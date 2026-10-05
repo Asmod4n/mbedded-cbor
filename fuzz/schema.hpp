@@ -158,7 +158,7 @@ template <class T>
 consteval std::vector<std::meta::info> path_texts()
 {
     std::vector<std::string> paths;
-    paths_of(^^T, "", paths, 0);
+    paths_of(^^T, "$", paths, 0);
     std::vector<std::meta::info> texts;
     for (std::string const &p : paths)
         texts.push_back(std::meta::reflect_constant_string(p));
@@ -402,7 +402,7 @@ void compare_all(T const &native, std::string_view const message)
     auto lot = cbor::schema<T>::path(message);
     require(lot.has_value());
     template for (constexpr std::meta::info text : texts)
-        compare(native_at<T, text, 0>(native), lot->template at<path_text<text>>());
+        compare(native_at<T, text, 1>(native), lot->template at<path_text<text>>());
 }
 
 // A struct from the bytes of the input, written and read back through every path of its type. The message

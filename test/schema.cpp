@@ -323,12 +323,12 @@ TEST_CASE("encode: a list of structs that hold strings")
 TEST_CASE("path: a message shorter than the least size is too_little_data, a foreign key is incorrect_type")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
-    CHECK_EQ(at_path<login, ".id">(bytes), 5u);
-    CHECK_EQ(at_path<login, ".id">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
+    CHECK_EQ(at_path<login, "$.id">(bytes), 5u);
+    CHECK_EQ(at_path<login, "$.id">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
     std::string other = bytes;
     other.replace(8, 2, "ID");
     CHECK_EQ(cbor::schema<login>::decode(other).error(), error::incorrect_type);
-    CHECK_EQ(at_path<login, ".id">(other).error(), error::incorrect_type);
+    CHECK_EQ(at_path<login, "$.id">(other).error(), error::incorrect_type);
 }
 
 #endif
@@ -364,14 +364,14 @@ vehicle const sample_vehicle{"Tesla", -7, {{{15, 2.5f}, {16, 2.0f}}}, {{17, 1.5f
 TEST_CASE("at_path: fixed fields give the value")
 {
     std::string const bytes = schema_bytes(sample_vehicle);
-    CHECK_EQ(at_path<vehicle, ".balance">(bytes), -7);
-    CHECK_EQ(at_path<vehicle, ".motor.cc">(bytes), 1800u);
-    CHECK_EQ(at_path<vehicle, ".motor.horsepower">(bytes), 300u);
-    CHECK_EQ(at_path<vehicle, ".spare[1].diameter">(bytes), 16u);
-    CHECK_EQ(at_path<vehicle, ".spare[0].airPressure">(bytes), 2.5f);
-    CHECK_EQ(at_path<vehicle, ".spare[].diameter">(bytes, 1uz), 16u);
-    CHECK_EQ(at_path<vehicle, ".spare[].diameter">(bytes, 2uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(at_path<vehicle, ".code">(bytes), "ABCD"s);
+    CHECK_EQ(at_path<vehicle, "$.balance">(bytes), -7);
+    CHECK_EQ(at_path<vehicle, "$.motor.cc">(bytes), 1800u);
+    CHECK_EQ(at_path<vehicle, "$.motor.horsepower">(bytes), 300u);
+    CHECK_EQ(at_path<vehicle, "$.spare[1].diameter">(bytes), 16u);
+    CHECK_EQ(at_path<vehicle, "$.spare[0].airPressure">(bytes), 2.5f);
+    CHECK_EQ(at_path<vehicle, "$.spare[].diameter">(bytes, 1uz), 16u);
+    CHECK_EQ(at_path<vehicle, "$.spare[].diameter">(bytes, 2uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(at_path<vehicle, "$.code">(bytes), "ABCD"s);
 }
 
 // A step over a part of variable size reads an offset and a length from the wire. An empty pair of brackets takes
@@ -379,14 +379,14 @@ TEST_CASE("at_path: fixed fields give the value")
 TEST_CASE("at_path: parts of variable size")
 {
     std::string const bytes = schema_bytes(sample_vehicle);
-    CHECK_EQ(at_path<vehicle, ".make">(bytes), "Tesla"s);
-    CHECK_EQ(at_path<vehicle, ".wheels[2].diameter">(bytes), 19u);
-    CHECK_EQ(at_path<vehicle, ".wheels[1].airPressure">(bytes), 3.0f);
-    CHECK_EQ(at_path<vehicle, ".wheels[].airPressure">(bytes, 1uz), 3.0f);
-    CHECK_EQ(at_path<vehicle, ".wheels[3].diameter">(bytes).error(), error::index_out_of_bounds);
-    CHECK_EQ(at_path<vehicle, ".wheels[].diameter">(bytes, 3uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(*at_path<vehicle, ".owner">(bytes), std::optional<std::uint8_t>{9});
-    CHECK_FALSE(at_path<vehicle, ".none">(bytes)->has_value());
+    CHECK_EQ(at_path<vehicle, "$.make">(bytes), "Tesla"s);
+    CHECK_EQ(at_path<vehicle, "$.wheels[2].diameter">(bytes), 19u);
+    CHECK_EQ(at_path<vehicle, "$.wheels[1].airPressure">(bytes), 3.0f);
+    CHECK_EQ(at_path<vehicle, "$.wheels[].airPressure">(bytes, 1uz), 3.0f);
+    CHECK_EQ(at_path<vehicle, "$.wheels[3].diameter">(bytes).error(), error::index_out_of_bounds);
+    CHECK_EQ(at_path<vehicle, "$.wheels[].diameter">(bytes, 3uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(*at_path<vehicle, "$.owner">(bytes), std::optional<std::uint8_t>{9});
+    CHECK_FALSE(at_path<vehicle, "$.none">(bytes)->has_value());
 }
 
 // A directory offset from the wire that points at bytes of another kind, or a length past the start of the next
@@ -398,12 +398,12 @@ TEST_CASE("at_path: a broken offset is an error")
     REQUIRE_NE(head, std::string::npos);
     std::string backward = bytes;
     backward.replace(head + 5, 4, "\x00\x00\x00\x01"s);
-    CHECK_FALSE(at_path<vehicle, ".make">(backward).has_value());
+    CHECK_FALSE(at_path<vehicle, "$.make">(backward).has_value());
     std::size_t const make = bytes.find("\x7a\x00\x00\x00\x05Tesla"s);
     REQUIRE_NE(make, std::string::npos);
     std::string past = bytes;
     past.replace(make + 1, 4, "\x00\x00\xff\xff"s);
-    CHECK_FALSE(at_path<vehicle, ".make">(past).has_value());
+    CHECK_FALSE(at_path<vehicle, "$.make">(past).has_value());
     CHECK_FALSE(cbor::schema<vehicle>::decode(backward).has_value());
     CHECK_FALSE(cbor::schema<vehicle>::decode(past).has_value());
 }
@@ -427,12 +427,12 @@ TEST_CASE("at_path: a fixed byte array is read inline")
 {
     badge const b{{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}, shade::light, "x"};
     std::string const bytes = schema_bytes(b);
-    CHECK_EQ(at_path<badge, ".mac">(bytes), "\x01\x02\x03\x04"s);
-    CHECK_EQ(at_path<badge, ".tone">(bytes), shade::light);
+    CHECK_EQ(at_path<badge, "$.mac">(bytes), "\x01\x02\x03\x04"s);
+    CHECK_EQ(at_path<badge, "$.tone">(bytes), shade::light);
     std::string zeros = bytes;
     std::size_t const mac = bytes.size() - cbor::schema<badge>::fixed_size() + cbor::schema<badge>::member_offset<^^badge::mac>();
     zeros.replace(mac + 1, 4, "\x00\x00\x00\x00"s);
-    CHECK_EQ(at_path<badge, ".mac">(zeros), "\x00\x00\x00\x00"s);
+    CHECK_EQ(at_path<badge, "$.mac">(zeros), "\x00\x00\x00\x00"s);
 }
 
 #endif
@@ -464,7 +464,7 @@ TEST_CASE("at_path: a list of structs, strings and lists, by index")
     std::string const bytes = schema_bytes(sample_garage);
     std::uint32_t sum = 0;
     for (std::size_t i = 0;; ++i) {
-        auto const d = at_path<garage, ".tires[].diameter">(bytes, i);
+        auto const d = at_path<garage, "$.tires[].diameter">(bytes, i);
         if (!d) {
             CHECK_EQ(d.error(), error::index_out_of_bounds);
             CHECK_EQ(i, 3u);
@@ -473,11 +473,11 @@ TEST_CASE("at_path: a list of structs, strings and lists, by index")
         sum += *d;
     }
     CHECK_EQ(sum, 17u + 18u + 19u);
-    CHECK_EQ(at_path<garage, ".tires[1].airPressure">(bytes), 3.0f);
-    CHECK_EQ(at_path<garage, ".names[1]">(bytes), "bc"s);
-    CHECK_EQ(at_path<garage, ".rows[][]">(bytes, 2uz, 0uz), 3u);
-    CHECK_EQ(at_path<garage, ".rows[][]">(bytes, 0uz, 1uz), 2u);
-    CHECK_EQ(at_path<garage, ".rows[1][0]">(bytes).error(), error::index_out_of_bounds);
+    CHECK_EQ(at_path<garage, "$.tires[1].airPressure">(bytes), 3.0f);
+    CHECK_EQ(at_path<garage, "$.names[1]">(bytes), "bc"s);
+    CHECK_EQ(at_path<garage, "$.rows[][]">(bytes, 2uz, 0uz), 3u);
+    CHECK_EQ(at_path<garage, "$.rows[][]">(bytes, 0uz, 1uz), 2u);
+    CHECK_EQ(at_path<garage, "$.rows[1][0]">(bytes).error(), error::index_out_of_bounds);
 }
 
 template <class T, cbor::fixed_string Path>
@@ -488,32 +488,37 @@ concept path_reads_at = requires(typename cbor::schema<T>::template accessor<> c
 
 // A path that ends at a leaf gives the value. A path that ends at a struct, a list, a fixed array or a map gives an
 // accessor. A name that is not a member, an index into a text or a map, an index past a fixed array, and a count of
-// indexes that does not match the empty brackets do not compile.
+// indexes that does not match the empty brackets do not compile. A path starts at the root of the document with $
+// (RFC 9535 2.2) or at the node of the accessor with @ (RFC 9535 2.3.5); on the root accessor both are the same
+// node.
 TEST_CASE("path: a path compiles where it names a part of the type")
 {
-    CHECK(path_reads<garage, ".names[0]">);
-    CHECK(path_reads<garage, ".tires">);
-    CHECK(path_reads<garage, ".tires[0]">);
-    CHECK(path_reads<garage, ".owners">);
-    CHECK(path_reads<garage, ".rows[0]">);
-    CHECK(path_reads<garage, "">);
-    CHECK(path_reads<vehicle, ".motor">);
-    CHECK(path_reads<vehicle, ".spare">);
-    CHECK(path_reads_at<garage, ".tires[].diameter", std::size_t>);
-    CHECK(path_reads_at<garage, ".tires[]", std::size_t>);
-    CHECK_FALSE(path_reads<garage, ".owners[7]">);
-    CHECK_FALSE(path_reads<garage, ".names[0][0]">);
-    CHECK_FALSE(path_reads<garage, ".nothing">);
-    CHECK_FALSE(path_reads<garage, ".tires[1">);
-    CHECK_FALSE(path_reads<garage, ".tires[].diameter">);
-    CHECK_FALSE(path_reads_at<garage, ".tires[0].diameter", std::size_t>);
-    CHECK_FALSE(path_reads<vehicle, ".spare[2].diameter">);
-    CHECK_FALSE(path_reads<vehicle, ".code[0]">);
-    CHECK_FALSE(path_reads<vehicle, ".make[0]">);
+    CHECK(path_reads<garage, "$.names[0]">);
+    CHECK(path_reads<garage, "$.tires">);
+    CHECK(path_reads<garage, "$.tires[0]">);
+    CHECK(path_reads<garage, "$.owners">);
+    CHECK(path_reads<garage, "$.rows[0]">);
+    CHECK(path_reads<garage, "$">);
+    CHECK(path_reads<vehicle, "$.motor">);
+    CHECK(path_reads<vehicle, "$.spare">);
+    CHECK(path_reads_at<garage, "$.tires[].diameter", std::size_t>);
+    CHECK(path_reads_at<garage, "$.tires[]", std::size_t>);
+    CHECK_FALSE(path_reads<garage, "$.owners[7]">);
+    CHECK_FALSE(path_reads<garage, "$.names[0][0]">);
+    CHECK_FALSE(path_reads<garage, "$.nothing">);
+    CHECK_FALSE(path_reads<garage, "$.tires[1">);
+    CHECK_FALSE(path_reads<garage, "$.tires[].diameter">);
+    CHECK_FALSE(path_reads_at<garage, "$.tires[0].diameter", std::size_t>);
+    CHECK_FALSE(path_reads<vehicle, "$.spare[2].diameter">);
+    CHECK_FALSE(path_reads<vehicle, "$.code[0]">);
+    CHECK_FALSE(path_reads<vehicle, "$.make[0]">);
+    CHECK_FALSE(path_reads<garage, ".tires">);
+    CHECK_FALSE(path_reads<garage, "tires">);
+    CHECK(path_reads<garage, "@.tires">);
     using A = cbor::schema<garage>::accessor<>;
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<".names[0]">()), cbor::result<std::string_view>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<".tires[]">(0uz)), cbor::result<cbor::schema<garage>::accessor<tire>>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<".tires">()),
+    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.names[0]">()), cbor::result<std::string_view>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.tires[]">(0uz)), cbor::result<cbor::schema<garage>::accessor<tire>>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.tires">()),
                        cbor::result<cbor::schema<garage>::accessor<std::vector<tire>>>>);
 }
 
@@ -525,27 +530,27 @@ TEST_CASE("path: an accessor reads relative to the part it names")
     auto const opened = cbor::schema<garage>::path(bytes);
     REQUIRE(opened.has_value());
     auto const &root = *opened;
-    auto const tires = root.at<".tires">();
+    auto const tires = root.at<"$.tires">();
     REQUIRE(tires.has_value());
     CHECK_EQ(tires->size(), 3u);
-    auto const second = tires->at<"[]">(1uz);
+    auto const second = tires->at<"@[]">(1uz);
     REQUIRE(second.has_value());
-    CHECK_EQ(second->at<".diameter">(), 18u);
-    CHECK_EQ(second->at<".airPressure">(), root.at<".tires[].airPressure">(1uz));
-    CHECK_EQ(tires->at<"[]">(3uz).error(), error::index_out_of_bounds);
-    auto const rows = root.at<".rows">();
+    CHECK_EQ(second->at<"@.diameter">(), 18u);
+    CHECK_EQ(second->at<"@.airPressure">(), root.at<"$.tires[].airPressure">(1uz));
+    CHECK_EQ(tires->at<"@[]">(3uz).error(), error::index_out_of_bounds);
+    auto const rows = root.at<"$.rows">();
     REQUIRE(rows.has_value());
     CHECK_EQ(rows->size(), 3u);
-    auto const first = rows->at<"[0]">();
+    auto const first = rows->at<"@[0]">();
     REQUIRE(first.has_value());
     CHECK_EQ(first->size(), 2u);
-    CHECK_EQ(first->at<"[1]">(), 2u);
-    auto const owners = root.at<".owners">();
+    CHECK_EQ(first->at<"@[1]">(), 2u);
+    auto const owners = root.at<"$.owners">();
     REQUIRE(owners.has_value());
     CHECK_EQ(owners->size(), 2u);
-    auto const names = root.at<".names">();
+    auto const names = root.at<"$.names">();
     REQUIRE(names.has_value());
-    CHECK_EQ(names->at<"[]">(1uz), "bc"sv);
+    CHECK_EQ(names->at<"@[]">(1uz), "bc"sv);
 }
 
 #endif
@@ -695,7 +700,7 @@ TEST_CASE("schema: an annotation gives the key of a member")
     keyed const &back = *decoded_back;
     CHECK_EQ(back.m0, 7u);
     CHECK(back.m1);
-    CHECK_EQ(at_path<keyed, ".EOF">(bytes), true);
+    CHECK_EQ(at_path<keyed, "$.EOF">(bytes), true);
 }
 
 // A struct that holds a list of itself is read by recursion, and the bytes decide how deep. Without a limit, a
@@ -855,7 +860,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
     std::string const bytes = *cbor::schema<passkey_login>::encode(full);
-    CHECK_EQ(at_path<passkey_login, ".note">(bytes), std::optional<std::string>{"hello"});
+    CHECK_EQ(at_path<passkey_login, "$.note">(bytes), std::optional<std::string>{"hello"});
     auto const decoded_back = *cbor::schema<passkey_login>::decode(bytes);
     passkey_login const &back = *decoded_back;
     REQUIRE(back.user.has_value());
@@ -864,7 +869,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
 
     passkey_login const empty{{std::byte{1}}, std::nullopt, std::nullopt};
     std::string const none = *cbor::schema<passkey_login>::encode(empty);
-    auto const absent = at_path<passkey_login, ".note">(none);
+    auto const absent = at_path<passkey_login, "$.note">(none);
     REQUIRE(absent.has_value());
     CHECK_FALSE(absent->has_value());
     for (std::string_view message : {std::string_view(bytes), std::string_view(none)}) {
@@ -1029,13 +1034,13 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
     CHECK_EQ(*cbor::schema<chain0>::encode(back), bytes);
     CHECK_EQ(back.next.next.next.next.next.next.next.next.next.v, 9u);
 
-    CHECK_EQ(at_path<chain0, ".next.next.next.next.next.next.next.next.next.v">(bytes), 9u);
-    CHECK_EQ(at_path<chain0, ".next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.v">(bytes),
+    CHECK_EQ(at_path<chain0, "$.next.next.next.next.next.next.next.next.next.v">(bytes), 9u);
+    CHECK_EQ(at_path<chain0, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.v">(bytes),
              19u);
-    CHECK_EQ(at_path<chain0, ".next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(
+    CHECK_EQ(at_path<chain0, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(
                  bytes),
              "ab"s);
-    CHECK_EQ(at_path<chain0, ".next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.words[1]">(
+    CHECK_EQ(at_path<chain0, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.words[1]">(
                  bytes),
              "yz"s);
 }
@@ -1055,12 +1060,12 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
     auto const decoded_back = *cbor::schema<chain3>::decode(bytes);
     chain3 const &back = *decoded_back;
     CHECK_EQ(*cbor::schema<chain3>::encode(back), bytes);
-    CHECK_EQ(at_path<chain3, ".next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(bytes), "ab"s);
+    CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(bytes), "ab"s);
 
     std::string broken = bytes;
     broken.at(broken.size() - 7) = '\x00';
     CHECK_EQ(cbor::schema<chain3>::decode(broken).error(), error::unpopulated_table_index);
-    CHECK_EQ(at_path<chain3, ".next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(broken).error(),
+    CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(broken).error(),
              error::unpopulated_table_index);
 }
 
@@ -1091,8 +1096,8 @@ TEST_CASE("schema: a root of another class tag is incorrect_type")
     auto const point = *cbor::schema<point_a>::decode(bytes);
     CHECK_EQ(point->x, 7u);
     CHECK_EQ(cbor::schema<point_b>::decode(bytes).error(), error::incorrect_type);
-    CHECK_EQ(at_path<point_b, ".x">(bytes).error(), error::incorrect_type);
-    CHECK_EQ(at_path<point_a, ".x">(bytes), 7u);
+    CHECK_EQ(at_path<point_b, "$.x">(bytes).error(), error::incorrect_type);
+    CHECK_EQ(at_path<point_a, "$.x">(bytes), 7u);
 }
 
 // The class tag of a nested record is a fixed head like any other. car holds the engine record at offset 12, and
@@ -1106,9 +1111,9 @@ TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
     std::string forged = bytes;
     forged.at(motor + 2) = '\xde';
     CHECK_EQ(cbor::schema<car>::decode(forged).error(), error::incorrect_type);
-    CHECK_EQ(at_path<car, ".seats">(forged), 4u);
-    CHECK_EQ(at_path<car, ".motor.cc">(forged).error(), error::incorrect_type);
-    CHECK_EQ(at_path<car, ".motor.cc">(bytes), 1800u);
+    CHECK_EQ(at_path<car, "$.seats">(forged), 4u);
+    CHECK_EQ(at_path<car, "$.motor.cc">(forged).error(), error::incorrect_type);
+    CHECK_EQ(at_path<car, "$.motor.cc">(bytes), 1800u);
 }
 
 namespace
@@ -1165,8 +1170,8 @@ TEST_CASE("path: the copying form outlives the message of the caller")
     auto const opened = cbor::schema<ticket>::path(ticket_bytes());
     REQUIRE(opened.has_value());
     auto const &root = *opened;
-    CHECK_EQ(root.at<".holder">(), sample_ticket.holder);
-    CHECK_EQ(root.at<".seats[]">(1uz), sample_ticket.seats.at(1));
+    CHECK_EQ(root.at<"$.holder">(), sample_ticket.holder);
+    CHECK_EQ(root.at<"$.seats[]">(1uz), sample_ticket.seats.at(1));
 }
 
 // The owner form keeps the owner in the root accessor. The caller releases its own pointer to the owner before it
@@ -1178,8 +1183,8 @@ TEST_CASE("path: the root keeps the owner after the caller releases it")
     auto const opened = cbor::schema<ticket>::path(std::move(owner), bytes);
     REQUIRE(opened.has_value());
     auto const &root = *opened;
-    auto const holder = root.at<".holder">();
-    auto const seat = root.at<".seats[1]">();
+    auto const holder = root.at<"$.holder">();
+    auto const seat = root.at<"$.seats[1]">();
     REQUIRE(holder.has_value());
     REQUIRE(seat.has_value());
     CHECK_EQ(*holder, sample_ticket.holder);
@@ -1248,24 +1253,24 @@ std::size_t probe_paths_read(std::string_view const message)
         ++n;
         CHECK(lies_inside(*r, bytes));
     };
-    count(at_path<probe, ".flag">(bytes));
-    count(at_path<probe, ".i16">(bytes));
-    count(at_path<probe, ".u64">(bytes));
-    count(at_path<probe, ".f64">(bytes));
-    count(at_path<probe, ".f32">(bytes));
-    count(at_path<probe, ".i128">(bytes));
-    count(at_path<probe, ".code">(bytes));
-    owned(at_path<probe, ".code">(block, bytes));
-    count(at_path<probe, ".text">(bytes));
-    owned(at_path<probe, ".text">(block, bytes));
+    count(at_path<probe, "$.flag">(bytes));
+    count(at_path<probe, "$.i16">(bytes));
+    count(at_path<probe, "$.u64">(bytes));
+    count(at_path<probe, "$.f64">(bytes));
+    count(at_path<probe, "$.f32">(bytes));
+    count(at_path<probe, "$.i128">(bytes));
+    count(at_path<probe, "$.code">(bytes));
+    owned(at_path<probe, "$.code">(block, bytes));
+    count(at_path<probe, "$.text">(bytes));
+    owned(at_path<probe, "$.text">(block, bytes));
     for (std::size_t i = 0; i < 3; ++i) {
-        count(at_path<probe, ".tires[].diameter">(bytes, i));
-        count(at_path<probe, ".tires[].airPressure">(bytes, i));
-        count(at_path<probe, ".pair[]">(bytes, i));
+        count(at_path<probe, "$.tires[].diameter">(bytes, i));
+        count(at_path<probe, "$.tires[].airPressure">(bytes, i));
+        count(at_path<probe, "$.pair[]">(bytes, i));
     }
-    count(at_path<probe, ".maybe">(bytes));
-    count(at_path<probe, ".motor.horsepower">(bytes));
-    count(at_path<probe, ".motor.cc">(bytes));
+    count(at_path<probe, "$.maybe">(bytes));
+    count(at_path<probe, "$.motor.horsepower">(bytes));
+    count(at_path<probe, "$.motor.cc">(bytes));
     return n;
 }
 
@@ -1305,38 +1310,38 @@ std::size_t probe_lot_read(std::string_view const message)
     };
     auto const all = [&] {
         std::vector<std::optional<double>> v;
-        v.push_back(number(lot.at<".flag">()));
-        v.push_back(number(lot.at<".i16">()));
-        v.push_back(number(lot.at<".u64">()));
-        v.push_back(number(lot.at<".f64">()));
-        v.push_back(number(lot.at<".f32">()));
-        v.push_back(number(lot.at<".i128">()));
-        v.push_back(text(lot.at<".code">()));
-        v.push_back(text(lot.at<".text">()));
+        v.push_back(number(lot.at<"$.flag">()));
+        v.push_back(number(lot.at<"$.i16">()));
+        v.push_back(number(lot.at<"$.u64">()));
+        v.push_back(number(lot.at<"$.f64">()));
+        v.push_back(number(lot.at<"$.f32">()));
+        v.push_back(number(lot.at<"$.i128">()));
+        v.push_back(text(lot.at<"$.code">()));
+        v.push_back(text(lot.at<"$.text">()));
         for (std::size_t i = 0; i < 3; ++i) {
-            v.push_back(number(lot.at<".tires[].diameter">(i)));
-            v.push_back(number(lot.at<".tires[].airPressure">(i)));
-            v.push_back(number(lot.at<".pair[]">(i)));
+            v.push_back(number(lot.at<"$.tires[].diameter">(i)));
+            v.push_back(number(lot.at<"$.tires[].airPressure">(i)));
+            v.push_back(number(lot.at<"$.pair[]">(i)));
         }
-        v.push_back(number(lot.at<".maybe">()));
-        v.push_back(number(lot.at<".motor.horsepower">()));
-        v.push_back(number(lot.at<".motor.cc">()));
+        v.push_back(number(lot.at<"$.maybe">()));
+        v.push_back(number(lot.at<"$.motor.horsepower">()));
+        v.push_back(number(lot.at<"$.motor.cc">()));
         return v;
     };
     std::vector<std::optional<double>> const forward = all();
     std::vector<std::optional<double>> backward;
     for (std::size_t i = 3; i-- > 0;) {
-        backward.push_back(number(lot.at<".tires[].airPressure">(i)));
-        backward.push_back(number(lot.at<".tires[].diameter">(i)));
+        backward.push_back(number(lot.at<"$.tires[].airPressure">(i)));
+        backward.push_back(number(lot.at<"$.tires[].diameter">(i)));
     }
     CHECK_EQ(backward[0], forward[8 + 3 * 2 + 1]);
     CHECK_EQ(backward[1], forward[8 + 3 * 2]);
     CHECK_EQ(backward[4], forward[8 + 1]);
     CHECK_EQ(backward[5], forward[8]);
     for (std::size_t i = 0; i < 3; ++i) {
-        auto const tire = lot.at<".tires[]">(i);
-        std::optional<double> const diameter = tire ? number(tire->at<".diameter">()) : std::nullopt;
-        std::optional<double> const pressure = tire ? number(tire->at<".airPressure">()) : std::nullopt;
+        auto const tire = lot.at<"$.tires[]">(i);
+        std::optional<double> const diameter = tire ? number(tire->at<"@.diameter">()) : std::nullopt;
+        std::optional<double> const pressure = tire ? number(tire->at<"@.airPressure">()) : std::nullopt;
         CHECK_EQ(diameter, forward[8 + 3 * i]);
         CHECK_EQ(pressure, forward[8 + 3 * i + 1]);
     }
@@ -1350,7 +1355,7 @@ template <class A, cbor::fixed_string Path>
 concept temporary_reads = requires(A &&a) { std::move(a).template at<Path>(); };
 
 template <class A>
-concept chain_reads = requires(A const &a) { (*a.template at<".tires[]">(0uz)).template at<".diameter">(); };
+concept chain_reads = requires(A const &a) { (*a.template at<"$.tires[]">(0uz)).template at<"@.diameter">(); };
 
 template <class R>
 concept dereferenced_as_rvalue = requires(R &&r) { *std::move(r); } || requires(R &&r) { std::move(r).operator->(); };
@@ -1363,11 +1368,11 @@ TEST_CASE("attack: the sample message reads every path")
     std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
     CHECK_EQ(probe_paths_read(bytes), probe_paths);
     CHECK_EQ(probe_lot_read(bytes), probe_lot_paths);
-    CHECK_EQ(at_path<probe, ".i16">(bytes), -300);
-    CHECK((*at_path<probe, ".i128">(bytes) == cbor::int128{-5}));
-    CHECK_EQ(at_path<probe, ".f64">(bytes), 2.5);
-    CHECK_EQ(at_path<probe, ".pair[]">(bytes, 1uz), 8u);
-    CHECK_EQ(at_path<probe, ".maybe">(bytes), std::optional<std::int32_t>{-9});
+    CHECK_EQ(at_path<probe, "$.i16">(bytes), -300);
+    CHECK((*at_path<probe, "$.i128">(bytes) == cbor::int128{-5}));
+    CHECK_EQ(at_path<probe, "$.f64">(bytes), 2.5);
+    CHECK_EQ(at_path<probe, "$.pair[]">(bytes, 1uz), 8u);
+    CHECK_EQ(at_path<probe, "$.maybe">(bytes), std::optional<std::int32_t>{-9});
 }
 
 // A text is a view into the bytes that the root holds. An accessor is read through an lvalue only, so each accessor
@@ -1377,11 +1382,11 @@ TEST_CASE("attack: no text result outlives its bytes")
 {
     std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
     using A = cbor::schema<probe>::accessor<>;
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<".text">()), cbor::result<std::string_view>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<".code">()), cbor::result<std::string_view>>);
-    CHECK(path_reads<probe, ".text">);
-    CHECK_FALSE(temporary_reads<A, ".text">);
-    CHECK_FALSE(temporary_reads<cbor::schema<probe>::accessor<tire>, ".diameter">);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.text">()), cbor::result<std::string_view>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.code">()), cbor::result<std::string_view>>);
+    CHECK(path_reads<probe, "$.text">);
+    CHECK_FALSE(temporary_reads<A, "$.text">);
+    CHECK_FALSE(temporary_reads<cbor::schema<probe>::accessor<tire>, "@.diameter">);
     CHECK_FALSE(chain_reads<A>);
     CHECK_FALSE(dereferenced_as_rvalue<cbor::owning_ref<probe>>);
     CHECK_THROWS_AS(cbor::schema<probe>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
@@ -1404,8 +1409,8 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
 TEST_CASE("attack: a shifted root is incorrect_type")
 {
     std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
-    CHECK_EQ(at_path<probe, ".i16">("\x00"s + bytes).error(), error::incorrect_type);
-    CHECK_EQ(at_path<probe, ".i16">(bytes + "\x00"s).error(), error::incorrect_type);
+    CHECK_EQ(at_path<probe, "$.i16">("\x00"s + bytes).error(), error::incorrect_type);
+    CHECK_EQ(at_path<probe, "$.i16">(bytes + "\x00"s).error(), error::incorrect_type);
     CHECK_EQ(probe_paths_read("\x00"s + bytes), 0u);
     CHECK_EQ(probe_paths_read(bytes + "\x00"s), 0u);
     CHECK_EQ(probe_lot_read("\x00"s + bytes), 0u);
@@ -1428,14 +1433,14 @@ TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
     using S = cbor::schema<probe>;
     for (int head = 0; head < 256; ++head) {
         CAPTURE(head);
-        CHECK_EQ(at_path<probe, ".flag">(forged(S::member_offset<^^probe::flag>(), head)).has_value(), head == 0xf4 || head == 0xf5);
-        CHECK_EQ(at_path<probe, ".i16">(forged(S::member_offset<^^probe::i16>(), head)).has_value(), head == 0x19 || head == 0x39);
-        CHECK_EQ(at_path<probe, ".u64">(forged(S::member_offset<^^probe::u64>(), head)).has_value(), head == 0x1b);
-        CHECK_EQ(at_path<probe, ".f64">(forged(S::member_offset<^^probe::f64>(), head)).has_value(), head == 0xfb);
-        CHECK_EQ(at_path<probe, ".f32">(forged(S::member_offset<^^probe::f32>(), head)).has_value(), head == 0xfa);
-        CHECK_EQ(at_path<probe, ".i128">(forged(S::member_offset<^^probe::i128>(), head)).has_value(), head == 0xc2 || head == 0xc3);
-        CHECK_EQ(at_path<probe, ".code">(forged(S::member_offset<^^probe::code>(), head)).has_value(), head == 0x63);
-        CHECK_EQ(at_path<probe, ".pair[1]">(forged(S::member_offset<^^probe::pair>(), head)).has_value(), head == 0x82);
+        CHECK_EQ(at_path<probe, "$.flag">(forged(S::member_offset<^^probe::flag>(), head)).has_value(), head == 0xf4 || head == 0xf5);
+        CHECK_EQ(at_path<probe, "$.i16">(forged(S::member_offset<^^probe::i16>(), head)).has_value(), head == 0x19 || head == 0x39);
+        CHECK_EQ(at_path<probe, "$.u64">(forged(S::member_offset<^^probe::u64>(), head)).has_value(), head == 0x1b);
+        CHECK_EQ(at_path<probe, "$.f64">(forged(S::member_offset<^^probe::f64>(), head)).has_value(), head == 0xfb);
+        CHECK_EQ(at_path<probe, "$.f32">(forged(S::member_offset<^^probe::f32>(), head)).has_value(), head == 0xfa);
+        CHECK_EQ(at_path<probe, "$.i128">(forged(S::member_offset<^^probe::i128>(), head)).has_value(), head == 0xc2 || head == 0xc3);
+        CHECK_EQ(at_path<probe, "$.code">(forged(S::member_offset<^^probe::code>(), head)).has_value(), head == 0x63);
+        CHECK_EQ(at_path<probe, "$.pair[1]">(forged(S::member_offset<^^probe::pair>(), head)).has_value(), head == 0x82);
     }
 }
 
@@ -1490,16 +1495,16 @@ TEST_CASE("attack: overlapping items are an error")
     REQUIRE_NE(head, std::string::npos);
     std::string same = bytes;
     same.replace(head + 9, 4, bytes.substr(head + 5, 4));
-    CHECK_FALSE(at_path<probe, ".text">(same).has_value());
-    CHECK_FALSE(at_path<probe, ".tires[0].diameter">(same).has_value());
+    CHECK_FALSE(at_path<probe, "$.text">(same).has_value());
+    CHECK_FALSE(at_path<probe, "$.tires[0].diameter">(same).has_value());
 
     std::string const one = schema_bytes(login{5, true, "ab"});
     std::size_t const text = one.find("\x7a\x00\x00\x00\x02" "ab"s);
     REQUIRE_NE(text, std::string::npos);
     std::string into_root = one;
     into_root.replace(text + 1, 4, std::string{'\x00', '\x00', '\x00', static_cast<char>(2 + cbor::schema<login>::fixed_size())});
-    CHECK_EQ(at_path<login, ".name">(into_root).error(), error::too_little_data);
-    CHECK_EQ(at_path<login, ".id">(into_root), 5u);
+    CHECK_EQ(at_path<login, "$.name">(into_root).error(), error::too_little_data);
+    CHECK_EQ(at_path<login, "$.id">(into_root), 5u);
 }
 
 // A record inside a list carries its class tag like the root. The tag of the second tire is forged. The test exists
@@ -1511,13 +1516,13 @@ TEST_CASE("attack: a forged class tag of a record in a list is incorrect_type")
     REQUIRE_NE(second, std::string::npos);
     std::string forged = bytes;
     forged.at(second + 2) = '\xe8';
-    CHECK_EQ(at_path<probe, ".tires[0].diameter">(forged), 17u);
-    CHECK_EQ(at_path<probe, ".tires[1].diameter">(forged).error(), error::incorrect_type);
+    CHECK_EQ(at_path<probe, "$.tires[0].diameter">(forged), 17u);
+    CHECK_EQ(at_path<probe, "$.tires[1].diameter">(forged).error(), error::incorrect_type);
     auto lot = *cbor::schema<probe>::path(forged);
     for (int pass = 0; pass < 2; ++pass) {
-        CHECK_EQ(lot.at<".tires[].diameter">(0uz), 17u);
-        CHECK_EQ(lot.at<".tires[].diameter">(1uz).error(), error::incorrect_type);
-        CHECK_EQ(lot.at<".tires[].airPressure">(1uz).error(), error::incorrect_type);
+        CHECK_EQ(lot.at<"$.tires[].diameter">(0uz), 17u);
+        CHECK_EQ(lot.at<"$.tires[].diameter">(1uz).error(), error::incorrect_type);
+        CHECK_EQ(lot.at<"$.tires[].airPressure">(1uz).error(), error::incorrect_type);
     }
 }
 
@@ -1577,35 +1582,35 @@ void lot_car_matches(cbor::schema<parking_lot>::accessor<> const &lot, parking_l
 {
     CAPTURE(i);
     lot_car const &c = back.cars.at(i);
-    CHECK_EQ(text_of(lot.at<".cars[].make">(i)), c.make);
-    CHECK_EQ(text_of(lot.at<".cars[].model">(i)), c.model);
-    CHECK_EQ(lot.at<".cars[].seats">(i), c.seats);
-    CHECK_EQ(lot.at<".cars[].engine.cc">(i), c.engine.cc);
-    CHECK_EQ(lot.at<".cars[].engine.horsepower">(i), c.engine.horsepower);
-    auto const note = *lot.at<".cars[].note">(i);
+    CHECK_EQ(text_of(lot.at<"$.cars[].make">(i)), c.make);
+    CHECK_EQ(text_of(lot.at<"$.cars[].model">(i)), c.model);
+    CHECK_EQ(lot.at<"$.cars[].seats">(i), c.seats);
+    CHECK_EQ(lot.at<"$.cars[].engine.cc">(i), c.engine.cc);
+    CHECK_EQ(lot.at<"$.cars[].engine.horsepower">(i), c.engine.horsepower);
+    auto const note = *lot.at<"$.cars[].note">(i);
     CHECK_EQ(note.has_value(), c.note.has_value());
     if (note && c.note)
         CHECK_EQ(*note, *c.note);
-    auto const opened = lot.at<".cars[]">(i);
+    auto const opened = lot.at<"$.cars[]">(i);
     REQUIRE(opened.has_value());
     auto const &car = *opened;
-    CHECK_EQ(text_of(car.at<".make">()), c.make);
-    CHECK_EQ(car.at<".engine.cc">(), c.engine.cc);
-    CHECK_EQ(car.at<".wheels">()->size(), c.wheels.size());
-    CHECK_EQ(text_of(lot.at<".cars[].code">(i)), std::string_view(c.code, 2));
+    CHECK_EQ(text_of(car.at<"@.make">()), c.make);
+    CHECK_EQ(car.at<"@.engine.cc">(), c.engine.cc);
+    CHECK_EQ(car.at<"@.wheels">()->size(), c.wheels.size());
+    CHECK_EQ(text_of(lot.at<"$.cars[].code">(i)), std::string_view(c.code, 2));
     for (std::size_t k = c.wheels.size() + 1; k-- > 0;) {
         CAPTURE(k);
         if (k == c.wheels.size()) {
-            CHECK_EQ(lot.at<".cars[].wheels[].diameter">(i, k).error(), error::index_out_of_bounds);
+            CHECK_EQ(lot.at<"$.cars[].wheels[].diameter">(i, k).error(), error::index_out_of_bounds);
             continue;
         }
-        CHECK_EQ(lot.at<".cars[].wheels[].diameter">(i, k), c.wheels[k].diameter);
-        CHECK_EQ(lot.at<".cars[].wheels[].airPressure">(i, k), c.wheels[k].airPressure);
-        CHECK_EQ(lot.at<".cars[].wheels[].snowTires">(i, k), c.wheels[k].snowTires);
-        auto const wheel = car.at<".wheels[]">(k);
+        CHECK_EQ(lot.at<"$.cars[].wheels[].diameter">(i, k), c.wheels[k].diameter);
+        CHECK_EQ(lot.at<"$.cars[].wheels[].airPressure">(i, k), c.wheels[k].airPressure);
+        CHECK_EQ(lot.at<"$.cars[].wheels[].snowTires">(i, k), c.wheels[k].snowTires);
+        auto const wheel = car.at<"@.wheels[]">(k);
         REQUIRE(wheel.has_value());
-        CHECK_EQ(wheel->at<".airPressure">(), c.wheels[k].airPressure);
-        CHECK_EQ(car.at<".wheels[].diameter">(k), c.wheels[k].diameter);
+        CHECK_EQ(wheel->at<"@.airPressure">(), c.wheels[k].airPressure);
+        CHECK_EQ(car.at<"@.wheels[].diameter">(k), c.wheels[k].diameter);
     }
 }
 
@@ -1616,7 +1621,7 @@ template <class D, cbor::fixed_string Path>
 concept temporary_lot_reads = requires(D &&d) { std::move(d).template at<Path>(0uz); };
 
 template <class D>
-concept temporary_car_reads = requires(D const &d) { (*d.template at<".cars[]">(0uz)).template at<".make">(); };
+concept temporary_car_reads = requires(D const &d) { (*d.template at<"$.cars[]">(0uz)).template at<"@.make">(); };
 
 } // namespace
 
@@ -1637,14 +1642,14 @@ TEST_CASE("path: an accessor gives the values of decode in every order")
     std::ranges::shuffle(order, std::mt19937(5));
     for (std::size_t const i : order)
         lot_car_matches(lot, back, i);
-    CHECK_EQ(lot.at<".cars[].seats">(back.cars.size()).error(), error::index_out_of_bounds);
-    CHECK_EQ(text_of(lot.at<".notes[]">(2uz)), "third"sv);
-    CHECK_EQ(text_of(lot.at<".notes[]">(0uz)), "first"sv);
-    CHECK_EQ(lot.at<".rows[][]">(2uz, 0uz), 3u);
-    CHECK_EQ(lot.at<".rows[][]">(0uz, 1uz), 2u);
-    CHECK_EQ(lot.at<".rows[][]">(1uz, 0uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(at_path<parking_lot, ".cars[].wheels[].diameter">(bytes, 3uz, 0uz), back.cars[3].wheels[0].diameter);
-    CHECK_EQ(at_path<parking_lot, ".cars[].model">(bytes, 3uz), "mmm"s);
+    CHECK_EQ(lot.at<"$.cars[].seats">(back.cars.size()).error(), error::index_out_of_bounds);
+    CHECK_EQ(text_of(lot.at<"$.notes[]">(2uz)), "third"sv);
+    CHECK_EQ(text_of(lot.at<"$.notes[]">(0uz)), "first"sv);
+    CHECK_EQ(lot.at<"$.rows[][]">(2uz, 0uz), 3u);
+    CHECK_EQ(lot.at<"$.rows[][]">(0uz, 1uz), 2u);
+    CHECK_EQ(lot.at<"$.rows[][]">(1uz, 0uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(at_path<parking_lot, "$.cars[].wheels[].diameter">(bytes, 3uz, 0uz), back.cars[3].wheels[0].diameter);
+    CHECK_EQ(at_path<parking_lot, "$.cars[].model">(bytes, 3uz), "mmm"s);
 }
 
 // An accessor is read through an lvalue. The test exists because a text and a nested accessor borrow the bytes of
@@ -1652,11 +1657,11 @@ TEST_CASE("path: an accessor gives the values of decode in every order")
 TEST_CASE("path: an accessor is not read through a temporary")
 {
     using D = cbor::schema<parking_lot>::accessor<>;
-    CHECK(lot_reads<D, ".cars[].seats">);
-    CHECK(lot_reads<D const, ".cars[].seats">);
-    CHECK(lot_reads<D const, ".cars[]">);
-    CHECK_FALSE(temporary_lot_reads<D, ".cars[].seats">);
-    CHECK_FALSE(temporary_lot_reads<D, ".cars[]">);
+    CHECK(lot_reads<D, "$.cars[].seats">);
+    CHECK(lot_reads<D const, "$.cars[].seats">);
+    CHECK(lot_reads<D const, "$.cars[]">);
+    CHECK_FALSE(temporary_lot_reads<D, "$.cars[].seats">);
+    CHECK_FALSE(temporary_lot_reads<D, "$.cars[]">);
     CHECK_FALSE(temporary_car_reads<D>);
     CHECK_THROWS_AS(cbor::schema<parking_lot>::path(std::shared_ptr<void const>{}, ""sv), std::logic_error);
 }
@@ -1667,11 +1672,12 @@ TEST_CASE("path: the copying form keeps its copy after the caller frees the mess
 {
     auto bytes = std::make_unique<std::string>(schema_bytes(sample_lot()));
     auto lot = *cbor::schema<parking_lot>::path(*bytes);
-    auto const make = *lot.at<".cars[].make">(3uz);
-    auto const car = *lot.at<".cars[]">(4uz);
+    auto const make = *lot.at<"$.cars[].make">(3uz);
+    auto const car = *lot.at<"$.cars[]">(4uz);
     bytes.reset();
     CHECK_EQ(make, "make3"sv);
-    CHECK_EQ(car.at<".make">(), "make4"sv);
+    CHECK_EQ(car.at<"@.make">(), "make4"sv);
+    CHECK_EQ(car.at<"$.cars[].make">(4uz), "make4"sv);
 }
 
 // Each prefix and each forged byte of a message of several cars is read through a new root and an accessor of each
@@ -1689,20 +1695,20 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
             return n;
         auto &lot = *opened;
         for (std::size_t i = 6; i-- > 0;) {
-            auto const make = lot.at<".cars[].make">(i);
-            auto const seats = lot.at<".cars[].seats">(i);
-            auto const pressure = lot.at<".cars[].wheels[].airPressure">(i, 1uz);
-            n += make.has_value() + seats.has_value() + lot.at<".cars[].note">(i).has_value() + pressure.has_value();
-            auto const car = lot.at<".cars[]">(i);
+            auto const make = lot.at<"$.cars[].make">(i);
+            auto const seats = lot.at<"$.cars[].seats">(i);
+            auto const pressure = lot.at<"$.cars[].wheels[].airPressure">(i, 1uz);
+            n += make.has_value() + seats.has_value() + lot.at<"$.cars[].note">(i).has_value() + pressure.has_value();
+            auto const car = lot.at<"$.cars[]">(i);
             if (!car)
                 continue;
-            differ += other(car->at<".make">(), make) + other(car->at<".seats">(), seats);
-            auto const wheel = car->at<".wheels[]">(1uz);
+            differ += other(car->at<"@.make">(), make) + other(car->at<"@.seats">(), seats);
+            auto const wheel = car->at<"@.wheels[]">(1uz);
             if (wheel)
-                differ += other(wheel->at<".airPressure">(), pressure);
+                differ += other(wheel->at<"@.airPressure">(), pressure);
         }
-        n += lot.at<".notes[]">(1uz).has_value();
-        n += lot.at<".rows[][]">(2uz, 0uz).has_value();
+        n += lot.at<"$.notes[]">(1uz).has_value();
+        n += lot.at<"$.rows[][]">(2uz, 0uz).has_value();
         return n;
     };
     CHECK_EQ(read(bytes), 5u * 3 + 2 + 2);
