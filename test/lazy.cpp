@@ -366,7 +366,7 @@ std::expected<std::string, std::error_code> typed_encoded(std::uint64_t const ta
     auto const r = cbor::encode<16>(binding, w, cbor::typed_array{tag, std::as_bytes(std::span(bytes))});
     if (!r)
         return std::unexpected(r.error());
-    return w.bytes;
+    return w.encoded;
 }
 
 } // namespace
@@ -413,8 +413,8 @@ TEST_CASE("tag 24: an embedded value is written as a document of its own and rea
     embedding_binding binding;
     test::string_writer w;
     REQUIRE(cbor::encode<16>(binding, w, A(1, A(2, 3))).has_value());
-    CHECK_EQ(w.bytes, "\xd8\x18\x48\x82\x01\xd8\x18\x43\x82\x02\x03"s);
-    auto const inner = lazy_of(w.bytes).at<16>(1);
+    CHECK_EQ(w.encoded, "\xd8\x18\x48\x82\x01\xd8\x18\x43\x82\x02\x03"s);
+    auto const inner = lazy_of(w.encoded).at<16>(1);
     REQUIRE(inner.has_value());
     auto const three = inner->at<16>(1);
     REQUIRE(three.has_value());
@@ -529,7 +529,7 @@ TEST_CASE("lazy: from, at and get as a chain")
     auto const name = doc.at("statuses").at(1).at("user").at("name").get<std::string_view>();
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "bob"sv);
-    CHECK_EQ(static_cast<void const *>(doc.document->bytes.data()), static_cast<void const *>(data));
+    CHECK_EQ(static_cast<void const *>(doc.document->encoded.data()), static_cast<void const *>(data));
     auto const missing = doc.at("statuses").at(5).at("user").get<std::string_view>();
     REQUIRE_FALSE(missing.has_value());
     CHECK_EQ(missing.error(), error::index_out_of_bounds);
@@ -614,7 +614,7 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     char const *const data = buffer->data();
     auto const moved = cbor::decode<16>(std::move(*buffer));
     REQUIRE(moved.has_value());
-    CHECK_EQ(static_cast<void const *>(moved->document->bytes.data()), static_cast<void const *>(data));
+    CHECK_EQ(static_cast<void const *>(moved->document->encoded.data()), static_cast<void const *>(data));
     buffer->assign(message.size(), '\0');
     buffer.reset();
     CHECK_EQ(text_of(*moved->at("k")), text);
@@ -622,7 +622,7 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     std::string lvalue = message;
     auto const copied = cbor::decode<16>(lvalue);
     REQUIRE(copied.has_value());
-    CHECK_NE(static_cast<void const *>(copied->document->bytes.data()), static_cast<void const *>(lvalue.data()));
+    CHECK_NE(static_cast<void const *>(copied->document->encoded.data()), static_cast<void const *>(lvalue.data()));
     CHECK_EQ(lvalue, message);
     lvalue.assign(message.size(), '\0');
     CHECK_EQ(text_of(*copied->at("k")), text);
@@ -630,15 +630,15 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     std::string const constant = message;
     auto const from_const = cbor::lazy::from(std::move(constant));
     REQUIRE(from_const.has_value());
-    CHECK_NE(static_cast<void const *>(from_const->document->bytes.data()), static_cast<void const *>(constant.data()));
+    CHECK_NE(static_cast<void const *>(from_const->document->encoded.data()), static_cast<void const *>(constant.data()));
     CHECK_EQ(constant, message);
 
     std::string again = message;
     char const *const again_data = again.data();
     auto const from_moved = cbor::lazy::from(std::move(again));
-    CHECK_EQ(static_cast<void const *>(from_moved->document->bytes.data()), static_cast<void const *>(again_data));
+    CHECK_EQ(static_cast<void const *>(from_moved->document->encoded.data()), static_cast<void const *>(again_data));
     auto const from_lvalue = cbor::lazy::from(message);
-    CHECK_NE(static_cast<void const *>(from_lvalue->document->bytes.data()), static_cast<void const *>(message.data()));
+    CHECK_NE(static_cast<void const *>(from_lvalue->document->encoded.data()), static_cast<void const *>(message.data()));
 
     CHECK_EQ(text_of(*cbor::decode<16>("\x63" "abc")), "abc");
     char const *const pointer = "\x62" "ab";

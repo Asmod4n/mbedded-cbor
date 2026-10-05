@@ -17,7 +17,7 @@ std::string encoded(F const &f)
     cbor::encoder<string_writer> e{w};
     REQUIRE(f(e).has_value());
     REQUIRE(e.flush().has_value());
-    return w.bytes;
+    return w.encoded;
 }
 
 } // namespace
@@ -87,5 +87,5 @@ TEST_CASE("simple_value_encode: a value from 24 up is refused")
     CHECK_EQ(e.simple_value_encode(static_cast<cbor::simple_value>(31)).error(), std::errc::invalid_argument);
     CHECK(e.simple_value_encode(cbor::simple_value::undefined).has_value());
     REQUIRE(e.flush().has_value());
-    CHECK_EQ(w.bytes, "\xf7"sv);
+    CHECK_EQ(w.encoded, "\xf7"sv);
 }

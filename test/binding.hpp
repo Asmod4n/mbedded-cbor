@@ -406,7 +406,7 @@ struct test_binding : cbor::binding<test::value> {
 };
 
 struct string_writer {
-    std::string bytes;
+    std::string encoded;
 
     string_writer &allocate(std::size_t)
     {
@@ -415,7 +415,7 @@ struct string_writer {
 
     std::expected<void, std::errc> append(std::string_view part)
     {
-        bytes.append(part);
+        encoded.append(part);
         return {};
     }
 
@@ -436,7 +436,7 @@ inline std::string encoded([[maybe_unused]] value const &v)
     [[maybe_unused]] test_binding binding;
     string_writer w;
     REQUIRE(cbor::encode<16>(binding, w, v).has_value());
-    return w.bytes;
+    return w.encoded;
 }
 
 template <std::size_t DepthMax = 16>

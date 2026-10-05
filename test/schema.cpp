@@ -215,7 +215,7 @@ std::string schema_bytes(auto const &value)
 {
     string_writer w;
     REQUIRE(cbor::schema<std::remove_cvref_t<decltype(value)>>::encode(value, w).has_value());
-    return w.bytes;
+    return w.encoded;
 }
 
 // The tests of one path open the message with the copying form of path and read one leaf. A text is copied into a

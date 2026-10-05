@@ -20,7 +20,7 @@ inline void lazy_channels(std::string_view const input)
     if (whole) {
         string_writer w;
         if (cbor::encode<16>(binding, w, *whole)) {
-            auto const again = cbor::decode<16>(binding, w.bytes);
+            auto const again = cbor::decode<16>(binding, w.encoded);
             require(again.has_value() && same_number(*whole, *again));
         }
     }

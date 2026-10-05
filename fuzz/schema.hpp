@@ -416,28 +416,28 @@ void round_trip(source &in)
     auto const written = cbor::schema<T>::encode(native, w);
     require(written.has_value());
     auto const whole = cbor::schema<T>::encode(native);
-    require(whole.has_value() && *whole == w.bytes && *written == w.bytes.size());
+    require(whole.has_value() && *whole == w.encoded && *written == w.encoded.size());
     std::string prefixed = in.string();
     std::size_t const before = prefixed.size();
-    require(cbor::schema<T>::encode(native, prefixed).has_value() && std::string_view(prefixed).substr(before) == w.bytes);
+    require(cbor::schema<T>::encode(native, prefixed).has_value() && std::string_view(prefixed).substr(before) == w.encoded);
     std::vector<char> chars(in.byte() % 4);
     std::size_t const used = chars.size();
     require(cbor::schema<T>::encode(native, chars).has_value() &&
-            std::string_view(chars.data(), chars.size()).substr(used) == w.bytes);
-    std::vector<char> room(in.number() % (w.bytes.size() + 16));
+            std::string_view(chars.data(), chars.size()).substr(used) == w.encoded);
+    std::vector<char> room(in.number() % (w.encoded.size() + 16));
     auto const placed = cbor::schema<T>::encode(native, std::span(room));
-    require(placed.has_value() == (room.size() >= w.bytes.size()));
+    require(placed.has_value() == (room.size() >= w.encoded.size()));
     if (placed)
-        require(std::string_view(room.data(), *placed) == w.bytes);
+        require(std::string_view(room.data(), *placed) == w.encoded);
     else
         require(placed.error() == std::errc::no_buffer_space);
-    auto const back = cbor::schema<T>::decode(w.bytes);
+    auto const back = cbor::schema<T>::decode(w.encoded);
     require(back.has_value());
     auto const again = cbor::schema<T>::encode(**back);
-    require(again.has_value() && *again == w.bytes);
-    auto const end = cbor::doc_end<64>(w.bytes);
-    require(end.has_value() && *end == w.bytes.size());
-    compare_all(native, w.bytes);
+    require(again.has_value() && *again == w.encoded);
+    auto const end = cbor::doc_end<64>(w.encoded);
+    require(end.has_value() && *end == w.encoded.size());
+    compare_all(native, w.encoded);
 }
 
 inline void decode_target(std::string_view const input)

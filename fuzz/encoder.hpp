@@ -147,7 +147,7 @@ inline void encoder_target(std::string_view const input)
         }
         require(out.flush().has_value());
     }
-    std::string_view rest = w.bytes;
+    std::string_view rest = w.encoded;
     test_binding binding;
     for (auto const &item : items) {
         auto const end = cbor::doc_end<16>(rest);
