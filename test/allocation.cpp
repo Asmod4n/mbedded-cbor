@@ -19,7 +19,7 @@ std::size_t allocations = 0;
 
 // The replaced operator new counts each allocation of this test binary, so a test can show that a call allocates
 // nothing.
-void *operator new(std::size_t const size)
+[[gnu::noinline]] void *operator new(std::size_t const size)
 {
     ++allocations;
     if (void *const p = std::malloc(size == 0 ? 1 : size))
@@ -27,28 +27,49 @@ void *operator new(std::size_t const size)
     throw std::bad_alloc();
 }
 
-void operator delete(void *const p) noexcept
+[[gnu::noinline]] void operator delete(void *const p) noexcept
 {
     std::free(p);
 }
 
-void operator delete(void *const p, std::size_t) noexcept
+[[gnu::noinline]] void operator delete(void *const p, std::size_t) noexcept
 {
     std::free(p);
 }
 
-// The path that succeeds compares a key of the document with a literal by value without an allocation: the key
-// [1, 29(0)] holds a shared reference inside an array, and the literal is [1, "x"] in preferred serialization.
+// The path that succeeds compares a key of the document with a literal by value without an allocation: the
+// document holds no shared value, and the literal [1, "x"] is parsed at compile time.
 TEST_CASE("path: a key is compared without an allocation")
+{
+    std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
+    auto const root = *cbor::lazy::from(std::string(bytes));
+    auto const map = *root.at(1);
+    test_binding binding;
+    REQUIRE(cbor::at_path<"$[[1, \"x\"]]", 16>(binding, map).has_value());
+    std::size_t const before = allocations;
+    auto const found = cbor::at_path<"$[[1, \"x\"]]", 16>(binding, map);
+    std::size_t const after = allocations;
+    REQUIRE(found.has_value());
+    CHECK_EQ(after, before);
+    CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
+}
+
+// A document with a shared value (tag 28) needs a table of the shared values to decode a reference to one, so the
+// count of allocations is fixed here: the key [1, 29(0)] refers to the shared value "x".
+TEST_CASE("path: a document with shared values allocates only the table of shared values")
 {
     std::string const bytes = "\x82\xd8\x1c\x61x\xa2\x82\x01\xd8\x1d\x00\x01\xa1\x61k\xd8\x1d\x00\x02"s;
     auto const root = *cbor::lazy::from(std::string(bytes));
     auto const map = *root.at(1);
-    REQUIRE(cbor::internal::key_find<16>(map, "\x82\x01\x61x"sv).has_value());
+    test_binding binding;
+    REQUIRE(cbor::at_path<"$[[1, \"x\"]]", 16>(binding, map).has_value());
+    // The document marks one shared value. The decoder keeps one flag and one entry for each mark, in two arrays,
+    // and an array that holds at least one element is one allocation.
+    constexpr std::size_t marks_allocations = 2;
     std::size_t const before = allocations;
-    auto const found = cbor::internal::key_find<16>(map, "\x82\x01\x61x"sv);
+    auto const found = cbor::at_path<"$[[1, \"x\"]]", 16>(binding, map);
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
-    CHECK_EQ(after, before);
-    CHECK_EQ(*found->get<std::uint64_t>(), 1u);
+    CHECK_EQ(after - before, marks_allocations);
+    CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
 }
