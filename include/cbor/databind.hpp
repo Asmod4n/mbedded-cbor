@@ -25,7 +25,7 @@
 #include <meta>
 #endif
 
-#include "doc_end.hpp"
+#include "item_end.hpp"
 #include "encode.hpp"
 #include "error.hpp"
 #include "validity.hpp"

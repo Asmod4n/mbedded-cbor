@@ -541,7 +541,7 @@ class heads
     friend struct lazy_entries;
 
     template <std::size_t DepthMax>
-    friend std::expected<std::size_t, error> doc_end(std::string_view encoded);
+    friend std::expected<std::size_t, error> item_end(std::string_view encoded);
 
     template <std::size_t DepthMax>
     friend result<std::string, error> inspect(std::string_view encoded);

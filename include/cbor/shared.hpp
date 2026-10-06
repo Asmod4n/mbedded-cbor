@@ -32,15 +32,15 @@ struct lazy_entries;
 
 class value_sharing
 {
-    struct document;
+    struct top_level_item;
 
     struct sharing_decoder;
 
     struct resolved;
 
-    static std::expected<std::size_t, error> shared_resolve(document &doc, std::size_t at);
+    static std::expected<std::size_t, error> shared_resolve(top_level_item &top_level, std::size_t at);
 
-    static std::expected<resolved, error> container_resolve(std::shared_ptr<document> source, std::size_t offset);
+    static std::expected<resolved, error> container_resolve(std::shared_ptr<top_level_item> source, std::size_t offset);
 
     template <std::size_t DepthMax, class Match>
     static result<lazy> key_find(resolved const &found, Match const &match);
@@ -69,7 +69,7 @@ class value_sharing
 };
 
 struct lazy {
-    std::shared_ptr<value_sharing::document> document;
+    std::shared_ptr<value_sharing::top_level_item> top_level;
     std::size_t offset;
 
     template <std::same_as<std::string> Encoded>
@@ -99,7 +99,7 @@ struct lazy {
     result<lazy_entries<DepthMax>> entries() const;
 };
 
-struct value_sharing::document {
+struct value_sharing::top_level_item {
     std::shared_ptr<void const> owner;
     std::string_view encoded;
     std::vector<lazy> sharedrefs;
@@ -134,33 +134,33 @@ struct value_sharing::document {
 };
 
 struct value_sharing::sharing_decoder : heads::decoder {
-    document message;
+    top_level_item message;
 };
 
 struct value_sharing::resolved {
-    std::shared_ptr<document> source;
+    std::shared_ptr<top_level_item> source;
     heads::head h;
     heads::decoder d;
 };
 
-inline std::expected<std::size_t, error> value_sharing::shared_resolve(document &doc, std::size_t at)
+inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &top_level, std::size_t at)
 {
     std::size_t item_at = at;
     for (;;) {
-        auto const h = heads::raw_head_read(doc.encoded, at);
+        auto const h = heads::raw_head_read(top_level.encoded, at);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         if (h->major != major_type::tag || h->info == std::to_underlying(heads::additional_information::indefinite_length))
             return at;
         if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
-            doc.mark(heads::decoder{doc.encoded.substr(h->at)});
+            top_level.mark(heads::decoder{top_level.encoded.substr(h->at)});
             at = h->at;
             continue;
         }
         if (h->argument != std::to_underlying(heads::tag_number::sharedref))
             return at;
-        heads::decoder d{doc.encoded.substr(h->at)};
-        auto const found = doc.sharedref_decode(d, item_at);
+        heads::decoder d{top_level.encoded.substr(h->at)};
+        auto const found = top_level.sharedref_decode(d, item_at);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         at = found->offset;
@@ -168,7 +168,7 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(document 
     }
 }
 
-inline std::expected<value_sharing::resolved, error> value_sharing::container_resolve(std::shared_ptr<document> source,
+inline std::expected<value_sharing::resolved, error> value_sharing::container_resolve(std::shared_ptr<top_level_item> source,
                                                                                       std::size_t offset)
 {
     for (;;) {
@@ -189,7 +189,7 @@ inline std::expected<value_sharing::resolved, error> value_sharing::container_re
         auto const embedded = d.byte_string_decode(r->argument);
         if (!embedded) [[unlikely]]
             return std::unexpected(embedded.error());
-        source = std::make_shared<document>(source->owner, *embedded, std::vector<lazy>{}, 0);
+        source = std::make_shared<top_level_item>(source->owner, *embedded, std::vector<lazy>{}, 0);
         offset = 0;
     }
 }

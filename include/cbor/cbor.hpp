@@ -6,7 +6,7 @@
 #include "head.hpp"
 #include "decode.hpp"
 #include "encode.hpp"
-#include "doc_end.hpp"
+#include "item_end.hpp"
 #include "shared.hpp"
 #include "lazy.hpp"
 #include "query.hpp"

@@ -110,7 +110,7 @@ class well_formedness
     }
 
     template <std::size_t DepthMax>
-    friend std::expected<std::size_t, error> doc_end(std::string_view encoded);
+    friend std::expected<std::size_t, error> item_end(std::string_view encoded);
 
     friend class decoding;
 
@@ -132,7 +132,7 @@ class well_formedness
 };
 
 template <std::size_t DepthMax>
-std::expected<std::size_t, error> doc_end(std::string_view const encoded)
+std::expected<std::size_t, error> item_end(std::string_view const encoded)
 {
     heads::decoder d{encoded};
     well_formedness::no_marks none;
