@@ -1,0 +1,323 @@
+{
+ "what": "Bisect of encode of floats, bench/runtime.cpp arm S, doc bench/docs/floats.cbor, between 2d450a7 and main 2b682f5. One binary per commit that changes include/ (1ae7394 changes nothing in include/ and is skipped). 2d450a7b and 2b682f5b are second builds of 2d450a7 and 2b682f5 for an A/A check. ns per iteration.",
+ "why": "Encode of floats was reported about 9 percent slower at main than at 2d450a7.",
+ "how": "Google Benchmark, --benchmark_min_time=0.2s, GLIBC_TUNABLES trim_threshold=1073741824, mmap_threshold=33554432, top_pad=268435456. Run 1: 15 binaries, 5 rounds, all binaries alternate in each round, 26.3 s. Run 2: 6 binaries, 12 rounds, alternate, 25.1 s. Each run stays under 30 s.",
+ "finding": "edbd393 makes encode of floats slower: +6.5 percent in run 1 and +11.2 percent in run 2 against 2d450a7, while bf0af73 is at -3.4 and -0.8 percent. In edbd393, encoder::float_encode jumps to an out-of-line encoder::head_encode(major, info, argument), which computes the argument width from info at run time (shlx, two cmov, a variable shift) and writes 8 bytes. Before, each of the three float cases wrote its initial byte and a 2, 4 or 8 byte movbe with a constant size, inline. 2b682f5 restores the inline writer, and main is within the A/A difference of 2d450a7 (-1.2 percent in run 2). The 9 percent slowdown at main is not reproduced in this session.",
+ "noise": "A/A: 2d450a7b against 2d450a7 is -1.0 and -1.1 percent; 2b682f5b against 2b682f5 is +2.5 and +0.1 percent. Single samples spread up to 34 percent.",
+ "context": {
+  "commit": "mbedded-cbor main 2b682f5, clean; worktrees of each commit, clean",
+  "flags": "g++-16 -std=c++23 -O2 -march=native -DNDEBUG -DDOCTEST_CONFIG_DISABLE -DARM_S",
+  "instruction_set": "sapphirerapids",
+  "compiler": "g++-16 (SUSE Linux) 16.2.0",
+  "cxx_library": "libstdc++ of gcc 16",
+  "c_library": "GNU libc 2.44",
+  "kernel": "6.18.44-fc-v70",
+  "scheduler": "not read (no access to sched features)",
+  "virtual_machine": "yes (systemd-detect-virt: docker for the outer container)",
+  "container": "podman, image mbedded-cbor-tw-gb",
+  "processor": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256_16": "39a8dd34f3afdd38",
+  "user": "uid 1000 in the container (podman run --user 1000:1000), not root",
+  "priority": "nice 0, no raise; the user owns no other process in the container",
+  "threads": 1,
+  "pinned": false
+ },
+ "run1": {
+  "2d450a7": {
+   "repetitions_ns": [
+    520706.7717206407,
+    466280.21061362943,
+    583967.3866171198,
+    488928.3327615667,
+    501468.90707965085
+   ],
+   "median_ns": 501468.90707965085,
+   "spread_percent": 23.47,
+   "vs_2d450a7_percent": 0.0
+  },
+  "3bf7216": {
+   "repetitions_ns": [
+    474280.8832236895,
+    449197.40619900625,
+    485584.93031360046,
+    465424.1639344047,
+    449093.1797385294
+   ],
+   "median_ns": 465424.1639344047,
+   "spread_percent": 7.84,
+   "vs_2d450a7_percent": -7.19
+  },
+  "39a8e55": {
+   "repetitions_ns": [
+    477689.3531409422,
+    478406.85664338904,
+    484369.1124030985,
+    491689.25800712116,
+    462322.8245243383
+   ],
+   "median_ns": 478406.85664338904,
+   "spread_percent": 6.14,
+   "vs_2d450a7_percent": -4.6
+  },
+  "bf0af73": {
+   "repetitions_ns": [
+    486588.3939394104,
+    464708.93057851546,
+    495722.89369366074,
+    484460.8514190346,
+    461012.4262295138
+   ],
+   "median_ns": 484460.8514190346,
+   "spread_percent": 7.16,
+   "vs_2d450a7_percent": -3.39
+  },
+  "edbd393": {
+   "repetitions_ns": [
+    533940.3972867924,
+    523965.38285712444,
+    538217.3869048103,
+    548188.564705893,
+    525115.8930581233
+   ],
+   "median_ns": 533940.3972867924,
+   "spread_percent": 4.54,
+   "vs_2d450a7_percent": 6.48
+  },
+  "6a68ff9": {
+   "repetitions_ns": [
+    526075.9452829903,
+    505543.6659877377,
+    541089.8838951549,
+    529610.8024691507,
+    527061.9401869149
+   ],
+   "median_ns": 527061.9401869149,
+   "spread_percent": 6.74,
+   "vs_2d450a7_percent": 5.1
+  },
+  "743f790": {
+   "repetitions_ns": [
+    540869.1493383339,
+    528584.5222436859,
+    534381.6061185106,
+    538339.3104166838,
+    536143.657250434
+   ],
+   "median_ns": 536143.657250434,
+   "spread_percent": 2.29,
+   "vs_2d450a7_percent": 6.91
+  },
+  "48d76f4": {
+   "repetitions_ns": [
+    536457.3838582621,
+    549655.1586073354,
+    523822.5432780618,
+    581549.3419810964,
+    509978.3688073238
+   ],
+   "median_ns": 536457.3838582621,
+   "spread_percent": 13.34,
+   "vs_2d450a7_percent": 6.98
+  },
+  "b5ec37a": {
+   "repetitions_ns": [
+    527220.3076923327,
+    515749.9187145455,
+    540782.7916666887,
+    510636.524236965,
+    505086.55357143696
+   ],
+   "median_ns": 515749.9187145455,
+   "spread_percent": 6.92,
+   "vs_2d450a7_percent": 2.85
+  },
+  "92bec77": {
+   "repetitions_ns": [
+    522225.4535104088,
+    522508.9814470813,
+    517497.323251442,
+    515406.86363632005,
+    509230.1317689478
+   ],
+   "median_ns": 517497.323251442,
+   "spread_percent": 2.57,
+   "vs_2d450a7_percent": 3.2
+  },
+  "c149688": {
+   "repetitions_ns": [
+    536364.2224880182,
+    522347.9563567257,
+    531546.1058394377,
+    526891.6949806969,
+    516788.3537906176
+   ],
+   "median_ns": 526891.6949806969,
+   "spread_percent": 3.72,
+   "vs_2d450a7_percent": 5.07
+  },
+  "aa49e44": {
+   "repetitions_ns": [
+    511618.0494505548,
+    608177.5136611852,
+    508698.1431261346,
+    530388.2587800204,
+    510294.81115112297
+   ],
+   "median_ns": 511618.0494505548,
+   "spread_percent": 19.44,
+   "vs_2d450a7_percent": 2.02
+  },
+  "2b682f5": {
+   "repetitions_ns": [
+    465190.48717947537,
+    628509.754717006,
+    503026.65319863823,
+    481589.0067567333,
+    476323.875000003
+   ],
+   "median_ns": 481589.0067567333,
+   "spread_percent": 33.91,
+   "vs_2d450a7_percent": -3.96
+  },
+  "2d450a7b": {
+   "repetitions_ns": [
+    473264.1148648792,
+    492584.7917448509,
+    504914.4918330317,
+    496240.4398625462,
+    553991.1980582536
+   ],
+   "median_ns": 496240.4398625462,
+   "spread_percent": 16.27,
+   "vs_2d450a7_percent": -1.04
+  },
+  "2b682f5b": {
+   "repetitions_ns": [
+    476441.8925619868,
+    506116.4052044613,
+    493576.66946311586,
+    496413.83054004965,
+    471325.78210118314
+   ],
+   "median_ns": 493576.66946311586,
+   "spread_percent": 7.05,
+   "vs_2d450a7_percent": -1.57
+  }
+ },
+ "run2": {
+  "2d450a7": {
+   "repetitions_ns": [
+    485012.37768239557,
+    480646.3426086794,
+    469504.0932203147,
+    477886.93613444536,
+    488730.1067960879,
+    474635.4809688736,
+    515123.3453608366,
+    486517.10034601984,
+    480706.7031249939,
+    520666.9979079317,
+    555510.6081771622,
+    497247.388333335
+   ],
+   "median_ns": 485764.73901420773,
+   "spread_percent": 17.71,
+   "vs_2d450a7_percent": 0.0
+  },
+  "bf0af73": {
+   "repetitions_ns": [
+    492378.9965156517,
+    482501.7699999989,
+    460887.9422442617,
+    477543.22696246183,
+    466112.85492225434,
+    492002.42096509127,
+    477470.56475578435,
+    491805.6318493274,
+    494668.367346933,
+    468760.623140514,
+    480947.1341256462,
+    510329.969858182
+   ],
+   "median_ns": 481724.45206282253,
+   "spread_percent": 10.26,
+   "vs_2d450a7_percent": -0.83
+  },
+  "edbd393": {
+   "repetitions_ns": [
+    590852.67366407,
+    526369.5121495284,
+    523401.17702448077,
+    523651.8922495227,
+    532537.5609756238,
+    646004.0909091318,
+    537483.5700757763,
+    521202.0208728775,
+    632876.6127167966,
+    544525.8490196386,
+    543342.5223301235,
+    556479.0761522995
+   ],
+   "median_ns": 540413.04620295,
+   "spread_percent": 23.09,
+   "vs_2d450a7_percent": 11.25
+  },
+  "2b682f5": {
+   "repetitions_ns": [
+    468700.12351944996,
+    529529.9557692291,
+    487559.5092127473,
+    483921.6852518404,
+    469642.94657765905,
+    463686.49735446676,
+    471375.1322314264,
+    478720.5778546896,
+    481935.1701754433,
+    523910.2404255178,
+    478002.4510135027,
+    481256.5874125745
+   ],
+   "median_ns": 479988.58263363206,
+   "spread_percent": 13.72,
+   "vs_2d450a7_percent": -1.19
+  },
+  "2d450a7b": {
+   "repetitions_ns": [
+    476125.61252112075,
+    546805.1048780591,
+    476601.31596638385,
+    477997.82744287216,
+    475400.37901858793,
+    490171.7975351851,
+    493174.5056818064,
+    489996.0102214497,
+    478935.27424748475,
+    493145.68996415206,
+    470945.46483707643,
+    482072.6956521688
+   ],
+   "median_ns": 480503.9849498268,
+   "spread_percent": 15.79,
+   "vs_2d450a7_percent": -1.08
+  },
+  "2b682f5b": {
+   "repetitions_ns": [
+    476371.40787121176,
+    485080.93548386905,
+    481343.0646766465,
+    488012.32075472805,
+    472339.31953641574,
+    480176.32538327517,
+    477230.3575221353,
+    508701.3110367968,
+    474987.58873724093,
+    498073.51546392223,
+    462287.8442211069,
+    480327.7191780957
+   ],
+   "median_ns": 480252.0222806854,
+   "spread_percent": 9.66,
+   "vs_2d450a7_percent": -1.13
+  }
+ }
+}
