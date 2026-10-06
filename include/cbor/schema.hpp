@@ -502,6 +502,7 @@ class packed
     CBOR_ALWAYS_INLINE static void zero_initialized_copy(std::span<char, fixed_size<E, Root>()> const field)
     {
         constexpr std::size_t n = fixed_size<E, Root>();
+        static_assert(zero_initialized<Root, E>().size() >= n, "The zero-initialized encoding must hold the whole field.");
         std::span<char const, n> const from{zero_initialized<Root, E>().data(), n};
         std::copy(from.begin(), from.end(), field.begin());
     }
@@ -632,6 +633,7 @@ class packed
                 std::copy(from.begin(), from.end(), std::as_writable_bytes(field.template last<n>()).begin());
             } else {
                 constexpr std::size_t head = heads::head_size(n);
+                static_assert(head + n * fixed_size<E, Root>() <= fixed_size<U, Root>(), "The elements must lie inside the field.");
                 std::size_t at = head;
                 for (auto const &e : value) {
                     position = value_encode<Root, E, Exact>(out, field.subspan(at).template first<fixed_size<E, Root>()>(), e, position);
@@ -752,6 +754,8 @@ class packed
             return fixed_head_valid<std::underlying_type_t<U>>(field);
         } else {
             constexpr unsigned char expected = static_cast<unsigned char>(zero_initialized<void, U>()[0]);
+            if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>)
+                static_assert(fixed_size<T, T>() > 1, "The field must hold the second byte that is read.");
             if constexpr (std::signed_integral<U> || std::same_as<U, int128>) {
                 if constexpr (std::same_as<U, int128>)
                     return (head & 0xfe) == expected && static_cast<unsigned char>(field[1]) == static_cast<unsigned char>(zero_initialized<void, U>()[1]);
@@ -769,6 +773,7 @@ class packed
     CBOR_ALWAYS_INLINE static bool class_tag_valid(std::span<char const, fixed_size<U, Root>()> const field)
     {
         constexpr std::size_t n = heads::head_size(*tag_number_of(^^U));
+        static_assert(zero_initialized<Root, U>().size() >= n, "The zero-initialized encoding must hold the whole tag head.");
         std::span<char const, n> const expected{zero_initialized<Root, U>().data(), n};
         return std::ranges::equal(field.template first<n>(), expected);
     }
@@ -851,6 +856,9 @@ class packed
     {
         static constexpr auto prefix = packing_prefix_of<T>();
         constexpr std::size_t fillers = shared_first_of<T>() - 1 - packing_table_of<T>().size();
+        static_assert(prefix.size() >= 8, "The packing prefix must hold the eight bytes that are compared and read.");
+        static_assert(fixed_size<T, T>() <= std::numeric_limits<std::size_t>::max() - directory_at<T>() - fillers,
+                      "The least size of an encoded item must fit in std::size_t.");
         constexpr std::size_t least = directory_at<T>() + fillers + fixed_size<T, T>();
         if (encoded.size() < least) [[unlikely]]
             return std::unexpected(error::too_little_data);
@@ -967,6 +975,7 @@ class packed
             if constexpr (is_fixed_string<U>) {
                 constexpr std::size_t n = fixed_length<U>::value;
                 constexpr std::size_t head = fixed_size<U, Root>() - n;
+                static_assert(zero_initialized<Root, U>().size() >= head, "The zero-initialized encoding must hold the whole head.");
                 std::span<char const, head> const expected{zero_initialized<Root, U>().data(), head};
                 if (!std::ranges::equal(field.template first<head>(), expected)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
@@ -1034,6 +1043,8 @@ class packed
                 using E = typename fixed_length<U>::element;
                 constexpr std::size_t n = fixed_length<U>::value;
                 constexpr std::size_t head = heads::head_size(n);
+                static_assert(zero_initialized<Root, U>().size() >= head, "The zero-initialized encoding must hold the whole head.");
+                static_assert(head + n * fixed_size<E, Root>() <= fixed_size<U, Root>(), "The elements must lie inside the field.");
                 std::span<char const, head> const expected{zero_initialized<Root, U>().data(), head};
                 if (!std::ranges::equal(field.template first<head>(), expected)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
@@ -1244,6 +1255,9 @@ class packed
     template <class T>
     static std::expected<std::size_t, std::errc> encoded_size(second_item<T> const &second)
     {
+        static_assert(fixed_size<T, T>() <= std::numeric_limits<std::size_t>::max() - directory_at<T>() -
+                                                (shared_first_of<T>() - 1 - packing_table_of<T>().size()),
+                      "The fixed part of an encoded item must fit in std::size_t.");
         std::size_t second_size;
         std::size_t size;
         if (second.overflow || ckd_mul(&second_size, second.items, sizeof(std::uint32_t)) ||
@@ -1350,10 +1364,15 @@ consteval std::size_t packed::fixed_size()
         using E = typename packed::fixed_length<U>::element;
         constexpr std::size_t n = packed::fixed_length<U>::value;
         if constexpr (std::same_as<E, char> || std::same_as<E, char8_t> || std::same_as<E, unsigned char> ||
-                      std::same_as<E, std::byte>)
+                      std::same_as<E, std::byte>) {
+            static_assert(n <= std::numeric_limits<std::size_t>::max() - heads::head_size(n), "The fixed size must fit in std::size_t.");
             return heads::head_size(n) + n;
-        else
-            return heads::head_size(n) + n * fixed_size<E, Root>();
+        } else {
+            constexpr std::size_t element = fixed_size<E, Root>();
+            static_assert(n <= (std::numeric_limits<std::size_t>::max() - heads::head_size(n)) / element,
+                          "The fixed size must fit in std::size_t.");
+            return heads::head_size(n) + n * element;
+        }
     } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
         if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unchecked()).empty() ||
                       !packed::keys_unique(packed::data_members<U>())) {
@@ -1364,12 +1383,19 @@ consteval std::size_t packed::fixed_size()
             template for (constexpr auto m : packed::data_members<U>()) {
                 if constexpr (!std::meta::has_identifier(m) || std::meta::is_bit_field(m) || !std::meta::is_public(m))
                     return no_fixed_size<U>();
-                size += fixed_size<typename[:std::meta::type_of(m):], Root>();
+                constexpr std::size_t member = fixed_size<typename[:std::meta::type_of(m):], Root>();
+                if (member > std::numeric_limits<std::size_t>::max() - size)
+                    return no_fixed_size<U>();
+                size += member;
             }
             return size;
         }
-    } else if constexpr (packed::is_inline_optional<U>)
-        return packed::inline_optional_head + fixed_size<typename U::value_type, Root>();
+    } else if constexpr (packed::is_inline_optional<U>) {
+        constexpr std::size_t value = fixed_size<typename U::value_type, Root>();
+        static_assert(value <= std::numeric_limits<std::size_t>::max() - packed::inline_optional_head,
+                      "The fixed size must fit in std::size_t.");
+        return packed::inline_optional_head + value;
+    }
     else if constexpr (requires(U const &v) {
                            v.has_value();
                            *v;

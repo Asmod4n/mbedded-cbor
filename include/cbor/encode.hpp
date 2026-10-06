@@ -195,6 +195,10 @@ struct encoder {
                 if (auto const r = flush(); !r) [[unlikely]]
                     return r;
             std::array<char, 9> head;
+            static_assert(std::tuple_size_v<decltype(block)> >= std::tuple_size_v<decltype(head)>,
+                          "The block must hold one whole head.");
+            static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(head)>,
+                          "A head must hold the initial byte and the eight argument bytes.");
             std::get<0>(head) = heads::initial_byte(major, info);
             std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), std::span(head).template subspan<1>().begin());
             std::ranges::copy(head, std::span(block).subspan(used).begin());
@@ -204,6 +208,8 @@ struct encoder {
             std::span<char> const out = block;
             std::size_t const at = used;
             std::array<char, 9> tail;
+            static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(tail)>,
+                          "A head must hold the initial byte and the eight argument bytes.");
             bool const near_end = out.size() - at < tail.size();
             std::span<char, 9> const item = near_end ? std::span(tail) : out.subspan(at).template first<9>();
             item.front() = heads::initial_byte(major, info);
@@ -265,6 +271,11 @@ struct encoder {
     std::expected<void, std::errc> float_encode(double const value)
     {
         std::array<char, 9> tail;
+        if constexpr (!direct)
+            static_assert(std::tuple_size_v<decltype(block)> >= std::tuple_size_v<decltype(tail)>,
+                          "The block must hold one whole float.");
+        static_assert(heads::initial_byte_size + sizeof(std::uint64_t) <= std::tuple_size_v<decltype(tail)>,
+                      "A float item must hold the initial byte and the eight bytes of a double.");
         bool const near_end = block.size() - used < tail.size();
         if constexpr (!direct)
             if (near_end) [[unlikely]]
