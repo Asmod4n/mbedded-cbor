@@ -34,37 +34,6 @@ struct lazy_elements;
 template <std::size_t DepthMax>
 struct lazy_entries;
 
-struct lazy {
-    std::shared_ptr<value_sharing::document> document;
-    std::size_t offset;
-
-    template <std::same_as<std::string> Encoded>
-    static result<lazy> from(Encoded &&encoded);
-    static result<lazy> from(std::string_view encoded);
-    static result<lazy> from(std::shared_ptr<std::string const> encoded);
-    static result<lazy> from(std::shared_ptr<void const> owner, std::string_view encoded);
-
-    template <std::size_t DepthMax = 64>
-    result<lazy> at(std::string_view key) const;
-
-    template <std::size_t DepthMax = 64>
-    result<lazy> at(std::int64_t index) const;
-
-    template <class T>
-        requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-                 std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
-                 std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-    result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-                                   std::is_same_v<T, typed_array>,
-                               owning_ref<T>, T>> get() const;
-
-    template <std::size_t DepthMax = 64>
-    result<lazy_elements<DepthMax>> elements() const;
-
-    template <std::size_t DepthMax = 64>
-    result<lazy_entries<DepthMax>> entries() const;
-};
-
 template <std::size_t DepthMax>
 struct lazy_elements {
     std::shared_ptr<value_sharing::document> document;
@@ -206,7 +175,7 @@ std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &enco
 {
     if (!encoded) [[unlikely]]
         throw std::logic_error("cbor::decode: the encoded data item is empty");
-    return lazy{std::make_shared<value_sharing::document>(encoded, *encoded, std::vector<std::size_t>{}, 0), 0};
+    return lazy{std::make_shared<value_sharing::document>(encoded, *encoded, std::vector<lazy>{}, 0), 0};
 }
 
 template <std::size_t DepthMax>
@@ -270,7 +239,7 @@ inline result<lazy> lazy::from(std::shared_ptr<void const> owner, std::string_vi
 {
     if (!owner) [[unlikely]]
         throw std::logic_error("cbor::lazy::from: the owner of the encoded data item is empty");
-    return lazy{std::make_shared<value_sharing::document>(std::move(owner), encoded, std::vector<std::size_t>{}, 0), 0};
+    return lazy{std::make_shared<value_sharing::document>(std::move(owner), encoded, std::vector<lazy>{}, 0), 0};
 }
 
 inline result<lazy> lazy::from(std::shared_ptr<std::string const> encoded)
@@ -300,20 +269,13 @@ result<lazy> lazy::at(std::string_view const key) const
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     for (std::uint64_t i = 0; i < h.argument; ++i) {
-        heads::decoder probe = d;
-        auto k = probe.head_decode();
-        while (k && k->major == major_type::tag &&
-               k->argument == std::to_underlying(heads::tag_number::shareable))
-            k = probe.head_decode();
+        auto const key_at = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
+        if (!key_at) [[unlikely]]
+            return std::unexpected(key_at.error());
+        heads::decoder probe{source->encoded.substr(*key_at)};
+        auto const k = probe.head_decode();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
-        if (k->major == major_type::tag && k->argument == std::to_underlying(heads::tag_number::sharedref)) {
-            auto const target = value_sharing::container_resolve(source, source->encoded.size() - d.encoded.size());
-            if (!target) [[unlikely]]
-                return std::unexpected(target.error());
-            probe = target->d;
-            k = target->h;
-        }
         bool match = false;
         if (k->major == major_type::text_string) {
             auto const text = probe.byte_string_decode(k->argument);
@@ -356,20 +318,13 @@ result<lazy> lazy::at(std::int64_t const index) const
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     for (std::uint64_t i = 0; i < h.argument; ++i) {
-        heads::decoder probe = d;
-        auto k = probe.head_decode();
-        while (k && k->major == major_type::tag &&
-               k->argument == std::to_underlying(heads::tag_number::shareable))
-            k = probe.head_decode();
+        auto const key_at = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
+        if (!key_at) [[unlikely]]
+            return std::unexpected(key_at.error());
+        heads::decoder probe{source->encoded.substr(*key_at)};
+        auto const k = probe.head_decode();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
-        if (k->major == major_type::tag && k->argument == std::to_underlying(heads::tag_number::sharedref)) {
-            auto const target = value_sharing::container_resolve(source, source->encoded.size() - d.encoded.size());
-            if (!target) [[unlikely]]
-                return std::unexpected(target.error());
-            probe = target->d;
-            k = target->h;
-        }
         bool const match = (k->major == major_type::unsigned_integer && index >= 0 &&
                             k->argument == static_cast<std::uint64_t>(index)) ||
                            (k->major == major_type::negative_integer && index < 0 &&
@@ -404,7 +359,7 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
             (h.argument == std::to_underlying(heads::tag_number::unsigned_bignum) ||
              h.argument == std::to_underlying(heads::tag_number::negative_bignum))) {
             negative = h.argument == std::to_underlying(heads::tag_number::negative_bignum);
-            auto const content = value_sharing::shared_resolve<64>(*source, source->encoded.size() - d.encoded.size());
+            auto const content = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
             if (!content) [[unlikely]]
                 return std::unexpected(content.error());
             d = heads::decoder{source->encoded.substr(*content)};
@@ -461,7 +416,7 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
             return std::unexpected(error::incorrect_type);
         if (auto const r = heads::typed_array_check(h.argument, 0); !r) [[unlikely]]
             return std::unexpected(r.error());
-        auto const content = value_sharing::shared_resolve<64>(*source, source->encoded.size() - d.encoded.size());
+        auto const content = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
         if (!content) [[unlikely]]
             return std::unexpected(content.error());
         d = heads::decoder{source->encoded.substr(*content)};
@@ -510,8 +465,8 @@ result<lazy_entries<DepthMax>> lazy::entries() const
 template <std::size_t DepthMax, class Binding>
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {
-    decoding::prefix before{l.document->encoded, l.document->marks, std::vector<bool>(l.document->marks.size())};
-    decoding::marks<Binding> shared(before.offsets.size());
+    decoding::prefix before{*l.document, std::vector<bool>(l.document->sharedrefs.size())};
+    decoding::marks<Binding> shared(l.document->sharedrefs.size());
     heads::decoder d{l.document->encoded.substr(l.offset)};
     return decoding::value_decode<DepthMax>(d, binding, shared, &before, 0, std::nullopt);
 }

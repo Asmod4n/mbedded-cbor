@@ -115,6 +115,8 @@ class well_formedness
     template <std::size_t DepthMax>
     friend std::expected<std::size_t, error> doc_end(std::string_view encoded);
 
+    friend class decoding;
+
     friend struct lazy;
 
     template <std::size_t>
