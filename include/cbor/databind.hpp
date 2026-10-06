@@ -722,7 +722,7 @@ template <class T>
 class databind
 {
 public:
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     static result<owning_ref<T>> decode(std::string_view const encoded)
     {
         auto copy = std::make_shared<std::string const>(encoded);
@@ -732,7 +732,7 @@ public:
         return owning_ref<T>(std::move(copy), std::move(*value));
     }
 
-    template <std::size_t DepthMax = 64, std::same_as<std::string> Encoded>
+    template <std::size_t DepthMax = 128, std::same_as<std::string> Encoded>
     static result<owning_ref<T>> decode(Encoded &&encoded)
     {
         auto owner = std::make_shared<std::string const>(std::move(encoded));
@@ -740,7 +740,7 @@ public:
         return decode<DepthMax>(std::move(owner), view);
     }
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     static result<owning_ref<T>> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         if (!owner) [[unlikely]]

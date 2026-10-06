@@ -83,10 +83,10 @@ struct lazy {
     static result<lazy> from(std::shared_ptr<std::string const> encoded);
     static result<lazy> from(std::shared_ptr<void const> owner, std::string_view encoded);
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     result<lazy> at(std::string_view key) const;
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     result<lazy> at(std::int64_t index) const;
 
     template <class T>
@@ -97,10 +97,10 @@ struct lazy {
                                    std::is_same_v<T, typed_array>,
                                owning_ref<T>, T>> get() const;
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     result<lazy_elements<DepthMax>> elements() const;
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     result<lazy_entries<DepthMax>> entries() const;
 };
 

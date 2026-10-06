@@ -30,13 +30,13 @@ namespace cbor
 
 struct lazy;
 
-template <std::size_t DepthMax = 64, class Binding>
+template <std::size_t DepthMax = 128, class Binding>
 result<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
 template <fixed_string Path, std::size_t DepthMax>
 class verify_path;
 
-template <fixed_string Path, std::size_t DepthMax = 64, class Binding>
+template <fixed_string Path, std::size_t DepthMax = 128, class Binding>
     requires(verify_path<Path, DepthMax>::value)
 result<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
 

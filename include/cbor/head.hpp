@@ -50,7 +50,7 @@ enum class pass;
 
 struct lazy;
 
-template <std::size_t DepthMax = 64>
+template <std::size_t DepthMax = 128>
 result<std::string, error> inspect(std::string_view encoded);
 
 class heads

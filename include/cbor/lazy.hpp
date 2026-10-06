@@ -194,7 +194,7 @@ template <>
 struct result<lazy, error> : std::expected<lazy, error> {
     using std::expected<lazy, cbor::error>::expected;
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     result at(std::string_view const key) const
     {
         if (!has_value()) [[unlikely]]
@@ -202,7 +202,7 @@ struct result<lazy, error> : std::expected<lazy, error> {
         return (**this).at<DepthMax>(key);
     }
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     result at(std::int64_t const index) const
     {
         if (!has_value()) [[unlikely]]
@@ -218,7 +218,7 @@ struct result<lazy, error> : std::expected<lazy, error> {
         return (**this).get<T>();
     }
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     cbor::result<lazy_elements<DepthMax>> elements() const
     {
         if (!has_value()) [[unlikely]]
@@ -226,7 +226,7 @@ struct result<lazy, error> : std::expected<lazy, error> {
         return (**this).elements<DepthMax>();
     }
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
     cbor::result<lazy_entries<DepthMax>> entries() const
     {
         if (!has_value()) [[unlikely]]
