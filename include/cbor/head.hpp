@@ -13,9 +13,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#ifdef CBOR_SIMDUTF
-#include <simdutf.h>
-#endif
 
 #include "binding.hpp"
 #include "error.hpp"
@@ -282,16 +279,6 @@ class heads
             std::string_view const string = encoded.substr(0, length);
             encoded.remove_prefix(length);
             return string;
-        }
-
-        std::expected<std::string_view, error> text_string_decode(std::uint64_t length)
-        {
-            auto const text = byte_string_decode(length);
-#ifdef CBOR_SIMDUTF
-            if (text && !simdutf::validate_utf8(text->data(), text->size())) [[unlikely]]
-                return std::unexpected(error::invalid_utf8_string);
-#endif
-            return text;
         }
     };
 

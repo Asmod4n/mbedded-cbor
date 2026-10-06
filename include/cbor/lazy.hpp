@@ -407,7 +407,7 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
     } else if constexpr (std::is_same_v<T, std::string_view>) {
         if (h.major != major_type::text_string) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        auto const text = d.text_string_decode(h.argument);
+        auto const text = d.byte_string_decode(h.argument);
         if (!text) [[unlikely]]
             return std::unexpected(text.error());
         return owning_ref<T>(source->owner, *text);

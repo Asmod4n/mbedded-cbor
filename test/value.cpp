@@ -131,8 +131,8 @@ TEST_CASE("depth: nested arrays and maps past the limit")
 }
 
 // Ported from test.rb: 'safety: all known malformed-input shapes raise cleanly'.
-// assert_safe accepts any error; here every shape names its error. Invalid UTF-8 is in
-// test/string.cpp, the zero-length bignum comes with the tags.
+// assert_safe accepts any error; here every shape names its error. The zero-length
+// bignum comes with the tags.
 TEST_CASE("safety: malformed shapes")
 {
     CHECK_EQ(decode_error("\xa2\x61"

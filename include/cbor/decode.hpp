@@ -53,7 +53,7 @@ class decoding
             return binding.byte_string_decode(*s);
         }
         case major_type::text_string: {
-            auto const s = d.text_string_decode(h->argument);
+            auto const s = d.byte_string_decode(h->argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
             return binding.text_string_decode(*s);
@@ -81,7 +81,7 @@ class decoding
                     heads::decoder probe = d;
                     auto const k = probe.head_decode();
                     if (k && k->major == major_type::text_string) {
-                        auto const t = probe.text_string_decode(k->argument);
+                        auto const t = probe.byte_string_decode(k->argument);
                         if (!t) [[unlikely]]
                             return std::unexpected(t.error());
                         d = probe;

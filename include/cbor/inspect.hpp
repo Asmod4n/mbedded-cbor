@@ -959,7 +959,7 @@ class diagnostic_notation
         case major_type::text_string: {
             bool const text = h->major == major_type::text_string;
             if (!indefinite) {
-                auto const s = text ? d.text_string_decode(h->argument) : d.byte_string_decode(h->argument);
+                auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
                 out += text ? quoted_of(*s) : "h'" + hex_of(*s) + "'";
