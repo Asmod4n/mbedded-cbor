@@ -456,9 +456,9 @@ template <std::size_t DepthMax, class Binding>
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {
     decoding::prefix before{*l.document, std::vector<bool>(l.document->sharedrefs.size())};
-    decoding::marks<Binding> shared(l.document->sharedrefs.size());
-    heads::decoder d{l.document->encoded.substr(l.offset)};
-    return decoding::value_decode<DepthMax>(d, binding, shared, &before, 0, std::nullopt);
+    decoding::value_decoder<Binding> v{
+        {l.document->encoded.substr(l.offset)}, binding, decoding::marks<Binding>(l.document->sharedrefs.size()), &before};
+    return v.template value_decode<DepthMax>(0, std::nullopt);
 }
 
 }
