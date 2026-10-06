@@ -572,8 +572,8 @@ class walker
             if constexpr (requires { binding.map_size(item); }) {
                 head(major_type::map, binding.map_size(item));
                 binding.map_for_each(item,
-                             [this](typename Binding::value const &k, typename Binding::value const &v) {
-                                 key(k);
+                             [this](typename Binding::value const &map_key, typename Binding::value const &v) {
+                                 key(map_key);
                                  value(v);
                              });
                 return;

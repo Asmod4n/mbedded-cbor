@@ -663,8 +663,8 @@ class packed
     static consteval std::meta::info member_named(std::string_view const name)
     {
         constexpr auto members = data_members<U>();
-        auto const m = std::ranges::find_if(members, [name](std::meta::info const m) {
-            return key_of(m) == name;
+        auto const m = std::ranges::find_if(members, [name](std::meta::info const member) {
+            return key_of(member) == name;
         });
         return m == members.end() ? std::meta::info{} : *m;
     }
@@ -1157,8 +1157,8 @@ class packed
                     out.reset();
                     return {};
                 }
-                if (auto const r = validity::check_nesting_depth(depth + 1, DepthMax); !r) [[unlikely]]
-                    return std::unexpected(r.error());
+                if (auto const nesting = validity::check_nesting_depth(depth + 1, DepthMax); !nesting) [[unlikely]]
+                    return std::unexpected(nesting.error());
                 E element{};
                 if (auto const e = value_read<DepthMax, Root>(
                         element, std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>(),
