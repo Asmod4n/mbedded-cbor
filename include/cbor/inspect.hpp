@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "error.hpp"
+#include "validity.hpp"
 #include "head.hpp"
 
 namespace cbor
@@ -557,8 +558,8 @@ class diagnostic_notation
                                                                      std::string &out, std::size_t const depth,
                                                                      std::size_t const depth_max)
     {
-        if (depth > depth_max) [[unlikely]]
-            return std::unexpected(error::nesting_depth_exceeded);
+        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+            return std::unexpected(r.error());
         if (at >= text.size()) [[unlikely]]
             return std::unexpected(error::invalid_path);
         std::string_view const rest = text.substr(at);
@@ -656,8 +657,8 @@ class diagnostic_notation
                                                                         std::size_t const at, std::size_t const depth,
                                                                         std::size_t const depth_max)
     {
-        if (depth > depth_max) [[unlikely]]
-            return std::unexpected(error::nesting_depth_exceeded);
+        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto const h = heads::raw_head_read(encoded, at);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
@@ -939,8 +940,8 @@ class diagnostic_notation
     template <std::size_t DepthMax>
     static std::expected<void, error> diagnostic_write(std::string &out, heads::decoder &d, std::size_t const depth)
     {
-        if (depth > DepthMax) [[unlikely]]
-            return std::unexpected(error::nesting_depth_exceeded);
+        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto const h = diagnostic_head_decode(d);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());

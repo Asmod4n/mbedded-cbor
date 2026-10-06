@@ -28,6 +28,7 @@
 #include "doc_end.hpp"
 #include "encode.hpp"
 #include "error.hpp"
+#include "validity.hpp"
 #include "head.hpp"
 #include "lazy.hpp"
 #include "owning_ref.hpp"
@@ -236,8 +237,8 @@ class generic
     template <std::size_t DepthMax, class U>
     static std::expected<void, error> generic_value_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth)
     {
-        if (depth > DepthMax) [[unlikely]]
-            return std::unexpected(error::nesting_depth_exceeded);
+        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+            return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool>) {
             auto const h = d.head_decode();
             if (!h) [[unlikely]]

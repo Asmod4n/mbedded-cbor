@@ -14,6 +14,7 @@
 #include "binding.hpp"
 #include "doc_end.hpp"
 #include "error.hpp"
+#include "validity.hpp"
 #include "head.hpp"
 #include "shared.hpp"
 
@@ -35,8 +36,8 @@ class decoding
     value_decode(heads::decoder &d, Binding &binding, marks<Binding> &shared, prefix *before, std::size_t depth,
                  std::optional<std::size_t> const mark)
     {
-        if (depth > DepthMax) [[unlikely]]
-            return std::unexpected(error::nesting_depth_exceeded);
+        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
@@ -103,8 +104,8 @@ class decoding
             return map;
         }
         case major_type::tag: {
-            if (depth + 1 > DepthMax) [[unlikely]]
-                return std::unexpected(error::nesting_depth_exceeded);
+            if (auto const r = validity::check_nesting_depth(depth + 1, DepthMax); !r) [[unlikely]]
+                return std::unexpected(r.error());
             if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
                 if (!before) {
                     std::size_t const index = shared.size();
