@@ -35,7 +35,7 @@ bool function_without_support(std::string_view const selector)
 // match() or search() must be refused; those cases are counted apart.
 TEST_CASE("path: the JSONPath Compliance Test Suite")
 {
-    std::ifstream in(TEST_VECTORS "/jsonpath/cts.cbor", std::ios::binary);
+    std::ifstream in(JSONPATH_CTS "/cts.cbor", std::ios::binary);
     REQUIRE(in.good());
     std::string const suite{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
     auto const root = cbor::decode<64>(suite);
