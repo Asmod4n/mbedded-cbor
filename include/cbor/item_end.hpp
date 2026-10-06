@@ -37,14 +37,14 @@ class well_formedness
     {
         std::array<std::uint64_t, DepthMax + 2> left;
         std::size_t level = 0;
-        left.at(0) = 1;
+        left[0] = 1;
         for (;;) {
-            while (left.at(level) == 0) {
+            while (left[level] == 0) {
                 if (level == 0)
                     return {};
                 --level;
             }
-            --left.at(level);
+            --left[level];
             if (auto const r = validity::check_nesting_depth(depth + level, DepthMax); !r) [[unlikely]]
                 return std::unexpected(r.error());
             if (d.encoded.size() >= 9) {
@@ -58,9 +58,9 @@ class well_formedness
                     std::size_t const size = heads::argument_size(info);
                     std::uint64_t argument = info;
                     if (info == std::to_underlying(heads::additional_information::one_byte_argument)) {
-                        argument = static_cast<std::uint8_t>(d.encoded.at(1));
+                        argument = static_cast<std::uint8_t>(d.encoded[1]);
                     } else if (!immediate) {
-                        argument = heads::unsigned_read<std::uint64_t>(std::span<char const>(d.encoded.substr(1, 8)).first<8>()) >>
+                        argument = heads::unsigned_read<std::uint64_t>(std::span<char const>(d.encoded).subspan<1, 8>()) >>
                                    ((64 - 8 * size) & 63);
                     }
                     d.encoded.remove_prefix(1 + size);
@@ -68,9 +68,9 @@ class well_formedness
                         if (auto const s = d.byte_string_decode(argument); !s) [[unlikely]]
                             return std::unexpected(s.error());
                     } else if (major == major_type::array) {
-                        left.at(++level) = argument;
+                        left[++level] = argument;
                     } else if (major == major_type::map) {
-                        left.at(++level) = argument > std::numeric_limits<std::uint64_t>::max() / 2
+                        left[++level] = argument > std::numeric_limits<std::uint64_t>::max() / 2
                                                ? std::numeric_limits<std::uint64_t>::max()
                                                : argument * 2;
                     }
@@ -87,17 +87,17 @@ class well_formedness
                     return std::unexpected(s.error());
                 break;
             case major_type::array:
-                left.at(++level) = h->argument;
+                left[++level] = h->argument;
                 break;
             case major_type::map:
-                left.at(++level) = h->argument > std::numeric_limits<std::uint64_t>::max() / 2
+                left[++level] = h->argument > std::numeric_limits<std::uint64_t>::max() / 2
                                        ? std::numeric_limits<std::uint64_t>::max()
                                        : h->argument * 2;
                 break;
             case major_type::tag:
                 if (h->argument == std::to_underlying(heads::tag_number::shareable))
                     marks.mark(d);
-                left.at(++level) = 1;
+                left[++level] = 1;
                 break;
             case major_type::simple_float:
                 if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]

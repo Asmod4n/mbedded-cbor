@@ -496,8 +496,10 @@ class walker
                 return binding.before_encode(item);
             if constexpr (Pass == pass::count)
                 return shared->replaced.emplace(*identity, binding.before_encode(item)).first->second;
+            else if (auto const found = shared->replaced.find(*identity); found != shared->replaced.end()) [[likely]]
+                return found->second;
             else
-                return shared->replaced.at(*identity);
+                return binding.before_encode(item);
         }
     }
 

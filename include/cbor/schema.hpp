@@ -309,7 +309,7 @@ class packed
         heads::head_append(encoded, major_type::array, members.size());
         template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, members.size()))) {
             if constexpr (has_integer_keys<U>) {
-                constexpr std::int64_t key = U::keys.at(i);
+                constexpr std::int64_t key = std::get<i>(U::keys);
                 if (key >= 0)
                     heads::head_append(encoded, major_type::unsigned_integer, static_cast<std::uint64_t>(key));
                 else
@@ -672,13 +672,13 @@ class packed
 
     static consteval std::size_t step_end(std::string_view const path, std::size_t const at)
     {
-        return static_cast<std::size_t>(std::ranges::find_first_of(path.substr(at + 1), std::string_view(".[")) -
+        return static_cast<std::size_t>(std::ranges::find_first_of(path | std::views::drop(at + 1), std::string_view(".[")) -
                                         path.begin());
     }
 
     static consteval std::size_t index_end(std::string_view const path, std::size_t const at)
     {
-        return static_cast<std::size_t>(std::ranges::find(path.substr(at + 1), ']') - path.begin());
+        return static_cast<std::size_t>(std::ranges::find(path | std::views::drop(at + 1), ']') - path.begin());
     }
 
     template <class T>
@@ -862,8 +862,8 @@ class packed
         constexpr std::size_t least = directory_at<T>() + fillers + fixed_size<T, T>();
         if (encoded.size() < least) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (!std::ranges::equal(encoded.substr(0, 4), std::span(prefix).first(4)) ||
-            !std::ranges::equal(encoded.substr(8, prefix.size() - 8), std::span(prefix).subspan(8)) ||
+        if (!std::ranges::equal(std::span(encoded).template first<4>(), std::span(prefix).template first<4>()) ||
+            !std::ranges::equal(std::span(encoded).template subspan<8, prefix.size() - 8>(), std::span(prefix).template subspan<8>()) ||
             static_cast<unsigned char>(encoded[prefix.size()]) != 0x5a) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         std::size_t const length = heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(prefix.size() + 1).template first<4>());
@@ -873,7 +873,7 @@ class packed
             return std::unexpected(error::incorrect_type);
         if (length > encoded.size() - least) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (std::ranges::any_of(encoded.substr(directory_at<T>() + length, fillers), [](char const c) { return c != '\xf7'; })) [[unlikely]]
+        if (std::ranges::any_of(std::span(encoded).subspan(directory_at<T>() + length, fillers), [](char const c) { return c != '\xf7'; })) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         return cbor::directory{directory_at<T>(), count};
     }
@@ -890,7 +890,7 @@ class packed
     static consteval std::size_t index_slot()
     {
         return index_slots<Path>() - static_cast<std::size_t>(std::ranges::count_if(
-                                          Path.view().substr(At) | std::views::pairwise, [](auto const pair) {
+                                          Path.view() | std::views::drop(At) | std::views::pairwise, [](auto const pair) {
                                               return std::get<0>(pair) == '[' && std::get<1>(pair) == ']';
                                           }));
     }
@@ -905,23 +905,23 @@ class packed
                 return path_valid<typename U::value_type, Path, At>();
             else
                 return true;
-        } else if constexpr (path.substr(At, 1) == ".") {
+        } else if constexpr (path[At] == '.') {
             if constexpr (!(std::is_class_v<U> && std::is_aggregate_v<U>) || requires { fixed_length<U>::value; } || is_optional<U>) {
                 return false;
             } else {
                 constexpr std::size_t end = step_end(path, At);
-                constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
+                constexpr std::meta::info m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
                 if constexpr (m == std::meta::info{})
                     return false;
                 else
                     return path_valid<typename[:std::meta::type_of(m):], Path, end>();
             }
-        } else if constexpr (path.substr(At, 1) == "[" && index_end(path, At) < path.size()) {
+        } else if constexpr (path[At] == '[' && index_end(path, At) < path.size()) {
             constexpr std::size_t close = index_end(path, At);
             if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U> || is_map<U> || is_optional<U>) {
                 return false;
             } else if constexpr (requires { fixed_length<U>::value; }) {
-                if constexpr (close != At + 1 && index_of<T>(path.substr(At + 1, close - At - 1)) >= fixed_length<U>::value)
+                if constexpr (close != At + 1 && index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1))) >= fixed_length<U>::value)
                     return false;
                 else
                     return path_valid<typename fixed_length<U>::element, Path, close + 1>();
@@ -950,9 +950,9 @@ class packed
                 return std::type_identity<typename cbor::schema<Root>::template accessor<U>>{};
             else
                 return std::type_identity<U>{};
-        } else if constexpr (path.substr(At, 1) == ".") {
+        } else if constexpr (path[At] == '.') {
             constexpr std::size_t end = step_end(path, At);
-            constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
+            constexpr std::meta::info m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
             return path_result<Root, typename[:std::meta::type_of(m):], Path, end>();
         } else {
             constexpr std::size_t close = index_end(path, At);
@@ -1010,7 +1010,7 @@ class packed
                 auto const r = reference_read<Root, is_text_range<U> ? major_type::text_string : major_type::byte_string>(encoded, field, floor, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return encoded.substr(r->data, r->length);
+                return std::string_view(std::span(encoded).subspan(r->data, r->length));
             } else if constexpr (is_map<U>) {
                 auto const r = reference_read<Root, major_type::map>(
                     encoded, field, floor, fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
@@ -1029,9 +1029,9 @@ class packed
                     return std::unexpected(error::incorrect_type);
                 return fixed_value_read<U>(field);
             }
-        } else if constexpr (path.substr(At, 1) == ".") {
+        } else if constexpr (path[At] == '.') {
             constexpr std::size_t end = step_end(path, At);
-            constexpr std::meta::info m = member_named<U>(path.substr(At + 1, end - At - 1));
+            constexpr std::meta::info m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
             using M = typename[:std::meta::type_of(m):];
             if (!class_tag_valid<Root, U>(field)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
@@ -1055,7 +1055,7 @@ class packed
                     return path_walk<Root, E, Path, close + 1>(
                         encoded, field.subspan(head + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(), floor, indexes);
                 } else {
-                    constexpr std::size_t i = index_of<T>(path.substr(At + 1, close - At - 1));
+                    constexpr std::size_t i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
                     return path_walk<Root, E, Path, close + 1>(
                         encoded, field.template subspan<head + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(), floor, indexes);
                 }
@@ -1065,7 +1065,7 @@ class packed
                 if constexpr (close == At + 1)
                     i = std::get<index_slot<Path, At>()>(indexes);
                 else
-                    i = index_of<T>(path.substr(At + 1, close - At - 1));
+                    i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
                 auto const r = reference_read<Root, major_type::array>(encoded, field, floor, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
@@ -1172,7 +1172,7 @@ class packed
                 auto const r = reference_take<Root, is_text_range<U> ? major_type::text_string : major_type::byte_string>(field, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                auto const part = encoded.substr(r->data, r->length);
+                std::string_view const part{std::span(encoded).subspan(r->data, r->length)};
                 if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>) {
                     auto const raw = std::as_bytes(std::span(part));
                     out = U(raw.begin(), raw.end());
@@ -1275,7 +1275,7 @@ class packed
         static constexpr auto prefix = packing_prefix_of<T>();
         constexpr std::size_t fillers = shared_first_of<T>() - 1 - packing_table_of<T>().size();
         std::size_t const size = encoded.size() - (Exact ? 0 : heads::head_padding);
-        std::ranges::copy(prefix, encoded.begin());
+        std::ranges::copy(prefix, encoded.template first<prefix.size()>().begin());
         heads::u32_write(encoded, 4, shared_first_of<T>() + second.items);
         heads::item_head_write(encoded, prefix.size(), major_type::byte_string, sizeof(std::uint32_t) * second.items);
         std::size_t const data = directory_at<T>() + sizeof(std::uint32_t) * second.items;
@@ -1503,7 +1503,7 @@ public:
                 if constexpr (close == 2)
                     at = std::get<0>(i);
                 else
-                    at = packed::index_of<U>(path.substr(2, close - 2));
+                    at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
                 if (at >= items.length) [[unlikely]]
                     return result<X>(std::unexpect, error::index_out_of_bounds);
                 return packed::path_walk<T, E, Path, close + 1>(

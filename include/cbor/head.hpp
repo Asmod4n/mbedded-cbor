@@ -215,7 +215,7 @@ class heads
     static std::string_view magnitude_without_leading_zeros(std::string_view const magnitude)
     {
         std::size_t const first = magnitude.find_first_not_of('\0');
-        return first == std::string_view::npos ? std::string_view{} : magnitude.substr(first);
+        return first == std::string_view::npos ? std::string_view{} : std::string_view(std::span(magnitude).subspan(first));
     }
 
     static std::uint64_t magnitude_value(std::string_view const magnitude)
@@ -290,20 +290,20 @@ class heads
             std::size_t const size = argument_size(info);
             if (encoded.size() < 1 + size) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            std::string_view const rest = encoded.substr(1, size);
+            std::span<char const> const rest = std::span(encoded).subspan(1, size);
             std::uint64_t argument;
             switch (static_cast<additional_information>(info)) {
             case additional_information::one_byte_argument:
                 argument = static_cast<std::uint8_t>(rest.front());
                 break;
             case additional_information::two_byte_argument:
-                argument = unsigned_read<std::uint16_t>(std::span<char const>(rest).first<2>());
+                argument = unsigned_read<std::uint16_t>(rest.first<2>());
                 break;
             case additional_information::four_byte_argument:
-                argument = unsigned_read<std::uint32_t>(std::span<char const>(rest).template first<4>());
+                argument = unsigned_read<std::uint32_t>(rest.first<4>());
                 break;
             default:
-                argument = unsigned_read<std::uint64_t>(std::span<char const>(rest).first<8>());
+                argument = unsigned_read<std::uint64_t>(rest.first<8>());
                 break;
             }
             encoded.remove_prefix(1 + size);
@@ -314,7 +314,7 @@ class heads
         {
             if (encoded.size() < length) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            std::string_view const string = encoded.substr(0, length);
+            std::string_view const string{std::span(encoded).first(length)};
             encoded.remove_prefix(length);
             return string;
         }
@@ -487,7 +487,7 @@ class heads
     {
         if (at >= encoded.size()) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        auto const initial = static_cast<std::uint8_t>(encoded.at(at));
+        auto const initial = static_cast<std::uint8_t>(encoded[at]);
         auto const major = static_cast<major_type>(initial >> 5);
         std::uint8_t const info = initial & 0x1f;
         if (info < std::to_underlying(additional_information::one_byte_argument) ||
@@ -499,14 +499,14 @@ class heads
         if (encoded.size() - at - 1 < size) [[unlikely]]
             return std::unexpected(error::too_little_data);
         std::uint64_t argument = 0;
-        for (char const c : encoded.substr(at + 1, size))
+        for (char const c : std::span(encoded).subspan(at + 1, size))
             argument = argument << 8 | static_cast<std::uint8_t>(c);
         return raw_head{major, info, argument, at + 1 + size};
     }
 
     static constexpr bool break_at(std::string_view const encoded, std::size_t const at)
     {
-        return at < encoded.size() && static_cast<std::uint8_t>(encoded.at(at)) == 0xff;
+        return at < encoded.size() && static_cast<std::uint8_t>(encoded[at]) == 0xff;
     }
 
     static std::expected<void, error> typed_array_check(std::uint64_t const tag, std::size_t const size)

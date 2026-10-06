@@ -153,7 +153,7 @@ struct value_sharing::top_level_item {
             return std::unexpected(error::inadmissible_type_for_tag_content);
         if (n->argument >= sharedrefs.size()) [[unlikely]]
             return std::unexpected(error::sharedref_index_not_marked);
-        lazy const &found = sharedrefs.at(static_cast<std::size_t>(n->argument));
+        lazy const &found = sharedrefs[static_cast<std::size_t>(n->argument)];
         if (found.offset >= item_at) [[unlikely]]
             return std::unexpected(error::sharedref_not_complete);
         return found;
@@ -180,13 +180,13 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level
         if (h->major != major_type::tag || h->info == std::to_underlying(heads::additional_information::indefinite_length))
             return at;
         if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
-            top_level.mark(heads::decoder{top_level.encoded.substr(h->at)});
+            top_level.mark(heads::decoder{std::string_view(std::span(top_level.encoded).subspan(h->at))});
             at = h->at;
             continue;
         }
         if (h->argument != std::to_underlying(heads::tag_number::sharedref))
             return at;
-        heads::decoder d{top_level.encoded.substr(h->at)};
+        heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
         auto const found = top_level.sharedref_decode(d, item_at);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
@@ -210,7 +210,7 @@ inline std::expected<value_sharing::resolved, error> value_sharing::container_re
         auto const at = shared_resolve(*source, offset);
         if (!at) [[unlikely]]
             return std::unexpected(at.error());
-        heads::decoder d{source->encoded.substr(*at)};
+        heads::decoder d{std::string_view(std::span(source->encoded).subspan(*at))};
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());

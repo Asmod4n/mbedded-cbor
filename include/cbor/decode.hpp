@@ -7,6 +7,7 @@
 #include <expected>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -67,7 +68,7 @@ class decoding
                 auto array = binding.array_decode(std::min<std::uint64_t>(h->argument, d.encoded.size()));
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
-                        shared.at(*mark) = array;
+                        shared[*mark] = array;
                 for (std::uint64_t i = 0; i < h->argument; ++i) {
                     auto element = value_decode<DepthMax>(depth + 1, std::nullopt);
                     if (!element) [[unlikely]]
@@ -80,7 +81,7 @@ class decoding
                 auto map = binding.map_decode(std::min<std::uint64_t>(h->argument, d.encoded.size() / 2));
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
-                        shared.at(*mark) = map;
+                        shared[*mark] = map;
                 for (std::uint64_t i = 0; i < h->argument; ++i) {
                     if constexpr (requires(std::string_view const t) { binding.map_key_decode(t); }) {
                         heads::decoder probe = d;
@@ -118,7 +119,7 @@ class decoding
                         auto content = value_decode<DepthMax>(depth + 1, index);
                         if (!content) [[unlikely]]
                             return content;
-                        shared.at(index) = *content;
+                        shared[index] = *content;
                         return content;
                     }
                     std::size_t const index = before->top_level.mark(d);
@@ -126,17 +127,17 @@ class decoding
                         shared.resize(index + 1);
                         before->evaluating.resize(index + 1);
                     }
-                    if (shared.at(index)) {
+                    if (shared[index]) {
                         if (auto const r = well_formedness::item_skip<DepthMax>(d, before->top_level, depth + 1); !r) [[unlikely]]
                             return std::unexpected(r.error());
-                        return *shared.at(index);
+                        return *shared[index];
                     }
-                    before->evaluating.at(index) = true;
+                    before->evaluating[index] = true;
                     auto content = value_decode<DepthMax>(depth + 1, index);
-                    before->evaluating.at(index) = false;
+                    before->evaluating[index] = false;
                     if (!content) [[unlikely]]
                         return content;
-                    shared.at(index) = *content;
+                    shared[index] = *content;
                     return content;
                 }
                 if (h->argument == std::to_underlying(heads::tag_number::unsigned_bignum) ||
@@ -171,28 +172,28 @@ class decoding
                     std::size_t const index = static_cast<std::size_t>(r->argument);
                     if (index >= shared.size()) [[unlikely]]
                         return std::unexpected(error::sharedref_index_not_marked);
-                    if (!shared.at(index) && before && !before->evaluating.at(index) &&
-                        before->top_level.sharedrefs.at(index).offset < before->top_level.encoded.size() - d.encoded.size()) {
+                    if (!shared[index] && before && !before->evaluating[index] &&
+                        before->top_level.sharedrefs[index].offset < before->top_level.encoded.size() - d.encoded.size()) {
                         std::string_view const rest = d.encoded;
-                        d.encoded = before->top_level.encoded.substr(before->top_level.sharedrefs.at(index).offset);
-                        before->evaluating.at(index) = true;
+                        d.encoded = std::string_view(std::span(before->top_level.encoded).subspan(before->top_level.sharedrefs[index].offset));
+                        before->evaluating[index] = true;
                         auto content = value_decode<DepthMax>(depth + 1, index);
-                        before->evaluating.at(index) = false;
+                        before->evaluating[index] = false;
                         d.encoded = rest;
                         if (!content) [[unlikely]]
                             return content;
-                        shared.at(index) = *content;
+                        shared[index] = *content;
                     }
-                    if (!shared.at(index)) [[unlikely]]
+                    if (!shared[index]) [[unlikely]]
                         return std::unexpected(error::sharedref_not_complete);
-                    return *shared.at(index);
+                    return *shared[index];
                 }
                 if constexpr (requires { binding.tag_begin(h->argument); }) {
                     std::optional<typename Binding::value> object = binding.tag_begin(h->argument);
                     if (object) {
                         if constexpr (requires { binding.cyclic_data_structures(); })
                             if (mark && binding.cyclic_data_structures())
-                                shared.at(*mark) = *object;
+                                shared[*mark] = *object;
                         auto content = value_decode<DepthMax>(depth + 1, std::nullopt);
                         if (!content) [[unlikely]]
                             return content;
