@@ -18,7 +18,7 @@ if(BUILD_TESTING)
 		target_compile_features(mbedded-cbor-test PRIVATE cxx_std_26)
 		target_compile_options(mbedded-cbor-test PRIVATE -freflection)
 	endif()
-	target_compile_definitions(mbedded-cbor-test PRIVATE TEST_VECTORS="${CMAKE_CURRENT_SOURCE_DIR}/test-vectors")
+	target_compile_definitions(mbedded-cbor-test PRIVATE TEST_VECTORS="${CMAKE_CURRENT_SOURCE_DIR}/test-vectors" JSONPATH_CTS="${CMAKE_CURRENT_SOURCE_DIR}/test/jsonpath")
 	doctest_discover_tests(mbedded-cbor-test)
 endif()
 
