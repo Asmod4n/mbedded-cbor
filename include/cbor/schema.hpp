@@ -26,6 +26,8 @@
 #ifdef __cpp_impl_reflection
 #include <meta>
 #include <stdckdint.h>
+#endif
+#if __has_include(<stdfloat>)
 #include <stdfloat>
 #endif
 
@@ -35,7 +37,6 @@
 #include "validity.hpp"
 #include "head.hpp"
 #include "owning_ref.hpp"
-#include "item.hpp"
 
 namespace cbor
 {
@@ -59,6 +60,10 @@ struct key {
     consteval explicit key(char const *const s) : text(std::define_static_string(std::string_view(s)))
     {
     }
+};
+
+struct tag {
+    std::uint64_t number;
 };
 
 template <std::uint64_t Number, class T>
@@ -237,10 +242,16 @@ class packed
             fixed_width_head_encode(encoded, major_type::unsigned_integer, sizeof(U));
         } else if constexpr (std::is_floating_point_v<U>) {
             constexpr int digits = std::numeric_limits<U>::digits;
+#if defined(__STDCPP_FLOAT16_T__)
             if constexpr (digits == std::numeric_limits<std::float16_t>::digits)
                 fixed_width_head_encode(encoded, major_type::simple_float, sizeof(std::float16_t));
-            else if constexpr (digits == std::numeric_limits<std::bfloat16_t>::digits ||
-                               digits == std::numeric_limits<std::float32_t>::digits)
+            else
+#endif
+            if constexpr (
+#if defined(__STDCPP_BFLOAT16_T__)
+                digits == std::numeric_limits<std::bfloat16_t>::digits ||
+#endif
+                digits == std::numeric_limits<std::float32_t>::digits)
                 fixed_width_head_encode(encoded, major_type::simple_float, sizeof(std::float32_t));
             else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
                 fixed_width_head_encode(encoded, major_type::simple_float, sizeof(std::float64_t));
@@ -397,11 +408,17 @@ class packed
     static constexpr auto float_bits(U const value)
     {
         constexpr int digits = std::numeric_limits<U>::digits;
+#if defined(__STDCPP_FLOAT16_T__)
         if constexpr (digits == std::numeric_limits<std::float16_t>::digits)
             return std::bit_cast<std::uint16_t>(value);
-        else if constexpr (digits == std::numeric_limits<std::bfloat16_t>::digits)
+        else
+#endif
+#if defined(__STDCPP_BFLOAT16_T__)
+        if constexpr (digits == std::numeric_limits<std::bfloat16_t>::digits)
             return std::bit_cast<std::uint32_t>(static_cast<std::float32_t>(value));
-        else if constexpr (digits == std::numeric_limits<std::float32_t>::digits)
+        else
+#endif
+        if constexpr (digits == std::numeric_limits<std::float32_t>::digits)
             return std::bit_cast<std::uint32_t>(value);
         else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
             return std::bit_cast<std::uint64_t>(value);
@@ -707,10 +724,19 @@ class packed
 #endif
             {
                 auto const bits = heads::unsigned_read<B>(field.template last<sizeof(B)>());
+#if defined(__STDCPP_FLOAT16_T__)
                 using F = std::conditional_t<sizeof(B) == sizeof(std::uint16_t), std::float16_t,
                                              std::conditional_t<sizeof(B) == sizeof(std::uint32_t), std::float32_t,
                                                                 std::float64_t>>;
                 return static_cast<U>(std::bit_cast<F>(bits));
+#else
+                if constexpr (sizeof(B) == sizeof(std::uint16_t))
+                    return static_cast<U>(heads::float_decode_binary16(bits));
+                else
+                    return static_cast<U>(
+                        std::bit_cast<std::conditional_t<sizeof(B) == sizeof(std::uint32_t), std::float32_t,
+                                                         std::float64_t>>(bits));
+#endif
             }
         }
     }
@@ -1301,10 +1327,16 @@ consteval std::size_t packed::fixed_size()
         return initial_byte_size + sizeof(U);
     else if constexpr (std::is_floating_point_v<U>) {
         constexpr int digits = std::numeric_limits<U>::digits;
+#if defined(__STDCPP_FLOAT16_T__)
         if constexpr (digits == std::numeric_limits<std::float16_t>::digits)
             return initial_byte_size + sizeof(std::float16_t);
-        else if constexpr (digits == std::numeric_limits<std::bfloat16_t>::digits ||
-                           digits == std::numeric_limits<std::float32_t>::digits)
+        else
+#endif
+        if constexpr (
+#if defined(__STDCPP_BFLOAT16_T__)
+            digits == std::numeric_limits<std::bfloat16_t>::digits ||
+#endif
+            digits == std::numeric_limits<std::float32_t>::digits)
             return initial_byte_size + sizeof(std::float32_t);
         else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
             return initial_byte_size + sizeof(std::float64_t);

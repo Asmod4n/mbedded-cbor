@@ -250,7 +250,6 @@ class heads
         half_precision_float,
         single_precision_float,
         double_precision_float,
-        reserved,
         break_stop_code = 31
     };
 
@@ -534,8 +533,6 @@ class heads
     friend class walker;
 
     friend struct lazy;
-
-    friend struct item;
 
     template <std::size_t>
     friend struct lazy_elements;
