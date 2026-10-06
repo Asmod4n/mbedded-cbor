@@ -65,7 +65,7 @@ class diagnostic_notation
     {
         int info;
         if (indicator == no_indicator)
-            info = argument < 24 ? 0 : 24 + std::countr_zero(std::bit_ceil(static_cast<unsigned>((std::bit_width(argument) + 7) / 8)));
+            info = argument < 24 ? 0 : heads::preferred_argument_info(argument);
         else if (indicator == immediate_indicator)
             info = 0;
         else
@@ -73,7 +73,7 @@ class diagnostic_notation
         if (info == 0) {
             if (argument >= 24) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            out.push_back(static_cast<char>(std::to_underlying(major) << 5 | static_cast<int>(argument)));
+            heads::head_append(out, major, static_cast<std::uint8_t>(argument), argument);
             return {};
         }
         if (info < 24 || info > 27) [[unlikely]]
@@ -81,9 +81,7 @@ class diagnostic_notation
         std::size_t const size = std::size_t{1} << (info - 24);
         if (size < 8 && argument >> (8 * size) != 0) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        out.push_back(static_cast<char>(std::to_underlying(major) << 5 | info));
-        for (std::size_t i = size; i > 0; --i)
-            out.push_back(static_cast<char>(argument >> (8 * (i - 1))));
+        heads::head_append(out, major, static_cast<std::uint8_t>(info), argument);
         return {};
     }
 
@@ -326,13 +324,10 @@ class diagnostic_notation
              static_cast<double>(static_cast<float>(value)) == value);
         if (!exact) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        std::uint64_t argument;
-        if (info == std::to_underlying(heads::simple_float_information::half_precision_float))
-            argument = nan ? 0x7e00 : heads::float_encode_binary16(static_cast<float>(value));
-        else if (info == std::to_underlying(heads::simple_float_information::single_precision_float))
-            argument = nan ? 0x7fc00000 : std::bit_cast<std::uint32_t>(static_cast<float>(value));
-        else
-            argument = nan ? 0x7ff8000000000000 : std::bit_cast<std::uint64_t>(value);
+        constexpr std::array<std::uint64_t, 3> quiet_nan{0x7e00, 0x7fc00000, 0x7ff8000000000000};
+        std::uint64_t const argument =
+            nan ? quiet_nan.at(static_cast<std::size_t>(info - std::to_underlying(heads::simple_float_information::half_precision_float)))
+                : heads::float_encode(static_cast<heads::simple_float_information>(info), value);
         return head_append(out, major_type::simple_float, argument, info);
     }
 
@@ -522,7 +517,7 @@ class diagnostic_notation
             return std::unexpected(error::invalid_path);
         major_type const major = map ? major_type::map : major_type::array;
         if (indicator == std::to_underlying(heads::additional_information::indefinite_length)) {
-            out.push_back(static_cast<char>(std::to_underlying(major) << 5 | indicator));
+            out.push_back(heads::initial_byte(major, static_cast<std::uint64_t>(indicator)));
             out += items;
             out.push_back('\xff');
         } else {
@@ -544,7 +539,7 @@ class diagnostic_notation
         if (indicator == std::to_underlying(heads::additional_information::indefinite_length)) {
             if (!content.empty()) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            out.push_back(static_cast<char>(std::to_underlying(major) << 5 | indicator));
+            out.push_back(heads::initial_byte(major, static_cast<std::uint64_t>(indicator)));
             out.push_back('\xff');
             return next->at;
         }
@@ -602,8 +597,7 @@ class diagnostic_notation
         constexpr std::array<std::string_view, 4> names{"false", "true", "null", "undefined"};
         for (std::size_t i = 0; i < names.size(); ++i)
             if (rest.starts_with(names.at(i))) {
-                out.push_back(static_cast<char>(std::to_underlying(major_type::simple_float) << 5 |
-                                                (std::to_underlying(simple_value::false_value) + i)));
+                out.push_back(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + i));
                 return at + names.at(i).size();
             }
         if (rest.starts_with("simple(")) {
@@ -676,10 +670,12 @@ class diagnostic_notation
         case major_type::text_string: {
             std::string content;
             if (!indefinite) {
-                if (encoded.size() - next < h->argument) [[unlikely]]
-                    return std::unexpected(error::too_little_data);
-                content = encoded.substr(next, static_cast<std::size_t>(h->argument));
-                next += static_cast<std::size_t>(h->argument);
+                heads::decoder d{encoded.substr(next)};
+                auto const s = d.byte_string_decode(h->argument);
+                if (!s) [[unlikely]]
+                    return std::unexpected(s.error());
+                content = *s;
+                next += s->size();
             } else {
                 while (!heads::break_at(encoded, next)) {
                     auto const chunk = heads::raw_head_read(encoded, next);
@@ -739,45 +735,24 @@ class diagnostic_notation
             break;
         }
         constexpr std::uint8_t half = std::to_underlying(heads::simple_float_information::half_precision_float);
-        constexpr std::uint8_t single = std::to_underlying(heads::simple_float_information::single_precision_float);
         constexpr std::uint8_t twice = std::to_underlying(heads::simple_float_information::double_precision_float);
         if (h->info < half) {
-            if (h->info == std::to_underlying(heads::simple_float_information::simple_value_follows) && h->argument < heads::simple_value_one_byte_min)
-                [[unlikely]]
-                return std::unexpected(error::syntax_error);
+            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
+                return std::unexpected(r.error());
             if (auto const r = head_append(out, major_type::simple_float, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
         }
         if (h->info > twice) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        std::uint64_t sign;
-        std::uint64_t exponent_all_ones;
-        std::uint64_t significand;
-        double value;
-        if (h->info == half) {
-            sign = h->argument >> 15;
-            exponent_all_ones = (h->argument >> 10 & 0x1f) == 0x1f;
-            significand = (h->argument & 0x3ff) << 42;
-            value = static_cast<double>(heads::float_decode_binary16(static_cast<std::uint16_t>(h->argument)));
-        } else if (h->info == single) {
-            sign = h->argument >> 31;
-            exponent_all_ones = (h->argument >> 23 & 0xff) == 0xff;
-            significand = (h->argument & 0x7fffff) << 29;
-            value = static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h->argument)));
-        } else {
-            sign = h->argument >> 63;
-            exponent_all_ones = (h->argument >> 52 & 0x7ff) == 0x7ff;
-            significand = h->argument & 0xfffffffffffff;
-            value = std::bit_cast<double>(h->argument);
-        }
-        if (exponent_all_ones && significand != 0) {
-            if (auto const r = head_append(out, major_type::simple_float, sign << 63 | std::uint64_t{0x7ff} << 52 | significand, twice);
-                !r) [[unlikely]]
+        heads::float_key const key = heads::float_key_of(h->info, h->argument);
+        if (key.nan) {
+            if (auto const r = head_append(out, major_type::simple_float, key.widened | std::uint64_t{0x7ff} << 52, twice); !r)
+                [[unlikely]]
                 return std::unexpected(r.error());
             return next;
         }
-        if (auto const r = float_append(out, value == 0 ? 0.0 : value, no_indicator); !r) [[unlikely]]
+        if (auto const r = float_append(out, key.value == 0 ? 0.0 : key.value, no_indicator); !r) [[unlikely]]
             return std::unexpected(r.error());
         return next;
     }
@@ -786,12 +761,7 @@ class diagnostic_notation
     {
         if (info < std::to_underlying(heads::additional_information::one_byte_argument))
             return {};
-        std::uint8_t const preferred =
-            argument < std::to_underlying(heads::additional_information::one_byte_argument)
-                ? 0
-                : static_cast<std::uint8_t>(std::to_underlying(heads::additional_information::one_byte_argument) +
-                                            std::countr_zero(std::bit_ceil(static_cast<unsigned>((std::bit_width(argument) + 7) / 8))));
-        if (info == preferred)
+        if (info == heads::preferred_argument_info(argument))
             return {};
         return {'_', static_cast<char>('0' + info - std::to_underlying(heads::additional_information::one_byte_argument))};
     }
@@ -885,13 +855,7 @@ class diagnostic_notation
     {
         constexpr std::array<std::uint64_t, 3> quiet_nan{0x7e00, 0x7fc00000, 0x7ff8000000000000};
         std::size_t const width = info - std::to_underlying(heads::simple_float_information::half_precision_float);
-        double value;
-        if (info == std::to_underlying(heads::simple_float_information::half_precision_float))
-            value = static_cast<double>(heads::float_decode_binary16(static_cast<std::uint16_t>(argument)));
-        else if (info == std::to_underlying(heads::simple_float_information::single_precision_float))
-            value = static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(argument)));
-        else
-            value = std::bit_cast<double>(argument);
+        double const value = heads::float_decode(info, argument);
         std::string const indicator =
             width == 0 ? std::string{} : std::string{'_', static_cast<char>('1' + width)};
         if (std::isnan(value)) {
@@ -1029,8 +993,8 @@ class diagnostic_notation
             out += "undefined";
             return {};
         case std::to_underlying(heads::simple_float_information::simple_value_follows):
-            if (h->argument < heads::simple_value_one_byte_min) [[unlikely]]
-                return std::unexpected(error::syntax_error);
+            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
+                return std::unexpected(r.error());
             out += "simple(" + decimal_of(h->argument) + ")";
             return {};
         case std::to_underlying(heads::simple_float_information::half_precision_float):

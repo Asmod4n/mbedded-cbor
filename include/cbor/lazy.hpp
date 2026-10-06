@@ -259,41 +259,52 @@ inline result<lazy> lazy::from(std::string_view const encoded)
     return from(std::make_shared<std::string const>(encoded));
 }
 
+template <std::size_t DepthMax, class Match>
+result<lazy> value_sharing::key_find(resolved const &found, Match const &match)
+{
+    if (found.h.major != major_type::map) [[unlikely]]
+        return std::unexpected(error::not_indexable);
+    document &source = *found.source;
+    heads::decoder d = found.d;
+    for (std::uint64_t i = 0; i < found.h.argument; ++i) {
+        auto const key_at = shared_resolve(source, source.encoded.size() - d.encoded.size());
+        if (!key_at) [[unlikely]]
+            return std::unexpected(key_at.error());
+        heads::decoder probe{source.encoded.substr(*key_at)};
+        auto const k = probe.head_decode();
+        if (!k) [[unlikely]]
+            return std::unexpected(k.error());
+        std::expected<bool, error> const matched = match(*k, probe);
+        if (!matched) [[unlikely]]
+            return std::unexpected(matched.error());
+        if (auto const r = well_formedness::item_skip<DepthMax>(d, source, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (*matched)
+            return lazy{found.source, source.encoded.size() - d.encoded.size()};
+        if (auto const r = well_formedness::item_skip<DepthMax>(d, source, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+    }
+    return std::unexpected(error::key_not_found);
+}
+
 template <std::size_t DepthMax>
 result<lazy> lazy::at(std::string_view const key) const
 {
     auto const found = value_sharing::container_resolve(document, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    auto [source, h, d] = *found;
-    if (h.major != major_type::map) [[unlikely]]
-        return std::unexpected(error::not_indexable);
-    for (std::uint64_t i = 0; i < h.argument; ++i) {
-        auto const key_at = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
-        if (!key_at) [[unlikely]]
-            return std::unexpected(key_at.error());
-        heads::decoder probe{source->encoded.substr(*key_at)};
-        auto const k = probe.head_decode();
-        if (!k) [[unlikely]]
-            return std::unexpected(k.error());
-        bool match = false;
-        if (k->major == major_type::text_string) {
-            auto const text = probe.byte_string_decode(k->argument);
-            if (!text) [[unlikely]]
-                return std::unexpected(text.error());
-            match = *text == key;
-        }
-        if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        if (match) {
-            std::size_t const value = source->encoded.size() - d.encoded.size();
-            return lazy{source, value};
-        }
-        if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-            return std::unexpected(r.error());
-    }
-    return std::unexpected(error::key_not_found);
+    return value_sharing::key_find<DepthMax>(
+        *found, [key](heads::head const &k, heads::decoder const probe) -> std::expected<bool, error> {
+            if (k.major != major_type::text_string)
+                return false;
+            heads::decoder text = probe;
+            auto const content = text.byte_string_decode(k.argument);
+            if (!content) [[unlikely]]
+                return std::unexpected(content.error());
+            return *content == key;
+        });
 }
+
 template <std::size_t DepthMax>
 result<lazy> lazy::at(std::int64_t const index) const
 {
@@ -315,31 +326,13 @@ result<lazy> lazy::at(std::int64_t const index) const
         std::size_t const element = source->encoded.size() - d.encoded.size();
         return lazy{source, element};
     }
-    if (h.major != major_type::map) [[unlikely]]
-        return std::unexpected(error::not_indexable);
-    for (std::uint64_t i = 0; i < h.argument; ++i) {
-        auto const key_at = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
-        if (!key_at) [[unlikely]]
-            return std::unexpected(key_at.error());
-        heads::decoder probe{source->encoded.substr(*key_at)};
-        auto const k = probe.head_decode();
-        if (!k) [[unlikely]]
-            return std::unexpected(k.error());
-        bool const match = (k->major == major_type::unsigned_integer && index >= 0 &&
-                            k->argument == static_cast<std::uint64_t>(index)) ||
-                           (k->major == major_type::negative_integer && index < 0 &&
-                            k->argument == static_cast<std::uint64_t>(-1 - index));
-        if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        if (match) {
-            std::size_t const value = source->encoded.size() - d.encoded.size();
-            return lazy{source, value};
-        }
-        if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-            return std::unexpected(r.error());
-    }
-    return std::unexpected(error::key_not_found);
+    return value_sharing::key_find<DepthMax>(
+        *found, [index](heads::head const &k, heads::decoder) -> std::expected<bool, error> {
+            return (k.major == major_type::unsigned_integer && index >= 0 && k.argument == static_cast<std::uint64_t>(index)) ||
+                   (k.major == major_type::negative_integer && index < 0 && k.argument == static_cast<std::uint64_t>(-1 - index));
+        });
 }
+
 template <class T>
     requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
@@ -387,21 +380,18 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
             return std::unexpected(error::incorrect_type);
         switch (static_cast<heads::simple_float_information>(h.info)) {
         case heads::simple_float_information::half_precision_float:
-            return static_cast<double>(heads::float_decode_binary16(static_cast<std::uint16_t>(h.argument)));
         case heads::simple_float_information::single_precision_float:
-            return static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h.argument)));
         case heads::simple_float_information::double_precision_float:
-            return std::bit_cast<double>(h.argument);
+            return heads::float_decode(h.info, h.argument);
         [[unlikely]] default:
             return std::unexpected(error::incorrect_type);
         }
     } else if constexpr (std::is_same_v<T, bool>) {
-        if (h.major != major_type::simple_float || (h.info != std::to_underlying(simple_value::false_value) &&
-                                                    h.info != std::to_underlying(simple_value::true_value))) [[unlikely]]
+        if (!heads::is_boolean(h)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         return h.info == std::to_underlying(simple_value::true_value);
     } else if constexpr (std::is_same_v<T, std::nullptr_t>) {
-        if (h.major != major_type::simple_float || h.info != std::to_underlying(simple_value::null)) [[unlikely]]
+        if (!heads::is_null(h)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         return nullptr;
     } else if constexpr (std::is_same_v<T, std::string_view>) {

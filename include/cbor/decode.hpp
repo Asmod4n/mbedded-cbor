@@ -200,16 +200,13 @@ class decoding
         default:
             switch (static_cast<heads::simple_float_information>(h->info)) {
             case heads::simple_float_information::simple_value_follows:
-                if (h->argument < heads::simple_value_one_byte_min) [[unlikely]]
-                    return std::unexpected(error::syntax_error);
+                if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
+                    return std::unexpected(r.error());
                 return binding.simple_value_decode(static_cast<std::uint8_t>(h->argument));
             case heads::simple_float_information::half_precision_float:
-                return binding.float_decode(static_cast<double>(heads::float_decode_binary16(
-                                              static_cast<std::uint16_t>(h->argument))));
             case heads::simple_float_information::single_precision_float:
-                return binding.float_decode(static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(h->argument))));
             case heads::simple_float_information::double_precision_float:
-                return binding.float_decode(std::bit_cast<double>(h->argument));
+                return binding.float_decode(heads::float_decode(h->info, h->argument));
             default:
                 return binding.simple_value_decode(h->info);
             }
