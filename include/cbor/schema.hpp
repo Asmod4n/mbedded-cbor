@@ -214,27 +214,12 @@ class packed
     static constexpr bool is_list = std::ranges::sized_range<U> && !is_text_range<U> && !is_byte_range<U> && !is_optional<U> &&
                                     !is_map<U> && !requires { fixed_length<U>::value; };
 
-    static constexpr void head_encode(std::vector<char> &encoded, major_type major, std::uint64_t argument)
+    static constexpr void fixed_width_head_encode(std::vector<char> &encoded, major_type const major, std::size_t const width)
     {
-        std::size_t const size = heads::head_size(argument);
-        if (size == heads::initial_byte_size) {
-            encoded.push_back(static_cast<char>(std::to_underlying(major) << 5 | argument));
-            return;
-        }
-        std::size_t const width = size - heads::initial_byte_size;
-        encoded.push_back(static_cast<char>(std::to_underlying(major) << 5 |
-                                          (std::to_underlying(heads::additional_information::one_byte_argument) +
-                                           std::countr_zero(width))));
-        for (std::size_t i = width; i-- > 0;)
-            encoded.push_back(static_cast<char>(argument >> (8 * i)));
-    }
-
-    static constexpr void fixed_width_head_encode(std::vector<char> &encoded, major_type major, std::size_t width)
-    {
-        encoded.push_back(static_cast<char>(std::to_underlying(major) << 5 |
-                                          (std::to_underlying(heads::additional_information::one_byte_argument) +
-                                           std::countr_zero(width))));
-        encoded.resize(encoded.size() + width);
+        heads::head_append(encoded, major,
+                           static_cast<std::uint8_t>(std::to_underlying(heads::additional_information::one_byte_argument) +
+                                                     std::countr_zero(width)),
+                           0);
     }
 
     template <class Root, class T>
@@ -242,13 +227,13 @@ class packed
     {
         using U = std::remove_cv_t<T>;
         if constexpr (std::same_as<U, bool>) {
-            head_encode(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
+            heads::head_append(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
         } else if constexpr (std::is_enum_v<U>) {
             zero_initialized_encode<Root, std::underlying_type_t<U>>(encoded);
 #ifdef __SIZEOF_INT128__
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
-            head_encode(encoded, major_type::tag, std::to_underlying(heads::tag_number::unsigned_bignum));
-            head_encode(encoded, major_type::byte_string, sizeof(U));
+            heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::unsigned_bignum));
+            heads::head_append(encoded, major_type::byte_string, sizeof(U));
             encoded.resize(encoded.size() + sizeof(U));
 #endif
         } else if constexpr (std::is_integral_v<U>) {
@@ -263,26 +248,26 @@ class packed
             else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
                 fixed_width_head_encode(encoded, major_type::simple_float, sizeof(std::float64_t));
             else {
-                head_encode(encoded, major_type::tag, std::to_underlying(heads::tag_number::float128_big_endian));
-                head_encode(encoded, major_type::byte_string, sizeof(std::float128_t));
+                heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::float128_big_endian));
+                heads::head_append(encoded, major_type::byte_string, sizeof(std::float128_t));
                 encoded.resize(encoded.size() + sizeof(std::float128_t));
             }
         } else if constexpr (requires { fixed_length<U>::value; }) {
             using E = typename fixed_length<U>::element;
             constexpr std::size_t n = fixed_length<U>::value;
             if constexpr (std::same_as<E, char> || std::same_as<E, char8_t>) {
-                head_encode(encoded, major_type::text_string, n);
+                heads::head_append(encoded, major_type::text_string, n);
                 encoded.resize(encoded.size() + n);
             } else if constexpr (std::same_as<E, unsigned char> || std::same_as<E, std::byte>) {
-                head_encode(encoded, major_type::byte_string, n);
+                heads::head_append(encoded, major_type::byte_string, n);
                 encoded.resize(encoded.size() + n);
             } else {
-                head_encode(encoded, major_type::array, n);
+                heads::head_append(encoded, major_type::array, n);
                 for (std::size_t i = 0; i < n; ++i)
                     zero_initialized_encode<Root, E>(encoded);
             }
         } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-            head_encode(encoded, major_type::tag, *tag_number_of(^^U));
+            heads::head_append(encoded, major_type::tag, *tag_number_of(^^U));
             straight_reference_encode<Root, U>(encoded);
             fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
             auto const count = heads::big_endian(static_cast<std::uint32_t>(data_members<U>().size()));
@@ -290,11 +275,11 @@ class packed
             template for (constexpr auto m : data_members<U>())
                 zero_initialized_encode<Root, typename[:std::meta::type_of(m):]>(encoded);
         } else if constexpr (is_inline_optional<U>) {
-            head_encode(encoded, major_type::array, 2);
-            head_encode(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
+            heads::head_append(encoded, major_type::array, 2);
+            heads::head_append(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
             zero_initialized_encode<Root, typename U::value_type>(encoded);
         } else {
-            head_encode(encoded, major_type::tag, std::to_underlying(heads::tag_number::reference));
+            heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::reference));
             fixed_width_head_encode(encoded, major_type::unsigned_integer, sizeof(std::uint32_t));
         }
     }
@@ -311,19 +296,19 @@ class packed
     static consteval std::span<char const> record_keys()
     {
         std::vector<char> encoded;
-        head_encode(encoded, major_type::tag, std::to_underlying(heads::tag_number::record_function));
+        heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::record_function));
         static constexpr auto members = members_of<U>();
-        head_encode(encoded, major_type::array, members.size());
+        heads::head_append(encoded, major_type::array, members.size());
         template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, members.size()))) {
             if constexpr (has_integer_keys<U>) {
                 constexpr std::int64_t key = U::keys.at(i);
                 if (key >= 0)
-                    head_encode(encoded, major_type::unsigned_integer, static_cast<std::uint64_t>(key));
+                    heads::head_append(encoded, major_type::unsigned_integer, static_cast<std::uint64_t>(key));
                 else
-                    head_encode(encoded, major_type::negative_integer, static_cast<std::uint64_t>(-1 - key));
+                    heads::head_append(encoded, major_type::negative_integer, static_cast<std::uint64_t>(-1 - key));
             } else {
                 constexpr std::string_view key = key_of(members[i]);
-                head_encode(encoded, major_type::text_string, key.size());
+                heads::head_append(encoded, major_type::text_string, key.size());
                 encoded.insert(encoded.end(), key.begin(), key.end());
             }
         }
@@ -381,11 +366,11 @@ class packed
     {
         constexpr std::uint64_t i = argument_index_of<Root, U>();
         if constexpr (i < straight_argument_count) {
-            head_encode(encoded, major_type::tag, std::to_underlying(heads::tag_number::straight_argument_first) + i);
+            heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::straight_argument_first) + i);
         } else {
-            head_encode(encoded, major_type::tag, std::to_underlying(heads::tag_number::reference));
-            head_encode(encoded, major_type::array, 2);
-            head_encode(encoded, major_type::unsigned_integer, i - straight_argument_count);
+            heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::reference));
+            heads::head_append(encoded, major_type::array, 2);
+            heads::head_append(encoded, major_type::unsigned_integer, i - straight_argument_count);
         }
     }
 
@@ -401,8 +386,8 @@ class packed
     static consteval std::span<char const> packing_prefix_of()
     {
         std::vector<char> encoded;
-        head_encode(encoded, major_type::tag, std::to_underlying(heads::tag_number::basic_packed_cbor));
-        head_encode(encoded, major_type::array, 2);
+        heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::basic_packed_cbor));
+        heads::head_append(encoded, major_type::array, 2);
         fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
         template for (constexpr std::meta::info type : packing_table_of<Root>()) {
             constexpr auto keys = record_keys<typename[:type:]>();
@@ -542,7 +527,7 @@ class packed
         std::size_t const item = c.position;
         std::size_t const m = j + shared_first_of<Root>() - shared_first;
         heads::u32_write(out, directory_at<Root>() + sizeof(std::uint32_t) * j, item);
-        field[1] = static_cast<char>((m & 1) << 5 | (std::to_underlying(heads::additional_information::one_byte_argument) + 2));
+        field[1] = heads::initial_byte(static_cast<major_type>(m & 1), std::to_underlying(heads::additional_information::four_byte_argument));
         auto const n = heads::big_endian(static_cast<std::uint32_t>(m >> 1));
         std::ranges::copy(n, field.template last<sizeof(std::uint32_t)>().begin());
         std::size_t const data = item + item_head;
@@ -595,8 +580,7 @@ class packed
     {
         using U = std::remove_cv_t<T>;
         if constexpr (std::same_as<U, bool>) {
-            field.front() = static_cast<char>(std::to_underlying(major_type::simple_float) << 5 |
-                                              (std::to_underlying(simple_value::false_value) + static_cast<int>(value)));
+            field.front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + value);
         } else if constexpr (std::is_enum_v<U>) {
             position = value_encode<Root, std::underlying_type_t<U>, Exact>(out, field, std::to_underlying(value), position);
 #ifdef __SIZEOF_INT128__
@@ -604,9 +588,8 @@ class packed
             uint128 magnitude = static_cast<uint128>(value);
             if constexpr (std::same_as<U, int128>) {
                 uint128 const sign = static_cast<uint128>(value >> 127);
-                field.front() = static_cast<char>(std::to_underlying(major_type::tag) << 5 |
-                                                  (std::to_underlying(heads::tag_number::unsigned_bignum) +
-                                                   static_cast<int>(sign & 1)));
+                field.front() = heads::initial_byte(major_type::tag, std::to_underlying(heads::tag_number::unsigned_bignum) +
+                                                                         static_cast<std::uint64_t>(sign & 1));
                 magnitude ^= sign;
             }
             auto const bytes = heads::big_endian(magnitude);
@@ -618,9 +601,9 @@ class packed
         } else if constexpr (std::signed_integral<U>) {
             using M = std::make_unsigned_t<U>;
             M const sign = static_cast<M>(value >> (8 * sizeof(U) - 1));
-            field.front() = static_cast<char>((sign & 1) << 5 |
-                                              (std::to_underlying(heads::additional_information::one_byte_argument) +
-                                               std::countr_zero(sizeof(U))));
+            field.front() = heads::initial_byte(static_cast<major_type>(sign & 1),
+                                                std::to_underlying(heads::additional_information::one_byte_argument) +
+                                                    std::countr_zero(sizeof(U)));
             auto const bytes = heads::big_endian(static_cast<M>(static_cast<M>(value) ^ sign));
             std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
         } else if constexpr (std::is_floating_point_v<U>) {
@@ -651,8 +634,7 @@ class packed
             if (value.has_value()) {
                 using E = typename U::value_type;
                 field.template subspan<1, 1>().front() =
-                    static_cast<char>(std::to_underlying(major_type::simple_float) << 5 |
-                                      std::to_underlying(simple_value::true_value));
+                    heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::true_value));
                 position = value_encode<Root, E, Exact>(out, field.template subspan<inline_optional_head, fixed_size<E, Root>()>(), *value,
                                            position);
             }
@@ -780,15 +762,14 @@ class packed
         std::size_t end;
     };
 
-    static constexpr unsigned char reference_tag_byte =
-        std::to_underlying(major_type::tag) << 5 | std::to_underlying(heads::tag_number::reference);
+    static constexpr char reference_tag_byte = heads::initial_byte(major_type::tag, std::to_underlying(heads::tag_number::reference));
 
     template <class Root>
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> shared_index_read(std::span<char const, dynamic_type_sizes> const field)
     {
         constexpr std::size_t fillers = shared_first_of<Root>() - shared_first;
         auto const info = static_cast<unsigned char>(field[1]);
-        if (static_cast<unsigned char>(field[0]) != reference_tag_byte ||
+        if (field[0] != reference_tag_byte ||
             (info & 0xdf) != std::to_underlying(heads::additional_information::one_byte_argument) + 2) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         std::size_t const m = 2 * std::size_t{heads::unsigned_read<std::uint32_t>(field.subspan<2, sizeof(std::uint32_t)>())} + (info >> 5);
@@ -804,8 +785,7 @@ class packed
         std::size_t size;
         if (item > end || end - item < item_head) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (static_cast<unsigned char>(encoded[item]) !=
-            (std::to_underlying(Major) << 5 | (std::to_underlying(heads::additional_information::one_byte_argument) + 2))) [[unlikely]]
+        if (encoded[item] != heads::initial_byte(Major, std::to_underlying(heads::additional_information::four_byte_argument))) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         std::size_t const length =
             heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 1).template first<sizeof(std::uint32_t)>());
@@ -999,8 +979,8 @@ class packed
             } else if constexpr (is_inline_optional<U>) {
                 using E = typename U::value_type;
                 using X = typename decltype(path_result<Root, E, Path, At>())::type;
-                if (static_cast<unsigned char>(field.template subspan<1, 1>().front()) !=
-                    (std::to_underlying(major_type::simple_float) << 5 | std::to_underlying(simple_value::true_value)))
+                if (field.template subspan<1, 1>().front() !=
+                    heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::true_value)))
                     return std::optional<X>{};
                 auto const x = path_walk<Root, E, Path, At>(encoded, field.template subspan<inline_optional_head, fixed_size<E, Root>()>(),
                                                             floor, indexes);
@@ -1128,8 +1108,8 @@ class packed
             }
             return done;
         } else if constexpr (is_inline_optional<U>) {
-            if (static_cast<unsigned char>(field.template subspan<1, 1>().front()) !=
-                (std::to_underlying(major_type::simple_float) << 5 | std::to_underlying(simple_value::true_value))) {
+            if (field.template subspan<1, 1>().front() !=
+                heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::true_value))) {
                 out.reset();
                 return {};
             }
@@ -1265,8 +1245,7 @@ class packed
         heads::item_head_write(encoded, prefix.size(), major_type::byte_string, sizeof(std::uint32_t) * second.items);
         std::size_t const data = directory_at<T>() + sizeof(std::uint32_t) * second.items;
         std::ranges::fill(encoded.subspan(data, fillers),
-                          static_cast<char>(std::to_underlying(major_type::simple_float) << 5 |
-                                            std::to_underlying(simple_value::undefined)));
+                          heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
         auto const root = encoded.subspan(size - fixed_size<T, T>()).template first<fixed_size<T, T>()>();
         zero_initialized_copy<T, T>(root);
         value_encode<T, T, Exact>(encoded, root, value, encode_cursor{data + fillers, 0});

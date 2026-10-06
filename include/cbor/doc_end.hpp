@@ -55,9 +55,7 @@ class well_formedness
                     major != major_type::tag &&
                     (major != major_type::simple_float || info != std::to_underlying(heads::additional_information::one_byte_argument))) {
                     bool const immediate = info < std::to_underlying(heads::additional_information::one_byte_argument);
-                    std::size_t const size =
-                        immediate ? 0
-                                  : std::size_t{1} << (info - std::to_underlying(heads::additional_information::one_byte_argument));
+                    std::size_t const size = heads::argument_size(info);
                     std::uint64_t argument = info;
                     if (info == std::to_underlying(heads::additional_information::one_byte_argument)) {
                         argument = static_cast<std::uint8_t>(d.encoded.at(1));
@@ -67,9 +65,8 @@ class well_formedness
                     }
                     d.encoded.remove_prefix(1 + size);
                     if (major == major_type::byte_string || major == major_type::text_string) {
-                        if (argument > d.encoded.size()) [[unlikely]]
-                            return std::unexpected(error::too_little_data);
-                        d.encoded.remove_prefix(static_cast<std::size_t>(argument));
+                        if (auto const s = d.byte_string_decode(argument); !s) [[unlikely]]
+                            return std::unexpected(s.error());
                     } else if (major == major_type::array) {
                         left.at(++level) = argument;
                     } else if (major == major_type::map) {
@@ -103,9 +100,8 @@ class well_formedness
                 left.at(++level) = 1;
                 break;
             case major_type::simple_float:
-                if (h->info == std::to_underlying(heads::simple_float_information::simple_value_follows) &&
-                    h->argument < heads::simple_value_one_byte_min) [[unlikely]]
-                    return std::unexpected(error::syntax_error);
+                if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
+                    return std::unexpected(r.error());
                 break;
             default:
                 break;
@@ -127,6 +123,8 @@ class well_formedness
     friend struct lazy_entries;
 
     friend class jsonpath;
+
+    friend class value_sharing;
 
 #ifdef __cpp_impl_reflection
     friend class generic;

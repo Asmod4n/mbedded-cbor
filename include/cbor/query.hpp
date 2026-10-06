@@ -165,10 +165,13 @@ class jsonpath
         std::size_t next = h->at;
         switch (h->major) {
         case major_type::byte_string:
-        case major_type::text_string:
-            if (literal.size() - next < h->argument) [[unlikely]]
-                return std::unexpected(error::too_little_data);
-            return next + static_cast<std::size_t>(h->argument);
+        case major_type::text_string: {
+            heads::decoder d{literal.substr(next)};
+            auto const s = d.byte_string_decode(h->argument);
+            if (!s) [[unlikely]]
+                return std::unexpected(s.error());
+            return next + s->size();
+        }
         case major_type::array:
         case major_type::map:
             for (std::uint64_t i = 0; i < (h->major == major_type::map ? 2 : 1) * h->argument; ++i) {
@@ -183,26 +186,6 @@ class jsonpath
         default:
             return next;
         }
-    }
-
-    struct float_key {
-        bool nan;
-        std::uint64_t widened;
-        double value;
-    };
-
-    static float_key float_key_of(std::uint8_t const info, std::uint64_t const argument)
-    {
-        if (info == std::to_underlying(heads::simple_float_information::half_precision_float))
-            return {(argument >> 10 & 0x1f) == 0x1f && (argument & 0x3ff) != 0,
-                    (argument >> 15) << 63 | (argument & 0x3ff) << 42,
-                    static_cast<double>(heads::float_decode_binary16(static_cast<std::uint16_t>(argument)))};
-        if (info == std::to_underlying(heads::simple_float_information::single_precision_float))
-            return {(argument >> 23 & 0xff) == 0xff && (argument & 0x7fffff) != 0,
-                    (argument >> 31) << 63 | (argument & 0x7fffff) << 29,
-                    static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(argument)))};
-        return {(argument >> 52 & 0x7ff) == 0x7ff && (argument & 0xfffffffffffff) != 0,
-                (argument >> 63) << 63 | (argument & 0xfffffffffffff), std::bit_cast<double>(argument)};
     }
 
     template <std::size_t DepthMax>
@@ -265,12 +248,13 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std
     case major_type::negative_integer:
         return h->argument == l->argument;
     case major_type::byte_string:
-    case major_type::text_string:
-        if (doc.encoded.size() - h->at < h->argument) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        return h->argument == l->argument &&
-               doc.encoded.substr(h->at, static_cast<std::size_t>(h->argument)) ==
-                   literal.substr(l->at, static_cast<std::size_t>(l->argument));
+    case major_type::text_string: {
+        heads::decoder d{doc.encoded.substr(h->at)};
+        auto const s = d.byte_string_decode(h->argument);
+        if (!s) [[unlikely]]
+            return std::unexpected(s.error());
+        return h->argument == l->argument && *s == literal.substr(l->at, static_cast<std::size_t>(l->argument));
+    }
     case major_type::array: {
         if (h->argument != l->argument)
             return false;
@@ -357,8 +341,8 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std
         return false;
     if (!h_float)
         return h->argument == l->argument;
-    float_key const a = float_key_of(h->info, h->argument);
-    float_key const b = float_key_of(l->info, l->argument);
+    heads::float_key const a = heads::float_key_of(h->info, h->argument);
+    heads::float_key const b = heads::float_key_of(l->info, l->argument);
     if (a.nan || b.nan)
         return a.nan && b.nan && a.widened == b.widened;
     return a.value == b.value;
@@ -367,40 +351,30 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std
 template <std::size_t DepthMax>
 result<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const key)
 {
+    heads::decoder text_key{key};
+    auto const literal = text_key.head_decode();
+    if (literal && literal->major == major_type::text_string)
+        return node.at<DepthMax>(text_key.encoded);
     auto const found = value_sharing::container_resolve(node.document, node.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [source, h, d] = *found;
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    heads::decoder text_key{key};
-    auto const literal = text_key.head_decode();
-    bool const text = literal && literal->major == major_type::text_string;
     for (std::uint64_t i = 0; i < h.argument; ++i) {
         std::size_t const start = source->encoded.size() - d.encoded.size();
         auto const key_at = value_sharing::shared_resolve(*source, start);
         if (!key_at) [[unlikely]]
             return std::unexpected(key_at.error());
-        bool match = false;
         heads::decoder look{source->encoded.substr(*key_at)};
-        auto const k = look.head_decode();
-        if (!k) [[unlikely]]
+        if (auto const k = look.head_decode(); !k) [[unlikely]]
             return std::unexpected(k.error());
-        if (text && k->major == major_type::text_string) {
-            auto const content = look.byte_string_decode(k->argument);
-            if (!content) [[unlikely]]
-                return std::unexpected(content.error());
-            match = *content == text_key.encoded;
-        }
         if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
-        if (!text) {
-            auto const equal = key_equal<DepthMax>(*source, start, key, 0, 0);
-            if (!equal) [[unlikely]]
-                return std::unexpected(equal.error());
-            match = *equal;
-        }
-        if (match)
+        auto const match = key_equal<DepthMax>(*source, start, key, 0, 0);
+        if (!match) [[unlikely]]
+            return std::unexpected(match.error());
+        if (*match)
             return lazy{source, source->encoded.size() - d.encoded.size()};
         if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());

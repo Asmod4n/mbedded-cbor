@@ -42,6 +42,9 @@ class value_sharing
 
     static std::expected<resolved, error> container_resolve(std::shared_ptr<document> source, std::size_t offset);
 
+    template <std::size_t DepthMax, class Match>
+    static result<lazy> key_find(resolved const &found, Match const &match);
+
     friend struct lazy;
 
     template <std::size_t>

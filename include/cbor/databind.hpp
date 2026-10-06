@@ -106,10 +106,9 @@ class generic
     static bool head_accepted(heads::head const &h)
     {
         if constexpr (std::same_as<U, bool>)
-            return h.major == major_type::simple_float && (h.info == std::to_underlying(simple_value::false_value) ||
-                                                           h.info == std::to_underlying(simple_value::true_value));
+            return heads::is_boolean(h);
         else if constexpr (std::same_as<U, std::nullptr_t>)
-            return h.major == major_type::simple_float && h.info == std::to_underlying(simple_value::null);
+            return heads::is_null(h);
         else if constexpr (std::same_as<U, simple_value>)
             return h.major == major_type::simple_float &&
                    h.info <= std::to_underlying(heads::simple_float_information::simple_value_follows);
@@ -130,8 +129,7 @@ class generic
         else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>)
             return h.major == major_type::byte_string;
         else if constexpr (packed::is_optional<U>)
-            return (h.major == major_type::simple_float && h.info == std::to_underlying(simple_value::null)) ||
-                   head_accepted<typename U::value_type>(h);
+            return heads::is_null(h) || head_accepted<typename U::value_type>(h);
         else if constexpr (is_tagged<U>)
             return h.major == major_type::tag && h.argument == U::number;
         else if constexpr (is_std_variant<U>)
@@ -243,9 +241,7 @@ class generic
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
-            if (h->major != major_type::simple_float || (h->info != std::to_underlying(simple_value::false_value) &&
-                                                         h->info != std::to_underlying(simple_value::true_value)))
-                [[unlikely]]
+            if (!heads::is_boolean(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             out = h->info == std::to_underlying(simple_value::true_value);
             return {};
@@ -255,9 +251,8 @@ class generic
                 return std::unexpected(h.error());
             if (!head_accepted<U>(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (h->info == std::to_underlying(heads::simple_float_information::simple_value_follows) &&
-                h->argument < heads::simple_value_one_byte_min) [[unlikely]]
-                return std::unexpected(error::syntax_error);
+            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
+                return std::unexpected(r.error());
             out = static_cast<simple_value>(h->argument);
             return {};
         } else if constexpr (packed::is_wide_integer<U>) {
@@ -280,13 +275,9 @@ class generic
                 return std::unexpected(error::incorrect_type);
             switch (static_cast<heads::simple_float_information>(h->info)) {
             case heads::simple_float_information::half_precision_float:
-                out = static_cast<U>(heads::float_decode_binary16(static_cast<std::uint16_t>(h->argument)));
-                return {};
             case heads::simple_float_information::single_precision_float:
-                out = static_cast<U>(std::bit_cast<float>(static_cast<std::uint32_t>(h->argument)));
-                return {};
             case heads::simple_float_information::double_precision_float:
-                out = static_cast<U>(std::bit_cast<double>(h->argument));
+                out = static_cast<U>(heads::float_decode(h->info, h->argument));
                 return {};
             [[unlikely]] default:
                 return std::unexpected(error::incorrect_type);
@@ -295,7 +286,7 @@ class generic
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
-            if (h->major != major_type::simple_float || h->info != std::to_underlying(simple_value::null)) [[unlikely]]
+            if (!heads::is_null(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return {};
         } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>) {
@@ -331,9 +322,8 @@ class generic
             }
             return {};
         } else if constexpr (packed::is_optional<U>) {
-            if (!d.encoded.empty() && static_cast<std::uint8_t>(d.encoded.front()) ==
-                                        (std::to_underlying(major_type::simple_float) << 5 |
-                                         std::to_underlying(simple_value::null))) {
+            if (!d.encoded.empty() &&
+                d.encoded.front() == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null))) {
                 d.encoded.remove_prefix(1);
                 out.reset();
                 return {};
@@ -583,15 +573,13 @@ class generic
     template <class U>
     static std::size_t generic_write(std::span<char> const out, std::size_t at, U const &value)
     {
-        constexpr auto simple = [](std::uint8_t const info) {
-            return static_cast<char>(std::to_underlying(major_type::simple_float) << 5 | info);
-        };
         if constexpr (std::same_as<U, bool>) {
-            out.subspan(at).front() = simple(value ? std::to_underlying(simple_value::true_value)
-                                                   : std::to_underlying(simple_value::false_value));
+            out.subspan(at).front() =
+                heads::initial_byte(major_type::simple_float, value ? std::to_underlying(simple_value::true_value)
+                                                                    : std::to_underlying(simple_value::false_value));
             return at + heads::initial_byte_size;
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
-            out.subspan(at).front() = simple(std::to_underlying(simple_value::null));
+            out.subspan(at).front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
             return at + heads::initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
             return at + heads::head_write(out, at, major_type::simple_float, std::to_underlying(value));
@@ -626,17 +614,8 @@ class generic
             return at + heads::head_write(out, at, major_type::unsigned_integer, static_cast<std::uint64_t>(value));
         } else if constexpr (std::is_floating_point_v<U>) {
             double const d = static_cast<double>(value);
-            switch (heads::preferred_float_info(d)) {
-            case heads::simple_float_information::half_precision_float:
-                out.subspan(at).front() = simple(std::to_underlying(heads::simple_float_information::half_precision_float));
-                return bytes_write(out, at + heads::initial_byte_size, heads::big_endian(heads::float_encode_binary16(static_cast<float>(d))));
-            case heads::simple_float_information::single_precision_float:
-                out.subspan(at).front() = simple(std::to_underlying(heads::simple_float_information::single_precision_float));
-                return bytes_write(out, at + heads::initial_byte_size, heads::big_endian(std::bit_cast<std::uint32_t>(static_cast<float>(d))));
-            default:
-                out.subspan(at).front() = simple(std::to_underlying(heads::simple_float_information::double_precision_float));
-                return bytes_write(out, at + heads::initial_byte_size, heads::big_endian(std::bit_cast<std::uint64_t>(d)));
-            }
+            heads::simple_float_information const info = heads::preferred_float_info(d);
+            return at + heads::head_write(out, at, major_type::simple_float, std::to_underlying(info), heads::float_encode(info, d));
         } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>) {
             at += heads::head_write(out, at, major_type::text_string, value.size());
             return bytes_write(out, at, value);
@@ -650,7 +629,7 @@ class generic
             return at + value.size();
         } else if constexpr (packed::is_optional<U>) {
             if (!value) {
-                out.subspan(at).front() = simple(std::to_underlying(simple_value::null));
+                out.subspan(at).front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
                 return at + heads::initial_byte_size;
             }
             return generic_write(out, at, *value);
