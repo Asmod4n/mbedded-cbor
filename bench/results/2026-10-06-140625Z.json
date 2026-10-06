@@ -1,0 +1,386 @@
+{
+ "what": "bench/runtime.cpp, arm S (encode into a span) and arm READ, docs floats, cwt, records, twitter, ints. Binary a: commit 2d450a7. Binary b: main aa49e44, encoder writer heads::head_write of edbd393. Binary c: aa49e44 with the encoder writer of 7b907bd restored in encode.hpp. Binary d: a second build of c for an A/A check. ns per iteration.",
+ "why": "edbd393 made float encode about 18 percent slower. The owner asked to restore the writer of 7b907bd and to measure it.",
+ "how": "Google Benchmark, one binary per arm, doc and variant, 2 rounds, all binaries alternate in each round, --benchmark_min_time=0.2s, GLIBC_TUNABLES trim_threshold=1073741824, mmap_threshold=33554432, top_pad=268435456. 2 rounds and not 3: 3 rounds took about 41 s, over the limit of 30 s; the 2 rounds took 27.8 s. Median of 2 is the mean.",
+ "finding": "Encode of floats: c is 3.8 percent faster than b and 9.3 percent slower than a. In every one of 5 samples, c is slower than a. The A/A difference reaches 8.4 percent in one cell, so the run is noisy. No encode cell of c is slower than b beyond the A/A difference.",
+ "context": {
+  "commit": "mbedded-cbor main aa49e44, dirty (encode.hpp change of binary c); worktree 2d450a7 clean",
+  "flags": "g++-16 -std=c++23 -O2 -march=native -DNDEBUG -DDOCTEST_CONFIG_DISABLE",
+  "instruction_set": "sapphirerapids",
+  "compiler": "g++-16 (SUSE Linux) 16.2.0",
+  "cxx_library": "libstdc++ of gcc 16",
+  "c_library": "GNU libc 2.44",
+  "kernel": "6.18.44-fc-v70",
+  "scheduler": "not read (no access to sched features)",
+  "virtual_machine": "yes (systemd-detect-virt: docker for the outer container)",
+  "container": "podman, image mbedded-cbor-tw-gb",
+  "processor": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256_16": "39a8dd34f3afdd38",
+  "user": "root in the container",
+  "priority": "nice 0, no raise",
+  "threads": 1,
+  "pinned": false
+ },
+ "cells": [
+  {
+   "arm": "S",
+   "doc": "floats",
+   "a": {
+    "repetitions_ns": [
+     475836.884879735,
+     442264.133858309
+    ],
+    "median_ns": 459050.509369022,
+    "spread_percent": 7.31
+   },
+   "b": {
+    "repetitions_ns": [
+     517982.0944444255,
+     524777.4065934323
+    ],
+    "median_ns": 521379.75051892886,
+    "spread_percent": 1.3
+   },
+   "c": {
+    "repetitions_ns": [
+     505518.4724858226,
+     497919.2714535761
+    ],
+    "median_ns": 501718.8719696994,
+    "spread_percent": 1.51
+   },
+   "d": {
+    "repetitions_ns": [
+     503190.016187036,
+     497260.4415357965
+    ],
+    "median_ns": 500225.2288614162,
+    "spread_percent": 1.19
+   }
+  },
+  {
+   "arm": "S",
+   "doc": "cwt",
+   "a": {
+    "repetitions_ns": [
+     59.33842954635742,
+     61.56974590271203
+    ],
+    "median_ns": 60.45408772453472,
+    "spread_percent": 3.69
+   },
+   "b": {
+    "repetitions_ns": [
+     63.58434868428586,
+     65.21706688135983
+    ],
+    "median_ns": 64.40070778282285,
+    "spread_percent": 2.54
+   },
+   "c": {
+    "repetitions_ns": [
+     64.50868630607263,
+     67.53708827268912
+    ],
+    "median_ns": 66.02288728938088,
+    "spread_percent": 4.59
+   },
+   "d": {
+    "repetitions_ns": [
+     63.87432658122545,
+     63.300464187896154
+    ],
+    "median_ns": 63.58739538456081,
+    "spread_percent": 0.9
+   }
+  },
+  {
+   "arm": "S",
+   "doc": "records",
+   "a": {
+    "repetitions_ns": [
+     317417.19797526376,
+     319776.5945945937
+    ],
+    "median_ns": 318596.8962849287,
+    "spread_percent": 0.74
+   },
+   "b": {
+    "repetitions_ns": [
+     329238.3458823919,
+     340178.9760765881
+    ],
+    "median_ns": 334708.66097949,
+    "spread_percent": 3.27
+   },
+   "c": {
+    "repetitions_ns": [
+     323383.3762827949,
+     324469.3555291597
+    ],
+    "median_ns": 323926.3659059773,
+    "spread_percent": 0.34
+   },
+   "d": {
+    "repetitions_ns": [
+     343015.81428574456,
+     349451.5665859269
+    ],
+    "median_ns": 346233.69043583574,
+    "spread_percent": 1.86
+   }
+  },
+  {
+   "arm": "S",
+   "doc": "twitter",
+   "a": {
+    "repetitions_ns": [
+     219373.09657319562,
+     250718.7688524657
+    ],
+    "median_ns": 235045.93271283066,
+    "spread_percent": 13.34
+   },
+   "b": {
+    "repetitions_ns": [
+     242393.69373942688,
+     241544.0378188505
+    ],
+    "median_ns": 241968.8657791387,
+    "spread_percent": 0.35
+   },
+   "c": {
+    "repetitions_ns": [
+     266668.648093853,
+     230853.6852917225
+    ],
+    "median_ns": 248761.16669278772,
+    "spread_percent": 14.4
+   },
+   "d": {
+    "repetitions_ns": [
+     246783.63717694048,
+     230922.0709105366
+    ],
+    "median_ns": 238852.85404373854,
+    "spread_percent": 6.64
+   }
+  },
+  {
+   "arm": "S",
+   "doc": "ints",
+   "a": {
+    "repetitions_ns": [
+     425481.3847429752,
+     403902.8881888989
+    ],
+    "median_ns": 414692.136465937,
+    "spread_percent": 5.2
+   },
+   "b": {
+    "repetitions_ns": [
+     480027.4168126032,
+     461764.95812397194
+    ],
+    "median_ns": 470896.18746828754,
+    "spread_percent": 3.88
+   },
+   "c": {
+    "repetitions_ns": [
+     432929.687402799,
+     421504.0611028322
+    ],
+    "median_ns": 427216.8742528156,
+    "spread_percent": 2.67
+   },
+   "d": {
+    "repetitions_ns": [
+     431756.27495901816,
+     426372.9496855449
+    ],
+    "median_ns": 429064.6123222815,
+    "spread_percent": 1.25
+   }
+  },
+  {
+   "arm": "READ",
+   "doc": "floats",
+   "a": {
+    "repetitions_ns": [
+     367023.63930012815,
+     356045.0694789224
+    ],
+    "median_ns": 361534.35438952525,
+    "spread_percent": 3.04
+   },
+   "b": {
+    "repetitions_ns": [
+     371858.2866666414,
+     363862.2483039654
+    ],
+    "median_ns": 367860.2674853034,
+    "spread_percent": 2.17
+   },
+   "c": {
+    "repetitions_ns": [
+     363833.69220432173,
+     349734.9588377671
+    ],
+    "median_ns": 356784.32552104443,
+    "spread_percent": 3.95
+   },
+   "d": {
+    "repetitions_ns": [
+     408674.80958383274,
+     364738.09162298235
+    ],
+    "median_ns": 386706.4506034076,
+    "spread_percent": 11.36
+   }
+  },
+  {
+   "arm": "READ",
+   "doc": "cwt",
+   "a": {
+    "repetitions_ns": [
+     63.19113859949019,
+     67.94212121023999
+    ],
+    "median_ns": 65.5666299048651,
+    "spread_percent": 7.25
+   },
+   "b": {
+    "repetitions_ns": [
+     146.24428866291777,
+     139.41235801588604
+    ],
+    "median_ns": 142.8283233394019,
+    "spread_percent": 4.78
+   },
+   "c": {
+    "repetitions_ns": [
+     148.80793775467356,
+     141.9229076067447
+    ],
+    "median_ns": 145.36542268070912,
+    "spread_percent": 4.74
+   },
+   "d": {
+    "repetitions_ns": [
+     150.9474295745555,
+     140.75102500408866
+    ],
+    "median_ns": 145.84922728932207,
+    "spread_percent": 6.99
+   }
+  },
+  {
+   "arm": "READ",
+   "doc": "records",
+   "a": {
+    "repetitions_ns": [
+     338954.6955445732,
+     329499.8802816832
+    ],
+    "median_ns": 334227.28791312815,
+    "spread_percent": 2.83
+   },
+   "b": {
+    "repetitions_ns": [
+     348581.18532818294,
+     355616.67427117703
+    ],
+    "median_ns": 352098.92979968,
+    "spread_percent": 2.0
+   },
+   "c": {
+    "repetitions_ns": [
+     339662.39194134943,
+     354053.4392523107
+    ],
+    "median_ns": 346857.9155968301,
+    "spread_percent": 4.15
+   },
+   "d": {
+    "repetitions_ns": [
+     361391.000000058,
+     339520.6425992611
+    ],
+    "median_ns": 350455.82129965955,
+    "spread_percent": 6.24
+   }
+  },
+  {
+   "arm": "READ",
+   "doc": "twitter",
+   "a": {
+    "repetitions_ns": [
+     311002.40763224976,
+     240910.97414513753
+    ],
+    "median_ns": 275956.6908886937,
+    "spread_percent": 25.4
+   },
+   "b": {
+    "repetitions_ns": [
+     254957.70126354034,
+     385243.7321669094
+    ],
+    "median_ns": 320100.71671522484,
+    "spread_percent": 40.7
+   },
+   "c": {
+    "repetitions_ns": [
+     274311.3843902526,
+     245472.93919653064
+    ],
+    "median_ns": 259892.16179339163,
+    "spread_percent": 11.1
+   },
+   "d": {
+    "repetitions_ns": [
+     250945.813648295,
+     259373.15426010924
+    ],
+    "median_ns": 255159.48395420212,
+    "spread_percent": 3.3
+   }
+  },
+  {
+   "arm": "READ",
+   "doc": "ints",
+   "a": {
+    "repetitions_ns": [
+     680716.543062215,
+     676295.768691593
+    ],
+    "median_ns": 678506.155876904,
+    "spread_percent": 0.65
+   },
+   "b": {
+    "repetitions_ns": [
+     655123.2687650347,
+     691779.2595238498
+    ],
+    "median_ns": 673451.2641444423,
+    "spread_percent": 5.44
+   },
+   "c": {
+    "repetitions_ns": [
+     673450.681578988,
+     691299.6449275869
+    ],
+    "median_ns": 682375.1632532874,
+    "spread_percent": 2.62
+   },
+   "d": {
+    "repetitions_ns": [
+     681337.9283950084,
+     708904.5251989989
+    ],
+    "median_ns": 695121.2267970036,
+    "spread_percent": 3.97
+   }
+  }
+ ]
+}
