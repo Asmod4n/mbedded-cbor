@@ -14,13 +14,13 @@ inline void doc_end_target(std::string_view const input)
     for (std::size_t at = 0; at < input.size() && at < 64; ++at) {
         std::string_view const rest = input.substr(at);
         auto const end = cbor::doc_end<16>(rest);
-        auto const value = cbor::decode<16>(binding, rest);
+        auto const value = cbor::lazy_decode<16>(binding, *cbor::decode<16>(rest));
         if (value)
             require(end.has_value());
         if (!end)
             continue;
         require(*end >= 1 && *end <= rest.size());
-        auto const framed = cbor::decode<16>(binding, rest.substr(0, *end));
+        auto const framed = cbor::lazy_decode<16>(binding, *cbor::decode<16>(rest.substr(0, *end)));
         if (value)
             require(framed.has_value() && same(*framed, *value));
         if (!framed)

@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -72,25 +71,6 @@ struct binding {
     bool embed_of(value const &item) = delete;
     void value_identity(value const &item) = delete;
     void key_identity(value const &item) = delete;
-};
-
-template <class B>
-concept language_binding = std::derived_from<B, binding<typename B::value>> &&
-                           requires(B &b, typename B::value v, std::uint64_t const n, std::string_view const s, double const f,
-                                    std::uint8_t const simple) {
-    { b.unsigned_integer_decode(n) } -> std::same_as<typename B::value>;
-    { b.negative_integer_decode(n) } -> std::same_as<typename B::value>;
-    { b.unsigned_bignum_decode(s) } -> std::same_as<typename B::value>;
-    { b.negative_bignum_decode(s) } -> std::same_as<typename B::value>;
-    { b.byte_string_decode(s) } -> std::same_as<typename B::value>;
-    { b.text_string_decode(s) } -> std::same_as<typename B::value>;
-    { b.float_decode(f) } -> std::same_as<typename B::value>;
-    { b.simple_value_decode(simple) } -> std::same_as<typename B::value>;
-    { b.array_decode(n) } -> std::same_as<typename B::value>;
-    { b.array_append(std::move(v), std::move(v)) } -> std::same_as<typename B::value>;
-    { b.map_decode(n) } -> std::same_as<typename B::value>;
-    { b.map_insert(std::move(v), std::move(v), std::move(v)) } -> std::same_as<typename B::value>;
-    { b.tag_decode(n, std::move(v)) } -> std::same_as<typename B::value>;
 };
 
 template <std::size_t N>

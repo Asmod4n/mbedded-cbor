@@ -241,7 +241,7 @@ static void setup()
 {
 #if defined(ARM_S) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
     bench::binding b;
-    auto t = cbor::decode<128>(b, std::string_view(doc));
+    auto t = cbor::lazy_decode<128>(b, *cbor::decode<128>(std::string_view(doc)));
     if (!t)
         std::abort();
     tree = std::move(*t);
@@ -288,7 +288,7 @@ static std::uint64_t op()
     return buf.size();
 #elif defined(ARM_READ)
     read_binding b;
-    auto const r = cbor::decode<128>(b, std::string_view(doc));
+    auto const r = cbor::lazy_decode<128>(b, *cbor::decode<128>(std::string_view(doc)));
     if (!r)
         std::abort();
     return *r;
