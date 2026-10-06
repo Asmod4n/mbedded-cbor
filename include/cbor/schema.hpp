@@ -1556,7 +1556,7 @@ public:
     }
 
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static result<owning_ref<T>> decode(std::string_view const encoded)
     {
@@ -1567,7 +1567,7 @@ public:
         return owning_ref<T>(std::move(copy), std::move(value));
     }
 
-    template <std::size_t DepthMax = 64, std::same_as<std::string> Encoded>
+    template <std::size_t DepthMax = 128, std::same_as<std::string> Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static result<owning_ref<T>> decode(Encoded &&encoded)
     {
@@ -1576,7 +1576,7 @@ public:
         return decode<DepthMax>(std::move(owner), view);
     }
 
-    template <std::size_t DepthMax = 64>
+    template <std::size_t DepthMax = 128>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static result<owning_ref<T>> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {

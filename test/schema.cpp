@@ -710,11 +710,11 @@ TEST_CASE("decode: a struct that holds itself stops at DepthMax")
 {
     REQUIRE_EQ(cbor::schema<node>::fixed_size(), 16u);
 
-    auto const at_limit = cbor::schema<node>::decode(node_chain(64));
+    auto const at_limit = cbor::schema<node>::decode(node_chain(128));
     REQUIRE(at_limit.has_value());
-    CHECK_EQ(depth_of(**at_limit), 64u);
+    CHECK_EQ(depth_of(**at_limit), 128u);
 
-    auto const over = cbor::schema<node>::decode(node_chain(65));
+    auto const over = cbor::schema<node>::decode(node_chain(129));
     REQUIRE_FALSE(over.has_value());
     CHECK_EQ(over.error(), error::nesting_depth_exceeded);
 
