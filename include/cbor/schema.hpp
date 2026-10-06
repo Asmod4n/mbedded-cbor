@@ -1596,8 +1596,12 @@ public:
         auto const size = packed::encoded_size<T>(second);
         if (!size) [[unlikely]]
             return std::unexpected(size.error());
+        auto const sum = validity::checked_add(*size, heads::head_padding);
+        if (!sum) [[unlikely]]
+            return std::unexpected(sum.error());
+        std::size_t const padded = *sum;
         std::string out;
-        out.resize_and_overwrite(*size + heads::head_padding, [&](char *const p, std::size_t const n) {
+        out.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
             return packed::encoded_write<false>(std::span<char>(p, n), value, second);
         });
         return out;
@@ -1613,17 +1617,26 @@ public:
         auto const size = packed::encoded_size<T>(second);
         if (!size) [[unlikely]]
             return std::unexpected(size.error());
-        std::size_t const padded = *size + heads::head_padding;
+        auto const sum = validity::checked_add(*size, heads::head_padding);
+        if (!sum) [[unlikely]]
+            return std::unexpected(sum.error());
+        std::size_t const padded = *sum;
         CBOR_ASSUME(padded >= fixed_size());
         if constexpr (std::same_as<U, std::string>) {
             std::size_t const at = target.size();
-            target.resize_and_overwrite(at + padded, [&](char *const p, std::size_t const n) {
+            auto const total = validity::checked_add(at, padded);
+            if (!total) [[unlikely]]
+                return std::unexpected(total.error());
+            target.resize_and_overwrite(*total, [&](char *const p, std::size_t const n) {
                 return at + packed::encoded_write<false>(std::span<char>(p, n).subspan(at), value, second);
             });
             return *size;
         } else if constexpr (encoding::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
-            target.reserve(at + padded);
+            auto const total = validity::checked_add(at, padded);
+            if (!total) [[unlikely]]
+                return std::unexpected(total.error());
+            target.reserve(*total);
             std::ranges::fill_n(std::back_inserter(target), padded, char{});
             packed::encoded_write<false>(std::span<char>(target).subspan(at), value, second);
             target.resize(at + *size);
