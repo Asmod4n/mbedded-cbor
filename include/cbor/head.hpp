@@ -540,9 +540,6 @@ class heads
     template <std::size_t>
     friend struct lazy_entries;
 
-    template <std::size_t DepthMax, language_binding Binding>
-    friend std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view encoded);
-
     template <std::size_t DepthMax>
     friend std::expected<std::size_t, error> doc_end(std::string_view encoded);
 

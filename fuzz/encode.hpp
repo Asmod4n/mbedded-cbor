@@ -18,7 +18,7 @@ inline void encode_from_input(std::string_view const input)
         return;
     }
     require(!r.reserved_simple && !r.zero_negative);
-    auto const back = cbor::decode<16>(binding, w.encoded);
+    auto const back = cbor::lazy_decode<16>(binding, *cbor::decode<16>(w.encoded));
     require(back.has_value() && same_number(v, *back));
     auto const end = cbor::doc_end<16>(w.encoded);
     require(end.has_value() && *end == w.encoded.size());

@@ -154,7 +154,7 @@ inline void encoder_target(std::string_view const input)
         require(end.has_value());
         if (item.size)
             require(*end == *item.size);
-        auto const back = cbor::decode<16>(binding, rest.substr(0, *end));
+        auto const back = cbor::lazy_decode<16>(binding, *cbor::decode<16>(rest.substr(0, *end)));
         require(back.has_value() && same(*back, item.value));
         rest.remove_prefix(*end);
     }

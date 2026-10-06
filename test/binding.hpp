@@ -444,7 +444,7 @@ template <std::size_t DepthMax = 16>
 inline std::expected<value, error> decoded(std::string_view wire)
 {
     test_binding binding;
-    return cbor::decode<DepthMax>(binding, wire);
+    return cbor::lazy_decode<DepthMax>(binding, *cbor::decode<DepthMax>(wire));
 }
 
 template <std::size_t DepthMax = 16>

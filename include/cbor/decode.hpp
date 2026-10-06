@@ -221,18 +221,8 @@ class decoding
         }
     };
 
-    template <std::size_t DepthMax, language_binding Binding>
-    friend std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view encoded);
-
     template <std::size_t DepthMax, class Binding>
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 };
-
-template <std::size_t DepthMax, language_binding Binding>
-std::expected<typename Binding::value, error> decode(Binding &binding, std::string_view encoded)
-{
-    decoding::value_decoder<Binding> v{{encoded}, binding, {}, nullptr};
-    return v.template value_decode<DepthMax>(0, std::nullopt);
-}
 
 }

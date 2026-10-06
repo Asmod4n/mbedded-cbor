@@ -29,7 +29,7 @@ template <std::size_t DepthMax = 16>
 handle decoded_ref(std::string_view wire)
 {
     ref_binding binding;
-    auto v = cbor::decode<DepthMax>(binding, wire);
+    auto v = cbor::lazy_decode<DepthMax>(binding, *cbor::decode<DepthMax>(wire));
     REQUIRE(v.has_value());
     return *v;
 }
@@ -38,7 +38,7 @@ template <std::size_t DepthMax = 16>
 error ref_decode_error(std::string_view wire)
 {
     ref_binding binding;
-    auto const v = cbor::decode<DepthMax>(binding, wire);
+    auto const v = cbor::lazy_decode<DepthMax>(binding, *cbor::decode<DepthMax>(wire));
     REQUIRE_FALSE(v.has_value());
     return v.error();
 }
@@ -164,7 +164,7 @@ TEST_CASE("tag 28/29: a cycle that a failed decode leaves behind is freed with t
     std::vector<std::weak_ptr<node>> made;
     {
         ref_binding binding;
-        CHECK_FALSE(cbor::decode<16>(binding, "\xd8\x1c\xa5\x61\x61\xd8\x1d\x00"sv).has_value());
+        CHECK_FALSE(cbor::lazy_decode<16>(binding, *cbor::decode<16>("\xd8\x1c\xa5\x61\x61\xd8\x1d\x00"sv)).has_value());
         made = binding.made;
     }
     REQUIRE_FALSE(made.empty());
@@ -453,7 +453,7 @@ TEST_CASE("registered tag: distinct objects with equal content do not share")
 TEST_CASE("registered tag: a reference inside the content names the object")
 {
     ref_binding binding;
-    auto const r = cbor::decode<16>(binding, "\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv);
+    auto const r = cbor::lazy_decode<16>(binding, *cbor::decode<16>("\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv));
     REQUIRE(r.has_value());
     CHECK(same(element(std::get<object>((*r)->kind).content, 0), *r));
     CHECK_EQ(binding.after_decode_calls, 1);
@@ -466,7 +466,7 @@ TEST_CASE("registered tag: after_decode sets the place of the mark")
 {
     ref_binding binding;
     binding.replacement = u(99);
-    auto const r = cbor::decode<16>(binding, "\x82\xd8\x1c\xd9\x13\x88\x81\x01\xd8\x1d\x00"sv);
+    auto const r = cbor::lazy_decode<16>(binding, *cbor::decode<16>("\x82\xd8\x1c\xd9\x13\x88\x81\x01\xd8\x1d\x00"sv));
     REQUIRE(r.has_value());
     CHECK(same(element(*r, 0), binding.replacement));
     CHECK(same(element(*r, 1), binding.replacement));
@@ -477,7 +477,7 @@ TEST_CASE("registered tag: two objects that name each other")
 {
     ref_binding binding;
     // 28 5000([28 5000([29 0])])
-    auto const r = cbor::decode<16>(binding, "\xd8\x1c\xd9\x13\x88\x81\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv);
+    auto const r = cbor::lazy_decode<16>(binding, *cbor::decode<16>("\xd8\x1c\xd9\x13\x88\x81\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv));
     REQUIRE(r.has_value());
     auto const peer = element(std::get<object>((*r)->kind).content, 0);
     CHECK(same(element(std::get<object>(peer->kind).content, 0), *r));
@@ -488,7 +488,7 @@ TEST_CASE("registered tag: two objects that name each other")
 TEST_CASE("registered tag: no hook for a tag without registration")
 {
     ref_binding binding;
-    REQUIRE(cbor::decode<16>(binding, "\xc1\x01"sv).has_value());
+    REQUIRE(cbor::lazy_decode<16>(binding, *cbor::decode<16>("\xc1\x01"sv)).has_value());
     CHECK_EQ(binding.after_decode_calls, 0);
 }
 

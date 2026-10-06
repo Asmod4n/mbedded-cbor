@@ -10,7 +10,7 @@ namespace fuzz
 inline void decode_encode_decode(std::string_view const input)
 {
     test_binding binding;
-    auto const value = cbor::decode<16>(binding, input);
+    auto const value = cbor::lazy_decode<16>(binding, *cbor::decode<16>(input));
     if (!value)
         return;
     string_writer w;
@@ -19,7 +19,7 @@ inline void decode_encode_decode(std::string_view const input)
         require(written.error() == cbor::error::nesting_depth_exceeded);
         return;
     }
-    auto const again = cbor::decode<16>(binding, w.encoded);
+    auto const again = cbor::lazy_decode<16>(binding, *cbor::decode<16>(w.encoded));
     require(again.has_value() && same_number(*value, *again));
     string_writer twice;
     require(cbor::encode<16>(binding, twice, *again).has_value() && twice.encoded == w.encoded);
@@ -30,13 +30,13 @@ inline void decode_encode_decode(std::string_view const input)
 inline void shared_references(std::string_view const input)
 {
     shared_test::ref_binding binding;
-    auto const value = cbor::decode<16>(binding, input);
+    auto const value = cbor::lazy_decode<16>(binding, *cbor::decode<16>(input));
     if (!value)
         return;
     string_writer w;
     if (cbor::encode<16, cbor::sharedrefs::on>(binding, w, *value)) {
         shared_test::ref_binding back;
-        auto const again = cbor::decode<16>(back, w.encoded);
+        auto const again = cbor::lazy_decode<16>(back, *cbor::decode<16>(w.encoded));
         require(again.has_value());
         std::map<shared_test::node const *, shared_test::node const *> pairs;
         require(same_graph(*value, *again, pairs));
