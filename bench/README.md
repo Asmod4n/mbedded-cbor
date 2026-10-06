@@ -55,9 +55,8 @@ Settings: `ARMS`, `SCHEMA_OPS`, `GXX`, `CLANGXX`, `JOBS` (parallel builds, defau
 
 Each read arm reads every item of the document once and sums every
 byte of every text string, byte string and map key, inside tags too.
-No read arm verifies the input before it reads it. mbedded-cbor checks
-UTF-8 in every text string while it reads; the library has no setting
-that turns this off. jsoncons delivers an end event for each array and
+No read arm verifies the input before it reads it. mbedded-cbor does
+not check UTF-8. jsoncons delivers an end event for each array and
 map; the arm counts it as one item.
 
 Each encode arm writes every item of the document into a buffer that

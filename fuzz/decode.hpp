@@ -37,10 +37,7 @@ inline void shared_references(std::string_view const input)
     if (cbor::encode<16, cbor::sharedrefs::on>(binding, w, *value)) {
         shared_test::ref_binding back;
         auto const again = cbor::decode<16>(back, w.encoded);
-        if (!again) {
-            require(again.error() == cbor::error::invalid_utf8_string);
-            return;
-        }
+        require(again.has_value());
         std::map<shared_test::node const *, shared_test::node const *> pairs;
         require(same_graph(*value, *again, pairs));
     }

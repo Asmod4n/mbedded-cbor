@@ -304,7 +304,7 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::text_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            auto const text = d.text_string_decode(h->argument);
+            auto const text = d.byte_string_decode(h->argument);
             if (!text) [[unlikely]]
                 return std::unexpected(text.error());
             out = U(*text);
@@ -439,7 +439,7 @@ class generic
                 return std::unexpected(k.error());
             std::string_view text;
             if (k->major == major_type::text_string) {
-                auto const t = from.text_string_decode(k->argument);
+                auto const t = from.byte_string_decode(k->argument);
                 if (!t) [[unlikely]]
                     return std::unexpected(t.error());
                 text = *t;

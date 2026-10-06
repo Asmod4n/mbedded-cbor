@@ -68,14 +68,11 @@ TEST_CASE("major 3: every length survives encode and decode")
 }
 
 // Ported from test.rb: 'major 3: decoder rejects invalid UTF-8 (TypeError)'.
-// Only a build with simdutf checks UTF-8; RFC 8949 5.3.1 permits both.
-TEST_CASE("major 3: invalid UTF-8")
+// The library never checks UTF-8; the language of the binding checks it. RFC 8949 5.3.1 permits this.
+// So the bytes of a text string that is not UTF-8 pass through unchanged.
+TEST_CASE("major 3: a text string that is not UTF-8 passes through unchanged")
 {
-#ifdef CBOR_SIMDUTF
-    CHECK_EQ(decode_error("\x63\xff\xfe\xfd"sv), error::invalid_utf8_string);
-#else
     CHECK_EQ(decoded_text_string("\x63\xff\xfe\xfd"sv), "\xff\xfe\xfd"s);
-#endif
 }
 
 // Ported from the 'out of bounds' raises of decode_bytes and decode_text in src/mrb_cbor.c.

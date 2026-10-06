@@ -6,8 +6,8 @@ namespace fuzz
 {
 
 // doc_end frames one item without reading what it means. Where decode reads an item, doc_end finds the same
-// end; where doc_end finds an end, decode of those bytes can refuse only for what the item means (UTF-8, a
-// tag, a simple value), never because the bytes are not well-formed. Every offset into the input is a start.
+// end; where doc_end finds an end, decode of those bytes can refuse only for what the item means (a tag, a
+// simple value), never because the bytes are not well-formed. Every offset into the input is a start.
 inline void doc_end_target(std::string_view const input)
 {
     test_binding binding;

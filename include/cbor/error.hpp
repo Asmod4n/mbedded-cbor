@@ -12,7 +12,6 @@ enum class error {
     too_little_data = 1,
     syntax_error,
     indefinite_length,
-    invalid_utf8_string,
     nesting_depth_exceeded,
     inadmissible_type_for_tag_content,
     sharedref_index_not_marked,
@@ -53,8 +52,6 @@ public:
             return "syntax error";
         case error::indefinite_length:
             return "indefinite length";
-        case error::invalid_utf8_string:
-            return "invalid UTF-8 string";
         case error::nesting_depth_exceeded:
             return "nesting depth exceeded";
         case error::inadmissible_type_for_tag_content:
@@ -111,7 +108,6 @@ public:
         case error::incorrect_type:
         case error::number_out_of_range:
             return {static_cast<int>(condition::not_found), *this};
-        case error::invalid_utf8_string:
         case error::inadmissible_type_for_tag_content:
         case error::sharedref_index_not_marked:
         case error::sharedref_index_out_of_range:
