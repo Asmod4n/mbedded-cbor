@@ -108,16 +108,16 @@ class jsonpath
     {
         if (at >= text.size())
             return std::nullopt;
-        bool const negative = text.at(at) == '-';
+        bool const negative = text[at] == '-';
         std::size_t const digits_at = at + (negative ? 1 : 0);
         std::size_t digits_end = digits_at;
-        while (digits_end < text.size() && diagnostic_notation::digit(text.at(digits_end)))
+        while (digits_end < text.size() && diagnostic_notation::digit(text[digits_end]))
             ++digits_end;
         if (digits_end == digits_at || digits_end - digits_at > 16 ||
-            (text.at(digits_at) == '0' && (digits_end > digits_at + 1 || negative)))
+            (text[digits_at] == '0' && (digits_end > digits_at + 1 || negative)))
             return std::nullopt;
         std::int64_t value = 0;
-        for (char const d : text.substr(digits_at, digits_end - digits_at))
+        for (char const d : std::span(text).subspan(digits_at, digits_end - digits_at))
             value = value * 10 + (d - '0');
         constexpr std::int64_t exact_max = (std::int64_t{1} << 53) - 1;
         if (value > exact_max) [[unlikely]]
@@ -128,24 +128,24 @@ class jsonpath
     static constexpr std::optional<std::size_t> number_end(std::string_view const text, std::size_t at)
     {
         auto const digits = [&text](std::size_t i) {
-            while (i < text.size() && diagnostic_notation::digit(text.at(i)))
+            while (i < text.size() && diagnostic_notation::digit(text[i]))
                 ++i;
             return i;
         };
-        if (at < text.size() && text.at(at) == '-')
+        if (at < text.size() && text[at] == '-')
             ++at;
         std::size_t next = digits(at);
-        if (next == at || (text.at(at) == '0' && next > at + 1))
+        if (next == at || (text[at] == '0' && next > at + 1))
             return std::nullopt;
-        if (next < text.size() && text.at(next) == '.') {
+        if (next < text.size() && text[next] == '.') {
             std::size_t const fraction = digits(next + 1);
             if (fraction == next + 1)
                 return std::nullopt;
             next = fraction;
         }
-        if (next < text.size() && (text.at(next) == 'e' || text.at(next) == 'E')) {
+        if (next < text.size() && (text[next] == 'e' || text[next] == 'E')) {
             std::size_t sign = next + 1;
-            if (sign < text.size() && (text.at(sign) == '+' || text.at(sign) == '-'))
+            if (sign < text.size() && (text[sign] == '+' || text[sign] == '-'))
                 ++sign;
             std::size_t const exponent = digits(sign);
             if (exponent == sign)
@@ -170,12 +170,12 @@ class jsonpath
             auto const next = diagnostic_notation::quoted_parse(text, at, name);
             if (!next) [[unlikely]]
                 return next;
-            char const quote = text.at(at);
+            char const quote = text[at];
             for (std::size_t i = at + 1; !literals && i + 1 < *next; ++i) {
-                if (text.at(i) != '\\')
+                if (text[i] != '\\')
                     continue;
-                char const e = text.at(++i);
-                if ((e == '\'' && quote == '"') || (e == '"' && quote == '\'') || (e == 'u' && text.at(i + 1) == '{'))
+                char const e = text[++i];
+                if ((e == '\'' && quote == '"') || (e == '"' && quote == '\'') || (e == 'u' && text[i + 1] == '{'))
                     [[unlikely]]
                     return std::unexpected(error::invalid_path);
             }
@@ -200,7 +200,7 @@ class jsonpath
                                                                                        std::size_t const depth)
         {
             selector s{selector::kind::key, keys.size(), 0, 0, std::nullopt, std::nullopt, 1, 0};
-            char const c = text.at(at);
+            char const c = text[at];
             if (c == '*') {
                 s.kind = selector::kind::wildcard;
                 return std::pair{at + 1, s};
@@ -224,7 +224,7 @@ class jsonpath
             if (!first) [[unlikely]]
                 return std::unexpected(first.error());
             std::size_t next = *first ? diagnostic_notation::blank_end(text, (*first)->at) : at;
-            if (next < text.size() && text.at(next) == ':') {
+            if (next < text.size() && text[next] == ':') {
                 s.kind = selector::kind::slice;
                 if (*first)
                     s.start = (*first)->value;
@@ -236,7 +236,7 @@ class jsonpath
                     s.end = (*end)->value;
                     next = diagnostic_notation::blank_end(text, (*end)->at);
                 }
-                if (next < text.size() && text.at(next) == ':') {
+                if (next < text.size() && text[next] == ':') {
                     next = diagnostic_notation::blank_end(text, next + 1);
                     auto const step = int_read(text, next);
                     if (!step) [[unlikely]]
@@ -248,7 +248,7 @@ class jsonpath
                 }
                 return std::pair{next, s};
             }
-            if (*first && next < text.size() && (text.at(next) == ']' || text.at(next) == ',')) {
+            if (*first && next < text.size() && (text[next] == ']' || text[next] == ',')) {
                 s.kind = selector::kind::index;
                 s.index = (*first)->value;
                 return std::pair{(*first)->at, s};
@@ -275,9 +275,9 @@ class jsonpath
                     return std::unexpected(s.error());
                 chosen.push_back(s->second);
                 at = diagnostic_notation::blank_end(text, s->first);
-                if (at >= text.size() || (text.at(at) != ',' && text.at(at) != ']')) [[unlikely]]
+                if (at >= text.size() || (text[at] != ',' && text[at] != ']')) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                if (text.at(at) == ']')
+                if (text[at] == ']')
                     return std::pair{at + 1, std::move(chosen)};
             }
         }
@@ -291,13 +291,13 @@ class jsonpath
             bool singular = true;
             for (;;) {
                 std::size_t const next = diagnostic_notation::blank_end(text, at);
-                if (next >= text.size() || (text.at(next) != '.' && text.at(next) != '['))
+                if (next >= text.size() || (text[next] != '.' && text[next] != '['))
                     break;
                 at = next;
                 segment s{false, found_selectors.size(), 0};
                 std::vector<selector> chosen;
-                if (text.at(at) == '[' || (text.substr(at).starts_with("..["))) {
-                    s.descendant = text.at(at) == '.';
+                if (text[at] == '[' || std::ranges::starts_with(std::span(text).subspan(at), std::string_view("..["))) {
+                    s.descendant = text[at] == '.';
                     auto const b = bracketed_parse(text, at + (s.descendant ? 2 : 0), depth);
                     if (!b) [[unlikely]]
                         return std::unexpected(b.error());
@@ -305,23 +305,23 @@ class jsonpath
                     at = b->first;
                 } else {
                     ++at;
-                    if (at < text.size() && text.at(at) == '.') {
+                    if (at < text.size() && text[at] == '.') {
                         s.descendant = true;
                         ++at;
                     }
-                    if (at < text.size() && text.at(at) == '*') {
+                    if (at < text.size() && text[at] == '*') {
                         chosen.push_back({selector::kind::wildcard, 0, 0, 0, std::nullopt, std::nullopt, 1, 0});
                         ++at;
                     } else {
                         std::size_t end = at;
-                        while (end < text.size() && (name_first(text.at(end)) || (end != at && diagnostic_notation::digit(text.at(end)))))
+                        while (end < text.size() && (name_first(text[end]) || (end != at && diagnostic_notation::digit(text[end]))))
                             ++end;
                         if (end == at) [[unlikely]]
                             return std::unexpected(error::invalid_path);
                         std::size_t const key_at = keys.size();
                         if (auto const r = diagnostic_notation::head_append(keys, major_type::text_string, end - at, diagnostic_notation::no_indicator); !r) [[unlikely]]
                             return std::unexpected(r.error());
-                        keys += text.substr(at, end - at);
+                        keys += std::string_view(std::span(text).subspan(at, end - at));
                         chosen.push_back({selector::kind::key, key_at, keys.size() - key_at, 0, std::nullopt, std::nullopt, 1, 0});
                         at = end;
                     }
@@ -342,7 +342,7 @@ class jsonpath
 
         constexpr bool comparable(std::size_t const index) const
         {
-            expression const &e = expressions.at(index);
+            expression const &e = expressions[index];
             return e.kind == expression::kind::literal || e.kind == expression::kind::length ||
                    e.kind == expression::kind::count || e.kind == expression::kind::value ||
                    (e.kind == expression::kind::query && e.singular);
@@ -359,7 +359,7 @@ class jsonpath
         {
             std::vector<std::size_t> arguments;
             std::size_t next = diagnostic_notation::blank_end(text, at + name.size() + 1);
-            if (next < text.size() && text.at(next) == ')')
+            if (next < text.size() && text[next] == ')')
                 ++next;
             else
                 for (;;) {
@@ -368,9 +368,9 @@ class jsonpath
                         return a;
                     arguments.push_back(a->index);
                     next = diagnostic_notation::blank_end(text, a->at);
-                    if (next >= text.size() || (text.at(next) != ',' && text.at(next) != ')')) [[unlikely]]
+                    if (next >= text.size() || (text[next] != ',' && text[next] != ')')) [[unlikely]]
                         return std::unexpected(error::invalid_path);
-                    if (text.at(next++) == ')')
+                    if (text[next++] == ')')
                         break;
                     next = diagnostic_notation::blank_end(text, next);
                 }
@@ -380,7 +380,7 @@ class jsonpath
             auto const function = name == "length" ? expression::kind::length
                                           : name == "count" ? expression::kind::count
                                                             : expression::kind::value;
-            bool const nodes = expressions.at(argument).kind == expression::kind::query;
+            bool const nodes = expressions[argument].kind == expression::kind::query;
             if (function == expression::kind::length ? !comparable(argument) : !nodes) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             return parsed_expression{next, expression_add({function, argument, 0, comparison_op::equal, false, false})};
@@ -393,7 +393,7 @@ class jsonpath
                 return std::unexpected(r.error());
             if (at >= text.size()) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            char const c = text.at(at);
+            char const c = text[at];
             if (c == '@' || c == '$') {
                 auto const q = segments_parse(text, at + 1, depth + 1);
                 if (!q) [[unlikely]]
@@ -408,10 +408,10 @@ class jsonpath
             };
             if (c >= 'a' && c <= 'z') {
                 std::size_t end = at;
-                while (end < text.size() && function_name_char(text.at(end)))
+                while (end < text.size() && function_name_char(text[end]))
                     ++end;
-                std::string_view const name = text.substr(at, end - at);
-                bool const call = end < text.size() && text.at(end) == '(';
+                std::string_view const name{std::span(text).subspan(at, end - at)};
+                bool const call = end < text.size() && text[end] == '(';
                 if (call && (name == "length" || name == "count" || name == "value"))
                     return function_parse(text, at, name, depth);
                 if (call && (name == "match" || name == "search")) [[unlikely]]
@@ -419,7 +419,7 @@ class jsonpath
                 if (!literals) {
                     constexpr std::array<std::string_view, 3> names{"false", "true", "null"};
                     for (std::size_t i = 0; i < names.size(); ++i)
-                        if (name == names.at(i)) {
+                        if (name == names[i]) {
                             keys.push_back(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + i));
                             return literal(end);
                         }
@@ -457,7 +457,7 @@ class jsonpath
                  {"<", comparison_op::less},
                  {">", comparison_op::greater}}};
             for (auto const &[token, op] : ops)
-                if (text.substr(at).starts_with(token))
+                if (std::ranges::starts_with(std::span(text).subspan(at), token))
                     return std::pair{op, token.size()};
             return std::nullopt;
         }
@@ -468,7 +468,7 @@ class jsonpath
             if (!inner) [[unlikely]]
                 return inner;
             std::size_t const close = diagnostic_notation::blank_end(text, inner->at);
-            if (close >= text.size() || text.at(close) != ')') [[unlikely]]
+            if (close >= text.size() || text[close] != ')') [[unlikely]]
                 return std::unexpected(error::invalid_path);
             return parsed_expression{close + 1, inner->index};
         }
@@ -477,18 +477,18 @@ class jsonpath
         {
             if (at >= text.size()) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            if (text.at(at) == '!') {
+            if (text[at] == '!') {
                 std::size_t const next = diagnostic_notation::blank_end(text, at + 1);
-                bool const paren = next < text.size() && text.at(next) == '(';
+                bool const paren = next < text.size() && text[next] == '(';
                 auto const operand = paren ? paren_parse(text, next, depth) : primary_parse(text, next, depth);
                 if (!operand) [[unlikely]]
                     return operand;
-                if (!paren && expressions.at(operand->index).kind != expression::kind::query) [[unlikely]]
+                if (!paren && expressions[operand->index].kind != expression::kind::query) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 return parsed_expression{operand->at, expression_add({expression::kind::logical_not, operand->index, 0,
                                                                       comparison_op::equal, false, false})};
             }
-            if (text.at(at) == '(')
+            if (text[at] == '(')
                 return paren_parse(text, at, depth);
             auto const left = primary_parse(text, at, depth);
             if (!left) [[unlikely]]
@@ -496,7 +496,7 @@ class jsonpath
             std::size_t const next = diagnostic_notation::blank_end(text, left->at);
             auto const op = comparison_op_read(text, next);
             if (!op) {
-                if (expressions.at(left->index).kind != expression::kind::query) [[unlikely]]
+                if (expressions[left->index].kind != expression::kind::query) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 return left;
             }
@@ -517,7 +517,7 @@ class jsonpath
                 if (!left) [[unlikely]]
                     return left;
                 std::size_t const next = diagnostic_notation::blank_end(text, left->at);
-                if (!text.substr(next).starts_with("&&"))
+                if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("&&")))
                     return left;
                 auto const right = basic_parse(text, diagnostic_notation::blank_end(text, next + 2), depth);
                 if (!right) [[unlikely]]
@@ -537,7 +537,7 @@ class jsonpath
                 if (!left) [[unlikely]]
                     return left;
                 std::size_t const next = diagnostic_notation::blank_end(text, left->at);
-                if (!text.substr(next).starts_with("||"))
+                if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("||")))
                     return left;
                 auto const right = logical_and_parse(text, diagnostic_notation::blank_end(text, next + 2), depth);
                 if (!right) [[unlikely]]
@@ -581,7 +581,7 @@ class jsonpath
         switch (h->major) {
         case major_type::byte_string:
         case major_type::text_string: {
-            heads::decoder d{literal.substr(next)};
+            heads::decoder d{std::string_view(std::span(literal).subspan(next))};
             auto const s = d.byte_string_decode(h->argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
@@ -658,7 +658,7 @@ class verify_path : public std::bool_constant<jsonpath::query_parse(Path.view(),
 template <std::size_t DepthMax>
 std::expected<std::size_t, error> jsonpath::top_level_item_end(value_sharing::top_level_item &top_level, std::size_t const at, std::size_t const depth)
 {
-    heads::decoder d{top_level.encoded.substr(at)};
+    heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(at))};
     if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     return top_level.encoded.size() - d.encoded.size();
@@ -690,11 +690,11 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::top_level_item &to
         return h->argument == l->argument;
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder d{top_level.encoded.substr(h->at)};
+        heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
         auto const s = d.byte_string_decode(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
-        return h->argument == l->argument && *s == literal.substr(l->at, static_cast<std::size_t>(l->argument));
+        return h->argument == l->argument && *s == std::string_view(std::span(literal).subspan(l->at, static_cast<std::size_t>(l->argument)));
     }
     case major_type::array: {
         if (h->argument != l->argument)
@@ -807,7 +807,7 @@ result<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const 
         auto const key_at = value_sharing::shared_resolve(*source, start);
         if (!key_at) [[unlikely]]
             return std::unexpected(key_at.error());
-        heads::decoder look{source->encoded.substr(*key_at)};
+        heads::decoder look{std::string_view(std::span(source->encoded).subspan(*key_at))};
         if (auto const k = look.head_decode(); !k) [[unlikely]]
             return std::unexpected(k.error());
         if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
@@ -1012,7 +1012,7 @@ std::expected<std::optional<lazy>, error> jsonpath::comparable_value(query_view 
     };
     switch (e.kind) {
     case expression::kind::literal: {
-        auto const l = lazy::from(v.keys.substr(e.first, e.second));
+        auto const l = lazy::from(std::string_view(std::span(v.keys).subspan(e.first, e.second)));
         if (!l) [[unlikely]]
             return std::unexpected(l.error());
         return *l;
@@ -1143,7 +1143,7 @@ std::expected<void, error> jsonpath::selector_apply(query_view const &v, selecto
     };
     if (s.kind == selector::kind::key || s.kind == selector::kind::index) {
         auto const child = s.kind == selector::kind::index ? node.at<DepthMax>(s.index)
-                                                           : key_find<DepthMax>(node, v.keys.substr(s.key_at, s.key_size));
+                                                           : key_find<DepthMax>(node, std::string_view(std::span(v.keys).subspan(s.key_at, s.key_size)));
         if (child)
             return append(*child);
         if (child.error() != error::not_indexable && child.error() != error::index_out_of_bounds &&
@@ -1185,13 +1185,13 @@ std::expected<void, error> jsonpath::selector_apply(query_view const &v, selecto
             std::int64_t const lower = std::min(std::max(start, std::int64_t{0}), len);
             std::int64_t const upper = std::min(std::max(end, std::int64_t{0}), len);
             for (std::int64_t i = lower; i < upper; i += s.step)
-                if (auto const r = append(children.at(static_cast<std::size_t>(i))); !r) [[unlikely]]
+                if (auto const r = append(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
                     return r;
         } else {
             std::int64_t const upper = std::min(std::max(start, std::int64_t{-1}), len - 1);
             std::int64_t const lower = std::min(std::max(end, std::int64_t{-1}), len - 1);
             for (std::int64_t i = upper; lower < i; i += s.step)
-                if (auto const r = append(children.at(static_cast<std::size_t>(i))); !r) [[unlikely]]
+                if (auto const r = append(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
                     return r;
         }
         return {};
@@ -1259,7 +1259,7 @@ result<typename Binding::value, error> jsonpath::query_walk(Binding &binding, qu
             selector const &each = v.selectors[s.selector_at];
             auto const child = each.kind == selector::kind::index
                                    ? node.at<DepthMax>(each.index)
-                                   : key_find<DepthMax>(node, v.keys.substr(each.key_at, each.key_size));
+                                   : key_find<DepthMax>(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)));
             if (!child) [[unlikely]]
                 return std::unexpected(child.error());
             node = *child;

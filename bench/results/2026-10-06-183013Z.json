@@ -1,0 +1,721 @@
+{
+ "what": "Replacement of .at() and substr() in include/ by span forms and operator[], with standard library hardening requested by the CMake target. bench/runtime.cpp arms S and READ on cwt, twitter and floats. before = include/ of d1f41df, after = this commit. ns per iteration and change against before in percent.",
+ "why": "The owner decided that no throwing accessor stays in include/, and that standard library hardening checks the bounds that the code does not check itself.",
+ "how": "g++-16 -std=c++23 -O2 -DNDEBUG. before, beforeAA and after with -D_GLIBCXX_ASSERTIONS -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST, as the target now requests; after_nohard without them. beforeAA is a second build of before. Google Benchmark, --benchmark_min_time=0.05s, 11 rounds, all 24 binaries alternate in each round, 26.2 s, uid 1000, not pinned, nice 0. A run of 6 rounds before it (14.0 s) gave the same signs.",
+ "noise": "A/A (beforeAA against before) is between -1.5 and +3.9 percent.",
+ "finding": "after is not slower than before in any cell: S is 5 to 6 percent faster on all three documents, READ is 2 and 6 percent faster on cwt and twitter and +0.6 percent on floats, which is under the noise. after without hardening is not faster than after with hardening; 2 cells are slower than before by more than the noise (READ floats +14.6, S cwt +6.2). The cost of hardening is not measurable in this run.",
+ "speed": {
+  "S cwt": {
+   "before_ns": 64.1,
+   "before_AA_pct": 1.7,
+   "after_pct": -6.2,
+   "after_without_hardening_pct": 6.2
+  },
+  "S twitter": {
+   "before_ns": 243640.4,
+   "before_AA_pct": 0.3,
+   "after_pct": -6.2,
+   "after_without_hardening_pct": -1.8
+  },
+  "S floats": {
+   "before_ns": 522860.3,
+   "before_AA_pct": -2.6,
+   "after_pct": -5.3,
+   "after_without_hardening_pct": -7.3
+  },
+  "READ cwt": {
+   "before_ns": 155.0,
+   "before_AA_pct": -0.2,
+   "after_pct": -2.3,
+   "after_without_hardening_pct": -3.1
+  },
+  "READ twitter": {
+   "before_ns": 272592.4,
+   "before_AA_pct": -1.3,
+   "after_pct": -5.8,
+   "after_without_hardening_pct": -1.4
+  },
+  "READ floats": {
+   "before_ns": 367789.7,
+   "before_AA_pct": 3.9,
+   "after_pct": 0.6,
+   "after_without_hardening_pct": 14.6
+  }
+ },
+ "size_how": "Four small programs (a: lazy at, b: encoder, c: item_end, d: databind) with g++-16 -std=c++26 -DNDEBUG, -O2 and -Os, x86-64. Section sizes in bytes of the whole binary; base.cpp is the program without the library.",
+ "size": {
+  "after.a.O2": {
+   "text": 16524,
+   "eh_frame": 2160,
+   "gcc_except_table": 210
+  },
+  "after.a.Os": {
+   "text": 12611,
+   "eh_frame": 2748,
+   "gcc_except_table": 215
+  },
+  "after.b.O2": {
+   "text": 3784,
+   "eh_frame": 488,
+   "gcc_except_table": 0
+  },
+  "after.b.Os": {
+   "text": 2364,
+   "eh_frame": 684,
+   "gcc_except_table": 0
+  },
+  "after.base.O2": {
+   "text": 358,
+   "eh_frame": 160,
+   "gcc_except_table": 0
+  },
+  "after.base.Os": {
+   "text": 358,
+   "eh_frame": 160,
+   "gcc_except_table": 0
+  },
+  "after.c.O2": {
+   "text": 3008,
+   "eh_frame": 460,
+   "gcc_except_table": 0
+  },
+  "after.c.Os": {
+   "text": 2178,
+   "eh_frame": 688,
+   "gcc_except_table": 0
+  },
+  "after.d.O2": {
+   "text": 27377,
+   "eh_frame": 2464,
+   "gcc_except_table": 181
+  },
+  "after.d.Os": {
+   "text": 16918,
+   "eh_frame": 3440,
+   "gcc_except_table": 167
+  },
+  "after_nohard.a.O2": {
+   "text": 15865,
+   "eh_frame": 1912,
+   "gcc_except_table": 210
+  },
+  "after_nohard.a.Os": {
+   "text": 9581,
+   "eh_frame": 2108,
+   "gcc_except_table": 213
+  },
+  "after_nohard.b.O2": {
+   "text": 3688,
+   "eh_frame": 420,
+   "gcc_except_table": 0
+  },
+  "after_nohard.b.Os": {
+   "text": 2204,
+   "eh_frame": 644,
+   "gcc_except_table": 0
+  },
+  "after_nohard.base.O2": {
+   "text": 358,
+   "eh_frame": 160,
+   "gcc_except_table": 0
+  },
+  "after_nohard.base.Os": {
+   "text": 358,
+   "eh_frame": 160,
+   "gcc_except_table": 0
+  },
+  "after_nohard.c.O2": {
+   "text": 2768,
+   "eh_frame": 384,
+   "gcc_except_table": 0
+  },
+  "after_nohard.c.Os": {
+   "text": 1847,
+   "eh_frame": 536,
+   "gcc_except_table": 0
+  },
+  "after_nohard.d.O2": {
+   "text": 26033,
+   "eh_frame": 2220,
+   "gcc_except_table": 181
+  },
+  "after_nohard.d.Os": {
+   "text": 12628,
+   "eh_frame": 2868,
+   "gcc_except_table": 167
+  },
+  "before.a.O2": {
+   "text": 16265,
+   "eh_frame": 1980,
+   "gcc_except_table": 211
+  },
+  "before.a.Os": {
+   "text": 10593,
+   "eh_frame": 2168,
+   "gcc_except_table": 227
+  },
+  "before.b.O2": {
+   "text": 3688,
+   "eh_frame": 420,
+   "gcc_except_table": 0
+  },
+  "before.b.Os": {
+   "text": 2204,
+   "eh_frame": 644,
+   "gcc_except_table": 0
+  },
+  "before.base.O2": {
+   "text": 358,
+   "eh_frame": 160,
+   "gcc_except_table": 0
+  },
+  "before.base.Os": {
+   "text": 358,
+   "eh_frame": 160,
+   "gcc_except_table": 0
+  },
+  "before.c.O2": {
+   "text": 2976,
+   "eh_frame": 428,
+   "gcc_except_table": 0
+  },
+  "before.c.Os": {
+   "text": 2096,
+   "eh_frame": 588,
+   "gcc_except_table": 0
+  },
+  "before.d.O2": {
+   "text": 26545,
+   "eh_frame": 2328,
+   "gcc_except_table": 273
+  },
+  "before.d.Os": {
+   "text": 13624,
+   "eh_frame": 2936,
+   "gcc_except_table": 235
+  },
+  "before_hard.a.O2": {
+   "text": 17196,
+   "eh_frame": 2220,
+   "gcc_except_table": 211
+  },
+  "before_hard.a.Os": {
+   "text": 12621,
+   "eh_frame": 2716,
+   "gcc_except_table": 229
+  },
+  "before_hard.b.O2": {
+   "text": 3784,
+   "eh_frame": 488,
+   "gcc_except_table": 0
+  },
+  "before_hard.b.Os": {
+   "text": 2364,
+   "eh_frame": 684,
+   "gcc_except_table": 0
+  },
+  "before_hard.base.O2": {
+   "text": 358,
+   "eh_frame": 160,
+   "gcc_except_table": 0
+  },
+  "before_hard.base.Os": {
+   "text": 358,
+   "eh_frame": 160,
+   "gcc_except_table": 0
+  },
+  "before_hard.c.O2": {
+   "text": 3152,
+   "eh_frame": 492,
+   "gcc_except_table": 0
+  },
+  "before_hard.c.Os": {
+   "text": 2451,
+   "eh_frame": 732,
+   "gcc_except_table": 0
+  },
+  "before_hard.d.O2": {
+   "text": 28849,
+   "eh_frame": 2836,
+   "gcc_except_table": 273
+  },
+  "before_hard.d.Os": {
+   "text": 16791,
+   "eh_frame": 3448,
+   "gcc_except_table": 235
+  }
+ },
+ "raw": {
+  "name": "hardening",
+  "time_utc": "2026-10-06T18:30:13.737266+00:00Z",
+  "wall_s": 26.15259835400002,
+  "rounds": 11,
+  "min_time": "0.05s",
+  "context": {
+   "commit": "d1f41df dirty (before = d1f41df include/, after = working tree)",
+   "flags_by_arm": "before, beforeAA, after: g++-16 -std=c++23 -O2 -DNDEBUG -D_GLIBCXX_ASSERTIONS -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST; after_nohard: same without the two hardening definitions",
+   "gxx": "g++-16 (SUSE Linux) 16.2.0",
+   "clang": "clang version 23.1.2",
+   "march_native_resolved": "x86-64 (no -march given) / x86-64-v3 where named",
+   "libstdcxx": "/usr/lib64/libstdc++.so.6.0.36",
+   "libc": "ldd (GNU libc) 2.44",
+   "kernel": "6.18.44-fc-v70",
+   "scheduler": "unknown (no debugfs)",
+   "virt": "[Errno 2] No such file or directory: 'systemd-detect-virt'",
+   "container": "podman mbedded-cbor-tw-gb",
+   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+   "cpus": 4,
+   "cpu_flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+   "uid": 1000,
+   "nice": 0,
+   "threads": 1,
+   "pinned": false
+  },
+  "arms": {
+   "after.READ.cwt": {
+    "samples_ns": [
+     152.56666615049696,
+     150.79063822019626,
+     150.88962448989156,
+     150.02417148356022,
+     151.39586441492523,
+     150.95095004468368,
+     151.99812852559288,
+     152.53379763365842,
+     154.6451127093988,
+     149.74209774408837,
+     152.77427058861204
+    ],
+    "median_ns": 151.39586441492523,
+    "spread": 0.032743063167778974
+   },
+   "after.READ.floats": {
+    "samples_ns": [
+     369131.61256568914,
+     366085.20725419297,
+     364683.3124998731,
+     420674.8563832507,
+     371399.7393618983,
+     370145.58201087586,
+     367595.57142900914,
+     394318.30687833275,
+     411850.3225805809,
+     367563.6063831539,
+     372741.14465445856
+    ],
+    "median_ns": 370145.58201087586,
+    "spread": 0.15353470247804957
+   },
+   "after.READ.twitter": {
+    "samples_ns": [
+     253396.470588327,
+     261788.61264814998,
+     256830.0142858756,
+     323342.84912290936,
+     260134.54887210773,
+     256757.3357936121,
+     258254.82706787947,
+     363768.6888888917,
+     255208.76208169735,
+     251213.34285691837,
+     254418.71600014565
+    ],
+    "median_ns": 256830.0142858756,
+    "spread": 0.44804684636548386
+   },
+   "after.S.cwt": {
+    "samples_ns": [
+     64.21526992505714,
+     69.58909293857538,
+     84.56277120895373,
+     59.813263078250536,
+     58.21233914242512,
+     58.09800165665977,
+     60.086290995600685,
+     61.17830213676715,
+     58.38816623716674,
+     62.76800177942382,
+     60.14067902007003
+    ],
+    "median_ns": 60.14067902007003,
+    "spread": 0.45551944641215236
+   },
+   "after.S.floats": {
+    "samples_ns": [
+     496895.9090911403,
+     729218.1684210607,
+     485698.2222223552,
+     477245.3424660143,
+     495327.74825194053,
+     707617.0566040862,
+     494563.3888892884,
+     509788.5248225007,
+     490236.11851832055,
+     502892.7400007888,
+     486891.27083336975
+    ],
+    "median_ns": 495327.74825194053,
+    "spread": 0.5279733577975985
+   },
+   "after.S.twitter": {
+    "samples_ns": [
+     225327.09463745158,
+     227485.64951782618,
+     253643.15772886277,
+     226295.06624607442,
+     224935.36102237398,
+     238759.856687796,
+     247066.7054792121,
+     232458.14238393996,
+     225765.03883488447,
+     231777.33673459702,
+     228437.25573768068
+    ],
+    "median_ns": 228437.25573768068,
+    "spread": 0.1276268727869483
+   },
+   "after_nohard.READ.cwt": {
+    "samples_ns": [
+     146.74539282039518,
+     152.08829145142593,
+     146.13383311921461,
+     150.1802670448945,
+     167.20766027770216,
+     151.6195342260597,
+     150.21463857429998,
+     152.40604747931314,
+     146.634496435467,
+     144.921774703721,
+     188.71932365631764
+    ],
+    "median_ns": 150.21463857429998,
+    "spread": 0.30221510219659264
+   },
+   "after_nohard.READ.floats": {
+    "samples_ns": [
+     412457.347305555,
+     421925.5276077784,
+     421455.49685490143,
+     414231.1987578927,
+     413613.80473337503,
+     412458.3473058718,
+     468799.98319295625,
+     418580.4666666158,
+     558389.3225803188,
+     421835.66871172155,
+     547006.4672127204
+    ],
+    "median_ns": 421455.49685490143,
+    "spread": 0.35381106974597065
+   },
+   "after_nohard.READ.twitter": {
+    "samples_ns": [
+     268526.04721059545,
+     266527.2346156109,
+     273596.8893283117,
+     270378.61600001634,
+     400219.5820894666,
+     265236.51778643037,
+     268824.4166669002,
+     370986.5247936077,
+     275995.79130448704,
+     264964.7799229127,
+     265700.75581381645
+    ],
+    "median_ns": 268824.4166669002,
+    "spread": 0.5104633234873863
+   },
+   "after_nohard.S.cwt": {
+    "samples_ns": [
+     68.4520330579912,
+     66.92324117505338,
+     66.80124696902527,
+     66.82421734634926,
+     79.64535085786596,
+     69.12122837599976,
+     69.83785844140395,
+     68.11108418097331,
+     67.73746439407748,
+     68.97277597966381,
+     66.4214436581957
+    ],
+    "median_ns": 68.11108418097331,
+    "spread": 0.1990909331588817
+   },
+   "after_nohard.S.floats": {
+    "samples_ns": [
+     517294.75000001915,
+     484567.6956522871,
+     508489.72072086524,
+     482436.2923080536,
+     475630.2916667386,
+     468148.98648698226,
+     492458.7318835593,
+     496877.3904107515,
+     479028.29285736254,
+     661951.3960393504,
+     472372.8791945812
+    ],
+    "median_ns": 484567.6956522871,
+    "spread": 0.4139759246445729
+   },
+   "after_nohard.S.twitter": {
+    "samples_ns": [
+     235668.63448281607,
+     269974.2026579861,
+     237857.5928572348,
+     264591.69620243553,
+     235444.50337837858,
+     245487.00338974892,
+     293274.56223174615,
+     234605.31740581058,
+     233268.74000000925,
+     257188.60269331431,
+     239317.99999975256
+    ],
+    "median_ns": 239317.99999975256,
+    "spread": 0.2572390206751858
+   },
+   "before.READ.cwt": {
+    "samples_ns": [
+     153.79079938004486,
+     155.8087118457439,
+     157.38258175105673,
+     156.98763490645342,
+     156.38091741806485,
+     153.5811681242161,
+     154.84789019383786,
+     153.7744126493509,
+     154.97693312148388,
+     174.91657409227216,
+     154.83866910869068
+    ],
+    "median_ns": 154.97693312148388,
+    "spread": 0.13891941459124735
+   },
+   "before.READ.floats": {
+    "samples_ns": [
+     375098.2444444162,
+     368160.2083330423,
+     375637.9635421562,
+     367789.7283237117,
+     389598.3174603826,
+     361507.4540813826,
+     368635.9834252285,
+     366142.95054977655,
+     365095.9157892574,
+     366701.09625690547,
+     362415.0259069342
+    ],
+    "median_ns": 367789.7283237117,
+    "spread": 0.07770479712619194
+   },
+   "before.READ.twitter": {
+    "samples_ns": [
+     259901.20895539463,
+     262485.26459124853,
+     272592.40839707636,
+     286007.16470606916,
+     266201.9446639217,
+     267068.7034219295,
+     278449.1287553668,
+     276940.3696500709,
+     278505.47500008816,
+     297557.8022817003,
+     267755.7977100525
+    ],
+    "median_ns": 272592.40839707636,
+    "spread": 0.144888103743944
+   },
+   "before.S.cwt": {
+    "samples_ns": [
+     63.65925482730237,
+     61.232423757409045,
+     70.23960399820592,
+     61.862379586802476,
+     65.9705767959868,
+     64.14029289501337,
+     72.30696736579621,
+     66.12432683242913,
+     68.84634961028776,
+     62.725414461697135,
+     62.400585868862336
+    ],
+    "median_ns": 64.14029289501337,
+    "spread": 0.1808607748774138
+   },
+   "before.S.floats": {
+    "samples_ns": [
+     512122.41176440957,
+     507363.11510777107,
+     522860.3333333909,
+     498810.5474454097,
+     503422.9333331395,
+     545665.2551023748,
+     591368.3306450747,
+     526580.9843750802,
+     531906.0072986387,
+     499854.1060603422,
+     724584.058823004
+    ],
+    "median_ns": 522860.3333333909,
+    "spread": 0.4526237717583612
+   },
+   "before.S.twitter": {
+    "samples_ns": [
+     239227.25090911132,
+     239437.5252528463,
+     358859.0515463337,
+     235496.70508477365,
+     246842.03103435785,
+     257516.94444409167,
+     243640.39160814715,
+     254700.59622635605,
+     234335.88552183923,
+     242388.78644054997,
+     256406.78388304418
+    ],
+    "median_ns": 243640.39160814715,
+    "spread": 0.53138752413953
+   },
+   "beforeAA.READ.cwt": {
+    "samples_ns": [
+     154.5342711008476,
+     154.2558850292231,
+     154.3000896874728,
+     154.63354349666125,
+     154.70434238333658,
+     209.31579479202267,
+     200.1782367165464,
+     153.51755519009814,
+     212.03662345968422,
+     171.73993261491293,
+     167.3266338502704
+    ],
+    "median_ns": 154.70434238333658,
+    "spread": 0.38118812012816994
+   },
+   "beforeAA.READ.floats": {
+    "samples_ns": [
+     372665.85405398696,
+     378466.7573524182,
+     526794.0090913146,
+     374443.09090920206,
+     364562.5459463141,
+     382228.48947354674,
+     370669.1145837956,
+     499739.0114288334,
+     497232.2645163595,
+     397608.0702706305,
+     424954.2384102836
+    ],
+    "median_ns": 382228.48947354674,
+    "spread": 0.445003100150861
+   },
+   "beforeAA.READ.twitter": {
+    "samples_ns": [
+     274569.4824905846,
+     266528.0530305663,
+     265901.9886365424,
+     266131.3984065082,
+     263476.3435116144,
+     272037.1937984013,
+     268960.1128405842,
+     269621.0459768154,
+     267156.82644612755,
+     279726.27450949134,
+     296608.1314285215
+    ],
+    "median_ns": 268960.1128405842,
+    "spread": 0.12574862500111528
+   },
+   "beforeAA.S.cwt": {
+    "samples_ns": [
+     67.22082966887321,
+     84.90588789130193,
+     64.83508033504604,
+     63.087015872004756,
+     65.23000271212227,
+     62.49444272770622,
+     66.10632487529242,
+     64.56284451401693,
+     76.23696530824822,
+     64.62429091162456,
+     69.35485690278306
+    ],
+    "median_ns": 65.23000271212227,
+    "spread": 0.3586150093576215
+   },
+   "beforeAA.S.floats": {
+    "samples_ns": [
+     494230.5428569073,
+     518949.1068704714,
+     511580.17036969896,
+     505045.0592593565,
+     509523.41538452223,
+     495843.75757617777,
+     702437.4842103497,
+     542721.1769231759,
+     504484.90909061057,
+     563999.1640622455,
+     495226.42753648444
+    ],
+    "median_ns": 509523.41538452223,
+    "spread": 0.4212749381086385
+   },
+   "beforeAA.S.twitter": {
+    "samples_ns": [
+     241567.253521174,
+     245837.52346581063,
+     236620.45774651397,
+     247823.1050726821,
+     234512.90397341363,
+     241337.34246579977,
+     244250.90598314512,
+     340572.4532021267,
+     235695.0793106425,
+     264353.0645161677,
+     247709.63698621042
+    ],
+    "median_ns": 244250.90598314512,
+    "spread": 0.4522546411379431
+   }
+  }
+ },
+ "mcu": {
+  "how": "arm-none-eabi-g++ 16 (cross-arm-none-gcc16, newlib) -mcpu=cortex-m4 -mthumb --specs=nosys.specs -std=c++23 -Os -DNDEBUG -ffunction-sections -fdata-sections -Wl,--gc-sections, static; after with the two hardening definitions.",
+  "mcu.cpp": {
+   "before": {
+    "text": 75140,
+    "rodata": 9008,
+    "ARM.extab": 392,
+    "ARM.exidx": 608,
+    "throw_out_of_range": 1
+   },
+   "after": {
+    "text": 81564,
+    "rodata": 10216,
+    "ARM.extab": 364,
+    "ARM.exidx": 568,
+    "throw_out_of_range": 0
+   }
+  },
+  "arm_end.cpp": {
+   "before": {
+    "text": 74180,
+    "rodata": 8960,
+    "ARM.extab": 404,
+    "ARM.exidx": 640,
+    "throw_out_of_range": 1
+   },
+   "after": {
+    "text": 80540,
+    "rodata": 9936,
+    "ARM.extab": 364,
+    "ARM.exidx": 568,
+    "throw_out_of_range": 0
+   }
+  },
+  "finding": "std::__throw_out_of_range is gone, but __cxa_throw and the unwinder stay (libstdc++ text 36.9 to 36.4 KB). The hardening assertion handler links in more of newlib (libc text 29.3 to 36.1 KB), so the whole image grows by 6.4 KB of text and 1.2 KB of rodata."
+ }
+}

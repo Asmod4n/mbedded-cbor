@@ -62,7 +62,7 @@ struct lazy_elements {
                 left = 0;
                 return *this;
             }
-            heads::decoder d{top_level->encoded.substr(offset)};
+            heads::decoder d{std::string_view(std::span(top_level->encoded).subspan(offset))};
             if (auto const r = well_formedness::item_skip<DepthMax>(d, *top_level, 1); !r) [[unlikely]] {
                 failure = r.error();
                 return *this;
@@ -114,7 +114,7 @@ struct lazy_entries {
         {
             if (left == 0)
                 return;
-            heads::decoder d{top_level->encoded.substr(key)};
+            heads::decoder d{std::string_view(std::span(top_level->encoded).subspan(key))};
             if (auto const r = well_formedness::item_skip<DepthMax>(d, *top_level, 1); !r) [[unlikely]] {
                 failure = r.error();
                 return;
@@ -135,7 +135,7 @@ struct lazy_entries {
                 left = 0;
                 return *this;
             }
-            heads::decoder d{top_level->encoded.substr(value)};
+            heads::decoder d{std::string_view(std::span(top_level->encoded).subspan(value))};
             if (auto const r = well_formedness::item_skip<DepthMax>(d, *top_level, 1); !r) [[unlikely]] {
                 failure = r.error();
                 return *this;
@@ -270,7 +270,7 @@ result<lazy> value_sharing::key_find(resolved const &found, Match const &match)
         auto const key_at = shared_resolve(source, source.encoded.size() - d.encoded.size());
         if (!key_at) [[unlikely]]
             return std::unexpected(key_at.error());
-        heads::decoder probe{source.encoded.substr(*key_at)};
+        heads::decoder probe{std::string_view(std::span(source.encoded).subspan(*key_at))};
         auto const k = probe.head_decode();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
@@ -355,7 +355,7 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
             auto const content = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
             if (!content) [[unlikely]]
                 return std::unexpected(content.error());
-            d = heads::decoder{source->encoded.substr(*content)};
+            d = heads::decoder{std::string_view(std::span(source->encoded).subspan(*content))};
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -409,7 +409,7 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
         auto const content = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
         if (!content) [[unlikely]]
             return std::unexpected(content.error());
-        d = heads::decoder{source->encoded.substr(*content)};
+        d = heads::decoder{std::string_view(std::span(source->encoded).subspan(*content))};
         auto const r = d.head_decode();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
@@ -457,7 +457,7 @@ std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy
 {
     decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size())};
     decoding::value_decoder<Binding> v{
-        {l.top_level->encoded.substr(l.offset)}, binding, decoding::marks<Binding>(l.top_level->sharedrefs.size()), &before};
+        {std::string_view(std::span(l.top_level->encoded).subspan(l.offset))}, binding, decoding::marks<Binding>(l.top_level->sharedrefs.size()), &before};
     return v.template value_decode<DepthMax>(0, std::nullopt);
 }
 

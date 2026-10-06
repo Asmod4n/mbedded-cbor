@@ -224,7 +224,7 @@ class generic
             if (!target) [[unlikely]]
                 return std::unexpected(target.error());
             std::string_view const rest = d.encoded;
-            d.encoded = d.message.encoded.substr(target->offset);
+            d.encoded = std::string_view(std::span(d.message.encoded).subspan(target->offset));
             auto const r = generic_value_read<DepthMax>(d, out, depth + 1);
             d.encoded = rest;
             return r;
@@ -386,7 +386,7 @@ class generic
     static bool key_matches(heads::head const &k, std::string_view const text)
     {
         if constexpr (packed::has_integer_keys<U>) {
-            constexpr std::int64_t key = U::keys.at(I);
+            constexpr std::int64_t key = std::get<I>(U::keys);
             if constexpr (key >= 0)
                 return k.major == major_type::unsigned_integer && k.argument == static_cast<std::uint64_t>(key);
             else
@@ -421,7 +421,7 @@ class generic
                 auto const target = d.message.sharedref_decode(d, key_at);
                 if (!target) [[unlikely]]
                     return std::unexpected(target.error());
-                referenced = heads::decoder{d.message.encoded.substr(target->offset)};
+                referenced = heads::decoder{std::string_view(std::span(d.message.encoded).subspan(target->offset))};
                 k = referenced.head_decode();
             }
             heads::decoder &from = indirect ? referenced : d;
@@ -573,7 +573,7 @@ class generic
                 if (member_present(m)) {
                     ++present;
                     if constexpr (packed::has_integer_keys<U>) {
-                        constexpr std::int64_t key = U::keys.at(i);
+                        constexpr std::int64_t key = std::get<i>(U::keys);
                         auto const sum = validity::checked_add(size, *generic_size(key));
                         if (!sum) [[unlikely]]
                             return sum;
@@ -700,7 +700,7 @@ class generic
                 auto const &m = value.[:members[i]:];
                 if (member_present(m)) {
                     if constexpr (packed::has_integer_keys<U>) {
-                        constexpr std::int64_t key = U::keys.at(i);
+                        constexpr std::int64_t key = std::get<i>(U::keys);
                         at = generic_write(out, at, key);
                     } else {
                         constexpr std::string_view name = packed::key_of(members[i]);

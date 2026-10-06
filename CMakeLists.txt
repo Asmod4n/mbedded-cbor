@@ -4,6 +4,7 @@ project(mbedded-cbor LANGUAGES CXX)
 add_library(mbedded-cbor INTERFACE)
 target_include_directories(mbedded-cbor INTERFACE include)
 target_compile_features(mbedded-cbor INTERFACE cxx_std_23)
+target_compile_definitions(mbedded-cbor INTERFACE _GLIBCXX_ASSERTIONS _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST)
 
 include(CTest)
 if(BUILD_TESTING)
