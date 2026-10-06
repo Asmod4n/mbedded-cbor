@@ -59,8 +59,8 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
             auto const r = cbor::at_path<64>(binding, selector, *document);
             bool const invalid = !r && r.error() == error::invalid_path;
             CHECK(invalid);
-            refused += c.size() == 2 ? 0 : 1;
-            passed += invalid ? 1 : 0;
+            refused += c.size() == 2 ? 0uz : 1uz;
+            passed += invalid ? 1uz : 0uz;
             continue;
         }
         auto const document = root->at<64>(static_cast<std::int64_t>(i))->at<64>(std::int64_t{2});
@@ -71,7 +71,7 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         for (value const &nodelist : *get_if<array>(c.at(3)))
             matched = matched || nodelist_matches(r, nodelist);
         CHECK(matched);
-        passed += matched ? 1 : 0;
+        passed += matched ? 1uz : 0uz;
     }
     MESSAGE("JSONPath CTS: " << passed << " of " << cases.size() << " as expected; " << refused
                              << " valid cases with match() or search() refused by decision");

@@ -97,7 +97,7 @@ class heads
 
     static constexpr char initial_byte(major_type const major, std::uint64_t const info)
     {
-        return static_cast<char>(std::to_underlying(major) << 5 | info);
+        return static_cast<char>(std::uint64_t{std::to_underlying(major)} << 5 | info);
     }
 
     static constexpr std::uint8_t preferred_argument_info(std::uint64_t const argument)
@@ -393,7 +393,7 @@ class heads
         constexpr precision f = single_precision;
         constexpr precision d = double_precision;
         std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
-        std::uint32_t const exp = bits >> d.significand_bits & d.exponent_max;
+        std::uint32_t const exp = static_cast<std::uint32_t>(bits >> d.significand_bits & d.exponent_max);
         constexpr int narrow = d.significand_bits - f.significand_bits;
         std::uint64_t const mant = bits & ((std::uint64_t{1} << d.significand_bits) - 1u);
         if (exp == d.exponent_max)

@@ -66,8 +66,8 @@ class encoding
 
         std::expected<void, std::errc> append(std::string_view const part)
         {
-            std::size_t const at = std::ranges::size(container);
-            container.resize(at + part.size());
+            auto const at = std::ranges::ssize(container);
+            container.resize(std::ranges::size(container) + part.size());
             std::ranges::transform(part, std::ranges::next(std::ranges::begin(container), at),
                                    [](char const c) { return static_cast<std::ranges::range_value_t<C>>(c); });
             return {};
