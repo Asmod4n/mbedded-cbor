@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "error.hpp"
+#include "validity.hpp"
 #include "head.hpp"
 
 namespace cbor
@@ -44,8 +45,8 @@ class well_formedness
                 --level;
             }
             --left.at(level);
-            if (depth + level > DepthMax) [[unlikely]]
-                return std::unexpected(error::nesting_depth_exceeded);
+            if (auto const r = validity::check_nesting_depth(depth + level, DepthMax); !r) [[unlikely]]
+                return std::unexpected(r.error());
             if (d.encoded.size() >= 9) {
                 auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                 auto const major = static_cast<major_type>(initial >> 5);

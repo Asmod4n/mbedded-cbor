@@ -22,6 +22,7 @@
 
 #include "binding.hpp"
 #include "error.hpp"
+#include "validity.hpp"
 #include "head.hpp"
 
 namespace cbor
@@ -465,8 +466,8 @@ class walker
     {
         if (failure) [[unlikely]]
             return;
-        if (depth > DepthMax) [[unlikely]] {
-            keep_error(error::nesting_depth_exceeded);
+        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]] {
+            keep_error(r.error());
             return;
         }
         if constexpr (requires { binding.embed_of(item); }) {
@@ -604,8 +605,8 @@ class walker
             break;
         case kind::typed_array:
             if constexpr (requires { binding.typed_array_of(item); }) {
-                if (depth > DepthMax) [[unlikely]] {
-                    keep_error(error::nesting_depth_exceeded);
+                if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]] {
+                    keep_error(r.error());
                     return;
                 }
                 cbor::typed_array const a = binding.typed_array_of(item);
@@ -643,8 +644,8 @@ class walker
                 head(major_type::unsigned_integer, heads::magnitude_value(m));
                 return;
             }
-            if (depth > DepthMax) [[unlikely]] {
-                keep_error(error::nesting_depth_exceeded);
+            if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]] {
+                keep_error(r.error());
                 return;
             }
             head(major_type::tag, std::to_underlying(heads::tag_number::unsigned_bignum));
@@ -660,8 +661,8 @@ class walker
             head(major_type::negative_integer, heads::magnitude_value(n));
             return;
         }
-        if (depth > DepthMax) [[unlikely]] {
-            keep_error(error::nesting_depth_exceeded);
+        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]] {
+            keep_error(r.error());
             return;
         }
         head(major_type::tag, std::to_underlying(heads::tag_number::negative_bignum));

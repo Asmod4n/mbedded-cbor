@@ -17,6 +17,7 @@
 #include "binding.hpp"
 #include "doc_end.hpp"
 #include "error.hpp"
+#include "validity.hpp"
 #include "head.hpp"
 #include "inspect.hpp"
 #include "lazy.hpp"
@@ -145,8 +146,8 @@ class jsonpath
                 return std::unexpected(error::invalid_path);
             ++at;
         }
-        if (q.selectors.size() > depth_max) [[unlikely]]
-            return std::unexpected(error::nesting_depth_exceeded);
+        if (auto const r = validity::check_nesting_depth(q.selectors.size(), depth_max); !r) [[unlikely]]
+            return std::unexpected(r.error());
         return q;
     }
 
@@ -156,8 +157,8 @@ class jsonpath
     static constexpr std::expected<std::size_t, error> literal_end(std::string_view const literal, std::size_t const at,
                                                                    std::size_t const depth, std::size_t const depth_max)
     {
-        if (depth > depth_max) [[unlikely]]
-            return std::unexpected(error::nesting_depth_exceeded);
+        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto const h = heads::raw_head_read(literal, at);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
@@ -244,8 +245,8 @@ template <std::size_t DepthMax>
 std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std::size_t const start, std::string_view const literal,
                                                std::size_t const literal_at, std::size_t const depth)
 {
-    if (depth > DepthMax) [[unlikely]]
-        return std::unexpected(error::nesting_depth_exceeded);
+    if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+        return std::unexpected(r.error());
     auto const at = value_sharing::shared_resolve(doc, start);
     if (!at) [[unlikely]]
         return std::unexpected(at.error());

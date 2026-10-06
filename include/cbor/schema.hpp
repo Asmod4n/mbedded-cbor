@@ -32,6 +32,7 @@
 #include "binding.hpp"
 #include "encode.hpp"
 #include "error.hpp"
+#include "validity.hpp"
 #include "head.hpp"
 #include "owning_ref.hpp"
 
@@ -1146,8 +1147,8 @@ class packed
                 out.reset();
                 return {};
             }
-            if (depth == DepthMax) [[unlikely]]
-                return std::unexpected(error::nesting_depth_exceeded);
+            if (auto const r = validity::check_nesting_depth(depth + 1, DepthMax); !r) [[unlikely]]
+                return std::unexpected(r.error());
             E element{};
             if (auto const e = value_read<DepthMax, Root>(
                     element, encoded, std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>(),
@@ -1175,8 +1176,8 @@ class packed
             auto const r = reference_take<Root, major_type::map>(encoded, field, floor, pair);
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (r->length != 0 && depth == DepthMax) [[unlikely]]
-                return std::unexpected(error::nesting_depth_exceeded);
+            if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, DepthMax); !c) [[unlikely]]
+                return std::unexpected(c.error());
             out.clear();
             for (std::size_t i = 0; i < r->length; ++i) {
                 auto const at = std::span<char const>(encoded).subspan(r->data + i * pair).template first<pair>();
@@ -1196,8 +1197,8 @@ class packed
             auto const r = reference_take<Root, major_type::array>(encoded, field, floor, fixed_size<E, Root>());
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (r->length != 0 && depth == DepthMax) [[unlikely]]
-                return std::unexpected(error::nesting_depth_exceeded);
+            if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, DepthMax); !c) [[unlikely]]
+                return std::unexpected(c.error());
             out.clear();
             out.reserve(r->length);
             for (std::size_t i = 0; i < r->length; ++i) {

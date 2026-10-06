@@ -1,6 +1,7 @@
 #pragma once
 
 #include "error.hpp"
+#include "validity.hpp"
 #include "binding.hpp"
 #include "head.hpp"
 #include "decode.hpp"
