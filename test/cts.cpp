@@ -43,12 +43,16 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
     test_binding binding;
     auto const all = cbor::lazy_decode<64>(binding, *root);
     REQUIRE(all.has_value());
-    array const &cases = *get_if<array>(*all);
+    array const *const suite_cases = get_if<array>(*all);
+    REQUIRE(suite_cases != nullptr);
+    array const &cases = *suite_cases;
     CHECK_EQ(cases.size(), 706);
     std::size_t refused = 0;
     std::size_t passed = 0;
     for (std::size_t i = 0; i < cases.size(); ++i) {
-        array const &c = *get_if<array>(cases.at(i));
+        array const *const test_case = get_if<array>(cases.at(i));
+        REQUIRE(test_case != nullptr);
+        array const &c = *test_case;
         std::string const name(c.at(0).text());
         std::string const selector(c.at(1).text());
         CAPTURE(name);
@@ -68,7 +72,9 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         auto const r = cbor::at_path<64>(binding, selector, *document);
         CAPTURE((r.has_value() ? error{} : r.error()));
         bool matched = false;
-        for (value const &nodelist : *get_if<array>(c.at(3)))
+        array const *const results = get_if<array>(c.at(3));
+        REQUIRE(results != nullptr);
+        for (value const &nodelist : *results)
             matched = matched || nodelist_matches(r, nodelist);
         CHECK(matched);
         passed += matched ? 1uz : 0uz;

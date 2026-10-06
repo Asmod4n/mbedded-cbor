@@ -161,12 +161,11 @@ TEST_CASE("tag 28/29: a binding without cyclic data structures refuses a cycle")
 // end it, and its shared pointers held each other forever. The binding ends every node that only other nodes hold.
 TEST_CASE("tag 28/29: a cycle that a failed decode leaves behind is freed with the binding")
 {
-    std::vector<std::weak_ptr<node>> made;
-    {
+    std::vector<std::weak_ptr<node>> const made = [] {
         ref_binding binding;
         CHECK_FALSE(cbor::lazy_decode<16>(binding, *cbor::decode<16>("\xd8\x1c\xa5\x61\x61\xd8\x1d\x00"sv)).has_value());
-        made = binding.made;
-    }
+        return binding.made;
+    }();
     REQUIRE_FALSE(made.empty());
     for (auto const &w : made)
         CHECK(w.expired());
