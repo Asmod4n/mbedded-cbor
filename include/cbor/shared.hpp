@@ -4,6 +4,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <expected>
 #include <iterator>
 #include <memory>
@@ -24,6 +25,8 @@ namespace cbor
 
 struct lazy;
 
+struct item;
+
 template <std::size_t DepthMax>
 struct lazy_elements;
 
@@ -39,6 +42,8 @@ class value_sharing
     struct resolved;
 
     static std::expected<std::size_t, error> shared_resolve(top_level_item &top_level, std::size_t at);
+
+    static std::expected<item *, error> item_resolve(top_level_item &top_level, std::size_t at);
 
     static std::expected<resolved, error> container_resolve(std::shared_ptr<top_level_item> source, std::size_t offset);
 
@@ -99,11 +104,30 @@ struct lazy {
     result<lazy_entries<DepthMax>> entries() const;
 };
 
+}
+
+#include "item.hpp"
+
+namespace cbor
+{
+
 struct value_sharing::top_level_item {
     std::shared_ptr<void const> owner;
     std::string_view encoded;
     std::vector<lazy> sharedrefs;
     std::size_t high_water_mark;
+    std::deque<item> items{};
+    std::vector<std::pair<std::size_t, item *>> item_offsets{};
+
+    item &entry(std::size_t const offset)
+    {
+        auto const known = std::ranges::lower_bound(item_offsets, offset, {}, &std::pair<std::size_t, item *>::first);
+        if (known != item_offsets.end() && known->first == offset)
+            return *known->second;
+        item &placeholder = items.emplace_back(item{lazy{{}, offset}});
+        item_offsets.insert(known, {offset, &placeholder});
+        return placeholder;
+    }
 
     std::size_t mark(heads::decoder const &at)
     {
@@ -166,6 +190,14 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level
         at = found->offset;
         item_at = at;
     }
+}
+
+inline std::expected<item *, error> value_sharing::item_resolve(top_level_item &top_level, std::size_t const at)
+{
+    auto const node = shared_resolve(top_level, at);
+    if (!node) [[unlikely]]
+        return std::unexpected(node.error());
+    return &top_level.entry(*node);
 }
 
 inline std::expected<value_sharing::resolved, error> value_sharing::container_resolve(std::shared_ptr<top_level_item> source,

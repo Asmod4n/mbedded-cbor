@@ -35,6 +35,7 @@
 #include "validity.hpp"
 #include "head.hpp"
 #include "owning_ref.hpp"
+#include "item.hpp"
 
 namespace cbor
 {
@@ -58,10 +59,6 @@ struct key {
     consteval explicit key(char const *const s) : text(std::define_static_string(std::string_view(s)))
     {
     }
-};
-
-struct tag {
-    std::uint64_t number;
 };
 
 template <std::uint64_t Number, class T>
