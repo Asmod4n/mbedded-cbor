@@ -604,7 +604,7 @@ class jsonpath
     }
 
     template <std::size_t DepthMax>
-    static std::expected<std::size_t, error> document_item_end(value_sharing::top_level_item &top_level, std::size_t at, std::size_t depth);
+    static std::expected<std::size_t, error> top_level_item_end(value_sharing::top_level_item &top_level, std::size_t at, std::size_t depth);
 
     template <std::size_t DepthMax>
     static std::expected<bool, error> key_equal(value_sharing::top_level_item &top_level, std::size_t at,
@@ -656,7 +656,7 @@ class verify_path : public std::bool_constant<jsonpath::query_parse(Path.view(),
 };
 
 template <std::size_t DepthMax>
-std::expected<std::size_t, error> jsonpath::document_item_end(value_sharing::top_level_item &top_level, std::size_t const at, std::size_t const depth)
+std::expected<std::size_t, error> jsonpath::top_level_item_end(value_sharing::top_level_item &top_level, std::size_t const at, std::size_t const depth)
 {
     heads::decoder d{top_level.encoded.substr(at)};
     if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
@@ -705,7 +705,7 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::top_level_item &to
             auto const equal = key_equal<DepthMax>(top_level, d, {literal, k}, depth + 1);
             if (!equal || !*equal)
                 return equal;
-            auto const d_end = document_item_end<DepthMax>(top_level, d, depth + 1);
+            auto const d_end = top_level_item_end<DepthMax>(top_level, d, depth + 1);
             if (!d_end) [[unlikely]]
                 return std::unexpected(d_end.error());
             auto const k_end = literal_end({literal, k}, {depth + 1, DepthMax});
@@ -721,10 +721,10 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::top_level_item &to
             return false;
         std::size_t d = h->at;
         for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const value_at = document_item_end<DepthMax>(top_level, d, depth + 1);
+            auto const value_at = top_level_item_end<DepthMax>(top_level, d, depth + 1);
             if (!value_at) [[unlikely]]
                 return std::unexpected(value_at.error());
-            auto const pair_end = document_item_end<DepthMax>(top_level, *value_at, depth + 1);
+            auto const pair_end = top_level_item_end<DepthMax>(top_level, *value_at, depth + 1);
             if (!pair_end) [[unlikely]]
                 return std::unexpected(pair_end.error());
             bool paired = false;
@@ -746,10 +746,10 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::top_level_item &to
                             return twin;
                         if (*twin) [[unlikely]]
                             return std::unexpected(error::duplicate_key);
-                        auto const earlier_value = document_item_end<DepthMax>(top_level, earlier, depth + 1);
+                        auto const earlier_value = top_level_item_end<DepthMax>(top_level, earlier, depth + 1);
                         if (!earlier_value) [[unlikely]]
                             return std::unexpected(earlier_value.error());
-                        auto const earlier_end = document_item_end<DepthMax>(top_level, *earlier_value, depth + 1);
+                        auto const earlier_end = top_level_item_end<DepthMax>(top_level, *earlier_value, depth + 1);
                         if (!earlier_end) [[unlikely]]
                             return std::unexpected(earlier_end.error());
                         earlier = *earlier_end;
