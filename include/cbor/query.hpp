@@ -6,10 +6,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -41,113 +43,525 @@ result<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
 class jsonpath
 {
     struct selector {
-        enum class kind { key, index, wildcard } kind;
+        enum class kind { key, index, wildcard, slice, filter } kind;
         std::size_t key_at;
         std::size_t key_size;
         std::int64_t index;
+        std::optional<std::int64_t> start;
+        std::optional<std::int64_t> end;
+        std::int64_t step;
+        std::size_t expression;
     };
 
+    struct segment {
+        bool descendant;
+        std::size_t selector_at;
+        std::size_t selector_count;
+    };
+
+    enum class comparison_op { equal, not_equal, less, less_equal, greater, greater_equal };
+
+    struct expression {
+        enum class kind { logical_or, logical_and, logical_not, comparison, query, literal, length, count, value } kind;
+        std::size_t first;
+        std::size_t second;
+        comparison_op op;
+        bool relative;
+        bool singular;
+    };
+
+    struct parsed_query {
+        std::size_t at;
+        std::size_t segment_at;
+        std::size_t segment_count;
+        bool singular;
+    };
+
+    struct parsed_expression {
+        std::size_t at;
+        std::size_t index;
+    };
+
+    struct integer {
+        std::int64_t value;
+        std::size_t at;
+    };
+
+    struct query_view {
+        std::span<segment const> segments;
+        std::span<selector const> selectors;
+        std::span<expression const> expressions;
+        std::string_view keys;
+    };
+
+    static constexpr bool name_first(char const c)
+    {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || static_cast<unsigned char>(c) >= 0x80;
+    }
+
+    static constexpr bool function_name_char(char const c)
+    {
+        return (c >= 'a' && c <= 'z') || c == '_' || diagnostic_notation::digit(c);
+    }
+
+    static constexpr std::expected<std::optional<integer>, error> int_read(std::string_view const text, std::size_t const at)
+    {
+        if (at >= text.size())
+            return std::nullopt;
+        bool const negative = text.at(at) == '-';
+        std::size_t const digits_at = at + (negative ? 1 : 0);
+        std::size_t digits_end = digits_at;
+        while (digits_end < text.size() && diagnostic_notation::digit(text.at(digits_end)))
+            ++digits_end;
+        if (digits_end == digits_at || digits_end - digits_at > 16 ||
+            (text.at(digits_at) == '0' && (digits_end > digits_at + 1 || negative)))
+            return std::nullopt;
+        std::int64_t value = 0;
+        for (char const d : text.substr(digits_at, digits_end - digits_at))
+            value = value * 10 + (d - '0');
+        constexpr std::int64_t exact_max = (std::int64_t{1} << 53) - 1;
+        if (value > exact_max) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        return integer{negative ? -value : value, digits_end};
+    }
+
+    static constexpr std::optional<std::size_t> number_end(std::string_view const text, std::size_t at)
+    {
+        auto const digits = [&text](std::size_t i) {
+            while (i < text.size() && diagnostic_notation::digit(text.at(i)))
+                ++i;
+            return i;
+        };
+        if (at < text.size() && text.at(at) == '-')
+            ++at;
+        std::size_t next = digits(at);
+        if (next == at || (text.at(at) == '0' && next > at + 1))
+            return std::nullopt;
+        if (next < text.size() && text.at(next) == '.') {
+            std::size_t const fraction = digits(next + 1);
+            if (fraction == next + 1)
+                return std::nullopt;
+            next = fraction;
+        }
+        if (next < text.size() && (text.at(next) == 'e' || text.at(next) == 'E')) {
+            std::size_t sign = next + 1;
+            if (sign < text.size() && (text.at(sign) == '+' || text.at(sign) == '-'))
+                ++sign;
+            std::size_t const exponent = digits(sign);
+            if (exponent == sign)
+                return std::nullopt;
+            next = exponent;
+        }
+        return next;
+    }
+
     struct query {
+        std::vector<segment> segments;
         std::vector<selector> selectors;
+        std::vector<expression> expressions;
         std::string keys;
+        bool literals;
+        std::size_t depth_max;
+        parsed_query top;
+
+        constexpr std::expected<std::size_t, error> string_parse(std::string_view const text, std::size_t const at)
+        {
+            std::string name;
+            auto const next = diagnostic_notation::quoted_parse(text, at, name);
+            if (!next) [[unlikely]]
+                return next;
+            char const quote = text.at(at);
+            for (std::size_t i = at + 1; !literals && i + 1 < *next; ++i) {
+                if (text.at(i) != '\\')
+                    continue;
+                char const e = text.at(++i);
+                if ((e == '\'' && quote == '"') || (e == '"' && quote == '\'') || (e == 'u' && text.at(i + 1) == '{'))
+                    [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+            }
+            if (auto const r = diagnostic_notation::head_append(keys, major_type::text_string, name.size(), diagnostic_notation::no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            keys += name;
+            return next;
+        }
+
+        constexpr std::expected<std::size_t, error> literal_parse(std::string_view const text, std::size_t const at)
+        {
+            std::string literal;
+            auto const next = diagnostic_notation::literal_parse({text, at}, literal, {0, depth_max});
+            if (!next) [[unlikely]]
+                return next;
+            if (auto const r = diagnostic_notation::canonical_append(keys, {literal, 0}, {0, depth_max}); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return next;
+        }
+
+        constexpr std::expected<std::pair<std::size_t, selector>, error> selector_parse(std::string_view const text, std::size_t const at,
+                                                                                       std::size_t const depth)
+        {
+            selector s{selector::kind::key, keys.size(), 0, 0, std::nullopt, std::nullopt, 1, 0};
+            char const c = text.at(at);
+            if (c == '*') {
+                s.kind = selector::kind::wildcard;
+                return std::pair{at + 1, s};
+            }
+            if (c == '\'' || c == '"') {
+                auto const next = string_parse(text, at);
+                if (!next) [[unlikely]]
+                    return std::unexpected(next.error());
+                s.key_size = keys.size() - s.key_at;
+                return std::pair{*next, s};
+            }
+            if (c == '?') {
+                auto const e = logical_or_parse(text, diagnostic_notation::blank_end(text, at + 1), depth + 1);
+                if (!e) [[unlikely]]
+                    return std::unexpected(e.error());
+                s.kind = selector::kind::filter;
+                s.expression = e->index;
+                return std::pair{e->at, s};
+            }
+            auto const first = int_read(text, at);
+            if (!first) [[unlikely]]
+                return std::unexpected(first.error());
+            std::size_t next = *first ? diagnostic_notation::blank_end(text, (*first)->at) : at;
+            if (next < text.size() && text.at(next) == ':') {
+                s.kind = selector::kind::slice;
+                if (*first)
+                    s.start = (*first)->value;
+                next = diagnostic_notation::blank_end(text, next + 1);
+                auto const end = int_read(text, next);
+                if (!end) [[unlikely]]
+                    return std::unexpected(end.error());
+                if (*end) {
+                    s.end = (*end)->value;
+                    next = diagnostic_notation::blank_end(text, (*end)->at);
+                }
+                if (next < text.size() && text.at(next) == ':') {
+                    next = diagnostic_notation::blank_end(text, next + 1);
+                    auto const step = int_read(text, next);
+                    if (!step) [[unlikely]]
+                        return std::unexpected(step.error());
+                    if (*step) {
+                        s.step = (*step)->value;
+                        next = (*step)->at;
+                    }
+                }
+                return std::pair{next, s};
+            }
+            if (*first && next < text.size() && (text.at(next) == ']' || text.at(next) == ',')) {
+                s.kind = selector::kind::index;
+                s.index = (*first)->value;
+                return std::pair{(*first)->at, s};
+            }
+            if (!literals) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            auto const literal_next = literal_parse(text, at);
+            if (!literal_next) [[unlikely]]
+                return std::unexpected(literal_next.error());
+            s.key_size = keys.size() - s.key_at;
+            return std::pair{*literal_next, s};
+        }
+
+        constexpr std::expected<std::pair<std::size_t, std::vector<selector>>, error> bracketed_parse(std::string_view const text, std::size_t at,
+                                                                                                     std::size_t const depth)
+        {
+            std::vector<selector> chosen;
+            for (;;) {
+                at = diagnostic_notation::blank_end(text, at + 1);
+                if (at >= text.size()) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                auto const s = selector_parse(text, at, depth);
+                if (!s) [[unlikely]]
+                    return std::unexpected(s.error());
+                chosen.push_back(s->second);
+                at = diagnostic_notation::blank_end(text, s->first);
+                if (at >= text.size() || (text.at(at) != ',' && text.at(at) != ']')) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                if (text.at(at) == ']')
+                    return std::pair{at + 1, std::move(chosen)};
+            }
+        }
+
+        constexpr std::expected<parsed_query, error> segments_parse(std::string_view const text, std::size_t at, std::size_t const depth)
+        {
+            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            std::vector<segment> found;
+            std::vector<selector> found_selectors;
+            bool singular = true;
+            for (;;) {
+                std::size_t const next = diagnostic_notation::blank_end(text, at);
+                if (next >= text.size() || (text.at(next) != '.' && text.at(next) != '['))
+                    break;
+                at = next;
+                segment s{false, found_selectors.size(), 0};
+                std::vector<selector> chosen;
+                if (text.at(at) == '[' || (text.substr(at).starts_with("..["))) {
+                    s.descendant = text.at(at) == '.';
+                    auto const b = bracketed_parse(text, at + (s.descendant ? 2 : 0), depth);
+                    if (!b) [[unlikely]]
+                        return std::unexpected(b.error());
+                    chosen = b->second;
+                    at = b->first;
+                } else {
+                    ++at;
+                    if (at < text.size() && text.at(at) == '.') {
+                        s.descendant = true;
+                        ++at;
+                    }
+                    if (at < text.size() && text.at(at) == '*') {
+                        chosen.push_back({selector::kind::wildcard, 0, 0, 0, std::nullopt, std::nullopt, 1, 0});
+                        ++at;
+                    } else {
+                        std::size_t end = at;
+                        while (end < text.size() && (name_first(text.at(end)) || (end != at && diagnostic_notation::digit(text.at(end)))))
+                            ++end;
+                        if (end == at) [[unlikely]]
+                            return std::unexpected(error::invalid_path);
+                        std::size_t const key_at = keys.size();
+                        if (auto const r = diagnostic_notation::head_append(keys, major_type::text_string, end - at, diagnostic_notation::no_indicator); !r) [[unlikely]]
+                            return std::unexpected(r.error());
+                        keys += text.substr(at, end - at);
+                        chosen.push_back({selector::kind::key, key_at, keys.size() - key_at, 0, std::nullopt, std::nullopt, 1, 0});
+                        at = end;
+                    }
+                }
+                singular = singular && !s.descendant && chosen.size() == 1 &&
+                           (chosen.front().kind == selector::kind::key || chosen.front().kind == selector::kind::index);
+                s.selector_count = chosen.size();
+                found_selectors.insert(found_selectors.end(), chosen.begin(), chosen.end());
+                found.push_back(s);
+            }
+            for (segment &s : found)
+                s.selector_at += selectors.size();
+            selectors.insert(selectors.end(), found_selectors.begin(), found_selectors.end());
+            parsed_query const p{at, segments.size(), found.size(), singular};
+            segments.insert(segments.end(), found.begin(), found.end());
+            return p;
+        }
+
+        constexpr bool comparable(std::size_t const index) const
+        {
+            expression const &e = expressions.at(index);
+            return e.kind == expression::kind::literal || e.kind == expression::kind::length ||
+                   e.kind == expression::kind::count || e.kind == expression::kind::value ||
+                   (e.kind == expression::kind::query && e.singular);
+        }
+
+        constexpr std::size_t expression_add(expression const e)
+        {
+            expressions.push_back(e);
+            return expressions.size() - 1;
+        }
+
+        constexpr std::expected<parsed_expression, error> function_parse(std::string_view const text, std::size_t const at,
+                                                                         std::string_view const name, std::size_t const depth)
+        {
+            std::vector<std::size_t> arguments;
+            std::size_t next = diagnostic_notation::blank_end(text, at + name.size() + 1);
+            if (next < text.size() && text.at(next) == ')')
+                ++next;
+            else
+                for (;;) {
+                    auto const a = primary_parse(text, next, depth + 1);
+                    if (!a) [[unlikely]]
+                        return a;
+                    arguments.push_back(a->index);
+                    next = diagnostic_notation::blank_end(text, a->at);
+                    if (next >= text.size() || (text.at(next) != ',' && text.at(next) != ')')) [[unlikely]]
+                        return std::unexpected(error::invalid_path);
+                    if (text.at(next++) == ')')
+                        break;
+                    next = diagnostic_notation::blank_end(text, next);
+                }
+            if (arguments.size() != 1) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            std::size_t const argument = arguments.front();
+            auto const function = name == "length" ? expression::kind::length
+                                          : name == "count" ? expression::kind::count
+                                                            : expression::kind::value;
+            bool const nodes = expressions.at(argument).kind == expression::kind::query;
+            if (function == expression::kind::length ? !comparable(argument) : !nodes) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            return parsed_expression{next, expression_add({function, argument, 0, comparison_op::equal, false, false})};
+        }
+
+        constexpr std::expected<parsed_expression, error> primary_parse(std::string_view const text, std::size_t const at,
+                                                                        std::size_t const depth)
+        {
+            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (at >= text.size()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            char const c = text.at(at);
+            if (c == '@' || c == '$') {
+                auto const q = segments_parse(text, at + 1, depth + 1);
+                if (!q) [[unlikely]]
+                    return std::unexpected(q.error());
+                return parsed_expression{q->at, expression_add({expression::kind::query, q->segment_at, q->segment_count,
+                                                                comparison_op::equal, c == '@', q->singular})};
+            }
+            std::size_t const key_at = keys.size();
+            auto const literal = [&](std::size_t const next) {
+                return parsed_expression{next, expression_add({expression::kind::literal, key_at, keys.size() - key_at,
+                                                               comparison_op::equal, false, false})};
+            };
+            if (c >= 'a' && c <= 'z') {
+                std::size_t end = at;
+                while (end < text.size() && function_name_char(text.at(end)))
+                    ++end;
+                std::string_view const name = text.substr(at, end - at);
+                bool const call = end < text.size() && text.at(end) == '(';
+                if (call && (name == "length" || name == "count" || name == "value"))
+                    return function_parse(text, at, name, depth);
+                if (call && (name == "match" || name == "search")) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                if (!literals) {
+                    constexpr std::array<std::string_view, 3> names{"false", "true", "null"};
+                    for (std::size_t i = 0; i < names.size(); ++i)
+                        if (name == names.at(i)) {
+                            keys.push_back(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + i));
+                            return literal(end);
+                        }
+                    return std::unexpected(error::invalid_path);
+                }
+            }
+            if (c == '\'' || c == '"') {
+                auto const next = string_parse(text, at);
+                if (!next) [[unlikely]]
+                    return std::unexpected(next.error());
+                return literal(*next);
+            }
+            if (!literals) {
+                auto const end = number_end(text, at);
+                if (!end) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                std::string number;
+                auto const next = diagnostic_notation::number_parse(text, at, number);
+                if (!next || *next != *end) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+            }
+            auto const next = literal_parse(text, at);
+            if (!next) [[unlikely]]
+                return std::unexpected(next.error());
+            return literal(*next);
+        }
+
+        static constexpr std::optional<std::pair<comparison_op, std::size_t>> comparison_op_read(std::string_view const text, std::size_t const at)
+        {
+            constexpr std::array<std::pair<std::string_view, comparison_op>, 6> ops{
+                {{"==", comparison_op::equal},
+                 {"!=", comparison_op::not_equal},
+                 {"<=", comparison_op::less_equal},
+                 {">=", comparison_op::greater_equal},
+                 {"<", comparison_op::less},
+                 {">", comparison_op::greater}}};
+            for (auto const &[token, op] : ops)
+                if (text.substr(at).starts_with(token))
+                    return std::pair{op, token.size()};
+            return std::nullopt;
+        }
+
+        constexpr std::expected<parsed_expression, error> paren_parse(std::string_view const text, std::size_t const at, std::size_t const depth)
+        {
+            auto const inner = logical_or_parse(text, diagnostic_notation::blank_end(text, at + 1), depth + 1);
+            if (!inner) [[unlikely]]
+                return inner;
+            std::size_t const close = diagnostic_notation::blank_end(text, inner->at);
+            if (close >= text.size() || text.at(close) != ')') [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            return parsed_expression{close + 1, inner->index};
+        }
+
+        constexpr std::expected<parsed_expression, error> basic_parse(std::string_view const text, std::size_t const at, std::size_t const depth)
+        {
+            if (at >= text.size()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            if (text.at(at) == '!') {
+                std::size_t const next = diagnostic_notation::blank_end(text, at + 1);
+                bool const paren = next < text.size() && text.at(next) == '(';
+                auto const operand = paren ? paren_parse(text, next, depth) : primary_parse(text, next, depth);
+                if (!operand) [[unlikely]]
+                    return operand;
+                if (!paren && expressions.at(operand->index).kind != expression::kind::query) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                return parsed_expression{operand->at, expression_add({expression::kind::logical_not, operand->index, 0,
+                                                                      comparison_op::equal, false, false})};
+            }
+            if (text.at(at) == '(')
+                return paren_parse(text, at, depth);
+            auto const left = primary_parse(text, at, depth);
+            if (!left) [[unlikely]]
+                return left;
+            std::size_t const next = diagnostic_notation::blank_end(text, left->at);
+            auto const op = comparison_op_read(text, next);
+            if (!op) {
+                if (expressions.at(left->index).kind != expression::kind::query) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                return left;
+            }
+            auto const right = primary_parse(text, diagnostic_notation::blank_end(text, next + op->second), depth);
+            if (!right) [[unlikely]]
+                return right;
+            if (!comparable(left->index) || !comparable(right->index)) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            return parsed_expression{right->at, expression_add({expression::kind::comparison, left->index, right->index,
+                                                                op->first, false, false})};
+        }
+
+        constexpr std::expected<parsed_expression, error> logical_and_parse(std::string_view const text, std::size_t const at,
+                                                                            std::size_t const depth)
+        {
+            auto left = basic_parse(text, at, depth);
+            for (;;) {
+                if (!left) [[unlikely]]
+                    return left;
+                std::size_t const next = diagnostic_notation::blank_end(text, left->at);
+                if (!text.substr(next).starts_with("&&"))
+                    return left;
+                auto const right = basic_parse(text, diagnostic_notation::blank_end(text, next + 2), depth);
+                if (!right) [[unlikely]]
+                    return right;
+                left = parsed_expression{right->at, expression_add({expression::kind::logical_and, left->index, right->index,
+                                                                    comparison_op::equal, false, false})};
+            }
+        }
+
+        constexpr std::expected<parsed_expression, error> logical_or_parse(std::string_view const text, std::size_t const at,
+                                                                           std::size_t const depth)
+        {
+            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            auto left = logical_and_parse(text, at, depth);
+            for (;;) {
+                if (!left) [[unlikely]]
+                    return left;
+                std::size_t const next = diagnostic_notation::blank_end(text, left->at);
+                if (!text.substr(next).starts_with("||"))
+                    return left;
+                auto const right = logical_and_parse(text, diagnostic_notation::blank_end(text, next + 2), depth);
+                if (!right) [[unlikely]]
+                    return right;
+                left = parsed_expression{right->at, expression_add({expression::kind::logical_or, left->index, right->index,
+                                                                    comparison_op::equal, false, false})};
+            }
+        }
     };
 
     static constexpr std::expected<query, error> query_parse(std::string_view const text, bool const literals,
                                                              std::size_t const depth_max)
     {
-        query q;
+        query q{{}, {}, {}, {}, literals, depth_max, {}};
         if (text.empty() || text.front() != '$') [[unlikely]]
             return std::unexpected(error::invalid_path);
-        std::size_t at = 1;
-        auto const name_first = [](char const c) {
-            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || static_cast<unsigned char>(c) >= 0x80;
-        };
-        for (;;) {
-            std::size_t const segment = diagnostic_notation::blank_end(text, at);
-            if (segment == text.size()) {
-                if (segment != at) [[unlikely]]
-                    return std::unexpected(error::invalid_path);
-                break;
-            }
-            at = segment;
-            std::size_t const key_at = q.keys.size();
-            if (text.at(at) == '.') {
-                ++at;
-                if (at < text.size() && text.at(at) == '*') {
-                    q.selectors.push_back({selector::kind::wildcard, 0, 0, 0});
-                    ++at;
-                    continue;
-                }
-                std::size_t end = at;
-                while (end < text.size() && (name_first(text.at(end)) || (end != at && diagnostic_notation::digit(text.at(end)))))
-                    ++end;
-                if (end == at) [[unlikely]]
-                    return std::unexpected(error::invalid_path);
-                if (auto const r = diagnostic_notation::head_append(q.keys, major_type::text_string, end - at, diagnostic_notation::no_indicator); !r) [[unlikely]]
-                    return std::unexpected(r.error());
-                q.keys += text.substr(at, end - at);
-                q.selectors.push_back({selector::kind::key, key_at, q.keys.size() - key_at, 0});
-                at = end;
-                continue;
-            }
-            if (text.at(at) != '[') [[unlikely]]
-                return std::unexpected(error::invalid_path);
-            at = diagnostic_notation::blank_end(text, at + 1);
-            if (at >= text.size()) [[unlikely]]
-                return std::unexpected(error::invalid_path);
-            char const c = text.at(at);
-            std::size_t end;
-            if (c == '*') {
-                q.selectors.push_back({selector::kind::wildcard, 0, 0, 0});
-                end = at + 1;
-            } else if (c == '\'' || c == '"') {
-                std::string name;
-                auto const next = diagnostic_notation::quoted_parse(text, at, name);
-                if (!next) [[unlikely]]
-                    return std::unexpected(next.error());
-                if (auto const r = diagnostic_notation::head_append(q.keys, major_type::text_string, name.size(), diagnostic_notation::no_indicator); !r) [[unlikely]]
-                    return std::unexpected(r.error());
-                q.keys += name;
-                q.selectors.push_back({selector::kind::key, key_at, q.keys.size() - key_at, 0});
-                end = *next;
-            } else {
-                std::size_t digits_at = at + (c == '-' ? 1 : 0);
-                std::size_t digits_end = digits_at;
-                while (digits_end < text.size() && diagnostic_notation::digit(text.at(digits_end)))
-                    ++digits_end;
-                std::size_t const close = diagnostic_notation::blank_end(text, digits_end);
-                bool const integer = digits_end != digits_at && digits_end - digits_at <= 16 && close < text.size() &&
-                                     text.at(close) == ']' &&
-                                     !(text.at(digits_at) == '0' && (digits_end > digits_at + 1 || c == '-'));
-                if (integer) {
-                    std::int64_t value = 0;
-                    for (char const d : text.substr(digits_at, digits_end - digits_at))
-                        value = value * 10 + (d - '0');
-                    constexpr std::int64_t exact_max = (std::int64_t{1} << 53) - 1;
-                    if (value > exact_max) [[unlikely]]
-                        return std::unexpected(error::invalid_path);
-                    q.selectors.push_back({selector::kind::index, 0, 0, c == '-' ? -value : value});
-                    end = digits_end;
-                } else if (literals) {
-                    std::string literal;
-                    auto const next = diagnostic_notation::literal_parse({text, at}, literal, {0, depth_max});
-                    if (!next) [[unlikely]]
-                        return std::unexpected(next.error());
-                    if (auto const r = diagnostic_notation::canonical_append(q.keys, {literal, 0}, {0, depth_max}); !r) [[unlikely]]
-                        return std::unexpected(r.error());
-                    q.selectors.push_back({selector::kind::key, key_at, q.keys.size() - key_at, 0});
-                    end = *next;
-                } else [[unlikely]] {
-                    return std::unexpected(error::invalid_path);
-                }
-            }
-            at = diagnostic_notation::blank_end(text, end);
-            if (at >= text.size() || text.at(at) != ']') [[unlikely]]
-                return std::unexpected(error::invalid_path);
-            ++at;
-        }
-        if (auto const r = validity::check_nesting_depth(q.selectors.size(), depth_max); !r) [[unlikely]]
+        auto const top = q.segments_parse(text, 1, 0);
+        if (!top) [[unlikely]]
+            return std::unexpected(top.error());
+        if (top->at != text.size()) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        if (auto const r = validity::check_nesting_depth(top->segment_count, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
+        q.top = *top;
         return q;
     }
 
@@ -196,9 +610,34 @@ class jsonpath
     static std::expected<bool, error> key_equal(value_sharing::document &doc, std::size_t at,
                                                 diagnostic_notation::literal_cursor literal, std::size_t depth);
 
+    template <std::size_t DepthMax>
+    static std::expected<bool, error> value_equal(lazy const &a, lazy const &b, std::size_t depth);
+
+    template <std::size_t DepthMax>
+    static std::expected<bool, error> value_less(lazy const &a, lazy const &b);
+
+    template <std::size_t DepthMax>
+    static std::expected<std::optional<lazy>, error> comparable_value(query_view const &v, std::size_t index, lazy const &current,
+                                                                      lazy const &root);
+
+    template <std::size_t DepthMax>
+    static std::expected<bool, error> expression_test(query_view const &v, std::size_t index, lazy const &current, lazy const &root);
+
+    template <std::size_t DepthMax>
+    static std::expected<void, error> selector_apply(query_view const &v, selector const &s, lazy const &node, lazy const &root,
+                                                     std::vector<lazy> &nodelist);
+
+    template <std::size_t DepthMax>
+    static std::expected<void, error> segment_apply(query_view const &v, segment const &s, lazy const &node, lazy const &root,
+                                                        std::vector<lazy> &nodelist, std::size_t depth);
+
+    template <std::size_t DepthMax>
+    static std::expected<std::vector<lazy>, error> segments_apply(query_view const &v, std::size_t segment_at, std::size_t segment_count,
+                                                                  lazy const &start, lazy const &root);
+
     template <std::size_t DepthMax, class Binding>
-    static result<typename Binding::value, error> query_walk(Binding &binding, std::span<selector const> selectors,
-                                                             std::string_view keys, lazy const &root);
+    static result<typename Binding::value, error> query_walk(Binding &binding, query_view const &v, parsed_query const &top,
+                                                             lazy const &root);
 
     template <fixed_string, std::size_t>
     friend class verify_path;
@@ -384,25 +823,445 @@ result<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const 
     return std::unexpected(error::key_not_found);
 }
 
+
+template <std::size_t DepthMax>
+std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b, std::size_t const depth)
+{
+    if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    auto const x = value_sharing::container_resolve(a.document, a.offset);
+    if (!x) [[unlikely]]
+        return std::unexpected(x.error());
+    auto const y = value_sharing::container_resolve(b.document, b.offset);
+    if (!y) [[unlikely]]
+        return std::unexpected(y.error());
+    heads::head const &h = x->h;
+    heads::head const &k = y->h;
+    constexpr std::uint8_t half = std::to_underlying(heads::simple_float_information::half_precision_float);
+    constexpr std::uint8_t twice = std::to_underlying(heads::simple_float_information::double_precision_float);
+    auto const integral = [](heads::head const &n) {
+        return n.major == major_type::unsigned_integer || n.major == major_type::negative_integer;
+    };
+    auto const floating = [](heads::head const &n) {
+        return n.major == major_type::simple_float && n.info >= half && n.info <= twice;
+    };
+    auto const number = [&](heads::head const &n) {
+        if (floating(n))
+            return heads::float_decode(n.info, n.argument);
+        return n.major == major_type::unsigned_integer ? static_cast<double>(n.argument) : -1.0 - static_cast<double>(n.argument);
+    };
+    if (integral(h) && integral(k))
+        return h.major == k.major && h.argument == k.argument;
+    if ((integral(h) || floating(h)) && (integral(k) || floating(k)))
+        return number(h) == number(k);
+    if (h.major != k.major || floating(h) || floating(k))
+        return false;
+    if (h.info == std::to_underlying(heads::additional_information::indefinite_length) ||
+        k.info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
+        return std::unexpected(error::indefinite_length);
+    std::size_t const x_content = x->source->encoded.size() - x->d.encoded.size();
+    std::size_t const y_content = y->source->encoded.size() - y->d.encoded.size();
+    switch (h.major) {
+    case major_type::byte_string:
+    case major_type::text_string: {
+        heads::decoder d = x->d;
+        heads::decoder e = y->d;
+        auto const s = d.byte_string_decode(h.argument);
+        if (!s) [[unlikely]]
+            return std::unexpected(s.error());
+        auto const t = e.byte_string_decode(k.argument);
+        if (!t) [[unlikely]]
+            return std::unexpected(t.error());
+        return *s == *t;
+    }
+    case major_type::array: {
+        if (h.argument != k.argument)
+            return false;
+        auto const left = a.elements<DepthMax>();
+        if (!left) [[unlikely]]
+            return std::unexpected(left.error());
+        auto const right = b.elements<DepthMax>();
+        if (!right) [[unlikely]]
+            return std::unexpected(right.error());
+        auto j = right->begin();
+        for (auto const element : *left) {
+            auto const other = *j;
+            if (!element) [[unlikely]]
+                return std::unexpected(element.error());
+            if (!other) [[unlikely]]
+                return std::unexpected(other.error());
+            auto const same = value_equal<DepthMax>(*element, *other, depth + 1);
+            if (!same || !*same)
+                return same;
+            ++j;
+        }
+        return true;
+    }
+    case major_type::map: {
+        if (h.argument != k.argument)
+            return false;
+        auto const left = a.entries<DepthMax>();
+        if (!left) [[unlikely]]
+            return std::unexpected(left.error());
+        auto const right = b.entries<DepthMax>();
+        if (!right) [[unlikely]]
+            return std::unexpected(right.error());
+        for (auto const entry : *left) {
+            if (!entry) [[unlikely]]
+                return std::unexpected(entry.error());
+            std::size_t twins = 0;
+            for (auto const mine : *left) {
+                if (!mine) [[unlikely]]
+                    return std::unexpected(mine.error());
+                auto const same = value_equal<DepthMax>(entry->first, mine->first, depth + 1);
+                if (!same) [[unlikely]]
+                    return same;
+                twins += *same ? 1 : 0;
+            }
+            std::size_t paired = 0;
+            bool values_same = false;
+            for (auto const other : *right) {
+                if (!other) [[unlikely]]
+                    return std::unexpected(other.error());
+                auto const same = value_equal<DepthMax>(entry->first, other->first, depth + 1);
+                if (!same) [[unlikely]]
+                    return same;
+                if (!*same)
+                    continue;
+                ++paired;
+                auto const value_same = value_equal<DepthMax>(entry->second, other->second, depth + 1);
+                if (!value_same) [[unlikely]]
+                    return value_same;
+                values_same = *value_same;
+            }
+            if (twins != 1 || paired != 1 || !values_same)
+                return false;
+        }
+        return true;
+    }
+    case major_type::tag:
+        if (h.argument != k.argument)
+            return false;
+        return value_equal<DepthMax>(lazy{x->source, x_content}, lazy{y->source, y_content}, depth + 1);
+    default:
+        return h.info == k.info && h.argument == k.argument;
+    }
+}
+
+template <std::size_t DepthMax>
+std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const &b)
+{
+    auto const x = value_sharing::container_resolve(a.document, a.offset);
+    if (!x) [[unlikely]]
+        return std::unexpected(x.error());
+    auto const y = value_sharing::container_resolve(b.document, b.offset);
+    if (!y) [[unlikely]]
+        return std::unexpected(y.error());
+    heads::head const &h = x->h;
+    heads::head const &k = y->h;
+    constexpr std::uint8_t half = std::to_underlying(heads::simple_float_information::half_precision_float);
+    constexpr std::uint8_t twice = std::to_underlying(heads::simple_float_information::double_precision_float);
+    auto const integral = [](heads::head const &n) {
+        return n.major == major_type::unsigned_integer || n.major == major_type::negative_integer;
+    };
+    auto const floating = [](heads::head const &n) {
+        return n.major == major_type::simple_float && n.info >= half && n.info <= twice;
+    };
+    auto const number = [&](heads::head const &n) {
+        if (floating(n))
+            return heads::float_decode(n.info, n.argument);
+        return n.major == major_type::unsigned_integer ? static_cast<double>(n.argument) : -1.0 - static_cast<double>(n.argument);
+    };
+    if (integral(h) && integral(k)) {
+        if (h.major != k.major)
+            return h.major == major_type::negative_integer;
+        return h.major == major_type::unsigned_integer ? h.argument < k.argument : h.argument > k.argument;
+    }
+    if ((integral(h) || floating(h)) && (integral(k) || floating(k)))
+        return number(h) < number(k);
+    if (h.major != major_type::text_string || k.major != major_type::text_string)
+        return false;
+    if (h.info == std::to_underlying(heads::additional_information::indefinite_length) ||
+        k.info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
+        return std::unexpected(error::indefinite_length);
+    heads::decoder d = x->d;
+    heads::decoder e = y->d;
+    auto const s = d.byte_string_decode(h.argument);
+    if (!s) [[unlikely]]
+        return std::unexpected(s.error());
+    auto const t = e.byte_string_decode(k.argument);
+    if (!t) [[unlikely]]
+        return std::unexpected(t.error());
+    return std::ranges::lexicographical_compare(*s, *t, {}, [](char const c) { return static_cast<unsigned char>(c); },
+                                                [](char const c) { return static_cast<unsigned char>(c); });
+}
+
+template <std::size_t DepthMax>
+std::expected<std::optional<lazy>, error> jsonpath::comparable_value(query_view const &v, std::size_t const index,
+                                                                     lazy const &current, lazy const &root)
+{
+    expression const &e = v.expressions[index];
+    auto const unsigned_integer = [](std::uint64_t const n) -> std::expected<std::optional<lazy>, error> {
+        std::string encoded;
+        if (auto const r = diagnostic_notation::head_append(encoded, major_type::unsigned_integer, n, diagnostic_notation::no_indicator); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        auto const l = lazy::from(std::move(encoded));
+        if (!l) [[unlikely]]
+            return std::unexpected(l.error());
+        return *l;
+    };
+    switch (e.kind) {
+    case expression::kind::literal: {
+        auto const l = lazy::from(v.keys.substr(e.first, e.second));
+        if (!l) [[unlikely]]
+            return std::unexpected(l.error());
+        return *l;
+    }
+    case expression::kind::query:
+    case expression::kind::count:
+    case expression::kind::value: {
+        expression const &q = e.kind == expression::kind::query ? e : v.expressions[e.first];
+        auto const nodes = segments_apply<DepthMax>(v, q.first, q.second, q.relative ? current : root, root);
+        if (!nodes) [[unlikely]]
+            return std::unexpected(nodes.error());
+        if (e.kind == expression::kind::count)
+            return unsigned_integer(nodes->size());
+        if (nodes->size() != 1)
+            return std::nullopt;
+        return nodes->front();
+    }
+    case expression::kind::length: {
+        auto const argument = comparable_value<DepthMax>(v, e.first, current, root);
+        if (!argument || !*argument) [[unlikely]]
+            return argument;
+        auto const found = value_sharing::container_resolve((*argument)->document, (*argument)->offset);
+        if (!found) [[unlikely]]
+            return std::unexpected(found.error());
+        if (found->h.major == major_type::array || found->h.major == major_type::map) {
+            if (found->h.info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
+                return std::unexpected(error::indefinite_length);
+            return unsigned_integer(found->h.argument);
+        }
+        if (found->h.major != major_type::text_string)
+            return std::nullopt;
+        if (found->h.info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
+            return std::unexpected(error::indefinite_length);
+        heads::decoder d = found->d;
+        auto const s = d.byte_string_decode(found->h.argument);
+        if (!s) [[unlikely]]
+            return std::unexpected(s.error());
+        return unsigned_integer(static_cast<std::uint64_t>(
+            std::ranges::count_if(*s, [](char const c) { return (static_cast<unsigned char>(c) & 0xc0) != 0x80; })));
+    }
+    [[unlikely]] default:
+        return std::unexpected(error::invalid_path);
+    }
+}
+
+template <std::size_t DepthMax>
+std::expected<bool, error> jsonpath::expression_test(query_view const &v, std::size_t const index, lazy const &current,
+                                                     lazy const &root)
+{
+    expression const &e = v.expressions[index];
+    switch (e.kind) {
+    case expression::kind::logical_or:
+    case expression::kind::logical_and: {
+        auto const left = expression_test<DepthMax>(v, e.first, current, root);
+        if (!left || *left == (e.kind == expression::kind::logical_or))
+            return left;
+        return expression_test<DepthMax>(v, e.second, current, root);
+    }
+    case expression::kind::logical_not: {
+        auto const operand = expression_test<DepthMax>(v, e.first, current, root);
+        if (!operand) [[unlikely]]
+            return operand;
+        return !*operand;
+    }
+    case expression::kind::query: {
+        auto const nodes = segments_apply<DepthMax>(v, e.first, e.second, e.relative ? current : root, root);
+        if (!nodes) [[unlikely]]
+            return std::unexpected(nodes.error());
+        return !nodes->empty();
+    }
+    case expression::kind::comparison:
+        break;
+    [[unlikely]] default:
+        return std::unexpected(error::invalid_path);
+    }
+    auto const a = comparable_value<DepthMax>(v, e.first, current, root);
+    if (!a) [[unlikely]]
+        return std::unexpected(a.error());
+    auto const b = comparable_value<DepthMax>(v, e.second, current, root);
+    if (!b) [[unlikely]]
+        return std::unexpected(b.error());
+    auto const equal = [&]() -> std::expected<bool, error> {
+        if (!*a || !*b)
+            return !*a && !*b;
+        return value_equal<DepthMax>(**a, **b, 0);
+    };
+    auto const less = [](std::optional<lazy> const &x, std::optional<lazy> const &y) -> std::expected<bool, error> {
+        if (!x || !y)
+            return false;
+        return value_less<DepthMax>(*x, *y);
+    };
+    auto const either = [](std::expected<bool, error> const &x, auto const &y) -> std::expected<bool, error> {
+        if (!x || *x)
+            return x;
+        return y();
+    };
+    switch (e.op) {
+    case comparison_op::equal:
+        return equal();
+    case comparison_op::not_equal: {
+        auto const r = equal();
+        if (!r) [[unlikely]]
+            return r;
+        return !*r;
+    }
+    case comparison_op::less:
+        return less(*a, *b);
+    case comparison_op::less_equal:
+        return either(less(*a, *b), equal);
+    case comparison_op::greater:
+        return less(*b, *a);
+    case comparison_op::greater_equal:
+        return either(less(*b, *a), equal);
+    }
+    return false;
+}
+
+template <std::size_t DepthMax>
+std::expected<void, error> jsonpath::selector_apply(query_view const &v, selector const &s, lazy const &node, lazy const &root,
+                                                    std::vector<lazy> &nodelist)
+{
+    std::size_t const limit = root.document->encoded.size();
+    auto const append = [&nodelist, limit](lazy const &l) -> std::expected<void, error> {
+        if (nodelist.size() >= limit) [[unlikely]]
+            return std::unexpected(error::nodelist_too_long);
+        nodelist.push_back(l);
+        return {};
+    };
+    if (s.kind == selector::kind::key || s.kind == selector::kind::index) {
+        auto const child = s.kind == selector::kind::index ? node.at<DepthMax>(s.index)
+                                                           : key_find<DepthMax>(node, v.keys.substr(s.key_at, s.key_size));
+        if (child)
+            return append(*child);
+        if (child.error() != error::not_indexable && child.error() != error::index_out_of_bounds &&
+            child.error() != error::key_not_found) [[unlikely]]
+            return std::unexpected(child.error());
+        return {};
+    }
+    auto const found = value_sharing::container_resolve(node.document, node.offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    std::vector<lazy> children;
+    if (found->h.major == major_type::array) {
+        auto const elements = node.elements<DepthMax>();
+        if (!elements) [[unlikely]]
+            return std::unexpected(elements.error());
+        for (auto const element : *elements) {
+            if (!element) [[unlikely]]
+                return std::unexpected(element.error());
+            children.push_back(*element);
+        }
+    } else if (found->h.major == major_type::map && s.kind != selector::kind::slice) {
+        auto const entries = node.entries<DepthMax>();
+        if (!entries) [[unlikely]]
+            return std::unexpected(entries.error());
+        for (auto const entry : *entries) {
+            if (!entry) [[unlikely]]
+                return std::unexpected(entry.error());
+            children.push_back(entry->second);
+        }
+    }
+    if (s.kind == selector::kind::slice) {
+        auto const len = static_cast<std::int64_t>(children.size());
+        if (s.step == 0)
+            return {};
+        auto const normalize = [len](std::int64_t const i) { return i >= 0 ? i : len + i; };
+        std::int64_t const start = normalize(s.start.value_or(s.step >= 0 ? 0 : len - 1));
+        std::int64_t const end = s.end ? normalize(*s.end) : (s.step >= 0 ? len : -1);
+        if (s.step > 0) {
+            std::int64_t const lower = std::min(std::max(start, std::int64_t{0}), len);
+            std::int64_t const upper = std::min(std::max(end, std::int64_t{0}), len);
+            for (std::int64_t i = lower; i < upper; i += s.step)
+                if (auto const r = append(children.at(static_cast<std::size_t>(i))); !r) [[unlikely]]
+                    return r;
+        } else {
+            std::int64_t const upper = std::min(std::max(start, std::int64_t{-1}), len - 1);
+            std::int64_t const lower = std::min(std::max(end, std::int64_t{-1}), len - 1);
+            for (std::int64_t i = upper; lower < i; i += s.step)
+                if (auto const r = append(children.at(static_cast<std::size_t>(i))); !r) [[unlikely]]
+                    return r;
+        }
+        return {};
+    }
+    for (lazy const &child : children) {
+        if (s.kind == selector::kind::filter) {
+            auto const chosen = expression_test<DepthMax>(v, s.expression, child, root);
+            if (!chosen) [[unlikely]]
+                return std::unexpected(chosen.error());
+            if (!*chosen)
+                continue;
+        }
+        if (auto const r = append(child); !r) [[unlikely]]
+            return r;
+    }
+    return {};
+}
+
+template <std::size_t DepthMax>
+std::expected<void, error> jsonpath::segment_apply(query_view const &v, segment const &s, lazy const &node, lazy const &root,
+                                                       std::vector<lazy> &nodelist, std::size_t const depth)
+{
+    if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    for (selector const &each : v.selectors.subspan(s.selector_at, s.selector_count))
+        if (auto const r = selector_apply<DepthMax>(v, each, node, root, nodelist); !r) [[unlikely]]
+            return r;
+    if (!s.descendant)
+        return {};
+    std::vector<lazy> children;
+    selector const wildcard{selector::kind::wildcard, 0, 0, 0, std::nullopt, std::nullopt, 1, 0};
+    if (auto const r = selector_apply<DepthMax>(v, wildcard, node, root, children); !r) [[unlikely]]
+        return r;
+    for (lazy const &child : children)
+        if (auto const r = segment_apply<DepthMax>(v, s, child, root, nodelist, depth + 1); !r) [[unlikely]]
+            return r;
+    return {};
+}
+
+template <std::size_t DepthMax>
+std::expected<std::vector<lazy>, error> jsonpath::segments_apply(query_view const &v, std::size_t const segment_at,
+                                                                 std::size_t const segment_count, lazy const &start, lazy const &root)
+{
+    std::vector<lazy> nodes{start};
+    std::vector<lazy> next;
+    for (segment const &s : v.segments.subspan(segment_at, segment_count)) {
+        next.clear();
+        for (lazy const &node : nodes)
+            if (auto const r = segment_apply<DepthMax>(v, s, node, root, next, 0); !r) [[unlikely]]
+                return std::unexpected(r.error());
+        std::swap(nodes, next);
+    }
+    return nodes;
+}
+
 template <std::size_t DepthMax, class Binding>
-result<typename Binding::value, error> jsonpath::query_walk(Binding &binding, std::span<selector const> const selectors,
-                                                            std::string_view const keys, lazy const &root)
+result<typename Binding::value, error> jsonpath::query_walk(Binding &binding, query_view const &v, parsed_query const &top,
+                                                            lazy const &root)
 {
     if (!root.document) [[unlikely]]
         throw std::logic_error("cbor::at_path: the lazy holds no document");
-    bool const nodelist =
-        std::ranges::any_of(selectors, [](selector const &s) { return s.kind == selector::kind::wildcard; });
-    std::size_t const limit = root.document->encoded.size();
-    if (!nodelist) {
+    if (top.singular) {
         lazy node = root;
-        for (selector const &s : selectors) {
-            auto const child = s.kind == selector::kind::index
-                                   ? node.at<DepthMax>(s.index)
-                                   : key_find<DepthMax>(node, keys.substr(s.key_at, s.key_size));
+        for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
+            selector const &each = v.selectors[s.selector_at];
+            auto const child = each.kind == selector::kind::index
+                                   ? node.at<DepthMax>(each.index)
+                                   : key_find<DepthMax>(node, v.keys.substr(each.key_at, each.key_size));
             if (!child) [[unlikely]]
                 return std::unexpected(child.error());
-            if (limit == 0) [[unlikely]]
-                return std::unexpected(error::nodelist_too_long);
             node = *child;
         }
         auto value = lazy_decode<DepthMax>(binding, node);
@@ -410,63 +1269,11 @@ result<typename Binding::value, error> jsonpath::query_walk(Binding &binding, st
             return std::unexpected(value.error());
         return std::move(*value);
     }
-    std::vector<lazy> nodes{root};
-    std::vector<lazy> next;
-    for (selector const &s : selectors) {
-        next.clear();
-        for (lazy const &node : nodes) {
-            error failure{};
-            if (s.kind == selector::kind::wildcard) {
-                auto const found = value_sharing::container_resolve(node.document, node.offset);
-                if (!found) [[unlikely]]
-                    return std::unexpected(found.error());
-                if (found->h.major == major_type::array) {
-                    auto const elements = node.elements<DepthMax>();
-                    if (!elements) [[unlikely]]
-                        return std::unexpected(elements.error());
-                    for (auto const element : *elements) {
-                        if (!element) [[unlikely]]
-                            return std::unexpected(element.error());
-                        if (next.size() == limit) [[unlikely]]
-                            return std::unexpected(error::nodelist_too_long);
-                        next.push_back(*element);
-                    }
-                } else if (found->h.major == major_type::map) {
-                    auto const entries = node.entries<DepthMax>();
-                    if (!entries) [[unlikely]]
-                        return std::unexpected(entries.error());
-                    for (auto const entry : *entries) {
-                        if (!entry) [[unlikely]]
-                            return std::unexpected(entry.error());
-                        if (next.size() == limit) [[unlikely]]
-                            return std::unexpected(error::nodelist_too_long);
-                        next.push_back(entry->second);
-                    }
-                } else {
-                    failure = error::not_indexable;
-                }
-            } else {
-                auto const child = s.kind == selector::kind::index
-                                       ? node.at<DepthMax>(s.index)
-                                       : key_find<DepthMax>(node, keys.substr(s.key_at, s.key_size));
-                if (child) {
-                    if (next.size() == limit) [[unlikely]]
-                        return std::unexpected(error::nodelist_too_long);
-                    next.push_back(*child);
-                } else {
-                    failure = child.error();
-                }
-            }
-            if (failure == error{})
-                continue;
-            if (failure != error::not_indexable && failure != error::index_out_of_bounds &&
-                failure != error::key_not_found) [[unlikely]]
-                return std::unexpected(failure);
-        }
-        std::swap(nodes, next);
-    }
-    auto array = binding.array_decode(nodes.size());
-    for (lazy const &node : nodes) {
+    auto const nodes = segments_apply<DepthMax>(v, top.segment_at, top.segment_count, root, root);
+    if (!nodes) [[unlikely]]
+        return std::unexpected(nodes.error());
+    auto array = binding.array_decode(nodes->size());
+    for (lazy const &node : *nodes) {
         auto value = lazy_decode<DepthMax>(binding, node);
         if (!value) [[unlikely]]
             return std::unexpected(value.error());
@@ -481,24 +1288,34 @@ result<typename Binding::value, error> at_path(Binding &binding, std::string_vie
     auto const q = jsonpath::query_parse(path, false, DepthMax);
     if (!q) [[unlikely]]
         return std::unexpected(q.error());
-    return jsonpath::query_walk<DepthMax>(binding, q->selectors, q->keys, l);
+    return jsonpath::query_walk<DepthMax>(binding, {q->segments, q->selectors, q->expressions, q->keys}, q->top, l);
 }
 
 template <fixed_string Path, std::size_t DepthMax, class Binding>
     requires(verify_path<Path, DepthMax>::value)
 result<typename Binding::value, error> at_path(Binding &binding, lazy const &l)
 {
-    constexpr std::size_t count = jsonpath::query_parse(Path.view(), true, DepthMax)->selectors.size();
-    constexpr std::size_t size = jsonpath::query_parse(Path.view(), true, DepthMax)->keys.size();
-    constexpr auto compiled = [] {
-        auto const q = *jsonpath::query_parse(Path.view(), true, DepthMax);
-        std::pair<std::array<jsonpath::selector, count>, std::array<char, size>> c{};
-        std::ranges::copy(q.selectors, c.first.begin());
-        std::ranges::copy(q.keys, c.second.begin());
+    constexpr auto q = [] { return *jsonpath::query_parse(Path.view(), true, DepthMax); };
+    constexpr std::size_t segments = q().segments.size();
+    constexpr std::size_t selectors = q().selectors.size();
+    constexpr std::size_t expressions = q().expressions.size();
+    constexpr std::size_t keys = q().keys.size();
+    constexpr auto top = q().top;
+    constexpr auto compiled = [q] {
+        auto const parsed = q();
+        std::tuple<std::array<jsonpath::segment, segments>, std::array<jsonpath::selector, selectors>,
+                   std::array<jsonpath::expression, expressions>, std::array<char, keys>>
+            c{};
+        std::ranges::copy(parsed.segments, std::get<0>(c).begin());
+        std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
+        std::ranges::copy(parsed.expressions, std::get<2>(c).begin());
+        std::ranges::copy(parsed.keys, std::get<3>(c).begin());
         return c;
     }();
-    return jsonpath::query_walk<DepthMax>(binding, std::span<jsonpath::selector const>(compiled.first),
-                                          std::string_view(compiled.second.data(), size), l);
+    return jsonpath::query_walk<DepthMax>(binding,
+                                          {std::get<0>(compiled), std::get<1>(compiled), std::get<2>(compiled),
+                                           std::string_view(std::get<3>(compiled).data(), keys)},
+                                          top, l);
 }
 
 }

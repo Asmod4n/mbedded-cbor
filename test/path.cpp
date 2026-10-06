@@ -144,8 +144,8 @@ TEST_CASE("path: a wildcard over records with large fields")
 }
 
 // RFC 9535 2.2 to 2.5: blanks before a segment and inside brackets, names in single or double quotes with their
-// escapes, an index without leading zeros in the range of I-JSON. At run time a bracket holds a name, an index
-// or a wildcard and nothing else; every other form is invalid_path. A query has at most DepthMax segments.
+// escapes, an index without leading zeros in the range of I-JSON. At run time a bracket holds the selectors of
+// RFC 9535 and nothing else; every other form is invalid_path. A query has at most DepthMax segments.
 TEST_CASE("path: the grammar")
 {
     value const doc = M("a"s, M("b c"s, A(1, 2, 3)), "ü'\""s, 4);
@@ -156,7 +156,7 @@ TEST_CASE("path: the grammar")
     CHECK(at("$.\u00fc_1", M("\u00fc_1"s, 5)) == V(5));
     for (std::string_view const bad :
          {"a"sv, ""sv, "$.1a"sv, "$["sv, "$[*"sv, "$['open"sv, "$['k'"sv, "$[x]"sv, "$[1"sv, "$#"sv, "$[01]"sv,
-          "$[-0]"sv, "$[1.5]"sv, "$[h'01']"sv, "$[true]"sv, "$.a "sv, "$..a"sv, "$[1,2]"sv, "$['\\x']"sv,
+          "$[-0]"sv, "$[1.5]"sv, "$[h'01']"sv, "$[true]"sv, "$.a "sv, "$.."sv, "$[1,]"sv, "$['\\x']"sv,
           "$['\\ud800']"sv, "$['\x01']"sv, "$[9007199254740992]"sv, "$[*]]"sv, "$."sv})
         CHECK_EQ(path_error(bad, A(1)), error::invalid_path);
     CHECK_EQ(path_error("$[9007199254740991]", A(1)), error::index_out_of_bounds);
@@ -328,4 +328,112 @@ TEST_CASE("path: a key map with duplicate keys is not valid")
     CHECK_EQ(compiled_at<"$[{\"k\": 1}]">(doc).error(), error::key_not_found);
     CHECK_FALSE(path_compiles<"$[{\"k\": 1, \"k\": 2}]">);
     CHECK_FALSE(path_compiles<"$[{\"k\": 1, \"k\"_0: 2}]">);
+}
+
+// RFC 9535 2.5.1.2: a child segment with several selectors gives, for each input node, the nodes of the first
+// selector, then those of the second, in the order of the selectors. A node can occur twice.
+TEST_CASE("path: several selectors in one segment")
+{
+    value const doc = M("a"s, 1, "b"s, 2, "c"s, A(10, 20, 30));
+    CHECK(at("$['b', 'a']", doc) == A(2, 1));
+    CHECK(at("$.c[2, 0, 2]", doc) == A(30, 10, 30));
+    CHECK(at("$['a', 'x', *]", doc) == A(1, 1, 2, A(10, 20, 30)));
+    CHECK(at("$.c[ 1 ,\t-1 ]", doc) == A(20, 30));
+}
+
+// RFC 9535 2.3.4.2.2: the defaults of start and end depend on the sign of step, negative bounds count from the end,
+// bounds out of range are clamped, a negative step walks backwards, and step 0 selects nothing. A slice of a node
+// that is not an array selects nothing.
+TEST_CASE("path: the array slice selector")
+{
+    value const doc = A(0, 1, 2, 3, 4, 5, 6);
+    CHECK(at("$[1:3]", doc) == A(1, 2));
+    CHECK(at("$[5:]", doc) == A(5, 6));
+    CHECK(at("$[1:5:2]", doc) == A(1, 3));
+    CHECK(at("$[5:1:-2]", doc) == A(5, 3));
+    CHECK(at("$[::-1]", doc) == A(6, 5, 4, 3, 2, 1, 0));
+    CHECK(at("$[-2:]", doc) == A(5, 6));
+    CHECK(at("$[-100:100:3]", doc) == A(0, 3, 6));
+    CHECK(at("$[0:7:0]", doc) == A());
+    CHECK(at("$[ 1 : 2 : 1 ]", doc) == A(1));
+    CHECK(at("$[:]", M("a"s, 1)) == A());
+    for (std::string_view const bad : {"$[1:2:3:4]"sv, "$[01:2]"sv, "$[1:-0]"sv, "$[:9007199254740992]"sv, "$[1:2:a]"sv})
+        CHECK_EQ(path_error(bad, doc), error::invalid_path);
+}
+
+// RFC 9535 2.5.2.2: a descendant segment applies its selectors to the input node and then to every descendant,
+// each node before its descendants and an array in its order. A descendant segment deeper than DepthMax fails.
+TEST_CASE("path: the descendant segment")
+{
+    value const doc = M("a"s, M("b"s, 1, "c"s, A(M("b"s, 2))), "b"s, 3);
+    CHECK(at("$..b", doc) == A(3, 1, 2));
+    CHECK(at("$..[0]", doc) == A(M("b"s, 2)));
+    CHECK(at("$.a..*", doc) == A(1, A(M("b"s, 2)), M("b"s, 2), 2));
+    CHECK(at("$..['b', 'c'][0]", doc) == A(M("b"s, 2)));
+    for (std::string_view const bad : {"$..."sv, "$.. b"sv, "$..1"sv})
+        CHECK_EQ(path_error(bad, doc), error::invalid_path);
+    std::string const deep = encoded(A(A(A(A(A(1))))));
+    test_binding binding;
+    CHECK_EQ(cbor::at_path<3>(binding, "$..[0]", *cbor::decode<16>(deep)).error(), error::nesting_depth_exceeded);
+}
+
+// RFC 9535 2.3.5: a filter keeps the children for which the logical expression is true. A comparison of numbers
+// compares by value, so 1 equals 1.0; < compares only numbers and strings; a side that selects nothing equals only
+// another side that selects nothing. && binds more tightly than ||, ! negates an existence test or a group.
+TEST_CASE("path: the filter selector")
+{
+    value const doc = A(M("a"s, 1), M("a"s, 2.0), M("a"s, "x"s), M("b"s, 1), M("a"s, simple{22}), M("a"s, A(1)));
+    CHECK(at("$[?@.a == 1]", doc) == A(M("a"s, 1)));
+    CHECK(at("$[?@.a == 2]", doc) == A(M("a"s, 2.0)));
+    CHECK(at("$[?@.a > 1]", doc) == A(M("a"s, 2.0)));
+    CHECK(at("$[?@.a <= 'x' && @.a >= 'x']", doc) == A(M("a"s, "x"s)));
+    CHECK(at("$[?@.a == null]", doc) == A(M("a"s, simple{22})));
+    CHECK(at("$[?@.a == $[0].a]", doc) == A(M("a"s, 1)));
+    CHECK(at("$[?@.a == @.c]", doc) == A(M("b"s, 1)));
+    CHECK(at("$[?@.b || @.a == 1 && @.a != 1]", doc) == A(M("b"s, 1)));
+    CHECK(at("$[?(@.b || @.a == 1) && !@.b]", doc) == A(M("a"s, 1)));
+    CHECK(at("$[?!(@.a)]", doc) == A(M("b"s, 1)));
+    CHECK(at("$[?@.a[0]]", doc) == A(M("a"s, A(1))));
+    CHECK(at("$[?@.a == -1e0 || @.a == 1.0e+0]", doc) == A(M("a"s, 1)));
+    CHECK(at("$.*[?@ == 'x']", doc) == A("x"s));
+    for (std::string_view const bad : {"$[?@.a]]"sv, "$[?1]"sv, "$[?@.a == @.*]"sv, "$[?!@.a == 1]"sv, "$[?@.a = 1]"sv,
+                                       "$[?@.a == 01]"sv, "$[?@.a == 1.]"sv, "$[?@.a == True]"sv, "$[?(@.a]"sv,
+                                       "$[?@.a == [1]]"sv, "$[?@.a == h'01']"sv, "$[?@.a == \"\\'\"]"sv})
+        CHECK_EQ(path_error(bad, doc), error::invalid_path);
+}
+
+// RFC 9535 2.4.4 to 2.4.8: length counts Unicode scalar values, elements or members and gives Nothing for other
+// values, and Nothing equals Nothing; count gives the size of a nodelist; value gives the value of a nodelist with one node. The owner decided
+// that the library has no regular expressions, so match and search are refused as an invalid path. A function that
+// is not well-typed (2.4.3) is an invalid path too.
+TEST_CASE("path: the function extensions")
+{
+    value const doc = A(M("a"s, "\u00fcb"s), M("a"s, A(1, 2)), M("a"s, 3), M("a"s, M("x"s, 1, "y"s, 2)));
+    CHECK(at("$[?length(@.a) == 2]", doc) == A(M("a"s, "\u00fcb"s), M("a"s, A(1, 2)), M("a"s, M("x"s, 1, "y"s, 2))));
+    CHECK(at("$[?length(@.a) == length(@.b)]", doc) == A(M("a"s, 3)));
+    CHECK(at("$[?count(@.a.*) == 2]", doc) == A(M("a"s, A(1, 2)), M("a"s, M("x"s, 1, "y"s, 2))));
+    CHECK(at("$[?value(@..y) == 2]", doc) == A(M("a"s, M("x"s, 1, "y"s, 2))));
+    CHECK(at("$[?length('abc') == 3]", A(1)) == A(1));
+    for (std::string_view const bad :
+         {"$[?match(@.a, 'a')]"sv, "$[?search(@.a, 'a')]"sv, "$[?length(@.a)]"sv, "$[?count(1) == 1]"sv,
+          "$[?length(@.*) == 1]"sv, "$[?value(@.a, @.b) == 1]"sv, "$[?foo(@.a)]"sv, "$[?length() == 1]"sv})
+        CHECK_EQ(path_error(bad, doc), error::invalid_path);
+}
+
+// The compile-time form takes an EDN literal (draft-ietf-cbor-edn-literals-28) wherever RFC 9535 takes a JSON
+// literal, so a filter compares with byte strings, tags, arrays and maps too. A quoted string stays a text string
+// as in RFC 9535, also with single quotes.
+TEST_CASE("path: an EDN literal in a filter")
+{
+    std::string const doc = encoded(A(M("a"s, bytes{"\x01"}), M("a"s, tagged{1000, "x"s}), M("a"s, A(1, 2)),
+                                      M("a"s, M("k"s, 1)), M("a"s, "s"s)));
+    CHECK(found(compiled_at<"$[?@.a == h'01'].a">(doc)) == A(bytes{"\x01"}));
+    CHECK(found(compiled_at<"$[?@.a == 1000(\"x\")].a">(doc)) == A(tagged{1000, "x"s}));
+    CHECK(found(compiled_at<"$[?@.a == [1, 2]].a">(doc)) == A(A(1, 2)));
+    CHECK(found(compiled_at<"$[?@.a == {\"k\": 1}].a">(doc)) == A(M("k"s, 1)));
+    CHECK(found(compiled_at<"$[?@.a == 's'].a">(doc)) == A("s"s));
+    CHECK(found(compiled_at<"$[?@.a == <<1>>].a">(doc)) == A(bytes{"\x01"}));
+    CHECK(path_compiles<"$[?@.a == simple(99)]">);
+    CHECK_FALSE(path_compiles<"$[?@.a == h'0']">);
+    CHECK_FALSE(path_compiles<"$[?match(@.a, 'x')]">);
 }
