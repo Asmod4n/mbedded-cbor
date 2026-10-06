@@ -1,16 +1,23 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
+#include <iterator>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
+#include "binding.hpp"
 #include "error.hpp"
 #include "head.hpp"
+#include "owning_ref.hpp"
 
 namespace cbor
 {
@@ -25,109 +32,15 @@ struct lazy_entries;
 
 class value_sharing
 {
-    struct sharing_decoder : heads::decoder {
-        std::string_view message;
-        std::vector<std::size_t> marks;
-        std::size_t high_water_mark;
+    struct document;
 
-        void mark(heads::decoder const &at)
-        {
-            std::size_t const offset = message.size() - at.encoded.size();
-            if (offset > high_water_mark) {
-                marks.push_back(offset);
-                high_water_mark = offset;
-            }
-        }
+    struct sharing_decoder;
 
-        std::expected<std::size_t, error> reference_follow(std::size_t const tag_at)
-        {
-            auto const n = head_decode();
-            if (!n) [[unlikely]]
-                return std::unexpected(n.error());
-            if (n->major != major_type::unsigned_integer) [[unlikely]]
-                return std::unexpected(error::inadmissible_type_for_tag_content);
-            if (n->argument >= marks.size()) [[unlikely]]
-                return std::unexpected(error::sharedref_index_not_marked);
-            std::size_t const marked = marks.at(static_cast<std::size_t>(n->argument));
-            if (marked >= tag_at) [[unlikely]]
-                return std::unexpected(error::sharedref_not_complete);
-            return marked;
-        }
-    };
+    struct resolved;
 
-    struct document {
-        std::shared_ptr<void const> owner;
-        std::string_view encoded;
-        std::vector<std::size_t> marks;
-        std::size_t high_water_mark;
+    static std::expected<std::size_t, error> shared_resolve(document &doc, std::size_t at);
 
-        void mark(heads::decoder const &d)
-        {
-            std::size_t const offset = encoded.size() - d.encoded.size();
-            if (offset > high_water_mark) {
-                marks.push_back(offset);
-                high_water_mark = offset;
-            }
-        }
-    };
-
-    template <std::size_t DepthMax>
-    static std::expected<std::size_t, error> shared_resolve(document const &doc, std::size_t at);
-
-    struct resolved {
-        std::shared_ptr<document> source;
-        heads::head h;
-        heads::decoder d;
-    };
-
-    static std::expected<resolved, error> container_resolve(std::shared_ptr<document> source, std::size_t offset)
-    {
-        std::vector<std::size_t> followed;
-        for (;;) {
-            heads::decoder d{source->encoded.substr(offset)};
-            auto const h = d.head_decode();
-            if (!h) [[unlikely]]
-                return std::unexpected(h.error());
-            if (h->major != major_type::tag)
-                return resolved{source, *h, d};
-            if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
-                source->mark(d);
-                offset = source->encoded.size() - d.encoded.size();
-                continue;
-            }
-            if (h->argument == std::to_underlying(heads::tag_number::encoded_cbor_data_item)) {
-                auto const r = d.head_decode();
-                if (!r) [[unlikely]]
-                    return std::unexpected(r.error());
-                if (r->major != major_type::byte_string) [[unlikely]]
-                    return std::unexpected(error::inadmissible_type_for_tag_content);
-                auto const embedded = d.byte_string_decode(r->argument);
-                if (!embedded) [[unlikely]]
-                    return std::unexpected(embedded.error());
-                source = std::make_shared<document>(source->owner, *embedded, std::vector<std::size_t>{}, 0);
-                offset = 0;
-                followed.clear();
-                continue;
-            }
-            if (h->argument != std::to_underlying(heads::tag_number::sharedref))
-                return resolved{source, *h, d};
-            if (std::ranges::find(followed, offset) != followed.end()) [[unlikely]]
-                return std::unexpected(error::sharedref_not_complete);
-            followed.push_back(offset);
-            auto const r = d.head_decode();
-            if (!r) [[unlikely]]
-                return std::unexpected(r.error());
-            if (r->major != major_type::unsigned_integer) [[unlikely]]
-                return std::unexpected(error::inadmissible_type_for_tag_content);
-            std::vector<std::size_t> const &offsets = source->marks;
-            if (r->argument >= offsets.size()) [[unlikely]]
-                return std::unexpected(error::sharedref_index_not_marked);
-            std::size_t const marked = offsets.at(static_cast<std::size_t>(r->argument));
-            if (marked >= offset) [[unlikely]]
-                return std::unexpected(error::sharedref_not_complete);
-            offset = marked;
-        }
-    }
+    static std::expected<resolved, error> container_resolve(std::shared_ptr<document> source, std::size_t offset);
 
     friend struct lazy;
 
@@ -140,6 +53,8 @@ class value_sharing
     template <std::size_t DepthMax>
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
 
+    friend class decoding;
+
     friend class jsonpath;
 
 #ifdef __cpp_impl_reflection
@@ -150,9 +65,84 @@ class value_sharing
 #endif
 };
 
-template <std::size_t DepthMax>
-std::expected<std::size_t, error> value_sharing::shared_resolve(document const &doc, std::size_t at)
+struct lazy {
+    std::shared_ptr<value_sharing::document> document;
+    std::size_t offset;
+
+    template <std::same_as<std::string> Encoded>
+    static result<lazy> from(Encoded &&encoded);
+    static result<lazy> from(std::string_view encoded);
+    static result<lazy> from(std::shared_ptr<std::string const> encoded);
+    static result<lazy> from(std::shared_ptr<void const> owner, std::string_view encoded);
+
+    template <std::size_t DepthMax = 64>
+    result<lazy> at(std::string_view key) const;
+
+    template <std::size_t DepthMax = 64>
+    result<lazy> at(std::int64_t index) const;
+
+    template <class T>
+        requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
+                 std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
+                 std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
+    result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                                   std::is_same_v<T, typed_array>,
+                               owning_ref<T>, T>> get() const;
+
+    template <std::size_t DepthMax = 64>
+    result<lazy_elements<DepthMax>> elements() const;
+
+    template <std::size_t DepthMax = 64>
+    result<lazy_entries<DepthMax>> entries() const;
+};
+
+struct value_sharing::document {
+    std::shared_ptr<void const> owner;
+    std::string_view encoded;
+    std::vector<lazy> sharedrefs;
+    std::size_t high_water_mark;
+
+    std::size_t mark(heads::decoder const &at)
+    {
+        std::size_t const offset = encoded.size() - at.encoded.size();
+        if (offset > high_water_mark) {
+            sharedrefs.push_back(lazy{{}, offset});
+            high_water_mark = offset;
+            return sharedrefs.size() - 1;
+        }
+        auto const known = std::ranges::lower_bound(sharedrefs, offset, {}, &lazy::offset);
+        return static_cast<std::size_t>(std::ranges::distance(sharedrefs.begin(), known));
+    }
+
+    std::expected<lazy, error> sharedref_decode(heads::decoder &d, std::size_t const item_at) const
+    {
+        auto const n = d.head_decode();
+        if (!n) [[unlikely]]
+            return std::unexpected(n.error());
+        if (n->major != major_type::unsigned_integer) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        if (n->argument >= sharedrefs.size()) [[unlikely]]
+            return std::unexpected(error::sharedref_index_not_marked);
+        lazy const &found = sharedrefs.at(static_cast<std::size_t>(n->argument));
+        if (found.offset >= item_at) [[unlikely]]
+            return std::unexpected(error::sharedref_not_complete);
+        return found;
+    }
+};
+
+struct value_sharing::sharing_decoder : heads::decoder {
+    document message;
+};
+
+struct value_sharing::resolved {
+    std::shared_ptr<document> source;
+    heads::head h;
+    heads::decoder d;
+};
+
+inline std::expected<std::size_t, error> value_sharing::shared_resolve(document &doc, std::size_t at)
 {
+    std::size_t item_at = at;
     for (;;) {
         auto const h = heads::raw_head_read(doc.encoded, at);
         if (!h) [[unlikely]]
@@ -160,22 +150,44 @@ std::expected<std::size_t, error> value_sharing::shared_resolve(document const &
         if (h->major != major_type::tag || h->info == std::to_underlying(heads::additional_information::indefinite_length))
             return at;
         if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
+            doc.mark(heads::decoder{doc.encoded.substr(h->at)});
             at = h->at;
             continue;
         }
         if (h->argument != std::to_underlying(heads::tag_number::sharedref))
             return at;
-        auto const n = heads::raw_head_read(doc.encoded, h->at);
-        if (!n) [[unlikely]]
-            return std::unexpected(n.error());
-        if (n->major != major_type::unsigned_integer) [[unlikely]]
+        heads::decoder d{doc.encoded.substr(h->at)};
+        auto const found = doc.sharedref_decode(d, item_at);
+        if (!found) [[unlikely]]
+            return std::unexpected(found.error());
+        at = found->offset;
+        item_at = at;
+    }
+}
+
+inline std::expected<value_sharing::resolved, error> value_sharing::container_resolve(std::shared_ptr<document> source,
+                                                                                      std::size_t offset)
+{
+    for (;;) {
+        auto const at = shared_resolve(*source, offset);
+        if (!at) [[unlikely]]
+            return std::unexpected(at.error());
+        heads::decoder d{source->encoded.substr(*at)};
+        auto const h = d.head_decode();
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        if (h->major != major_type::tag || h->argument != std::to_underlying(heads::tag_number::encoded_cbor_data_item))
+            return resolved{source, *h, d};
+        auto const r = d.head_decode();
+        if (!r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (r->major != major_type::byte_string) [[unlikely]]
             return std::unexpected(error::inadmissible_type_for_tag_content);
-        if (n->argument >= doc.marks.size()) [[unlikely]]
-            return std::unexpected(error::sharedref_index_not_marked);
-        std::size_t const marked = doc.marks.at(static_cast<std::size_t>(n->argument));
-        if (marked >= at) [[unlikely]]
-            return std::unexpected(error::sharedref_not_complete);
-        at = marked;
+        auto const embedded = d.byte_string_decode(r->argument);
+        if (!embedded) [[unlikely]]
+            return std::unexpected(embedded.error());
+        source = std::make_shared<document>(source->owner, *embedded, std::vector<lazy>{}, 0);
+        offset = 0;
     }
 }
 

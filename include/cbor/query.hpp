@@ -246,7 +246,7 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std
 {
     if (depth > DepthMax) [[unlikely]]
         return std::unexpected(error::nesting_depth_exceeded);
-    auto const at = value_sharing::shared_resolve<DepthMax>(doc, start);
+    auto const at = value_sharing::shared_resolve(doc, start);
     if (!at) [[unlikely]]
         return std::unexpected(at.error());
     auto const h = heads::raw_head_read(doc.encoded, *at);
@@ -377,33 +377,11 @@ result<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const 
     bool const text = literal && literal->major == major_type::text_string;
     for (std::uint64_t i = 0; i < h.argument; ++i) {
         std::size_t const start = source->encoded.size() - d.encoded.size();
-        heads::decoder probe = d;
-        for (;;) {
-            heads::decoder look = probe;
-            auto const k = look.head_decode();
-            if (!k) [[unlikely]]
-                return std::unexpected(k.error());
-            if (k->major == major_type::tag && k->argument == std::to_underlying(heads::tag_number::shareable)) {
-                probe = look;
-                continue;
-            }
-            if (k->major == major_type::tag && k->argument == std::to_underlying(heads::tag_number::sharedref)) {
-                auto const n = look.head_decode();
-                if (!n) [[unlikely]]
-                    return std::unexpected(n.error());
-                if (n->major != major_type::unsigned_integer) [[unlikely]]
-                    return std::unexpected(error::inadmissible_type_for_tag_content);
-                if (n->argument >= source->marks.size()) [[unlikely]]
-                    return std::unexpected(error::sharedref_index_not_marked);
-                std::size_t const marked = source->marks.at(static_cast<std::size_t>(n->argument));
-                if (marked >= start) [[unlikely]]
-                    return std::unexpected(error::sharedref_not_complete);
-                probe = heads::decoder{source->encoded.substr(marked)};
-            }
-            break;
-        }
+        auto const key_at = value_sharing::shared_resolve(*source, start);
+        if (!key_at) [[unlikely]]
+            return std::unexpected(key_at.error());
         bool match = false;
-        heads::decoder look = probe;
+        heads::decoder look{source->encoded.substr(*key_at)};
         auto const k = look.head_decode();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());

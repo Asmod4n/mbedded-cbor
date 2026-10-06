@@ -29,6 +29,7 @@
 #include "encode.hpp"
 #include "error.hpp"
 #include "head.hpp"
+#include "lazy.hpp"
 #include "owning_ref.hpp"
 #include "schema.hpp"
 #include "shared.hpp"
@@ -204,8 +205,8 @@ class generic
     template <std::size_t DepthMax, class U>
     static std::expected<void, error> generic_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth)
     {
+        std::size_t const item_at = d.message.encoded.size() - d.encoded.size();
         for (;;) {
-            std::size_t const tag_at = d.message.size() - d.encoded.size();
             heads::decoder look = d;
             auto const h = look.head_decode();
             if (!h) [[unlikely]]
@@ -214,17 +215,17 @@ class generic
                 break;
             if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
                 d.encoded = look.encoded;
-                d.mark(d);
+                d.message.mark(d);
                 continue;
             }
             if (h->argument != std::to_underlying(heads::tag_number::sharedref))
                 break;
             d.encoded = look.encoded;
-            auto const target = d.reference_follow(tag_at);
+            auto const target = d.message.sharedref_decode(d, item_at);
             if (!target) [[unlikely]]
                 return std::unexpected(target.error());
             std::string_view const rest = d.encoded;
-            d.encoded = d.message.substr(*target);
+            d.encoded = d.message.encoded.substr(target->offset);
             auto const r = generic_value_read<DepthMax>(d, out, depth + 1);
             d.encoded = rest;
             return r;
@@ -417,20 +418,19 @@ class generic
             return std::unexpected(error::incorrect_type);
         std::bitset<count> found;
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
-            std::size_t key_at = d.message.size() - d.encoded.size();
+            std::size_t const key_at = d.message.encoded.size() - d.encoded.size();
             auto k = d.head_decode();
             while (k && k->major == major_type::tag && k->argument == std::to_underlying(heads::tag_number::shareable)) {
-                d.mark(d);
-                key_at = d.message.size() - d.encoded.size();
+                d.message.mark(d);
                 k = d.head_decode();
             }
             heads::decoder referenced{};
             bool const indirect = k && k->major == major_type::tag && k->argument == std::to_underlying(heads::tag_number::sharedref);
             if (indirect) {
-                auto const target = d.reference_follow(key_at);
+                auto const target = d.message.sharedref_decode(d, key_at);
                 if (!target) [[unlikely]]
                     return std::unexpected(target.error());
-                referenced = heads::decoder{d.message.substr(*target)};
+                referenced = heads::decoder{d.message.encoded.substr(target->offset)};
                 k = referenced.head_decode();
             }
             heads::decoder &from = indirect ? referenced : d;
@@ -461,7 +461,7 @@ class generic
                 }
             }
             if (!matched) {
-                if (auto const s = well_formedness::item_skip<DepthMax>(d, d, depth + 1); !s) [[unlikely]]
+                if (auto const s = well_formedness::item_skip<DepthMax>(d, d.message, depth + 1); !s) [[unlikely]]
                     return s;
             } else if (!r) [[unlikely]] {
                 return r;
@@ -785,7 +785,7 @@ private:
     template <std::size_t DepthMax>
     static result<T> read(std::string_view const encoded)
     {
-        value_sharing::sharing_decoder d{{encoded}, encoded, {}, 0};
+        value_sharing::sharing_decoder d{{encoded}, {{}, encoded, {}, 0}};
         T out{};
         if (auto const r = generic::generic_read<DepthMax>(d, out, 0); !r) [[unlikely]]
             return std::unexpected(r.error());

@@ -12,13 +12,13 @@
 #include <vector>
 
 #include "binding.hpp"
+#include "doc_end.hpp"
 #include "error.hpp"
 #include "head.hpp"
+#include "shared.hpp"
 
 namespace cbor
 {
-
-struct lazy;
 
 class decoding
 {
@@ -26,9 +26,8 @@ class decoding
     using marks = std::vector<std::optional<typename Binding::value>>;
 
     struct prefix {
-        std::string_view document;
-        std::vector<std::size_t> const &offsets;
-        std::vector<bool> decoding;
+        value_sharing::document &document;
+        std::vector<bool> evaluating;
     };
 
     template <std::size_t DepthMax, class Binding>
@@ -107,16 +106,28 @@ class decoding
             if (depth + 1 > DepthMax) [[unlikely]]
                 return std::unexpected(error::nesting_depth_exceeded);
             if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
-                std::size_t index = shared.size();
-                if (before) {
-                    std::size_t const at = before->document.size() - d.encoded.size();
-                    auto const known = std::lower_bound(before->offsets.begin(), before->offsets.end(), at);
-                    if (known != before->offsets.end() && *known == at)
-                        index = static_cast<std::size_t>(known - before->offsets.begin());
-                }
-                if (index == shared.size())
+                if (!before) {
+                    std::size_t const index = shared.size();
                     shared.emplace_back();
+                    auto content = value_decode<DepthMax>(d, binding, shared, before, depth + 1, index);
+                    if (!content) [[unlikely]]
+                        return content;
+                    shared.at(index) = *content;
+                    return content;
+                }
+                std::size_t const index = before->document.mark(d);
+                if (index >= shared.size()) {
+                    shared.resize(index + 1);
+                    before->evaluating.resize(index + 1);
+                }
+                if (shared.at(index)) {
+                    if (auto const r = well_formedness::item_skip<DepthMax>(d, before->document, depth + 1); !r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    return *shared.at(index);
+                }
+                before->evaluating.at(index) = true;
                 auto content = value_decode<DepthMax>(d, binding, shared, before, depth + 1, index);
+                before->evaluating.at(index) = false;
                 if (!content) [[unlikely]]
                     return content;
                 shared.at(index) = *content;
@@ -154,13 +165,12 @@ class decoding
                 std::size_t const index = static_cast<std::size_t>(r->argument);
                 if (index >= shared.size()) [[unlikely]]
                     return std::unexpected(error::sharedref_index_not_marked);
-                if (!shared.at(index) && before && index < before->offsets.size() &&
-                    before->offsets.at(index) < before->document.size() - d.encoded.size() &&
-                    !before->decoding.at(index)) {
-                    heads::decoder earlier{before->document.substr(before->offsets.at(index))};
-                    before->decoding.at(index) = true;
+                if (!shared.at(index) && before && !before->evaluating.at(index) &&
+                    before->document.sharedrefs.at(index).offset < before->document.encoded.size() - d.encoded.size()) {
+                    heads::decoder earlier{before->document.encoded.substr(before->document.sharedrefs.at(index).offset)};
+                    before->evaluating.at(index) = true;
                     auto content = value_decode<DepthMax>(earlier, binding, shared, before, depth + 1, index);
-                    before->decoding.at(index) = false;
+                    before->evaluating.at(index) = false;
                     if (!content) [[unlikely]]
                         return content;
                     shared.at(index) = *content;
