@@ -500,10 +500,10 @@ class generic
             if constexpr (std::same_as<U, int128>)
                 negative = value < 0;
             uint128 const magnitude =
-                negative ? static_cast<uint128>(-1 - value) : static_cast<uint128>(value);
+                negative ? ~static_cast<uint128>(value) : static_cast<uint128>(value);
             if (magnitude <= std::numeric_limits<std::uint64_t>::max())
                 return heads::head_size(static_cast<std::uint64_t>(magnitude));
-            std::size_t const digits = sizeof(uint128) - std::countl_zero(magnitude) / 8;
+            std::size_t const digits = sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(magnitude)) / 8;
             return heads::initial_byte_size + heads::head_size(digits) + digits;
 #endif
         } else if constexpr (is_std_variant<U>) {
@@ -624,12 +624,12 @@ class generic
             if constexpr (std::same_as<U, int128>)
                 negative = value < 0;
             uint128 const magnitude =
-                negative ? static_cast<uint128>(-1 - value) : static_cast<uint128>(value);
+                negative ? ~static_cast<uint128>(value) : static_cast<uint128>(value);
             if (magnitude <= std::numeric_limits<std::uint64_t>::max())
                 return at + heads::head_write(out, at,
                                        negative ? major_type::negative_integer : major_type::unsigned_integer,
                                        static_cast<std::uint64_t>(magnitude));
-            std::size_t const digits = sizeof(uint128) - std::countl_zero(magnitude) / 8;
+            std::size_t const digits = sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(magnitude)) / 8;
             at += heads::head_write(out, at, major_type::tag,
                              std::to_underlying(negative ? heads::tag_number::negative_bignum : heads::tag_number::unsigned_bignum));
             at += heads::head_write(out, at, major_type::byte_string, digits);

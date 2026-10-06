@@ -1636,7 +1636,7 @@ public:
             if (!total) [[unlikely]]
                 return std::unexpected(total.error());
             target.reserve(*total);
-            std::ranges::fill_n(std::back_inserter(target), padded, char{});
+            target.insert(target.end(), padded, char{});
             packed::encoded_write<false>(std::span<char>(target).subspan(at), value, second);
             target.resize(at + *size);
             return *size;

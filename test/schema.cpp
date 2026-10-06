@@ -1698,11 +1698,11 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
             auto const make = lot.at<"$.cars[].make">(i);
             auto const seats = lot.at<"$.cars[].seats">(i);
             auto const pressure = lot.at<"$.cars[].wheels[].airPressure">(i, 1uz);
-            n += make.has_value() + seats.has_value() + lot.at<"$.cars[].note">(i).has_value() + pressure.has_value();
+            n += std::size_t{make.has_value()} + std::size_t{seats.has_value()} + std::size_t{lot.at<"$.cars[].note">(i).has_value()} + std::size_t{pressure.has_value()};
             auto const car = lot.at<"$.cars[]">(i);
             if (!car)
                 continue;
-            differ += other(car->at<"@.make">(), make) + other(car->at<"@.seats">(), seats);
+            differ += std::size_t{other(car->at<"@.make">(), make)} + std::size_t{other(car->at<"@.seats">(), seats)};
             auto const wheel = car->at<"@.wheels[]">(1uz);
             if (wheel)
                 differ += other(wheel->at<"@.airPressure">(), pressure);

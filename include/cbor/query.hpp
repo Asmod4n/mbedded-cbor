@@ -915,7 +915,7 @@ std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b, s
                 auto const same = value_equal<DepthMax>(entry->first, mine->first, depth + 1);
                 if (!same) [[unlikely]]
                     return same;
-                twins += *same ? 1 : 0;
+                twins += *same ? 1uz : 0uz;
             }
             std::size_t paired = 0;
             bool values_same = false;

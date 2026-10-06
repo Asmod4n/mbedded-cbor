@@ -374,7 +374,7 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
         if (!std::in_range<T>(argument) || (std::is_unsigned_v<T> && negative)) [[unlikely]]
             return std::unexpected(error::number_out_of_range);
         T const magnitude = static_cast<T>(argument);
-        return static_cast<T>(negative ? -1 - magnitude : magnitude);
+        return static_cast<T>(negative ? ~magnitude : magnitude);
     } else if constexpr (std::is_same_v<T, double>) {
         if (h.major != major_type::simple_float) [[unlikely]]
             return std::unexpected(error::incorrect_type);

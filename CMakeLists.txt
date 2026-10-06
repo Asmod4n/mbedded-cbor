@@ -6,7 +6,7 @@ target_include_directories(mbedded-cbor INTERFACE include)
 target_compile_features(mbedded-cbor INTERFACE cxx_std_23)
 target_compile_definitions(mbedded-cbor INTERFACE _GLIBCXX_ASSERTIONS _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST)
 
-set(CBOR_WARNINGS -Wall -Wextra -Wpedantic -Wshadow -Werror)
+set(CBOR_WARNINGS -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Werror)
 
 include(CTest)
 if(BUILD_TESTING)
