@@ -14,7 +14,6 @@
 #include <optional>
 #include <ranges>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -1528,7 +1527,7 @@ public:
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         if (!owner) [[unlikely]]
-            throw std::logic_error("cbor::schema::path: the owner of the encoded data item is empty");
+            validity::throw_logic_error("cbor::schema::path: the owner of the encoded data item is empty");
         auto const dir = packed::directory_read<T>(encoded);
         if (!dir) [[unlikely]]
             return std::unexpected(dir.error());
@@ -1581,7 +1580,7 @@ public:
     static result<owning_ref<T>> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         if (!owner) [[unlikely]]
-            throw std::logic_error("cbor::schema::decode: the owner of the encoded data item is empty");
+            validity::throw_logic_error("cbor::schema::decode: the owner of the encoded data item is empty");
         T value{};
         if (auto const r = packed::root_read<T, DepthMax>(value, encoded); !r) [[unlikely]]
             return std::unexpected(r.error());

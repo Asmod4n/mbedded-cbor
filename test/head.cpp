@@ -29,6 +29,23 @@ value N(std::uint64_t argument)
 }
 
 // A Writer whose language has no more space.
+struct broken_writer {
+    broken_writer &allocate(std::size_t)
+    {
+        return *this;
+    }
+
+    std::expected<void, std::errc> append(std::string_view)
+    {
+        return std::unexpected(std::errc::io_error);
+    }
+
+    std::expected<void, std::errc> done(std::size_t)
+    {
+        return {};
+    }
+};
+
 struct full_writer {
     full_writer &allocate(std::size_t)
     {
@@ -151,5 +168,13 @@ TEST_CASE("head: encode returns the error of the Writer")
 {
     full_writer w;
     test_binding binding;
-    CHECK_EQ(cbor::encode<16>(binding, w, U(0)).error(), std::make_error_code(std::errc::not_enough_memory));
+    CHECK_EQ(cbor::encode<16>(binding, w, U(0)).error(), cbor::error{cbor::error::not_enough_memory});
+}
+
+// A Writer error that has no member of its own must still fail, and never read as success.
+TEST_CASE("head: encode returns io_error for any other error of the Writer")
+{
+    broken_writer w;
+    test_binding binding;
+    CHECK_EQ(cbor::encode<16>(binding, w, U(0)).error(), cbor::error::io_error);
 }

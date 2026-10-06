@@ -292,7 +292,7 @@ TEST_CASE("tag 28/29: encode without sharing refuses a cycle as a value")
     string_writer w;
     auto const r = cbor::encode<16>(binding, w, a);
     REQUIRE_FALSE(r.has_value());
-    CHECK((r.error() == error::cyclic_data_structure));
+    CHECK((r.error() == cbor::error{error::cyclic_data_structure}));
     std::get<std::vector<handle>>(a->kind).clear();
 
     handle deep = u(1);
@@ -301,7 +301,7 @@ TEST_CASE("tag 28/29: encode without sharing refuses a cycle as a value")
     string_writer d;
     auto const too_deep = cbor::encode<16>(binding, d, deep);
     REQUIRE_FALSE(too_deep.has_value());
-    CHECK((too_deep.error() == error::nesting_depth_exceeded));
+    CHECK((too_deep.error() == cbor::error{error::nesting_depth_exceeded}));
 }
 
 // Ported from test.rb: 'tag 28/29: mutual recursion — hash↔array cycle'.
@@ -419,7 +419,7 @@ TEST_CASE("sharedrefs::off: values are written each time, a cycle is an error")
     string_writer w2;
     auto const e = cbor::encode<16>(binding, w2, a);
     REQUIRE_FALSE(e.has_value());
-    CHECK((e.error() == error::cyclic_data_structure));
+    CHECK((e.error() == cbor::error{error::cyclic_data_structure}));
     std::get<std::vector<handle>>(a->kind).clear();
 }
 

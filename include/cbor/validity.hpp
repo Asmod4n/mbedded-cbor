@@ -2,9 +2,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <expected>
-#include <string>
-#include <string_view>
+#if defined(__cpp_exceptions)
+#include <stdexcept>
+#endif
 #include <system_error>
 #include <utility>
 #if __has_include(<stdckdint.h>)
@@ -24,6 +26,29 @@ struct lazy;
 
 class validity
 {
+public:
+    [[noreturn]] static void throw_logic_error(char const *const what)
+    {
+#if defined(__cpp_exceptions)
+        throw std::logic_error(what);
+#else
+        (void)what;
+        std::abort();
+#endif
+    }
+
+    static constexpr error writer_error(std::errc const e) noexcept
+    {
+        if (e == std::errc::no_buffer_space)
+            return error::no_buffer_space;
+        if (e == std::errc::value_too_large)
+            return error::value_too_large;
+        if (e == std::errc::not_enough_memory)
+            return error::not_enough_memory;
+        return error::io_error;
+    }
+
+private:
     static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth, std::size_t const depth_max)
     {
         if (depth > depth_max) [[unlikely]]

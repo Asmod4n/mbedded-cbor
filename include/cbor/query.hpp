@@ -8,7 +8,6 @@
 #include <expected>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -1252,7 +1251,7 @@ result<typename Binding::value, error> jsonpath::query_walk(Binding &binding, qu
                                                             lazy const &root)
 {
     if (!root.top_level) [[unlikely]]
-        throw std::logic_error("cbor::at_path: the lazy holds no top-level item");
+        validity::throw_logic_error("cbor::at_path: the lazy holds no top-level item");
     if (top.singular) {
         lazy node = root;
         for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {

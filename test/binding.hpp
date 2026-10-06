@@ -14,12 +14,12 @@
 #include <variant>
 #include <vector>
 
-// doctest prints an error by its message, because cbor::error converts to std::error_code.
+// doctest prints an error by its message.
 template <>
 struct doctest::StringMaker<cbor::error> {
     static doctest::String convert(cbor::error const e)
     {
-        return std::error_code(e).message().c_str();
+        return std::string(cbor::message(e)).c_str();
     }
 };
 

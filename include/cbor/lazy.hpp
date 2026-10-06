@@ -10,7 +10,6 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -21,6 +20,7 @@
 #include "decode.hpp"
 #include "item_end.hpp"
 #include "error.hpp"
+#include "validity.hpp"
 #include "head.hpp"
 #include "owning_ref.hpp"
 #include "shared.hpp"
@@ -174,7 +174,7 @@ template <std::size_t DepthMax>
 std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded)
 {
     if (!encoded) [[unlikely]]
-        throw std::logic_error("cbor::decode: the encoded data item is empty");
+        validity::throw_logic_error("cbor::decode: the encoded data item is empty");
     return lazy{std::make_shared<value_sharing::top_level_item>(encoded, *encoded, std::vector<lazy>{}, 0), 0};
 }
 
@@ -238,7 +238,7 @@ struct result<lazy, error> : std::expected<lazy, error> {
 inline result<lazy> lazy::from(std::shared_ptr<void const> owner, std::string_view const encoded)
 {
     if (!owner) [[unlikely]]
-        throw std::logic_error("cbor::lazy::from: the owner of the encoded data item is empty");
+        validity::throw_logic_error("cbor::lazy::from: the owner of the encoded data item is empty");
     return lazy{std::make_shared<value_sharing::top_level_item>(std::move(owner), encoded, std::vector<lazy>{}, 0), 0};
 }
 
