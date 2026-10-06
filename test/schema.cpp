@@ -253,7 +253,7 @@ auto at_path(std::shared_ptr<void const> const &owner, std::string_view const by
 // the generic decoder finds its end at the end of the message.
 void check_one_item(std::string const &bytes)
 {
-    auto const end = cbor::doc_end<16>(bytes);
+    auto const end = cbor::item_end<16>(bytes);
     REQUIRE(end.has_value());
     CHECK_EQ(*end, bytes.size());
 }
@@ -488,7 +488,7 @@ concept path_reads_at = requires(typename cbor::schema<T>::template accessor<> c
 
 // A path that ends at a leaf gives the value. A path that ends at a struct, a list, a fixed array or a map gives an
 // accessor. A name that is not a member, an index into a text or a map, an index past a fixed array, and a count of
-// indexes that does not match the empty brackets do not compile. A path starts at the root of the document with $
+// indexes that does not match the empty brackets do not compile. A path starts at the root of the top-level item with $
 // (RFC 9535 2.2) or at the node of the accessor with @ (RFC 9535 2.3.5); on the root accessor both are the same
 // node.
 TEST_CASE("path: a path compiles where it names a part of the type")
@@ -873,7 +873,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
     REQUIRE(absent.has_value());
     CHECK_FALSE(absent->has_value());
     for (std::string_view message : {std::string_view(bytes), std::string_view(none)}) {
-        auto const end = cbor::doc_end<64>(message);
+        auto const end = cbor::item_end<64>(message);
         REQUIRE(end.has_value());
         CHECK_EQ(*end, message.size());
     }
@@ -1022,8 +1022,8 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
 
     chain0 const value = chain_of<chain0>(0);
     std::string const bytes = *cbor::schema<chain0>::encode(value);
-    CHECK_EQ(cbor::doc_end<64>(bytes).error(), error::nesting_depth_exceeded);
-    CHECK_EQ(cbor::doc_end<128>(bytes), bytes.size());
+    CHECK_EQ(cbor::item_end<64>(bytes).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(cbor::item_end<128>(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x19"s);
     CHECK_EQ(bytes.substr(bytes.size() - 25),
              "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x03"s);
@@ -1052,7 +1052,7 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
 {
     chain3 const value = chain_of<chain3>(3);
     std::string const bytes = *cbor::schema<chain3>::encode(value);
-    CHECK_EQ(cbor::doc_end<64>(bytes), bytes.size());
+    CHECK_EQ(cbor::item_end<64>(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x16"s);
     CHECK_EQ(bytes.substr(bytes.size() - 25),
              "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x1a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"s);

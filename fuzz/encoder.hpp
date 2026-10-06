@@ -150,7 +150,7 @@ inline void encoder_target(std::string_view const input)
     std::string_view rest = w.encoded;
     test_binding binding;
     for (auto const &item : items) {
-        auto const end = cbor::doc_end<16>(rest);
+        auto const end = cbor::item_end<16>(rest);
         require(end.has_value());
         if (item.size)
             require(*end == *item.size);

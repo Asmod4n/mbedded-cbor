@@ -12,7 +12,7 @@
 namespace fuzz
 {
 
-// Every text key of the document, so a generated path names keys that exist; a key made of random bytes
+// Every text key of the top-level item, so a generated path names keys that exist; a key made of random bytes
 // would almost never match.
 inline void text_keys(test::value const &v, std::vector<std::string> &keys, int const depth)
 {
@@ -123,14 +123,14 @@ inline query query_from(source &in, std::vector<std::string> const &keys)
     return q;
 }
 
-// The reference decodes a tag 24 document whole, and lazy reads it only up to the item a step needs. Where the
-// whole document does not decode, the reference cannot say what lazy finds.
+// The reference decodes a tag 24 embedded data item whole, and lazy reads it only up to the item a step needs. Where the
+// whole embedded data item does not decode, the reference cannot say what lazy finds.
 struct undecided {};
 
 // The reference: RFC 9535 2.1.2 over the eager value. Each segment maps the nodelist to the children it selects.
 // A name selects a value under an equal text key; an index counts from the end when negative and selects a
 // value under an equal integer key of a map; a wildcard selects every element or every value. Without a
-// wildcard a missing child is an error; with one it adds no node. Tag 24 is a document of its own when a
+// wildcard a missing child is an error; with one it adds no node. Tag 24 is a top-level item of its own when a
 // segment goes into it. A nodelist longer than the message is an error.
 inline std::optional<test::value> walked(test::value const &start, std::vector<segment> const &segments,
                                          std::size_t const limit)

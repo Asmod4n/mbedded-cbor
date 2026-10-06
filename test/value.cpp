@@ -229,9 +229,9 @@ TEST_CASE("encode: a kind the binding cannot describe is unsupported_value")
     CHECK((r.error() == error::unsupported_value));
 }
 
-// A span target is written in place. The last items of a document lie closer to the end than the
+// A span target is written in place. The last items of a top-level item lie closer to the end than the
 // widest head, so each kind is checked as the last item of a span of exact size and of one byte less.
-TEST_CASE("encode: a span of exact size holds the document, one byte less is no_buffer_space")
+TEST_CASE("encode: a span of exact size holds the top-level item, one byte less is no_buffer_space")
 {
     test_binding binding;
     for (value const &v : {A(1, 24), A(1, 1.5), A(1, 100000.25), A(1, 0.1), A(1, "abc"s),

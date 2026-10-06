@@ -305,8 +305,8 @@ TEST_CASE("lazy: get reads a simple value")
     CHECK_EQ(get<std::nullptr_t>("\xf7"s).error(), error::incorrect_type);
 }
 
-// A text string and a byte string come as views into the document, each only as its own type. The view holds the
-// document, so it stays valid after the lazy that gave it ends.
+// A text string and a byte string come as views into the top-level item, each only as its own type. The view holds the
+// top-level item, so it stays valid after the lazy that gave it ends.
 TEST_CASE("lazy: get reads a string as a view")
 {
     auto const text = lazy_of("\x64IETF"s).get<std::string_view>();
@@ -407,8 +407,8 @@ struct embedding_binding : test_binding {
 } // namespace
 
 // RFC 8949 3.4.5.1: tag 24 carries an encoded data item in a byte string. The encoder writes each embedded
-// value as a document of its own, and a view passes through the tag into it.
-TEST_CASE("tag 24: an embedded value is written as a document of its own and read through")
+// value as a top-level item of its own, and a view passes through the tag into it.
+TEST_CASE("tag 24: an embedded value is written as a top-level item of its own and read through")
 {
     embedding_binding binding;
     test::string_writer w;
@@ -422,9 +422,9 @@ TEST_CASE("tag 24: an embedded value is written as a document of its own and rea
     CHECK_EQ(get<std::uint64_t>("\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
 }
 
-// The marks of an embedded document are its own: the 29(0) inside names the 28 inside, not the one
+// The marks of an embedded data item are its own: the 29(0) inside names the 28 inside, not the one
 // outside before it.
-TEST_CASE("tag 24: an embedded document has marks of its own")
+TEST_CASE("tag 24: an embedded data item has marks of its own")
 {
     std::string const doc = "\x82\xd8\x1c\x07\xd8\x18\x47\x82\xd8\x1c\x09\xd8\x1d\x00"s;
     auto const embedded = lazy_of(doc).at<16>(1);
@@ -468,7 +468,7 @@ TEST_CASE("lazy: a byte string key is not the text key with the same bytes")
     CHECK_EQ(*a->get<std::uint64_t>(), 2u);
 }
 
-// A tag 29 reference names a mark that lies before it. A mark that navigation recorded later in the document
+// A tag 29 reference names a mark that lies before it. A mark that navigation recorded later in the top-level item
 // is no target, as in the full decoder.
 TEST_CASE("lazy: a reference forward to a mark that navigation recorded is an error")
 {
@@ -498,7 +498,7 @@ struct buffer_owner {
 } // namespace
 
 // lazy::from with an owner reads bytes that someone else holds, as the page of a read transaction of LMDB. Each
-// lazy that a step gives holds the owner too, so the bytes live until the last lazy of the document ends.
+// lazy that a step gives holds the owner too, so the bytes live until the last lazy of the top-level item ends.
 TEST_CASE("lazy: from an owner holds the owner until the last lazy ends")
 {
     bool released = false;
@@ -529,7 +529,7 @@ TEST_CASE("lazy: from, at and get as a chain")
     auto const name = doc.at("statuses").at(1).at("user").at("name").get<std::string_view>();
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "bob"sv);
-    CHECK_EQ(static_cast<void const *>(doc.document->encoded.data()), static_cast<void const *>(data));
+    CHECK_EQ(static_cast<void const *>(doc.top_level->encoded.data()), static_cast<void const *>(data));
     auto const missing = doc.at("statuses").at(5).at("user").get<std::string_view>();
     REQUIRE_FALSE(missing.has_value());
     CHECK_EQ(missing.error(), error::index_out_of_bounds);
@@ -568,9 +568,9 @@ concept read_from_temporary = requires(R &&r) { *std::move(*r); };
 
 } // namespace
 
-// A view that get gives holds the bytes of the document: it outlives the lazy and the owner that made it, and it
+// A view that get gives holds the bytes of the top-level item: it outlives the lazy and the owner that made it, and it
 // cannot be read through a temporary.
-TEST_CASE("lazy: a view holds the document")
+TEST_CASE("lazy: a view holds the top-level item")
 {
     bool released = false;
     std::optional<cbor::owning_ref<std::string_view>> view;
@@ -599,7 +599,7 @@ TEST_CASE("lazy: get follows a shared reference in the content of a tag")
 }
 
 // The value category of the bytes says what cbor::decode and lazy::from do. A moved std::string becomes the owner and
-// is not copied; an lvalue, a const rvalue and a literal are copied once. The document stays valid after the caller
+// is not copied; an lvalue, a const rvalue and a literal are copied once. The top-level item stays valid after the caller
 // reuses or destroys its buffer.
 TEST_CASE("lazy: decode and from move an rvalue string and copy everything else")
 {
@@ -614,7 +614,7 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     char const *const data = buffer->data();
     auto const moved = cbor::decode<16>(std::move(*buffer));
     REQUIRE(moved.has_value());
-    CHECK_EQ(static_cast<void const *>(moved->document->encoded.data()), static_cast<void const *>(data));
+    CHECK_EQ(static_cast<void const *>(moved->top_level->encoded.data()), static_cast<void const *>(data));
     buffer->assign(message.size(), '\0');
     buffer.reset();
     CHECK_EQ(text_of(*moved->at("k")), text);
@@ -622,7 +622,7 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     std::string lvalue = message;
     auto const copied = cbor::decode<16>(lvalue);
     REQUIRE(copied.has_value());
-    CHECK_NE(static_cast<void const *>(copied->document->encoded.data()), static_cast<void const *>(lvalue.data()));
+    CHECK_NE(static_cast<void const *>(copied->top_level->encoded.data()), static_cast<void const *>(lvalue.data()));
     CHECK_EQ(lvalue, message);
     lvalue.assign(message.size(), '\0');
     CHECK_EQ(text_of(*copied->at("k")), text);
@@ -630,15 +630,15 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     std::string const constant = message;
     auto const from_const = cbor::lazy::from(std::move(constant));
     REQUIRE(from_const.has_value());
-    CHECK_NE(static_cast<void const *>(from_const->document->encoded.data()), static_cast<void const *>(constant.data()));
+    CHECK_NE(static_cast<void const *>(from_const->top_level->encoded.data()), static_cast<void const *>(constant.data()));
     CHECK_EQ(constant, message);
 
     std::string again = message;
     char const *const again_data = again.data();
     auto const from_moved = cbor::lazy::from(std::move(again));
-    CHECK_EQ(static_cast<void const *>(from_moved->document->encoded.data()), static_cast<void const *>(again_data));
+    CHECK_EQ(static_cast<void const *>(from_moved->top_level->encoded.data()), static_cast<void const *>(again_data));
     auto const from_lvalue = cbor::lazy::from(message);
-    CHECK_NE(static_cast<void const *>(from_lvalue->document->encoded.data()), static_cast<void const *>(message.data()));
+    CHECK_NE(static_cast<void const *>(from_lvalue->top_level->encoded.data()), static_cast<void const *>(message.data()));
 
     CHECK_EQ(text_of(*cbor::decode<16>("\x63" "abc")), "abc");
     char const *const pointer = "\x62" "ab";

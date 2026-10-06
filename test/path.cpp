@@ -77,7 +77,7 @@ TEST_CASE("path: one wildcard with a nested tail and an index tail")
 }
 
 // RFC 9535 2.1.2: each segment maps the nodelist to the concatenation of what it selects, so two and three
-// wildcards give one flat nodelist in document order.
+// wildcards give one flat nodelist in the order of the query argument.
 TEST_CASE("path: two and three wildcards")
 {
     value const teams =
@@ -125,7 +125,7 @@ TEST_CASE("path: a wildcard on a map and missing keys")
 }
 
 // Ported from test.rb: 'path: compiled path is reusable across different lazies'.
-TEST_CASE("path: one compiled path, two documents")
+TEST_CASE("path: one compiled path, two top-level items")
 {
     std::string const d1 = encoded(M("items"s, A(M("id"s, 1), M("id"s, 2))));
     std::string const d2 = encoded(M("items"s, A(M("id"s, 9), M("id"s, 8), M("id"s, 7))));
@@ -318,7 +318,7 @@ TEST_CASE("path: a shared reference inside a key is followed")
     CHECK_EQ(compiled_at<"$[[1, \"x\"]]">(forward).error(), error::sharedref_index_not_marked);
 }
 
-// RFC 8949 5.6: a map with duplicate keys is not valid. A key map of the document with a duplicate pair is not taken
+// RFC 8949 5.6: a map with duplicate keys is not valid. A key map of the top-level item with a duplicate pair is not taken
 // as equal to a literal with as many pairs: the lookup gives duplicate_key. A literal with a duplicate key does not
 // compile.
 TEST_CASE("path: a key map with duplicate keys is not valid")

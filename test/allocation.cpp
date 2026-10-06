@@ -37,8 +37,8 @@ std::size_t allocations = 0;
     std::free(p);
 }
 
-// The path that succeeds compares a key of the document with a literal by value without an allocation: the
-// document holds no shared value, and the literal [1, "x"] is parsed at compile time.
+// The path that succeeds compares a key of the top-level item with a literal by value without an allocation: the
+// top-level item holds no shared value, and the literal [1, "x"] is parsed at compile time.
 TEST_CASE("path: a key is compared without an allocation")
 {
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
@@ -54,16 +54,16 @@ TEST_CASE("path: a key is compared without an allocation")
     CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
 }
 
-// A document with a shared value (tag 28) needs a table of the shared values to decode a reference to one, so the
+// A top-level item with a shared value (tag 28) needs a table of the shared values to decode a reference to one, so the
 // count of allocations is fixed here: the key [1, 29(0)] refers to the shared value "x".
-TEST_CASE("path: a document with shared values allocates only the table of shared values")
+TEST_CASE("path: a top-level item with shared values allocates only the table of shared values")
 {
     std::string const bytes = "\x82\xd8\x1c\x61x\xa2\x82\x01\xd8\x1d\x00\x01\xa1\x61k\xd8\x1d\x00\x02"s;
     auto const root = *cbor::lazy::from(std::string(bytes));
     auto const map = *root.at(1);
     test_binding binding;
     REQUIRE(cbor::at_path<"$[[1, \"x\"]]", 16>(binding, map).has_value());
-    // The document marks one shared value. The decoder keeps one flag and one entry for each mark, in two arrays,
+    // The top-level item marks one shared value. The decoder keeps one flag and one entry for each mark, in two arrays,
     // and an array that holds at least one element is one allocation.
     constexpr std::size_t marks_allocations = 2;
     std::size_t const before = allocations;

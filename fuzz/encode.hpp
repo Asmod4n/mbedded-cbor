@@ -20,7 +20,7 @@ inline void encode_from_input(std::string_view const input)
     require(!r.reserved_simple && !r.zero_negative);
     auto const back = cbor::lazy_decode<16>(binding, *cbor::decode<16>(w.encoded));
     require(back.has_value() && same_number(v, *back));
-    auto const end = cbor::doc_end<16>(w.encoded);
+    auto const end = cbor::item_end<16>(w.encoded);
     require(end.has_value() && *end == w.encoded.size());
 }
 

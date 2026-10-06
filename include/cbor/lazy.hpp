@@ -19,7 +19,7 @@
 
 #include "binding.hpp"
 #include "decode.hpp"
-#include "doc_end.hpp"
+#include "item_end.hpp"
 #include "error.hpp"
 #include "head.hpp"
 #include "owning_ref.hpp"
@@ -36,7 +36,7 @@ struct lazy_entries;
 
 template <std::size_t DepthMax>
 struct lazy_elements {
-    std::shared_ptr<value_sharing::document> document;
+    std::shared_ptr<value_sharing::top_level_item> top_level;
     std::size_t offset;
     std::uint64_t count;
 
@@ -44,7 +44,7 @@ struct lazy_elements {
         using value_type = std::expected<lazy, error>;
         using difference_type = std::ptrdiff_t;
 
-        std::shared_ptr<value_sharing::document> document;
+        std::shared_ptr<value_sharing::top_level_item> top_level;
         std::size_t offset;
         std::uint64_t left;
         error failure;
@@ -53,7 +53,7 @@ struct lazy_elements {
         {
             if (failure != error{}) [[unlikely]]
                 return std::unexpected(failure);
-            return lazy{document, offset};
+            return lazy{top_level, offset};
         }
 
         iterator &operator++()
@@ -62,12 +62,12 @@ struct lazy_elements {
                 left = 0;
                 return *this;
             }
-            heads::decoder d{document->encoded.substr(offset)};
-            if (auto const r = well_formedness::item_skip<DepthMax>(d, *document, 1); !r) [[unlikely]] {
+            heads::decoder d{top_level->encoded.substr(offset)};
+            if (auto const r = well_formedness::item_skip<DepthMax>(d, *top_level, 1); !r) [[unlikely]] {
                 failure = r.error();
                 return *this;
             }
-            offset = document->encoded.size() - d.encoded.size();
+            offset = top_level->encoded.size() - d.encoded.size();
             --left;
             return *this;
         }
@@ -85,7 +85,7 @@ struct lazy_elements {
 
     iterator begin() const
     {
-        return iterator{document, offset, count, error{}};
+        return iterator{top_level, offset, count, error{}};
     }
 
     std::default_sentinel_t end() const
@@ -96,7 +96,7 @@ struct lazy_elements {
 
 template <std::size_t DepthMax>
 struct lazy_entries {
-    std::shared_ptr<value_sharing::document> document;
+    std::shared_ptr<value_sharing::top_level_item> top_level;
     std::size_t offset;
     std::uint64_t count;
 
@@ -104,7 +104,7 @@ struct lazy_entries {
         using value_type = std::expected<std::pair<lazy, lazy>, error>;
         using difference_type = std::ptrdiff_t;
 
-        std::shared_ptr<value_sharing::document> document;
+        std::shared_ptr<value_sharing::top_level_item> top_level;
         std::size_t key;
         std::size_t value;
         std::uint64_t left;
@@ -114,19 +114,19 @@ struct lazy_entries {
         {
             if (left == 0)
                 return;
-            heads::decoder d{document->encoded.substr(key)};
-            if (auto const r = well_formedness::item_skip<DepthMax>(d, *document, 1); !r) [[unlikely]] {
+            heads::decoder d{top_level->encoded.substr(key)};
+            if (auto const r = well_formedness::item_skip<DepthMax>(d, *top_level, 1); !r) [[unlikely]] {
                 failure = r.error();
                 return;
             }
-            value = document->encoded.size() - d.encoded.size();
+            value = top_level->encoded.size() - d.encoded.size();
         }
 
         value_type operator*() const
         {
             if (failure != error{}) [[unlikely]]
                 return std::unexpected(failure);
-            return std::pair{lazy{document, key}, lazy{document, value}};
+            return std::pair{lazy{top_level, key}, lazy{top_level, value}};
         }
 
         iterator &operator++()
@@ -135,12 +135,12 @@ struct lazy_entries {
                 left = 0;
                 return *this;
             }
-            heads::decoder d{document->encoded.substr(value)};
-            if (auto const r = well_formedness::item_skip<DepthMax>(d, *document, 1); !r) [[unlikely]] {
+            heads::decoder d{top_level->encoded.substr(value)};
+            if (auto const r = well_formedness::item_skip<DepthMax>(d, *top_level, 1); !r) [[unlikely]] {
                 failure = r.error();
                 return *this;
             }
-            key = document->encoded.size() - d.encoded.size();
+            key = top_level->encoded.size() - d.encoded.size();
             --left;
             value_find();
             return *this;
@@ -159,7 +159,7 @@ struct lazy_entries {
 
     iterator begin() const
     {
-        iterator first{document, offset, offset, count, error{}};
+        iterator first{top_level, offset, offset, count, error{}};
         first.value_find();
         return first;
     }
@@ -175,7 +175,7 @@ std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &enco
 {
     if (!encoded) [[unlikely]]
         throw std::logic_error("cbor::decode: the encoded data item is empty");
-    return lazy{std::make_shared<value_sharing::document>(encoded, *encoded, std::vector<lazy>{}, 0), 0};
+    return lazy{std::make_shared<value_sharing::top_level_item>(encoded, *encoded, std::vector<lazy>{}, 0), 0};
 }
 
 template <std::size_t DepthMax>
@@ -239,7 +239,7 @@ inline result<lazy> lazy::from(std::shared_ptr<void const> owner, std::string_vi
 {
     if (!owner) [[unlikely]]
         throw std::logic_error("cbor::lazy::from: the owner of the encoded data item is empty");
-    return lazy{std::make_shared<value_sharing::document>(std::move(owner), encoded, std::vector<lazy>{}, 0), 0};
+    return lazy{std::make_shared<value_sharing::top_level_item>(std::move(owner), encoded, std::vector<lazy>{}, 0), 0};
 }
 
 inline result<lazy> lazy::from(std::shared_ptr<std::string const> encoded)
@@ -264,7 +264,7 @@ result<lazy> value_sharing::key_find(resolved const &found, Match const &match)
 {
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    document &source = *found.source;
+    top_level_item &source = *found.source;
     heads::decoder d = found.d;
     for (std::uint64_t i = 0; i < found.h.argument; ++i) {
         auto const key_at = shared_resolve(source, source.encoded.size() - d.encoded.size());
@@ -290,7 +290,7 @@ result<lazy> value_sharing::key_find(resolved const &found, Match const &match)
 template <std::size_t DepthMax>
 result<lazy> lazy::at(std::string_view const key) const
 {
-    auto const found = value_sharing::container_resolve(document, offset);
+    auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     return value_sharing::key_find<DepthMax>(
@@ -308,7 +308,7 @@ result<lazy> lazy::at(std::string_view const key) const
 template <std::size_t DepthMax>
 result<lazy> lazy::at(std::int64_t const index) const
 {
-    auto const found = value_sharing::container_resolve(document, offset);
+    auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [source, h, d] = *found;
@@ -341,7 +341,7 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
                                std::is_same_v<T, typed_array>,
                            owning_ref<T>, T>> lazy::get() const
 {
-    auto const found = value_sharing::container_resolve(document, offset);
+    auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [source, h, d] = *found;
@@ -433,7 +433,7 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
 template <std::size_t DepthMax>
 result<lazy_elements<DepthMax>> lazy::elements() const
 {
-    auto const found = value_sharing::container_resolve(document, offset);
+    auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto const &[source, h, d] = *found;
@@ -444,7 +444,7 @@ result<lazy_elements<DepthMax>> lazy::elements() const
 template <std::size_t DepthMax>
 result<lazy_entries<DepthMax>> lazy::entries() const
 {
-    auto const found = value_sharing::container_resolve(document, offset);
+    auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto const &[source, h, d] = *found;
@@ -455,9 +455,9 @@ result<lazy_entries<DepthMax>> lazy::entries() const
 template <std::size_t DepthMax, class Binding>
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {
-    decoding::prefix before{*l.document, std::vector<bool>(l.document->sharedrefs.size())};
+    decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size())};
     decoding::value_decoder<Binding> v{
-        {l.document->encoded.substr(l.offset)}, binding, decoding::marks<Binding>(l.document->sharedrefs.size()), &before};
+        {l.top_level->encoded.substr(l.offset)}, binding, decoding::marks<Binding>(l.top_level->sharedrefs.size()), &before};
     return v.template value_decode<DepthMax>(0, std::nullopt);
 }
 

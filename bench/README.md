@@ -4,8 +4,9 @@ Two benches measure mbedded-cbor against other libraries:
 
 - `runtime.cpp`: the runtime API against libcbor, msgpack-cxx and
   FlexBuffers (and jsoncons and vladimirgamalyan/cbor when a checkout is
-  given). Each arm encodes a document into a fixed buffer, or reads every
-  item and every byte of the document. Documents are in `docs/`.
+  given). Each arm encodes a top-level item into a fixed buffer, or reads every
+  item and every byte of the top-level item. Each file in `docs/` holds
+  one top-level item.
 - `schema.cpp`: `cbor::schema<T>` against FlatBuffers and Cap'n Proto on
   carsales (`cars.json`, 1000 cars). Each arm encodes the lot, or reads
   every field of every car.
@@ -53,13 +54,13 @@ Settings: `ARMS`, `SCHEMA_OPS`, `GXX`, `CLANGXX`, `JOBS` (parallel builds, defau
 
 ## Every arm of the runtime bench does the same work
 
-Each read arm reads every item of the document once and sums every
+Each read arm reads every item of the top-level item once and sums every
 byte of every text string, byte string and map key, inside tags too.
 No read arm verifies the input before it reads it. mbedded-cbor does
 not check UTF-8. jsoncons delivers an end event for each array and
 map; the arm counts it as one item.
 
-Each encode arm writes every item of the document into a buffer that
+Each encode arm writes every item of the top-level item into a buffer that
 it keeps across iterations:
 
 - S (mbedded-cbor), VG_RAW, MP_REUSE and FB_REUSE walk the same
@@ -68,7 +69,7 @@ it keeps across iterations:
   as bytes, not as items, so MP_REUSE does not encode from it.
 - LC_PREALLOC walks the `cbor_item_t` tree that `cbor_load` built,
   and JC_CLEAR the `jsoncons::json` tree that `decode_cbor` built.
-  Both trees hold every item of the document, and the walk is part of
+  Both trees hold every item of the top-level item, and the walk is part of
   the cost of the library. jsoncons keeps no tag it does not know, so
   JC_CLEAR writes `cwt` without tag 18 (not checked here: jsoncons
   has no package).
@@ -90,7 +91,7 @@ other map becomes a vector of key, value, key, value. No key is
 converted to a decimal string.
 
 A CBOR simple value false, true or null becomes the bool or nil of
-msgpack and FlexBuffers. The documents hold no other simple value.
+msgpack and FlexBuffers. The top-level items hold no other simple value.
 
 Floats: CBOR arms write the width the library chooses. mbedded-cbor
 and vladimirgamalyan/cbor write the shortest width that holds the
@@ -101,7 +102,7 @@ where the double is exact as a float, else 8, and all elements of one
 vector take the width of the widest; `floats.cbor` is one vector, so
 every float takes 8 bytes.
 
-The item count and the string byte sum of each document, as each read
+The item count and the string byte sum of each top-level item, as each read
 arm sees them, were compared once outside the timed loop with a
 checker that includes `runtime.cpp`. READ and LC_READ see the CBOR
 items exactly; MP_READ and FB_READ see one item more per tag and per

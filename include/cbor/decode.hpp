@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "binding.hpp"
-#include "doc_end.hpp"
+#include "item_end.hpp"
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
@@ -27,7 +27,7 @@ class decoding
     using marks = std::vector<std::optional<typename Binding::value>>;
 
     struct prefix {
-        value_sharing::document &document;
+        value_sharing::top_level_item &top_level;
         std::vector<bool> evaluating;
     };
 
@@ -121,13 +121,13 @@ class decoding
                         shared.at(index) = *content;
                         return content;
                     }
-                    std::size_t const index = before->document.mark(d);
+                    std::size_t const index = before->top_level.mark(d);
                     if (index >= shared.size()) {
                         shared.resize(index + 1);
                         before->evaluating.resize(index + 1);
                     }
                     if (shared.at(index)) {
-                        if (auto const r = well_formedness::item_skip<DepthMax>(d, before->document, depth + 1); !r) [[unlikely]]
+                        if (auto const r = well_formedness::item_skip<DepthMax>(d, before->top_level, depth + 1); !r) [[unlikely]]
                             return std::unexpected(r.error());
                         return *shared.at(index);
                     }
@@ -172,9 +172,9 @@ class decoding
                     if (index >= shared.size()) [[unlikely]]
                         return std::unexpected(error::sharedref_index_not_marked);
                     if (!shared.at(index) && before && !before->evaluating.at(index) &&
-                        before->document.sharedrefs.at(index).offset < before->document.encoded.size() - d.encoded.size()) {
+                        before->top_level.sharedrefs.at(index).offset < before->top_level.encoded.size() - d.encoded.size()) {
                         std::string_view const rest = d.encoded;
-                        d.encoded = before->document.encoded.substr(before->document.sharedrefs.at(index).offset);
+                        d.encoded = before->top_level.encoded.substr(before->top_level.sharedrefs.at(index).offset);
                         before->evaluating.at(index) = true;
                         auto content = value_decode<DepthMax>(depth + 1, index);
                         before->evaluating.at(index) = false;

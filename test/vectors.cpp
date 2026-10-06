@@ -82,7 +82,7 @@ TEST_CASE("test vectors: not well-formed items fail")
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
         std::string const wire = bytes_of_hex(c.hex);
-        auto const end = cbor::doc_end<16>(wire);
+        auto const end = cbor::item_end<16>(wire);
         bool const one_item = end.has_value() && *end == wire.size();
         CHECK_FALSE((one_item && decoded(wire).has_value()));
     }

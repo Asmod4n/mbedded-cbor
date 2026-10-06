@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "binding.hpp"
-#include "doc_end.hpp"
+#include "item_end.hpp"
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
@@ -604,10 +604,10 @@ class jsonpath
     }
 
     template <std::size_t DepthMax>
-    static std::expected<std::size_t, error> document_item_end(value_sharing::document &doc, std::size_t at, std::size_t depth);
+    static std::expected<std::size_t, error> document_item_end(value_sharing::top_level_item &top_level, std::size_t at, std::size_t depth);
 
     template <std::size_t DepthMax>
-    static std::expected<bool, error> key_equal(value_sharing::document &doc, std::size_t at,
+    static std::expected<bool, error> key_equal(value_sharing::top_level_item &top_level, std::size_t at,
                                                 diagnostic_notation::literal_cursor literal, std::size_t depth);
 
     template <std::size_t DepthMax>
@@ -656,25 +656,25 @@ class verify_path : public std::bool_constant<jsonpath::query_parse(Path.view(),
 };
 
 template <std::size_t DepthMax>
-std::expected<std::size_t, error> jsonpath::document_item_end(value_sharing::document &doc, std::size_t const at, std::size_t const depth)
+std::expected<std::size_t, error> jsonpath::document_item_end(value_sharing::top_level_item &top_level, std::size_t const at, std::size_t const depth)
 {
-    heads::decoder d{doc.encoded.substr(at)};
-    if (auto const r = well_formedness::item_skip<DepthMax>(d, doc, depth); !r) [[unlikely]]
+    heads::decoder d{top_level.encoded.substr(at)};
+    if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
         return std::unexpected(r.error());
-    return doc.encoded.size() - d.encoded.size();
+    return top_level.encoded.size() - d.encoded.size();
 }
 
 template <std::size_t DepthMax>
-std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std::size_t const start,
+std::expected<bool, error> jsonpath::key_equal(value_sharing::top_level_item &top_level, std::size_t const start,
                                                diagnostic_notation::literal_cursor const cursor, std::size_t const depth)
 {
     std::string_view const literal = cursor.text;
     if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
         return std::unexpected(r.error());
-    auto const at = value_sharing::shared_resolve(doc, start);
+    auto const at = value_sharing::shared_resolve(top_level, start);
     if (!at) [[unlikely]]
         return std::unexpected(at.error());
-    auto const h = heads::raw_head_read(doc.encoded, *at);
+    auto const h = heads::raw_head_read(top_level.encoded, *at);
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
     auto const l = heads::raw_head_read(literal, cursor.at);
@@ -690,7 +690,7 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std
         return h->argument == l->argument;
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder d{doc.encoded.substr(h->at)};
+        heads::decoder d{top_level.encoded.substr(h->at)};
         auto const s = d.byte_string_decode(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
@@ -702,10 +702,10 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std
         std::size_t d = h->at;
         std::size_t k = l->at;
         for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const equal = key_equal<DepthMax>(doc, d, {literal, k}, depth + 1);
+            auto const equal = key_equal<DepthMax>(top_level, d, {literal, k}, depth + 1);
             if (!equal || !*equal)
                 return equal;
-            auto const d_end = document_item_end<DepthMax>(doc, d, depth + 1);
+            auto const d_end = document_item_end<DepthMax>(top_level, d, depth + 1);
             if (!d_end) [[unlikely]]
                 return std::unexpected(d_end.error());
             auto const k_end = literal_end({literal, k}, {depth + 1, DepthMax});
@@ -721,10 +721,10 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std
             return false;
         std::size_t d = h->at;
         for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const value_at = document_item_end<DepthMax>(doc, d, depth + 1);
+            auto const value_at = document_item_end<DepthMax>(top_level, d, depth + 1);
             if (!value_at) [[unlikely]]
                 return std::unexpected(value_at.error());
-            auto const pair_end = document_item_end<DepthMax>(doc, *value_at, depth + 1);
+            auto const pair_end = document_item_end<DepthMax>(top_level, *value_at, depth + 1);
             if (!pair_end) [[unlikely]]
                 return std::unexpected(pair_end.error());
             bool paired = false;
@@ -736,25 +736,25 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std
                 auto const k_end = literal_end({literal, *k_value}, {depth + 1, DepthMax});
                 if (!k_end) [[unlikely]]
                     return std::unexpected(k_end.error());
-                auto const key_same = key_equal<DepthMax>(doc, d, {literal, k}, depth + 1);
+                auto const key_same = key_equal<DepthMax>(top_level, d, {literal, k}, depth + 1);
                 if (!key_same) [[unlikely]]
                     return key_same;
                 if (*key_same) {
                     for (std::size_t earlier = h->at; earlier < d;) {
-                        auto const twin = key_equal<DepthMax>(doc, earlier, {literal, k}, depth + 1);
+                        auto const twin = key_equal<DepthMax>(top_level, earlier, {literal, k}, depth + 1);
                         if (!twin) [[unlikely]]
                             return twin;
                         if (*twin) [[unlikely]]
                             return std::unexpected(error::duplicate_key);
-                        auto const earlier_value = document_item_end<DepthMax>(doc, earlier, depth + 1);
+                        auto const earlier_value = document_item_end<DepthMax>(top_level, earlier, depth + 1);
                         if (!earlier_value) [[unlikely]]
                             return std::unexpected(earlier_value.error());
-                        auto const earlier_end = document_item_end<DepthMax>(doc, *earlier_value, depth + 1);
+                        auto const earlier_end = document_item_end<DepthMax>(top_level, *earlier_value, depth + 1);
                         if (!earlier_end) [[unlikely]]
                             return std::unexpected(earlier_end.error());
                         earlier = *earlier_end;
                     }
-                    auto const value_same = key_equal<DepthMax>(doc, *value_at, {literal, *k_value}, depth + 1);
+                    auto const value_same = key_equal<DepthMax>(top_level, *value_at, {literal, *k_value}, depth + 1);
                     if (!value_same) [[unlikely]]
                         return value_same;
                     paired = *value_same;
@@ -770,7 +770,7 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::document &doc, std
     case major_type::tag:
         if (h->argument != l->argument)
             return false;
-        return key_equal<DepthMax>(doc, h->at, {literal, l->at}, depth + 1);
+        return key_equal<DepthMax>(top_level, h->at, {literal, l->at}, depth + 1);
     default:
         break;
     }
@@ -796,7 +796,7 @@ result<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const 
     auto const literal = text_key.head_decode();
     if (literal && literal->major == major_type::text_string)
         return node.at<DepthMax>(text_key.encoded);
-    auto const found = value_sharing::container_resolve(node.document, node.offset);
+    auto const found = value_sharing::container_resolve(node.top_level, node.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto [source, h, d] = *found;
@@ -829,10 +829,10 @@ std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b, s
 {
     if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
         return std::unexpected(r.error());
-    auto const x = value_sharing::container_resolve(a.document, a.offset);
+    auto const x = value_sharing::container_resolve(a.top_level, a.offset);
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
-    auto const y = value_sharing::container_resolve(b.document, b.offset);
+    auto const y = value_sharing::container_resolve(b.top_level, b.offset);
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
     heads::head const &h = x->h;
@@ -951,10 +951,10 @@ std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b, s
 template <std::size_t DepthMax>
 std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const &b)
 {
-    auto const x = value_sharing::container_resolve(a.document, a.offset);
+    auto const x = value_sharing::container_resolve(a.top_level, a.offset);
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
-    auto const y = value_sharing::container_resolve(b.document, b.offset);
+    auto const y = value_sharing::container_resolve(b.top_level, b.offset);
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
     heads::head const &h = x->h;
@@ -1034,7 +1034,7 @@ std::expected<std::optional<lazy>, error> jsonpath::comparable_value(query_view 
         auto const argument = comparable_value<DepthMax>(v, e.first, current, root);
         if (!argument || !*argument) [[unlikely]]
             return argument;
-        auto const found = value_sharing::container_resolve((*argument)->document, (*argument)->offset);
+        auto const found = value_sharing::container_resolve((*argument)->top_level, (*argument)->offset);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         if (found->h.major == major_type::array || found->h.major == major_type::map) {
@@ -1134,7 +1134,7 @@ template <std::size_t DepthMax>
 std::expected<void, error> jsonpath::selector_apply(query_view const &v, selector const &s, lazy const &node, lazy const &root,
                                                     std::vector<lazy> &nodelist)
 {
-    std::size_t const limit = root.document->encoded.size();
+    std::size_t const limit = root.top_level->encoded.size();
     auto const append = [&nodelist, limit](lazy const &l) -> std::expected<void, error> {
         if (nodelist.size() >= limit) [[unlikely]]
             return std::unexpected(error::nodelist_too_long);
@@ -1151,7 +1151,7 @@ std::expected<void, error> jsonpath::selector_apply(query_view const &v, selecto
             return std::unexpected(child.error());
         return {};
     }
-    auto const found = value_sharing::container_resolve(node.document, node.offset);
+    auto const found = value_sharing::container_resolve(node.top_level, node.offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     std::vector<lazy> children;
@@ -1251,8 +1251,8 @@ template <std::size_t DepthMax, class Binding>
 result<typename Binding::value, error> jsonpath::query_walk(Binding &binding, query_view const &v, parsed_query const &top,
                                                             lazy const &root)
 {
-    if (!root.document) [[unlikely]]
-        throw std::logic_error("cbor::at_path: the lazy holds no document");
+    if (!root.top_level) [[unlikely]]
+        throw std::logic_error("cbor::at_path: the lazy holds no top-level item");
     if (top.singular) {
         lazy node = root;
         for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
