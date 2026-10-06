@@ -1,10 +1,13 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <expected>
 #include <initializer_list>
 #include <memory>
 #include <optional>
+#include <random>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -568,3 +571,104 @@ TEST_CASE("registered tag: before_encode that returns a new value by value")
     CHECK_EQ(binding.before_encode_calls, 2);
     CHECK_EQ(w.encoded, "\x82\xd9\x13\x88\x82\x01\x82\x02\x03\xd9\x13\x88\x82\x01\x82\x02\x03"sv);
 }
+
+// Ported from test.rb: 'tag 28/29: shared value preserved via lazy.value'. The map half: the first
+// test above covers only the array half.
+TEST_CASE("lazy: a value shared by two map values keeps its identity")
+{
+    auto const v = arr({u(1), u(2), u(3)});
+    std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}));
+    ref_binding binding;
+    auto const r = cbor::lazy_decode<16>(binding, *cbor::decode<16>(doc));
+    REQUIRE(r.has_value());
+    CHECK(same(at(*r, "a"), at(*r, "b")));
+}
+
+// Ported from test.rb: 'tag 28: self-referential Tag 28 inside Tag 28 is safe'. The exact bytes of
+// mruby-cbor: two marks on one value and no reference, which must decode without a fault.
+TEST_CASE("tag 28: inside tag 28 without a reference")
+{
+    auto const r = decoded_ref("\xd8\x1c\xd8\x1c\x18\x2a"sv);
+    CHECK_EQ(std::get<std::uint64_t>(r->kind), 42);
+}
+
+// Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved'. The
+// test above checks the encoder only; this one checks that the decoder gives one object three times.
+TEST_CASE("registered tag: the same object three times keeps its identity")
+{
+    auto const point = std::make_shared<node>(node{object{5000, arr({u(3), u(7)})}});
+    auto const r = round_trip(arr({point, point, point}));
+    CHECK(same(element(r, 0), element(r, 1)));
+    CHECK(same(element(r, 1), element(r, 2)));
+}
+
+// Ported from test.rb: 'registered tag + sharedref: distinct instances with equal fields do NOT share'.
+// The test above checks the encoder only; this one checks that the decoder gives two objects.
+TEST_CASE("registered tag: distinct objects with equal content decode to two objects")
+{
+    auto const p1 = std::make_shared<node>(node{object{5000, arr({u(1), u(2)})}});
+    auto const p2 = std::make_shared<node>(node{object{5000, arr({u(1), u(2)})}});
+    auto const r = round_trip(arr({p1, p2}));
+    CHECK_FALSE(same(element(r, 0), element(r, 1)));
+}
+
+// Ported from test.rb: 'registered tag + sharedref: non-immediate ivar (String) shares correctly'. The
+// string inside the content gets its own mark, so the mark of the object must be placed before it.
+TEST_CASE("registered tag: an object whose content holds a string keeps its identity")
+{
+    auto const cfg = std::make_shared<node>(node{object{5001, arr({u(30), s("default")})}});
+    auto const r = round_trip(obj({{s("p"), cfg}, {s("b"), cfg}, {s("f"), cfg}}));
+    CHECK(same(at(r, "p"), at(r, "b")));
+    CHECK(same(at(r, "b"), at(r, "f")));
+}
+
+// Ported from test.rb: 'registered tag + sharedref: identity preserved through lazy.value'.
+TEST_CASE("lazy: a registered object keeps its identity")
+{
+    auto const l = std::make_shared<node>(node{object{5003, arr({u(99)})}});
+    std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}));
+    ref_binding binding;
+    auto const r = cbor::lazy_decode<16>(binding, *cbor::decode<16>(doc));
+    REQUIRE(r.has_value());
+    CHECK(same(at(*r, "a"), at(*r, "b")));
+}
+
+// Ported from test.rb: 'path + sharedref: wildcard on shared leaf + two wildcards over shared'. The
+// second half: two wildcards, and the outer one goes through a reference. RFC 9535 gives one flat
+// nodelist, as path.cpp expects, where mruby-cbor gave one array for each team.
+TEST_CASE("path: two wildcards over a shared array")
+{
+    auto const teams = arr({obj({{s("members"), arr({obj({{s("n"), s("a")}}), obj({{s("n"), s("b")}})})}}),
+                            obj({{s("members"), arr({obj({{s("n"), s("c")}})})}})});
+    std::string const doc =
+        encoded_shared(obj({{s("p"), obj({{s("teams"), teams}})}, {s("b"), obj({{s("teams"), teams}})}}));
+    ref_binding binding;
+    auto const r = cbor::at_path<16>(binding, "$.b.teams[*].members[*].n", *cbor::decode<16>(doc));
+    REQUIRE(r.has_value());
+    CHECK_EQ(std::get<std::vector<handle>>((*r)->kind).size(), 3);
+    CHECK_EQ(std::get<std::string>(element(*r, 0)->kind), "a");
+    CHECK_EQ(std::get<std::string>(element(*r, 1)->kind), "b");
+    CHECK_EQ(std::get<std::string>(element(*r, 2)->kind), "c");
+}
+
+// Ported from what.rb: 'regression #3'. A lazy read of the first path must not change what a later
+// decode of the second path gives: the plain array, with its values.
+TEST_CASE("lazy: a reference decodes to the plain value after a read of its mark")
+{
+    auto const shared = arr({u(10), u(20), u(30)});
+    std::string const doc = encoded_shared(
+        obj({{s("path_a"), obj({{s("ref"), shared}})}, {s("path_b"), obj({{s("ref"), shared}})}}));
+    auto const root = *cbor::decode<16>(doc);
+    REQUIRE(root.at<16>("path_a").at<16>("ref").has_value());
+    auto const ref = root.at<16>("path_b").at<16>("ref");
+    REQUIRE(ref.has_value());
+    ref_binding binding;
+    auto const r = cbor::lazy_decode<16>(binding, *ref);
+    REQUIRE(r.has_value());
+    REQUIRE(std::holds_alternative<std::vector<handle>>((*r)->kind));
+    CHECK_EQ(std::get<std::vector<handle>>((*r)->kind).size(), 3);
+    CHECK_EQ(std::get<std::uint64_t>(element(*r, 0)->kind), 10);
+    CHECK_EQ(std::get<std::uint64_t>(element(*r, 1)->kind), 20);
+    CHECK_EQ(std::get<std::uint64_t>(element(*r, 2)->kind), 30);
+}
+
