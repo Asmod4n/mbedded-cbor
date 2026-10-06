@@ -132,6 +132,10 @@ class heads
     CBOR_ALWAYS_INLINE static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
                                                      std::uint8_t const info, std::uint64_t const argument)
     {
+        static_assert(argument_size(std::to_underlying(additional_information::eight_byte_argument)) <= sizeof(std::uint64_t),
+                      "The widest argument must fit in the bytes of one std::uint64_t.");
+        static_assert(head_padding >= sizeof(std::uint64_t),
+                      "The padding after the last head must hold the bytes that a head writes past its own size.");
         std::size_t const width = argument_size(info);
         auto const bytes = big_endian(argument << ((64 - 8 * width) & 63));
         if constexpr (Exact) {
@@ -277,6 +281,12 @@ class heads
                 return std::unexpected(error::indefinite_length);
             if (info > std::to_underlying(additional_information::eight_byte_argument)) [[unlikely]]
                 return std::unexpected(error::syntax_error);
+            static_assert(argument_size(std::to_underlying(additional_information::two_byte_argument)) >= sizeof(std::uint16_t),
+                          "A two-byte argument must cover the bytes of one std::uint16_t.");
+            static_assert(argument_size(std::to_underlying(additional_information::four_byte_argument)) >= sizeof(std::uint32_t),
+                          "A four-byte argument must cover the bytes of one std::uint32_t.");
+            static_assert(argument_size(std::to_underlying(additional_information::eight_byte_argument)) >= sizeof(std::uint64_t),
+                          "An eight-byte argument must cover the bytes of one std::uint64_t.");
             std::size_t const size = argument_size(info);
             if (encoded.size() < 1 + size) [[unlikely]]
                 return std::unexpected(error::too_little_data);
