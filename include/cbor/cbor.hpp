@@ -8,6 +8,7 @@
 #include "encode.hpp"
 #include "item_end.hpp"
 #include "shared.hpp"
+#include "item.hpp"
 #include "lazy.hpp"
 #include "query.hpp"
 #include "inspect.hpp"
