@@ -359,7 +359,7 @@ struct typed_binding : cbor::binding<cbor::typed_array> {
     }
 };
 
-std::expected<std::string, std::error_code> typed_encoded(std::uint64_t const tag, std::string_view const bytes)
+std::expected<std::string, cbor::error> typed_encoded(std::uint64_t const tag, std::string_view const bytes)
 {
     typed_binding binding;
     test::string_writer w;
@@ -388,9 +388,9 @@ TEST_CASE("encode: a typed array is a tag and a byte string")
 // element size is inadmissible content.
 TEST_CASE("encode: a typed array the binding answers wrongly")
 {
-    CHECK((typed_encoded(76, "\x00"sv).error() == cbor::error::unsupported_value));
-    CHECK((typed_encoded(63, "\x00"sv).error() == cbor::error::unsupported_value));
-    CHECK((typed_encoded(66, "\x00\x01\x02"sv).error() == cbor::error::inadmissible_type_for_tag_content));
+    CHECK((typed_encoded(76, "\x00"sv).error() == cbor::error{cbor::error::unsupported_value}));
+    CHECK((typed_encoded(63, "\x00"sv).error() == cbor::error{cbor::error::unsupported_value}));
+    CHECK((typed_encoded(66, "\x00\x01\x02"sv).error() == cbor::error{cbor::error::inadmissible_type_for_tag_content}));
 }
 
 namespace

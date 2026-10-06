@@ -12,7 +12,6 @@
 #include <memory>
 #include <ranges>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -744,7 +743,7 @@ public:
     static result<owning_ref<T>> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         if (!owner) [[unlikely]]
-            throw std::logic_error("cbor::databind::decode: the owner of the encoded data item is empty");
+            validity::throw_logic_error("cbor::databind::decode: the owner of the encoded data item is empty");
         auto value = read<DepthMax>(encoded);
         if (!value) [[unlikely]]
             return std::unexpected(value.error());

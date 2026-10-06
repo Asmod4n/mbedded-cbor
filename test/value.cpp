@@ -178,7 +178,7 @@ TEST_CASE("depth: encode past the limit")
     string_writer w2;
     auto const r = cbor::encode<16>(binding, w2, A(deep));
     REQUIRE_FALSE(r.has_value());
-    CHECK((r.error() == error::nesting_depth_exceeded));
+    CHECK((r.error() == cbor::error{error::nesting_depth_exceeded}));
 }
 
 // RFC 8949 Table 4: the simple values 24 to 31 are reserved; Appendix F: f8 with a value below 32 is
@@ -190,7 +190,7 @@ TEST_CASE("encode: a reserved simple value is an error")
         string_writer w;
         auto const r = cbor::encode<16>(binding, w, V(simple{v}));
         REQUIRE_FALSE(r.has_value());
-        CHECK((r.error() == error::reserved_simple_value));
+        CHECK((r.error() == cbor::error{error::reserved_simple_value}));
     }
     CHECK_EQ(encoded(V(simple{23})), "\xf7"sv);
     CHECK_EQ(encoded(V(simple{32})), "\xf8\x20"sv);
@@ -226,7 +226,7 @@ TEST_CASE("encode: a kind the binding cannot describe is unsupported_value")
     string_writer w2;
     auto const r = cbor::encode<16>(binding, w2, std::string("array"));
     REQUIRE_FALSE(r.has_value());
-    CHECK((r.error() == error::unsupported_value));
+    CHECK((r.error() == cbor::error{error::unsupported_value}));
 }
 
 // A span target is written in place. The last items of a top-level item lie closer to the end than the
@@ -242,6 +242,6 @@ TEST_CASE("encode: a span of exact size holds the top-level item, one byte less 
         CHECK_EQ(std::string_view(exact.data(), exact.size()), expected);
         std::vector<char> short_by_one(expected.size() - 1);
         CHECK_EQ(cbor::encode<16>(binding, std::span<char>(short_by_one), v).error(),
-                 std::make_error_code(std::errc::no_buffer_space));
+                 cbor::error{cbor::error::no_buffer_space});
     }
 }

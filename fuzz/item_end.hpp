@@ -24,7 +24,7 @@ inline void item_end_target(std::string_view const input)
         if (value)
             require(framed.has_value() && same(*framed, *value));
         if (!framed)
-            require(std::error_code(framed.error()) != cbor::condition::not_well_formed);
+            require(framed.error() != cbor::error::too_little_data && framed.error() != cbor::error::syntax_error);
         if (value) {
             auto const cut = cbor::item_end<16>(rest.substr(0, *end - 1));
             require(!cut.has_value());

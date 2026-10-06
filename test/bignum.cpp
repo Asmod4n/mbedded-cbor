@@ -99,9 +99,9 @@ TEST_CASE("bignum tag 3: an empty magnitude is refused")
 {
     test_binding binding;
     string_writer w;
-    CHECK_EQ(cbor::encode<16>(binding, w, big(true, "")).error(), make_error_code(error::unsupported_value));
+    CHECK_EQ(cbor::encode<16>(binding, w, big(true, "")).error(), cbor::error{error::unsupported_value});
     CHECK_EQ(cbor::encode<16>(binding, w, big(true, std::string(2, '\0'))).error(),
-             make_error_code(error::unsupported_value));
+             cbor::error{error::unsupported_value});
 }
 
 // Found by the fuzzer: the decoder counts the content of tag 2 or 3 one level deeper, as the content of every
@@ -115,7 +115,7 @@ TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
     string_writer w;
     auto const r = cbor::encode<16>(binding, w, deep);
     REQUIRE_FALSE(r.has_value());
-    CHECK_EQ(r.error(), cbor::make_error_code(error::nesting_depth_exceeded));
+    CHECK_EQ(r.error(), cbor::error{error::nesting_depth_exceeded});
     value shallow = V(value{bignum{false, std::string(9, '\x01')}});
     for (int i = 0; i < 15; ++i)
         shallow = A(shallow);

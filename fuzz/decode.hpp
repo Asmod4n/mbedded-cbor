@@ -16,7 +16,7 @@ inline void decode_encode_decode(std::string_view const input)
     string_writer w;
     auto const written = cbor::encode<16>(binding, w, *value);
     if (!written) {
-        require(written.error() == cbor::error::nesting_depth_exceeded);
+        require(written.error() == cbor::error{cbor::error::nesting_depth_exceeded});
         return;
     }
     auto const again = cbor::lazy_decode<16>(binding, *cbor::decode<16>(w.encoded));
