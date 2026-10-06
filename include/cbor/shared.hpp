@@ -119,14 +119,17 @@ struct value_sharing::top_level_item {
     std::deque<item> items{};
     std::vector<std::pair<std::size_t, item *>> item_offsets{};
 
-    item &entry(std::size_t const offset)
+    std::expected<item *, error> entry(std::size_t const offset)
     {
         auto const known = std::ranges::lower_bound(item_offsets, offset, {}, &std::pair<std::size_t, item *>::first);
         if (known != item_offsets.end() && known->first == offset)
-            return *known->second;
-        item &placeholder = items.emplace_back(item{lazy{{}, offset}});
+            return known->second;
+        auto const h = heads::raw_head_read(encoded, offset);
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        item &placeholder = items.emplace_back(item{h->major, h->info, h->argument, lazy{{}, offset}});
         item_offsets.insert(known, {offset, &placeholder});
-        return placeholder;
+        return &placeholder;
     }
 
     std::size_t mark(heads::decoder const &at)
@@ -197,7 +200,7 @@ inline std::expected<item *, error> value_sharing::item_resolve(top_level_item &
     auto const node = shared_resolve(top_level, at);
     if (!node) [[unlikely]]
         return std::unexpected(node.error());
-    return &top_level.entry(*node);
+    return top_level.entry(*node);
 }
 
 inline std::expected<value_sharing::resolved, error> value_sharing::container_resolve(std::shared_ptr<top_level_item> source,
