@@ -676,6 +676,192 @@ TEST_CASE("view: the view keeps the bytes alive after the accessor is gone")
 namespace
 {
 
+numbers const three_numbers{{1, 2, 0xfffe},
+                            {1, 2, 0xfffffffe},
+                            {1, 2, 0xfffffffffffffffe},
+                            {-1, 2, -3},
+                            {-1, 2, -3},
+                            {-1, 2, -3},
+                            {-1, 2, -3},
+#if defined(__STDCPP_FLOAT16_T__)
+                            {-1.0f16, 2.0f16, -4.0f16},
+#endif
+                            {-1.0f, 2.0f, -4.0f},
+                            {-1.0, 2.0, -4.0}};
+
+template <class E>
+std::vector<std::uint64_t> bits_of_all(std::vector<E> const &values)
+{
+    std::vector<std::uint64_t> out;
+    for (E const x : values)
+        out.push_back(bits_of(x));
+    return out;
+}
+
+} // namespace
+
+// The iterator of a view yields each element by value. It is a random access iterator by the concepts of the
+// standard library, so that std::ranges algorithms and range-for take the view as they take a std::span. The view is
+// a sized random access range. It is not a borrowed range: its iterators read bytes that the view keeps alive.
+TEST_CASE("view: the iterator and the view model the standard concepts")
+{
+    using V = cbor::typed_array_view<double>;
+    using I = V::iterator;
+    CHECK(std::random_access_iterator<I>);
+    CHECK(std::sized_sentinel_for<I, I>);
+    CHECK(std::same_as<std::iter_value_t<I>, double>);
+    CHECK(std::same_as<std::iter_reference_t<I>, double>);
+    CHECK(std::ranges::random_access_range<V const>);
+    CHECK(std::ranges::sized_range<V const>);
+    CHECK(std::ranges::common_range<V const>);
+    CHECK_FALSE(std::ranges::borrowed_range<V>);
+    CHECK_FALSE(std::ranges::contiguous_range<V>);
+    CHECK_FALSE(std::output_iterator<I, double>);
+}
+
+// Each element type of RFC 8746 that the schema writes is read three ways: range-for, the iterator with index and
+// arithmetic, and std::ranges algorithms. The expected bits are those of the values that were encoded. The order of
+// the values makes the maximum the middle element and the minimum the last one for the signed types.
+TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every element type")
+{
+    std::string const bytes = schema_bytes(three_numbers);
+    auto check = [&]<cbor::fixed_string Path, class E>(std::vector<E> const &source) {
+        auto const v = view_of<Path>(bytes);
+        REQUIRE(v.has_value());
+        cbor::typed_array_view<E> const &view = *v;
+        REQUIRE_EQ(view.size(), 3u);
+        CHECK_FALSE(view.empty());
+        std::vector<E> seen;
+        for (E const x : view)
+            seen.push_back(x);
+        CHECK_EQ(bits_of_all(seen), bits_of_all(source));
+        auto const b = view.begin();
+        CHECK_EQ(view.end() - b, 3);
+        CHECK_EQ(b - view.end(), -3);
+        CHECK_EQ(bits_of(b[2]), bits_of(source[2]));
+        CHECK_EQ(bits_of(*(b + 1)), bits_of(source[1]));
+        CHECK_EQ(bits_of(*(1 + b)), bits_of(source[1]));
+        CHECK_EQ(bits_of(*(view.end() - 1)), bits_of(source[2]));
+        auto i = b;
+        CHECK_EQ(bits_of(*i++), bits_of(source[0]));
+        CHECK_EQ(bits_of(*i), bits_of(source[1]));
+        CHECK_EQ(bits_of(*--i), bits_of(source[0]));
+        i += 2;
+        CHECK_EQ(bits_of(*i), bits_of(source[2]));
+        i -= 1;
+        CHECK_EQ(bits_of(*i--), bits_of(source[1]));
+        CHECK(i == b);
+        CHECK(b < view.end());
+        CHECK(view.end() > b);
+        CHECK(b <= b);
+        CHECK_EQ(bits_of(std::ranges::fold_left(view, E{}, std::plus<>{})),
+                 bits_of(std::ranges::fold_left(source, E{}, std::plus<>{})));
+        CHECK_EQ(bits_of(std::ranges::max(view)), bits_of(std::ranges::max(source)));
+        CHECK_EQ(std::ranges::find(view, source[1]) - view.begin(), 1);
+        CHECK(std::ranges::find(view, E{0}) == view.end());
+        CHECK_EQ(std::ranges::distance(view), 3);
+    };
+    check.operator()<"$.u16">(three_numbers.u16);
+    check.operator()<"$.u32">(three_numbers.u32);
+    check.operator()<"$.u64">(three_numbers.u64);
+    check.operator()<"$.s8">(three_numbers.s8);
+    check.operator()<"$.s16">(three_numbers.s16);
+    check.operator()<"$.s32">(three_numbers.s32);
+    check.operator()<"$.s64">(three_numbers.s64);
+#if defined(__STDCPP_FLOAT16_T__)
+    check.operator()<"$.f16">(three_numbers.f16);
+#endif
+    check.operator()<"$.f32">(three_numbers.f32);
+    check.operator()<"$.f64">(three_numbers.f64);
+}
+
+// front and back read the first and the last element with one load each. first(n) and last(n) give a sub-view of n
+// elements, as std::span does. n equal to the size gives the whole view; n one past it is index_out_of_bounds as an
+// error value, where std::span would have undefined behaviour.
+TEST_CASE("view: front, back, first and last")
+{
+    auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+    REQUIRE(root.has_value());
+    auto const v = root->view<"$.v">();
+    REQUIRE(v.has_value());
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*v->front()), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*v->back()), 0x4010000000000000u);
+    auto const head = v->first(2);
+    REQUIRE(head.has_value());
+    REQUIRE_EQ(head->size(), 2u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*head->back()), 0x4000000000000000u);
+    CHECK_EQ((*head)[2].error(), error::index_out_of_bounds);
+    auto const tail = v->last(2);
+    REQUIRE(tail.has_value());
+    REQUIRE_EQ(tail->size(), 2u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*tail->front()), 0x4000000000000000u);
+    CHECK_EQ(v->first(3)->size(), 3u);
+    CHECK_EQ(v->last(3)->size(), 3u);
+    CHECK_EQ(v->first(0)->size(), 0u);
+    CHECK_EQ(v->last(0)->size(), 0u);
+    CHECK_EQ(v->first(4).error(), error::index_out_of_bounds);
+    CHECK_EQ(v->last(4).error(), error::index_out_of_bounds);
+    CHECK_EQ(v->first(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+    CHECK_EQ(v->last(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+}
+
+// An empty view has no front and no back, which is an error value, and no element to iterate. first(0) and last(0)
+// are empty views, and first(1) is out of bounds.
+TEST_CASE("view: an empty view has no front, no back and no element")
+{
+    auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{}));
+    REQUIRE(root.has_value());
+    auto const v = root->view<"$.v">();
+    REQUIRE(v.has_value());
+    CHECK(v->empty());
+    CHECK_EQ(v->front().error(), error::index_out_of_bounds);
+    CHECK_EQ(v->back().error(), error::index_out_of_bounds);
+    CHECK(v->begin() == v->end());
+    CHECK_EQ(std::ranges::fold_left(*v, 0.0, std::plus<>{}), 0.0);
+    CHECK(v->first(0)->empty());
+    CHECK(v->last(0)->empty());
+    CHECK_EQ(v->first(1).error(), error::index_out_of_bounds);
+    CHECK_EQ(v->last(1).error(), error::index_out_of_bounds);
+}
+
+// A sub-view holds the owner as the view does. The test drops the string, the accessor and the parent view, then
+// reads the sub-views, so that the sanitizer sees a read of freed memory if a sub-view borrowed from its parent.
+// The sub-view of an rvalue view takes the owner over, and the test reads it after the same drops. A view made from
+// an rvalue accessor takes the owner over too.
+TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is gone")
+{
+    std::optional<cbor::typed_array_view<double>> copied;
+    std::optional<cbor::typed_array_view<double>> moved;
+    std::optional<cbor::typed_array_view<double>> taken;
+    {
+        auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+        REQUIRE(root.has_value());
+        auto v = root->view<"$.v">();
+        REQUIRE(v.has_value());
+        auto c = v->last(2);
+        REQUIRE(c.has_value());
+        copied.emplace(std::move(*c));
+        auto m = std::move(*v).first(1);
+        REQUIRE(m.has_value());
+        moved.emplace(std::move(*m));
+        auto r = cbor::schema<doubles>::path(schema_bytes(doubles{{8.0}}));
+        REQUIRE(r.has_value());
+        auto t = std::move(*r).view<"$.v">();
+        REQUIRE(t.has_value());
+        taken.emplace(std::move(*t));
+    }
+    REQUIRE_EQ(copied->size(), 2u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*copied->back()), 0x4010000000000000u);
+    CHECK_EQ(std::ranges::fold_left(*copied, 0.0, std::plus<>{}), 6.0);
+    REQUIRE_EQ(moved->size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*moved->front()), 0x3ff0000000000000u);
+    REQUIRE_EQ(taken->size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*taken->front()), 0x4020000000000000u);
+}
+
+namespace
+{
+
 struct [[=cbor::tag(1514)]] garage {
     std::vector<tire> tires;
     std::vector<std::string> names;
