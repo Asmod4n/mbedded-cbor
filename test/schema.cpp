@@ -516,10 +516,10 @@ TEST_CASE("path: a path compiles where it names a part of the type")
     CHECK_FALSE(path_reads<garage, "tires">);
     CHECK(path_reads<garage, "@.tires">);
     using A = cbor::schema<garage>::accessor<>;
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.names[0]">()), cbor::result<std::string_view>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.tires[]">(0uz)), cbor::result<cbor::schema<garage>::accessor<tire>>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.names[0]">()), std::expected<std::string_view, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.tires[]">(0uz)), std::expected<cbor::schema<garage>::accessor<tire>, cbor::error>>);
     CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.tires">()),
-                       cbor::result<cbor::schema<garage>::accessor<std::vector<tire>>>>);
+                       std::expected<cbor::schema<garage>::accessor<std::vector<tire>>, cbor::error>>);
 }
 
 // An accessor of a list gives its size and its elements; an accessor of a struct gives its fields. A leaf through
@@ -1382,8 +1382,8 @@ TEST_CASE("attack: no text result outlives its bytes")
 {
     std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
     using A = cbor::schema<probe>::accessor<>;
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.text">()), cbor::result<std::string_view>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.code">()), cbor::result<std::string_view>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.text">()), std::expected<std::string_view, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.code">()), std::expected<std::string_view, cbor::error>>);
     CHECK(path_reads<probe, "$.text">);
     CHECK_FALSE(temporary_reads<A, "$.text">);
     CHECK_FALSE(temporary_reads<cbor::schema<probe>::accessor<tire>, "@.diameter">);
@@ -1571,7 +1571,7 @@ parking_lot sample_lot()
     return l;
 }
 
-std::string text_of(cbor::result<std::string_view> const &r)
+std::string text_of(std::expected<std::string_view, cbor::error> const &r)
 {
     return r ? std::string(*r) : "(error)"s;
 }
