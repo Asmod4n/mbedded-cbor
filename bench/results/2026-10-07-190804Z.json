@@ -1,0 +1,434 @@
+{
+ "time": "2026-10-07-190804Z",
+ "commits": "29e5201 with bench/compare.cpp dirty ( M bench/compare.cpp )",
+ "purpose": "Typed array view (owner decision 2026-10-07). g++-16 only (clang 23 has no reflection). floats.cbor, 60000 binary64. One field = element 30000; every field = sum of all elements. MB_FIELD: path $.values[30000] from the root each time (today's per-access path). MB_READ_PATH: $.values[] with an index from the root for each element (per-access path). MB_READ: accessor of $.values, then @[] per element. MB_FIELD_VIEW / MB_READ_VIEW: view<$.values> checked once, then operator[]. FB_*: FlatBuffers without Verifier; FB_*_V: with VerifyFloatsBuffer each time. CP_*: Cap n Proto. aa2 = the same arm built a second time (A/A). Each arm its own binary, alternating in shuffled order, 10 rounds, min_time 0.2s. ns per message, real_time. FB_FIELD: the disassembly shows that the element load is removed by the compiler; only the vector offset is read.",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG",
+ "resolved_march": "-march=                     \t\tsapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.0",
+  "clang version 23.1.2"
+ ],
+ "packages": [
+  "glibc-2.44-2.1.x86_64",
+  "libstdc++6-16.2.0+git9497-3.1.x86_64",
+  "gcc16-c++-16.2.0+git9497-3.1.x86_64",
+  "clang-23-1.1.x86_64",
+  "libbenchmark1-1.9.5-2.3.x86_64",
+  "libflatbuffers25_2_10-25.2.10-2.5.x86_64",
+  "libcapnp-1_5_0-1.5.0-1.3.x86_64"
+ ],
+ "ldd_sample": "linux-vdso.so.1 (0x00007fc0ef3c2000)\n\tlibcapnp.so.1.5.0 => /lib64/libcapnp.so.1.5.0 (0x00007fc0ef303000)\n\tlibkj.so.1.5.0 => /lib64/libkj.so.1.5.0 (0x00007fc0ef27d000)\n\tlibflatbuffers.so.25.2.10 => /lib64/libflatbuffers.so.25.2.10 (0x00007fc0ef1f1000)\n\tlibbenchmark.so.1 => /lib64/libbenchmark.so.1 (0x00007fc0ef18c000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fc0eeee9000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007fc0eedc5000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007fc0eed97000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007fc0eeb83000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fc0ef3c4000)",
+ "kernel": "6.18.44-fc-v77",
+ "scheduler": "cat: /sys/kernel/sched_ext/state: No such file or directory\n1",
+ "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-tw-compare, user 1000",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4
+ },
+ "user": "uid 1000 in the container",
+ "uid": 1000,
+ "priority_raised": false,
+ "priority_note": "renice: failed to set priority for 1 (process ID): Permission denied\n1",
+ "processes_in_container": "  UID     PID  NI COMMAND\n 1000       1   0 bash\n 1000      11   0 ps\n",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; 3 of 4 cpus stay to the rest of the machine; other processes were not moved",
+ "loadavg_start": "0.92 1.21 1.05 1/120 9",
+ "loadavg_end": "0.96 1.18 1.05 2/118 203",
+ "run": {
+  "rounds": [
+   {
+    "round": 1,
+    "wall_s": 4.742433071136475,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.05235602094240838
+   },
+   {
+    "round": 2,
+    "wall_s": 4.518013954162598,
+    "steal_ticks": 0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "round": 3,
+    "wall_s": 4.567249059677124,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.0544069640914037
+   },
+   {
+    "round": 4,
+    "wall_s": 4.923488616943359,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.050505050505050504
+   },
+   {
+    "round": 5,
+    "wall_s": 4.422821044921875,
+    "steal_ticks": 0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "round": 6,
+    "wall_s": 4.967959880828857,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.04997501249375312
+   },
+   {
+    "round": 7,
+    "wall_s": 4.621969699859619,
+    "steal_ticks": 0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "round": 8,
+    "wall_s": 4.642337083816528,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.0536480686695279
+   },
+   {
+    "round": 9,
+    "wall_s": 4.764673233032227,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.05219206680584551
+   },
+   {
+    "round": 10,
+    "wall_s": 4.440278053283691,
+    "steal_ticks": 0,
+    "steal_percent_of_cpu_time": 0.0
+   }
+  ],
+  "steal_ticks": 6,
+  "steal_percent_of_cpu_time_mean": 0.03130831835079891,
+  "steal_percent_of_cpu_time_max": 0.0544069640914037
+ },
+ "failed_run": [],
+ "arms": {
+  "cmp.CP_FIELD.floats.g++-16": {
+   "repetitions_ns": [
+    134.83890665718513,
+    144.78905212087548,
+    140.94984155025222,
+    142.10084151560886,
+    138.7152090965321,
+    135.81419790607765,
+    153.40381236403633,
+    145.88958087226635,
+    139.3900325260537,
+    144.6054876898064
+   ],
+   "median_ns": 141.52534153293055,
+   "spread": 0.13768211391724394,
+   "check": "-189",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.CP_READ.floats.g++-16": {
+   "repetitions_ns": [
+    39563.838782135026,
+    38069.73390510826,
+    39923.86273266876,
+    38934.95903954359,
+    38188.42750309855,
+    39717.160067641686,
+    38800.404037573324,
+    38495.757497673,
+    38591.72957868014,
+    39537.80083559809
+   ],
+   "median_ns": 38867.681538558456,
+   "spread": 0.04870348797766888,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.FB_FIELD.floats.g++-16": {
+   "repetitions_ns": [
+    0.9536362605072307,
+    0.9621472682627528,
+    0.9871821682120693,
+    1.1143076880401361,
+    0.9849674859604434,
+    0.9771548592570841,
+    0.9885242463100375,
+    0.9837580466883309,
+    0.9795973872506822,
+    0.9704006417999685
+   ],
+   "median_ns": 0.9816777169695066,
+   "spread": 0.16848292602406478,
+   "check": "-189",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.FB_FIELD_V.floats.g++-16": {
+   "repetitions_ns": [
+    5.280955333529683,
+    5.078071956970726,
+    5.4013915438658255,
+    5.208061571684255,
+    4.968396478800119,
+    5.0357668542441605,
+    5.089774244630784,
+    5.8506405562233414,
+    5.515208650989218,
+    5.568586426545382
+   ],
+   "median_ns": 5.2445084526069685,
+   "spread": 0.1775711904610895,
+   "check": "-189",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.FB_READ.floats.g++-16": {
+   "repetitions_ns": [
+    37671.44249326004,
+    38617.77890081567,
+    37776.71304936153,
+    38158.755797698,
+    37540.965657151246,
+    37755.00908006427,
+    37488.386070690925,
+    37942.92472972498,
+    38417.758811039275,
+    37680.23040068684
+   ],
+   "median_ns": 37765.8610647129,
+   "spread": 0.03012647244922939,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.FB_READ_V.floats.g++-16": {
+   "repetitions_ns": [
+    38365.54202464874,
+    38108.82260283689,
+    38083.70257772623,
+    37624.3336916074,
+    37464.65432456877,
+    37701.49999998415,
+    37378.13458593275,
+    38141.002174279696,
+    38224.52972980426,
+    38205.45828236371
+   ],
+   "median_ns": 38096.26259028156,
+   "spread": 0.026416712595593417,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_FIELD.floats.g++-16": {
+   "repetitions_ns": [
+    14.071162261507778,
+    14.505852112447872,
+    13.647354625888232,
+    14.996190900491081,
+    13.938325869651834,
+    14.14330374611155,
+    13.923983483535897,
+    14.303904411204817,
+    13.685618211660705,
+    13.789852001919275
+   ],
+   "median_ns": 14.004744065579807,
+   "spread": 0.09883499854573907,
+   "check": "-189",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_FIELD_VIEW.floats.g++-16": {
+   "repetitions_ns": [
+    21.993137699973886,
+    20.344385929233198,
+    19.812628896832198,
+    19.504788601150743,
+    20.084022353639032,
+    22.685468800045783,
+    19.608696839480743,
+    19.90777020497758,
+    21.13440373068391,
+    19.69157276370262
+   ],
+   "median_ns": 19.995896279308305,
+   "spread": 0.16307175965533838,
+   "check": "-189",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_FIELD_VIEW.floats.g++-16.aa2": {
+   "repetitions_ns": [
+    20.864539800004422,
+    19.710827758778784,
+    19.844493835944526,
+    20.6978442213954,
+    20.081563199983066,
+    19.66281046970764,
+    20.628704400041897,
+    19.894057061319234,
+    19.280871416812285,
+    20.3712596194663
+   ],
+   "median_ns": 19.987810130651148,
+   "spread": 0.08213676389186597,
+   "check": "-189",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ.floats.g++-16": {
+   "repetitions_ns": [
+    37981.20426916607,
+    38534.655091888264,
+    37474.786668394874,
+    37450.3952928796,
+    37696.24322503323,
+    39221.49692436465,
+    38083.866702926236,
+    37519.808564834384,
+    37587.28295778523,
+    37754.96279823659
+   ],
+   "median_ns": 37725.603011634914,
+   "spread": 0.04729193424085931,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ_PATH.floats.g++-16": {
+   "repetitions_ns": [
+    254372.28754569896,
+    255111.519552484,
+    273743.0888891039,
+    257969.95648281058,
+    256548.3605382312,
+    255989.54316543354,
+    266842.7488151361,
+    268825.5364968529,
+    257447.86604644652,
+    260289.23406132616
+   ],
+   "median_ns": 257708.91126462855,
+   "spread": 0.07615138241002328,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ_VIEW.floats.g++-16": {
+   "repetitions_ns": [
+    37772.321510800706,
+    37614.82539684209,
+    42677.311926638075,
+    37507.58587221415,
+    37474.841095187934,
+    37672.77941376466,
+    38286.22751643598,
+    38922.78518823413,
+    37534.96492409494,
+    38269.51380347006
+   ],
+   "median_ns": 37722.550462282685,
+   "spread": 0.13882569423671764,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ_VIEW.floats.g++-16.aa2": {
+   "repetitions_ns": [
+    38008.041196949205,
+    37444.15827332186,
+    37922.88422069438,
+    37452.25632104678,
+    38187.839278476335,
+    37488.29493211631,
+    37567.20125617853,
+    37679.93338690156,
+    38337.53703697855,
+    38288.91823480529
+   ],
+   "median_ns": 37801.40880379797,
+   "spread": 0.02385896238167562,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "480064",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  }
+ }
+}
