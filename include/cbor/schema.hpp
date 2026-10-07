@@ -1868,7 +1868,7 @@ public:
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(std::same_as<U, T> && Path.view().starts_with('$') && packed::path_valid<T, Path, 1>() &&
                      sizeof...(Index) == packed::index_slots<Path>())
-        CBOR_ALWAYS_INLINE auto view(this Self &&self, Index const... indexes)
+        auto view(this Self &&self, Index const... indexes)
         {
             using X = typename decltype(packed::path_result<T, T, Path, 1>())::type;
             using E = typename decltype([]<class V>(std::type_identity<accessor<V>>) {
