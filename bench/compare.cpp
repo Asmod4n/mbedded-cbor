@@ -351,9 +351,7 @@ static double cp_read()
 }
 static double mb_field()
 {
-    auto const opened = S::path(keep, msg);
-    if (!opened) [[unlikely]] std::abort();
-    auto const x = opened->at<"$.values[30000]">();
+    auto const x = S::at<"$.values[30000]">(msg);
     if (!x) [[unlikely]] std::abort();
     return *x;
 }

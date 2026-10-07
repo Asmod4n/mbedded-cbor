@@ -566,6 +566,57 @@ TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length 
     CHECK_EQ(at_path<doubles, "$.v[0]">(longer).error(), error::too_little_data);
 }
 
+// schema::at reads one number from the message with no accessor and no owner, because the number is returned by
+// value. It makes every check that path and accessor::at make: the table of keys, the undefined values after the
+// directory, the tag of the root, the tag and the length of the typed array, and the index. The expected bits of 1.0
+// and 2.0 are 3ff0000000000000 and 4000000000000000 in binary64 (IEEE 754).
+TEST_CASE("schema::at: one number of a typed array, with every check of path")
+{
+    std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
+    using S = cbor::schema<doubles>;
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at<"$.v[0]">(bytes)), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at<"$.v[]">(bytes, 1uz)), 0x4000000000000000u);
+    CHECK_EQ(S::at<"$.v[2]">(bytes).error(), error::index_out_of_bounds);
+    CHECK_EQ(S::at<"$.v[]">(bytes, std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+    CHECK_EQ(S::at<"$.v[0]">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
+    std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
+    REQUIRE_NE(at, std::string::npos);
+    std::string wrong = bytes;
+    wrong[at + 1] = '\x52';
+    CHECK_EQ(S::at<"$.v[0]">(wrong).error(), error::incorrect_type);
+    std::string odd = bytes;
+    odd[at + 6] = '\x0f';
+    CHECK_EQ(S::at<"$.v[0]">(odd).error(), error::inadmissible_type_for_tag_content);
+    std::string longer = bytes;
+    longer[at + 6] = '\x18';
+    CHECK_EQ(S::at<"$.v[0]">(longer).error(), error::too_little_data);
+    std::size_t const filler = bytes.find('\xf7');
+    REQUIRE_NE(filler, std::string::npos);
+    for (std::size_t j = filler; j < bytes.size() && bytes[j] == '\xf7'; ++j) {
+        std::string defined = bytes;
+        defined[j] = '\xf6';
+        CHECK_EQ(S::at<"$.v[0]">(defined).error(), error::incorrect_type);
+        CHECK_EQ(at_path<doubles, "$.v[0]">(defined).error(), error::incorrect_type);
+    }
+    std::string root = bytes;
+    root[root.size() - S::fixed_size() + 2] = '\xfc';
+    CHECK_EQ(S::at<"$.v[0]">(root).error(), error::incorrect_type);
+    CHECK_EQ(at_path<doubles, "$.v[0]">(root).error(), error::incorrect_type);
+}
+
+// schema::at gives only a value that holds no reference into the message, because no owner keeps the message alive.
+// A path to a text, a list or a struct has no form of schema::at, and a wrong use does not compile.
+TEST_CASE("schema::at: a path to a text or a list does not compile")
+{
+    auto const at_compiles = []<class T, cbor::fixed_string Path>() { return requires { cbor::schema<T>::template at<Path>(std::string_view{}); }; };
+    CHECK(at_compiles.template operator()<doubles, "$.v[0]">());
+    CHECK_FALSE(at_compiles.template operator()<doubles, "$.v">());
+    CHECK_FALSE(at_compiles.template operator()<login, "$.name">());
+    CHECK(at_compiles.template operator()<login, "$.id">());
+    CHECK_FALSE(at_compiles.template operator()<people, "$.people[0]">());
+    CHECK_FALSE(at_compiles.template operator()<people, "$.people[0].n">());
+}
+
 namespace
 {
 
