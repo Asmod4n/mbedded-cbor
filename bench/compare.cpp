@@ -4,7 +4,11 @@
 #include <capnp/serialize.h>
 #include <flatbuffers/flatbuffers.h>
 #include <cstdio>
+#include <array>
+#include <bit>
 #include <cstdint>
+#include <cstring>
+#include <span>
 #include <fstream>
 #include <functional>
 #include <iterator>
@@ -356,6 +360,99 @@ static double mb_field()
     return *x;
 }
 static double fb_field() { return fbfloats::GetFloats(fbmsg.data())->values()->Get(30000); }
+static std::string typed_array_msg, array_msg;
+
+static void head_put(std::string &out, unsigned const major, std::uint64_t const n)
+{
+    out.push_back(char(major << 5 | 27));
+    for (int k = 7; k >= 0; --k) out.push_back(char(n >> (8 * k)));
+}
+
+static void prototype_build(T const &f)
+{
+#if defined(OP_MB_READ_TA82)
+    std::uint64_t const tag = 82;
+#else
+    std::uint64_t const tag = 86;
+#endif
+    head_put(typed_array_msg, 6, tag);
+    head_put(typed_array_msg, 2, 8 * f.values.size());
+    for (double const x : f.values) {
+        auto b = std::bit_cast<std::uint64_t>(x);
+        if (tag == 82) b = std::byteswap(b);
+        typed_array_msg.append(reinterpret_cast<char const *>(&b), 8);
+    }
+    head_put(array_msg, 4, f.values.size());
+    for (double const x : f.values) {
+        array_msg.push_back(char(0xfb));
+        auto const b = std::byteswap(std::bit_cast<std::uint64_t>(x));
+        array_msg.append(reinterpret_cast<char const *>(&b), 8);
+    }
+}
+
+static std::uint64_t argument_read(std::span<char const> const b)
+{
+    std::uint64_t v;
+    std::memcpy(&v, b.data() + 1, 8);
+    return std::byteswap(v);
+}
+
+static double typed_array_read()
+{
+    std::span<char const> const all(typed_array_msg);
+    if (all.size() < 18 || std::uint8_t(all[0]) != 0xdb || std::uint8_t(all[9]) != 0x5b) [[unlikely]] std::abort();
+#if defined(OP_MB_READ_TA82)
+    if (argument_read(all) != 82) [[unlikely]] std::abort();
+#else
+    if (argument_read(all) != 86) [[unlikely]] std::abort();
+#endif
+    std::uint64_t const length = argument_read(all.subspan(9));
+    if (length > all.size() - 18 || length % 8 != 0) [[unlikely]] std::abort();
+    std::span<char const> const data = all.subspan(18, length);
+    double s = 0;
+    for (std::size_t i = 0; i < data.size(); i += 8) {
+        std::uint64_t b;
+        std::memcpy(&b, data.subspan(i, 8).data(), 8);
+#if defined(OP_MB_READ_TA82)
+        b = std::byteswap(b);
+#endif
+        s += std::bit_cast<double>(b);
+    }
+    return s;
+}
+
+static constexpr std::size_t block = 576;
+static constexpr auto head_mask = [] {
+    std::array<std::uint8_t, block> m{};
+    for (std::size_t i = 0; i < block; i += 9) m[i] = 0xff;
+    return m;
+}();
+
+static double fixed_array_read()
+{
+    std::span<char const> const all(array_msg);
+    if (all.size() < 9 || std::uint8_t(all[0]) != 0x9b) [[unlikely]] std::abort();
+    std::uint64_t const n = argument_read(all);
+    if (n > (all.size() - 9) / 9) [[unlikely]] std::abort();
+    std::span<char const> const items = all.subspan(9, 9 * n);
+#if defined(OP_MB_READ_FIXED_STRIDED)
+    for (std::size_t i = 0; i < items.size(); i += 9)
+        if (std::uint8_t(items[i]) != 0xfb) [[unlikely]] std::abort();
+#else
+    std::uint8_t bad = 0;
+    std::size_t at = 0;
+    for (; at + block <= items.size(); at += block) {
+        auto const chunk = items.subspan(at).first<block>();
+        for (std::size_t j = 0; j < block; ++j) bad |= std::uint8_t((std::uint8_t(chunk[j]) ^ 0xfb) & head_mask[j]);
+    }
+    for (std::size_t j = 0; at + j < items.size(); ++j) bad |= std::uint8_t((std::uint8_t(items[at + j]) ^ 0xfb) & head_mask[j]);
+    if (bad != 0) [[unlikely]] std::abort();
+#endif
+    double s = 0;
+    for (std::size_t i = 0; i < items.size(); i += 9) s += std::bit_cast<double>(argument_read(items.subspan(i, 9)));
+    return s;
+}
+
 static double cp_field()
 {
     auto rd = cp_reader();
@@ -575,6 +672,10 @@ static double op()
     return fb_read();
 #elif defined(OP_CP_READ)
     return cp_read();
+#elif defined(OP_MB_READ_TA86) || defined(OP_MB_READ_TA82)
+    return typed_array_read();
+#elif defined(OP_MB_READ_FIXED) || defined(OP_MB_READ_FIXED_STRIDED)
+    return fixed_array_read();
 #else
 #error no op
 #endif
@@ -608,6 +709,9 @@ int main(int argc, char **argv)
     if (!S::encode(data, msg)) std::abort();
     foreign_build(data);
     if (!fb_verify()) std::abort();
+#if defined(DS_FLOATS)
+    prototype_build(data);
+#endif
     char text[64];
     std::snprintf(text, sizeof text, "%.17g", check());
     benchmark::AddCustomContext("check", text);
