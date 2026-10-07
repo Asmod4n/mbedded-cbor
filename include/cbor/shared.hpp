@@ -129,7 +129,9 @@ struct value_sharing::top_level_item {
 
     std::expected<item *, error> entry(std::size_t const offset)
     {
-        auto const known = std::ranges::lower_bound(item_offsets, offset, {}, &std::pair<std::size_t, item *>::first);
+        auto const known = item_offsets.empty() || item_offsets.back().first < offset
+                               ? item_offsets.end()
+                               : std::ranges::lower_bound(item_offsets, offset, {}, &std::pair<std::size_t, item *>::first);
         if (known != item_offsets.end() && known->first == offset)
             return known->second;
         auto const h = heads::raw_head_read(encoded, offset);
