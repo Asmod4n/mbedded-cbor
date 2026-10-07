@@ -987,7 +987,12 @@ class packed
             return std::unexpected(error::incorrect_type);
         if (length > encoded.size() - least) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (std::ranges::any_of(std::span(encoded).subspan(directory_at<T>() + length, fillers), [](char const c) { return c != '\xf7'; })) [[unlikely]]
+        static constexpr auto undefined = [] {
+            std::array<char, fillers> a{};
+            a.fill(static_cast<char>(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined))));
+            return a;
+        }();
+        if (!std::ranges::equal(std::span(encoded).subspan(directory_at<T>() + length).template first<fillers>(), undefined)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         return cbor::directory{directory_at<T>(), count};
     }
@@ -1901,6 +1906,22 @@ public:
         if (!packed::class_tag_valid<T, T>(root)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         return accessor<>(std::move(owner), encoded, root, *dir);
+    }
+
+    template <fixed_string Path, std::convertible_to<std::size_t>... Index,
+              class X = typename decltype(packed::path_result<T, T, Path, 1>())::type>
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && Path.view().starts_with('$') &&
+                 packed::path_valid<T, Path, 1>() && sizeof...(Index) == packed::index_slots<Path>() &&
+                 std::is_trivially_copyable_v<X> && !std::same_as<X, std::string_view> &&
+                 !std::same_as<X, std::optional<std::string_view>>)
+    static std::expected<X, error> at(std::string_view const encoded, Index const... indexes)
+    {
+        auto const dir = packed::directory_read<T>(encoded);
+        if (!dir) [[unlikely]]
+            return std::unexpected(dir.error());
+        std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
+        return packed::path_walk<T, T, Path, 1>(
+            encoded, std::span<char const>(encoded).subspan(encoded.size() - fixed_size()).template first<fixed_size()>(), *dir, i);
     }
 
     static std::expected<accessor<>, error> path(std::string_view const encoded)
