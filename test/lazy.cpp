@@ -507,7 +507,7 @@ TEST_CASE("lazy: from an owner holds the owner until the last lazy ends")
         auto const owner = std::make_shared<buffer_owner>(encoded(M("user"s, M("name"s, "ann"s))), &released);
         auto const doc = cbor::lazy::from(owner, owner->bytes);
         REQUIRE(doc.has_value());
-        name.emplace(*doc.at("user").at("name"));
+        name.emplace(*doc->at("user").and_then([](cbor::lazy const &u) { return u.at("name"); }));
     }
     CHECK_FALSE(released);
     {
@@ -519,23 +519,30 @@ TEST_CASE("lazy: from an owner holds the owner until the last lazy ends")
     CHECK(released);
 }
 
-// The member form: lazy::from takes the bytes by move and copies nothing; each step gives a result that the next
-// step reads, so a chain needs no and_then, and an error anywhere reaches the end of the chain.
+// lazy::from takes the bytes by move and copies nothing. Each step gives a std::expected, and_then gives it to the
+// next step, so an error anywhere reaches the end of the chain.
 TEST_CASE("lazy: from, at and get as a chain")
 {
     std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
     char const *const data = bytes.data();
     cbor::lazy const doc = *cbor::lazy::from(std::move(bytes));
-    auto const name = doc.at("statuses").at(1).at("user").at("name").get<std::string_view>();
+    auto const name = doc.at("statuses")
+                          .and_then([](cbor::lazy const &s) { return s.at(1); })
+                          .and_then([](cbor::lazy const &s) { return s.at("user"); })
+                          .and_then([](cbor::lazy const &u) { return u.at("name"); })
+                          .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "bob"sv);
     CHECK_EQ(static_cast<void const *>(doc.top_level->encoded.data()), static_cast<void const *>(data));
-    auto const missing = doc.at("statuses").at(5).at("user").get<std::string_view>();
+    auto const missing = doc.at("statuses")
+                             .and_then([](cbor::lazy const &s) { return s.at(5); })
+                             .and_then([](cbor::lazy const &s) { return s.at("user"); })
+                             .and_then([](cbor::lazy const &u) { return u.get<std::string_view>(); });
     REQUIRE_FALSE(missing.has_value());
     CHECK_EQ(missing.error(), error::index_out_of_bounds);
-    CHECK_FALSE(doc.at("nope").get<std::string_view>().has_value());
+    CHECK_FALSE(doc.at("nope").and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); }).has_value());
     std::size_t count = 0;
-    for (auto const e : *doc.at("statuses").elements()) {
+    for (auto const e : *doc.at("statuses").and_then([](cbor::lazy const &s) { return s.elements(); })) {
         REQUIRE(e.has_value());
         ++count;
     }
@@ -576,7 +583,9 @@ TEST_CASE("lazy: a view holds the top-level item")
     std::optional<cbor::owning_ref<std::string_view>> view;
     {
         auto const owner = std::make_shared<buffer_owner>(encoded(M("name"s, "ann"s)), &released);
-        auto const name = cbor::lazy::from(owner, owner->bytes).at("name").get<std::string_view>();
+        auto const name = cbor::lazy::from(owner, owner->bytes)
+                              .and_then([](cbor::lazy const &d) { return d.at("name"); })
+                              .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
         REQUIRE(name.has_value());
         view.emplace(*name);
     }
@@ -584,7 +593,7 @@ TEST_CASE("lazy: a view holds the top-level item")
     CHECK_EQ(**view, "ann"sv);
     view.reset();
     CHECK(released);
-    CHECK_FALSE(read_from_temporary<cbor::result<cbor::owning_ref<std::string_view>>>);
+    CHECK_FALSE(read_from_temporary<std::expected<cbor::owning_ref<std::string_view>, cbor::error>>);
     CHECK_THROWS_AS((void)cbor::lazy::from(std::shared_ptr<void const>{}, "\x00"sv), std::logic_error);
 }
 
@@ -592,8 +601,8 @@ TEST_CASE("lazy: a view holds the top-level item")
 TEST_CASE("lazy: get follows a shared reference in the content of a tag")
 {
     auto const root = lazy_of("\x83\xd8\x1c\x41\x05\xc2\xd8\x1d\x00\xd8\x40\xd8\x1d\x00"s);
-    CHECK_EQ(*root.at(1).get<std::uint64_t>(), 5u);
-    auto const typed = root.at(2).get<cbor::typed_array>();
+    CHECK_EQ(*root.at(1)->get<std::uint64_t>(), 5u);
+    auto const typed = root.at(2)->get<cbor::typed_array>();
     REQUIRE(typed.has_value());
     CHECK_EQ((*typed)->bytes.size(), 1u);
 }

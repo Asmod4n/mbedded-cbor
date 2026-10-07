@@ -193,77 +193,32 @@ std::expected<lazy, error> decode(Encoded &&encoded)
     return decode<DepthMax>(std::make_shared<std::string const>(std::move(encoded)));
 }
 
-template <>
-struct result<lazy, error> : std::expected<lazy, error> {
-    using std::expected<lazy, cbor::error>::expected;
-
-    template <std::size_t DepthMax = 128>
-    result at(std::string_view const key) const
-    {
-        if (!has_value()) [[unlikely]]
-            return std::unexpected(error());
-        return (**this).at<DepthMax>(key);
-    }
-
-    template <std::size_t DepthMax = 128>
-    result at(std::int64_t const index) const
-    {
-        if (!has_value()) [[unlikely]]
-            return std::unexpected(error());
-        return (**this).at<DepthMax>(index);
-    }
-
-    template <class T>
-    auto get() const -> decltype((**this).template get<T>())
-    {
-        if (!has_value()) [[unlikely]]
-            return std::unexpected(error());
-        return (**this).get<T>();
-    }
-
-    template <std::size_t DepthMax = 128>
-    cbor::result<lazy_elements<DepthMax>> elements() const
-    {
-        if (!has_value()) [[unlikely]]
-            return std::unexpected(error());
-        return (**this).elements<DepthMax>();
-    }
-
-    template <std::size_t DepthMax = 128>
-    cbor::result<lazy_entries<DepthMax>> entries() const
-    {
-        if (!has_value()) [[unlikely]]
-            return std::unexpected(error());
-        return (**this).entries<DepthMax>();
-    }
-};
-
-inline result<lazy> lazy::from(std::shared_ptr<void const> owner, std::string_view const encoded)
+inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner, std::string_view const encoded)
 {
     if (!owner) [[unlikely]]
         validity::throw_logic_error("cbor::lazy::from: the owner of the encoded data item is empty");
     return lazy{std::make_shared<value_sharing::top_level_item>(std::move(owner), encoded, std::vector<lazy>{}, 0), 0};
 }
 
-inline result<lazy> lazy::from(std::shared_ptr<std::string const> encoded)
+inline std::expected<lazy, error> lazy::from(std::shared_ptr<std::string const> encoded)
 {
     std::string_view const view = *encoded;
     return from(std::move(encoded), view);
 }
 
 template <std::same_as<std::string> Encoded>
-result<lazy> lazy::from(Encoded &&encoded)
+std::expected<lazy, error> lazy::from(Encoded &&encoded)
 {
     return from(std::make_shared<std::string const>(std::move(encoded)));
 }
 
-inline result<lazy> lazy::from(std::string_view const encoded)
+inline std::expected<lazy, error> lazy::from(std::string_view const encoded)
 {
     return from(std::make_shared<std::string const>(encoded));
 }
 
 template <std::size_t DepthMax, class Match>
-result<lazy> value_sharing::key_find(resolved const &found, Match const &match)
+std::expected<lazy, error> value_sharing::key_find(resolved const &found, Match const &match)
 {
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
@@ -291,7 +246,7 @@ result<lazy> value_sharing::key_find(resolved const &found, Match const &match)
 }
 
 template <std::size_t DepthMax>
-result<lazy> lazy::at(std::string_view const key) const
+std::expected<lazy, error> lazy::at(std::string_view const key) const
 {
     auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
@@ -309,7 +264,7 @@ result<lazy> lazy::at(std::string_view const key) const
 }
 
 template <std::size_t DepthMax>
-result<lazy> lazy::at(std::int64_t const index) const
+std::expected<lazy, error> lazy::at(std::int64_t const index) const
 {
     auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
@@ -340,9 +295,9 @@ template <class T>
     requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
              std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                std::is_same_v<T, typed_array>,
-                           owning_ref<T>, T>> lazy::get() const
+                           owning_ref<T>, T>, error> lazy::get() const
 {
     auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
@@ -434,7 +389,7 @@ result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<
     }
 }
 template <std::size_t DepthMax>
-result<lazy_elements<DepthMax>> lazy::elements() const
+std::expected<lazy_elements<DepthMax>, error> lazy::elements() const
 {
     auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
@@ -445,7 +400,7 @@ result<lazy_elements<DepthMax>> lazy::elements() const
     return lazy_elements<DepthMax>{source, source->encoded.size() - d.encoded.size(), h.argument};
 }
 template <std::size_t DepthMax>
-result<lazy_entries<DepthMax>> lazy::entries() const
+std::expected<lazy_entries<DepthMax>, error> lazy::entries() const
 {
     auto const found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
@@ -561,7 +516,7 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
 }
 
 template <std::size_t DepthMax>
-result<std::reference_wrapper<item const>> lazy::decode() const &
+std::expected<std::reference_wrapper<item const>, error> lazy::decode() const &
 {
     auto const built = value_sharing::item_decode<DepthMax>(*top_level, offset, 0);
     if (!built) [[unlikely]]

@@ -13,7 +13,7 @@ namespace
 // A nodelist of the suite matches the result of at_path in one of three forms: a query that is not singular gives
 // its nodelist as an array; a singular query gives the value of its one node; a singular query that selects
 // nothing gives the error of the missing node.
-bool nodelist_matches(cbor::result<value> const &r, value const &nodelist)
+bool nodelist_matches(std::expected<value, cbor::error> const &r, value const &nodelist)
 {
     array const &nodes = *get_if<array>(nodelist);
     if (!r)

@@ -228,14 +228,14 @@ auto at_path(std::string_view const bytes, Index const... indexes)
                                  std::conditional_t<std::same_as<X, std::optional<std::string_view>>, std::optional<std::string>, X>>;
     auto const root = cbor::schema<T>::path(bytes);
     if (!root)
-        return cbor::result<Y>(std::unexpect, root.error());
+        return std::expected<Y, cbor::error>(std::unexpect, root.error());
     auto const x = root->template at<Path>(indexes...);
     if (!x)
-        return cbor::result<Y>(std::unexpect, x.error());
+        return std::expected<Y, cbor::error>(std::unexpect, x.error());
     if constexpr (std::same_as<X, std::optional<std::string_view>>)
-        return x->has_value() ? cbor::result<Y>(Y(std::in_place, **x)) : cbor::result<Y>(Y{});
+        return x->has_value() ? std::expected<Y, cbor::error>(Y(std::in_place, **x)) : std::expected<Y, cbor::error>(Y{});
     else
-        return cbor::result<Y>(Y(*x));
+        return std::expected<Y, cbor::error>(Y(*x));
 }
 
 // The owner form: the caller keeps the owner alive, so a text stays a view into the message.
@@ -860,7 +860,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
     std::string const bytes = *cbor::schema<passkey_login>::encode(full);
-    CHECK_EQ(at_path<passkey_login, "$.note">(bytes), std::optional<std::string>{"hello"});
+    CHECK_EQ(at_path<passkey_login, "$.note">(bytes).value(), std::optional<std::string>{"hello"});
     auto const decoded_back = *cbor::schema<passkey_login>::decode(bytes);
     passkey_login const &back = *decoded_back;
     REQUIRE(back.user.has_value());
@@ -1139,7 +1139,7 @@ std::string ticket_bytes()
 // the caller would read freed memory, and the address sanitizer reports that read.
 TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 {
-    cbor::result<cbor::oref<ticket>> const t = cbor::schema<ticket>::decode(ticket_bytes());
+    std::expected<cbor::oref<ticket>, cbor::error> const t = cbor::schema<ticket>::decode(ticket_bytes());
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);
@@ -1372,7 +1372,7 @@ TEST_CASE("attack: the sample message reads every path")
     CHECK((*at_path<probe, "$.i128">(bytes) == cbor::int128{-5}));
     CHECK_EQ(at_path<probe, "$.f64">(bytes), 2.5);
     CHECK_EQ(at_path<probe, "$.pair[]">(bytes, 1uz), 8u);
-    CHECK_EQ(at_path<probe, "$.maybe">(bytes), std::optional<std::int32_t>{-9});
+    CHECK_EQ(at_path<probe, "$.maybe">(bytes).value(), std::optional<std::int32_t>{-9});
 }
 
 // A text is a view into the bytes that the root holds. An accessor is read through an lvalue only, so each accessor
@@ -1389,8 +1389,8 @@ TEST_CASE("attack: no text result outlives its bytes")
     CHECK_FALSE(temporary_reads<cbor::schema<probe>::accessor<tire>, "@.diameter">);
     CHECK_FALSE(chain_reads<A>);
     CHECK_FALSE(dereferenced_as_rvalue<cbor::owning_ref<probe>>);
-    CHECK_THROWS_AS(cbor::schema<probe>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
-    CHECK_THROWS_AS(cbor::schema<probe>::decode(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::schema<probe>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::schema<probe>::decode(std::shared_ptr<void const>{}, bytes), std::logic_error);
 }
 
 // Each prefix of the message is a cut message. The test exists because a reader that trusted an offset from the
@@ -1663,7 +1663,7 @@ TEST_CASE("path: an accessor is not read through a temporary")
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[].seats">);
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[]">);
     CHECK_FALSE(temporary_car_reads<D>);
-    CHECK_THROWS_AS(cbor::schema<parking_lot>::path(std::shared_ptr<void const>{}, ""sv), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::schema<parking_lot>::path(std::shared_ptr<void const>{}, ""sv), std::logic_error);
 }
 
 // The copying form keeps its copy: a text and a car accessor stay valid after the caller frees the message, while the

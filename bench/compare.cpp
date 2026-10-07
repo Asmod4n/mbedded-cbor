@@ -469,12 +469,12 @@ struct [[=cbor::tag(1522)]] Records { std::vector<Record> records; };
 using T = Records;
 using S = cbor::schema<T>;
 
-template <class V> static V must(cbor::result<V> const &r)
+template <class V> static V must(std::expected<V, cbor::error> const &r)
 {
     if (!r) [[unlikely]] std::abort();
     return *r;
 }
-static std::string_view must_text(cbor::result<cbor::lazy> const &l)
+static std::string_view must_text(cbor::lazy const &l)
 {
     auto const t = l.get<std::string_view>();
     if (!t) [[unlikely]] std::abort();
@@ -488,12 +488,13 @@ static T load()
     auto const els = l->elements();
     for (auto const &e : *els) {
         if (!e) [[unlikely]] std::abort();
-        cbor::result<cbor::lazy> const r = *e;
-        auto const ratio = r.at("ratio").get<double>();
-        Record x{must(r.at("id").get<std::int64_t>()), must_text(r.at("text")), User{must_text(r.at("user").at("name")), must(r.at("user").at("followers").get<std::uint64_t>())},
-                 ratio ? *ratio : 0.0, {}, must(r.at("neg").get<std::int64_t>())};
-        auto const tags = r.at("tags").elements();
-        for (auto const &t : *tags) x.tags.push_back(must_text(*t));
+        cbor::lazy const r = must(*e);
+        cbor::lazy const u = must(r.at("user"));
+        auto const ratio = must(r.at("ratio")).get<double>();
+        Record x{must(must(r.at("id")).get<std::int64_t>()), must_text(must(r.at("text"))), User{must_text(must(u.at("name"))), must(must(u.at("followers")).get<std::uint64_t>())},
+                 ratio ? *ratio : 0.0, {}, must(must(r.at("neg")).get<std::int64_t>())};
+        auto const tags = must(must(r.at("tags")).elements());
+        for (auto const &t : tags) x.tags.push_back(must_text(must(t)));
         rs.records.push_back(std::move(x));
     }
     return rs;
