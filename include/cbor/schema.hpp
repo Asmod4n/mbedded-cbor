@@ -77,6 +77,9 @@ consteval bool tags_registered();
 template <class T>
 class schema;
 
+template <class E>
+class typed_array_view;
+
 struct directory {
     std::size_t at;
     std::size_t count;
@@ -1451,6 +1454,36 @@ class packed
     }
 
     friend class generic;
+
+    template <class>
+    friend class cbor::typed_array_view;
+};
+
+template <class E>
+class typed_array_view
+{
+    std::shared_ptr<void const> owner;
+    std::span<char const> bytes;
+
+    typed_array_view(std::shared_ptr<void const> o, std::span<char const> const b) : owner(std::move(o)), bytes(b)
+    {
+    }
+
+    template <class>
+    friend class schema;
+
+public:
+    std::size_t size() const
+    {
+        return bytes.size() / sizeof(E);
+    }
+
+    CBOR_ALWAYS_INLINE std::expected<E, error> operator[](std::size_t const i) const
+    {
+        if (i >= size()) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return packed::typed_array_element_read<E>(bytes.subspan(i * sizeof(E)).template first<sizeof(E)>());
+    }
 };
 
 template <class Root>
@@ -1672,6 +1705,23 @@ public:
 
         template <fixed_string Path, std::convertible_to<std::size_t>... Index>
         auto at(Index const... indexes) const && = delete;
+
+        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+            requires(std::same_as<U, T> && Path.view().starts_with('$') && packed::path_valid<T, Path, 1>() &&
+                     sizeof...(Index) == packed::index_slots<Path>())
+        auto view(Index const... indexes) const
+        {
+            using X = typename decltype(packed::path_result<T, T, Path, 1>())::type;
+            using E = typename decltype([]<class V>(std::type_identity<accessor<V>>) {
+                static_assert(packed::is_typed_array<V>, "cbor::schema::accessor::view: the path does not end at a typed array");
+                return std::type_identity<std::remove_cv_t<std::ranges::range_value_t<V>>>{};
+            }(std::type_identity<X>{}))::type;
+            auto const list = at<Path>(indexes...);
+            if (!list) [[unlikely]]
+                return std::expected<typed_array_view<E>, error>(std::unexpect, list.error());
+            return std::expected<typed_array_view<E>, error>(
+                typed_array_view<E>(owner, std::span<char const>(encoded).subspan(list->items.data, list->items.length * sizeof(E))));
+        }
 
         std::size_t size() const
             requires(listed)
