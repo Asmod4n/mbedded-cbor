@@ -1,0 +1,5 @@
+namespace fbrecords;
+table User { name:string; followers:ulong; }
+table Record { id:long; text:string; user:User; ratio:double; tags:[string]; neg:long; }
+table Records { records:[Record]; }
+root_type Records;
