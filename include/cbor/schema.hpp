@@ -879,56 +879,37 @@ class packed
         return m - fillers;
     }
 
-    template <major_type Major>
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> item_length_read(std::string_view const encoded, std::size_t const item,
-                                                                     std::size_t const end, std::size_t const element)
-    {
-        std::size_t size;
-        if (item > end || end - item < item_head) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        if (encoded[item] != heads::initial_byte(Major, std::to_underlying(heads::additional_information::four_byte_argument))) [[unlikely]]
-            return std::unexpected(error::incorrect_type);
-        std::size_t const length =
-            heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 1).template first<sizeof(std::uint32_t)>());
-        if (ckd_mul(&size, length, element) || size > end - item - item_head) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        return length;
-    }
-
-    template <class E>
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> typed_array_length_read(std::string_view const encoded, std::size_t const item,
-                                                                                     std::size_t const end)
-    {
-        if (item > end || end - item < typed_array_head) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        if (encoded[item] != heads::initial_byte(major_type::tag, std::to_underlying(heads::additional_information::one_byte_argument)) ||
-            static_cast<unsigned char>(encoded[item + 1]) != typed_array_tag<E>() ||
-            encoded[item + 2] != heads::initial_byte(major_type::byte_string, std::to_underlying(heads::additional_information::four_byte_argument)))
-            [[unlikely]]
-            return std::unexpected(error::incorrect_type);
-        std::size_t const size =
-            heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 3).template first<sizeof(std::uint32_t)>());
-        if (size > end - item - typed_array_head) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        if (size % sizeof(E) != 0) [[unlikely]]
-            return std::unexpected(error::inadmissible_type_for_tag_content);
-        return size / sizeof(E);
-    }
-
     template <major_type Major, class E>
     CBOR_ALWAYS_INLINE static std::expected<reference, error> item_reference_read(std::string_view const encoded, std::size_t const item,
                                                                                   std::size_t const end, std::size_t const element)
     {
         if constexpr (is_typed_array_element<E>) {
-            auto const length = typed_array_length_read<E>(encoded, item, end);
-            if (!length) [[unlikely]]
-                return std::unexpected(length.error());
-            return reference{item + typed_array_head, *length};
+            if (end < item + typed_array_head) [[unlikely]]
+                return std::unexpected(error::too_little_data);
+            static constexpr std::array<char, 3> head{
+                heads::initial_byte(major_type::tag, std::to_underlying(heads::additional_information::one_byte_argument)),
+                static_cast<char>(typed_array_tag<E>()),
+                heads::initial_byte(major_type::byte_string, std::to_underlying(heads::additional_information::four_byte_argument))};
+            if (!std::ranges::equal(std::span<char const>(encoded).subspan(item).template first<head.size()>(), head)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            std::size_t const size =
+                heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 3).template first<sizeof(std::uint32_t)>());
+            if (size > end - item - typed_array_head) [[unlikely]]
+                return std::unexpected(error::too_little_data);
+            if (size % sizeof(E) != 0) [[unlikely]]
+                return std::unexpected(error::inadmissible_type_for_tag_content);
+            return reference{item + typed_array_head, size / sizeof(E)};
         } else {
-            auto const length = item_length_read<Major>(encoded, item, end, element);
-            if (!length) [[unlikely]]
-                return std::unexpected(length.error());
-            return reference{item + item_head, *length};
+            std::size_t size;
+            if (end < item + item_head) [[unlikely]]
+                return std::unexpected(error::too_little_data);
+            if (encoded[item] != heads::initial_byte(Major, std::to_underlying(heads::additional_information::four_byte_argument))) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            std::size_t const length =
+                heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 1).template first<sizeof(std::uint32_t)>());
+            if (ckd_mul(&size, length, element) || size > end - item - item_head) [[unlikely]]
+                return std::unexpected(error::too_little_data);
+            return reference{item + item_head, length};
         }
     }
 
