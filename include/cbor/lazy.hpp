@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <bit>
 #include <concepts>
 #include <cstddef>
@@ -516,7 +517,7 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
         if (h->argument > left) [[unlikely]]
             return std::unexpected(error::too_little_data);
         auto &elements = node->content.emplace<std::vector<item const *>>();
-        elements.reserve(h->argument);
+        elements.reserve(std::min<std::size_t>(h->argument, left / sizeof(item const *)));
         std::size_t next = h->at;
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             auto const element = item_decode<DepthMax>(top_level, next, depth + 1);
@@ -533,7 +534,7 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
         if (h->argument > left / 2) [[unlikely]]
             return std::unexpected(error::too_little_data);
         auto &entries = node->content.emplace<std::vector<std::pair<item const *, item const *>>>();
-        entries.reserve(h->argument);
+        entries.reserve(std::min<std::size_t>(h->argument, left / sizeof(std::pair<item const *, item const *>)));
         std::size_t next = h->at;
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             auto const key = item_decode<DepthMax>(top_level, next, depth + 1);

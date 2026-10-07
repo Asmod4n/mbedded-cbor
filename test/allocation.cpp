@@ -15,6 +15,8 @@ namespace
 
 std::size_t allocations = 0;
 
+std::size_t allocated_bytes = 0;
+
 } // namespace
 
 // The replaced operator new counts each allocation of this test binary, so a test can show that a call allocates
@@ -22,6 +24,7 @@ std::size_t allocations = 0;
 [[gnu::noinline]] void *operator new(std::size_t const size)
 {
     ++allocations;
+    allocated_bytes += size;
     if (void *const p = std::malloc(size == 0 ? 1 : size))
         return p;
     throw std::bad_alloc();
@@ -72,4 +75,21 @@ TEST_CASE("path: a top-level item with shared values allocates only the table of
     REQUIRE(found.has_value());
     CHECK_EQ(after - before, marks_allocations);
     CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
+}
+
+// The count in the head of an array is not trusted: each element takes at least one byte, so decode keeps room for at
+// most one element for each byte left. The room is also bounded by the bytes left, so a head that claims many elements
+// does not make decode take several times the size of the message. Here the array claims 4096 elements and its first
+// element is not well-formed, so decode fails before it builds anything but the array.
+TEST_CASE("decode: the room kept for the elements of an array is bounded by the bytes left")
+{
+    std::string bytes = "\x99\x10\x00\xff"s;
+    bytes.resize(4099);
+    auto const root = *cbor::lazy::from(std::string(bytes));
+    std::size_t const before = allocated_bytes;
+    auto const r = root.decode();
+    std::size_t const after = allocated_bytes;
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::syntax_error);
+    CHECK_LE(after - before, 2 * bytes.size());
 }
