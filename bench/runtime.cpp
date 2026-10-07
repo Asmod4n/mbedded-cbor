@@ -7,6 +7,7 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <numeric>
 #include <span>
 #include <string>
@@ -21,7 +22,7 @@ static std::uint64_t bytes_sum(std::string_view const s)
                                  [](char const c) { return std::uint64_t(std::uint8_t(c)); });
 }
 
-#if defined(ARM_READ)
+#if defined(ARM_READ) || defined(ARM_MB_DECODE)
 struct read_binding : cbor::binding<std::uint64_t> {
     std::uint64_t unsigned_integer_decode(std::uint64_t a) { return a; }
     std::uint64_t negative_integer_decode(std::uint64_t a) { return a; }
@@ -39,7 +40,7 @@ struct read_binding : cbor::binding<std::uint64_t> {
 };
 #endif
 
-#if defined(ARM_LC_PREALLOC) || defined(ARM_LC_READ)
+#if defined(ARM_LC_PREALLOC) || defined(ARM_LC_READ) || defined(ARM_LC_DECODE)
 #include <cbor.h>
 #endif
 
@@ -154,7 +155,7 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
 }
 #endif
 
-#if defined(ARM_FB_REUSE) || defined(ARM_FB_READ)
+#if defined(ARM_FB_REUSE) || defined(ARM_FB_READ) || defined(ARM_FB_READ_V) || defined(ARM_FB_PATH) || defined(ARM_FB_PATH_V)
 #define ARM_FB 1
 #include <flatbuffers/flexbuffers.h>
 static void fb_build(flexbuffers::Builder &f, bench::value const &x)
@@ -201,14 +202,89 @@ static std::uint64_t fb_read(flexbuffers::Reference const r)
     if (r.IsString()) { auto const t = r.AsString(); return bytes_sum(std::string_view(t.c_str(), t.size())); }
     if (r.IsBlob()) { auto const t = r.AsBlob(); return bytes_sum(std::string_view(reinterpret_cast<char const *>(t.data()), t.size())); }
     if (r.IsUInt()) return r.AsUInt64();
-    if (r.IsInt()) return std::uint64_t(r.AsInt64());
+    if (r.IsInt()) { auto const v = r.AsInt64(); return v < 0 ? std::uint64_t(-1 - v) : std::uint64_t(v); }
     if (r.IsFloat()) return std::bit_cast<std::uint64_t>(r.AsDouble());
-    if (r.IsBool()) return r.AsBool();
-    return 1;
+    if (r.IsBool()) return 20u + r.AsBool();
+    return 22;
 }
 #endif
 
 static std::string doc;
+static std::shared_ptr<void const> const keep = std::make_shared<int const>(0);
+
+#if defined(ARM_MB_DECODE)
+static std::uint64_t value_sum(bench::value const &x)
+{
+    bench::binding b;
+    switch (b.kind_of(x)) {
+    case cbor::kind::unsigned_integer: return b.unsigned_of(x);
+    case cbor::kind::negative_integer: return b.unsigned_of(x) - 1;
+    case cbor::kind::floating_point: return std::bit_cast<std::uint64_t>(b.float_of(x));
+    case cbor::kind::simple_value: return b.simple_of(x);
+    case cbor::kind::text_string: return bytes_sum(b.text_of(x));
+    case cbor::kind::byte_string: return bytes_sum(b.bytes_of(x));
+    case cbor::kind::array: { std::uint64_t s = b.array_size(x); for (std::uint64_t i = 0; i < b.array_size(x); ++i) s += value_sum(b.array_at(x, i)); return s; }
+    case cbor::kind::map: { std::uint64_t s = b.map_size(x); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { s += value_sum(k) + value_sum(v); }); return s; }
+    case cbor::kind::registered: return b.registered_tag(x) + value_sum(b.before_encode(x));
+    default: std::abort();
+    }
+}
+#endif
+
+#if defined(ARM_LC_DECODE)
+static std::uint64_t item_sum(cbor_item_t const *i)
+{
+    auto *x = const_cast<cbor_item_t *>(i);
+    switch (cbor_typeof(x)) {
+    case CBOR_TYPE_UINT: return cbor_get_int(x);
+    case CBOR_TYPE_NEGINT: return cbor_get_int(x);
+    case CBOR_TYPE_BYTESTRING: return bytes_sum(std::string_view(reinterpret_cast<char const *>(cbor_bytestring_handle(x)), cbor_bytestring_length(x)));
+    case CBOR_TYPE_STRING: return bytes_sum(std::string_view(reinterpret_cast<char const *>(cbor_string_handle(x)), cbor_string_length(x)));
+    case CBOR_TYPE_ARRAY: { std::uint64_t s = cbor_array_size(x); for (std::size_t k = 0; k < cbor_array_size(x); ++k) s += item_sum(cbor_array_handle(x)[k]); return s; }
+    case CBOR_TYPE_MAP: { std::uint64_t s = cbor_map_size(x); for (std::size_t k = 0; k < cbor_map_size(x); ++k) s += item_sum(cbor_map_handle(x)[k].key) + item_sum(cbor_map_handle(x)[k].value); return s; }
+    case CBOR_TYPE_TAG: return cbor_tag_value(x) + item_sum(cbor_tag_item(x));
+    case CBOR_TYPE_FLOAT_CTRL:
+        if (cbor_float_ctrl_is_ctrl(x)) return cbor_ctrl_value(x);
+        return std::bit_cast<std::uint64_t>(cbor_float_get_float(x));
+    }
+    std::abort();
+}
+#endif
+
+#if defined(ARM_MB_PATH)
+static std::uint64_t mb_path()
+{
+    auto const l = cbor::lazy::from(keep, std::string_view(doc));
+#if defined(DOC_twitter)
+    auto const v = l.at("statuses").at(50).at("user").at("screen_name").get<std::string_view>();
+    if (!v) [[unlikely]] std::abort();
+    return bytes_sum(**v);
+#elif defined(DOC_floats)
+    auto const v = l.at(30000).get<double>();
+    if (!v) [[unlikely]] std::abort();
+    return std::bit_cast<std::uint64_t>(*v);
+#elif defined(DOC_records)
+    auto const v = l.at(1000).at("user").at("name").get<std::string_view>();
+    if (!v) [[unlikely]] std::abort();
+    return bytes_sum(**v);
+#endif
+}
+#endif
+
+#if defined(ARM_FB_PATH) || defined(ARM_FB_PATH_V)
+static std::uint64_t fb_path(flexbuffers::Reference const root)
+{
+#if defined(DOC_twitter)
+    auto const t = root.AsMap()["statuses"].AsVector()[50].AsMap()["user"].AsMap()["screen_name"].AsString();
+    return bytes_sum(std::string_view(t.c_str(), t.size()));
+#elif defined(DOC_floats)
+    return std::bit_cast<std::uint64_t>(root.AsVector()[30000].AsDouble());
+#elif defined(DOC_records)
+    auto const t = root.AsVector()[1000].AsMap()["user"].AsMap()["name"].AsString();
+    return bytes_sum(std::string_view(t.c_str(), t.size()));
+#endif
+}
+#endif
 static std::string const *bytes = &doc;
 #if defined(ARM_S) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
 static bench::value tree;
@@ -288,10 +364,38 @@ static std::uint64_t op()
     return buf.size();
 #elif defined(ARM_READ)
     read_binding b;
-    auto const r = cbor::lazy_decode<128>(b, *cbor::decode<128>(std::string_view(doc)));
+    auto const r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, std::string_view(doc)));
     if (!r)
         std::abort();
     return *r;
+#elif defined(ARM_MB_DECODE)
+    bench::binding b;
+    auto r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, std::string_view(doc)));
+    if (!r) [[unlikely]]
+        std::abort();
+    benchmark::DoNotOptimize(&*r);
+    return r->kind.index();
+#elif defined(ARM_LC_DECODE)
+    cbor_load_result lr;
+    cbor_item_t *const it = cbor_load(reinterpret_cast<cbor_data>(doc.data()), doc.size(), &lr);
+    if (!it) [[unlikely]]
+        std::abort();
+    benchmark::DoNotOptimize(it);
+    std::uint64_t const t = cbor_typeof(it);
+    cbor_decref(const_cast<cbor_item_t **>(&it));
+    return t;
+#elif defined(ARM_MB_PATH)
+    return mb_path();
+#elif defined(ARM_FB_PATH)
+    return fb_path(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size()));
+#elif defined(ARM_FB_PATH_V)
+    if (!flexbuffers::VerifyBuffer(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size())) [[unlikely]]
+        std::abort();
+    return fb_path(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size()));
+#elif defined(ARM_FB_READ_V)
+    if (!flexbuffers::VerifyBuffer(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size())) [[unlikely]]
+        std::abort();
+    return fb_read(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size()));
 #elif defined(ARM_LC_PREALLOC)
     std::size_t const n = cbor_serialize(lc, lcbuf.data(), lcbuf.size());
     if (n == 0)
@@ -314,10 +418,10 @@ static std::uint64_t op()
         c.array_start = [](void *x, std::uint64_t n) { *static_cast<std::uint64_t *>(x) += n; };
         c.map_start = [](void *x, std::uint64_t n) { *static_cast<std::uint64_t *>(x) += n; };
         c.tag = [](void *x, std::uint64_t v) { *static_cast<std::uint64_t *>(x) += v; };
-        c.float2 = [](void *x, float v) { *static_cast<std::uint64_t *>(x) += std::bit_cast<std::uint32_t>(v); };
-        c.float4 = [](void *x, float v) { *static_cast<std::uint64_t *>(x) += std::bit_cast<std::uint32_t>(v); };
+        c.float2 = [](void *x, float v) { *static_cast<std::uint64_t *>(x) += std::bit_cast<std::uint64_t>(double(v)); };
+        c.float4 = [](void *x, float v) { *static_cast<std::uint64_t *>(x) += std::bit_cast<std::uint64_t>(double(v)); };
         c.float8 = [](void *x, double v) { *static_cast<std::uint64_t *>(x) += std::bit_cast<std::uint64_t>(v); };
-        c.boolean = [](void *x, bool v) { *static_cast<std::uint64_t *>(x) += v; };
+        c.boolean = [](void *x, bool v) { *static_cast<std::uint64_t *>(x) += 20u + v; };
         c.null = [](void *x) { *static_cast<std::uint64_t *>(x) += 22; };
         c.undefined = [](void *x) { *static_cast<std::uint64_t *>(x) += 23; };
         return c;
@@ -412,8 +516,10 @@ static std::uint64_t op()
 
 static void run(benchmark::State &state)
 {
-    for (auto _ : state)
+    for (auto _ : state) {
         benchmark::DoNotOptimize(op());
+        benchmark::ClobberMemory();
+    }
     state.SetBytesProcessed(std::int64_t(state.iterations()) * std::int64_t(bytes->size()));
 }
 
@@ -424,6 +530,22 @@ int main(int argc, char **argv)
     if (doc.empty())
         std::abort();
     setup();
+#if defined(ARM_MB_DECODE)
+    {
+        bench::binding b;
+        auto const r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, std::string_view(doc)));
+        benchmark::AddCustomContext("check", std::to_string(value_sum(*r)));
+    }
+#elif defined(ARM_LC_DECODE)
+    {
+        cbor_load_result lr;
+        cbor_item_t *it = cbor_load(reinterpret_cast<cbor_data>(doc.data()), doc.size(), &lr);
+        benchmark::AddCustomContext("check", std::to_string(item_sum(it)));
+        cbor_decref(&it);
+    }
+#else
+    benchmark::AddCustomContext("check", std::to_string(op()));
+#endif
     benchmark::AddCustomContext("document", DOC_PATH);
     benchmark::RegisterBenchmark(ARM_NAME, run);
     benchmark::Initialize(&argc, argv);
