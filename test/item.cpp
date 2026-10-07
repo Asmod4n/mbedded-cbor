@@ -7,6 +7,7 @@
 #include <functional>
 #include <limits>
 #include <span>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -19,6 +20,9 @@
 
 namespace item_test
 {
+
+using namespace std::string_literals;
+using namespace std::string_view_literals;
 
 // RFC 8949 section 3: every data item starts with a head of major type,
 // additional information and argument. An integer is its head alone, so
@@ -75,16 +79,26 @@ TEST_CASE("null and undefined are two items")
 }
 
 // A tag whose number is registered decodes to a record. The record is
-// still major type 6 on the wire, so the head fields say tag.
+// still major type 6 on the wire, so the head fields say tag. The names
+// come from the registry and the fields are a view on the encoded bytes,
+// so the record owns no memory.
 TEST_CASE("a record is a tag in its head fields")
 {
-    cbor::item const x{cbor::major_type::unsigned_integer, 7, 7, {}};
-    cbor::item const r{cbor::major_type::tag, 25, 40000, cbor::record{40000, {{"x", &x}}}};
+    static constexpr std::string_view names[] = {"x"};
+    static constexpr std::byte fields[] = {std::byte{0x07}};
+    cbor::item const r{cbor::major_type::tag, 25, 40000, cbor::record{40000, names, fields}};
     CHECK(r.major_type == cbor::major_type::tag);
-    CHECK(std::get<cbor::record>(r.content).fields.at(0).second == &x);
+    CHECK_EQ(std::get<cbor::record>(r.content).names[0], "x"sv);
+    CHECK_EQ(std::get<cbor::record>(r.content).fields.data(), fields);
 }
 
-using namespace std::string_view_literals;
+// An item owns no memory, so a cache of many items costs only their own
+// size. Each alternative of the content is an immediate value or a view.
+TEST_CASE("an item owns no memory")
+{
+    CHECK(std::is_trivially_destructible_v<cbor::record>);
+    CHECK(std::is_trivially_copyable_v<std::span<std::byte const>>);
+}
 
 cbor::item const *address_of(cbor::result<std::reference_wrapper<cbor::item const>> const &r)
 {
@@ -109,11 +123,42 @@ TEST_CASE("decode: a child decoded through its lazy is the item its parent holds
     auto const top_level = cbor::lazy::from(std::string("\xa1\x61k\x82\x01\x02"sv));
     REQUIRE(top_level.has_value());
     cbor::item const *const map = address_of(top_level->decode());
-    auto const &entries = std::get<std::vector<std::pair<cbor::item const *, cbor::item const *>>>(map->content);
-    REQUIRE_EQ(entries.size(), 1);
+    CHECK_EQ(map->argument, 1u);
+    auto const entries = top_level->entries();
+    REQUIRE(entries.has_value());
+    auto const entry = *entries->begin();
+    REQUIRE(entry.has_value());
     auto const value = top_level->at("k");
     REQUIRE(value.has_value());
-    CHECK_EQ(address_of(value->decode()), entries[0].second);
+    CHECK_EQ(address_of(value->decode()), address_of(entry->second.decode()));
+}
+
+// RFC 8949 3.1: an array is its count and its encoded elements. The item
+// holds the count in its argument and a view on the bytes of the
+// elements, so it allocates nothing for them.
+TEST_CASE("decode: an array is its count and a view on the bytes of its elements")
+{
+    std::string const bytes = "\x82\x01\x62hi"s;
+    auto const top_level = cbor::lazy::from(std::make_shared<std::string const>(bytes));
+    REQUIRE(top_level.has_value());
+    cbor::item const *const array = address_of(top_level->decode());
+    CHECK_EQ(array->argument, 2u);
+    auto const elements = std::get<std::span<std::byte const>>(array->content);
+    REQUIRE_EQ(elements.size(), 4u);
+    CHECK_EQ(elements[0], std::byte{0x01});
+    CHECK_EQ(elements[1], std::byte{0x62});
+}
+
+template <class Lazy>
+concept decodable = requires(Lazy &&l) { std::forward<Lazy>(l).decode(); };
+
+// A reference to an item lives only as long as the top-level item that
+// holds it, so decode on a temporary lazy does not compile.
+TEST_CASE("decode: a temporary lazy gives no item")
+{
+    CHECK_FALSE(decodable<cbor::lazy>);
+    CHECK_FALSE(decodable<cbor::lazy const>);
+    CHECK(decodable<cbor::lazy const &>);
 }
 
 // The order does not matter: a child decoded first is taken by its
@@ -125,8 +170,10 @@ TEST_CASE("decode: a child decoded before its parent is the item its parent take
     auto const child = top_level->at(1);
     REQUIRE(child.has_value());
     cbor::item const *const inner = address_of(child->decode());
-    cbor::item const *const outer = address_of(top_level->decode());
-    CHECK_EQ(std::get<std::vector<cbor::item const *>>(outer->content)[1], inner);
+    REQUIRE(top_level->decode().has_value());
+    auto const again = top_level->at(1);
+    REQUIRE(again.has_value());
+    CHECK_EQ(address_of(again->decode()), inner);
 }
 
 // RFC 8949 3.4 and the value sharing tags 28 and 29: a reference is the
@@ -136,14 +183,14 @@ TEST_CASE("decode: a shared reference is the item of the shared value")
 {
     auto const top_level = cbor::lazy::from(std::string("\x82\xd8\x1c\x62hi\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
-    cbor::item const *const array = address_of(top_level->decode());
-    auto const &elements = std::get<std::vector<cbor::item const *>>(array->content);
-    REQUIRE_EQ(elements.size(), 2);
-    CHECK_EQ(elements[0], elements[1]);
-    CHECK_EQ(std::get<std::string_view>(elements[0]->content), "hi");
+    REQUIRE(top_level->decode().has_value());
+    auto const shared = top_level->at(0);
+    REQUIRE(shared.has_value());
+    cbor::item const *const value = address_of(shared->decode());
+    CHECK_EQ(std::get<std::string_view>(value->content), "hi");
     auto const reference = top_level->at(1);
     REQUIRE(reference.has_value());
-    CHECK_EQ(address_of(reference->decode()), elements[0]);
+    CHECK_EQ(address_of(reference->decode()), value);
 }
 
 // A cycle comes from the wire: 28([29(0)]) is an array that holds
@@ -154,20 +201,27 @@ TEST_CASE("decode: a cyclic array holds its own address")
     auto const top_level = cbor::lazy::from(std::string("\xd8\x1c\x81\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
     cbor::item const *const array = address_of(top_level->decode());
-    auto const &elements = std::get<std::vector<cbor::item const *>>(array->content);
-    REQUIRE_EQ(elements.size(), 1);
-    CHECK_EQ(elements[0], array);
+    auto const elements = top_level->elements();
+    REQUIRE(elements.has_value());
+    auto const element = *elements->begin();
+    REQUIRE(element.has_value());
+    CHECK_EQ(address_of(element->decode()), array);
 }
 
 // A reference to a value that comes later on the wire is refused, as in
-// every other reader of the shared values.
+// every other reader of the shared values. The elements of an array are
+// read on access. The decode of the array has recorded the mark that
+// lies after the reference, so the reference is not complete, as in lazy.
 TEST_CASE("decode: a forward shared reference is refused")
 {
     auto const top_level = cbor::lazy::from(std::string("\x82\xd8\x1d\x00\xd8\x1c\x00"sv));
     REQUIRE(top_level.has_value());
-    auto const r = top_level->decode();
+    REQUIRE(top_level->decode().has_value());
+    auto const element = top_level->at(0);
+    REQUIRE(element.has_value());
+    auto const r = element->decode();
     REQUIRE_FALSE(r.has_value());
-    CHECK_EQ(r.error(), cbor::error::sharedref_index_not_marked);
+    CHECK_EQ(r.error(), cbor::error::sharedref_not_complete);
 }
 
 // The nesting depth is checked as in every decoder: [[[0]]] holds an

@@ -109,7 +109,10 @@ struct lazy {
     result<lazy_entries<DepthMax>> entries() const;
 
     template <std::size_t DepthMax = 128>
-    result<std::reference_wrapper<item const>> decode() const;
+    result<std::reference_wrapper<item const>> decode() const &;
+
+    template <std::size_t DepthMax = 128>
+    result<std::reference_wrapper<item const>> decode() const && = delete;
 };
 
 }

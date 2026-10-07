@@ -25,7 +25,7 @@ namespace
 template <class T>
 void round_trip(std::string const &bytes, T const &expected)
 {
-    auto const back = cbor::databind<T>::decode(bytes);
+    auto const back = cbor::databind<T>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK(**back == expected);
     auto const again = cbor::databind<T>::encode(expected);
@@ -134,12 +134,12 @@ TEST_CASE("databind: a SenML pack with integer labels")
     round_trip(*bytes, pack);
 }
 
-// RFC 8392 A.3 carries a COSE_Sign1 under tag 18 with a kid in the unprotected header. decode(bytes) copies the
-// message once and the views point into that copy; decode(owner, bytes) copies nothing and keeps the owner.
+// RFC 8392 A.3 carries a COSE_Sign1 under tag 18 with a kid in the unprotected header. A moved string becomes the
+// owner; decode(owner, bytes) copies nothing and keeps the owner.
 TEST_CASE("databind: a COSE_Sign1 under tag 18 reads as views into the message")
 {
     std::string const message = "\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s;
-    auto const sign1 = cbor::databind<cose_sign1>::decode(message);
+    auto const sign1 = cbor::databind<cose_sign1>::decode(std::string(message));
     REQUIRE(sign1.has_value());
     auto const &[protected_header, unprotected, payload, signature] = (*sign1)->content;
     CHECK_EQ(protected_header.size(), 3u);
@@ -162,7 +162,7 @@ TEST_CASE("databind: a CTAP2 getAssertion response")
     std::string const message =
         "\xa3\x01\xa2\x62\x69\x64\x42\x0a\x0b\x64\x74\x79\x70\x65\x6a\x70\x75\x62\x6c\x69\x63\x2d\x6b\x65\x79"
         "\x02\x41\x25\x03\x41\x30"s;
-    auto const r = cbor::databind<get_assertion_response>::decode(message);
+    auto const r = cbor::databind<get_assertion_response>::decode(std::string(message));
     REQUIRE(r.has_value());
     CHECK_EQ((*r)->credential_id.type, "public-key"sv);
     CHECK_EQ((*r)->credential_id.id.size(), 2u);
@@ -226,7 +226,7 @@ struct annotated {
 TEST_CASE("databind: an annotation gives the key of a member")
 {
     std::string const bytes = "\xa2\x69x-user-id\x07\x63" "EOF\xf5"s;
-    auto const back = cbor::databind<annotated>::decode(bytes);
+    auto const back = cbor::databind<annotated>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->m0, 7u);
     CHECK((*back)->m1);
@@ -359,10 +359,13 @@ TEST_CASE("databind: a shared reference reads as the item it names")
     CHECK(**skipped == pair_ab{2, {2}});
 }
 
+template <class Encoded>
+concept decodable = requires(Encoded &&e) { cbor::databind<std::string_view>::decode(std::forward<Encoded>(e)); };
+
 // The value category of the bytes says what decode does. A moved std::string becomes the owner and is not copied:
-// the view points into the buffer that was moved. An lvalue, a const rvalue and a literal are copied once, so the
-// result does not depend on the buffer that the caller reuses or destroys.
-TEST_CASE("databind: decode moves an rvalue string and copies everything else")
+// the view points into the buffer that was moved. Every other form would need a copy or would leave views into bytes
+// that nothing keeps alive, so it does not compile; the caller passes an owner with the bytes instead.
+TEST_CASE("databind: decode takes a moved string as the owner and refuses every other form")
 {
     std::string const text(40, 'x');
     std::string const message = "\x78\x28"s + text;
@@ -375,30 +378,18 @@ TEST_CASE("databind: decode moves an rvalue string and copies everything else")
     buffer.reset();
     CHECK_EQ(**moved, text);
 
-    std::string lvalue = message;
-    auto const copied = cbor::databind<std::string_view>::decode(lvalue);
-    REQUIRE(copied.has_value());
-    CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(lvalue.data() + 2));
-    CHECK_EQ(lvalue, message);
-    lvalue.assign(message.size(), '\0');
-    CHECK_EQ(**copied, text);
+    CHECK(decodable<std::string>);
+    CHECK_FALSE(decodable<std::string &>);
+    CHECK_FALSE(decodable<std::string const &>);
+    CHECK_FALSE(decodable<std::string const>);
+    CHECK_FALSE(decodable<char const *>);
+    CHECK_FALSE(decodable<char const (&)[3]>);
+    CHECK_FALSE(decodable<std::string_view>);
 
-    std::string const constant = message;
-    auto const from_const = cbor::databind<std::string_view>::decode(std::move(constant));
-    REQUIRE(from_const.has_value());
-    CHECK_NE(static_cast<void const *>((*from_const)->data()), static_cast<void const *>(constant.data() + 2));
-    CHECK_EQ(constant, message);
-
-    auto const literal = cbor::databind<std::string_view>::decode("\x63" "abc");
-    REQUIRE(literal.has_value());
-    CHECK_EQ(**literal, "abc"sv);
-    char const *const pointer = "\x62" "ab";
-    auto const from_pointer = cbor::databind<std::string_view>::decode(pointer);
-    REQUIRE(from_pointer.has_value());
-    CHECK_EQ(**from_pointer, "ab"sv);
-    auto const view = cbor::databind<std::string_view>::decode("\x61" "a"sv);
-    REQUIRE(view.has_value());
-    CHECK_EQ(**view, "a"sv);
+    auto const owner = std::make_shared<std::string const>(message);
+    auto const held = cbor::databind<std::string_view>::decode(owner, *owner);
+    REQUIRE(held.has_value());
+    CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(owner->data() + 2));
 }
 
 #endif
