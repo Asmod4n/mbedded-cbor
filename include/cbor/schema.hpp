@@ -1462,6 +1462,8 @@ class packed
 template <class E>
 class typed_array_view
 {
+    static constexpr std::ptrdiff_t stride = sizeof(E);
+
     std::shared_ptr<void const> owner;
     std::span<char const> bytes;
 
@@ -1473,9 +1475,166 @@ class typed_array_view
     friend class schema;
 
 public:
-    std::size_t size() const
+    class iterator
+    {
+        std::span<char const>::iterator at;
+
+        explicit iterator(std::span<char const>::iterator const i) : at(i)
+        {
+        }
+
+        friend class typed_array_view;
+
+    public:
+        using iterator_concept = std::random_access_iterator_tag;
+        using iterator_category = std::input_iterator_tag;
+        using value_type = E;
+        using difference_type = std::ptrdiff_t;
+
+        iterator() = default;
+
+        CBOR_ALWAYS_INLINE E operator*() const
+        {
+            return packed::typed_array_element_read<E>(std::span<char const, sizeof(E)>(at, sizeof(E)));
+        }
+
+        CBOR_ALWAYS_INLINE E operator[](difference_type const n) const
+        {
+            return *(*this + n);
+        }
+
+        CBOR_ALWAYS_INLINE iterator &operator++()
+        {
+            at += stride;
+            return *this;
+        }
+
+        CBOR_ALWAYS_INLINE iterator operator++(int)
+        {
+            iterator const was = *this;
+            at += stride;
+            return was;
+        }
+
+        CBOR_ALWAYS_INLINE iterator &operator--()
+        {
+            at -= stride;
+            return *this;
+        }
+
+        CBOR_ALWAYS_INLINE iterator operator--(int)
+        {
+            iterator const was = *this;
+            at -= stride;
+            return was;
+        }
+
+        CBOR_ALWAYS_INLINE iterator &operator+=(difference_type const n)
+        {
+            at += n * stride;
+            return *this;
+        }
+
+        CBOR_ALWAYS_INLINE iterator &operator-=(difference_type const n)
+        {
+            at -= n * stride;
+            return *this;
+        }
+
+        CBOR_ALWAYS_INLINE friend iterator operator+(iterator const i, difference_type const n)
+        {
+            return iterator(i.at + n * stride);
+        }
+
+        CBOR_ALWAYS_INLINE friend iterator operator+(difference_type const n, iterator const i)
+        {
+            return iterator(i.at + n * stride);
+        }
+
+        CBOR_ALWAYS_INLINE friend iterator operator-(iterator const i, difference_type const n)
+        {
+            return iterator(i.at - n * stride);
+        }
+
+        CBOR_ALWAYS_INLINE friend difference_type operator-(iterator const a, iterator const b)
+        {
+            return (a.at - b.at) / stride;
+        }
+
+        CBOR_ALWAYS_INLINE friend bool operator==(iterator const a, iterator const b)
+        {
+            return a.at == b.at;
+        }
+
+        CBOR_ALWAYS_INLINE friend auto operator<=>(iterator const a, iterator const b)
+        {
+            return a.at <=> b.at;
+        }
+    };
+
+    CBOR_ALWAYS_INLINE std::size_t size() const
     {
         return bytes.size() / sizeof(E);
+    }
+
+    CBOR_ALWAYS_INLINE bool empty() const
+    {
+        return bytes.empty();
+    }
+
+    CBOR_ALWAYS_INLINE iterator begin() const &
+    {
+        return iterator(bytes.begin());
+    }
+
+    CBOR_ALWAYS_INLINE iterator end() const &
+    {
+        return iterator(bytes.end());
+    }
+
+    iterator begin() const && = delete;
+    iterator end() const && = delete;
+
+    CBOR_ALWAYS_INLINE std::expected<E, error> front() const
+    {
+        if (bytes.empty()) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return packed::typed_array_element_read<E>(bytes.template first<sizeof(E)>());
+    }
+
+    CBOR_ALWAYS_INLINE std::expected<E, error> back() const
+    {
+        if (bytes.empty()) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return packed::typed_array_element_read<E>(bytes.template last<sizeof(E)>());
+    }
+
+    CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) const &
+    {
+        if (n > size()) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return typed_array_view(owner, bytes.first(n * sizeof(E)));
+    }
+
+    CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) &&
+    {
+        if (n > size()) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return typed_array_view(std::move(owner), bytes.first(n * sizeof(E)));
+    }
+
+    CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) const &
+    {
+        if (n > size()) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return typed_array_view(owner, bytes.last(n * sizeof(E)));
+    }
+
+    CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) &&
+    {
+        if (n > size()) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return typed_array_view(std::move(owner), bytes.last(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<E, error> operator[](std::size_t const i) const
@@ -1706,21 +1865,21 @@ public:
         template <fixed_string Path, std::convertible_to<std::size_t>... Index>
         auto at(Index const... indexes) const && = delete;
 
-        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+        template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(std::same_as<U, T> && Path.view().starts_with('$') && packed::path_valid<T, Path, 1>() &&
                      sizeof...(Index) == packed::index_slots<Path>())
-        auto view(Index const... indexes) const
+        CBOR_ALWAYS_INLINE auto view(this Self &&self, Index const... indexes)
         {
             using X = typename decltype(packed::path_result<T, T, Path, 1>())::type;
             using E = typename decltype([]<class V>(std::type_identity<accessor<V>>) {
                 static_assert(packed::is_typed_array<V>, "cbor::schema::accessor::view: the path does not end at a typed array");
                 return std::type_identity<std::remove_cv_t<std::ranges::range_value_t<V>>>{};
             }(std::type_identity<X>{}))::type;
-            auto const list = at<Path>(indexes...);
+            auto const list = self.template at<Path>(indexes...);
             if (!list) [[unlikely]]
                 return std::expected<typed_array_view<E>, error>(std::unexpect, list.error());
             return std::expected<typed_array_view<E>, error>(
-                typed_array_view<E>(owner, std::span<char const>(encoded).subspan(list->items.data, list->items.length * sizeof(E))));
+                typed_array_view<E>(std::forward_like<Self>(self.owner), std::span<char const>(self.encoded).subspan(list->items.data, list->items.length * sizeof(E))));
         }
 
         std::size_t size() const
