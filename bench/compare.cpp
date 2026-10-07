@@ -3,6 +3,7 @@
 #include <capnp/message.h>
 #include <capnp/serialize.h>
 #include <flatbuffers/flatbuffers.h>
+#include <bit>
 #include <cstdio>
 #include <cstdint>
 #include <span>
@@ -356,7 +357,15 @@ static double mb_field()
     if (!x) [[unlikely]] std::abort();
     return *x;
 }
-static double fb_field() { return fbfloats::GetFloats(fbmsg.data())->values()->Get(30000); }
+static double fb_field()
+{
+    auto const *v = fbfloats::GetFloats(fbmsg.data())->values();
+    benchmark::DoNotOptimize(v);
+    double x = v->Get(30000);
+    benchmark::DoNotOptimize(x);
+    if (std::bit_cast<std::uint64_t>(x) == 0) [[unlikely]] std::abort();
+    return x;
+}
 static double mb_read_path()
 {
     auto const opened = S::path(keep, msg);
@@ -394,6 +403,54 @@ static double mb_field_view()
     auto const x = (*v)[30000];
     if (!x) [[unlikely]] std::abort();
     return *x;
+}
+static double mb_field_view_moved()
+{
+    auto opened = S::path(keep, msg);
+    if (!opened) [[unlikely]] std::abort();
+    auto const v = std::move(*opened).view<"$.values">();
+    if (!v) [[unlikely]] std::abort();
+    auto const x = (*v)[30000];
+    if (!x) [[unlikely]] std::abort();
+    return *x;
+}
+static double mb_front()
+{
+    auto const opened = S::path(keep, msg);
+    if (!opened) [[unlikely]] std::abort();
+    auto const v = opened->view<"$.values">();
+    if (!v) [[unlikely]] std::abort();
+    auto const x = v->front();
+    if (!x) [[unlikely]] std::abort();
+    return *x;
+}
+static double mb_back()
+{
+    auto const opened = S::path(keep, msg);
+    if (!opened) [[unlikely]] std::abort();
+    auto const v = opened->view<"$.values">();
+    if (!v) [[unlikely]] std::abort();
+    auto const x = v->back();
+    if (!x) [[unlikely]] std::abort();
+    return *x;
+}
+static double mb_read_for()
+{
+    auto const opened = S::path(keep, msg);
+    if (!opened) [[unlikely]] std::abort();
+    auto const v = opened->view<"$.values">();
+    if (!v) [[unlikely]] std::abort();
+    double s = 0;
+    for (double const x : *v) s += x;
+    return s;
+}
+static double mb_read_fold()
+{
+    auto const opened = S::path(keep, msg);
+    if (!opened) [[unlikely]] std::abort();
+    auto const v = opened->view<"$.values">();
+    if (!v) [[unlikely]] std::abort();
+    return std::ranges::fold_left(*v, 0.0, std::plus<>{});
 }
 
 static double cp_field()
@@ -622,6 +679,16 @@ static double op()
     return mb_read_view();
 #elif defined(OP_MB_FIELD_VIEW)
     return mb_field_view();
+#elif defined(OP_MB_FIELD_VIEW_MOVED)
+    return mb_field_view_moved();
+#elif defined(OP_MB_FRONT)
+    return mb_front();
+#elif defined(OP_MB_BACK)
+    return mb_back();
+#elif defined(OP_MB_READ_FOR)
+    return mb_read_for();
+#elif defined(OP_MB_READ_FOLD)
+    return mb_read_fold();
 #else
 #error no op
 #endif
