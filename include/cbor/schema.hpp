@@ -215,6 +215,60 @@ class packed
     static constexpr bool is_list = std::ranges::sized_range<U> && !is_text_range<U> && !is_byte_range<U> && !is_optional<U> &&
                                     !is_map<U> && !requires { fixed_length<U>::value; };
 
+    template <class E>
+    static consteval std::uint64_t typed_array_tag()
+    {
+        constexpr std::uint64_t f = std::is_floating_point_v<E> ? 1 : 0;
+        constexpr std::uint64_t s = std::is_signed_v<E> && !std::is_floating_point_v<E> ? 1 : 0;
+        constexpr std::uint64_t e = sizeof(E) > 1 ? 1 : 0;
+        constexpr std::uint64_t ll = static_cast<std::uint64_t>(std::countr_zero(sizeof(E))) - f;
+        return std::to_underlying(heads::tag_number::typed_array_first) | f << 4 | s << 3 | e << 2 | ll;
+    }
+
+    template <class E>
+    static constexpr bool is_typed_array_integer = requires {
+        requires std::integral<E> && !std::same_as<E, bool> && !std::same_as<E, char> && !std::same_as<E, wchar_t> &&
+                     !std::same_as<E, char8_t> && !std::same_as<E, char16_t> && !std::same_as<E, char32_t>;
+        requires sizeof(E) <= sizeof(std::uint64_t);
+    };
+
+    template <class E>
+    static constexpr bool is_typed_array_float = requires {
+        requires std::is_floating_point_v<E> && std::numeric_limits<E>::is_iec559;
+        requires(sizeof(E) == 2 && std::numeric_limits<E>::digits == 11) || (sizeof(E) == 4 && std::numeric_limits<E>::digits == 24) ||
+                    (sizeof(E) == 8 && std::numeric_limits<E>::digits == 53);
+    };
+
+    template <class E>
+    static constexpr bool is_typed_array_element = is_typed_array_integer<E> || is_typed_array_float<E>;
+
+    template <class U>
+    static constexpr bool is_typed_array = requires {
+        requires is_list<U>;
+        requires is_typed_array_element<std::remove_cv_t<std::ranges::range_value_t<U>>>;
+    };
+
+    static constexpr std::size_t typed_array_head = heads::initial_byte_size + sizeof(std::uint8_t) + item_head;
+
+    template <class E>
+    CBOR_ALWAYS_INLINE static E typed_array_element_read(std::span<char const, sizeof(E)> const in)
+    {
+        std::array<char, sizeof(E)> little;
+        std::ranges::copy(in, little.begin());
+        if constexpr (std::endian::native == std::endian::big)
+            std::ranges::reverse(little);
+        return std::bit_cast<E>(little);
+    }
+
+    template <class E>
+    CBOR_ALWAYS_INLINE static void typed_array_element_write(std::span<char, sizeof(E)> const out, E const value)
+    {
+        auto little = std::bit_cast<std::array<char, sizeof(E)>>(value);
+        if constexpr (std::endian::native == std::endian::big)
+            std::ranges::reverse(little);
+        std::ranges::copy(little, out.begin());
+    }
+
     static constexpr void fixed_width_head_encode(std::vector<char> &encoded, major_type const major, std::size_t const width)
     {
         heads::head_append(encoded, major,
@@ -448,6 +502,12 @@ class packed
         template <class E, class R>
         void elements_add(R const &range)
         {
+            if constexpr (is_typed_array_element<std::remove_cv_t<E>>) {
+                items += 1;
+                bytes_add(typed_array_head);
+                block_add(std::ranges::size(range), sizeof(E));
+                return;
+            }
             items += 1;
             bytes_add(item_head);
             block_add(std::ranges::size(range), fixed_size<E, Root>());
@@ -577,6 +637,24 @@ class packed
                 zero_initialized_copy<Root, M>(mapped);
                 c = value_encode<Root, M, Exact>(out, mapped, v, c);
                 at += fixed_size<M, Root>();
+            }
+        } else if constexpr (is_typed_array<U>) {
+            using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+            std::size_t const length = std::ranges::size(value);
+            out[item] = heads::initial_byte(major_type::tag, std::to_underlying(heads::additional_information::one_byte_argument));
+            out[item + 1] = static_cast<char>(typed_array_tag<E>());
+            heads::item_head_write(out, item + 2, major_type::byte_string, length * sizeof(E));
+            std::size_t const elements = item + typed_array_head;
+            c.position = elements + length * sizeof(E);
+            if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U>) {
+                auto const from = std::as_bytes(std::span(value));
+                std::ranges::copy(from, std::as_writable_bytes(out.subspan(elements, from.size())).begin());
+            } else {
+                std::size_t at = elements;
+                for (E const e : value) {
+                    typed_array_element_write<E>(out.subspan(at).template first<sizeof(E)>(), e);
+                    at += sizeof(E);
+                }
             }
         } else {
             using E = std::ranges::range_value_t<U>;
@@ -814,13 +892,50 @@ class packed
         return length;
     }
 
+    template <class E>
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> typed_array_length_read(std::string_view const encoded, std::size_t const item,
+                                                                                     std::size_t const end)
+    {
+        if (item > end || end - item < typed_array_head) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        if (encoded[item] != heads::initial_byte(major_type::tag, std::to_underlying(heads::additional_information::one_byte_argument)) ||
+            static_cast<unsigned char>(encoded[item + 1]) != typed_array_tag<E>() ||
+            encoded[item + 2] != heads::initial_byte(major_type::byte_string, std::to_underlying(heads::additional_information::four_byte_argument)))
+            [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        std::size_t const size =
+            heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 3).template first<sizeof(std::uint32_t)>());
+        if (size > end - item - typed_array_head) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        if (size % sizeof(E) != 0) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return size / sizeof(E);
+    }
+
+    template <major_type Major, class E>
+    CBOR_ALWAYS_INLINE static std::expected<reference, error> item_reference_read(std::string_view const encoded, std::size_t const item,
+                                                                                  std::size_t const end, std::size_t const element)
+    {
+        if constexpr (is_typed_array_element<E>) {
+            auto const length = typed_array_length_read<E>(encoded, item, end);
+            if (!length) [[unlikely]]
+                return std::unexpected(length.error());
+            return reference{item + typed_array_head, *length};
+        } else {
+            auto const length = item_length_read<Major>(encoded, item, end, element);
+            if (!length) [[unlikely]]
+                return std::unexpected(length.error());
+            return reference{item + item_head, *length};
+        }
+    }
+
     CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, cbor::directory const dir, std::size_t const j)
     {
         return heads::unsigned_read<std::uint32_t>(
             std::span<char const>(encoded).subspan(dir.at + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());
     }
 
-    template <class Root, major_type Major>
+    template <class Root, major_type Major, class E = void>
     CBOR_ALWAYS_INLINE static std::expected<reference, error> reference_read(std::string_view const encoded,
                                                            std::span<char const, dynamic_type_sizes> const field,
                                                            cbor::directory const dir, std::size_t const element)
@@ -828,10 +943,10 @@ class packed
         auto const j = shared_index_read<Root>(field);
         if (!j) [[unlikely]]
             return std::unexpected(j.error());
-        return item_read<Root, Major>(encoded, dir, *j, element);
+        return item_read<Root, Major, E>(encoded, dir, *j, element);
     }
 
-    template <class Root, major_type Major>
+    template <class Root, major_type Major, class E = void>
     CBOR_ALWAYS_INLINE static std::expected<reference, error> item_read(std::string_view const encoded, cbor::directory const dir,
                                                                         std::size_t const j, std::size_t const element)
     {
@@ -844,10 +959,7 @@ class packed
         std::size_t const end = j + 1 < dir.count ? directory_entry(encoded, dir, j + 1) : items_end;
         if (item < items_at || end > items_end) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        auto const length = item_length_read<Major>(encoded, item, end, element);
-        if (!length) [[unlikely]]
-            return std::unexpected(length.error());
-        return reference{item + item_head, *length};
+        return item_reference_read<Major, E>(encoded, item, end, element);
     }
 
     template <class T>
@@ -1016,6 +1128,12 @@ class packed
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor, *r);
+            } else if constexpr (is_typed_array<U>) {
+                using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+                auto const r = reference_read<Root, major_type::array, E>(encoded, field, floor, sizeof(E));
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor, *r);
             } else if constexpr (is_list<U>) {
                 auto const r = reference_read<Root, major_type::array>(encoded, field, floor, fixed_size<std::ranges::range_value_t<U>, Root>());
                 if (!r) [[unlikely]]
@@ -1065,6 +1183,15 @@ class packed
                     i = std::get<index_slot<Path, At>()>(indexes);
                 else
                     i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
+                if constexpr (is_typed_array<U>) {
+                    using F = std::remove_cv_t<E>;
+                    auto const r = reference_read<Root, major_type::array, F>(encoded, field, floor, sizeof(F));
+                    if (!r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    if (i >= r->length) [[unlikely]]
+                        return std::unexpected(error::index_out_of_bounds);
+                    return typed_array_element_read<F>(std::span<char const>(encoded).subspan(r->data + i * sizeof(F)).template first<sizeof(F)>());
+                }
                 auto const r = reference_read<Root, major_type::array>(encoded, field, floor, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
@@ -1084,7 +1211,7 @@ class packed
         std::size_t at;
         std::size_t end;
 
-        template <class Root, major_type Major>
+        template <class Root, major_type Major, class E = void>
         CBOR_ALWAYS_INLINE std::expected<reference, error> reference_take(std::span<char const, dynamic_type_sizes> const field,
                                                                           std::size_t const element)
         {
@@ -1095,12 +1222,11 @@ class packed
                 return std::unexpected(error::unpopulated_table_index);
             if (directory_entry(encoded, dir, *j) != at) [[unlikely]]
                 return std::unexpected(error::syntax_error);
-            auto const length = item_length_read<Major>(encoded, at, end, element);
-            if (!length) [[unlikely]]
-                return std::unexpected(length.error());
-            reference const r{at + item_head, *length};
+            auto const r = item_reference_read<Major, E>(encoded, at, end, element);
+            if (!r) [[unlikely]]
+                return r;
             index += 1;
-            at = r.data + *length * element;
+            at = r->data + r->length * element;
             return r;
         }
 
@@ -1200,6 +1326,25 @@ class packed
                         !e) [[unlikely]]
                         return e;
                     out.insert_or_assign(std::move(key), std::move(value));
+                }
+                return {};
+            } else if constexpr (is_typed_array<U>) {
+                using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+                auto const r = reference_take<Root, major_type::array, E>(field, sizeof(E));
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, DepthMax); !c) [[unlikely]]
+                    return std::unexpected(c.error());
+                auto const from = std::span<char const>(encoded).subspan(r->data, r->length * sizeof(E));
+                if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U> &&
+                              requires { out.resize(std::size_t{}); }) {
+                    out.resize(r->length);
+                    std::ranges::copy(std::as_bytes(from), std::as_writable_bytes(std::span(out)).begin());
+                } else {
+                    out.clear();
+                    out.reserve(r->length);
+                    for (std::size_t i = 0; i < r->length; ++i)
+                        out.push_back(typed_array_element_read<E>(from.subspan(i * sizeof(E)).template first<sizeof(E)>()));
                 }
                 return {};
             } else if constexpr (std::ranges::sized_range<U>) {
@@ -1494,6 +1639,18 @@ public:
                 constexpr std::size_t root = packed::fixed_size<T, T>();
                 return packed::path_walk<T, T, Path, 1>(
                     encoded, std::span<char const>(encoded).subspan(encoded.size() - root).template first<root>(), dir, i);
+            } else if constexpr (packed::is_typed_array<U> && path.size() > 1) {
+                using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+                constexpr std::size_t close = packed::index_end(path, 1);
+                std::size_t at;
+                if constexpr (close == 2)
+                    at = std::get<0>(i);
+                else
+                    at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
+                if (at >= items.length) [[unlikely]]
+                    return std::expected<E, error>(std::unexpect, error::index_out_of_bounds);
+                return std::expected<E, error>(packed::typed_array_element_read<E>(
+                    std::span<char const>(encoded).subspan(items.data + at * sizeof(E)).template first<sizeof(E)>()));
             } else if constexpr (packed::is_list<U> && path.size() > 1) {
                 using E = std::ranges::range_value_t<U>;
                 constexpr std::size_t close = packed::index_end(path, 1);
