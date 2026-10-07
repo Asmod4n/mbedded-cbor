@@ -722,10 +722,10 @@ class databind
 {
 public:
     template <std::size_t DepthMax = 128>
-    static result<owning_ref<T>> decode(std::string_view encoded) = delete;
+    static std::expected<owning_ref<T>, error> decode(std::string_view encoded) = delete;
 
     template <std::size_t DepthMax = 128, std::same_as<std::string> Encoded>
-    static result<owning_ref<T>> decode(Encoded &&encoded)
+    static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
     {
         auto owner = std::make_shared<std::string const>(std::move(encoded));
         std::string_view const view = *owner;
@@ -733,7 +733,7 @@ public:
     }
 
     template <std::size_t DepthMax = 128>
-    static result<owning_ref<T>> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         if (!owner) [[unlikely]]
             validity::throw_logic_error("cbor::databind::decode: the owner of the encoded data item is empty");
@@ -743,7 +743,7 @@ public:
         return owning_ref<T>(std::move(owner), std::move(*value));
     }
 
-    CBOR_ALWAYS_INLINE static result<std::string, std::errc> encode(T const &value)
+    CBOR_ALWAYS_INLINE static std::expected<std::string, std::errc> encode(T const &value)
     {
         auto const counted = generic::generic_size(value);
         if (!counted) [[unlikely]]
@@ -760,7 +760,7 @@ public:
     }
 
     template <class Target>
-    CBOR_ALWAYS_INLINE static result<std::size_t, std::errc> encode(T const &value, Target &&target)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, std::errc> encode(T const &value, Target &&target)
     {
         using U = std::remove_cvref_t<Target>;
         auto const counted = generic::generic_size(value);
@@ -809,7 +809,7 @@ public:
 
 private:
     template <std::size_t DepthMax>
-    static result<T> read(std::string_view const encoded)
+    static std::expected<T, error> read(std::string_view const encoded)
     {
         value_sharing::sharing_decoder d{{encoded}, {{}, encoded, {}, 0}};
         T out{};

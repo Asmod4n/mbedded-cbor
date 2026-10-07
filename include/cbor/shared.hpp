@@ -53,7 +53,7 @@ class value_sharing
     static std::expected<resolved, error> container_resolve(std::shared_ptr<top_level_item> source, std::size_t offset);
 
     template <std::size_t DepthMax, class Match>
-    static result<lazy> key_find(resolved const &found, Match const &match);
+    static std::expected<lazy, error> key_find(resolved const &found, Match const &match);
 
     friend struct lazy;
 
@@ -83,36 +83,36 @@ struct lazy {
     std::size_t offset;
 
     template <std::same_as<std::string> Encoded>
-    static result<lazy> from(Encoded &&encoded);
-    static result<lazy> from(std::string_view encoded);
-    static result<lazy> from(std::shared_ptr<std::string const> encoded);
-    static result<lazy> from(std::shared_ptr<void const> owner, std::string_view encoded);
+    static std::expected<lazy, error> from(Encoded &&encoded);
+    static std::expected<lazy, error> from(std::string_view encoded);
+    static std::expected<lazy, error> from(std::shared_ptr<std::string const> encoded);
+    static std::expected<lazy, error> from(std::shared_ptr<void const> owner, std::string_view encoded);
 
     template <std::size_t DepthMax = 128>
-    result<lazy> at(std::string_view key) const;
+    std::expected<lazy, error> at(std::string_view key) const;
 
     template <std::size_t DepthMax = 128>
-    result<lazy> at(std::int64_t index) const;
+    std::expected<lazy, error> at(std::int64_t index) const;
 
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
                  std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-    result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+    std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                    std::is_same_v<T, typed_array>,
-                               owning_ref<T>, T>> get() const;
+                               owning_ref<T>, T>, error> get() const;
 
     template <std::size_t DepthMax = 128>
-    result<lazy_elements<DepthMax>> elements() const;
+    std::expected<lazy_elements<DepthMax>, error> elements() const;
 
     template <std::size_t DepthMax = 128>
-    result<lazy_entries<DepthMax>> entries() const;
+    std::expected<lazy_entries<DepthMax>, error> entries() const;
 
     template <std::size_t DepthMax = 128>
-    result<std::reference_wrapper<item const>> decode() const &;
+    std::expected<std::reference_wrapper<item const>, error> decode() const &;
 
     template <std::size_t DepthMax = 128>
-    result<std::reference_wrapper<item const>> decode() const && = delete;
+    std::expected<std::reference_wrapper<item const>, error> decode() const && = delete;
 };
 
 }

@@ -1523,7 +1523,7 @@ public:
         }
     };
 
-    static result<accessor<>> path(std::shared_ptr<void const> owner, std::string_view const encoded)
+    static std::expected<accessor<>, error> path(std::shared_ptr<void const> owner, std::string_view const encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         if (!owner) [[unlikely]]
@@ -1537,7 +1537,7 @@ public:
         return accessor<>(std::move(owner), encoded, root, *dir);
     }
 
-    static result<accessor<>> path(std::string_view const encoded)
+    static std::expected<accessor<>, error> path(std::string_view const encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         auto copy = std::make_shared<std::string const>(encoded);
@@ -1547,7 +1547,7 @@ public:
 
     template <std::same_as<std::string> Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static result<accessor<>> path(Encoded &&encoded)
+    static std::expected<accessor<>, error> path(Encoded &&encoded)
     {
         auto owner = std::make_shared<std::string const>(std::move(encoded));
         std::string_view const view = *owner;
@@ -1557,7 +1557,7 @@ public:
 
     template <std::size_t DepthMax = 128>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static result<owning_ref<T>> decode(std::string_view const encoded)
+    static std::expected<owning_ref<T>, error> decode(std::string_view const encoded)
     {
         auto copy = std::make_shared<std::string const>(encoded);
         T value{};
@@ -1568,7 +1568,7 @@ public:
 
     template <std::size_t DepthMax = 128, std::same_as<std::string> Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static result<owning_ref<T>> decode(Encoded &&encoded)
+    static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
     {
         auto owner = std::make_shared<std::string const>(std::move(encoded));
         std::string_view const view = *owner;
@@ -1577,7 +1577,7 @@ public:
 
     template <std::size_t DepthMax = 128>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static result<owning_ref<T>> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         if (!owner) [[unlikely]]
             validity::throw_logic_error("cbor::schema::decode: the owner of the encoded data item is empty");
@@ -1587,7 +1587,7 @@ public:
         return owning_ref<T>(std::move(owner), std::move(value));
     }
 
-    CBOR_ALWAYS_INLINE static result<std::string, std::errc> encode(T const &value)
+    CBOR_ALWAYS_INLINE static std::expected<std::string, std::errc> encode(T const &value)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         packed::second_item<T> second;
@@ -1608,7 +1608,7 @@ public:
 
     template <class Target>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static result<std::size_t, std::errc> encode(T const &value, Target &&target)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, std::errc> encode(T const &value, Target &&target)
     {
         using U = std::remove_cvref_t<Target>;
         packed::second_item<T> second;

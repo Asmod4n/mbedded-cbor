@@ -88,12 +88,4 @@ constexpr std::string_view message(error const e) noexcept
     return "unknown cbor error";
 }
 
-template <class T, class E = error>
-struct result;
-
-template <class T, class E>
-struct result : std::expected<T, E> {
-    using std::expected<T, E>::expected;
-};
-
 }

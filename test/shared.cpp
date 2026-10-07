@@ -658,8 +658,8 @@ TEST_CASE("lazy: a reference decodes to the plain value after a read of its mark
     std::string const doc = encoded_shared(
         obj({{s("path_a"), obj({{s("ref"), shared}})}, {s("path_b"), obj({{s("ref"), shared}})}}));
     auto const root = *cbor::decode<16>(doc);
-    REQUIRE(root.at<16>("path_a").at<16>("ref").has_value());
-    auto const ref = root.at<16>("path_b").at<16>("ref");
+    REQUIRE(root.at<16>("path_a").and_then([](cbor::lazy const &a) { return a.at<16>("ref"); }).has_value());
+    auto const ref = root.at<16>("path_b").and_then([](cbor::lazy const &b) { return b.at<16>("ref"); });
     REQUIRE(ref.has_value());
     ref_binding binding;
     auto const r = cbor::lazy_decode<16>(binding, *ref);

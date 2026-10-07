@@ -30,13 +30,13 @@ error path_error(std::string_view const path, value const &data)
 }
 
 template <cbor::fixed_string Path>
-cbor::result<value> compiled_at(std::string const &doc)
+std::expected<value, cbor::error> compiled_at(std::string const &doc)
 {
     test_binding binding;
     return cbor::at_path<Path, 16>(binding, *cbor::decode<16>(doc));
 }
 
-value found(cbor::result<value> const &r)
+value found(std::expected<value, cbor::error> const &r)
 {
     CAPTURE(r.has_value() ? cbor::error{} : r.error());
     REQUIRE(r.has_value());

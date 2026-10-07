@@ -30,14 +30,14 @@ namespace cbor
 struct lazy;
 
 template <std::size_t DepthMax = 128, class Binding>
-result<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
+std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
 template <fixed_string Path, std::size_t DepthMax>
 class verify_path;
 
 template <fixed_string Path, std::size_t DepthMax = 128, class Binding>
     requires(verify_path<Path, DepthMax>::value)
-result<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
+std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
 
 class jsonpath
 {
@@ -565,7 +565,7 @@ class jsonpath
     }
 
     template <std::size_t DepthMax>
-    static result<lazy, error> key_find(lazy const &node, std::string_view key);
+    static std::expected<lazy, error> key_find(lazy const &node, std::string_view key);
 
     static constexpr std::expected<std::size_t, error> literal_end(diagnostic_notation::literal_cursor const cursor,
                                                                    diagnostic_notation::nesting const n)
@@ -635,18 +635,18 @@ class jsonpath
                                                                   lazy const &start, lazy const &root);
 
     template <std::size_t DepthMax, class Binding>
-    static result<typename Binding::value, error> query_walk(Binding &binding, query_view const &v, parsed_query const &top,
+    static std::expected<typename Binding::value, error> query_walk(Binding &binding, query_view const &v, parsed_query const &top,
                                                              lazy const &root);
 
     template <fixed_string, std::size_t>
     friend class verify_path;
 
     template <std::size_t DepthMax, class Binding>
-    friend result<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
+    friend std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
     template <fixed_string Path, std::size_t DepthMax, class Binding>
         requires(verify_path<Path, DepthMax>::value)
-    friend result<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
+    friend std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
 };
 
 template <fixed_string Path, std::size_t DepthMax>
@@ -789,7 +789,7 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::top_level_item &to
 }
 
 template <std::size_t DepthMax>
-result<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const key)
+std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const key)
 {
     heads::decoder text_key{key};
     auto const literal = text_key.head_decode();
@@ -1247,7 +1247,7 @@ std::expected<std::vector<lazy>, error> jsonpath::segments_apply(query_view cons
 }
 
 template <std::size_t DepthMax, class Binding>
-result<typename Binding::value, error> jsonpath::query_walk(Binding &binding, query_view const &v, parsed_query const &top,
+std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &binding, query_view const &v, parsed_query const &top,
                                                             lazy const &root)
 {
     if (!root.top_level) [[unlikely]]
@@ -1282,7 +1282,7 @@ result<typename Binding::value, error> jsonpath::query_walk(Binding &binding, qu
 }
 
 template <std::size_t DepthMax, class Binding>
-result<typename Binding::value, error> at_path(Binding &binding, std::string_view const path, lazy const &l)
+std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view const path, lazy const &l)
 {
     auto const q = jsonpath::query_parse(path, false, DepthMax);
     if (!q) [[unlikely]]
@@ -1292,7 +1292,7 @@ result<typename Binding::value, error> at_path(Binding &binding, std::string_vie
 
 template <fixed_string Path, std::size_t DepthMax, class Binding>
     requires(verify_path<Path, DepthMax>::value)
-result<typename Binding::value, error> at_path(Binding &binding, lazy const &l)
+std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l)
 {
     constexpr auto q = [] { return *jsonpath::query_parse(Path.view(), true, DepthMax); };
     constexpr std::size_t segments = q().segments.size();

@@ -100,7 +100,7 @@ TEST_CASE("an item owns no memory")
     CHECK(std::is_trivially_copyable_v<std::span<std::byte const>>);
 }
 
-cbor::item const *address_of(cbor::result<std::reference_wrapper<cbor::item const>> const &r)
+cbor::item const *address_of(std::expected<std::reference_wrapper<cbor::item const>, cbor::error> const &r)
 {
     REQUIRE(r.has_value());
     return &r->get();
