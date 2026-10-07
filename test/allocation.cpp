@@ -77,10 +77,9 @@ TEST_CASE("path: a top-level item with shared values allocates only the table of
     CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
 }
 
-// The count in the head of an array is not trusted: each element takes at least one byte, so decode keeps room for at
-// most one element for each byte left. The room is also bounded by the bytes left, so a head that claims many elements
-// does not make decode take several times the size of the message. Here the array claims 4096 elements and its first
-// element is not well-formed, so decode fails before it builds anything but the array.
+// The count in the head of an array is not trusted. The item of an array is its count and a view on its bytes, so a
+// head that claims many elements makes decode take no room for them. Here the array claims 4096 elements and its
+// first element is not well-formed, so decode fails before it builds anything but the array.
 TEST_CASE("decode: the room kept for the elements of an array is bounded by the bytes left")
 {
     std::string bytes = "\x99\x10\x00\xff"s;

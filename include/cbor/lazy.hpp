@@ -491,6 +491,8 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
         return std::unexpected(e.error());
     item *const node = *e;
     if (!std::holds_alternative<lazy>(node->content)) {
+        if (h->major == major_type::array || h->major == major_type::map)
+            return std::pair{node, h->at + std::get<std::span<std::byte const>>(node->content).size()};
         heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(at))};
         if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -513,44 +515,14 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
             node->content = std::as_bytes(std::span(string));
         return std::pair{node, h->at + string.size()};
     }
-    case major_type::array: {
-        if (h->argument > left) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        auto &elements = node->content.emplace<std::vector<item const *>>();
-        elements.reserve(std::min<std::size_t>(h->argument, left / sizeof(item const *)));
-        std::size_t next = h->at;
-        for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const element = item_decode<DepthMax>(top_level, next, depth + 1);
-            if (!element) [[unlikely]] {
-                node->content = lazy{{}, at};
-                return std::unexpected(element.error());
-            }
-            elements.push_back(element->first);
-            next = element->second;
-        }
-        return std::pair{node, next};
-    }
+    case major_type::array:
     case major_type::map: {
-        if (h->argument > left / 2) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        auto &entries = node->content.emplace<std::vector<std::pair<item const *, item const *>>>();
-        entries.reserve(std::min<std::size_t>(h->argument, left / sizeof(std::pair<item const *, item const *>)));
-        std::size_t next = h->at;
-        for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const key = item_decode<DepthMax>(top_level, next, depth + 1);
-            if (!key) [[unlikely]] {
-                node->content = lazy{{}, at};
-                return std::unexpected(key.error());
-            }
-            auto const value = item_decode<DepthMax>(top_level, key->second, depth + 1);
-            if (!value) [[unlikely]] {
-                node->content = lazy{{}, at};
-                return std::unexpected(value.error());
-            }
-            entries.emplace_back(key->first, value->first);
-            next = value->second;
-        }
-        return std::pair{node, next};
+        heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(at))};
+        if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        std::size_t const end = top_level.encoded.size() - d.encoded.size();
+        node->content = std::as_bytes(std::span(top_level.encoded).subspan(h->at, end - h->at));
+        return std::pair{node, end};
     }
     case major_type::tag: {
         node->content = static_cast<item const *>(nullptr);
@@ -589,7 +561,7 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
 }
 
 template <std::size_t DepthMax>
-result<std::reference_wrapper<item const>> lazy::decode() const
+result<std::reference_wrapper<item const>> lazy::decode() const &
 {
     auto const built = value_sharing::item_decode<DepthMax>(*top_level, offset, 0);
     if (!built) [[unlikely]]

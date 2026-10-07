@@ -142,12 +142,9 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             CHECK_EQ(std::get<std::string_view>(it.content), after_head);
             break;
         case cbor::major_type::array:
-            REQUIRE(std::holds_alternative<std::vector<cbor::item const *>>(it.content));
-            CHECK_EQ(std::get<std::vector<cbor::item const *>>(it.content).size(), argument);
-            break;
         case cbor::major_type::map:
-            REQUIRE(std::holds_alternative<std::vector<std::pair<cbor::item const *, cbor::item const *>>>(it.content));
-            CHECK_EQ(std::get<std::vector<std::pair<cbor::item const *, cbor::item const *>>>(it.content).size(), argument);
+            REQUIRE(std::holds_alternative<std::span<std::byte const>>(it.content));
+            CHECK(std::ranges::equal(std::get<std::span<std::byte const>>(it.content), std::as_bytes(std::span(after_head))));
             break;
         case cbor::major_type::tag:
             REQUIRE(std::holds_alternative<cbor::item const *>(it.content));

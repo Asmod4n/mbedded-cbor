@@ -722,14 +722,7 @@ class databind
 {
 public:
     template <std::size_t DepthMax = 128>
-    static result<owning_ref<T>> decode(std::string_view const encoded)
-    {
-        auto copy = std::make_shared<std::string const>(encoded);
-        auto value = read<DepthMax>(*copy);
-        if (!value) [[unlikely]]
-            return std::unexpected(value.error());
-        return owning_ref<T>(std::move(copy), std::move(*value));
-    }
+    static result<owning_ref<T>> decode(std::string_view encoded) = delete;
 
     template <std::size_t DepthMax = 128, std::same_as<std::string> Encoded>
     static result<owning_ref<T>> decode(Encoded &&encoded)
