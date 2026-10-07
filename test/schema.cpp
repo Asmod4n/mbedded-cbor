@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -280,7 +281,8 @@ TEST_CASE("encode: a struct with a number, a bool and a string")
 }
 
 // A negative int16 is major type 1 with -1 - n in two bytes (RFC 8949 3.1). A float stays binary32 (fa). The list
-// of uint16 is shared item 16 and keeps the width of its elements. The empty optional is shared item 17, an empty
+// of uint16 is shared item 16, a typed array of RFC 8746: tag 69 (uint16, little endian) = d8 45 over a byte string
+// of four bytes. The empty optional is shared item 17, an empty
 // array. Item 17 is 6(-1) = c6 3a 00 00 00 00, because 2.2 maps a negative N to index 16 - 2N - 1. The items start
 // at 46 (2e) and 57 (39). The rump starts with the class tag 1508 = d9 05 e4.
 TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
@@ -289,7 +291,7 @@ TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x84\x61t\x61\x66\x61v\x61o"
                     "\x5a\x00\x00\x00\x08\x00\x00\x00\x2e\x00\x00\x00\x39"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-                    "\x9a\x00\x00\x00\x02\x19\x00\x07\x19\x00\x08"
+                    "\xd8\x45\x5a\x00\x00\x00\x04\x07\x00\x08\x00"
                     "\x9a\x00\x00\x00\x00"
                     "\xd9\x05\xe4\xd8\x80\x9a\x00\x00\x00\x04\x39\x00\x04\xfa\x3f\xc0\x00\x00"
                     "\xc6\x1a\x00\x00\x00\x00\xc6\x3a\x00\x00\x00\x00"s);
@@ -438,6 +440,131 @@ TEST_CASE("at_path: a fixed byte array is read inline")
 #endif
 
 #ifdef __cpp_impl_reflection
+
+namespace
+{
+
+struct [[=cbor::tag(1530)]] numbers {
+    std::vector<std::uint16_t> u16;
+    std::vector<std::uint32_t> u32;
+    std::vector<std::uint64_t> u64;
+    std::vector<std::int8_t> s8;
+    std::vector<std::int16_t> s16;
+    std::vector<std::int32_t> s32;
+    std::vector<std::int64_t> s64;
+#if defined(__STDCPP_FLOAT16_T__)
+    std::vector<std::float16_t> f16;
+#endif
+    std::vector<float> f32;
+    std::vector<double> f64;
+};
+
+numbers const sample_numbers{{0x0102},
+                             {0x01020304},
+                             {0x0102030405060708},
+                             {-2},
+                             {-2},
+                             {-2},
+                             {-2},
+#if defined(__STDCPP_FLOAT16_T__)
+                             {1.0f16},
+#endif
+                             {1.0f},
+                             {1.0}};
+
+struct [[=cbor::tag(1531)]] doubles {
+    std::vector<double> v;
+};
+
+} // namespace
+
+// The schema writes a list of a fixed-width number as a typed array of RFC 8746 in little endian. The tag numbers
+// come from RFC 8746 figure 6: uint16le 69, uint32le 70, uint64le 71, sint8 72, sint16le 77, sint32le 78,
+// sint64le 79, float16le 84, float32le 85, float64le 86. The byte string holds the elements with the lowest byte
+// first. The test exists because the tag tells every other reader the type of the elements.
+TEST_CASE("encode: a list of a fixed-width number is a typed array of RFC 8746")
+{
+    std::string const bytes = schema_bytes(sample_numbers);
+    check_one_item(bytes);
+    CHECK_NE(bytes.find("\xd8\x45\x5a\x00\x00\x00\x02\x02\x01"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x46\x5a\x00\x00\x00\x04\x04\x03\x02\x01"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x47\x5a\x00\x00\x00\x08\x08\x07\x06\x05\x04\x03\x02\x01"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x48\x5a\x00\x00\x00\x01\xfe"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x4d\x5a\x00\x00\x00\x02\xfe\xff"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x4e\x5a\x00\x00\x00\x04\xfe\xff\xff\xff"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x4f\x5a\x00\x00\x00\x08\xfe\xff\xff\xff\xff\xff\xff\xff"sv), std::string::npos);
+#if defined(__STDCPP_FLOAT16_T__)
+    CHECK_NE(bytes.find("\xd8\x54\x5a\x00\x00\x00\x02\x00\x3c"sv), std::string::npos);
+#endif
+    CHECK_NE(bytes.find("\xd8\x55\x5a\x00\x00\x00\x04\x00\x00\x80\x3f"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x56\x5a\x00\x00\x00\x08\x00\x00\x00\x00\x00\x00\xf0\x3f"sv), std::string::npos);
+}
+
+// decode and path read every element type back from its typed array. The floats are compared by their bits.
+TEST_CASE("decode and at_path: every typed array gives its elements back")
+{
+    std::string const bytes = schema_bytes(sample_numbers);
+    auto const back = cbor::schema<numbers>::decode(bytes);
+    REQUIRE(back.has_value());
+    numbers const &n = **back;
+    CHECK_EQ(n.u16, sample_numbers.u16);
+    CHECK_EQ(n.u32, sample_numbers.u32);
+    CHECK_EQ(n.u64, sample_numbers.u64);
+    CHECK_EQ(n.s8, sample_numbers.s8);
+    CHECK_EQ(n.s16, sample_numbers.s16);
+    CHECK_EQ(n.s32, sample_numbers.s32);
+    CHECK_EQ(n.s64, sample_numbers.s64);
+#if defined(__STDCPP_FLOAT16_T__)
+    REQUIRE_EQ(n.f16.size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint16_t>(n.f16[0]), 0x3c00u);
+    CHECK_EQ(std::bit_cast<std::uint16_t>(*at_path<numbers, "$.f16[0]">(bytes)), 0x3c00u);
+#endif
+    REQUIRE_EQ(n.f32.size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint32_t>(n.f32[0]), 0x3f800000u);
+    REQUIRE_EQ(n.f64.size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(n.f64[0]), 0x3ff0000000000000u);
+    CHECK_EQ(at_path<numbers, "$.u16[0]">(bytes), 0x0102u);
+    CHECK_EQ(at_path<numbers, "$.u32[]">(bytes, 0uz), 0x01020304u);
+    CHECK_EQ(at_path<numbers, "$.u64[0]">(bytes), 0x0102030405060708u);
+    CHECK_EQ(at_path<numbers, "$.s8[0]">(bytes), std::int8_t{-2});
+    CHECK_EQ(at_path<numbers, "$.s16[0]">(bytes), std::int16_t{-2});
+    CHECK_EQ(at_path<numbers, "$.s32[0]">(bytes), -2);
+    CHECK_EQ(at_path<numbers, "$.s64[]">(bytes, 0uz), std::int64_t{-2});
+    CHECK_EQ(std::bit_cast<std::uint32_t>(*at_path<numbers, "$.f32[0]">(bytes)), 0x3f800000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*at_path<numbers, "$.f64[0]">(bytes)), 0x3ff0000000000000u);
+    CHECK_EQ(at_path<numbers, "$.f64[1]">(bytes).error(), error::index_out_of_bounds);
+    auto const root = cbor::schema<numbers>::path(bytes);
+    REQUIRE(root.has_value());
+    auto const list = root->at<"$.u32">();
+    REQUIRE(list.has_value());
+    CHECK_EQ(list->size(), 1u);
+    CHECK_EQ(list->at<"@[0]">(), 0x01020304u);
+    CHECK_EQ(list->at<"@[]">(1uz).error(), error::index_out_of_bounds);
+}
+
+// A list of doubles that does not carry tag 86, or whose byte string is not a multiple of eight bytes, is refused
+// as an error value by decode and by path. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746).
+TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length is refused")
+{
+    std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
+    std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
+    REQUIRE_NE(at, std::string::npos);
+    REQUIRE(cbor::schema<doubles>::decode(bytes).has_value());
+    for (char const tag : {'\x52', '\x55'}) {
+        std::string wrong = bytes;
+        wrong[at + 1] = tag;
+        CHECK_EQ(cbor::schema<doubles>::decode(wrong).error(), error::incorrect_type);
+        CHECK_EQ(at_path<doubles, "$.v[0]">(wrong).error(), error::incorrect_type);
+    }
+    std::string odd = bytes;
+    odd[at + 6] = '\x0f';
+    CHECK_EQ(cbor::schema<doubles>::decode(odd).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(at_path<doubles, "$.v[0]">(odd).error(), error::inadmissible_type_for_tag_content);
+    std::string longer = bytes;
+    longer[at + 6] = '\x18';
+    CHECK_EQ(cbor::schema<doubles>::decode(longer).error(), error::too_little_data);
+    CHECK_EQ(at_path<doubles, "$.v[0]">(longer).error(), error::too_little_data);
+}
 
 namespace
 {
