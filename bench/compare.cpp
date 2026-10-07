@@ -488,7 +488,7 @@ static T load()
     auto const els = l->elements();
     for (auto const &e : *els) {
         if (!e) [[unlikely]] std::abort();
-        cbor::lazy const r = must(*e);
+        cbor::lazy const r = must(e);
         cbor::lazy const u = must(r.at("user"));
         auto const ratio = must(r.at("ratio")).get<double>();
         Record x{must(must(r.at("id")).get<std::int64_t>()), must_text(must(r.at("text"))), User{must_text(must(u.at("name"))), must(must(u.at("followers")).get<std::uint64_t>())},

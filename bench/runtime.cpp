@@ -22,7 +22,7 @@ static std::uint64_t bytes_sum(std::string_view const s)
                                  [](char const c) { return std::uint64_t(std::uint8_t(c)); });
 }
 
-#if defined(ARM_READ) || defined(ARM_MB_DECODE)
+#if defined(ARM_READ) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
 struct read_binding : cbor::binding<std::uint64_t> {
     std::uint64_t unsigned_integer_decode(std::uint64_t a) { return a; }
     std::uint64_t negative_integer_decode(std::uint64_t a) { return a; }
@@ -394,6 +394,12 @@ static std::uint64_t op()
     return t;
 #elif defined(ARM_MB_PATH)
     return mb_path();
+#elif defined(ARM_MB_PATH_ALL)
+    read_binding b;
+    auto const r = cbor::at_path<"$..*">(b, *cbor::lazy::from(keep, std::string_view(doc)));
+    if (!r) [[unlikely]]
+        std::abort();
+    return *r;
 #elif defined(ARM_FB_PATH)
     return fb_path(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size()));
 #elif defined(ARM_FB_PATH_V)
