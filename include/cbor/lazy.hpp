@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -14,6 +15,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "binding.hpp"
@@ -452,6 +454,148 @@ result<lazy_entries<DepthMax>> lazy::entries() const
         return std::unexpected(error::not_indexable);
     return lazy_entries<DepthMax>{source, source->encoded.size() - d.encoded.size(), h.argument};
 }
+template <std::size_t DepthMax>
+std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(top_level_item &top_level, std::size_t const at,
+                                                                               std::size_t const depth)
+{
+    if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    auto const h = heads::raw_head_read(top_level.encoded, at);
+    if (!h) [[unlikely]]
+        return std::unexpected(h.error());
+    if (h->info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
+        return std::unexpected(h->major >= major_type::byte_string && h->major <= major_type::map ? error::indefinite_length
+                                                                                                 : error::syntax_error);
+    if (h->major == major_type::tag && h->argument == std::to_underlying(heads::tag_number::shareable)) {
+        top_level.mark(heads::decoder{std::string_view(std::span(top_level.encoded).subspan(h->at))});
+        return item_decode<DepthMax>(top_level, h->at, depth + 1);
+    }
+    if (h->major == major_type::tag && h->argument == std::to_underlying(heads::tag_number::sharedref)) {
+        heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
+        auto const found = top_level.sharedref_decode(d, at);
+        if (!found) [[unlikely]]
+            return std::unexpected(found.error());
+        auto const target = item_resolve(top_level, found->offset);
+        if (!target) [[unlikely]]
+            return std::unexpected(target.error());
+        if (std::holds_alternative<lazy>((*target)->content)) {
+            auto const built = item_decode<DepthMax>(top_level, found->offset, depth);
+            if (!built) [[unlikely]]
+                return std::unexpected(built.error());
+        }
+        return std::pair{*target, top_level.encoded.size() - d.encoded.size()};
+    }
+    auto const e = top_level.entry(at);
+    if (!e) [[unlikely]]
+        return std::unexpected(e.error());
+    item *const node = *e;
+    if (!std::holds_alternative<lazy>(node->content)) {
+        heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(at))};
+        if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return std::pair{node, top_level.encoded.size() - d.encoded.size()};
+    }
+    std::size_t const left = top_level.encoded.size() - h->at;
+    switch (h->major) {
+    case major_type::unsigned_integer:
+    case major_type::negative_integer:
+        node->content = std::monostate{};
+        return std::pair{node, h->at};
+    case major_type::byte_string:
+    case major_type::text_string: {
+        if (h->argument > left) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        std::string_view const string{std::span(top_level.encoded).subspan(h->at, h->argument)};
+        if (h->major == major_type::text_string)
+            node->content = string;
+        else
+            node->content = std::as_bytes(std::span(string));
+        return std::pair{node, h->at + string.size()};
+    }
+    case major_type::array: {
+        if (h->argument > left) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        auto &elements = node->content.emplace<std::vector<item const *>>();
+        elements.reserve(h->argument);
+        std::size_t next = h->at;
+        for (std::uint64_t i = 0; i < h->argument; ++i) {
+            auto const element = item_decode<DepthMax>(top_level, next, depth + 1);
+            if (!element) [[unlikely]] {
+                node->content = lazy{{}, at};
+                return std::unexpected(element.error());
+            }
+            elements.push_back(element->first);
+            next = element->second;
+        }
+        return std::pair{node, next};
+    }
+    case major_type::map: {
+        if (h->argument > left / 2) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        auto &entries = node->content.emplace<std::vector<std::pair<item const *, item const *>>>();
+        entries.reserve(h->argument);
+        std::size_t next = h->at;
+        for (std::uint64_t i = 0; i < h->argument; ++i) {
+            auto const key = item_decode<DepthMax>(top_level, next, depth + 1);
+            if (!key) [[unlikely]] {
+                node->content = lazy{{}, at};
+                return std::unexpected(key.error());
+            }
+            auto const value = item_decode<DepthMax>(top_level, key->second, depth + 1);
+            if (!value) [[unlikely]] {
+                node->content = lazy{{}, at};
+                return std::unexpected(value.error());
+            }
+            entries.emplace_back(key->first, value->first);
+            next = value->second;
+        }
+        return std::pair{node, next};
+    }
+    case major_type::tag: {
+        node->content = static_cast<item const *>(nullptr);
+        auto const content = item_decode<DepthMax>(top_level, h->at, depth + 1);
+        if (!content) [[unlikely]] {
+            node->content = lazy{{}, at};
+            return std::unexpected(content.error());
+        }
+        node->content = static_cast<item const *>(content->first);
+        return std::pair{node, content->second};
+    }
+    case major_type::simple_float:
+        switch (static_cast<heads::simple_float_information>(h->info)) {
+        case heads::simple_float_information::half_precision_float:
+#if defined(__STDCPP_FLOAT16_T__)
+            node->content = std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(h->argument));
+#else
+            node->content = heads::float_decode_binary16(static_cast<std::uint16_t>(h->argument));
+#endif
+            break;
+        case heads::simple_float_information::single_precision_float:
+            node->content = std::bit_cast<float>(static_cast<std::uint32_t>(h->argument));
+            break;
+        case heads::simple_float_information::double_precision_float:
+            node->content = std::bit_cast<double>(h->argument);
+            break;
+        default:
+            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            node->content = std::monostate{};
+            break;
+        }
+        return std::pair{node, h->at};
+    }
+    std::unreachable();
+}
+
+template <std::size_t DepthMax>
+result<std::reference_wrapper<item const>> lazy::decode() const
+{
+    auto const built = value_sharing::item_decode<DepthMax>(*top_level, offset, 0);
+    if (!built) [[unlikely]]
+        return std::unexpected(built.error());
+    return std::cref(*built->first);
+}
+
 template <std::size_t DepthMax, class Binding>
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {

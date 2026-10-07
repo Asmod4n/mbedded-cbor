@@ -98,6 +98,8 @@ private:
 
     friend class well_formedness;
 
+    friend class value_sharing;
+
     friend class diagnostic_notation;
 
     friend class jsonpath;

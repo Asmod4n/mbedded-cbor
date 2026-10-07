@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <deque>
 #include <expected>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <span>
@@ -44,6 +45,10 @@ class value_sharing
     static std::expected<std::size_t, error> shared_resolve(top_level_item &top_level, std::size_t at);
 
     static std::expected<item *, error> item_resolve(top_level_item &top_level, std::size_t at);
+
+    template <std::size_t DepthMax>
+    static std::expected<std::pair<item *, std::size_t>, error> item_decode(top_level_item &top_level, std::size_t at,
+                                                                           std::size_t depth);
 
     static std::expected<resolved, error> container_resolve(std::shared_ptr<top_level_item> source, std::size_t offset);
 
@@ -102,6 +107,9 @@ struct lazy {
 
     template <std::size_t DepthMax = 128>
     result<lazy_entries<DepthMax>> entries() const;
+
+    template <std::size_t DepthMax = 128>
+    result<std::reference_wrapper<item const>> decode() const;
 };
 
 }
