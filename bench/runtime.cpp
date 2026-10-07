@@ -209,7 +209,198 @@ static std::uint64_t fb_read(flexbuffers::Reference const r)
 }
 #endif
 
+#if defined(ARM_TC_READ) || defined(ARM_TC_PATH)
+#include <tinycbor/cbor.h>
+static void tc_check(CborError const e)
+{
+    if (e != CborNoError) [[unlikely]]
+        std::abort();
+}
+static std::uint64_t tc_string(CborValue *const it)
+{
+    std::uint64_t sum = 0;
+    bool const text = cbor_value_is_text_string(it);
+    tc_check(cbor_value_begin_string_iteration(it));
+    for (;;) {
+        char const *p = nullptr;
+        std::size_t n = 0;
+        CborError const e = text ? cbor_value_get_text_string_chunk(it, &p, &n, it)
+                                 : cbor_value_get_byte_string_chunk(it, reinterpret_cast<std::uint8_t const **>(&p), &n, it);
+        if (e == CborErrorNoMoreStringChunks)
+            break;
+        tc_check(e);
+        sum += bytes_sum(std::string_view(p, n));
+    }
+    tc_check(cbor_value_finish_string_iteration(it));
+    return sum;
+}
+static std::uint64_t tc_float(CborValue const *const it)
+{
+    double d = 0;
+    if (cbor_value_is_half_float(it)) {
+        float f = 0;
+        tc_check(cbor_value_get_half_float_as_float(it, &f));
+        d = f;
+    } else if (cbor_value_is_float(it)) {
+        float f = 0;
+        tc_check(cbor_value_get_float(it, &f));
+        d = f;
+    } else {
+        tc_check(cbor_value_get_double(it, &d));
+    }
+    return std::bit_cast<std::uint64_t>(d);
+}
+#endif
+
+#if defined(ARM_TC_READ)
+static std::uint64_t tc_read(CborValue *const it, int const depth)
+{
+    if (depth > 128) [[unlikely]]
+        std::abort();
+    std::uint64_t sum = 0;
+    switch (cbor_value_get_type(it)) {
+    case CborIntegerType: tc_check(cbor_value_get_raw_integer(it, &sum)); tc_check(cbor_value_advance_fixed(it)); return sum;
+    case CborByteStringType:
+    case CborTextStringType: return tc_string(it);
+    case CborArrayType:
+    case CborMapType: {
+        std::size_t n = 0;
+        if (cbor_value_is_array(it))
+            tc_check(cbor_value_get_array_length(it, &n));
+        else
+            tc_check(cbor_value_get_map_length(it, &n));
+        sum = n;
+        CborValue r;
+        tc_check(cbor_value_enter_container(it, &r));
+        while (!cbor_value_at_end(&r))
+            sum += tc_read(&r, depth + 1);
+        tc_check(cbor_value_leave_container(it, &r));
+        return sum;
+    }
+    case CborTagType: {
+        CborTag t = 0;
+        tc_check(cbor_value_get_tag(it, &t));
+        tc_check(cbor_value_advance_fixed(it));
+        return t + tc_read(it, depth + 1);
+    }
+    case CborBooleanType: { bool b = false; tc_check(cbor_value_get_boolean(it, &b)); sum = 20u + b; } break;
+    case CborNullType: sum = 22; break;
+    case CborUndefinedType: sum = 23; break;
+    case CborSimpleType: { std::uint8_t v = 0; tc_check(cbor_value_get_simple_type(it, &v)); sum = v; } break;
+    case CborHalfFloatType:
+    case CborFloatType:
+    case CborDoubleType: sum = tc_float(it); break;
+    default: std::abort();
+    }
+    tc_check(cbor_value_advance_fixed(it));
+    return sum;
+}
+#endif
+
+#if defined(ARM_TC_PATH)
+static void tc_find(CborValue *const it, char const *const key)
+{
+    CborValue v;
+    if (!cbor_value_is_map(it)) [[unlikely]]
+        std::abort();
+    tc_check(cbor_value_map_find_value(it, key, &v));
+    if (!cbor_value_is_valid(&v)) [[unlikely]]
+        std::abort();
+    *it = v;
+}
+static void tc_index(CborValue *const it, std::size_t const i)
+{
+    std::size_t n = 0;
+    if (!cbor_value_is_array(it)) [[unlikely]]
+        std::abort();
+    tc_check(cbor_value_get_array_length(it, &n));
+    if (i >= n) [[unlikely]]
+        std::abort();
+    CborValue r;
+    tc_check(cbor_value_enter_container(it, &r));
+    for (std::size_t k = 0; k < i; ++k)
+        tc_check(cbor_value_advance(&r));
+    *it = r;
+}
+#endif
+
+#if defined(ARM_JC_DECODE)
+#include <jsoncons/json.hpp>
+#include <jsoncons_ext/cbor/cbor.hpp>
+static std::uint64_t json_sum(jsoncons::json const &j)
+{
+    switch (j.type()) {
+    case jsoncons::json_type::null_value: return 22;
+    case jsoncons::json_type::bool_value: return 20u + j.as<bool>();
+    case jsoncons::json_type::uint64_value: return j.as<std::uint64_t>();
+    case jsoncons::json_type::int64_value: { auto const v = j.as<std::int64_t>(); return v < 0 ? std::uint64_t(-1 - v) : std::uint64_t(v); }
+    case jsoncons::json_type::half_value:
+    case jsoncons::json_type::double_value: return std::bit_cast<std::uint64_t>(j.as<double>());
+    case jsoncons::json_type::string_value: { auto const t = j.as_string_view(); return bytes_sum(std::string_view(t.data(), t.size())); }
+    case jsoncons::json_type::byte_string_value: { auto const t = j.as_byte_string_view(); return bytes_sum(std::string_view(reinterpret_cast<char const *>(t.data()), t.size())); }
+    case jsoncons::json_type::array_value: { std::uint64_t s = j.size(); for (auto const &e : j.array_range()) s += json_sum(e); return s; }
+    case jsoncons::json_type::object_value: { std::uint64_t s = j.size(); for (auto const &m : j.object_range()) s += bytes_sum(std::string_view(m.key().data(), m.key().size())) + json_sum(m.value()); return s; }
+    default: std::abort();
+    }
+}
+#endif
+
+#if defined(ARM_JC_PATH)
+#include <jsoncons/json.hpp>
+#include <jsoncons_ext/cbor/cbor.hpp>
+using jc_cursor = jsoncons::cbor::cbor_bytes_cursor;
+static void jc_skip(jc_cursor &c)
+{
+    auto const t = c.current().event_type();
+    if (t != jsoncons::staj_event_type::begin_array && t != jsoncons::staj_event_type::begin_object)
+        return;
+    int depth = 1;
+    while (depth > 0) {
+        c.next();
+        switch (c.current().event_type()) {
+        case jsoncons::staj_event_type::begin_array:
+        case jsoncons::staj_event_type::begin_object: ++depth; break;
+        case jsoncons::staj_event_type::end_array:
+        case jsoncons::staj_event_type::end_object: --depth; break;
+        default: break;
+        }
+    }
+}
+static void jc_key(jc_cursor &c, std::string_view const key)
+{
+    if (c.current().event_type() != jsoncons::staj_event_type::begin_object) [[unlikely]]
+        std::abort();
+    for (;;) {
+        c.next();
+        if (c.current().event_type() != jsoncons::staj_event_type::key) [[unlikely]]
+            std::abort();
+        auto const k = c.current().get<jsoncons::string_view>();
+        bool const hit = std::string_view(k.data(), k.size()) == key;
+        c.next();
+        if (hit)
+            return;
+        jc_skip(c);
+    }
+}
+static void jc_index(jc_cursor &c, std::size_t const i)
+{
+    if (c.current().event_type() != jsoncons::staj_event_type::begin_array || i >= c.current().size()) [[unlikely]]
+        std::abort();
+    c.next();
+    for (std::size_t k = 0; k < i; ++k) {
+        jc_skip(c);
+        c.next();
+    }
+}
+static std::uint64_t jc_text(jc_cursor const &c)
+{
+    auto const t = c.current().get<jsoncons::string_view>();
+    return bytes_sum(std::string_view(t.data(), t.size()));
+}
+#endif
+
 static std::string doc;
+static std::string_view in;
 static std::shared_ptr<void const> const keep = std::make_shared<int const>(0);
 
 #if defined(ARM_MB_DECODE)
@@ -254,7 +445,7 @@ static std::uint64_t item_sum(cbor_item_t const *i)
 #if defined(ARM_MB_PATH)
 static std::uint64_t mb_path()
 {
-    auto const l = cbor::lazy::from(keep, std::string_view(doc));
+    auto const l = cbor::lazy::from(keep, in);
 #if defined(DOC_twitter)
     auto const v = l.and_then([](cbor::lazy const &d) { return d.at("statuses"); })
                        .and_then([](cbor::lazy const &s) { return s.at(50); })
@@ -372,44 +563,93 @@ static std::uint64_t op()
     return buf.size();
 #elif defined(ARM_READ)
     read_binding b;
-    auto const r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, std::string_view(doc)));
+    auto const r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, in));
     if (!r)
         std::abort();
     return *r;
 #elif defined(ARM_MB_DECODE)
     bench::binding b;
-    auto r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, std::string_view(doc)));
+    auto r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, in));
     if (!r) [[unlikely]]
         std::abort();
     benchmark::DoNotOptimize(&*r);
     return r->kind.index();
 #elif defined(ARM_LC_DECODE)
     cbor_load_result lr;
-    cbor_item_t *const it = cbor_load(reinterpret_cast<cbor_data>(doc.data()), doc.size(), &lr);
+    cbor_item_t *it = cbor_load(reinterpret_cast<cbor_data>(in.data()), in.size(), &lr);
     if (!it) [[unlikely]]
         std::abort();
     benchmark::DoNotOptimize(it);
     std::uint64_t const t = cbor_typeof(it);
-    cbor_decref(const_cast<cbor_item_t **>(&it));
+    cbor_decref(&it);
     return t;
 #elif defined(ARM_MB_PATH)
     return mb_path();
 #elif defined(ARM_MB_PATH_ALL)
     read_binding b;
-    auto const r = cbor::at_path<"$..*">(b, *cbor::lazy::from(keep, std::string_view(doc)));
+    auto const r = cbor::at_path<"$..*">(b, *cbor::lazy::from(keep, in));
     if (!r) [[unlikely]]
         std::abort();
     return *r;
+#elif defined(ARM_TC_READ)
+    CborParser parser;
+    CborValue it;
+    tc_check(cbor_parser_init(reinterpret_cast<std::uint8_t const *>(in.data()), in.size(), 0, &parser, &it));
+    return tc_read(&it, 0);
+#elif defined(ARM_TC_PATH)
+    CborParser parser;
+    CborValue it;
+    tc_check(cbor_parser_init(reinterpret_cast<std::uint8_t const *>(in.data()), in.size(), 0, &parser, &it));
+#if defined(DOC_twitter)
+    tc_find(&it, "statuses");
+    tc_index(&it, 50);
+    tc_find(&it, "user");
+    tc_find(&it, "screen_name");
+    if (!cbor_value_is_text_string(&it)) [[unlikely]]
+        std::abort();
+    return tc_string(&it);
+#elif defined(DOC_floats)
+    tc_index(&it, 30000);
+    return tc_float(&it);
+#elif defined(DOC_records)
+    tc_index(&it, 1000);
+    tc_find(&it, "user");
+    tc_find(&it, "name");
+    if (!cbor_value_is_text_string(&it)) [[unlikely]]
+        std::abort();
+    return tc_string(&it);
+#endif
+#elif defined(ARM_JC_DECODE)
+    auto j = jsoncons::cbor::decode_cbor<jsoncons::json>(std::span<std::uint8_t const>(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
+    benchmark::DoNotOptimize(&j);
+    return std::uint64_t(j.type());
+#elif defined(ARM_JC_PATH)
+    jc_cursor c(std::span<std::uint8_t const>(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
+#if defined(DOC_twitter)
+    jc_key(c, "statuses");
+    jc_index(c, 50);
+    jc_key(c, "user");
+    jc_key(c, "screen_name");
+    return jc_text(c);
+#elif defined(DOC_floats)
+    jc_index(c, 30000);
+    return std::bit_cast<std::uint64_t>(c.current().get<double>());
+#elif defined(DOC_records)
+    jc_index(c, 1000);
+    jc_key(c, "user");
+    jc_key(c, "name");
+    return jc_text(c);
+#endif
 #elif defined(ARM_FB_PATH)
-    return fb_path(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size()));
+    return fb_path(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
 #elif defined(ARM_FB_PATH_V)
-    if (!flexbuffers::VerifyBuffer(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size())) [[unlikely]]
+    if (!flexbuffers::VerifyBuffer(reinterpret_cast<std::uint8_t const *>(in.data()), in.size())) [[unlikely]]
         std::abort();
-    return fb_path(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size()));
+    return fb_path(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
 #elif defined(ARM_FB_READ_V)
-    if (!flexbuffers::VerifyBuffer(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size())) [[unlikely]]
+    if (!flexbuffers::VerifyBuffer(reinterpret_cast<std::uint8_t const *>(in.data()), in.size())) [[unlikely]]
         std::abort();
-    return fb_read(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size()));
+    return fb_read(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
 #elif defined(ARM_LC_PREALLOC)
     std::size_t const n = cbor_serialize(lc, lcbuf.data(), lcbuf.size());
     if (n == 0)
@@ -440,11 +680,11 @@ static std::uint64_t op()
         c.undefined = [](void *x) { *static_cast<std::uint64_t *>(x) += 23; };
         return c;
     }();
-    auto const *p = reinterpret_cast<cbor_data>(doc.data());
+    auto const *p = reinterpret_cast<cbor_data>(in.data());
     std::uint64_t sum = 0;
     std::size_t at = 0;
-    while (at < doc.size()) {
-        auto const r = cbor_stream_decode(p + at, doc.size() - at, &cb, &sum);
+    while (at < in.size()) {
+        auto const r = cbor_stream_decode(p + at, in.size() - at, &cb, &sum);
         if (r.status != CBOR_DECODER_FINISHED)
             std::abort();
         at += r.read;
@@ -456,7 +696,7 @@ static std::uint64_t op()
     benchmark::ClobberMemory();
     return jcbuf.size();
 #elif defined(ARM_JC_READ)
-    jsoncons::cbor::cbor_bytes_cursor cursor(std::span<std::uint8_t const>(reinterpret_cast<std::uint8_t const *>(doc.data()), doc.size()));
+    jsoncons::cbor::cbor_bytes_cursor cursor(std::span<std::uint8_t const>(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
     std::uint64_t sum = 0;
     for (; !cursor.done(); cursor.next()) {
         auto const &e = cursor.current();
@@ -465,10 +705,16 @@ static std::uint64_t op()
         case jsoncons::staj_event_type::string_value: { auto const t = e.get<jsoncons::string_view>(); sum += bytes_sum(std::string_view(t.data(), t.size())); } break;
         case jsoncons::staj_event_type::byte_string_value: { auto const t = e.get<jsoncons::byte_string_view>(); sum += bytes_sum(std::string_view(reinterpret_cast<char const *>(t.data()), t.size())); } break;
         case jsoncons::staj_event_type::uint64_value: sum += e.get<std::uint64_t>(); break;
-        case jsoncons::staj_event_type::int64_value: sum += std::uint64_t(e.get<std::int64_t>()); break;
+        case jsoncons::staj_event_type::int64_value: { auto const v = e.get<std::int64_t>(); sum += v < 0 ? std::uint64_t(-1 - v) : std::uint64_t(v); } break;
+        case jsoncons::staj_event_type::half_value:
         case jsoncons::staj_event_type::double_value: sum += std::bit_cast<std::uint64_t>(e.get<double>()); break;
-        case jsoncons::staj_event_type::bool_value: sum += e.get<bool>(); break;
-        default: sum += 1; break;
+        case jsoncons::staj_event_type::bool_value: sum += 20u + e.get<bool>(); break;
+        case jsoncons::staj_event_type::null_value: sum += 22; break;
+        case jsoncons::staj_event_type::begin_array:
+        case jsoncons::staj_event_type::begin_object: sum += e.size(); break;
+        case jsoncons::staj_event_type::end_array:
+        case jsoncons::staj_event_type::end_object: break;
+        default: std::abort();
         }
     }
     return sum;
@@ -479,8 +725,8 @@ static std::uint64_t op()
     return std::size_t(vo.p - vo.v.data());
 #elif defined(ARM_VG_READ)
     span_decoder d;
-    d.p = reinterpret_cast<std::uint8_t const *>(doc.data());
-    d.end = d.p + doc.size();
+    d.p = reinterpret_cast<std::uint8_t const *>(in.data());
+    d.end = d.p + in.size();
     return vg_read(d, 0);
 #elif defined(ARM_MP_REUSE)
     mpbuf.clear();
@@ -491,10 +737,10 @@ static std::uint64_t op()
 #elif defined(ARM_MP_READ)
     struct reader : msgpack::null_visitor {
         std::uint64_t sum = 0;
-        bool visit_nil() { sum += 1; return true; }
-        bool visit_boolean(bool v) { sum += v; return true; }
+        bool visit_nil() { sum += 22; return true; }
+        bool visit_boolean(bool v) { sum += 20u + v; return true; }
         bool visit_positive_integer(std::uint64_t v) { sum += v; return true; }
-        bool visit_negative_integer(std::int64_t v) { sum += std::uint64_t(v); return true; }
+        bool visit_negative_integer(std::int64_t v) { sum += std::uint64_t(-1 - v); return true; }
         bool visit_float32(float v) { sum += std::bit_cast<std::uint32_t>(v); return true; }
         bool visit_float64(double v) { sum += std::bit_cast<std::uint64_t>(v); return true; }
         bool visit_str(char const *v, std::uint32_t n) { sum += bytes_sum(std::string_view(v, n)); return true; }
@@ -512,7 +758,7 @@ static std::uint64_t op()
         }
     } v;
     std::size_t off = 0;
-    if (!msgpack::parse(alt.data(), alt.size(), off, v))
+    if (!msgpack::parse(in.data(), in.size(), off, v))
         std::abort();
     return v.sum;
 #elif defined(ARM_FB_REUSE)
@@ -522,15 +768,30 @@ static std::uint64_t op()
     benchmark::ClobberMemory();
     return fbb.GetSize();
 #elif defined(ARM_FB_READ)
-    return fb_read(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(alt.data()), alt.size()));
+    return fb_read(flexbuffers::GetRoot(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
 #else
 #error no arm
 #endif
 }
 
+static std::vector<std::string> copies;
+
+static std::size_t l3_bytes()
+{
+    std::ifstream f("/sys/devices/system/cpu/cpu0/cache/index3/size");
+    std::size_t kib = 0;
+    f >> kib;
+    if (kib == 0)
+        std::abort();
+    return kib * 1024;
+}
+
 static void run(benchmark::State &state)
 {
+    std::size_t i = 0;
     for (auto _ : state) {
+        in = copies[i];
+        i = i + 1 == copies.size() ? 0 : i + 1;
         benchmark::DoNotOptimize(op());
         benchmark::ClobberMemory();
     }
@@ -539,11 +800,12 @@ static void run(benchmark::State &state)
 
 int main(int argc, char **argv)
 {
-    std::ifstream in(DOC_PATH, std::ios::binary);
-    doc.assign(std::istreambuf_iterator<char>(in), {});
+    std::ifstream file(DOC_PATH, std::ios::binary);
+    doc.assign(std::istreambuf_iterator<char>(file), {});
     if (doc.empty())
         std::abort();
     setup();
+    in = *bytes;
 #if defined(ARM_MB_DECODE)
     {
         bench::binding b;
@@ -557,9 +819,13 @@ int main(int argc, char **argv)
         benchmark::AddCustomContext("check", std::to_string(item_sum(it)));
         cbor_decref(&it);
     }
+#elif defined(ARM_JC_DECODE)
+    benchmark::AddCustomContext("check", std::to_string(json_sum(jsoncons::cbor::decode_cbor<jsoncons::json>(std::span<std::uint8_t const>(reinterpret_cast<std::uint8_t const *>(doc.data()), doc.size())))));
 #else
     benchmark::AddCustomContext("check", std::to_string(op()));
 #endif
+    copies.assign(2 * l3_bytes() / bytes->size() + 1, *bytes);
+    benchmark::AddCustomContext("copies", std::to_string(copies.size()));
     benchmark::AddCustomContext("document", DOC_PATH);
     benchmark::RegisterBenchmark(ARM_NAME, run);
     benchmark::Initialize(&argc, argv);
