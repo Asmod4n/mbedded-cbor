@@ -966,7 +966,7 @@ class packed
     CBOR_ALWAYS_INLINE static auto path_walk(std::string_view const encoded, std::span<char const, fixed_size<T, Root>()> const field,
                                              cbor::directory const floor,
                                              std::array<std::size_t, index_slots<Path>()> const &indexes)
-        -> cbor::result<typename decltype(path_result<Root, T, Path, At>())::type>
+        -> std::expected<typename decltype(path_result<Root, T, Path, At>())::type, error>
     {
         using U = std::remove_cv_t<T>;
         constexpr std::string_view path = Path.view();
@@ -1504,7 +1504,7 @@ public:
                 else
                     at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
                 if (at >= items.length) [[unlikely]]
-                    return result<X>(std::unexpect, error::index_out_of_bounds);
+                    return std::expected<X, error>(std::unexpect, error::index_out_of_bounds);
                 return packed::path_walk<T, E, Path, close + 1>(
                     encoded, std::span<char const>(encoded).subspan(items.data + at * packed::fixed_size<E, T>()).template first<packed::fixed_size<E, T>()>(),
                     dir, i);
