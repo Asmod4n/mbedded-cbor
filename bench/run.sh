@@ -19,7 +19,7 @@ MIN_TIME=${MIN_TIME:-0.2s}
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 build=$(mktemp -d "${TMPDIR:-/tmp}/mbedded-cbor-bench.XXXXXX")
 trap 'rm -rf "$build"' EXIT
-flags="-O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG"
+flags="-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG"
 export GLIBC_TUNABLES=glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456
 
 docs="cwt senml floats ints strings records twitter"
@@ -85,6 +85,10 @@ finish
 
 echo "running $PROCESSES processes per binary"
 mkdir -p "$build/out"
+for b in "$build"/rt.* "$build"/cw.* "$build"/sc.*; do
+	[ -e "$b" ] || continue
+	echo "$(basename "$b") $(readelf -h "$b" | grep -o 'Type: *[A-Z]*' | tr -s ' ')"
+done > "$build/out/elf_type"
 i=1
 while [ "$i" -le "$PROCESSES" ]; do
 	for b in "$build"/rt.* "$build"/cw.* "$build"/sc.*; do
