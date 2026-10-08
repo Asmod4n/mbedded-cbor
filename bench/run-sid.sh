@@ -78,18 +78,26 @@ done
 for p in $pids; do wait "$p"; done
 [ -n "${BUILD_ONLY:-}" ] && exit 0
 
-steal() { awk '/^cpu /{print $9, $2+$3+$4+$5+$6+$7+$8+$9}' /proc/stat; }
+steal() {
+	local user nice system idle iowait irq softirq stolen rest
+	read -r _ user nice system idle iowait irq softirq stolen rest < /proc/stat
+	echo "$stolen $((user + nice + system + idle + iowait + irq + softirq + stolen))"
+}
+for b in "$build"/bin/*; do
+	echo "$(basename "$b") $(readelf -h "$b" | grep -o 'Type: *[A-Z]*' | tr -s ' ')"
+done > "$build/out/elf_type"
 cat /proc/loadavg > "$build/out/loadavg_start"
 i=1
 while [ "$i" -le "$PROCESSES" ]; do
 	s0=$(steal)
 	t0=$(date +%s.%N)
-	for b in "$build"/bin/*; do
-		n=$(basename "$b")
+	ls "$build"/bin | shuf > "$build/out/order.$i"
+	while read -r n; do
+		b=$build/bin/$n
 		"$b" --benchmark_min_time="$MIN_TIME" --benchmark_out_format=json \
-			--benchmark_out="$build/out/$i.$n.json" > /dev/null 2>> "$build/out/err.txt" ||
+			--benchmark_out="$build/out/$i.$n.json" < /dev/null > /dev/null 2>> "$build/out/err.txt" ||
 			echo "$n" >> "$build/out/failed.txt"
-	done
+	done < "$build/out/order.$i"
 	s1=$(steal)
 	t1=$(date +%s.%N)
 	echo "$i $t0 $t1 $s0 $s1" >> "$build/out/rounds"
