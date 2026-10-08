@@ -122,6 +122,21 @@ TEST_CASE("databind: an unknown key is skipped, a missing key is an error")
     CHECK_EQ(cbor::databind<std::uint64_t>::decode("\x00\x00"s).error(), error::syntax_error);
 }
 
+// The owner decided that a map with a duplicate key is not valid. A struct took the last of two equal member
+// keys and a std::map took the last value of a repeated key, with no error, before this test existed.
+TEST_CASE("databind: a repeated key is duplicate_key")
+{
+    CHECK_EQ(cbor::databind<pair_ab>::decode("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x80"s).error(),
+             error::duplicate_key);
+    CHECK_EQ(
+        (cbor::databind<std::map<std::string, std::string>>::decode("\xa2\x61\x61\x61\x41\x61\x61\x61\x42"s)
+             .error()),
+        error::duplicate_key);
+    auto const distinct = cbor::databind<pair_ab>::decode("\xa2\x61\x61\x01\x61\x62\x80"s);
+    REQUIRE(distinct.has_value());
+    CHECK_EQ((*distinct)->a, 1u);
+}
+
 // RFC 8428 6, the CBOR form of the example in 5.1.2: the integer labels come from the keys of the struct.
 TEST_CASE("databind: a SenML pack with integer labels")
 {

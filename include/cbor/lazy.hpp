@@ -278,14 +278,10 @@ std::expected<lazy, error> lazy::at(std::int64_t const index) const
         return std::unexpected(found.error());
     auto [source, h, d] = *found;
     if (h.major == major_type::array) {
-        std::int64_t const size =
-            h.argument > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
-                ? std::numeric_limits<std::int64_t>::max()
-                : static_cast<std::int64_t>(h.argument);
-        std::int64_t const position = index < 0 ? index + size : index;
-        if (position < 0 || position >= size) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
-        for (std::int64_t i = 0; i < position; ++i)
+        auto const position = validity::check_index(index, h.argument);
+        if (!position) [[unlikely]]
+            return std::unexpected(position.error());
+        for (std::uint64_t i = 0; i < *position; ++i)
             if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
                 return std::unexpected(r.error());
         std::size_t const element = source->encoded.size() - d.encoded.size();
@@ -324,20 +320,24 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (r->major != major_type::byte_string) [[unlikely]]
-                return std::unexpected(error::inadmissible_type_for_tag_content);
+            if (error const c = validity::check_tag_content(h.argument, r->major).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
             auto const bytes = d.byte_string_decode(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             std::string_view const magnitude = heads::magnitude_without_leading_zeros(*bytes);
-            if (magnitude.size() > sizeof(std::uint64_t)) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
+            if (error const c =
+                    validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t)).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
             argument = heads::magnitude_value(magnitude);
         } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
             return std::unexpected(error::incorrect_type);
         }
-        if (!std::in_range<T>(argument) || (std::is_unsigned_v<T> && negative)) [[unlikely]]
-            return std::unexpected(error::number_out_of_range);
+        if (error const c = validity::check_number_range<T>(negative, argument).error_or(error{});
+            c != error{}) [[unlikely]]
+            return std::unexpected(c);
         T const magnitude = static_cast<T>(argument);
         return static_cast<T>(negative ? ~magnitude : magnitude);
     } else if constexpr (std::is_same_v<T, double>) {
@@ -369,8 +369,9 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
     } else if constexpr (std::is_same_v<T, typed_array>) {
         if (h.major != major_type::tag) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        if (auto const r = validity::typed_array_check(h.argument, 0); !r) [[unlikely]]
-            return std::unexpected(r.error());
+        if (error const r = validity::typed_array_check(h.argument, 0).error_or(error{}); r != error{})
+            [[unlikely]]
+            return std::unexpected(r);
         auto const content = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
         if (!content) [[unlikely]]
             return std::unexpected(content.error());
@@ -378,13 +379,15 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
         auto const r = d.head_decode();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
-        if (r->major != major_type::byte_string) [[unlikely]]
-            return std::unexpected(error::inadmissible_type_for_tag_content);
+        if (error const c = validity::check_tag_content(h.argument, r->major).error_or(error{}); c != error{})
+            [[unlikely]]
+            return std::unexpected(c);
         auto const bytes = d.byte_string_decode(r->argument);
         if (!bytes) [[unlikely]]
             return std::unexpected(bytes.error());
-        if (auto const c = validity::typed_array_check(h.argument, bytes->size()); !c) [[unlikely]]
-            return std::unexpected(c.error());
+        if (error const c = validity::typed_array_check(h.argument, bytes->size()).error_or(error{});
+            c != error{}) [[unlikely]]
+            return std::unexpected(c);
         return owning_ref<T>(source->owner, typed_array{h.argument, std::as_bytes(std::span(*bytes))});
     } else {
         if (h.major != major_type::byte_string) [[unlikely]]
@@ -428,9 +431,9 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
     auto const h = heads::raw_head_read(top_level.encoded, at);
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    if (h->info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
-        return std::unexpected(h->major >= major_type::byte_string && h->major <= major_type::map ? error::indefinite_length
-                                                                                                 : error::syntax_error);
+    if (error const r = validity::check_definite_length(h->major, h->info).error_or(error{}); r != error{})
+        [[unlikely]]
+        return std::unexpected(r);
     if (h->major == major_type::tag && h->argument == std::to_underlying(heads::tag_number::shareable)) {
         top_level.mark(heads::decoder{std::string_view(std::span(top_level.encoded).subspan(h->at))});
         return item_decode<DepthMax>(top_level, h->at, depth + 1);
@@ -514,8 +517,9 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
             node->content = std::bit_cast<double>(h->argument);
             break;
         default:
-            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+                r != error{}) [[unlikely]]
+                return std::unexpected(r);
             node->content = std::monostate{};
             break;
         }
@@ -529,6 +533,8 @@ template <std::size_t DepthMax, class Self>
              std::is_lvalue_reference_v<Self>)
 std::expected<std::reference_wrapper<item const>, error> lazy::decode(this Self &&self)
 {
+    validity::throw_logic_error_if_null(self.top_level,
+                                        "cbor::lazy::decode: the lazy holds no top-level item");
     auto const built = value_sharing::item_decode<DepthMax>(*self.top_level, self.offset, 0);
     if (!built) [[unlikely]]
         return std::unexpected(built.error());
@@ -539,6 +545,7 @@ template <std::size_t DepthMax, class Binding>
     requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {
+    validity::throw_logic_error_if_null(l.top_level, "cbor::lazy_decode: the lazy holds no top-level item");
     decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size())};
     decoding::value_decoder<Binding> v{
         {std::string_view(std::span(l.top_level->encoded).subspan(l.offset))}, binding, decoding::marks<Binding>(l.top_level->sharedrefs.size()), &before};

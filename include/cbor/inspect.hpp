@@ -396,11 +396,15 @@ class diagnostic_notation
             if (v < 0 || v >= base)
                 break;
             ++digits;
-            if (mantissa > (std::numeric_limits<std::uint64_t>::max() - static_cast<std::uint64_t>(v)) / static_cast<std::uint64_t>(base)) {
+            auto const next = validity::checked_mul(mantissa, static_cast<std::uint64_t>(base))
+                                  .and_then([v](std::uint64_t const m) {
+                                      return validity::checked_add(m, static_cast<std::uint64_t>(v));
+                                  });
+            if (!next) {
                 overflow = true;
                 continue;
             }
-            mantissa = mantissa * static_cast<std::uint64_t>(base) + static_cast<std::uint64_t>(v);
+            mantissa = *next;
             if (fraction)
                 --exponent;
         }
@@ -643,9 +647,12 @@ class diagnostic_notation
                 return std::unexpected(error::invalid_path);
             std::uint64_t number = 0;
             for (char const d : std::span(text).subspan(at, digits_end - at)) {
-                if (number > (std::numeric_limits<std::uint64_t>::max() - static_cast<std::uint64_t>(d - '0')) / 10) [[unlikely]]
+                auto const next = validity::checked_mul(number, 10).and_then([d](std::uint64_t const m) {
+                    return validity::checked_add(m, static_cast<std::uint64_t>(d - '0'));
+                });
+                if (!next) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                number = number * 10 + static_cast<std::uint64_t>(d - '0');
+                number = *next;
             }
             if (auto const r = head_append(out, major_type::tag, number, indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -674,8 +681,6 @@ class diagnostic_notation
         switch (h->major) {
         case major_type::unsigned_integer:
         case major_type::negative_integer:
-            if (indefinite) [[unlikely]]
-                return std::unexpected(error::syntax_error);
             if (auto const r = head_append(out, h->major, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
@@ -694,8 +699,11 @@ class diagnostic_notation
                     auto const chunk = heads::raw_head_read(encoded, next);
                     if (!chunk) [[unlikely]]
                         return std::unexpected(chunk.error());
-                    if (chunk->major != h->major || chunk->info == std::to_underlying(heads::additional_information::indefinite_length) ||
-                        encoded.size() - chunk->at < chunk->argument) [[unlikely]]
+                    if (error const c =
+                            validity::check_chunk(h->major, chunk->major, chunk->info).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::unexpected(c);
+                    if (encoded.size() - chunk->at < chunk->argument) [[unlikely]]
                         return std::unexpected(error::syntax_error);
                     content += std::string_view(std::span(encoded).subspan(chunk->at, static_cast<std::size_t>(chunk->argument)));
                     next = chunk->at + static_cast<std::size_t>(chunk->argument);
@@ -739,8 +747,6 @@ class diagnostic_notation
             return next;
         }
         case major_type::tag:
-            if (indefinite) [[unlikely]]
-                return std::unexpected(error::syntax_error);
             if (auto const r = head_append(out, major_type::tag, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return canonical_append(out, {encoded, next}, {n.depth + 1, n.depth_max});
@@ -750,8 +756,9 @@ class diagnostic_notation
         constexpr std::uint8_t half = std::to_underlying(heads::simple_float_information::half_precision_float);
         constexpr std::uint8_t twice = std::to_underlying(heads::simple_float_information::double_precision_float);
         if (h->info < half) {
-            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+                r != error{}) [[unlikely]]
+                return std::unexpected(r);
             if (auto const r = head_append(out, major_type::simple_float, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
@@ -898,11 +905,11 @@ class diagnostic_notation
         auto const initial = static_cast<std::uint8_t>(d.encoded.front());
         auto const major = static_cast<major_type>(initial >> 5);
         std::uint8_t const info = initial & 0x1f;
+        if (error const r = validity::check_additional_information(major, info).error_or(error{});
+            r != error{}) [[unlikely]]
+            return std::unexpected(r);
         if (info != std::to_underlying(heads::additional_information::indefinite_length))
             return d.head_decode().transform([](heads::head const h) { return diagnostic_head{h.major, h.info, h.argument}; });
-        if (major == major_type::unsigned_integer || major == major_type::negative_integer || major == major_type::tag)
-            [[unlikely]]
-            return std::unexpected(error::syntax_error);
         d.encoded.remove_prefix(1);
         return diagnostic_head{major, info, 0};
     }
@@ -952,10 +959,14 @@ class diagnostic_notation
             for (bool first = true; !break_found(d); first = false) {
                 if (!first)
                     out += ", ";
-                if (d.encoded.empty() || static_cast<major_type>(static_cast<std::uint8_t>(d.encoded.front()) >> 5) != h->major ||
-                    (static_cast<std::uint8_t>(d.encoded.front()) & 0x1f) == std::to_underlying(heads::additional_information::indefinite_length))
-                    [[unlikely]]
-                    return std::unexpected(d.encoded.empty() ? error::too_little_data : error::syntax_error);
+                if (d.encoded.empty()) [[unlikely]]
+                    return std::unexpected(error::too_little_data);
+                auto const initial = static_cast<std::uint8_t>(d.encoded.front());
+                if (error const c =
+                        validity::check_chunk(h->major, static_cast<major_type>(initial >> 5), initial & 0x1f)
+                            .error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
                 if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
                     return r;
             }
@@ -1007,8 +1018,9 @@ class diagnostic_notation
             out += "undefined";
             return {};
         case std::to_underlying(heads::simple_float_information::simple_value_follows):
-            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+                r != error{}) [[unlikely]]
+                return std::unexpected(r);
             out += "simple(" + decimal_of(h->argument) + ")";
             return {};
         case std::to_underlying(heads::simple_float_information::half_precision_float):

@@ -693,8 +693,9 @@ class jsonpath
                 auto const r = d.head_decode();
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (r->major != major_type::byte_string) [[unlikely]]
-                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                if (error const content = validity::check_tag_content(h.argument, r->major).error_or(error{});
+                    content != error{}) [[unlikely]]
+                    return std::unexpected(content);
                 auto const embedded = d.byte_string_decode(r->argument);
                 if (!embedded) [[unlikely]]
                     return std::unexpected(embedded.error());
@@ -705,13 +706,10 @@ class jsonpath
             selector const &each = v.selectors[v.segments[top.segment_at + step].selector_at];
             ++step;
             if (each.kind == selector::kind::index && h.major == major_type::array) {
-                std::int64_t const size = h.argument > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
-                                              ? std::numeric_limits<std::int64_t>::max()
-                                              : static_cast<std::int64_t>(h.argument);
-                std::int64_t const position = each.index < 0 ? each.index + size : each.index;
-                if (position < 0 || position >= size) [[unlikely]]
-                    return std::unexpected(error::index_out_of_bounds);
-                for (std::int64_t i = 0; i < position; ++i)
+                auto const position = validity::check_index(each.index, h.argument);
+                if (!position) [[unlikely]]
+                    return std::unexpected(position.error());
+                for (std::uint64_t i = 0; i < *position; ++i)
                     if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
                         return std::unexpected(r.error());
                 continue;
@@ -785,20 +783,24 @@ class jsonpath
                 auto const r = d.head_decode();
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (r->major != major_type::byte_string) [[unlikely]]
-                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                if (error const c = validity::check_tag_content(h.argument, r->major).error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
                 auto const bytes = d.byte_string_decode(r->argument);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
                 std::string_view const magnitude = heads::magnitude_without_leading_zeros(*bytes);
-                if (magnitude.size() > sizeof(std::uint64_t)) [[unlikely]]
-                    return std::unexpected(error::number_out_of_range);
+                if (error const c = validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))
+                                        .error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
                 argument = heads::magnitude_value(magnitude);
             } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
                 return std::unexpected(error::incorrect_type);
             }
-            if (!std::in_range<T>(argument) || (std::is_unsigned_v<T> && negative)) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
+            if (error const c = validity::check_number_range<T>(negative, argument).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
             T const magnitude = static_cast<T>(argument);
             return static_cast<T>(negative ? ~magnitude : magnitude);
         } else if constexpr (std::is_same_v<T, double>) {
@@ -830,8 +832,9 @@ class jsonpath
         } else if constexpr (std::is_same_v<T, typed_array>) {
             if (h.major != major_type::tag) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (auto const r = validity::typed_array_check(h.argument, 0); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (error const r = validity::typed_array_check(h.argument, 0).error_or(error{}); r != error{})
+                [[unlikely]]
+                return std::unexpected(r);
             for (;;) {
                 heads::decoder const before = d;
                 auto const t = d.head_decode();
@@ -847,13 +850,15 @@ class jsonpath
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (r->major != major_type::byte_string) [[unlikely]]
-                return std::unexpected(error::inadmissible_type_for_tag_content);
+            if (error const c = validity::check_tag_content(h.argument, r->major).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
             auto const bytes = d.byte_string_decode(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            if (auto const c = validity::typed_array_check(h.argument, bytes->size()); !c) [[unlikely]]
-                return std::unexpected(c.error());
+            if (error const c = validity::typed_array_check(h.argument, bytes->size()).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
             return typed_array{h.argument, std::as_bytes(std::span(*bytes))};
         } else {
             if (h.major != major_type::byte_string) [[unlikely]]
@@ -987,8 +992,9 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::top_level_item &to
     auto const l = heads::raw_head_read(literal, cursor.at);
     if (!l) [[unlikely]]
         return std::unexpected(l.error());
-    if (h->info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
-        return std::unexpected(error::indefinite_length);
+    if (error const c = validity::check_definite_length(h->major, h->info).error_or(error{}); c != error{})
+        [[unlikely]]
+        return std::unexpected(c);
     if (h->major != l->major)
         return false;
     switch (h->major) {
@@ -1130,7 +1136,6 @@ std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::string_view
     return std::unexpected(error::key_not_found);
 }
 
-
 template <std::size_t DepthMax>
 std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b, std::size_t const depth)
 {
@@ -1163,9 +1168,6 @@ std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b, s
         return number(h) == number(k);
     if (h.major != k.major || floating(h) || floating(k))
         return false;
-    if (h.info == std::to_underlying(heads::additional_information::indefinite_length) ||
-        k.info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
-        return std::unexpected(error::indefinite_length);
     std::size_t const x_content = x->source->encoded.size() - x->d.encoded.size();
     std::size_t const y_content = y->source->encoded.size() - y->d.encoded.size();
     switch (h.major) {
@@ -1288,9 +1290,6 @@ std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const &b)
         return number(h) < number(k);
     if (h.major != major_type::text_string || k.major != major_type::text_string)
         return false;
-    if (h.info == std::to_underlying(heads::additional_information::indefinite_length) ||
-        k.info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
-        return std::unexpected(error::indefinite_length);
     heads::decoder d = x->d;
     heads::decoder e = y->d;
     auto const s = d.byte_string_decode(h.argument);
@@ -1344,15 +1343,10 @@ std::expected<std::optional<lazy>, error> jsonpath::comparable_value(query_view 
         auto const found = value_sharing::container_resolve((*argument)->top_level, (*argument)->offset);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
-        if (found->h.major == major_type::array || found->h.major == major_type::map) {
-            if (found->h.info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
-                return std::unexpected(error::indefinite_length);
+        if (found->h.major == major_type::array || found->h.major == major_type::map)
             return unsigned_integer(found->h.argument);
-        }
         if (found->h.major != major_type::text_string)
             return std::nullopt;
-        if (found->h.info == std::to_underlying(heads::additional_information::indefinite_length)) [[unlikely]]
-            return std::unexpected(error::indefinite_length);
         heads::decoder d = found->d;
         auto const s = d.byte_string_decode(found->h.argument);
         if (!s) [[unlikely]]

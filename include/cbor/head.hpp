@@ -18,14 +18,6 @@
 #include "error.hpp"
 #include "validity.hpp"
 
-#ifdef _MSC_VER
-#define CBOR_ALWAYS_INLINE [[msvc::forceinline]]
-#define CBOR_ASSUME(condition) __assume(condition)
-#else
-#define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
-#define CBOR_ASSUME(condition) [[assume(condition)]]
-#endif
-
 namespace cbor
 {
 
@@ -33,17 +25,6 @@ namespace cbor
 __extension__ typedef __int128 int128;
 __extension__ typedef unsigned __int128 uint128;
 #endif
-
-enum class major_type : std::uint8_t {
-    unsigned_integer,
-    negative_integer,
-    byte_string,
-    text_string,
-    array,
-    map,
-    tag,
-    simple_float
-};
 
 enum class simple_value : std::uint8_t { false_value = 20, true_value, null, undefined };
 
@@ -57,13 +38,7 @@ std::expected<std::string, error> inspect(std::string_view encoded);
 
 class heads
 {
-    enum class additional_information : std::uint8_t {
-        one_byte_argument = 24,
-        two_byte_argument,
-        four_byte_argument,
-        eight_byte_argument,
-        indefinite_length = 31
-    };
+    using additional_information = validity::additional_information;
 
     using tag_number = validity::tag_number;
 
@@ -252,11 +227,9 @@ class heads
                 encoded.remove_prefix(1);
                 return head{major, info, info};
             }
-            if (info == std::to_underlying(additional_information::indefinite_length) &&
-                major >= major_type::byte_string && major <= major_type::map) [[unlikely]]
-                return std::unexpected(error::indefinite_length);
-            if (info > std::to_underlying(additional_information::eight_byte_argument)) [[unlikely]]
-                return std::unexpected(error::syntax_error);
+            if (error const r = validity::check_definite_length(major, info).error_or(error{}); r != error{})
+                [[unlikely]]
+                return std::unexpected(r);
             static_assert(argument_size(std::to_underlying(additional_information::two_byte_argument)) >= sizeof(std::uint16_t),
                           "A two-byte argument must cover the bytes of one std::uint16_t.");
             static_assert(argument_size(std::to_underlying(additional_information::four_byte_argument)) >= sizeof(std::uint32_t),
@@ -459,18 +432,21 @@ class heads
         std::size_t at;
     };
 
-    static constexpr std::expected<raw_head, error> raw_head_read(std::string_view const encoded, std::size_t const at)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<raw_head, error>
+    raw_head_read(std::string_view const encoded, std::size_t const at)
     {
         if (at >= encoded.size()) [[unlikely]]
             return std::unexpected(error::too_little_data);
         auto const initial = static_cast<std::uint8_t>(encoded[at]);
         auto const major = static_cast<major_type>(initial >> 5);
         std::uint8_t const info = initial & 0x1f;
-        if (info < std::to_underlying(additional_information::one_byte_argument) ||
-            info == std::to_underlying(additional_information::indefinite_length))
+        if (info < std::to_underlying(additional_information::one_byte_argument))
             return raw_head{major, info, info, at + 1};
-        if (info > std::to_underlying(additional_information::eight_byte_argument)) [[unlikely]]
-            return std::unexpected(error::syntax_error);
+        if (error const r = validity::check_additional_information(major, info).error_or(error{});
+            r != error{}) [[unlikely]]
+            return std::unexpected(r);
+        if (info == std::to_underlying(additional_information::indefinite_length))
+            return raw_head{major, info, info, at + 1};
         std::size_t const size = argument_size(info);
         if (encoded.size() - at - 1 < size) [[unlikely]]
             return std::unexpected(error::too_little_data);

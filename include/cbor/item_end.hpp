@@ -72,9 +72,8 @@ class well_formedness
                     } else if (major == major_type::array) {
                         left[++level] = argument;
                     } else if (major == major_type::map) {
-                        left[++level] = argument > std::numeric_limits<std::uint64_t>::max() / 2
-                                               ? std::numeric_limits<std::uint64_t>::max()
-                                               : argument * 2;
+                        left[++level] = validity::checked_mul(argument, 2)
+                                            .value_or(std::numeric_limits<std::uint64_t>::max());
                     }
                     continue;
                 }
@@ -92,9 +91,8 @@ class well_formedness
                 left[++level] = h->argument;
                 break;
             case major_type::map:
-                left[++level] = h->argument > std::numeric_limits<std::uint64_t>::max() / 2
-                                       ? std::numeric_limits<std::uint64_t>::max()
-                                       : h->argument * 2;
+                left[++level] =
+                    validity::checked_mul(h->argument, 2).value_or(std::numeric_limits<std::uint64_t>::max());
                 break;
             case major_type::tag:
                 if (h->argument == std::to_underlying(heads::tag_number::shareable))
@@ -102,8 +100,9 @@ class well_formedness
                 left[++level] = 1;
                 break;
             case major_type::simple_float:
-                if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
-                    return std::unexpected(r.error());
+                if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+                    r != error{}) [[unlikely]]
+                    return std::unexpected(r);
                 break;
             default:
                 break;

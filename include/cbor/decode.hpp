@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <limits>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -146,8 +145,9 @@ class decoding
                     auto const r = d.head_decode();
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (r->major != major_type::byte_string) [[unlikely]]
-                        return std::unexpected(error::inadmissible_type_for_tag_content);
+                    if (error const c = validity::check_tag_content(h->argument, r->major).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::unexpected(c);
                     auto const bytes = d.byte_string_decode(r->argument);
                     if (!bytes) [[unlikely]]
                         return std::unexpected(bytes.error());
@@ -165,13 +165,13 @@ class decoding
                     auto const r = d.head_decode();
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (r->major != major_type::unsigned_integer) [[unlikely]]
-                        return std::unexpected(error::inadmissible_type_for_tag_content);
-                    if (r->argument > std::numeric_limits<std::size_t>::max()) [[unlikely]]
-                        return std::unexpected(error::sharedref_index_out_of_range);
-                    std::size_t const index = static_cast<std::size_t>(r->argument);
-                    if (index >= shared.size()) [[unlikely]]
-                        return std::unexpected(error::sharedref_index_not_marked);
+                    if (error const c = validity::check_tag_content(h->argument, r->major).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::unexpected(c);
+                    auto const checked = validity::check_sharedref_index(r->argument, shared.size());
+                    if (!checked) [[unlikely]]
+                        return std::unexpected(checked.error());
+                    std::size_t const index = *checked;
                     if (!shared[index] && before && !before->evaluating[index] &&
                         before->top_level.sharedrefs[index].offset < before->top_level.encoded.size() - d.encoded.size()) {
                         std::string_view const rest = d.encoded;
@@ -208,8 +208,9 @@ class decoding
             default:
                 switch (static_cast<heads::simple_float_information>(h->info)) {
                 case heads::simple_float_information::simple_value_follows:
-                    if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
-                        return std::unexpected(r.error());
+                    if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+                        r != error{}) [[unlikely]]
+                        return std::unexpected(r);
                     return binding.simple_value_decode(static_cast<std::uint8_t>(h->argument));
                 case heads::simple_float_information::half_precision_float:
                 case heads::simple_float_information::single_precision_float:

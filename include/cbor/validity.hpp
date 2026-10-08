@@ -9,6 +9,7 @@
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <type_traits>
 #if defined(__cpp_exceptions)
 #include <stdexcept>
 #endif
@@ -21,6 +22,14 @@
 #include "binding.hpp"
 #include "error.hpp"
 
+#ifdef _MSC_VER
+#define CBOR_ALWAYS_INLINE [[msvc::forceinline]]
+#define CBOR_ASSUME(condition) __assume(condition)
+#else
+#define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
+#define CBOR_ASSUME(condition) [[assume(condition)]]
+#endif
+
 namespace cbor
 {
 
@@ -28,8 +37,27 @@ enum class pass;
 
 struct lazy;
 
+enum class major_type : std::uint8_t {
+    unsigned_integer,
+    negative_integer,
+    byte_string,
+    text_string,
+    array,
+    map,
+    tag,
+    simple_float
+};
+
 class validity
 {
+    enum class additional_information : std::uint8_t {
+        one_byte_argument = 24,
+        two_byte_argument,
+        four_byte_argument,
+        eight_byte_argument,
+        indefinite_length = 31
+    };
+
     enum class simple_float_information : std::uint8_t {
         simple_value_follows = 24,
         half_precision_float,
@@ -96,34 +124,56 @@ public:
             throw_logic_error(what);
     }
 
-    static constexpr std::expected<std::size_t, std::errc> checked_mul(std::size_t const a, std::size_t const b)
+    template <std::unsigned_integral T>
+        requires(sizeof(T) >= sizeof(unsigned int))
+    static constexpr std::expected<T, std::errc> checked_mul(T const a, std::type_identity_t<T> const b)
     {
-        std::size_t product;
-        if consteval {
-            if (a != 0 && b > std::numeric_limits<std::size_t>::max() / a) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-            product = a * b;
-            return product;
-        } else {
 #ifdef __STDC_VERSION_STDCKDINT_H__
+        if !consteval {
+            T product;
             if (ckd_mul(&product, a, b)) [[unlikely]]
                 return std::unexpected(std::errc::value_too_large);
-#elif defined(__has_builtin)
-#if __has_builtin(__builtin_mul_overflow)
-            if (__builtin_mul_overflow(a, b, &product)) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-#else
-            if (a != 0 && b > std::numeric_limits<std::size_t>::max() / a) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-            product = a * b;
-#endif
-#else
-            if (a != 0 && b > std::numeric_limits<std::size_t>::max() / a) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-            product = a * b;
-#endif
             return product;
         }
+#elif defined(__has_builtin)
+#if __has_builtin(__builtin_mul_overflow)
+        if !consteval {
+            T product;
+            if (__builtin_mul_overflow(a, b, &product)) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+            return product;
+        }
+#endif
+#endif
+        if (a != 0 && b > std::numeric_limits<T>::max() / a) [[unlikely]]
+            return std::unexpected(std::errc::value_too_large);
+        return a * b;
+    }
+
+    template <std::unsigned_integral T>
+        requires(sizeof(T) >= sizeof(unsigned int))
+    static constexpr std::expected<T, std::errc> checked_add(T const a, std::type_identity_t<T> const b)
+    {
+#ifdef __STDC_VERSION_STDCKDINT_H__
+        if !consteval {
+            T sum;
+            if (ckd_add(&sum, a, b)) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+            return sum;
+        }
+#elif defined(__has_builtin)
+#if __has_builtin(__builtin_add_overflow)
+        if !consteval {
+            T sum;
+            if (__builtin_add_overflow(a, b, &sum)) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+            return sum;
+        }
+#endif
+#endif
+        if (b > std::numeric_limits<T>::max() - a) [[unlikely]]
+            return std::unexpected(std::errc::value_too_large);
+        return a + b;
     }
 
     template <std::ranges::forward_range R, class Projection = std::identity>
@@ -143,38 +193,40 @@ public:
         return error::io_error;
     }
 
-private:
-    static constexpr std::expected<std::size_t, std::errc> checked_add(std::size_t const a, std::size_t const b)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_additional_information(major_type const major, std::uint8_t const info)
     {
-        std::size_t sum;
-        if consteval {
-            sum = a + b;
-            if (sum < a) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-            return sum;
-        } else {
-#ifdef __STDC_VERSION_STDCKDINT_H__
-            if (ckd_add(&sum, a, b)) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-#elif defined(__has_builtin)
-#if __has_builtin(__builtin_add_overflow)
-            if (__builtin_add_overflow(a, b, &sum)) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-#else
-            sum = a + b;
-            if (sum < a) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-#endif
-#else
-            sum = a + b;
-            if (sum < a) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-#endif
-            return sum;
-        }
+        if (info <= std::to_underlying(additional_information::eight_byte_argument)) [[likely]]
+            return {};
+        if (info == std::to_underlying(additional_information::indefinite_length) &&
+            major != major_type::unsigned_integer && major != major_type::negative_integer &&
+            major != major_type::tag)
+            return {};
+        return std::unexpected(error::syntax_error);
     }
 
-    static constexpr std::expected<void, error> check_simple_value(std::uint8_t const info, std::uint64_t const argument)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_definite_length(major_type const major, std::uint8_t const info)
+    {
+        if (info == std::to_underlying(additional_information::indefinite_length) &&
+            major >= major_type::byte_string && major <= major_type::map) [[unlikely]]
+            return std::unexpected(error::indefinite_length);
+        if (info > std::to_underlying(additional_information::eight_byte_argument)) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_chunk(major_type const string, major_type const major, std::uint8_t const info)
+    {
+        if (major != string || info == std::to_underlying(additional_information::indefinite_length))
+            [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_simple_value(std::uint8_t const info, std::uint64_t const argument)
     {
         if (info == std::to_underlying(simple_float_information::simple_value_follows) &&
             argument < simple_value_one_byte_min) [[unlikely]]
@@ -182,16 +234,102 @@ private:
         return {};
     }
 
-    static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag, std::size_t const size)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_tag_content(std::uint64_t const tag,
+                                                                                     major_type const content)
+    {
+        major_type admitted;
+        switch (tag) {
+        case std::to_underlying(tag_number::unsigned_bignum):
+        case std::to_underlying(tag_number::negative_bignum):
+        case std::to_underlying(tag_number::encoded_cbor_data_item):
+            admitted = major_type::byte_string;
+            break;
+        case std::to_underlying(tag_number::sharedref):
+            admitted = major_type::unsigned_integer;
+            break;
+        default:
+            if (tag < std::to_underlying(tag_number::typed_array_first) ||
+                tag > std::to_underlying(tag_number::typed_array_last))
+                return {};
+            admitted = major_type::byte_string;
+            break;
+        }
+        if (content != admitted) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::size_t typed_array_element_size(std::uint64_t const tag)
+    {
+        std::uint64_t const f = tag >> 4 & 1;
+        std::uint64_t const ll = tag & 3;
+        return std::size_t{1} << (f + ll);
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag,
+                                                                                     std::size_t const size)
     {
         if (tag < std::to_underlying(tag_number::typed_array_first) ||
             tag > std::to_underlying(tag_number::typed_array_last) ||
             tag == std::to_underlying(tag_number::typed_array_reserved)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        std::uint64_t const f = tag >> 4 & 1;
-        std::uint64_t const ll = tag & 3;
-        if (size % (std::uint64_t{1} << (f + ll)) != 0) [[unlikely]]
+        if (size % typed_array_element_size(tag) != 0) [[unlikely]]
             return std::unexpected(error::inadmissible_type_for_tag_content);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<std::size_t, error>
+    check_sharedref_index(std::uint64_t const argument, std::size_t const marked)
+    {
+        if (!std::in_range<std::size_t>(argument)) [[unlikely]]
+            return std::unexpected(error::sharedref_index_out_of_range);
+        if (argument >= marked) [[unlikely]]
+            return std::unexpected(error::sharedref_index_not_marked);
+        return static_cast<std::size_t>(argument);
+    }
+
+    template <std::integral I>
+    CBOR_ALWAYS_INLINE static constexpr std::expected<std::uint64_t, error>
+    check_index(I const index, std::uint64_t const length)
+    {
+        if constexpr (std::is_signed_v<I>) {
+            if (index < 0) {
+                std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(index);
+                if (back > length) [[unlikely]]
+                    return std::unexpected(error::index_out_of_bounds);
+                return length - back;
+            }
+        }
+        if (static_cast<std::uint64_t>(index) >= length) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return static_cast<std::uint64_t>(index);
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_count(std::size_t const count,
+                                                                               std::size_t const size)
+    {
+        if (count > size) [[unlikely]]
+            return std::unexpected(error::index_out_of_bounds);
+        return {};
+    }
+
+    template <class T, class M>
+        requires(std::numeric_limits<T>::is_integer && std::numeric_limits<M>::is_integer &&
+                 !std::numeric_limits<M>::is_signed && sizeof(T) <= sizeof(M))
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_number_range(bool const negative,
+                                                                                      M const magnitude)
+    {
+        if ((!std::numeric_limits<T>::is_signed && negative) ||
+            magnitude > static_cast<M>(std::numeric_limits<T>::max())) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_magnitude_size(std::size_t const size, std::size_t const width)
+    {
+        if (size > width) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
         return {};
     }
 
