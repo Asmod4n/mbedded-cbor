@@ -196,17 +196,12 @@ class decoding
                         return std::unexpected(error::sharedref_not_complete);
                     return *shared[index];
                 }
-                heads::decoder content_decoder = d;
-                auto c = content_decoder.head_decode();
-                while (c && c->major == major_type::tag &&
-                       c->argument == std::to_underlying(rfc8949::tag_number::shareable))
-                    c = content_decoder.head_decode();
-                if (!c) [[unlikely]]
-                    return std::unexpected(c.error());
-                if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
-                    if (error const e = validity::check_tag_content(h->argument, c->major, c->info).error_or(error{});
-                        e != error{}) [[unlikely]]
-                        return std::unexpected(e);
+                if (error const e = validity::check_tag_content(h->argument, before->top_level.encoded,
+                                                                before->top_level.encoded.size() - d.encoded.size(),
+                                                                before->top_level.sharedrefs, &lazy::offset)
+                                        .error_or(error{});
+                    e != error{}) [[unlikely]]
+                    return std::unexpected(e);
                 if constexpr (requires { binding.tag_begin(h->argument); }) {
                     std::optional<typename Binding::value> object = binding.tag_begin(h->argument);
                     if (object) {

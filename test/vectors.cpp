@@ -655,3 +655,43 @@ TEST_CASE("tags 0 and 1: decode, lazy and inspect refuse every content that RFC 
             }
         }
 }
+
+// A content of tag 0 or 1 may be a tag 28 or a tag 29 (RFC 8949 3.4.1, 3.4.2; value-sharing). The check of the
+// content type must read the value that a tag 29 names. A fuzzer found [28(0), 0(29(0))] accepted by decode,
+// and the encoder wrote 0(0), which no reader accepts. decode, lazy and inspect give the same answer for each.
+TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the value it names")
+{
+    struct shared_content {
+        std::string_view encoded;
+        error refused;
+    };
+    std::array<shared_content, 12> const contents{{
+        {"\x82\xd8\x1c\x00\xc0\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
+        {"\x82\xd8\x1c\x60\xc0\xd8\x1d\x00"sv, error{}},
+        {"\x82\xd8\x1c\x00\xc1\xd8\x1d\x00"sv, error{}},
+        {"\x82\xd8\x1c\x60\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
+        {"\xc1\xd8\x1c\x00"sv, error{}},
+        {"\xc0\xd8\x1c\x00"sv, error::inadmissible_type_for_tag_content},
+        {"\xc1\xd8\x1d\x00"sv, error::sharedref_index_not_marked},
+        {"\xd8\x1c\x81\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
+        {"\xd8\x1c\xd8\x1c\xc1\xd8\x1d\x01"sv, error::inadmissible_type_for_tag_content},
+        {"\x83\xd8\x1c\x00\xd8\x1c\xd8\x1d\x00\xc1\xd8\x1d\x01"sv, error{}},
+        {"\xd8\x1c\x82\x00\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
+        {"\xd8\x1c\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
+    }};
+    for (shared_content const &c : contents) {
+        CAPTURE(c.encoded);
+        auto const d = decoded<depth_limit>(c.encoded);
+        auto const l = lazy_value_of(c.encoded);
+        auto const text = cbor::inspect<depth_limit>(c.encoded);
+        if (c.refused == error{}) {
+            CHECK(d.has_value());
+            CHECK(l.has_value());
+            CHECK(text.has_value());
+        } else {
+            CHECK_EQ(d.error(), c.refused);
+            CHECK_EQ(l.error(), c.refused);
+            CHECK_EQ(text.error(), c.refused);
+        }
+    }
+}

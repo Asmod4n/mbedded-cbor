@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -11,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+using namespace std::literals;
 using cbor::error;
 using cbor::major_type;
 using cbor::validity;
@@ -336,8 +338,9 @@ TEST_CASE("validity: typed_array_check for the tags around 64 to 87 and the leng
 // tags 2 and 3 (RFC 8949 3.4.3), of tag 24 (RFC 8949 3.4.5.1) and of tags 64 to 87 (RFC 8746 2) is a byte
 // string; the content of tag 29 is an unsigned integer (value-sharing). The content of tag 0 is a text string
 // (RFC 8949 3.4.1). The content of tag 1 is an unsigned or negative integer, or a float with additional
-// information 25, 26 or 27 (RFC 8949 3.4.2). Every other tag takes every major type. Each additional
-// information 0 to 31 is checked, because tag 1 admits major type 7 only with three of them.
+// information 25, 26 or 27 (RFC 8949 3.4.2). Every other tag takes every major type. This test exists
+// so that no content that these sections forbid passes a reader. Tag 1 admits major type 7 only with three
+// additional informations, so every additional information 0 to 31 is checked.
 TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113, every major type and additional information")
 {
     std::vector<std::uint64_t> tags;
@@ -483,4 +486,19 @@ TEST_CASE("validity: check_magnitude_size for every size up to one past the widt
             else
                 CHECK_EQ(r.error(), error::number_out_of_range);
         }
+}
+
+// The check of a tag content follows each tag 29 back to its mark. A reader that knows every mark of the
+// message, as lazy does, can name a mark at or after the reference, and the walk would not end. This test
+// exists so that such a reference ends the walk with sharedref_not_complete.
+TEST_CASE("validity: check_tag_content refuses a tag 29 that names a mark at or after it")
+{
+    std::vector<std::size_t> const self{1};
+    CHECK_EQ(validity::check_tag_content(1, "\xc1\xd8\x1d\x00"sv, 1, self, std::identity{}).error(),
+             error::sharedref_not_complete);
+    std::vector<std::size_t> const forward{4};
+    CHECK_EQ(validity::check_tag_content(1, "\xc1\xd8\x1d\x00\x05"sv, 1, forward, std::identity{}).error(),
+             error::sharedref_not_complete);
+    std::vector<std::size_t> const before{0};
+    CHECK(validity::check_tag_content(1, "\x05\xc1\xd8\x1d\x00"sv, 2, before, std::identity{}).has_value());
 }
