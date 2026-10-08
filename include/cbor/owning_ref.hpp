@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 namespace cbor
@@ -37,6 +38,23 @@ class owning_ref
     friend class jsonpath;
 
 public:
+    owning_ref(owning_ref const &) = default;
+    owning_ref &operator=(owning_ref const &) = default;
+
+    owning_ref(owning_ref &&o) noexcept(std::is_nothrow_move_constructible_v<T> &&
+                                        std::is_nothrow_default_constructible_v<T>)
+        : owner(std::move(o.owner)), value(std::exchange(o.value, T{}))
+    {
+    }
+
+    owning_ref &operator=(owning_ref &&o) noexcept(std::is_nothrow_move_assignable_v<T> &&
+                                                   std::is_nothrow_default_constructible_v<T>)
+    {
+        owner = std::move(o.owner);
+        value = std::exchange(o.value, T{});
+        return *this;
+    }
+
     T const &operator*() const &
     {
         return value;

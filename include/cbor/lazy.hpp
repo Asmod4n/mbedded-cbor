@@ -198,7 +198,7 @@ std::expected<lazy, error> decode(Encoded &&encoded)
 
 inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner, std::string_view const encoded)
 {
-    if (!owner) [[unlikely]]
+    if (owner.use_count() == 0) [[unlikely]]
         validity::throw_logic_error("cbor::lazy::from: the owner of the encoded data item is empty");
     return lazy{std::make_shared<value_sharing::top_level_item>(std::move(owner), encoded, std::vector<lazy>{}, 0), 0};
 }
