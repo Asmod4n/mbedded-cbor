@@ -31,7 +31,7 @@ namespace cbor
 enum class sharedrefs { off, on };
 
 template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
-    requires(DepthMax <= 1024)
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value);
 
 class encoding
@@ -127,7 +127,7 @@ class encoding
     friend class walker;
 
     template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
-        requires(DepthMax <= 1024)
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<void, error> encode(Binding &binding, Writer &&target,
                                                        typename Binding::value const &value);
 
@@ -650,7 +650,7 @@ class walker
     void simple(std::uint8_t const v)
     {
         if (v >= std::to_underlying(heads::simple_float_information::simple_value_follows) &&
-            v < heads::simple_value_one_byte_min) [[unlikely]] {
+            v < validity::simple_value_one_byte_min) [[unlikely]] {
             keep_error(error::reserved_simple_value);
             return;
         }
@@ -669,7 +669,7 @@ bool cycle_find(Binding &binding, typename Binding::value const &item,
     auto const identity = binding.value_identity(item);
     if (identity && std::ranges::find(path, *identity) != path.end())
         return true;
-    if (path.size() > DepthMax)
+    if (!validity::check_nesting_depth(path.size(), DepthMax)) [[unlikely]]
         return false;
     if (identity)
         path.push_back(*identity);
@@ -734,7 +734,7 @@ std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer, 
 }
 
 template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
-    requires(DepthMax <= 1024)
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value)
 {
     decltype(auto) message = encoding::message_of(target, 0);

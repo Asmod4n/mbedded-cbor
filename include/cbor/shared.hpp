@@ -64,7 +64,7 @@ class value_sharing
     friend struct lazy_entries;
 
     template <std::size_t DepthMax>
-        requires(DepthMax <= 1024)
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
 
     friend class decoding;
@@ -92,12 +92,12 @@ struct lazy {
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<lazy, error> from(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
-    template <std::size_t DepthMax = 128>
-        requires(DepthMax <= 1024)
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<lazy, error> at(std::string_view key) const;
 
-    template <std::size_t DepthMax = 128>
-        requires(DepthMax <= 1024)
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<lazy, error> at(std::int64_t index) const;
 
     template <class T>
@@ -108,20 +108,20 @@ struct lazy {
                                    std::is_same_v<T, typed_array>,
                                owning_ref<T>, T>, error> get() const;
 
-    template <std::size_t DepthMax = 128>
-        requires(DepthMax <= 1024)
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<lazy_elements<DepthMax>, error> elements() const;
 
-    template <std::size_t DepthMax = 128>
-        requires(DepthMax <= 1024)
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<lazy_entries<DepthMax>, error> entries() const;
 
-    template <std::size_t DepthMax = 128>
-        requires(DepthMax <= 1024)
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<std::reference_wrapper<item const>, error> decode() const &;
 
-    template <std::size_t DepthMax = 128>
-        requires(DepthMax <= 1024)
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<std::reference_wrapper<item const>, error> decode() const && = delete;
 };
 
