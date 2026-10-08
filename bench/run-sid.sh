@@ -28,6 +28,9 @@ compile() {
 }
 
 mkdir -p "$build/bin" "$build/out"
+if [ -z "${RUN_ONLY:-}" ]; then
+	echo "${COMMIT:?the commit of the tree with its dirty mark: \$(git rev-parse HEAD), and -dirty when git status --porcelain is not empty}" > "$build/commit"
+fi
 [ -n "${RUN_ONLY:-}" ] && compilers=""
 running=0
 spawn() {

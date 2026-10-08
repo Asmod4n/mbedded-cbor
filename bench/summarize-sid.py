@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import statistics
 import subprocess
 import sys
@@ -70,6 +71,9 @@ for line in read(os.path.join(build, "out", "rounds")).splitlines():
     steal.append({"round": int(i), "wall_s": t1 - t0, "steal_ticks": st1 - st0,
                   "steal_percent_of_cpu_time": 100.0 * (st1 - st0) / max(1, tot1 - tot0)})
 
+commit = read(os.path.join(build, "commit"))
+if not re.fullmatch(r"[0-9a-f]{40}(-dirty)?", commit):
+    sys.exit(f"{build}/commit holds {commit!r}, not a commit with its dirty mark")
 failed = sorted(set(read(os.path.join(build, "out", "failed.txt")).split()))
 sample = sorted(glob.glob(os.path.join(build, "bin", "*")))
 packages = run("dpkg-query", "-W", "-f", "${Package} ${Version}\n", "g++-16", "clang-23", "libstdc++6", "libc6",
@@ -77,7 +81,7 @@ packages = run("dpkg-query", "-W", "-f", "${Package} ${Version}\n", "g++-16", "c
                "libmsgpack-cxx-dev")
 print(json.dumps({
     "time": stamp,
-    "commit": read(os.path.join(build, "commit")),
+    "commit": commit,
     "purpose": "mbedded-cbor runtime API against CBOR libraries that openSUSE Tumbleweed does not package, in Debian sid",
     "flags": flags,
     "pie": pie(flags),
