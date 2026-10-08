@@ -630,6 +630,23 @@ TEST_CASE("lazy: from and decode refuse a null or empty std::shared_ptr<std::str
     CHECK_THROWS_AS((void)cbor::decode<16>(holds_nothing), std::logic_error);
 }
 
+// cbor::lazy is an aggregate, so cbor::lazy{} holds no top-level item, and so does the lazy inside a cache
+// entry that was not built. Each member read through the null pointer before this test existed; each one now
+// refuses it as a wrong use.
+TEST_CASE("lazy: every member refuses a lazy that holds no top-level item")
+{
+    cbor::lazy const none{};
+    CHECK_THROWS_AS((void)none.at<16>("a"sv), std::logic_error);
+    CHECK_THROWS_AS((void)none.at<16>(std::int64_t{0}), std::logic_error);
+    CHECK_THROWS_AS((void)none.get<std::uint64_t>(), std::logic_error);
+    CHECK_THROWS_AS((void)none.get<cbor::typed_array>(), std::logic_error);
+    CHECK_THROWS_AS((void)none.elements<16>(), std::logic_error);
+    CHECK_THROWS_AS((void)none.entries<16>(), std::logic_error);
+    CHECK_THROWS_AS((void)none.decode<16>(), std::logic_error);
+    test_binding binding;
+    CHECK_THROWS_AS((void)cbor::lazy_decode<16>(binding, none), std::logic_error);
+}
+
 // A shared reference may stand for the content of a tag: the magnitude of a bignum, the bytes of a typed array.
 TEST_CASE("lazy: get follows a shared reference in the content of a tag")
 {

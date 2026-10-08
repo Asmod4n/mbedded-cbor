@@ -169,11 +169,15 @@ struct value_sharing::top_level_item {
         auto const n = d.head_decode();
         if (!n) [[unlikely]]
             return std::unexpected(n.error());
-        if (n->major != major_type::unsigned_integer) [[unlikely]]
-            return std::unexpected(error::inadmissible_type_for_tag_content);
-        if (n->argument >= sharedrefs.size()) [[unlikely]]
-            return std::unexpected(error::sharedref_index_not_marked);
-        lazy const &found = sharedrefs[static_cast<std::size_t>(n->argument)];
+        if (error const c =
+                validity::check_tag_content(std::to_underlying(heads::tag_number::sharedref), n->major)
+                    .error_or(error{});
+            c != error{}) [[unlikely]]
+            return std::unexpected(c);
+        auto const index = validity::check_sharedref_index(n->argument, sharedrefs.size());
+        if (!index) [[unlikely]]
+            return std::unexpected(index.error());
+        lazy const &found = sharedrefs[*index];
         if (found.offset >= item_at) [[unlikely]]
             return std::unexpected(error::sharedref_not_complete);
         return found;
@@ -197,7 +201,7 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level
         auto const h = heads::raw_head_read(top_level.encoded, at);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        if (h->major != major_type::tag || h->info == std::to_underlying(heads::additional_information::indefinite_length))
+        if (h->major != major_type::tag)
             return at;
         if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
             top_level.mark(heads::decoder{std::string_view(std::span(top_level.encoded).subspan(h->at))});
@@ -226,6 +230,7 @@ inline std::expected<item *, error> value_sharing::item_resolve(top_level_item &
 inline std::expected<value_sharing::resolved, error> value_sharing::container_resolve(std::shared_ptr<top_level_item> source,
                                                                                       std::size_t offset)
 {
+    validity::throw_logic_error_if_null(source, "cbor::lazy: the lazy holds no top-level item");
     for (;;) {
         auto const at = shared_resolve(*source, offset);
         if (!at) [[unlikely]]
@@ -239,8 +244,9 @@ inline std::expected<value_sharing::resolved, error> value_sharing::container_re
         auto const r = d.head_decode();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
-        if (r->major != major_type::byte_string) [[unlikely]]
-            return std::unexpected(error::inadmissible_type_for_tag_content);
+        if (error const c = validity::check_tag_content(h->argument, r->major).error_or(error{});
+            c != error{}) [[unlikely]]
+            return std::unexpected(c);
         auto const embedded = d.byte_string_decode(r->argument);
         if (!embedded) [[unlikely]]
             return std::unexpected(embedded.error());

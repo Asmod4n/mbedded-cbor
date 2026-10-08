@@ -83,22 +83,15 @@ class generic
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        if (h->major == major_type::unsigned_integer) {
-            if (!std::in_range<U>(h->argument)) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
-            out = static_cast<V>(static_cast<U>(h->argument));
-            return {};
-        }
-        if (h->major != major_type::negative_integer) [[unlikely]]
+        if (h->major != major_type::unsigned_integer && h->major != major_type::negative_integer) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        if constexpr (std::is_unsigned_v<U>) {
-            return std::unexpected(error::number_out_of_range);
-        } else {
-            if (h->argument > static_cast<std::uint64_t>(std::numeric_limits<U>::max())) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
-            out = static_cast<V>(static_cast<U>(-1 - static_cast<U>(h->argument)));
-            return {};
-        }
+        bool const negative = h->major == major_type::negative_integer;
+        if (error const c = validity::check_number_range<U>(negative, h->argument).error_or(error{});
+            c != error{}) [[unlikely]]
+            return std::unexpected(c);
+        U const magnitude = static_cast<U>(h->argument);
+        out = static_cast<V>(negative ? static_cast<U>(~magnitude) : magnitude);
+        return {};
     }
 
     template <class U>
@@ -160,29 +153,28 @@ class generic
             auto const b = d.head_decode();
             if (!b) [[unlikely]]
                 return std::unexpected(b.error());
-            if (b->major != major_type::byte_string) [[unlikely]]
-                return std::unexpected(error::inadmissible_type_for_tag_content);
+            if (error const c = validity::check_tag_content(h->argument, b->major).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
             auto const bytes = d.byte_string_decode(b->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             std::string_view const digits = heads::magnitude_without_leading_zeros(*bytes);
-            if (digits.size() > sizeof(uint128)) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
+            if (error const c =
+                    validity::check_magnitude_size(digits.size(), sizeof(uint128)).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
             magnitude = 0;
             for (char const c : digits)
                 magnitude = magnitude << 8 | static_cast<std::uint8_t>(c);
         } else if (h->major != major_type::unsigned_integer && !negative) [[unlikely]] {
             return std::unexpected(error::incorrect_type);
         }
-        if constexpr (std::same_as<U, uint128>) {
-            if (negative) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
-            out = magnitude;
-        } else {
-            if (magnitude > static_cast<uint128>(std::numeric_limits<int128>::max())) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
-            out = negative ? -1 - static_cast<int128>(magnitude) : static_cast<int128>(magnitude);
-        }
+        if (error const c = validity::check_number_range<U>(negative, magnitude).error_or(error{});
+            c != error{}) [[unlikely]]
+            return std::unexpected(c);
+        U const value = static_cast<U>(magnitude);
+        out = negative ? static_cast<U>(~value) : value;
         return {};
     }
 #endif
@@ -250,8 +242,9 @@ class generic
                 return std::unexpected(h.error());
             if (!head_accepted<U>(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+                r != error{}) [[unlikely]]
+                return std::unexpected(r);
             out = static_cast<simple_value>(h->argument);
             return {};
         } else if constexpr (packed::is_wide_integer<U>) {
@@ -353,10 +346,13 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::map) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
+            out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 typename U::key_type key{};
                 if (auto const r = generic_read<DepthMax>(d, key, depth + 1); !r) [[unlikely]]
                     return r;
+                if (out.contains(key)) [[unlikely]]
+                    return std::unexpected(error::duplicate_key);
                 typename U::mapped_type value{};
                 if (auto const r = generic_read<DepthMax>(d, value, depth + 1); !r) [[unlikely]]
                     return r;
@@ -446,8 +442,12 @@ class generic
             template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, count))) {
                 if (!matched && key_matches<U, i>(*k, text)) {
                     matched = true;
-                    found.set(i);
-                    r = generic_read<DepthMax>(d, out.[:members[i]:], depth + 1);
+                    if (found.test(i)) [[unlikely]] {
+                        r = std::unexpected(error::duplicate_key);
+                    } else {
+                        found.set(i);
+                        r = generic_read<DepthMax>(d, out.[:members[i]:], depth + 1);
+                    }
                 }
             }
             if (!matched) {

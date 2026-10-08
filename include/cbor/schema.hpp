@@ -24,7 +24,6 @@
 #include <vector>
 #ifdef __cpp_impl_reflection
 #include <meta>
-#include <stdckdint.h>
 #endif
 #if __has_include(<stdfloat>)
 #include <stdfloat>
@@ -492,14 +491,16 @@ class packed
 
         void bytes_add(std::size_t const n)
         {
-            overflow |= ckd_add(&bytes, bytes, n);
+            auto const sum = validity::checked_add(bytes, n);
+            overflow |= !sum;
+            bytes = sum.value_or(bytes);
         }
 
         void block_add(std::size_t const count, std::size_t const size)
         {
-            std::size_t block;
-            overflow |= ckd_mul(&block, count, size);
-            overflow |= ckd_add(&bytes, bytes, block);
+            auto const block = validity::checked_mul(count, size);
+            overflow |= !block;
+            bytes_add(block.value_or(0));
         }
 
         template <class E, class R>
@@ -713,7 +714,13 @@ class packed
                 std::copy(from.begin(), from.end(), std::as_writable_bytes(field.template last<n>()).begin());
             } else {
                 constexpr std::size_t head = heads::head_size(n);
-                static_assert(head + n * fixed_size<E, Root>() <= fixed_size<U, Root>(), "The elements must lie inside the field.");
+                static_assert(validity::checked_mul(n, fixed_size<E, Root>())
+                                      .and_then([](std::size_t const elements) {
+                                          return validity::checked_add(head, elements);
+                                      })
+                                      .value_or(std::numeric_limits<std::size_t>::max()) <=
+                                  fixed_size<U, Root>(),
+                              "The elements must lie inside the field.");
                 std::size_t at = head;
                 for (auto const &e : value) {
                     position = value_encode<Root, E, Exact>(out, field.subspan(at).template first<fixed_size<E, Root>()>(), e, position);
@@ -884,8 +891,8 @@ class packed
                                                                                   std::size_t const end, std::size_t const element)
     {
         if constexpr (is_typed_array_element<E>) {
-            static_assert(validity::typed_array_check(typed_array_tag<E>(), sizeof(E)).has_value(),
-                          "The tag of a typed array of E admits elements of sizeof(E) bytes.");
+            static_assert(validity::typed_array_element_size(typed_array_tag<E>()) == sizeof(E),
+                          "The elements of the typed array tag of E are sizeof(E) bytes.");
             if (end < item + typed_array_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             static constexpr std::array<char, 3> head{
@@ -936,7 +943,7 @@ class packed
     CBOR_ALWAYS_INLINE static std::expected<reference, error> item_read(std::string_view const encoded, cbor::directory const dir,
                                                                         std::size_t const j, std::size_t const element)
     {
-        if (j >= dir.count) [[unlikely]]
+        if (!validity::check_index(j, dir.count)) [[unlikely]]
             return std::unexpected(error::unpopulated_table_index);
         constexpr std::size_t fillers = shared_first_of<Root>() - 1 - packing_table_of<Root>().size();
         std::size_t const items_at = dir.at + sizeof(std::uint32_t) * dir.count + fillers;
@@ -1154,14 +1161,21 @@ class packed
                 constexpr std::size_t n = fixed_length<U>::value;
                 constexpr std::size_t head = heads::head_size(n);
                 static_assert(zero_initialized<Root, U>().size() >= head, "The zero-initialized encoding must hold the whole head.");
-                static_assert(head + n * fixed_size<E, Root>() <= fixed_size<U, Root>(), "The elements must lie inside the field.");
+                static_assert(validity::checked_mul(n, fixed_size<E, Root>())
+                                      .and_then([](std::size_t const elements) {
+                                          return validity::checked_add(head, elements);
+                                      })
+                                      .value_or(std::numeric_limits<std::size_t>::max()) <=
+                                  fixed_size<U, Root>(),
+                              "The elements must lie inside the field.");
                 std::span<char const, head> const expected{zero_initialized<Root, U>().data(), head};
                 if (!std::ranges::equal(field.template first<head>(), expected)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
                 if constexpr (close == At + 1) {
                     std::size_t const i = std::get<index_slot<Path, At>()>(indexes);
-                    if (i >= n) [[unlikely]]
-                        return std::unexpected(error::index_out_of_bounds);
+                    if (error const c = validity::check_index(i, n).error_or(error{}); c != error{})
+                        [[unlikely]]
+                        return std::unexpected(c);
                     return path_walk<Root, E, Path, close + 1>(
                         encoded, field.subspan(head + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(), floor, indexes);
                 } else {
@@ -1181,15 +1195,17 @@ class packed
                     auto const r = reference_read<Root, major_type::array, F>(encoded, field, floor, sizeof(F));
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (i >= r->length) [[unlikely]]
-                        return std::unexpected(error::index_out_of_bounds);
+                    if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
+                        [[unlikely]]
+                        return std::unexpected(c);
                     return typed_array_element_read<F>(std::span<char const>(encoded).subspan(r->data + i * sizeof(F)).template first<sizeof(F)>());
                 }
                 auto const r = reference_read<Root, major_type::array>(encoded, field, floor, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (i >= r->length) [[unlikely]]
-                    return std::unexpected(error::index_out_of_bounds);
+                if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
+                    [[unlikely]]
+                    return std::unexpected(c);
                 return path_walk<Root, E, Path, close + 1>(
                     encoded, std::span<char const>(encoded).subspan(r->data + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(),
                     floor, indexes);
@@ -1211,7 +1227,7 @@ class packed
             auto const j = shared_index_read<Root>(field);
             if (!j) [[unlikely]]
                 return std::unexpected(j.error());
-            if (*j != index || *j >= dir.count) [[unlikely]]
+            if (*j != index || !validity::check_index(*j, dir.count)) [[unlikely]]
                 return std::unexpected(error::unpopulated_table_index);
             if (directory_entry(encoded, dir, *j) != at) [[unlikely]]
                 return std::unexpected(error::syntax_error);
@@ -1396,11 +1412,17 @@ class packed
             validity::checked_add(directory_at<T>(), shared_first_of<T>() - 1 - packing_table_of<T>().size())
                 .and_then([](std::size_t const head) { return validity::checked_add(head, fixed_size<T, T>()); });
         static_assert(fixed_part.has_value(), "The fixed part of an encoded item must fit in std::size_t.");
-        std::size_t second_size;
-        std::size_t size;
-        if (second.overflow || ckd_mul(&second_size, second.items, sizeof(std::uint32_t)) ||
-            ckd_add(&second_size, second_size, second.bytes) || ckd_add(&size, *fixed_part, second_size) ||
-            !std::in_range<std::uint32_t>(size)) [[unlikely]]
+        constexpr std::size_t fixed = *fixed_part;
+        if (second.overflow) [[unlikely]]
+            return std::unexpected(std::errc::value_too_large);
+        auto const directory = validity::checked_mul(second.items, sizeof(std::uint32_t));
+        if (!directory) [[unlikely]]
+            return directory;
+        auto const second_size = validity::checked_add(*directory, second.bytes);
+        if (!second_size) [[unlikely]]
+            return second_size;
+        auto const size = validity::checked_add(fixed, *second_size);
+        if (!size || !std::in_range<std::uint32_t>(*size)) [[unlikely]]
             return std::unexpected(std::errc::value_too_large);
         return size;
     }
@@ -1587,50 +1609,52 @@ public:
 
     CBOR_ALWAYS_INLINE std::expected<E, error> front() const
     {
-        if (bytes.empty()) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
+        if (error const c = validity::check_index(std::size_t{0}, size()).error_or(error{}); c != error{})
+            [[unlikely]]
+            return std::unexpected(c);
         return packed::typed_array_element_read<E>(bytes.template first<sizeof(E)>());
     }
 
     CBOR_ALWAYS_INLINE std::expected<E, error> back() const
     {
-        if (bytes.empty()) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
+        if (error const c = validity::check_index(std::size_t{0}, size()).error_or(error{}); c != error{})
+            [[unlikely]]
+            return std::unexpected(c);
         return packed::typed_array_element_read<E>(bytes.template last<sizeof(E)>());
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) const &
     {
-        if (n > size()) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
+        if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
+            return std::unexpected(c);
         return typed_array_view(owner, bytes.first(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) &&
     {
-        if (n > size()) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
+        if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
+            return std::unexpected(c);
         return typed_array_view(std::move(owner), bytes.first(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) const &
     {
-        if (n > size()) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
+        if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
+            return std::unexpected(c);
         return typed_array_view(owner, bytes.last(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) &&
     {
-        if (n > size()) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
+        if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
+            return std::unexpected(c);
         return typed_array_view(std::move(owner), bytes.last(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<E, error> operator[](std::size_t const i) const
     {
-        if (i >= size()) [[unlikely]]
-            return std::unexpected(error::index_out_of_bounds);
+        if (error const c = validity::check_index(i, size()).error_or(error{}); c != error{}) [[unlikely]]
+            return std::unexpected(c);
         return packed::typed_array_element_read<E>(bytes.subspan(i * sizeof(E)).template first<sizeof(E)>());
     }
 };
@@ -1691,17 +1715,16 @@ consteval std::size_t packed::fixed_size()
         constexpr std::size_t n = packed::fixed_length<U>::value;
         if constexpr (std::same_as<E, char> || std::same_as<E, char8_t> || std::same_as<E, unsigned char> ||
                       std::same_as<E, std::byte>) {
-            static_assert(validity::checked_add(heads::head_size(n), n).has_value(), "The fixed size must fit in std::size_t.");
-            return heads::head_size(n) + n;
+            constexpr auto size = validity::checked_add(heads::head_size(n), n);
+            static_assert(size.has_value(), "The fixed size must fit in std::size_t.");
+            return *size;
         } else {
             constexpr std::size_t element = fixed_size<E, Root>();
-            static_assert(validity::checked_mul(n, element)
-                              .and_then([](std::size_t const elements) {
-                                  return validity::checked_add(heads::head_size(n), elements);
-                              })
-                              .has_value(),
-                          "The fixed size must fit in std::size_t.");
-            return heads::head_size(n) + n * element;
+            constexpr auto size = validity::checked_mul(n, element).and_then([](std::size_t const elements) {
+                return validity::checked_add(heads::head_size(n), elements);
+            });
+            static_assert(size.has_value(), "The fixed size must fit in std::size_t.");
+            return *size;
         }
     } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
         if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unchecked()).empty() ||
@@ -1723,9 +1746,9 @@ consteval std::size_t packed::fixed_size()
         }
     } else if constexpr (packed::is_inline_optional<U>) {
         constexpr std::size_t value = fixed_size<typename U::value_type, Root>();
-        static_assert(validity::checked_add(packed::inline_optional_head, value).has_value(),
-                      "The fixed size must fit in std::size_t.");
-        return packed::inline_optional_head + value;
+        constexpr auto size = validity::checked_add(packed::inline_optional_head, value);
+        static_assert(size.has_value(), "The fixed size must fit in std::size_t.");
+        return *size;
     }
     else if constexpr (requires(U const &v) {
                            v.has_value();
@@ -1834,8 +1857,9 @@ public:
                     at = std::get<0>(i);
                 else
                     at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
-                if (at >= self.items.length) [[unlikely]]
-                    return std::expected<E, error>(std::unexpect, error::index_out_of_bounds);
+                if (error const c = validity::check_index(at, self.items.length).error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::expected<E, error>(std::unexpect, c);
                 return std::expected<E, error>(packed::typed_array_element_read<E>(
                     std::span<char const>(self.encoded).subspan(self.items.data + at * sizeof(E)).template first<sizeof(E)>()));
             } else if constexpr (packed::is_list<U> && path.size() > 1) {
@@ -1847,8 +1871,9 @@ public:
                     at = std::get<0>(i);
                 else
                     at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
-                if (at >= self.items.length) [[unlikely]]
-                    return std::expected<X, error>(std::unexpect, error::index_out_of_bounds);
+                if (error const c = validity::check_index(at, self.items.length).error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::expected<X, error>(std::unexpect, c);
                 return packed::path_walk<T, E, Path, close + 1>(
                     self.encoded, std::span<char const>(self.encoded).subspan(self.items.data + at * packed::fixed_size<E, T>()).template first<packed::fixed_size<E, T>()>(),
                     self.dir, i);
@@ -1856,7 +1881,6 @@ public:
                 return packed::path_walk<T, U, Path, 1>(self.encoded, self.field, self.dir, i);
             }
         }
-
 
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(std::same_as<U, T> && Path.view().starts_with('$') && packed::path_valid<T, Path, 1>() &&
@@ -1932,7 +1956,6 @@ public:
         std::string_view const view = *owner;
         return path(std::move(owner), view);
     }
-
 
     template <std::size_t DepthMax = validity::nesting_depth_default>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() &&

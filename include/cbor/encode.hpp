@@ -649,8 +649,7 @@ class walker
 
     void simple(std::uint8_t const v)
     {
-        if (v >= std::to_underlying(heads::simple_float_information::simple_value_follows) &&
-            v < validity::simple_value_one_byte_min) [[unlikely]] {
+        if (!validity::check_simple_value(heads::preferred_argument_info(v), v)) [[unlikely]] {
             keep_error(error::reserved_simple_value);
             return;
         }
