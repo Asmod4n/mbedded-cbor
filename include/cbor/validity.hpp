@@ -1,11 +1,14 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <expected>
+#include <functional>
 #include <limits>
 #include <memory>
+#include <ranges>
 #if defined(__cpp_exceptions)
 #include <stdexcept>
 #endif
@@ -121,6 +124,12 @@ public:
 #endif
             return product;
         }
+    }
+
+    template <std::ranges::forward_range R, class Projection = std::identity>
+    static constexpr bool keys_unique(R const &sorted, Projection const projection = {})
+    {
+        return std::ranges::adjacent_find(sorted, {}, projection) == std::ranges::end(sorted);
     }
 
     static constexpr error writer_error(std::errc const e) noexcept
