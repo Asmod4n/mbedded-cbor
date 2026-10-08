@@ -610,7 +610,7 @@ template <std::size_t DepthMax, class Binding>
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {
     validity::throw_logic_error_if_null(l.top_level, "cbor::lazy_decode: the lazy holds no top-level item");
-    decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size()), {}};
+    decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size()), {}, {}};
     decoding::value_decoder<Binding> v{
         {std::string_view(std::span(l.top_level->encoded).subspan(l.offset))}, binding, decoding::marks<Binding>(l.top_level->sharedrefs.size()), &before};
     return v.template value_decode<DepthMax>(0, std::nullopt);
