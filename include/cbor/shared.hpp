@@ -175,7 +175,7 @@ struct value_sharing::top_level_item {
         if (!n) [[unlikely]]
             return std::unexpected(n.error());
         if (error const c =
-                validity::check_tag_content(std::to_underlying(rfc8949::tag_number::sharedref), n->major)
+                validity::check_tag_content(std::to_underlying(rfc8949::tag_number::sharedref), n->major, n->info)
                     .error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
@@ -250,7 +250,7 @@ inline std::expected<value_sharing::resolved, error> value_sharing::container_re
         auto const r = d.head_decode();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
-        if (error const c = validity::check_tag_content(h->argument, r->major).error_or(error{});
+        if (error const c = validity::check_tag_content(h->argument, r->major, r->info).error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
         auto const embedded = d.byte_string_decode(r->argument);

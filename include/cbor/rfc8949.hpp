@@ -42,6 +42,8 @@ class rfc8949
     static constexpr std::uint8_t simple_value_one_byte_min = 32;
 
     enum class tag_number : std::uint64_t {
+        standard_date_time_string = 0,
+        epoch_based_date_time = 1,
         unsigned_bignum = 2,
         negative_bignum = 3,
         encoded_cbor_data_item = 24,

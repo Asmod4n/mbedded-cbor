@@ -1,6 +1,7 @@
 #include "binding.hpp"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <charconv>
 #include <cmath>
@@ -564,12 +565,11 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
             CHECK(l.has_value());
             CHECK(text.has_value());
         } else if (v.encoded == "\xc1\xa1\x61\x61\x00"sv || v.encoded == "\xc0\xa1\x61\x61\x00"sv) {
-            // RFC 8949 3.4.1 and 3.4.2 make a map invalid as the content of tag 0 or 1. The library checks
-            // the content type of tags 2, 3, 24, 29 and the typed arrays where it reads them, and of no other
-            // tag. This expectation records the defect until the check of tags 0 and 1 is built.
-            CHECK(d.has_value());
-            CHECK(l.has_value());
-            CHECK(text.has_value());
+            // RFC 8949 3.4.1 and 3.4.2 make a map invalid as the content of tag 0 or 1, and RFC 8949 5.3.2
+            // names the error.
+            CHECK_EQ(d.error(), error::inadmissible_type_for_tag_content);
+            CHECK_EQ(l.error(), error::inadmissible_type_for_tag_content);
+            CHECK_EQ(text.error(), error::inadmissible_type_for_tag_content);
         } else {
             CHECK_FALSE(d.has_value());
             CHECK_FALSE(l.has_value());
@@ -609,4 +609,49 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
         ++checked;
     }
     CHECK_EQ(checked, 11u);
+}
+
+// RFC 8949 3.4.1: the content of tag 0 is a text string. RFC 8949 3.4.2: the content of tag 1 is an unsigned or
+// negative integer (major types 0 and 1) or a float (major type 7 with additional information 25, 26 or 27).
+// Every other content is invalid. One item of each major type, each float width and two simple values goes
+// into each tag, and decode, lazy and inspect give the same answer.
+TEST_CASE("tags 0 and 1: decode, lazy and inspect refuse every content that RFC 8949 3.4.1 and 3.4.2 forbid")
+{
+    struct content {
+        std::string_view encoded;
+        bool date_time_string;
+        bool epoch_based_date_time;
+    };
+    std::array<content, 12> const contents{{
+        {"\x00"sv, false, true},
+        {"\x20"sv, false, true},
+        {"\x40"sv, false, false},
+        {"\x60"sv, true, false},
+        {"\x80"sv, false, false},
+        {"\xa0"sv, false, false},
+        {"\xc2\x40"sv, false, false},
+        {"\xf4"sv, false, false},
+        {"\xf8\x20"sv, false, false},
+        {"\xf9\x3c\x00"sv, false, true},
+        {"\xfa\x3f\x80\x00\x00"sv, false, true},
+        {"\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv, false, true},
+    }};
+    for (content const &c : contents)
+        for (char const tag : {'\xc0', '\xc1'}) {
+            std::string const wire = std::string(1, tag) + std::string(c.encoded);
+            CAPTURE(wire);
+            bool const admitted = tag == '\xc0' ? c.date_time_string : c.epoch_based_date_time;
+            auto const d = decoded<depth_limit>(wire);
+            auto const l = lazy_value_of(wire);
+            auto const text = cbor::inspect<depth_limit>(wire);
+            if (admitted) {
+                CHECK(d.has_value());
+                CHECK(l.has_value());
+                CHECK(text.has_value());
+            } else {
+                CHECK_EQ(d.error(), error::inadmissible_type_for_tag_content);
+                CHECK_EQ(l.error(), error::inadmissible_type_for_tag_content);
+                CHECK_EQ(text.error(), error::inadmissible_type_for_tag_content);
+            }
+        }
 }

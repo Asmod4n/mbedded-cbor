@@ -153,7 +153,7 @@ class decoding
                     auto const r = d.head_decode();
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (error const c = validity::check_tag_content(h->argument, r->major).error_or(error{});
+                    if (error const c = validity::check_tag_content(h->argument, r->major, r->info).error_or(error{});
                         c != error{}) [[unlikely]]
                         return std::unexpected(c);
                     auto const bytes = d.byte_string_decode(r->argument);
@@ -173,7 +173,7 @@ class decoding
                     auto const r = d.head_decode();
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (error const c = validity::check_tag_content(h->argument, r->major).error_or(error{});
+                    if (error const c = validity::check_tag_content(h->argument, r->major, r->info).error_or(error{});
                         c != error{}) [[unlikely]]
                         return std::unexpected(c);
                     auto const checked = validity::check_sharedref_index(r->argument, shared.size());
@@ -196,6 +196,17 @@ class decoding
                         return std::unexpected(error::sharedref_not_complete);
                     return *shared[index];
                 }
+                heads::decoder content_decoder = d;
+                auto c = content_decoder.head_decode();
+                while (c && c->major == major_type::tag &&
+                       c->argument == std::to_underlying(rfc8949::tag_number::shareable))
+                    c = content_decoder.head_decode();
+                if (!c) [[unlikely]]
+                    return std::unexpected(c.error());
+                if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
+                    if (error const e = validity::check_tag_content(h->argument, c->major, c->info).error_or(error{});
+                        e != error{}) [[unlikely]]
+                        return std::unexpected(e);
                 if constexpr (requires { binding.tag_begin(h->argument); }) {
                     std::optional<typename Binding::value> object = binding.tag_begin(h->argument);
                     if (object) {
