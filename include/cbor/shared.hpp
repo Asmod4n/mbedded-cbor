@@ -116,13 +116,10 @@ struct lazy {
         requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<lazy_entries<DepthMax>, error> entries() const;
 
-    template <std::size_t DepthMax = validity::nesting_depth_default>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
-    std::expected<std::reference_wrapper<item const>, error> decode() const &;
-
-    template <std::size_t DepthMax = validity::nesting_depth_default>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
-    std::expected<std::reference_wrapper<item const>, error> decode() const && = delete;
+    template <std::size_t DepthMax = validity::nesting_depth_default, class Self>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+                 std::is_lvalue_reference_v<Self>)
+    std::expected<std::reference_wrapper<item const>, error> decode(this Self &&self);
 };
 
 }
