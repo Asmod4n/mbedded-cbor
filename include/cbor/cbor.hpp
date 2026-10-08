@@ -1,6 +1,9 @@
 #pragma once
 
 #include "error.hpp"
+#include "rfc8949.hpp"
+#include "rfc8746.hpp"
+#include "rfc9535.hpp"
 #include "validity.hpp"
 #include "binding.hpp"
 #include "head.hpp"

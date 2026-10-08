@@ -310,9 +310,9 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
         bool negative = h.major == major_type::negative_integer;
         std::uint64_t argument = h.argument;
         if (h.major == major_type::tag &&
-            (h.argument == std::to_underlying(heads::tag_number::unsigned_bignum) ||
-             h.argument == std::to_underlying(heads::tag_number::negative_bignum))) {
-            negative = h.argument == std::to_underlying(heads::tag_number::negative_bignum);
+            (h.argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
+             h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum))) {
+            negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
             auto const content = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
             if (!content) [[unlikely]]
                 return std::unexpected(content.error());
@@ -343,10 +343,10 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
     } else if constexpr (std::is_same_v<T, double>) {
         if (h.major != major_type::simple_float) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        switch (static_cast<heads::simple_float_information>(h.info)) {
-        case heads::simple_float_information::half_precision_float:
-        case heads::simple_float_information::single_precision_float:
-        case heads::simple_float_information::double_precision_float:
+        switch (static_cast<rfc8949::simple_float_information>(h.info)) {
+        case rfc8949::simple_float_information::half_precision_float:
+        case rfc8949::simple_float_information::single_precision_float:
+        case rfc8949::simple_float_information::double_precision_float:
             return heads::float_decode(h.info, h.argument);
         [[unlikely]] default:
             return std::unexpected(error::incorrect_type);
@@ -434,11 +434,11 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
     if (error const r = validity::check_definite_length(h->major, h->info).error_or(error{}); r != error{})
         [[unlikely]]
         return std::unexpected(r);
-    if (h->major == major_type::tag && h->argument == std::to_underlying(heads::tag_number::shareable)) {
+    if (h->major == major_type::tag && h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
         top_level.mark(heads::decoder{std::string_view(std::span(top_level.encoded).subspan(h->at))});
         return item_decode<DepthMax>(top_level, h->at, depth + 1);
     }
-    if (h->major == major_type::tag && h->argument == std::to_underlying(heads::tag_number::sharedref)) {
+    if (h->major == major_type::tag && h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
         heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
         auto const found = top_level.sharedref_decode(d, at);
         if (!found) [[unlikely]]
@@ -502,18 +502,18 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
         return std::pair{node, content->second};
     }
     case major_type::simple_float:
-        switch (static_cast<heads::simple_float_information>(h->info)) {
-        case heads::simple_float_information::half_precision_float:
+        switch (static_cast<rfc8949::simple_float_information>(h->info)) {
+        case rfc8949::simple_float_information::half_precision_float:
 #if defined(__STDCPP_FLOAT16_T__)
             node->content = std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(h->argument));
 #else
             node->content = heads::float_decode_binary16(static_cast<std::uint16_t>(h->argument));
 #endif
             break;
-        case heads::simple_float_information::single_precision_float:
+        case rfc8949::simple_float_information::single_precision_float:
             node->content = std::bit_cast<float>(static_cast<std::uint32_t>(h->argument));
             break;
-        case heads::simple_float_information::double_precision_float:
+        case rfc8949::simple_float_information::double_precision_float:
             node->content = std::bit_cast<double>(h->argument);
             break;
         default:

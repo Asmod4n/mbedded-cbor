@@ -224,7 +224,7 @@ class packed
         constexpr std::uint64_t s = std::is_signed_v<E> && !std::is_floating_point_v<E> ? 1 : 0;
         constexpr std::uint64_t e = sizeof(E) > 1 ? 1 : 0;
         constexpr std::uint64_t ll = static_cast<std::uint64_t>(std::countr_zero(sizeof(E))) - f;
-        return std::to_underlying(heads::tag_number::typed_array_first) | f << 4 | s << 3 | e << 2 | ll;
+        return std::to_underlying(rfc8746::tag_number::typed_array_first) | f << 4 | s << 3 | e << 2 | ll;
     }
 
     template <class E>
@@ -273,10 +273,11 @@ class packed
 
     static constexpr void fixed_width_head_encode(std::vector<char> &encoded, major_type const major, std::size_t const width)
     {
-        heads::head_append(encoded, major,
-                           static_cast<std::uint8_t>(std::to_underlying(heads::additional_information::one_byte_argument) +
-                                                     std::countr_zero(width)),
-                           0);
+        heads::head_append(
+            encoded, major,
+            static_cast<std::uint8_t>(std::to_underlying(rfc8949::additional_information::one_byte_argument) +
+                                      std::countr_zero(width)),
+            0);
     }
 
     template <class Root, class T>
@@ -289,7 +290,8 @@ class packed
             zero_initialized_encode<Root, std::underlying_type_t<U>>(encoded);
 #ifdef __SIZEOF_INT128__
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
-            heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::unsigned_bignum));
+            heads::head_append(encoded, major_type::tag,
+                               std::to_underlying(rfc8949::tag_number::unsigned_bignum));
             heads::head_append(encoded, major_type::byte_string, sizeof(U));
             encoded.resize(encoded.size() + sizeof(U));
 #endif
@@ -311,7 +313,8 @@ class packed
             else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
                 fixed_width_head_encode(encoded, major_type::simple_float, sizeof(std::float64_t));
             else {
-                heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::float128_big_endian));
+                heads::head_append(encoded, major_type::tag,
+                                   std::to_underlying(rfc8746::tag_number::float128_big_endian));
                 heads::head_append(encoded, major_type::byte_string, sizeof(std::float128_t));
                 encoded.resize(encoded.size() + sizeof(std::float128_t));
             }
@@ -342,7 +345,7 @@ class packed
             heads::head_append(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
             zero_initialized_encode<Root, typename U::value_type>(encoded);
         } else {
-            heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::reference));
+            heads::head_append(encoded, major_type::tag, std::to_underlying(validity::tag_number::reference));
             fixed_width_head_encode(encoded, major_type::unsigned_integer, sizeof(std::uint32_t));
         }
     }
@@ -359,7 +362,8 @@ class packed
     static consteval std::span<char const> record_keys()
     {
         std::vector<char> encoded;
-        heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::record_function));
+        heads::head_append(encoded, major_type::tag,
+                           std::to_underlying(validity::tag_number::record_function));
         static constexpr auto members = members_of<U>();
         heads::head_append(encoded, major_type::array, members.size());
         template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, members.size()))) {
@@ -415,7 +419,8 @@ class packed
     }
 
     static constexpr std::uint64_t straight_argument_count =
-        std::to_underlying(heads::tag_number::straight_argument_last) - std::to_underlying(heads::tag_number::straight_argument_first) + 1;
+        std::to_underlying(validity::tag_number::straight_argument_last) -
+        std::to_underlying(validity::tag_number::straight_argument_first) + 1;
 
     template <class Root, class U>
     static consteval std::uint64_t argument_index_of()
@@ -429,9 +434,10 @@ class packed
     {
         constexpr std::uint64_t i = argument_index_of<Root, U>();
         if constexpr (i < straight_argument_count) {
-            heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::straight_argument_first) + i);
+            heads::head_append(encoded, major_type::tag,
+                               std::to_underlying(validity::tag_number::straight_argument_first) + i);
         } else {
-            heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::reference));
+            heads::head_append(encoded, major_type::tag, std::to_underlying(validity::tag_number::reference));
             heads::head_append(encoded, major_type::array, 2);
             heads::head_append(encoded, major_type::unsigned_integer, i - straight_argument_count);
         }
@@ -449,7 +455,8 @@ class packed
     static consteval std::span<char const> packing_prefix_of()
     {
         std::vector<char> encoded;
-        heads::head_append(encoded, major_type::tag, std::to_underlying(heads::tag_number::basic_packed_cbor));
+        heads::head_append(encoded, major_type::tag,
+                           std::to_underlying(validity::tag_number::basic_packed_cbor));
         heads::head_append(encoded, major_type::array, 2);
         fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
         template for (constexpr std::meta::info type : packing_table_of<Root>()) {
@@ -605,7 +612,9 @@ class packed
         std::size_t const item = c.position;
         std::size_t const m = j + shared_first_of<Root>() - shared_first;
         heads::u32_write(out, directory_at<Root>() + sizeof(std::uint32_t) * j, item);
-        field[1] = heads::initial_byte(static_cast<major_type>(m & 1), std::to_underlying(heads::additional_information::four_byte_argument));
+        field[1] =
+            heads::initial_byte(static_cast<major_type>(m & 1),
+                                std::to_underlying(rfc8949::additional_information::four_byte_argument));
         auto const n = heads::big_endian(static_cast<std::uint32_t>(m >> 1));
         std::ranges::copy(n, field.template last<sizeof(std::uint32_t)>().begin());
         std::size_t const data = item + item_head;
@@ -645,7 +654,8 @@ class packed
         } else if constexpr (is_typed_array<U>) {
             using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
             std::size_t const length = std::ranges::size(value);
-            out[item] = heads::initial_byte(major_type::tag, std::to_underlying(heads::additional_information::one_byte_argument));
+            out[item] = heads::initial_byte(
+                major_type::tag, std::to_underlying(rfc8949::additional_information::one_byte_argument));
             out[item + 1] = static_cast<char>(typed_array_tag<E>());
             heads::item_head_write(out, item + 2, major_type::byte_string, length * sizeof(E));
             std::size_t const elements = item + typed_array_head;
@@ -684,8 +694,9 @@ class packed
             uint128 magnitude = static_cast<uint128>(value);
             if constexpr (std::same_as<U, int128>) {
                 uint128 const sign = static_cast<uint128>(value >> 127);
-                field.front() = heads::initial_byte(major_type::tag, std::to_underlying(heads::tag_number::unsigned_bignum) +
-                                                                         static_cast<std::uint64_t>(sign & 1));
+                field.front() = heads::initial_byte(major_type::tag,
+                                                    std::to_underlying(rfc8949::tag_number::unsigned_bignum) +
+                                                        static_cast<std::uint64_t>(sign & 1));
                 magnitude ^= sign;
             }
             auto const bytes = heads::big_endian(magnitude);
@@ -697,9 +708,10 @@ class packed
         } else if constexpr (std::signed_integral<U>) {
             using M = std::make_unsigned_t<U>;
             M const sign = static_cast<M>(value >> (8 * sizeof(U) - 1));
-            field.front() = heads::initial_byte(static_cast<major_type>(sign & 1),
-                                                std::to_underlying(heads::additional_information::one_byte_argument) +
-                                                    std::countr_zero(sizeof(U)));
+            field.front() =
+                heads::initial_byte(static_cast<major_type>(sign & 1),
+                                    std::to_underlying(rfc8949::additional_information::one_byte_argument) +
+                                        std::countr_zero(sizeof(U)));
             auto const bytes = heads::big_endian(static_cast<M>(static_cast<M>(value) ^ sign));
             std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
         } else if constexpr (std::is_floating_point_v<U>) {
@@ -870,7 +882,8 @@ class packed
         std::size_t length;
     };
 
-    static constexpr char reference_tag_byte = heads::initial_byte(major_type::tag, std::to_underlying(heads::tag_number::reference));
+    static constexpr char reference_tag_byte =
+        heads::initial_byte(major_type::tag, std::to_underlying(validity::tag_number::reference));
 
     template <class Root>
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> shared_index_read(std::span<char const, dynamic_type_sizes> const field)
@@ -878,7 +891,8 @@ class packed
         constexpr std::size_t fillers = shared_first_of<Root>() - shared_first;
         auto const info = static_cast<unsigned char>(field[1]);
         if (field[0] != reference_tag_byte ||
-            (info & 0xdf) != std::to_underlying(heads::additional_information::one_byte_argument) + 2) [[unlikely]]
+            (info & 0xdf) != std::to_underlying(rfc8949::additional_information::one_byte_argument) + 2)
+            [[unlikely]]
             return std::unexpected(error::incorrect_type);
         std::size_t const m = 2 * std::size_t{heads::unsigned_read<std::uint32_t>(field.subspan<2, sizeof(std::uint32_t)>())} + (info >> 5);
         if (m < fillers) [[unlikely]]
@@ -896,9 +910,11 @@ class packed
             if (end < item + typed_array_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             static constexpr std::array<char, 3> head{
-                heads::initial_byte(major_type::tag, std::to_underlying(heads::additional_information::one_byte_argument)),
+                heads::initial_byte(major_type::tag,
+                                    std::to_underlying(rfc8949::additional_information::one_byte_argument)),
                 static_cast<char>(typed_array_tag<E>()),
-                heads::initial_byte(major_type::byte_string, std::to_underlying(heads::additional_information::four_byte_argument))};
+                heads::initial_byte(major_type::byte_string,
+                                    std::to_underlying(rfc8949::additional_information::four_byte_argument))};
             if (!std::ranges::equal(std::span<char const>(encoded).subspan(item).template first<head.size()>(), head)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             std::size_t const size =
@@ -911,7 +927,10 @@ class packed
         } else {
             if (end < item + item_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            if (encoded[item] != heads::initial_byte(Major, std::to_underlying(heads::additional_information::four_byte_argument))) [[unlikely]]
+            if (encoded[item] !=
+                heads::initial_byte(Major,
+                                    std::to_underlying(rfc8949::additional_information::four_byte_argument)))
+                [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             std::size_t const length =
                 heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 1).template first<sizeof(std::uint32_t)>());
@@ -1684,7 +1703,7 @@ consteval std::size_t packed::fixed_size()
         return fixed_size<std::underlying_type_t<U>, Root>();
 #ifdef __SIZEOF_INT128__
     else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>)
-        return heads::head_size(std::to_underlying(heads::tag_number::negative_bignum)) +
+        return heads::head_size(std::to_underlying(rfc8949::tag_number::negative_bignum)) +
                heads::head_size(sizeof(U)) + sizeof(U);
 #endif
     else if constexpr (std::is_integral_v<U> && std::has_single_bit(sizeof(U)) && sizeof(U) <= sizeof(std::uint64_t))
@@ -1706,7 +1725,7 @@ consteval std::size_t packed::fixed_size()
             return initial_byte_size + sizeof(std::float64_t);
         else if constexpr (digits == heads::extended_precision_digits ||
                            digits == std::numeric_limits<std::float128_t>::digits)
-            return heads::head_size(std::to_underlying(heads::tag_number::float128_big_endian)) +
+            return heads::head_size(std::to_underlying(rfc8746::tag_number::float128_big_endian)) +
                    heads::head_size(sizeof(std::float128_t)) + sizeof(std::float128_t);
         else
             return no_fixed_size<T>();

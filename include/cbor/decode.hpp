@@ -111,7 +111,7 @@ class decoding
             case major_type::tag: {
                 if (auto const r = validity::check_nesting_depth(depth + 1, DepthMax); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
+                if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
                     if (!before) {
                         std::size_t const index = shared.size();
                         shared.emplace_back();
@@ -139,9 +139,10 @@ class decoding
                     shared[index] = *content;
                     return content;
                 }
-                if (h->argument == std::to_underlying(heads::tag_number::unsigned_bignum) ||
-                    h->argument == std::to_underlying(heads::tag_number::negative_bignum)) {
-                    bool const negative = h->argument == std::to_underlying(heads::tag_number::negative_bignum);
+                if (h->argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
+                    h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)) {
+                    bool const negative =
+                        h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
                     auto const r = d.head_decode();
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
@@ -161,7 +162,7 @@ class decoding
                         return binding.negative_bignum_decode(std::string_view(heads::magnitude_plus_one(magnitude)));
                     return binding.unsigned_bignum_decode(magnitude);
                 }
-                if (h->argument == std::to_underlying(heads::tag_number::sharedref)) {
+                if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
                     auto const r = d.head_decode();
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
@@ -206,15 +207,15 @@ class decoding
                 return binding.tag_decode(h->argument, std::move(*content));
             }
             default:
-                switch (static_cast<heads::simple_float_information>(h->info)) {
-                case heads::simple_float_information::simple_value_follows:
+                switch (static_cast<rfc8949::simple_float_information>(h->info)) {
+                case rfc8949::simple_float_information::simple_value_follows:
                     if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
                         r != error{}) [[unlikely]]
                         return std::unexpected(r);
                     return binding.simple_value_decode(static_cast<std::uint8_t>(h->argument));
-                case heads::simple_float_information::half_precision_float:
-                case heads::simple_float_information::single_precision_float:
-                case heads::simple_float_information::double_precision_float:
+                case rfc8949::simple_float_information::half_precision_float:
+                case rfc8949::simple_float_information::single_precision_float:
+                case rfc8949::simple_float_information::double_precision_float:
                     return binding.float_decode(heads::float_decode(h->info, h->argument));
                 default:
                     return binding.simple_value_decode(h->info);

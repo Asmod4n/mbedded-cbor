@@ -21,6 +21,8 @@
 
 #include "binding.hpp"
 #include "error.hpp"
+#include "rfc8746.hpp"
+#include "rfc8949.hpp"
 
 #ifdef _MSC_VER
 #define CBOR_ALWAYS_INLINE [[msvc::forceinline]]
@@ -37,47 +39,9 @@ enum class pass;
 
 struct lazy;
 
-enum class major_type : std::uint8_t {
-    unsigned_integer,
-    negative_integer,
-    byte_string,
-    text_string,
-    array,
-    map,
-    tag,
-    simple_float
-};
-
 class validity
 {
-    enum class additional_information : std::uint8_t {
-        one_byte_argument = 24,
-        two_byte_argument,
-        four_byte_argument,
-        eight_byte_argument,
-        indefinite_length = 31
-    };
-
-    enum class simple_float_information : std::uint8_t {
-        simple_value_follows = 24,
-        half_precision_float,
-        single_precision_float,
-        double_precision_float,
-        break_stop_code = 31
-    };
-
-    static constexpr std::uint8_t simple_value_one_byte_min = 32;
-
     enum class tag_number : std::uint64_t {
-        unsigned_bignum = 2,
-        negative_bignum = 3,
-        encoded_cbor_data_item = 24,
-        shareable = 28,
-        sharedref = 29,
-        typed_array_first = 64,
-        typed_array_reserved = 76,
-        float128_big_endian = 83,
-        typed_array_last = 87,
         reference = 6,
         basic_packed_cbor = 113,
         record_function = 114,
@@ -197,9 +161,9 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_additional_information(major_type const major, std::uint8_t const info)
     {
-        if (info <= std::to_underlying(additional_information::eight_byte_argument)) [[likely]]
+        if (info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument)) [[likely]]
             return {};
-        if (info == std::to_underlying(additional_information::indefinite_length) &&
+        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length) &&
             major != major_type::unsigned_integer && major != major_type::negative_integer &&
             major != major_type::tag)
             return {};
@@ -209,10 +173,10 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_definite_length(major_type const major, std::uint8_t const info)
     {
-        if (info == std::to_underlying(additional_information::indefinite_length) &&
+        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length) &&
             major >= major_type::byte_string && major <= major_type::map) [[unlikely]]
             return std::unexpected(error::indefinite_length);
-        if (info > std::to_underlying(additional_information::eight_byte_argument)) [[unlikely]]
+        if (info > std::to_underlying(rfc8949::additional_information::eight_byte_argument)) [[unlikely]]
             return std::unexpected(error::syntax_error);
         return {};
     }
@@ -220,7 +184,7 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_chunk(major_type const string, major_type const major, std::uint8_t const info)
     {
-        if (major != string || info == std::to_underlying(additional_information::indefinite_length))
+        if (major != string || info == std::to_underlying(rfc8949::additional_information::indefinite_length))
             [[unlikely]]
             return std::unexpected(error::syntax_error);
         return {};
@@ -229,8 +193,8 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_simple_value(std::uint8_t const info, std::uint64_t const argument)
     {
-        if (info == std::to_underlying(simple_float_information::simple_value_follows) &&
-            argument < simple_value_one_byte_min) [[unlikely]]
+        if (info == std::to_underlying(rfc8949::simple_float_information::simple_value_follows) &&
+            argument < rfc8949::simple_value_one_byte_min) [[unlikely]]
             return std::unexpected(error::syntax_error);
         return {};
     }
@@ -240,17 +204,17 @@ public:
     {
         major_type admitted;
         switch (tag) {
-        case std::to_underlying(tag_number::unsigned_bignum):
-        case std::to_underlying(tag_number::negative_bignum):
-        case std::to_underlying(tag_number::encoded_cbor_data_item):
+        case std::to_underlying(rfc8949::tag_number::unsigned_bignum):
+        case std::to_underlying(rfc8949::tag_number::negative_bignum):
+        case std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item):
             admitted = major_type::byte_string;
             break;
-        case std::to_underlying(tag_number::sharedref):
+        case std::to_underlying(rfc8949::tag_number::sharedref):
             admitted = major_type::unsigned_integer;
             break;
         default:
-            if (tag < std::to_underlying(tag_number::typed_array_first) ||
-                tag > std::to_underlying(tag_number::typed_array_last))
+            if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
+                tag > std::to_underlying(rfc8746::tag_number::typed_array_last))
                 return {};
             admitted = major_type::byte_string;
             break;
@@ -270,9 +234,9 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag,
                                                                                      std::size_t const size)
     {
-        if (tag < std::to_underlying(tag_number::typed_array_first) ||
-            tag > std::to_underlying(tag_number::typed_array_last) ||
-            tag == std::to_underlying(tag_number::typed_array_reserved)) [[unlikely]]
+        if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
+            tag > std::to_underlying(rfc8746::tag_number::typed_array_last) ||
+            tag == std::to_underlying(rfc8746::tag_number::typed_array_reserved)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         if (size % typed_array_element_size(tag) != 0) [[unlikely]]
             return std::unexpected(error::inadmissible_type_for_tag_content);
@@ -363,5 +327,4 @@ public:
     friend class databind;
 #endif
 };
-
 }
