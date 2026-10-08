@@ -24,6 +24,7 @@
 #include "head.hpp"
 #include "inspect.hpp"
 #include "lazy.hpp"
+#include "owning_ref.hpp"
 #include "shared.hpp"
 
 namespace cbor
@@ -54,13 +55,7 @@ template <fixed_string Path, class T, std::size_t DepthMax = 128>
     requires(singular_query<Path, DepthMax>::value &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<T, error> at_path(std::string const &encoded);
-
-template <fixed_string Path, class T, std::size_t DepthMax = 128>
-    requires(singular_query<Path, DepthMax>::value &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
-std::expected<T, error> at_path(std::string const &&encoded) = delete;
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view encoded);
 
 class jsonpath
 {
@@ -906,6 +901,15 @@ class jsonpath
             lazy{std::make_shared<value_sharing::top_level_item>(std::shared_ptr<void const>{}, encoded, std::vector<lazy>{}, 0), 0});
     }
 
+    template <fixed_string Path, std::size_t DepthMax, class T>
+    static std::expected<owning_ref<T>, error> query_walk(std::shared_ptr<void const> owner, std::string_view const encoded)
+    {
+        auto const r = query_walk<Path, DepthMax, T>(encoded);
+        if (!r) [[unlikely]]
+            return std::unexpected(r.error());
+        return owning_ref<T>(std::move(owner), *r);
+    }
+
     template <fixed_string, std::size_t>
     friend class singular_query;
 
@@ -919,7 +923,7 @@ class jsonpath
         requires(singular_query<Path, DepthMax>::value &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, typed_array>))
-    friend std::expected<T, error> at_path(std::string const &encoded);
+    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view encoded);
 
     template <fixed_string, std::size_t>
     friend class verify_path;
@@ -1627,9 +1631,11 @@ template <fixed_string Path, class T, std::size_t DepthMax>
     requires(singular_query<Path, DepthMax>::value &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<T, error> at_path(std::string const &encoded)
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view const encoded)
 {
-    return jsonpath::query_walk<Path, DepthMax, T>(encoded);
+    if (!owner) [[unlikely]]
+        validity::throw_logic_error("cbor::at_path: the owner of the encoded data item is empty");
+    return jsonpath::query_walk<Path, DepthMax, T>(std::move(owner), encoded);
 }
 
 }

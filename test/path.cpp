@@ -6,7 +6,9 @@
 #include <expected>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -500,10 +502,19 @@ std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vect
 template <cbor::fixed_string Path, class T, std::size_t DepthMax = 128>
 std::expected<comparable_t<T>, error> path_get(std::string const &doc)
 {
-    auto const r = cbor::at_path<Path, T, DepthMax>(doc);
-    if (!r)
-        return std::unexpected(r.error());
-    return comparable(*r);
+    if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                  std::is_same_v<T, cbor::typed_array>) {
+        auto const owner = std::make_shared<std::string const>(doc);
+        auto const r = cbor::at_path<Path, T, DepthMax>(owner, *owner);
+        if (!r)
+            return std::unexpected(r.error());
+        return comparable(**r);
+    } else {
+        auto const r = cbor::at_path<Path, T, DepthMax>(doc);
+        if (!r)
+            return std::unexpected(r.error());
+        return comparable(*r);
+    }
 }
 
 // Each typed read is checked twice: against the value that the specification gives, and against the lazy chain
@@ -544,28 +555,55 @@ TEST_CASE("path: a typed read of each shape of the bench")
     check_path<"$[1].user.name", std::string_view>(records, {std::int64_t{1}, "user"sv, "name"sv}, "bob"sv);
 }
 
-// The typed read gives a view into the bytes of the caller and no owner. The view stays inside those bytes also
-// where a tag 29 on the walk makes the read go through lazy.
+// The typed read gives a view into the bytes of the caller, held by the owner that the caller gives. The view stays
+// inside those bytes also where a tag 29 on the walk makes the read go through lazy.
 TEST_CASE("path: a typed read gives a view into the bytes of the caller")
 {
-    std::string const doc = "\x82\xd8\x1c\x61x\xa1\x61k\x63xyz"s;
-    auto const text = cbor::at_path<"$[1].k", std::string_view>(doc);
+    auto const doc = std::make_shared<std::string const>("\x82\xd8\x1c\x61x\xa1\x61k\x63xyz"s);
+    auto const text = cbor::at_path<"$[1].k", std::string_view>(doc, *doc);
     REQUIRE(text.has_value());
-    CHECK_EQ(*text, "xyz"sv);
-    CHECK(inside(doc, text->data()));
-    std::string const shared = "\x82\xd8\x1c\x61x\xd8\x1d\x00"s;
-    auto const named = cbor::at_path<"$[1]", std::string_view>(shared);
+    CHECK_EQ(**text, "xyz"sv);
+    CHECK(inside(*doc, (*text)->data()));
+    auto const shared = std::make_shared<std::string const>("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
+    auto const named = cbor::at_path<"$[1]", std::string_view>(shared, *shared);
     REQUIRE(named.has_value());
-    CHECK_EQ(*named, "x"sv);
-    CHECK(inside(shared, named->data()));
-    std::string const blob = "\x81\x43\x01\x02\x03"s;
-    auto const span = cbor::at_path<"$[0]", std::span<std::byte const>>(blob);
+    CHECK_EQ(**named, "x"sv);
+    CHECK(inside(*shared, (*named)->data()));
+    auto const blob = std::make_shared<std::string const>("\x81\x43\x01\x02\x03"s);
+    auto const span = cbor::at_path<"$[0]", std::span<std::byte const>>(blob, *blob);
     REQUIRE(span.has_value());
-    CHECK(inside(blob, span->data()));
-    std::string const typed = "\x81\xd8\x48\x43\x01\x02\x03"s;
-    auto const array = cbor::at_path<"$[0]", cbor::typed_array>(typed);
+    CHECK(inside(*blob, (*span)->data()));
+    auto const typed = std::make_shared<std::string const>("\x81\xd8\x48\x43\x01\x02\x03"s);
+    auto const array = cbor::at_path<"$[0]", cbor::typed_array>(typed, *typed);
     REQUIRE(array.has_value());
-    CHECK(inside(typed, array->bytes.data()));
+    CHECK(inside(*typed, (*array)->bytes.data()));
+}
+
+// The view outlives every name of the bytes that the caller had: the result holds the owner. Under ASan a read of
+// bytes that are freed is reported, so this test fails there if the owner is not held.
+TEST_CASE("path: a typed read holds the owner of the bytes")
+{
+    auto const read = [] {
+        auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
+        return cbor::at_path<"$.a", std::string_view>(owner, *owner);
+    };
+    auto const text = read();
+    REQUIRE(text.has_value());
+    CHECK_EQ(**text, "xyz"sv);
+    auto const tagged = [] {
+        auto const owner = std::make_shared<std::string const>("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
+        return cbor::at_path<"$[1]", std::string_view>(owner, *owner);
+    }();
+    REQUIRE(tagged.has_value());
+    CHECK_EQ(**tagged, "x"sv);
+}
+
+// An empty owner is a wrong use that the compiler cannot see.
+TEST_CASE("path: a typed read with an empty owner throws std::logic_error")
+{
+    std::string const doc = "\xa1\x61\x61\x63xyz"s;
+    auto const read = [&doc] { return cbor::at_path<"$.a", std::string_view>(std::shared_ptr<void const>{}, doc); };
+    CHECK_THROWS_AS((void)read(), std::logic_error);
 }
 
 // RFC 8949 3: a data item has at least its initial byte, and an argument or a string has as many bytes as its head
@@ -761,22 +799,31 @@ TEST_CASE("path: a typed read keeps the nesting depth of lazy")
     CHECK(path_get<"$[1]", std::uint64_t, 4>("\x82\x81\x81\x81\x81\x00\x01"s) == std::unexpected(error::nesting_depth_exceeded));
 }
 
-// The typed read compiles only where it is safe. A view is read only from a std::string that the caller holds, so it
-// cannot outlive the bytes: a temporary std::string, a std::string_view and a literal give no view. A scalar holds no
-// bytes and is read from any of them. The path is a singular query of RFC 9535 2.3.5.1 with names and indexes only: a
-// wildcard, a descendant segment and a literal key of EDN go to at_path with a binding. A path with more segments than
-// DepthMax does not compile.
+// The typed read compiles only where it is safe. A view is read only with an owner of the bytes, so it cannot outlive
+// them: a std::string, a temporary std::string, a std::string_view and a literal alone give no view. The forms that
+// a review of 2026-10-08 showed to read freed memory under ASan, a reference into a temporary vector and the
+// content of a temporary std::shared_ptr, do not compile. A scalar holds no bytes and is read from any of them. The
+// path is a singular query of RFC 9535 2.3.5.1 with names and indexes only: a wildcard, a descendant segment and a
+// literal key of EDN go to at_path with a binding. A path with more segments than DepthMax does not compile.
 TEST_CASE("path: a typed read that is not safe does not compile")
 {
     std::string text = "\xa1\x61\x61\x61x"s;
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(text)));
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::as_const(text))));
+    auto const owner = std::make_shared<std::string const>(text);
+    auto const strings = [&text] { return std::vector<std::string>{text}; };
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o, std::string_view(*o)); }; }(owner)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::span<std::byte const>>(o, std::string_view(*o)); }; }(owner)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", cbor::typed_array>(o, std::string_view(*o)); }; }(owner)));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(text)));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::as_const(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string{})));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::move(std::as_const(text)))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }("\xa1\x61\x61\x61x")));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::span<std::byte const>>(std::forward<S>(s)); }; }(std::string{})));
+    CHECK_FALSE(([]<class F>(F const &) { return requires(F const &f) { cbor::at_path<"$.a", std::string_view>(f()[0]); }; }(strings)));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(*std::make_shared<std::string const>(s)); }; }(text)));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::span<std::byte const>>(std::forward<S>(s)); }; }(text)));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", cbor::typed_array>(std::forward<S>(s)); }; }(std::string_view(text))));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::int64_t>(o, std::string_view(*o)); }; }(owner)));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::int64_t>(std::forward<S>(s)); }; }(std::string{})));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK(cbor::at_path<"$.a", std::int64_t>(std::string(text)) == std::unexpected(error::incorrect_type));
