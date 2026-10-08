@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <expected>
+#include <limits>
 #include <memory>
 #if defined(__cpp_exceptions)
 #include <stdexcept>
@@ -90,6 +91,36 @@ public:
     {
         if (!pointer) [[unlikely]]
             throw_logic_error(what);
+    }
+
+    static constexpr std::expected<std::size_t, std::errc> checked_mul(std::size_t const a, std::size_t const b)
+    {
+        std::size_t product;
+        if consteval {
+            if (a != 0 && b > std::numeric_limits<std::size_t>::max() / a) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+            product = a * b;
+            return product;
+        } else {
+#ifdef __STDC_VERSION_STDCKDINT_H__
+            if (ckd_mul(&product, a, b)) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+#elif defined(__has_builtin)
+#if __has_builtin(__builtin_mul_overflow)
+            if (__builtin_mul_overflow(a, b, &product)) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+#else
+            if (a != 0 && b > std::numeric_limits<std::size_t>::max() / a) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+            product = a * b;
+#endif
+#else
+            if (a != 0 && b > std::numeric_limits<std::size_t>::max() / a) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+            product = a * b;
+#endif
+            return product;
+        }
     }
 
     static constexpr error writer_error(std::errc const e) noexcept
