@@ -844,3 +844,52 @@ TEST_CASE("lazy_decode: a map with a repeated key gives duplicate_key")
              error::duplicate_key);
     CHECK(cbor::lazy_decode<16>(binding, lazy_of("\xa2\x01\x00\xf9\x3c\x00\x00"s)).has_value());
 }
+
+// RFC 8949 5.6: the keys of each map are recorded in the walk that reads the map and are compared at its end.
+// A repeated key at depth 3 is refused by every reader that reads the whole map or looks up the repeated key,
+// and a repeated key of the outer map after a nested map is refused as well. decode refuses the map at depth
+// 3 when that map itself is decoded. The same maps with distinct keys are read.
+TEST_CASE("lazy: a repeated key at depth 3 gives duplicate_key")
+{
+    test_binding binding;
+    std::string const inner = "\xa1\x61\x61\xa1\x61\x62\xa3\x61\x63\x01\x61\x64\x02\x61\x64\x03"s;
+    std::string const outer = "\xa2\x61\x61\xa1\x61\x62\xa1\x61\x63\x01\x61\x61\x00"s;
+    std::string const distinct = "\xa1\x61\x61\xa1\x61\x62\xa2\x61\x63\x01\x61\x64\x02"s;
+    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of(inner)).error(), error::duplicate_key);
+    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of(outer)).error(), error::duplicate_key);
+    CHECK(cbor::lazy_decode<16>(binding, lazy_of(distinct)).has_value());
+    CHECK_EQ(lazy_of(inner).at<16>("a")->at<16>("b")->at<16>("d").error(), error::duplicate_key);
+    CHECK_EQ(lazy_of(outer).at<16>("a").error(), error::duplicate_key);
+    CHECK(lazy_of(distinct).at<16>("a")->at<16>("b")->at<16>("d").has_value());
+    CHECK_EQ((cbor::at_path<"$.a.b.d", int>(inner)).error(), error::duplicate_key);
+    CHECK_EQ((cbor::at_path<"$.a", int>(outer)).error(), error::duplicate_key);
+    CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(distinct)), 2);
+    CHECK_EQ(cbor::at_path<16>(binding, "$..*", lazy_of(inner)).error(), error::duplicate_key);
+    CHECK_EQ(cbor::at_path<16>(binding, "$.a.b.d", lazy_of(inner)).error(), error::duplicate_key);
+    auto const repeated = lazy_of(inner).at<16>("a")->at<16>("b");
+    REQUIRE(repeated.has_value());
+    CHECK_EQ(repeated->decode().error(), error::duplicate_key);
+    auto const read = lazy_of(distinct).at<16>("a")->at<16>("b");
+    REQUIRE(read.has_value());
+    CHECK(read->decode().has_value());
+}
+
+// Two text keys with the same length, the same first eight bytes and the same last eight bytes differ only in
+// the middle. Such keys are compared byte for byte: the distinct pair is read, and the equal pair gives
+// duplicate_key (RFC 8949 5.6).
+TEST_CASE("lazy_decode: keys that differ only in the middle are compared in full")
+{
+    test_binding binding;
+    std::string const distinct = "\xa2\x71"
+                                 "aaaaaaaaXbbbbbbbb"
+                                 "\x01\x71"
+                                 "aaaaaaaaYbbbbbbbb"
+                                 "\x02"s;
+    std::string const repeated = "\xa2\x71"
+                                 "aaaaaaaaXbbbbbbbb"
+                                 "\x01\x71"
+                                 "aaaaaaaaXbbbbbbbb"
+                                 "\x02"s;
+    CHECK(cbor::lazy_decode<16>(binding, lazy_of(distinct)).has_value());
+    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of(repeated)).error(), error::duplicate_key);
+}
