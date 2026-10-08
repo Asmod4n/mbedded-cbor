@@ -983,7 +983,7 @@ std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::string_view
         if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
-    if (!seen)
+    if (!seen) [[unlikely]]
         return std::unexpected(error::key_not_found);
     return lazy{source, value};
 }
