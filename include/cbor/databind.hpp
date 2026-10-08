@@ -738,8 +738,8 @@ public:
         requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
-        if (owner.use_count() == 0) [[unlikely]]
-            validity::throw_logic_error("cbor::databind::decode: the owner of the encoded data item is empty");
+        validity::throw_logic_error_if_empty(owner,
+                                             "cbor::databind::decode: the owner of the encoded data item is empty");
         auto value = read<DepthMax>(encoded);
         if (!value) [[unlikely]]
             return std::unexpected(value.error());

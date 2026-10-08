@@ -617,6 +617,19 @@ TEST_CASE("lazy: from checks that the owner holds an object")
     CHECK_EQ(**name, "xyz"sv);
 }
 
+// The forms that take the bytes in a std::shared_ptr<std::string const> read through it. A null pointer was read
+// before this test existed, and an empty pointer was kept as the owner of a view.
+TEST_CASE("lazy: from and decode refuse a null or empty std::shared_ptr<std::string const>")
+{
+    std::shared_ptr<std::string const> const null_bytes;
+    CHECK_THROWS_AS((void)cbor::lazy::from(null_bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::decode<16>(null_bytes), std::logic_error);
+    std::string const bytes = "\x00"s;
+    std::shared_ptr<std::string const> const holds_nothing(std::shared_ptr<std::string const>{}, &bytes);
+    CHECK_THROWS_AS((void)cbor::lazy::from(holds_nothing), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::decode<16>(holds_nothing), std::logic_error);
+}
+
 // A shared reference may stand for the content of a tag: the magnitude of a bignum, the bytes of a typed array.
 TEST_CASE("lazy: get follows a shared reference in the content of a tag")
 {

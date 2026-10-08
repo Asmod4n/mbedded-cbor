@@ -177,8 +177,9 @@ template <std::size_t DepthMax>
     requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded)
 {
-    if (!encoded) [[unlikely]]
-        validity::throw_logic_error("cbor::decode: the encoded data item is empty");
+    validity::throw_logic_error_if_null(encoded, "cbor::decode: the encoded data item is null");
+    validity::throw_logic_error_if_empty(encoded,
+                                         "cbor::decode: the owner of the encoded data item is empty");
     return lazy{std::make_shared<value_sharing::top_level_item>(encoded, *encoded, std::vector<lazy>{}, 0), 0};
 }
 
@@ -198,13 +199,14 @@ std::expected<lazy, error> decode(Encoded &&encoded)
 
 inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner, std::string_view const encoded)
 {
-    if (owner.use_count() == 0) [[unlikely]]
-        validity::throw_logic_error("cbor::lazy::from: the owner of the encoded data item is empty");
+    validity::throw_logic_error_if_empty(owner,
+                                         "cbor::lazy::from: the owner of the encoded data item is empty");
     return lazy{std::make_shared<value_sharing::top_level_item>(std::move(owner), encoded, std::vector<lazy>{}, 0), 0};
 }
 
 inline std::expected<lazy, error> lazy::from(std::shared_ptr<std::string const> encoded)
 {
+    validity::throw_logic_error_if_null(encoded, "cbor::lazy::from: the encoded data item is null");
     std::string_view const view = *encoded;
     return from(std::move(encoded), view);
 }

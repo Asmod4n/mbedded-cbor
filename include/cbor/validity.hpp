@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <expected>
+#include <memory>
 #if defined(__cpp_exceptions)
 #include <stdexcept>
 #endif
@@ -55,6 +56,20 @@ public:
         (void)what;
         std::abort();
 #endif
+    }
+
+    template <class T>
+    static void throw_logic_error_if_empty(std::shared_ptr<T> const &owner, char const *const what)
+    {
+        if (owner.use_count() == 0) [[unlikely]]
+            throw_logic_error(what);
+    }
+
+    template <class T>
+    static void throw_logic_error_if_null(std::shared_ptr<T> const &pointer, char const *const what)
+    {
+        if (!pointer) [[unlikely]]
+            throw_logic_error(what);
     }
 
     static constexpr error writer_error(std::errc const e) noexcept
