@@ -697,6 +697,20 @@ TEST_CASE("path: a typed read of a path that is not in the message")
     check_path<"$[0]", std::int64_t>("\x80"s, {std::int64_t{0}}, std::unexpected(error::index_out_of_bounds));
 }
 
+// RFC 8949 5.6.1: text strings are compared byte by byte, so a key whose head is not in the preferred serialization
+// of RFC 8949 4.1 is the same key. The path keeps its key in the preferred form; a key on the wire with another head
+// for the same text is found, and a key with the same head byte and another length is not.
+TEST_CASE("path: a typed read finds a key whose head is not preferred")
+{
+    check_path<"$.a", std::uint64_t>("\xa1\x78\x01" "a\x05"s, {"a"sv}, 5u);
+    check_path<"$.a", std::uint64_t>("\xa2\x79\x00\x01" "b\x01\x7a\x00\x00\x00\x01" "a\x02"s, {"a"sv}, 2u);
+    std::string const long_key = "abcdefghijklmnopqrstuvwx";
+    check_path<"$.abcdefghijklmnopqrstuvwx", std::uint64_t>("\xa2\x78\x19"s + long_key + "y\x01\x79\x00\x18"s + long_key + "\x02"s,
+                                                            {std::string_view(long_key)}, 2u);
+    check_path<"$.abcdefghijklmnopqrstuvwx", std::uint64_t>("\xa1\x78\x19"s + long_key + "y\x01"s, {std::string_view(long_key)},
+                                                            std::unexpected(error::key_not_found));
+}
+
 // RFC 9535 2.3.3.1: a negative index counts from the end of the array. An index selector on a map selects the value
 // under the equal integer key, positive or negative (RFC 8949 3.1).
 TEST_CASE("path: a typed read with a negative index and with an integer key")
