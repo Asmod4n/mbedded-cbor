@@ -53,13 +53,15 @@ class well_formedness
                 auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                 auto const major = static_cast<major_type>(initial >> 5);
                 std::uint8_t const info = initial & 0x1f;
-                if (info <= std::to_underlying(heads::additional_information::eight_byte_argument) &&
+                if (info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument) &&
                     major != major_type::tag &&
-                    (major != major_type::simple_float || info != std::to_underlying(heads::additional_information::one_byte_argument))) {
-                    bool const immediate = info < std::to_underlying(heads::additional_information::one_byte_argument);
+                    (major != major_type::simple_float ||
+                     info != std::to_underlying(rfc8949::additional_information::one_byte_argument))) {
+                    bool const immediate =
+                        info < std::to_underlying(rfc8949::additional_information::one_byte_argument);
                     std::size_t const size = heads::argument_size(info);
                     std::uint64_t argument = info;
-                    if (info == std::to_underlying(heads::additional_information::one_byte_argument)) {
+                    if (info == std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
                         argument = static_cast<std::uint8_t>(d.encoded[1]);
                     } else if (!immediate) {
                         argument = heads::unsigned_read<std::uint64_t>(std::span<char const>(d.encoded).subspan<1, 8>()) >>
@@ -95,7 +97,7 @@ class well_formedness
                     validity::checked_mul(h->argument, 2).value_or(std::numeric_limits<std::uint64_t>::max());
                 break;
             case major_type::tag:
-                if (h->argument == std::to_underlying(heads::tag_number::shareable))
+                if (h->argument == std::to_underlying(rfc8949::tag_number::shareable))
                     marks.mark(d);
                 left[++level] = 1;
                 break;

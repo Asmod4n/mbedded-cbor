@@ -103,15 +103,16 @@ class generic
             return heads::is_null(h);
         else if constexpr (std::same_as<U, simple_value>)
             return h.major == major_type::simple_float &&
-                   h.info <= std::to_underlying(heads::simple_float_information::simple_value_follows);
+                   h.info <= std::to_underlying(rfc8949::simple_float_information::simple_value_follows);
         else if constexpr (std::is_floating_point_v<U>)
             return h.major == major_type::simple_float &&
-                   h.info >= std::to_underlying(heads::simple_float_information::half_precision_float) &&
-                   h.info <= std::to_underlying(heads::simple_float_information::double_precision_float);
+                   h.info >= std::to_underlying(rfc8949::simple_float_information::half_precision_float) &&
+                   h.info <= std::to_underlying(rfc8949::simple_float_information::double_precision_float);
         else if constexpr (packed::is_wide_integer<U>)
             return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer ||
-                   (h.major == major_type::tag && (h.argument == std::to_underlying(heads::tag_number::unsigned_bignum) ||
-                                                   h.argument == std::to_underlying(heads::tag_number::negative_bignum)));
+                   (h.major == major_type::tag &&
+                    (h.argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
+                     h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)));
         else if constexpr (std::is_unsigned_v<U>)
             return h.major == major_type::unsigned_integer;
         else if constexpr (std::is_integral_v<U> || std::is_enum_v<U>)
@@ -146,10 +147,10 @@ class generic
         bool negative = h->major == major_type::negative_integer;
         uint128 magnitude = h->argument;
         if (h->major == major_type::tag) {
-            if (h->argument != std::to_underlying(heads::tag_number::unsigned_bignum) &&
-                h->argument != std::to_underlying(heads::tag_number::negative_bignum)) [[unlikely]]
+            if (h->argument != std::to_underlying(rfc8949::tag_number::unsigned_bignum) &&
+                h->argument != std::to_underlying(rfc8949::tag_number::negative_bignum)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            negative = h->argument == std::to_underlying(heads::tag_number::negative_bignum);
+            negative = h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
             auto const b = d.head_decode();
             if (!b) [[unlikely]]
                 return std::unexpected(b.error());
@@ -203,12 +204,12 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::tag)
                 break;
-            if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
+            if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
                 d.encoded = look.encoded;
                 d.message.mark(d);
                 continue;
             }
-            if (h->argument != std::to_underlying(heads::tag_number::sharedref))
+            if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
                 break;
             d.encoded = look.encoded;
             auto const target = d.message.sharedref_decode(d, item_at);
@@ -265,10 +266,10 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::simple_float) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            switch (static_cast<heads::simple_float_information>(h->info)) {
-            case heads::simple_float_information::half_precision_float:
-            case heads::simple_float_information::single_precision_float:
-            case heads::simple_float_information::double_precision_float:
+            switch (static_cast<rfc8949::simple_float_information>(h->info)) {
+            case rfc8949::simple_float_information::half_precision_float:
+            case rfc8949::simple_float_information::single_precision_float:
+            case rfc8949::simple_float_information::double_precision_float:
                 out = static_cast<U>(heads::float_decode(h->info, h->argument));
                 return {};
             [[unlikely]] default:
@@ -406,12 +407,14 @@ class generic
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
             std::size_t const key_at = d.message.encoded.size() - d.encoded.size();
             auto k = d.head_decode();
-            while (k && k->major == major_type::tag && k->argument == std::to_underlying(heads::tag_number::shareable)) {
+            while (k && k->major == major_type::tag &&
+                   k->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
                 d.message.mark(d);
                 k = d.head_decode();
             }
             heads::decoder referenced{};
-            bool const indirect = k && k->major == major_type::tag && k->argument == std::to_underlying(heads::tag_number::sharedref);
+            bool const indirect = k && k->major == major_type::tag &&
+                                  k->argument == std::to_underlying(rfc8949::tag_number::sharedref);
             if (indirect) {
                 auto const target = d.message.sharedref_decode(d, key_at);
                 if (!target) [[unlikely]]
@@ -478,9 +481,9 @@ class generic
     static std::size_t float_size(double const value)
     {
         switch (heads::preferred_float_info(value)) {
-        case heads::simple_float_information::half_precision_float:
+        case rfc8949::simple_float_information::half_precision_float:
             return heads::initial_byte_size + sizeof(std::uint16_t);
-        case heads::simple_float_information::single_precision_float:
+        case rfc8949::simple_float_information::single_precision_float:
             return heads::initial_byte_size + sizeof(std::uint32_t);
         default:
             return heads::initial_byte_size + sizeof(std::uint64_t);
@@ -631,7 +634,8 @@ class generic
                                        static_cast<std::uint64_t>(magnitude));
             std::size_t const digits = sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(magnitude)) / 8;
             at += heads::head_write(out, at, major_type::tag,
-                             std::to_underlying(negative ? heads::tag_number::negative_bignum : heads::tag_number::unsigned_bignum));
+                                    std::to_underlying(negative ? rfc8949::tag_number::negative_bignum
+                                                                : rfc8949::tag_number::unsigned_bignum));
             at += heads::head_write(out, at, major_type::byte_string, digits);
             auto const bytes = heads::big_endian(magnitude);
             return bytes_write(out, at, std::span<char const>(bytes).last(digits));
@@ -649,7 +653,7 @@ class generic
             return at + heads::head_write(out, at, major_type::unsigned_integer, static_cast<std::uint64_t>(value));
         } else if constexpr (std::is_floating_point_v<U>) {
             double const d = static_cast<double>(value);
-            heads::simple_float_information const info = heads::preferred_float_info(d);
+            rfc8949::simple_float_information const info = heads::preferred_float_info(d);
             return at + heads::head_write(out, at, major_type::simple_float, std::to_underlying(info), heads::float_encode(info, d));
         } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>) {
             at += heads::head_write(out, at, major_type::text_string, value.size());

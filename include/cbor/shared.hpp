@@ -170,7 +170,7 @@ struct value_sharing::top_level_item {
         if (!n) [[unlikely]]
             return std::unexpected(n.error());
         if (error const c =
-                validity::check_tag_content(std::to_underlying(heads::tag_number::sharedref), n->major)
+                validity::check_tag_content(std::to_underlying(rfc8949::tag_number::sharedref), n->major)
                     .error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
@@ -203,12 +203,12 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level
             return std::unexpected(h.error());
         if (h->major != major_type::tag)
             return at;
-        if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
+        if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
             top_level.mark(heads::decoder{std::string_view(std::span(top_level.encoded).subspan(h->at))});
             at = h->at;
             continue;
         }
-        if (h->argument != std::to_underlying(heads::tag_number::sharedref))
+        if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
             return at;
         heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
         auto const found = top_level.sharedref_decode(d, item_at);
@@ -239,7 +239,8 @@ inline std::expected<value_sharing::resolved, error> value_sharing::container_re
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        if (h->major != major_type::tag || h->argument != std::to_underlying(heads::tag_number::encoded_cbor_data_item))
+        if (h->major != major_type::tag ||
+            h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
             return resolved{source, *h, d};
         auto const r = d.head_decode();
         if (!r) [[unlikely]]

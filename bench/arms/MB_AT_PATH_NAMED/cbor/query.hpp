@@ -26,6 +26,7 @@
 #include "inspect.hpp"
 #include "lazy.hpp"
 #include "owning_ref.hpp"
+#include "rfc9535.hpp"
 #include "shared.hpp"
 
 namespace cbor
@@ -142,8 +143,7 @@ class jsonpath
         std::int64_t value = 0;
         for (char const d : std::span(text).subspan(digits_at, digits_end - digits_at))
             value = value * 10 + (d - '0');
-        constexpr std::int64_t exact_max = (std::int64_t{1} << 53) - 1;
-        if (value > exact_max) [[unlikely]]
+        if (value > rfc9535::exact_integer_max) [[unlikely]]
             return std::unexpected(error::invalid_path);
         return integer{negative ? -value : value, digits_end};
     }
@@ -671,9 +671,9 @@ class jsonpath
                 return std::unexpected(h.error());
             if (h->major != major_type::tag)
                 return before;
-            if (h->argument == std::to_underlying(heads::tag_number::sharedref)) [[unlikely]]
+            if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]]
                 return std::nullopt;
-            if (h->argument != std::to_underlying(heads::tag_number::shareable))
+            if (h->argument != std::to_underlying(rfc8949::tag_number::shareable))
                 return before;
         }
     }
@@ -698,7 +698,8 @@ class jsonpath
                 if (!c) [[unlikely]]
                     return std::unexpected(c.error());
                 h = *c;
-                if (h.major != major_type::tag || h.argument != std::to_underlying(heads::tag_number::encoded_cbor_data_item))
+                if (h.major != major_type::tag ||
+                    h.argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
                     break;
                 auto const r = d.head_decode();
                 if (!r) [[unlikely]]
@@ -768,9 +769,9 @@ class jsonpath
             bool negative = h.major == major_type::negative_integer;
             std::uint64_t argument = h.argument;
             if (h.major == major_type::tag &&
-                (h.argument == std::to_underlying(heads::tag_number::unsigned_bignum) ||
-                 h.argument == std::to_underlying(heads::tag_number::negative_bignum))) {
-                negative = h.argument == std::to_underlying(heads::tag_number::negative_bignum);
+                (h.argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
+                 h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum))) {
+                negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
                 auto const content = sharedref_find(d);
                 if (!content) [[unlikely]]
                     return std::unexpected(content.error());
@@ -803,10 +804,10 @@ class jsonpath
         } else if constexpr (std::is_same_v<T, double>) {
             if (h.major != major_type::simple_float) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            switch (static_cast<heads::simple_float_information>(h.info)) {
-            case heads::simple_float_information::half_precision_float:
-            case heads::simple_float_information::single_precision_float:
-            case heads::simple_float_information::double_precision_float:
+            switch (static_cast<rfc8949::simple_float_information>(h.info)) {
+            case rfc8949::simple_float_information::half_precision_float:
+            case rfc8949::simple_float_information::single_precision_float:
+            case rfc8949::simple_float_information::double_precision_float:
                 return heads::float_decode(h.info, h.argument);
             [[unlikely]] default:
                 return std::unexpected(error::incorrect_type);
@@ -1078,8 +1079,9 @@ std::expected<bool, error> jsonpath::key_equal(value_sharing::top_level_item &to
     default:
         break;
     }
-    constexpr std::uint8_t half = std::to_underlying(heads::simple_float_information::half_precision_float);
-    constexpr std::uint8_t twice = std::to_underlying(heads::simple_float_information::double_precision_float);
+    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+    constexpr std::uint8_t twice =
+        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
     bool const h_float = h->info >= half && h->info <= twice;
     bool const l_float = l->info >= half && l->info <= twice;
     if (h_float != l_float)
@@ -1140,8 +1142,9 @@ std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b, s
         return std::unexpected(y.error());
     heads::head const &h = x->h;
     heads::head const &k = y->h;
-    constexpr std::uint8_t half = std::to_underlying(heads::simple_float_information::half_precision_float);
-    constexpr std::uint8_t twice = std::to_underlying(heads::simple_float_information::double_precision_float);
+    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+    constexpr std::uint8_t twice =
+        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
     auto const integral = [](heads::head const &n) {
         return n.major == major_type::unsigned_integer || n.major == major_type::negative_integer;
     };
@@ -1259,8 +1262,9 @@ std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const &b)
         return std::unexpected(y.error());
     heads::head const &h = x->h;
     heads::head const &k = y->h;
-    constexpr std::uint8_t half = std::to_underlying(heads::simple_float_information::half_precision_float);
-    constexpr std::uint8_t twice = std::to_underlying(heads::simple_float_information::double_precision_float);
+    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+    constexpr std::uint8_t twice =
+        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
     auto const integral = [](heads::head const &n) {
         return n.major == major_type::unsigned_integer || n.major == major_type::negative_integer;
     };

@@ -16,6 +16,8 @@
 
 #include "binding.hpp"
 #include "error.hpp"
+#include "rfc8746.hpp"
+#include "rfc8949.hpp"
 #include "validity.hpp"
 
 namespace cbor
@@ -25,8 +27,6 @@ namespace cbor
 __extension__ typedef __int128 int128;
 __extension__ typedef unsigned __int128 uint128;
 #endif
-
-enum class simple_value : std::uint8_t { false_value = 20, true_value, null, undefined };
 
 enum class pass;
 
@@ -38,10 +38,6 @@ std::expected<std::string, error> inspect(std::string_view encoded);
 
 class heads
 {
-    using additional_information = validity::additional_information;
-
-    using tag_number = validity::tag_number;
-
     template <class V>
     static V unsigned_read(std::span<char const, sizeof(V)> const field)
     {
@@ -59,17 +55,19 @@ class heads
 
     static constexpr std::uint8_t preferred_argument_info(std::uint64_t const argument)
     {
-        if (argument < std::to_underlying(additional_information::one_byte_argument))
+        if (argument < std::to_underlying(rfc8949::additional_information::one_byte_argument))
             return static_cast<std::uint8_t>(argument);
-        return static_cast<std::uint8_t>(std::to_underlying(additional_information::one_byte_argument) +
-                                         std::countr_zero(std::bit_ceil(static_cast<unsigned>((std::bit_width(argument) + 7) / 8))));
+        return static_cast<std::uint8_t>(
+            std::to_underlying(rfc8949::additional_information::one_byte_argument) +
+            std::countr_zero(std::bit_ceil(static_cast<unsigned>((std::bit_width(argument) + 7) / 8))));
     }
 
     static constexpr std::size_t argument_size(std::uint8_t const info)
     {
-        if (info < std::to_underlying(additional_information::one_byte_argument))
+        if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument))
             return 0;
-        return std::size_t{1} << (info - std::to_underlying(additional_information::one_byte_argument));
+        return std::size_t{1} << (info -
+                                  std::to_underlying(rfc8949::additional_information::one_byte_argument));
     }
 
     static constexpr std::size_t head_size(std::uint64_t const argument)
@@ -89,7 +87,8 @@ class heads
     CBOR_ALWAYS_INLINE static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
                                                      std::uint8_t const info, std::uint64_t const argument)
     {
-        static_assert(argument_size(std::to_underlying(additional_information::eight_byte_argument)) <= sizeof(std::uint64_t),
+        static_assert(argument_size(std::to_underlying(
+                          rfc8949::additional_information::eight_byte_argument)) <= sizeof(std::uint64_t),
                       "The widest argument must fit in the bytes of one std::uint64_t.");
         static_assert(head_padding >= sizeof(std::uint64_t),
                       "The padding after the last head must hold the bytes that a head writes past its own size.");
@@ -155,7 +154,8 @@ class heads
     CBOR_ALWAYS_INLINE static void item_head_write(std::span<char> const out, std::size_t const at, major_type const major,
                                                   std::size_t const length)
     {
-        out[at] = initial_byte(major, std::to_underlying(additional_information::four_byte_argument));
+        out[at] =
+            initial_byte(major, std::to_underlying(rfc8949::additional_information::four_byte_argument));
         u32_write(out, at + 1, length);
     }
 
@@ -206,8 +206,6 @@ class heads
         return std::string(magnitude_without_leading_zeros(difference));
     }
 
-    using simple_float_information = validity::simple_float_information;
-
     struct head {
         major_type major;
         std::uint8_t info;
@@ -223,32 +221,35 @@ class heads
             auto const initial = static_cast<std::uint8_t>(encoded.front());
             auto const major = static_cast<major_type>(initial >> 5);
             std::uint8_t const info = initial & 0x1f;
-            if (info < std::to_underlying(additional_information::one_byte_argument)) {
+            if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
                 encoded.remove_prefix(1);
                 return head{major, info, info};
             }
             if (error const r = validity::check_definite_length(major, info).error_or(error{}); r != error{})
                 [[unlikely]]
                 return std::unexpected(r);
-            static_assert(argument_size(std::to_underlying(additional_information::two_byte_argument)) >= sizeof(std::uint16_t),
+            static_assert(argument_size(std::to_underlying(
+                              rfc8949::additional_information::two_byte_argument)) >= sizeof(std::uint16_t),
                           "A two-byte argument must cover the bytes of one std::uint16_t.");
-            static_assert(argument_size(std::to_underlying(additional_information::four_byte_argument)) >= sizeof(std::uint32_t),
+            static_assert(argument_size(std::to_underlying(
+                              rfc8949::additional_information::four_byte_argument)) >= sizeof(std::uint32_t),
                           "A four-byte argument must cover the bytes of one std::uint32_t.");
-            static_assert(argument_size(std::to_underlying(additional_information::eight_byte_argument)) >= sizeof(std::uint64_t),
+            static_assert(argument_size(std::to_underlying(
+                              rfc8949::additional_information::eight_byte_argument)) >= sizeof(std::uint64_t),
                           "An eight-byte argument must cover the bytes of one std::uint64_t.");
             std::size_t const size = argument_size(info);
             if (encoded.size() < 1 + size) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             std::span<char const> const rest = std::span(encoded).subspan(1, size);
             std::uint64_t argument;
-            switch (static_cast<additional_information>(info)) {
-            case additional_information::one_byte_argument:
+            switch (static_cast<rfc8949::additional_information>(info)) {
+            case rfc8949::additional_information::one_byte_argument:
                 argument = static_cast<std::uint8_t>(rest.front());
                 break;
-            case additional_information::two_byte_argument:
+            case rfc8949::additional_information::two_byte_argument:
                 argument = unsigned_read<std::uint16_t>(rest.first<2>());
                 break;
-            case additional_information::four_byte_argument:
+            case rfc8949::additional_information::four_byte_argument:
                 argument = unsigned_read<std::uint32_t>(rest.first<4>());
                 break;
             default:
@@ -336,7 +337,7 @@ class heads
                                                      (f.exponent_bias - 1 - static_cast<int>(exp32)));
     }
 
-    static constexpr simple_float_information preferred_float_info(double value)
+    static constexpr rfc8949::simple_float_information preferred_float_info(double value)
     {
         constexpr precision h = half_precision;
         constexpr precision f = single_precision;
@@ -346,40 +347,41 @@ class heads
         constexpr int narrow = d.significand_bits - f.significand_bits;
         std::uint64_t const mant = bits & ((std::uint64_t{1} << d.significand_bits) - 1u);
         if (exp == d.exponent_max)
-            return simple_float_information::half_precision_float;
+            return rfc8949::simple_float_information::half_precision_float;
         if ((mant & ((std::uint64_t{1} << narrow) - 1u)) != 0)
-            return simple_float_information::double_precision_float;
+            return rfc8949::simple_float_information::double_precision_float;
         if (exp == 0)
-            return mant == 0 ? simple_float_information::half_precision_float
-                             : simple_float_information::double_precision_float;
+            return mant == 0 ? rfc8949::simple_float_information::half_precision_float
+                             : rfc8949::simple_float_information::double_precision_float;
         constexpr std::uint32_t normal_min = d.exponent_bias - f.exponent_bias + 1;
         if (exp < normal_min)
             return exp + f.significand_bits >= normal_min &&
                            (mant & ((std::uint64_t{1} << (narrow + normal_min - exp)) - 1u)) == 0
-                       ? simple_float_information::single_precision_float
-                       : simple_float_information::double_precision_float;
+                       ? rfc8949::simple_float_information::single_precision_float
+                       : rfc8949::simple_float_information::double_precision_float;
         if (exp > static_cast<std::uint32_t>(d.exponent_bias + f.exponent_bias))
-            return simple_float_information::double_precision_float;
+            return rfc8949::simple_float_information::double_precision_float;
         std::uint32_t const mant32 = static_cast<std::uint32_t>(mant >> narrow);
         if (exp >= static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias + 1) &&
             exp <= static_cast<std::uint32_t>(d.exponent_bias + h.exponent_bias))
             return (mant32 & ((1u << (f.significand_bits - h.significand_bits)) - 1u)) == 0
-                       ? simple_float_information::half_precision_float
-                       : simple_float_information::single_precision_float;
+                       ? rfc8949::simple_float_information::half_precision_float
+                       : rfc8949::simple_float_information::single_precision_float;
         if (exp >= static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias - h.significand_bits + 1) &&
             exp <= static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias))
             return (mant32 & ((1u << (d.exponent_bias - 1 - static_cast<int>(exp))) - 1u)) == 0
-                       ? simple_float_information::half_precision_float
-                       : simple_float_information::single_precision_float;
-        return simple_float_information::single_precision_float;
+                       ? rfc8949::simple_float_information::half_precision_float
+                       : rfc8949::simple_float_information::single_precision_float;
+        return rfc8949::simple_float_information::single_precision_float;
     }
 
-    static constexpr std::uint64_t float_encode(simple_float_information const info, double const value)
+    static constexpr std::uint64_t float_encode(rfc8949::simple_float_information const info,
+                                                double const value)
     {
         switch (info) {
-        case simple_float_information::half_precision_float:
+        case rfc8949::simple_float_information::half_precision_float:
             return float_encode_binary16(static_cast<float>(value));
-        case simple_float_information::single_precision_float:
+        case rfc8949::simple_float_information::single_precision_float:
             return std::bit_cast<std::uint32_t>(static_cast<float>(value));
         default:
             return std::bit_cast<std::uint64_t>(value);
@@ -388,9 +390,9 @@ class heads
 
     static constexpr double float_decode(std::uint8_t const info, std::uint64_t const argument)
     {
-        if (info == std::to_underlying(simple_float_information::half_precision_float))
+        if (info == std::to_underlying(rfc8949::simple_float_information::half_precision_float))
             return static_cast<double>(float_decode_binary16(static_cast<std::uint16_t>(argument)));
-        if (info == std::to_underlying(simple_float_information::single_precision_float))
+        if (info == std::to_underlying(rfc8949::simple_float_information::single_precision_float))
             return static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(argument)));
         return std::bit_cast<double>(argument);
     }
@@ -404,10 +406,10 @@ class heads
     static constexpr float_key float_key_of(std::uint8_t const info, std::uint64_t const argument)
     {
         double const value = float_decode(info, argument);
-        if (info == std::to_underlying(simple_float_information::half_precision_float))
+        if (info == std::to_underlying(rfc8949::simple_float_information::half_precision_float))
             return {(argument >> 10 & 0x1f) == 0x1f && (argument & 0x3ff) != 0,
                     (argument >> 15) << 63 | (argument & 0x3ff) << 42, value};
-        if (info == std::to_underlying(simple_float_information::single_precision_float))
+        if (info == std::to_underlying(rfc8949::simple_float_information::single_precision_float))
             return {(argument >> 23 & 0xff) == 0xff && (argument & 0x7fffff) != 0,
                     (argument >> 31) << 63 | (argument & 0x7fffff) << 29, value};
         return {(argument >> 52 & 0x7ff) == 0x7ff && (argument & 0xfffffffffffff) != 0,
@@ -440,12 +442,12 @@ class heads
         auto const initial = static_cast<std::uint8_t>(encoded[at]);
         auto const major = static_cast<major_type>(initial >> 5);
         std::uint8_t const info = initial & 0x1f;
-        if (info < std::to_underlying(additional_information::one_byte_argument))
+        if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument))
             return raw_head{major, info, info, at + 1};
         if (error const r = validity::check_additional_information(major, info).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
-        if (info == std::to_underlying(additional_information::indefinite_length))
+        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
             return raw_head{major, info, info, at + 1};
         std::size_t const size = argument_size(info);
         if (encoded.size() - at - 1 < size) [[unlikely]]
@@ -511,5 +513,4 @@ class heads
     friend class databind;
 #endif
 };
-
 }

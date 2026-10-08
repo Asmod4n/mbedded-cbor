@@ -289,23 +289,26 @@ struct encoder {
             direct && near_end ? std::span(tail) : out.subspan(at).template first<9>();
         std::size_t size;
         switch (heads::preferred_float_info(value)) {
-        case heads::simple_float_information::half_precision_float: {
-            item.front() = heads::initial_byte(major_type::simple_float,
-                                               std::to_underlying(heads::simple_float_information::half_precision_float));
+        case rfc8949::simple_float_information::half_precision_float: {
+            item.front() = heads::initial_byte(
+                major_type::simple_float,
+                std::to_underlying(rfc8949::simple_float_information::half_precision_float));
             auto const v = std::byteswap(heads::float_encode_binary16(static_cast<float>(value)));
             std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
             size = 3;
         } break;
-        case heads::simple_float_information::single_precision_float: {
-            item.front() = heads::initial_byte(major_type::simple_float,
-                                               std::to_underlying(heads::simple_float_information::single_precision_float));
+        case rfc8949::simple_float_information::single_precision_float: {
+            item.front() = heads::initial_byte(
+                major_type::simple_float,
+                std::to_underlying(rfc8949::simple_float_information::single_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
             std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
             size = 5;
         } break;
         default: {
-            item.front() = heads::initial_byte(major_type::simple_float,
-                                               std::to_underlying(heads::simple_float_information::double_precision_float));
+            item.front() = heads::initial_byte(
+                major_type::simple_float,
+                std::to_underlying(rfc8949::simple_float_information::double_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint64_t>(value));
             std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
             size = 9;
@@ -323,14 +326,15 @@ struct encoder {
     std::expected<void, std::errc> fixed_width_head_encode(major_type const major, T const argument)
     {
         return head_encode(major,
-                           std::to_underlying(heads::additional_information::one_byte_argument) + std::countr_zero(sizeof(T)),
+                           std::to_underlying(rfc8949::additional_information::one_byte_argument) +
+                               std::countr_zero(sizeof(T)),
                            argument);
     }
 
     std::expected<void, std::errc> simple_value_encode(simple_value const value)
     {
-        if (std::to_underlying(value) >= std::to_underlying(heads::simple_float_information::simple_value_follows))
-            [[unlikely]]
+        if (std::to_underlying(value) >=
+            std::to_underlying(rfc8949::simple_float_information::simple_value_follows)) [[unlikely]]
             return std::unexpected(std::errc::invalid_argument);
         return head_encode(major_type::simple_float, std::to_underlying(value), std::to_underlying(value));
     }
@@ -459,7 +463,7 @@ class walker
                             failure = r.error();
                         return;
                     }
-                    head(major_type::tag, std::to_underlying(heads::tag_number::encoded_cbor_data_item));
+                    head(major_type::tag, std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item));
                     keep(out.byte_string_encode(inner.encoded));
                 }
                 return;
@@ -474,12 +478,12 @@ class walker
                 auto const number = shared->numbers.find(*identity);
                 if (number != shared->numbers.end()) {
                     if (number->second < shared->next) {
-                        head(major_type::tag, std::to_underlying(heads::tag_number::sharedref));
+                        head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
                         head(major_type::unsigned_integer, number->second);
                         return;
                     }
                     number->second = shared->next++;
-                    head(major_type::tag, std::to_underlying(heads::tag_number::shareable));
+                    head(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable));
                 }
             }
         }
@@ -626,7 +630,7 @@ class walker
                 keep_error(r.error());
                 return;
             }
-            head(major_type::tag, std::to_underlying(heads::tag_number::unsigned_bignum));
+            head(major_type::tag, std::to_underlying(rfc8949::tag_number::unsigned_bignum));
             keep(out.byte_string_encode(m));
             return;
         }
@@ -643,7 +647,7 @@ class walker
             keep_error(r.error());
             return;
         }
-        head(major_type::tag, std::to_underlying(heads::tag_number::negative_bignum));
+        head(major_type::tag, std::to_underlying(rfc8949::tag_number::negative_bignum));
         keep(out.byte_string_encode(n));
     }
 
