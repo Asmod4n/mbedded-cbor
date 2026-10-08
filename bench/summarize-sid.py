@@ -20,6 +20,18 @@ def read(path):
     return open(path).read().strip() if os.path.exists(path) else ""
 
 
+def elf_type_count(path):
+    count = collections.Counter()
+    for line in read(path).splitlines():
+        name, kind = line.split(" ", 1)
+        count[kind + " " + name.split(".")[0]] += 1
+    return dict(sorted(count.items()))
+
+
+def pie(flags):
+    return "-fPIE -pie" if {"-fPIE", "-pie"} <= set(flags.split()) else "default of the compiler"
+
+
 def cpu():
     model, flags_line = "", ""
     with open("/proc/cpuinfo") as f:
@@ -68,6 +80,8 @@ print(json.dumps({
     "commit": read(os.path.join(build, "commit")),
     "purpose": "mbedded-cbor runtime API against CBOR libraries that openSUSE Tumbleweed does not package, in Debian sid",
     "flags": flags,
+    "pie": pie(flags),
+    "elf_type_count": elf_type_count(os.path.join(build, "out", "elf_type")),
     "processes": int(processes),
     "min_time": min_time,
     "resolved_march": run("g++-16", "-march=native", "-Q", "--help=target").split("-march=", 1)[1].split()[0],
