@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <limits>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -38,6 +40,27 @@ class verify_path;
 template <fixed_string Path, std::size_t DepthMax = 128, class Binding>
     requires(verify_path<Path, DepthMax>::value)
 std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
+
+template <fixed_string Path, std::size_t DepthMax>
+class singular_query;
+
+template <fixed_string Path, class T, std::size_t DepthMax = 128>
+    requires(singular_query<Path, DepthMax>::value &&
+             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+              std::is_same_v<T, std::nullptr_t>))
+std::expected<T, error> at_path(std::string_view encoded);
+
+template <fixed_string Path, class T, std::size_t DepthMax = 128>
+    requires(singular_query<Path, DepthMax>::value &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<T, error> at_path(std::string const &encoded);
+
+template <fixed_string Path, class T, std::size_t DepthMax = 128>
+    requires(singular_query<Path, DepthMax>::value &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<T, error> at_path(std::string const &&encoded) = delete;
 
 class jsonpath
 {
@@ -637,6 +660,266 @@ class jsonpath
     template <std::size_t DepthMax, class Binding>
     static std::expected<typename Binding::value, error> query_walk(Binding &binding, query_view const &v, parsed_query const &top,
                                                              lazy const &root);
+
+    static std::expected<std::optional<heads::decoder>, error> sharedref_find(heads::decoder d)
+    {
+        for (;;) {
+            heads::decoder const before = d;
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::tag)
+                return before;
+            if (h->argument == std::to_underlying(heads::tag_number::sharedref)) [[unlikely]]
+                return std::nullopt;
+            if (h->argument != std::to_underlying(heads::tag_number::shareable))
+                return before;
+        }
+    }
+
+    template <std::size_t DepthMax, class T>
+    static std::optional<std::expected<T, error>> query_walk(query_view const &v, parsed_query const &top,
+                                                             std::string_view const encoded)
+    {
+        heads::decoder d{encoded};
+        heads::head h{};
+        std::size_t step = 0;
+        well_formedness::no_marks none;
+        for (;;) {
+            for (;;) {
+                auto const at = sharedref_find(d);
+                if (!at) [[unlikely]]
+                    return std::unexpected(at.error());
+                if (!*at) [[unlikely]]
+                    return std::nullopt;
+                d = **at;
+                auto const c = d.head_decode();
+                if (!c) [[unlikely]]
+                    return std::unexpected(c.error());
+                h = *c;
+                if (h.major != major_type::tag || h.argument != std::to_underlying(heads::tag_number::encoded_cbor_data_item))
+                    break;
+                auto const r = d.head_decode();
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (r->major != major_type::byte_string) [[unlikely]]
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                auto const embedded = d.byte_string_decode(r->argument);
+                if (!embedded) [[unlikely]]
+                    return std::unexpected(embedded.error());
+                d = heads::decoder{*embedded};
+            }
+            if (step == top.segment_count)
+                break;
+            selector const &each = v.selectors[v.segments[top.segment_at + step].selector_at];
+            ++step;
+            if (each.kind == selector::kind::index && h.major == major_type::array) {
+                std::int64_t const size = h.argument > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
+                                              ? std::numeric_limits<std::int64_t>::max()
+                                              : static_cast<std::int64_t>(h.argument);
+                std::int64_t const position = each.index < 0 ? each.index + size : each.index;
+                if (position < 0 || position >= size) [[unlikely]]
+                    return std::unexpected(error::index_out_of_bounds);
+                for (std::int64_t i = 0; i < position; ++i)
+                    if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
+                        return std::unexpected(r.error());
+                continue;
+            }
+            if (h.major != major_type::map) [[unlikely]]
+                return std::unexpected(error::not_indexable);
+            std::string_view const key =
+                each.kind == selector::kind::key ? std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)) : std::string_view{};
+            heads::decoder named{key};
+            if (each.kind == selector::kind::key && !named.head_decode()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            bool found = false;
+            for (std::uint64_t i = 0; i < h.argument && !found; ++i) {
+                auto const key_at = sharedref_find(d);
+                if (!key_at) [[unlikely]]
+                    return std::unexpected(key_at.error());
+                if (!*key_at) [[unlikely]]
+                    return std::nullopt;
+                heads::decoder probe = **key_at;
+                auto const k = probe.head_decode();
+                if (!k) [[unlikely]]
+                    return std::unexpected(k.error());
+                if (each.kind == selector::kind::key) {
+                    if (k->major == major_type::text_string) {
+                        auto const content = probe.byte_string_decode(k->argument);
+                        if (!content) [[unlikely]]
+                            return std::unexpected(content.error());
+                        found = *content == named.encoded;
+                    }
+                } else {
+                    found = (k->major == major_type::unsigned_integer && each.index >= 0 &&
+                             k->argument == static_cast<std::uint64_t>(each.index)) ||
+                            (k->major == major_type::negative_integer && each.index < 0 &&
+                             k->argument == static_cast<std::uint64_t>(-1 - each.index));
+                }
+                if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (!found)
+                    if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
+                        return std::unexpected(r.error());
+            }
+            if (!found) [[unlikely]]
+                return std::unexpected(error::key_not_found);
+        }
+        if constexpr (std::integral<T> && !std::is_same_v<T, bool>) {
+            bool negative = h.major == major_type::negative_integer;
+            std::uint64_t argument = h.argument;
+            if (h.major == major_type::tag &&
+                (h.argument == std::to_underlying(heads::tag_number::unsigned_bignum) ||
+                 h.argument == std::to_underlying(heads::tag_number::negative_bignum))) {
+                negative = h.argument == std::to_underlying(heads::tag_number::negative_bignum);
+                auto const content = sharedref_find(d);
+                if (!content) [[unlikely]]
+                    return std::unexpected(content.error());
+                if (!*content) [[unlikely]]
+                    return std::nullopt;
+                d = **content;
+                auto const r = d.head_decode();
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (r->major != major_type::byte_string) [[unlikely]]
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                auto const bytes = d.byte_string_decode(r->argument);
+                if (!bytes) [[unlikely]]
+                    return std::unexpected(bytes.error());
+                std::string_view const magnitude = heads::magnitude_without_leading_zeros(*bytes);
+                if (magnitude.size() > sizeof(std::uint64_t)) [[unlikely]]
+                    return std::unexpected(error::number_out_of_range);
+                argument = heads::magnitude_value(magnitude);
+            } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
+                return std::unexpected(error::incorrect_type);
+            }
+            if (!std::in_range<T>(argument) || (std::is_unsigned_v<T> && negative)) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            T const magnitude = static_cast<T>(argument);
+            return static_cast<T>(negative ? ~magnitude : magnitude);
+        } else if constexpr (std::is_same_v<T, double>) {
+            if (h.major != major_type::simple_float) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            switch (static_cast<heads::simple_float_information>(h.info)) {
+            case heads::simple_float_information::half_precision_float:
+            case heads::simple_float_information::single_precision_float:
+            case heads::simple_float_information::double_precision_float:
+                return heads::float_decode(h.info, h.argument);
+            [[unlikely]] default:
+                return std::unexpected(error::incorrect_type);
+            }
+        } else if constexpr (std::is_same_v<T, bool>) {
+            if (!heads::is_boolean(h)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return h.info == std::to_underlying(simple_value::true_value);
+        } else if constexpr (std::is_same_v<T, std::nullptr_t>) {
+            if (!heads::is_null(h)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return nullptr;
+        } else if constexpr (std::is_same_v<T, std::string_view>) {
+            if (h.major != major_type::text_string) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            auto const text = d.byte_string_decode(h.argument);
+            if (!text) [[unlikely]]
+                return std::unexpected(text.error());
+            return *text;
+        } else if constexpr (std::is_same_v<T, typed_array>) {
+            if (h.major != major_type::tag) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            if (auto const r = heads::typed_array_check(h.argument, 0); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            auto const content = sharedref_find(d);
+            if (!content) [[unlikely]]
+                return std::unexpected(content.error());
+            if (!*content) [[unlikely]]
+                return std::nullopt;
+            d = **content;
+            auto const r = d.head_decode();
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (r->major != major_type::byte_string) [[unlikely]]
+                return std::unexpected(error::inadmissible_type_for_tag_content);
+            auto const bytes = d.byte_string_decode(r->argument);
+            if (!bytes) [[unlikely]]
+                return std::unexpected(bytes.error());
+            if (auto const c = heads::typed_array_check(h.argument, bytes->size()); !c) [[unlikely]]
+                return std::unexpected(c.error());
+            return typed_array{h.argument, std::as_bytes(std::span(*bytes))};
+        } else {
+            if (h.major != major_type::byte_string) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            auto const bytes = d.byte_string_decode(h.argument);
+            if (!bytes) [[unlikely]]
+                return std::unexpected(bytes.error());
+            return std::as_bytes(std::span(*bytes));
+        }
+    }
+
+    template <std::size_t DepthMax, class T>
+    static std::expected<T, error> query_walk(query_view const &v, parsed_query const &top, lazy const &root)
+    {
+        lazy node = root;
+        for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
+            selector const &each = v.selectors[s.selector_at];
+            auto const child = each.kind == selector::kind::index
+                                   ? node.at<DepthMax>(each.index)
+                                   : key_find<DepthMax>(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)));
+            if (!child) [[unlikely]]
+                return std::unexpected(child.error());
+            node = *child;
+        }
+        auto const value = node.get<T>();
+        if (!value) [[unlikely]]
+            return std::unexpected(value.error());
+        if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                      std::is_same_v<T, typed_array>)
+            return **value;
+        else
+            return *value;
+    }
+
+    template <fixed_string Path, std::size_t DepthMax, class T>
+    static std::expected<T, error> query_walk(std::string_view const encoded)
+    {
+        constexpr auto q = [] {
+            std::array const text = Path.value;
+            return *query_parse(std::string_view(text.data(), text.size() - 1), true, DepthMax);
+        };
+        constexpr std::size_t segments = q().segments.size();
+        constexpr std::size_t selectors = q().selectors.size();
+        constexpr std::size_t keys = q().keys.size();
+        constexpr auto top = q().top;
+        constexpr auto compiled = [q] {
+            auto const parsed = q();
+            std::tuple<std::array<segment, segments>, std::array<selector, selectors>, std::array<char, keys>> c{};
+            std::ranges::copy(parsed.segments, std::get<0>(c).begin());
+            std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
+            std::ranges::copy(parsed.keys, std::get<2>(c).begin());
+            return c;
+        }();
+        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys)};
+        auto const walked = query_walk<DepthMax, T>(v, top, encoded);
+        if (walked) [[likely]]
+            return *walked;
+        return query_walk<DepthMax, T>(
+            v, top,
+            lazy{std::make_shared<value_sharing::top_level_item>(std::shared_ptr<void const>{}, encoded, std::vector<lazy>{}, 0), 0});
+    }
+
+    template <fixed_string, std::size_t>
+    friend class singular_query;
+
+    template <fixed_string Path, class T, std::size_t DepthMax>
+        requires(singular_query<Path, DepthMax>::value &&
+                 ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+                  std::is_same_v<T, std::nullptr_t>))
+    friend std::expected<T, error> at_path(std::string_view encoded);
+
+    template <fixed_string Path, class T, std::size_t DepthMax>
+        requires(singular_query<Path, DepthMax>::value &&
+                 (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                  std::is_same_v<T, typed_array>))
+    friend std::expected<T, error> at_path(std::string const &encoded);
 
     template <fixed_string, std::size_t>
     friend class verify_path;
@@ -1315,6 +1598,38 @@ std::expected<typename Binding::value, error> at_path(Binding &binding, lazy con
                                           {std::get<0>(compiled), std::get<1>(compiled), std::get<2>(compiled),
                                            std::string_view(std::get<3>(compiled).data(), keys)},
                                           top, l);
+}
+
+template <fixed_string Path, std::size_t DepthMax>
+class singular_query : public std::bool_constant<[] {
+    std::array const text = Path.value;
+    auto const q = jsonpath::query_parse(std::string_view(text.data(), text.size() - 1), true, DepthMax);
+    return q.has_value() && q->top.singular &&
+           std::ranges::all_of(q->selectors, [&q](jsonpath::selector const &s) {
+               return s.kind == jsonpath::selector::kind::index ||
+                      (s.kind == jsonpath::selector::kind::key &&
+                       static_cast<major_type>(static_cast<std::uint8_t>(q->keys[s.key_at]) >> 5) == major_type::text_string);
+           });
+}()>
+{
+};
+
+template <fixed_string Path, class T, std::size_t DepthMax>
+    requires(singular_query<Path, DepthMax>::value &&
+             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+              std::is_same_v<T, std::nullptr_t>))
+std::expected<T, error> at_path(std::string_view const encoded)
+{
+    return jsonpath::query_walk<Path, DepthMax, T>(encoded);
+}
+
+template <fixed_string Path, class T, std::size_t DepthMax>
+    requires(singular_query<Path, DepthMax>::value &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<T, error> at_path(std::string const &encoded)
+{
+    return jsonpath::query_walk<Path, DepthMax, T>(encoded);
 }
 
 }
