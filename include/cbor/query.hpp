@@ -661,22 +661,6 @@ class jsonpath
     static std::expected<typename Binding::value, error> query_walk(Binding &binding, query_view const &v, parsed_query const &top,
                                                              lazy const &root);
 
-    static std::expected<std::optional<heads::decoder>, error> sharedref_find(heads::decoder d)
-    {
-        for (;;) {
-            heads::decoder const before = d;
-            auto const h = d.head_decode();
-            if (!h) [[unlikely]]
-                return std::unexpected(h.error());
-            if (h->major != major_type::tag)
-                return before;
-            if (h->argument == std::to_underlying(heads::tag_number::sharedref)) [[unlikely]]
-                return std::nullopt;
-            if (h->argument != std::to_underlying(heads::tag_number::shareable))
-                return before;
-        }
-    }
-
     template <std::size_t DepthMax, class T>
     static std::optional<std::expected<T, error>> query_walk(query_view const &v, parsed_query const &top,
                                                              std::string_view const encoded)
@@ -687,12 +671,18 @@ class jsonpath
         well_formedness::no_marks none;
         for (;;) {
             for (;;) {
-                auto const at = sharedref_find(d);
-                if (!at) [[unlikely]]
-                    return std::unexpected(at.error());
-                if (!*at) [[unlikely]]
-                    return std::nullopt;
-                d = **at;
+                for (;;) {
+                    heads::decoder const before = d;
+                    auto const t = d.head_decode();
+                    if (!t) [[unlikely]]
+                        return std::unexpected(t.error());
+                    if (t->major == major_type::tag && t->argument == std::to_underlying(heads::tag_number::sharedref)) [[unlikely]]
+                        return std::nullopt;
+                    if (t->major != major_type::tag || t->argument != std::to_underlying(heads::tag_number::shareable)) {
+                        d = before;
+                        break;
+                    }
+                }
                 auto const c = d.head_decode();
                 if (!c) [[unlikely]]
                     return std::unexpected(c.error());
@@ -734,12 +724,19 @@ class jsonpath
                 return std::unexpected(error::invalid_path);
             bool found = false;
             for (std::uint64_t i = 0; i < h.argument && !found; ++i) {
-                auto const key_at = sharedref_find(d);
-                if (!key_at) [[unlikely]]
-                    return std::unexpected(key_at.error());
-                if (!*key_at) [[unlikely]]
-                    return std::nullopt;
-                heads::decoder probe = **key_at;
+                heads::decoder probe = d;
+                for (;;) {
+                    heads::decoder const before = probe;
+                    auto const t = probe.head_decode();
+                    if (!t) [[unlikely]]
+                        return std::unexpected(t.error());
+                    if (t->major == major_type::tag && t->argument == std::to_underlying(heads::tag_number::sharedref)) [[unlikely]]
+                        return std::nullopt;
+                    if (t->major != major_type::tag || t->argument != std::to_underlying(heads::tag_number::shareable)) {
+                        probe = before;
+                        break;
+                    }
+                }
                 auto const k = probe.head_decode();
                 if (!k) [[unlikely]]
                     return std::unexpected(k.error());
@@ -772,12 +769,18 @@ class jsonpath
                 (h.argument == std::to_underlying(heads::tag_number::unsigned_bignum) ||
                  h.argument == std::to_underlying(heads::tag_number::negative_bignum))) {
                 negative = h.argument == std::to_underlying(heads::tag_number::negative_bignum);
-                auto const content = sharedref_find(d);
-                if (!content) [[unlikely]]
-                    return std::unexpected(content.error());
-                if (!*content) [[unlikely]]
-                    return std::nullopt;
-                d = **content;
+                for (;;) {
+                    heads::decoder const before = d;
+                    auto const t = d.head_decode();
+                    if (!t) [[unlikely]]
+                        return std::unexpected(t.error());
+                    if (t->major == major_type::tag && t->argument == std::to_underlying(heads::tag_number::sharedref)) [[unlikely]]
+                        return std::nullopt;
+                    if (t->major != major_type::tag || t->argument != std::to_underlying(heads::tag_number::shareable)) {
+                        d = before;
+                        break;
+                    }
+                }
                 auto const r = d.head_decode();
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
@@ -828,12 +831,18 @@ class jsonpath
                 return std::unexpected(error::incorrect_type);
             if (auto const r = heads::typed_array_check(h.argument, 0); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            auto const content = sharedref_find(d);
-            if (!content) [[unlikely]]
-                return std::unexpected(content.error());
-            if (!*content) [[unlikely]]
-                return std::nullopt;
-            d = **content;
+            for (;;) {
+                heads::decoder const before = d;
+                auto const t = d.head_decode();
+                if (!t) [[unlikely]]
+                    return std::unexpected(t.error());
+                if (t->major == major_type::tag && t->argument == std::to_underlying(heads::tag_number::sharedref)) [[unlikely]]
+                    return std::nullopt;
+                if (t->major != major_type::tag || t->argument != std::to_underlying(heads::tag_number::shareable)) {
+                    d = before;
+                    break;
+                }
+            }
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
