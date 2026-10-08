@@ -40,6 +40,7 @@ compile() {
 }
 
 mkdir -p "$build/bin" "$build/out"
+[ -n "${RUN_ONLY:-}" ] && compilers=""
 for a in $arms; do arm_include "$a" > /dev/null; done
 pids=""
 for cc in $compilers; do
@@ -52,7 +53,10 @@ for cc in $compilers; do
 				pids=""
 			fi
 		done
-		[ -n "${AA:-}" ] && { compile "$cc" READ "$d" "$build/bin/$cc.$d.READ_AA" & pids="$pids $!"; }
+		for a in ${AA:-}; do
+			compile "$cc" "$a" "$d" "$build/bin/$cc.$d.${a}_AA" &
+			pids="$pids $!"
+		done
 	done
 done
 for p in $pids; do wait "$p"; done
