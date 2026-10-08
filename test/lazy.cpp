@@ -598,6 +598,25 @@ TEST_CASE("lazy: a view holds the top-level item")
     CHECK_THROWS_AS((void)cbor::lazy::from(std::shared_ptr<void const>{}, "\x00"sv), std::logic_error);
 }
 
+// An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
+// owner does not compile, because the owner does not hold it. The test exists because each of these let a view
+// outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
+TEST_CASE("lazy: from checks that the owner holds an object")
+{
+    auto const bytes = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::lazy::from(o, std::string(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::lazy::from(o, std::move(s)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::lazy::from(o, *o); }; }(bytes)));
+    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
+    CHECK_THROWS_AS((void)cbor::lazy::from(holds_nothing, *bytes), std::logic_error);
+    std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
+    auto const name = cbor::lazy::from(holds_bytes, *bytes)
+                          .and_then([](cbor::lazy const &d) { return d.at("a"); })
+                          .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
+    REQUIRE(name.has_value());
+    CHECK_EQ(**name, "xyz"sv);
+}
+
 // A shared reference may stand for the content of a tag: the magnitude of a bignum, the bytes of a typed array.
 TEST_CASE("lazy: get follows a shared reference in the content of a tag")
 {

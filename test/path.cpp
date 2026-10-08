@@ -9,6 +9,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -608,6 +609,48 @@ TEST_CASE("path: a typed read with an empty owner throws std::logic_error")
     CHECK_THROWS_AS((void)read(), std::logic_error);
 }
 
+// An owner is empty when it holds no object, whatever pointer it stores. The test exists because a check of the stored
+// pointer takes an aliasing std::shared_ptr that holds nothing, and the view then outlives its bytes; it also refuses
+// a std::shared_ptr that holds the bytes and stores a null pointer.
+TEST_CASE("path: a typed read checks that the owner holds an object")
+{
+    auto const bytes = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
+    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
+    auto const read = [&bytes](std::shared_ptr<void const> const &owner) {
+        return cbor::at_path<"$.a", std::string_view>(owner, *bytes);
+    };
+    CHECK_THROWS_AS((void)read(holds_nothing), std::logic_error);
+    std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
+    auto const r = read(holds_bytes);
+    REQUIRE(r.has_value());
+    CHECK_EQ(**r, "xyz"sv);
+}
+
+// A move gives the owner and the view to the target. The test exists because a source that kept its view after it
+// lost its owner read freed memory once the target and the bytes were gone. The source keeps an empty view.
+TEST_CASE("path: a moved owning_ref keeps no view")
+{
+    auto const read = [] {
+        auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
+        return *cbor::at_path<"$.a", std::string_view>(owner, *owner);
+    };
+    std::optional<cbor::owning_ref<std::string_view>> source(read());
+    {
+        auto const target = std::move(*source);
+        CHECK_EQ(*target, "xyz"sv);
+    }
+    CHECK(source->operator->()->empty());
+    CHECK_EQ(source->operator->()->data(), nullptr);
+    std::optional<cbor::owning_ref<std::string_view>> assigned(read());
+    source.emplace(read());
+    *source = std::move(*assigned);
+    assigned.reset();
+    CHECK_EQ(**source, "xyz"sv);
+    auto &same = *source;
+    *source = std::move(same);
+    CHECK_EQ(**source, "xyz"sv);
+}
+
 // RFC 8949 3: a data item has at least its initial byte, and an argument or a string has as many bytes as its head
 // says. A message that ends before is too little data, at the target and in a sibling that the walk skips.
 TEST_CASE("path: a typed read of a message that ends too early")
@@ -802,16 +845,16 @@ TEST_CASE("path: a typed read keeps the nesting depth of lazy")
 }
 
 // The typed read compiles only where it is safe. A view is read only with an owner of the bytes, so it cannot outlive
-// them: a std::string, a temporary std::string, a std::string_view and a literal alone give no view. The forms that
-// a review of 2026-10-08 showed to read freed memory under ASan, a reference into a temporary vector and the
-// content of a temporary std::shared_ptr, do not compile. A scalar holds no bytes and is read from any of them. The
-// path is a singular query of RFC 9535 2.3.5.1 with names and indexes only: a wildcard, a descendant segment and a
-// literal key of EDN go to at_path with a binding. A path with more segments than DepthMax does not compile.
+// them: a std::string, a temporary std::string, a std::string_view and a literal alone give no view. A temporary or a
+// moved std::string beside an owner does not compile either, because the owner does not hold it and the view would
+// read freed memory. A std::string that the caller keeps is read beside an owner. A scalar holds no bytes and is read
+// from any of them. The path is a singular query of RFC 9535 2.3.5.1 with names and indexes only: a wildcard, a
+// descendant segment and a literal key of EDN go to at_path with a binding. A path with more segments than DepthMax
+// does not compile.
 TEST_CASE("path: a typed read that is not safe does not compile")
 {
     std::string text = "\xa1\x61\x61\x61x"s;
     auto const owner = std::make_shared<std::string const>(text);
-    auto const strings = [&text] { return std::vector<std::string>{text}; };
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o, std::string_view(*o)); }; }(owner)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::span<std::byte const>>(o, std::string_view(*o)); }; }(owner)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", cbor::typed_array>(o, std::string_view(*o)); }; }(owner)));
@@ -821,8 +864,11 @@ TEST_CASE("path: a typed read that is not safe does not compile")
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::move(std::as_const(text)))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }("\xa1\x61\x61\x61x")));
-    CHECK_FALSE(([]<class F>(F const &) { return requires(F const &f) { cbor::at_path<"$.a", std::string_view>(f()[0]); }; }(strings)));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(*std::make_shared<std::string const>(s)); }; }(text)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o, std::string(*o)); }; }(owner)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::at_path<"$.a", std::string_view>(o, std::move(s)); }; }(owner)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o, std::declval<std::string const>()); }; }(owner)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", cbor::typed_array>(o, std::string(*o)); }; }(owner)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o, std::string const &s) { cbor::at_path<"$.a", std::string_view>(o, s); }; }(owner)));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::span<std::byte const>>(std::forward<S>(s)); }; }(text)));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", cbor::typed_array>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::int64_t>(o, std::string_view(*o)); }; }(owner)));

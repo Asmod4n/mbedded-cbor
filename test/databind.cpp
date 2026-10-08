@@ -158,6 +158,23 @@ TEST_CASE("databind: a COSE_Sign1 under tag 18 reads as views into the message")
     CHECK_EQ(*cbor::databind<cose_sign1>::encode(**sign1), message);
 }
 
+// An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
+// owner does not compile, because the owner does not hold it. The test exists because each of these let a view
+// outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
+TEST_CASE("databind: decode checks that the owner holds an object")
+{
+    auto const bytes = std::make_shared<std::string const>("\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s);
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::databind<cose_sign1>::decode(o, std::string(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::databind<cose_sign1>::decode(o, std::move(s)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::databind<cose_sign1>::decode(o, *o); }; }(bytes)));
+    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
+    CHECK_THROWS_AS((void)cbor::databind<cose_sign1>::decode(holds_nothing, *bytes), std::logic_error);
+    std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
+    auto const held = cbor::databind<cose_sign1>::decode(holds_bytes, *bytes);
+    REQUIRE(held.has_value());
+    CHECK_EQ(reinterpret_cast<char const *>(std::get<2>((*held)->content).data()), bytes->data() + 12);
+}
+
 // CTAP 2.1 6.2.2: a nested struct under an integer key, text keys inside it, and an absent optional user.
 TEST_CASE("databind: a CTAP2 getAssertion response")
 {

@@ -1878,7 +1878,7 @@ public:
     static std::expected<accessor<>, error> path(std::shared_ptr<void const> owner, std::string_view const encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        if (!owner) [[unlikely]]
+        if (owner.use_count() == 0) [[unlikely]]
             validity::throw_logic_error("cbor::schema::path: the owner of the encoded data item is empty");
         auto const dir = packed::directory_read<T>(encoded);
         if (!dir) [[unlikely]]
@@ -1888,6 +1888,10 @@ public:
             return std::unexpected(error::incorrect_type);
         return accessor<>(std::move(owner), encoded, root, *dir);
     }
+
+    template <class Encoded>
+        requires std::same_as<std::remove_const_t<Encoded>, std::string>
+    static std::expected<accessor<>, error> path(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
     template <fixed_string Path, std::convertible_to<std::size_t>... Index,
               class X = typename decltype(packed::path_result<T, T, Path, 1>())::type>
@@ -1947,13 +1951,17 @@ public:
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && DepthMax <= 1024)
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
-        if (!owner) [[unlikely]]
+        if (owner.use_count() == 0) [[unlikely]]
             validity::throw_logic_error("cbor::schema::decode: the owner of the encoded data item is empty");
         T value{};
         if (auto const r = packed::root_read<T, DepthMax>(value, encoded); !r) [[unlikely]]
             return std::unexpected(r.error());
         return owning_ref<T>(std::move(owner), std::move(value));
     }
+
+    template <std::size_t DepthMax = 128, class Encoded>
+        requires std::same_as<std::remove_const_t<Encoded>, std::string>
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
     CBOR_ALWAYS_INLINE static std::expected<std::string, std::errc> encode(T const &value)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())

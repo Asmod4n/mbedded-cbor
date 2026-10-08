@@ -1864,6 +1864,30 @@ TEST_CASE("attack: no text result outlives its bytes")
     CHECK_THROWS_AS((void)cbor::schema<probe>::decode(std::shared_ptr<void const>{}, bytes), std::logic_error);
 }
 
+// An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
+// owner does not compile, because the owner does not hold it. The test exists because each of these let a view
+// outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
+TEST_CASE("attack: path and decode check that the owner holds an object")
+{
+    auto const bytes = std::make_shared<std::string const>(*cbor::schema<probe>::encode(sample_probe));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::path(o, std::string(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::schema<probe>::path(o, std::move(s)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::decode(o, std::string(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::schema<probe>::decode(o, std::move(s)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::path(o, *o); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::decode(o, *o); }; }(bytes)));
+    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
+    CHECK_THROWS_AS((void)cbor::schema<probe>::path(holds_nothing, *bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::schema<probe>::decode(holds_nothing, *bytes), std::logic_error);
+    std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
+    auto const root = cbor::schema<probe>::path(holds_bytes, *bytes);
+    REQUIRE(root.has_value());
+    CHECK_EQ(root->at<"$.i16">(), -300);
+    auto const decoded = cbor::schema<probe>::decode(holds_bytes, *bytes);
+    REQUIRE(decoded.has_value());
+    CHECK_EQ((*decoded)->i16, -300);
+}
+
 // Each prefix of the message is a cut message. The test exists because a reader that trusted an offset from the
 // wire would read past the end of the cut. No prefix reads a value: the root lies at the end of the message.
 TEST_CASE("attack: every prefix of a message is an error for every path")
