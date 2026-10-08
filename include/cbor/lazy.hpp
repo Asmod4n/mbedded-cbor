@@ -256,7 +256,7 @@ std::expected<lazy, error> value_sharing::key_find(resolved const &found, Match 
         if (auto const r = well_formedness::item_skip<DepthMax>(d, source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
-    if (!seen)
+    if (!seen) [[unlikely]]
         return std::unexpected(error::key_not_found);
     return lazy{found.source, value};
 }
