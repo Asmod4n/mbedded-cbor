@@ -1,3 +1,6 @@
 [submodule "test-vectors"]
 	path = test-vectors
 	url = https://github.com/hildjj/test-vectors/
+[submodule "cbor-test-vectors"]
+	path = cbor-test-vectors
+	url = https://github.com/cbor-wg/cbor-test-vectors
