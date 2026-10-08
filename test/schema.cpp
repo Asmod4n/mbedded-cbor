@@ -951,6 +951,20 @@ TEST_CASE("at_path: a list of structs, strings and lists, by index")
     CHECK_EQ(at_path<garage, "$.rows[1][0]">(bytes).error(), error::index_out_of_bounds);
 }
 
+// RFC 8949 5.6: a map with a repeated key is not valid. decode read the second of two equal keys over the
+// first before this test existed. The key 9 of the sample is written over with 7, the other key.
+TEST_CASE("schema: decode refuses a map with a repeated key")
+{
+    std::string bytes = schema_bytes(sample_garage);
+    std::string const nine = "\x19\x00\x09"s;
+    auto const at = bytes.find(nine);
+    REQUIRE(at != std::string::npos);
+    REQUIRE(bytes.find(nine, at + 1) == std::string::npos);
+    bytes.replace(at, nine.size(), "\x19\x00\x07"s);
+    CHECK_EQ(cbor::schema<garage>::decode(bytes).error(), error::duplicate_key);
+    CHECK(cbor::schema<garage>::decode(schema_bytes(sample_garage)).has_value());
+}
+
 template <class T, cbor::fixed_string Path>
 concept path_reads = requires(typename cbor::schema<T>::template accessor<> const &a) { a.template at<Path>(); };
 

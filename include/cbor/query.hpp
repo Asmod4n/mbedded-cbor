@@ -591,48 +591,6 @@ class jsonpath
     template <std::size_t DepthMax>
     static std::expected<lazy, error> key_find(lazy const &node, std::string_view key);
 
-    static constexpr std::expected<std::size_t, error> literal_end(diagnostic_notation::literal_cursor const cursor,
-                                                                   diagnostic_notation::nesting const n)
-    {
-        if (auto const r = validity::check_nesting_depth(n.depth, n.depth_max); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        std::string_view const literal = cursor.text;
-        auto const h = heads::raw_head_read(literal, cursor.at);
-        if (!h) [[unlikely]]
-            return std::unexpected(h.error());
-        std::size_t next = h->at;
-        switch (h->major) {
-        case major_type::byte_string:
-        case major_type::text_string: {
-            heads::decoder d{std::string_view(std::span(literal).subspan(next))};
-            auto const s = d.byte_string_decode(h->argument);
-            if (!s) [[unlikely]]
-                return std::unexpected(s.error());
-            return next + s->size();
-        }
-        case major_type::array:
-        case major_type::map:
-            for (std::uint64_t i = 0; i < (h->major == major_type::map ? 2 : 1) * h->argument; ++i) {
-                auto const end = literal_end({literal, next}, {n.depth + 1, n.depth_max});
-                if (!end) [[unlikely]]
-                    return end;
-                next = *end;
-            }
-            return next;
-        case major_type::tag:
-            return literal_end({literal, next}, {n.depth + 1, n.depth_max});
-        default:
-            return next;
-        }
-    }
-
-    template <std::size_t DepthMax>
-    static std::expected<std::size_t, error> top_level_item_end(value_sharing::top_level_item &top_level, std::size_t at, std::size_t depth);
-
-    template <std::size_t DepthMax>
-    static std::expected<bool, error> key_equal(value_sharing::top_level_item &top_level, std::size_t at,
-                                                diagnostic_notation::literal_cursor literal, std::size_t depth);
-
     template <std::size_t DepthMax>
     static std::expected<bool, error> value_equal(lazy const &a, lazy const &b, std::size_t depth);
 
@@ -724,7 +682,8 @@ class jsonpath
             if (each.kind == selector::kind::key && !named.head_decode()) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             bool found = false;
-            for (std::uint64_t i = 0; i < h.argument && !found; ++i) {
+            heads::decoder value{};
+            for (std::uint64_t i = 0; i < h.argument; ++i) {
                 heads::decoder probe = d;
                 for (;;) {
                     heads::decoder const before = probe;
@@ -743,27 +702,35 @@ class jsonpath
                 auto const k = probe.head_decode();
                 if (!k) [[unlikely]]
                     return std::unexpected(k.error());
+                bool matched = false;
                 if (each.kind == selector::kind::key) {
                     if (k->major == major_type::text_string) {
                         auto const content = probe.byte_string_decode(k->argument);
                         if (!content) [[unlikely]]
                             return std::unexpected(content.error());
-                        found = *content == named.encoded;
+                        matched = *content == named.encoded;
                     }
                 } else {
-                    found = (k->major == major_type::unsigned_integer && each.index >= 0 &&
-                             k->argument == static_cast<std::uint64_t>(each.index)) ||
-                            (k->major == major_type::negative_integer && each.index < 0 &&
-                             k->argument == static_cast<std::uint64_t>(-1 - each.index));
+                    matched = (k->major == major_type::unsigned_integer && each.index >= 0 &&
+                               k->argument == static_cast<std::uint64_t>(each.index)) ||
+                              (k->major == major_type::negative_integer && each.index < 0 &&
+                               k->argument == static_cast<std::uint64_t>(-1 - each.index));
                 }
                 if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (!found)
-                    if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
-                        return std::unexpected(r.error());
+                if (matched) {
+                    if (error const c = validity::check_key_unique(found).error_or(error{}); c != error{})
+                        [[unlikely]]
+                        return std::unexpected(c);
+                    found = true;
+                    value = d;
+                }
+                if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
+                    return std::unexpected(r.error());
             }
             if (!found) [[unlikely]]
                 return std::unexpected(error::key_not_found);
+            d = value;
         }
         if constexpr (std::integral<T> && !std::is_same_v<T, bool>) {
             bool negative = h.major == major_type::negative_integer;
@@ -976,142 +943,6 @@ class verify_path
 };
 
 template <std::size_t DepthMax>
-std::expected<std::size_t, error> jsonpath::top_level_item_end(value_sharing::top_level_item &top_level, std::size_t const at, std::size_t const depth)
-{
-    heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(at))};
-    if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    return top_level.encoded.size() - d.encoded.size();
-}
-
-template <std::size_t DepthMax>
-std::expected<bool, error> jsonpath::key_equal(value_sharing::top_level_item &top_level, std::size_t const start,
-                                               diagnostic_notation::literal_cursor const cursor, std::size_t const depth)
-{
-    std::string_view const literal = cursor.text;
-    if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    auto const at = value_sharing::shared_resolve(top_level, start);
-    if (!at) [[unlikely]]
-        return std::unexpected(at.error());
-    auto const h = heads::raw_head_read(top_level.encoded, *at);
-    if (!h) [[unlikely]]
-        return std::unexpected(h.error());
-    auto const l = heads::raw_head_read(literal, cursor.at);
-    if (!l) [[unlikely]]
-        return std::unexpected(l.error());
-    if (error const c = validity::check_definite_length(h->major, h->info).error_or(error{}); c != error{})
-        [[unlikely]]
-        return std::unexpected(c);
-    if (h->major != l->major)
-        return false;
-    switch (h->major) {
-    case major_type::unsigned_integer:
-    case major_type::negative_integer:
-        return h->argument == l->argument;
-    case major_type::byte_string:
-    case major_type::text_string: {
-        heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
-        auto const s = d.byte_string_decode(h->argument);
-        if (!s) [[unlikely]]
-            return std::unexpected(s.error());
-        return h->argument == l->argument && *s == std::string_view(std::span(literal).subspan(l->at, static_cast<std::size_t>(l->argument)));
-    }
-    case major_type::array: {
-        if (h->argument != l->argument)
-            return false;
-        std::size_t d = h->at;
-        std::size_t k = l->at;
-        for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const equal = key_equal<DepthMax>(top_level, d, {literal, k}, depth + 1);
-            if (!equal || !*equal)
-                return equal;
-            auto const d_end = top_level_item_end<DepthMax>(top_level, d, depth + 1);
-            if (!d_end) [[unlikely]]
-                return std::unexpected(d_end.error());
-            auto const k_end = literal_end({literal, k}, {depth + 1, DepthMax});
-            if (!k_end) [[unlikely]]
-                return std::unexpected(k_end.error());
-            d = *d_end;
-            k = *k_end;
-        }
-        return true;
-    }
-    case major_type::map: {
-        if (h->argument != l->argument)
-            return false;
-        std::size_t d = h->at;
-        for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const value_at = top_level_item_end<DepthMax>(top_level, d, depth + 1);
-            if (!value_at) [[unlikely]]
-                return std::unexpected(value_at.error());
-            auto const pair_end = top_level_item_end<DepthMax>(top_level, *value_at, depth + 1);
-            if (!pair_end) [[unlikely]]
-                return std::unexpected(pair_end.error());
-            bool paired = false;
-            std::size_t k = l->at;
-            for (std::uint64_t j = 0; j < l->argument && !paired; ++j) {
-                auto const k_value = literal_end({literal, k}, {depth + 1, DepthMax});
-                if (!k_value) [[unlikely]]
-                    return std::unexpected(k_value.error());
-                auto const k_end = literal_end({literal, *k_value}, {depth + 1, DepthMax});
-                if (!k_end) [[unlikely]]
-                    return std::unexpected(k_end.error());
-                auto const key_same = key_equal<DepthMax>(top_level, d, {literal, k}, depth + 1);
-                if (!key_same) [[unlikely]]
-                    return key_same;
-                if (*key_same) {
-                    for (std::size_t earlier = h->at; earlier < d;) {
-                        auto const twin = key_equal<DepthMax>(top_level, earlier, {literal, k}, depth + 1);
-                        if (!twin) [[unlikely]]
-                            return twin;
-                        if (*twin) [[unlikely]]
-                            return std::unexpected(error::duplicate_key);
-                        auto const earlier_value = top_level_item_end<DepthMax>(top_level, earlier, depth + 1);
-                        if (!earlier_value) [[unlikely]]
-                            return std::unexpected(earlier_value.error());
-                        auto const earlier_end = top_level_item_end<DepthMax>(top_level, *earlier_value, depth + 1);
-                        if (!earlier_end) [[unlikely]]
-                            return std::unexpected(earlier_end.error());
-                        earlier = *earlier_end;
-                    }
-                    auto const value_same = key_equal<DepthMax>(top_level, *value_at, {literal, *k_value}, depth + 1);
-                    if (!value_same) [[unlikely]]
-                        return value_same;
-                    paired = *value_same;
-                }
-                k = *k_end;
-            }
-            if (!paired)
-                return false;
-            d = *pair_end;
-        }
-        return true;
-    }
-    case major_type::tag:
-        if (h->argument != l->argument)
-            return false;
-        return key_equal<DepthMax>(top_level, h->at, {literal, l->at}, depth + 1);
-    default:
-        break;
-    }
-    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-    constexpr std::uint8_t twice =
-        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
-    bool const h_float = h->info >= half && h->info <= twice;
-    bool const l_float = l->info >= half && l->info <= twice;
-    if (h_float != l_float)
-        return false;
-    if (!h_float)
-        return h->argument == l->argument;
-    heads::float_key const a = heads::float_key_of(h->info, h->argument);
-    heads::float_key const b = heads::float_key_of(l->info, l->argument);
-    if (a.nan || b.nan)
-        return a.nan && b.nan && a.widened == b.widened;
-    return a.value == b.value;
-}
-
-template <std::size_t DepthMax>
 std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const key)
 {
     heads::decoder text_key{key};
@@ -1124,25 +955,27 @@ std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::string_view
     auto [source, h, d] = *found;
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
+    bool seen = false;
+    std::size_t value = 0;
     for (std::uint64_t i = 0; i < h.argument; ++i) {
         std::size_t const start = source->encoded.size() - d.encoded.size();
-        auto const key_at = value_sharing::shared_resolve(*source, start);
-        if (!key_at) [[unlikely]]
-            return std::unexpected(key_at.error());
-        heads::decoder look{std::string_view(std::span(source->encoded).subspan(*key_at))};
-        if (auto const k = look.head_decode(); !k) [[unlikely]]
-            return std::unexpected(k.error());
         if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
-        auto const match = key_equal<DepthMax>(*source, start, {key, 0}, 0);
+        auto const match = validity::keys_equivalent<DepthMax>(*source, start, key, 0, 0);
         if (!match) [[unlikely]]
             return std::unexpected(match.error());
-        if (*match)
-            return lazy{source, source->encoded.size() - d.encoded.size()};
+        if (*match) {
+            if (error const c = validity::check_key_unique(seen).error_or(error{}); c != error{}) [[unlikely]]
+                return std::unexpected(c);
+            seen = true;
+            value = source->encoded.size() - d.encoded.size();
+        }
         if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
-    return std::unexpected(error::key_not_found);
+    if (!seen)
+        return std::unexpected(error::key_not_found);
+    return lazy{source, value};
 }
 
 template <std::size_t DepthMax>

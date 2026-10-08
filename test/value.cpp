@@ -69,14 +69,16 @@ struct key_binding : test_binding {
 } // namespace
 
 // A binding reserves with the size. A head that declares more items than the remaining bytes can
-// hold must not make it reserve more: each item takes at least one byte, each pair at least two.
+// hold must not make it reserve more: each item takes at least one byte, each pair at least two. decode reads
+// every pair of a map for its keys before the binding gets the map (RFC 8949 5.6), so a map that claims more
+// pairs than it holds gives the binding no size at all.
 TEST_CASE("major 4 and 5: the size a binding receives")
 {
     CHECK(sizes_of("\x83\x01\x02\x03"sv) == std::vector<std::uint64_t>{3});
     CHECK(sizes_of("\xa2\x01\x02\x03\x04"sv) == std::vector<std::uint64_t>{2});
     CHECK(sizes_of("\x82\x80\xa0"sv) == std::vector<std::uint64_t>{2, 0, 0});
     CHECK(sizes_of("\x9b\xff\xff\xff\xff\xff\xff\xff\xff\x01\x02"sv) == std::vector<std::uint64_t>{2});
-    CHECK(sizes_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x01\x02\x03"sv) == std::vector<std::uint64_t>{1});
+    CHECK(sizes_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x01\x02\x03"sv).empty());
     CHECK(sizes_of("\x99\x01\x00"sv) == std::vector<std::uint64_t>{0});
 }
 

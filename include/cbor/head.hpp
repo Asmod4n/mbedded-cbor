@@ -492,6 +492,8 @@ class heads
                                 std::to_underlying(rfc8949::simple_float_information::break_stop_code));
     }
 
+    friend class validity;
+
     friend class decoding;
 
     friend class encoding;

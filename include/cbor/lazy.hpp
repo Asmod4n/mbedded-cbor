@@ -229,6 +229,8 @@ std::expected<lazy, error> value_sharing::key_find(resolved const &found, Match 
         return std::unexpected(error::not_indexable);
     top_level_item &source = *found.source;
     heads::decoder d = found.d;
+    bool seen = false;
+    std::size_t value = 0;
     for (std::uint64_t i = 0; i < found.h.argument; ++i) {
         auto const key_at = shared_resolve(source, source.encoded.size() - d.encoded.size());
         if (!key_at) [[unlikely]]
@@ -242,12 +244,18 @@ std::expected<lazy, error> value_sharing::key_find(resolved const &found, Match 
             return std::unexpected(matched.error());
         if (auto const r = well_formedness::item_skip<DepthMax>(d, source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
-        if (*matched)
-            return lazy{found.source, source.encoded.size() - d.encoded.size()};
+        if (*matched) {
+            if (error const c = validity::check_key_unique(seen).error_or(error{}); c != error{}) [[unlikely]]
+                return std::unexpected(c);
+            seen = true;
+            value = source.encoded.size() - d.encoded.size();
+        }
         if (auto const r = well_formedness::item_skip<DepthMax>(d, source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
-    return std::unexpected(error::key_not_found);
+    if (!seen)
+        return std::unexpected(error::key_not_found);
+    return lazy{found.source, value};
 }
 
 template <std::size_t DepthMax>
@@ -420,7 +428,12 @@ std::expected<lazy_entries<DepthMax>, error> lazy::entries() const
     auto const &[source, h, d] = *found;
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    return lazy_entries<DepthMax>{source, source->encoded.size() - d.encoded.size(), h.argument};
+    std::size_t const first_key = source->encoded.size() - d.encoded.size();
+    if (error const c =
+            validity::check_keys_unique<DepthMax>(*source, first_key, h.argument, 1).error_or(error{});
+        c != error{}) [[unlikely]]
+        return std::unexpected(c);
+    return lazy_entries<DepthMax>{source, first_key, h.argument};
 }
 template <std::size_t DepthMax>
 std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(top_level_item &top_level, std::size_t const at,
@@ -488,6 +501,12 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
         if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
             return std::unexpected(r.error());
         std::size_t const end = top_level.encoded.size() - d.encoded.size();
+        if (h->major == major_type::map)
+            if (error const c =
+                    validity::check_keys_unique<DepthMax>(top_level, h->at, h->argument, depth + 1)
+                        .error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
         node->content = std::as_bytes(std::span(top_level.encoded).subspan(h->at, end - h->at));
         return std::pair{node, end};
     }

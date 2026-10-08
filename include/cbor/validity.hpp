@@ -147,6 +147,21 @@ public:
         return std::ranges::adjacent_find(sorted, {}, projection) == std::ranges::end(sorted);
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_key_unique(bool const equal_key_seen)
+    {
+        if (equal_key_seen) [[unlikely]]
+            return std::unexpected(error::duplicate_key);
+        return {};
+    }
+
+    template <std::size_t DepthMax, class First, class Second>
+    static std::expected<bool, error> keys_equivalent(First &first, std::size_t first_at, Second &second,
+                                                      std::size_t second_at, std::size_t depth);
+
+    template <std::size_t DepthMax, class Message>
+    static std::expected<void, error> check_keys_unique(Message &message, std::size_t first_key,
+                                                        std::uint64_t count, std::size_t depth);
+
     static constexpr error writer_error(std::errc const e) noexcept
     {
         if (e == std::errc::no_buffer_space)
