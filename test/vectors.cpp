@@ -563,8 +563,9 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
             CHECK(l.has_value());
             CHECK(text.has_value());
         } else if (v.encoded == "\xc1\xa1\x61\x61\x00"sv || v.encoded == "\xc0\xa1\x61\x61\x00"sv) {
-            // RFC 8949 5.3.2 lets a decoder check the content type of a tag it knows. The library checks tags
-            // 2, 3, 24, 29 and the typed arrays; tags 0 and 1 are not checked, a question to the owner.
+            // RFC 8949 3.4.1 and 3.4.2 make a map invalid as the content of tag 0 or 1. The library checks
+            // the content type of tags 2, 3, 24, 29 and the typed arrays where it reads them, and of no other
+            // tag. This expectation records the defect until the check of tags 0 and 1 is built.
             CHECK(d.has_value());
             CHECK(l.has_value());
             CHECK(text.has_value());
