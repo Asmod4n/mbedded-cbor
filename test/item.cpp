@@ -168,6 +168,31 @@ TEST_CASE("decode: a map with a repeated key gives duplicate_key")
     CHECK(distinct->decode().has_value());
 }
 
+// A large map is checked by its key views, not pair by pair over the whole map. 65536 distinct text keys
+// decode, and the same map with its last key equal to its first gives duplicate_key.
+TEST_CASE("decode: a map of 65536 keys is checked for a repeated key")
+{
+    constexpr std::size_t count = 65536;
+    std::string map = "\xba\x00\x01\x00\x00"s;
+    for (std::size_t i = 0; i < count; ++i) {
+        std::size_t const n = i + 1 == count ? 0 : i;
+        map += '\x64';
+        for (int shift = 24; shift >= 0; shift -= 8)
+            map += static_cast<char>(n >> shift & 0xff);
+        map += '\x00';
+    }
+    std::string distinct = map;
+    distinct[distinct.size() - 2] = '\x01';
+    distinct[distinct.size() - 3] = '\xff';
+    distinct[distinct.size() - 4] = '\xff';
+    auto const unique = cbor::lazy::from(std::move(distinct));
+    REQUIRE(unique.has_value());
+    CHECK(unique->decode().has_value());
+    auto const twice = cbor::lazy::from(std::move(map));
+    REQUIRE(twice.has_value());
+    CHECK_EQ(twice->decode().error(), cbor::error::duplicate_key);
+}
+
 template <class Lazy>
 concept decodable = requires(Lazy &&l) { std::forward<Lazy>(l).decode(); };
 
