@@ -49,14 +49,15 @@ class well_formedness
             --left[level];
             if (!validity::check_nesting_depth(depth + level, DepthMax).has_value()) [[unlikely]]
                 return std::unexpected(error::nesting_depth_exceeded);
-            if (d.encoded.size() >= heads::initial_byte_size + sizeof(std::uint64_t)) {
+            if (d.encoded.size() >= heads::initial_byte_size + sizeof(std::uint64_t)) [[likely]] {
                 auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                 auto const major = static_cast<major_type>(initial >> 5);
                 std::uint8_t const info = initial & 0x1f;
                 if (info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument) &&
                     major != major_type::tag &&
                     (major != major_type::simple_float ||
-                     info != std::to_underlying(rfc8949::additional_information::one_byte_argument))) {
+                     info != std::to_underlying(rfc8949::additional_information::one_byte_argument)))
+                    [[likely]] {
                     bool const immediate =
                         info < std::to_underlying(rfc8949::additional_information::one_byte_argument);
                     std::size_t const size = heads::argument_size(info);
