@@ -956,8 +956,9 @@ class jsonpath
 
 template <fixed_string Path, std::size_t DepthMax>
 class verify_path
-    : public std::bool_constant<validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
-                                jsonpath::query_parse(Path.view(), true, DepthMax).has_value()>
+    : public std::bool_constant<
+          validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+          jsonpath::query_parse(Path.view(), true, DepthMax).has_value()>
 {
 };
 
@@ -1557,8 +1558,7 @@ template <std::size_t DepthMax, class Binding>
 std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &binding, query_view const &v, parsed_query const &top,
                                                             lazy const &root)
 {
-    if (!root.top_level) [[unlikely]]
-        validity::throw_logic_error("cbor::at_path: the lazy holds no top-level item");
+    validity::throw_logic_error_if_null(root.top_level, "cbor::at_path: the lazy holds no top-level item");
     if (top.singular) {
         lazy node = root;
         for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
@@ -1656,8 +1656,7 @@ template <fixed_string Path, class T, std::size_t DepthMax>
               std::is_same_v<T, typed_array>))
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view const encoded)
 {
-    if (owner.use_count() == 0) [[unlikely]]
-        validity::throw_logic_error("cbor::at_path: the owner of the encoded data item is empty");
+    validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
     return jsonpath::query_walk<Path, DepthMax, T>(std::move(owner), encoded);
 }
 

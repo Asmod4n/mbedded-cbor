@@ -1,6 +1,8 @@
 #include "binding.hpp"
 
 #include <cstddef>
+#include <memory>
+#include <stdexcept>
 
 using cbor::error;
 using cbor::validity;
@@ -29,4 +31,51 @@ TEST_CASE("validity: check_nesting_depth for every depth up to one past the limi
     constexpr bool past_limit_allowed = validity::check_nesting_depth(1025, validity::nesting_depth_limit).has_value();
     CHECK(limit_allowed);
     CHECK_FALSE(past_limit_allowed);
+}
+
+namespace
+{
+
+struct shared_ptr_case {
+    std::shared_ptr<int const> pointer;
+    bool empty;
+    bool null;
+};
+
+std::shared_ptr<int const> const holder = std::make_shared<int const>(7);
+int const elsewhere = 8;
+
+// The four states of a std::shared_ptr after [util.smartptr.shared]: it owns an object or not (empty means it owns
+// none), and it stores a pointer or not (null). Each state is built with a constructor of the standard.
+shared_ptr_case const shared_ptr_cases[] = {
+    {std::shared_ptr<int const>{}, true, true},
+    {std::shared_ptr<int const>(std::shared_ptr<int const>{}, &elsewhere), true, false},
+    {std::shared_ptr<int const>(holder, nullptr), false, true},
+    {holder, false, false},
+};
+
+} // namespace
+
+// An owner that owns no object keeps nothing alive, whatever pointer it stores. The check must throw for exactly the
+// two empty states, so that a view beside such an owner is never handed out.
+TEST_CASE("validity: throw_logic_error_if_empty for every state of a shared_ptr")
+{
+    for (shared_ptr_case const &c : shared_ptr_cases) {
+        if (c.empty)
+            CHECK_THROWS_AS(validity::throw_logic_error_if_empty(c.pointer, "empty"), std::logic_error);
+        else
+            CHECK_NOTHROW(validity::throw_logic_error_if_empty(c.pointer, "empty"));
+    }
+}
+
+// A pointer that is read through must not be null, whether it owns an object or not. The check must throw for
+// exactly the two null states.
+TEST_CASE("validity: throw_logic_error_if_null for every state of a shared_ptr")
+{
+    for (shared_ptr_case const &c : shared_ptr_cases) {
+        if (c.null)
+            CHECK_THROWS_AS(validity::throw_logic_error_if_null(c.pointer, "null"), std::logic_error);
+        else
+            CHECK_NOTHROW(validity::throw_logic_error_if_null(c.pointer, "null"));
+    }
 }
