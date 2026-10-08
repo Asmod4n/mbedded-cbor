@@ -98,8 +98,12 @@ class well_formedness
                     validity::checked_mul(h->argument, 2).value_or(std::numeric_limits<std::uint64_t>::max());
                 break;
             case major_type::tag:
-                if (h->argument == std::to_underlying(rfc8949::tag_number::shareable))
-                    marks.mark(d);
+                if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
+                    if constexpr (requires { marks.mark(d, depth + level); })
+                        marks.mark(d, depth + level);
+                    else
+                        marks.mark(d);
+                }
                 left[++level] = 1;
                 break;
             case major_type::simple_float:

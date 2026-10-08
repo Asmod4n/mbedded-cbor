@@ -677,3 +677,120 @@ TEST_CASE("lazy: a reference decodes to the plain value after a read of its mark
     CHECK_EQ(std::get<std::uint64_t>(element(*r, 2)->kind), 30);
 }
 
+
+namespace shared_test
+{
+
+std::string unsigned_head(std::uint64_t const major, std::uint64_t const n)
+{
+    std::string h;
+    if (n < 24) {
+        h += static_cast<char>(major << 5 | n);
+    } else if (n < 256) {
+        h += static_cast<char>(major << 5 | 24);
+        h += static_cast<char>(n);
+    } else {
+        h += static_cast<char>(major << 5 | 25);
+        h += static_cast<char>(n >> 8);
+        h += static_cast<char>(n & 0xff);
+    }
+    return h;
+}
+
+struct nesting_binding : ref_binding {
+    std::size_t open = 0;
+    std::size_t open_max = 0;
+
+    handle array_decode(std::uint64_t const size)
+    {
+        open_max = std::max(open_max, ++open);
+        return ref_binding::array_decode(size);
+    }
+
+    handle array_append(handle a, handle e)
+    {
+        --open;
+        return ref_binding::array_append(std::move(a), std::move(e));
+    }
+};
+
+} // namespace shared_test
+
+// The fuzz target path found this: [28([[...[0]...]]), [[...[29(0)]...]]] with h arrays in the mark and r
+// arrays around the reference. The decode of the whole item needs a depth of h + 2 and r + 2 only. A lazy
+// that starts at the second element meets the reference before the mark is built. The mark is then built
+// at the depth of its own position, as the decode of the whole item builds it, and not below the
+// reference, so at_path and lazy_decode accept every item that the decode of the whole item accepts.
+TEST_CASE("tag 29: a mark before the start of a lazy is built at the depth of its own position")
+{
+    for (std::size_t h = 0; h <= 15; ++h) {
+        for (std::size_t r = 0; r <= 15; ++r) {
+            CAPTURE(h);
+            CAPTURE(r);
+            std::string const doc = "\x82\xd8\x1c"s + repeat("\x81"sv, h) + '\x00' + repeat("\x81"sv, r) + "\xd8\x1d\x00"s;
+            std::string const target = repeat("\x81"sv, h) + '\x00';
+            test_binding whole_binding;
+            auto const whole = cbor::lazy_decode<16>(whole_binding, *cbor::decode<16>(doc));
+            test_binding path_binding;
+            auto const found = cbor::at_path<16>(path_binding, "$[1]", *cbor::decode<16>(doc));
+            CHECK_EQ(found.has_value(), whole.has_value());
+            if (!found)
+                continue;
+            auto const second = cbor::decode<16>(doc)->at<16>(1);
+            REQUIRE(second.has_value());
+            test_binding lazy_binding;
+            auto const lazy = cbor::lazy_decode<16>(lazy_binding, *second);
+            REQUIRE(lazy.has_value());
+            test_binding expected_binding;
+            auto const expected = cbor::lazy_decode<32>(expected_binding, *cbor::decode<32>(repeat("\x81"sv, r) + target));
+            REQUIRE(expected.has_value());
+            CHECK_EQ(*found, *expected);
+            CHECK_EQ(*lazy, *expected);
+        }
+    }
+}
+
+// [28([29(0)]), 29(0)]: the array holds itself. A lazy at the second element builds the mark at its own
+// depth. The reference inside the mark meets the mark while it is built and gives the same array.
+TEST_CASE("tag 29: a self-referencing array before the start of a lazy")
+{
+    std::string const doc = "\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1d\x00"s;
+    auto const second = cbor::decode<16>(doc)->at<16>(1);
+    REQUIRE(second.has_value());
+    ref_binding binding;
+    auto const v = cbor::lazy_decode<16>(binding, *second);
+    REQUIRE(v.has_value());
+    CHECK(same(element(*v, 0), *v));
+    test_binding plain;
+    CHECK_EQ(cbor::lazy_decode<16>(plain, *second).error(), error::sharedref_not_complete);
+}
+
+// [28([0]), 28([29(0)]), ..., 28([29(n - 2)]), 29(n - 1)]: each mark names the one before it. A lazy at the
+// last element builds every mark that is not built and stands before the target, in the order of the
+// marks. Each mark is built at the depth of its own position, and each reference inside it finds its mark
+// built. So no mark is built below another mark, and the stack holds the frames down to the reference
+// plus the frames of one mark: at most 2 * (DepthMax + 1) calls of value_decode, whatever n is. The
+// binding counts the arrays that are open at the same time; a chain that is built mark below mark opens
+// n of them.
+TEST_CASE("tag 29: a chain of marks before the start of a lazy keeps the stack bounded")
+{
+    for (std::size_t const n : {1uz, 2uz, 17uz, 300uz}) {
+        CAPTURE(n);
+        std::string doc = unsigned_head(4, n + 1) + "\xd8\x1c\x81\x00"s;
+        for (std::size_t i = 1; i < n; ++i)
+            doc += "\xd8\x1c\x81\xd8\x1d"s + unsigned_head(0, i - 1);
+        doc += "\xd8\x1d"s + unsigned_head(0, n - 1);
+        auto const last = cbor::decode<16>(doc)->at<16>(static_cast<std::int64_t>(n));
+        REQUIRE(last.has_value());
+        nesting_binding binding;
+        auto v = cbor::lazy_decode<16>(binding, *last);
+        CAPTURE(v.has_value() ? error{} : v.error());
+        REQUIRE(v.has_value());
+        CHECK_LE(binding.open_max, 2);
+        for (std::size_t i = 1; i < n; ++i)
+            v = element(*v, 0);
+        CHECK_EQ(std::get<std::uint64_t>(element(*v, 0)->kind), 0);
+        test_binding path_binding;
+        CHECK(cbor::at_path<16>(path_binding, "$[" + std::to_string(n) + "]", *cbor::decode<16>(doc)).has_value());
+    }
+}

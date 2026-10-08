@@ -30,6 +30,12 @@ class decoding
         value_sharing::top_level_item &top_level;
         std::vector<bool> evaluating;
         std::vector<std::size_t> keys;
+        std::vector<std::size_t> mark_depths;
+
+        void mark(heads::decoder const &, std::size_t const depth)
+        {
+            mark_depths.push_back(depth);
+        }
     };
 
     template <class Binding>
@@ -186,15 +192,29 @@ class decoding
                     std::size_t const index = *checked;
                     if (!shared[index] && before && !before->evaluating[index] &&
                         before->top_level.sharedrefs[index].offset < before->top_level.encoded.size() - d.encoded.size()) {
+                        if (before->mark_depths.empty()) {
+                            heads::decoder all{before->top_level.encoded};
+                            if (auto const s = well_formedness::item_skip<DepthMax>(all, *before, 0); !s) [[unlikely]]
+                                return std::unexpected(s.error());
+                        }
+                        if (auto const c = validity::check_sharedref_index(index, before->mark_depths.size()); !c)
+                            [[unlikely]]
+                            return std::unexpected(c.error());
                         std::string_view const rest = d.encoded;
-                        d.encoded = std::string_view(std::span(before->top_level.encoded).subspan(before->top_level.sharedrefs[index].offset));
-                        before->evaluating[index] = true;
-                        auto content = value_decode<DepthMax>(depth + 1, index);
-                        before->evaluating[index] = false;
+                        for (std::size_t i = 0; i <= index; ++i) {
+                            if (shared[i] || before->evaluating[i])
+                                continue;
+                            d.encoded = std::string_view(std::span(before->top_level.encoded).subspan(before->top_level.sharedrefs[i].offset));
+                            before->evaluating[i] = true;
+                            auto content = value_decode<DepthMax>(before->mark_depths[i] + 1, i);
+                            before->evaluating[i] = false;
+                            if (!content) [[unlikely]] {
+                                d.encoded = rest;
+                                return content;
+                            }
+                            shared[i] = *content;
+                        }
                         d.encoded = rest;
-                        if (!content) [[unlikely]]
-                            return content;
-                        shared[index] = *content;
                     }
                     if (!shared[index]) [[unlikely]]
                         return std::unexpected(error::sharedref_not_complete);
