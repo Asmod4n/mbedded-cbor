@@ -1024,6 +1024,17 @@ class diagnostic_notation
             return {};
         }
         case major_type::tag: {
+            heads::decoder content_decoder = d;
+            auto c = content_decoder.head_decode();
+            while (c && c->major == major_type::tag &&
+                   c->argument == std::to_underlying(rfc8949::tag_number::shareable))
+                c = content_decoder.head_decode();
+            if (!c) [[unlikely]]
+                return std::unexpected(c.error());
+            if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
+                if (error const e = validity::check_tag_content(h->argument, c->major, c->info).error_or(error{});
+                    e != error{}) [[unlikely]]
+                    return std::unexpected(e);
             out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument) + "(";
             if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
                 return r;

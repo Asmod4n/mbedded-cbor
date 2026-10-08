@@ -154,7 +154,7 @@ class generic
             auto const b = d.head_decode();
             if (!b) [[unlikely]]
                 return std::unexpected(b.error());
-            if (error const c = validity::check_tag_content(h->argument, b->major).error_or(error{});
+            if (error const c = validity::check_tag_content(h->argument, b->major, b->info).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = d.byte_string_decode(b->argument);

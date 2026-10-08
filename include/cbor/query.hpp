@@ -654,7 +654,7 @@ class jsonpath
                 auto const r = d.head_decode();
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (!validity::check_tag_content(h.argument, r->major).has_value()) [[unlikely]]
+                if (!validity::check_tag_content(h.argument, r->major, r->info).has_value()) [[unlikely]]
                     return std::unexpected(error::inadmissible_type_for_tag_content);
                 auto const embedded = d.byte_string_decode(r->argument);
                 if (!embedded) [[unlikely]]
@@ -756,7 +756,7 @@ class jsonpath
                 auto const r = d.head_decode();
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (error const c = validity::check_tag_content(h.argument, r->major).error_or(error{});
+                if (error const c = validity::check_tag_content(h.argument, r->major, r->info).error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
                 auto const bytes = d.byte_string_decode(r->argument);
@@ -832,7 +832,7 @@ class jsonpath
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (error const c = validity::check_tag_content(h.argument, r->major).error_or(error{});
+            if (error const c = validity::check_tag_content(h.argument, r->major, r->info).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = d.byte_string_decode(r->argument);

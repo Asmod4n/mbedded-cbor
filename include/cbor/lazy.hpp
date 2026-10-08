@@ -332,7 +332,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (error const c = validity::check_tag_content(h.argument, r->major).error_or(error{});
+            if (error const c = validity::check_tag_content(h.argument, r->major, r->info).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = d.byte_string_decode(r->argument);
@@ -398,7 +398,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
         auto const r = d.head_decode();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
-        if (error const c = validity::check_tag_content(h.argument, r->major).error_or(error{}); c != error{})
+        if (error const c = validity::check_tag_content(h.argument, r->major, r->info).error_or(error{}); c != error{})
             [[unlikely]]
             return std::unexpected(c);
         auto const bytes = d.byte_string_decode(r->argument);
@@ -527,6 +527,13 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
         if (!content) [[unlikely]] {
             node->content = lazy{{}, at};
             return std::unexpected(content.error());
+        }
+        if (error const c = validity::check_tag_content(h->argument, content->first->major_type,
+                                                        content->first->additional_information)
+                                .error_or(error{});
+            c != error{}) [[unlikely]] {
+            node->content = lazy{{}, at};
+            return std::unexpected(c);
         }
         node->content = static_cast<item const *>(content->first);
         return std::pair{node, content->second};
