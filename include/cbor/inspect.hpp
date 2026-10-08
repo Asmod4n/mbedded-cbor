@@ -749,8 +749,12 @@ class diagnostic_notation
                 ++next;
             if (map) {
                 std::ranges::sort(items);
-                if (!validity::keys_unique(items, &std::pair<std::string, std::string>::first)) [[unlikely]]
-                    return std::unexpected(error::duplicate_key);
+                if (error const c =
+                        validity::check_key_unique(
+                            !validity::keys_unique(items, &std::pair<std::string, std::string>::first))
+                            .error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
             }
             if (auto const r = head_append(out, h->major, items.size(), no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());

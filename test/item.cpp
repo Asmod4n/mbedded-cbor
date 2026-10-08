@@ -149,6 +149,25 @@ TEST_CASE("decode: an array is its count and a view on the bytes of its elements
     CHECK_EQ(elements[1], std::byte{0x62});
 }
 
+// RFC 8949 5.6: a map with a repeated key is not valid. decode builds the item of a map and refuses the map
+// when two of its keys are equal by RFC 8949 5.6.1. An array holds its elements as bytes, so a map inside it
+// is refused when the map itself is decoded.
+TEST_CASE("decode: a map with a repeated key gives duplicate_key")
+{
+    auto const twice = cbor::lazy::from(std::string("\xa2\x61k\x01\x61k\x02"sv));
+    REQUIRE(twice.has_value());
+    CHECK_EQ(twice->decode().error(), cbor::error::duplicate_key);
+    auto const nested = cbor::lazy::from(std::string("\x81\xa2\x01\x00\x18\x01\x00"sv));
+    REQUIRE(nested.has_value());
+    REQUIRE(nested->decode().has_value());
+    auto const inner = nested->at(0);
+    REQUIRE(inner.has_value());
+    CHECK_EQ(inner->decode().error(), cbor::error::duplicate_key);
+    auto const distinct = cbor::lazy::from(std::string("\xa2\x61k\x01\x61j\x02"sv));
+    REQUIRE(distinct.has_value());
+    CHECK(distinct->decode().has_value());
+}
+
 template <class Lazy>
 concept decodable = requires(Lazy &&l) { std::forward<Lazy>(l).decode(); };
 

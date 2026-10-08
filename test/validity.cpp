@@ -161,6 +161,14 @@ TEST_CASE("validity: keys_unique for every sorted sequence of up to four keys")
     }
 }
 
+// RFC 8949 5.6: a second key equal to a key already met makes the map not valid. The input set is {false,
+// true}.
+TEST_CASE("validity: check_key_unique for both inputs")
+{
+    CHECK(validity::check_key_unique(false).has_value());
+    CHECK_EQ(validity::check_key_unique(true).error(), error::duplicate_key);
+}
+
 #ifdef __SIZEOF_INT128__
 // C23 ckd_mul gives the product when it is representable and reports an overflow otherwise. The compiler and
 // the run time use the same function, so both must give the answer of the exact product, which a wider type

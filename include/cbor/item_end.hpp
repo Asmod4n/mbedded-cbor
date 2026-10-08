@@ -116,6 +116,8 @@ class well_formedness
         requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<std::size_t, error> item_end(std::string_view encoded);
 
+    friend class validity;
+
     friend class decoding;
 
     friend struct lazy;

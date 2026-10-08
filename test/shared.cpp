@@ -157,13 +157,18 @@ TEST_CASE("tag 28/29: a binding without cyclic data structures refuses a cycle")
     CHECK(*v == A(A(), A()));
 }
 
-// Found by the fuzzer: a decode that fails inside a cycle returns no value, so nobody could reach the cycle to
-// end it, and its shared pointers held each other forever. The binding ends every node that only other nodes hold.
+// Found by the fuzzer: a decode that fails inside a cycle returns no value, so nobody could reach the cycle
+// to end it, and its shared pointers held each other forever. The binding ends every node that only other
+// nodes hold. The map is complete and its keys are distinct, so the binding makes the map and the cycle
+// before the content of tag 2, an integer, fails (RFC 8949 3.4.3). The fuzzer found a truncated map, which
+// decode now refuses before the binding makes anything.
 TEST_CASE("tag 28/29: a cycle that a failed decode leaves behind is freed with the binding")
 {
     std::vector<std::weak_ptr<node>> const made = [] {
         ref_binding binding;
-        CHECK_FALSE(cbor::lazy_decode<16>(binding, *cbor::decode<16>("\xd8\x1c\xa5\x61\x61\xd8\x1d\x00"sv)).has_value());
+        CHECK_FALSE(cbor::lazy_decode<16>(
+                        binding, *cbor::decode<16>("\xd8\x1c\xa2\x61\x61\xd8\x1d\x00\x61\x62\xc2\x00"sv))
+                        .has_value());
         return binding.made;
     }();
     REQUIRE_FALSE(made.empty());

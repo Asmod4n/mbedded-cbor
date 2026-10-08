@@ -137,6 +137,21 @@ TEST_CASE("databind: a repeated key is duplicate_key")
     CHECK_EQ((*distinct)->a, 1u);
 }
 
+// RFC 8949 5.6: a key that no member takes is still a key of the map, so two equal keys of that kind make the
+// map not valid. The keys of a std::map are compared after they are read, so an integer key in two widths is
+// one key (RFC 8949 5.6.1).
+TEST_CASE("databind: a repeated key that no member takes is duplicate_key")
+{
+    CHECK_EQ(cbor::databind<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\x80\x61x\x01\x61x\x02"s).error(),
+             error::duplicate_key);
+    CHECK_EQ(cbor::databind<pair_ab>::decode("\xa4\x61x\x01\x61\x61\x01\x61\x62\x80\x61x\x02"s).error(),
+             error::duplicate_key);
+    CHECK(cbor::databind<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\x80\x61x\x01\x61y\x02"s).has_value());
+    CHECK_EQ(
+        (cbor::databind<std::map<std::uint64_t, std::uint64_t>>::decode("\xa2\x01\x00\x18\x01\x00"s).error()),
+        error::duplicate_key);
+}
+
 // RFC 8428 6, the CBOR form of the example in 5.1.2: the integer labels come from the keys of the struct.
 TEST_CASE("databind: a SenML pack with integer labels")
 {

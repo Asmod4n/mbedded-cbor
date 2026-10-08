@@ -19,7 +19,9 @@
 #include "binding.hpp"
 #include "error.hpp"
 #include "head.hpp"
+#include "item_end.hpp"
 #include "owning_ref.hpp"
+#include "validity.hpp"
 
 namespace cbor
 {
@@ -54,6 +56,8 @@ class value_sharing
 
     template <std::size_t DepthMax, class Match>
     static std::expected<lazy, error> key_find(resolved const &found, Match const &match);
+
+    friend class validity;
 
     friend struct lazy;
 
@@ -257,3 +261,203 @@ inline std::expected<value_sharing::resolved, error> value_sharing::container_re
 }
 
 }
+
+namespace cbor
+{
+
+template <std::size_t DepthMax, class First, class Second>
+std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t const first_at, Second &second,
+                                                     std::size_t const second_at, std::size_t const depth)
+{
+    if (auto const r = check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    auto const encoded_of = []<class Message>(Message &message) -> std::string_view {
+        if constexpr (std::same_as<Message, std::string_view const>)
+            return message;
+        else
+            return message.encoded;
+    };
+    auto const resolve = []<class Message>(Message &message,
+                                           std::size_t const at) -> std::expected<std::size_t, error> {
+        if constexpr (std::same_as<Message, std::string_view const>)
+            return at;
+        else
+            return value_sharing::shared_resolve(message, at);
+    };
+    auto const skip = []<class Message>(Message &message, heads::decoder &d, std::size_t const level) {
+        if constexpr (std::same_as<Message, std::string_view const>) {
+            well_formedness::no_marks none;
+            return well_formedness::item_skip<DepthMax>(d, none, level);
+        } else {
+            return well_formedness::item_skip<DepthMax>(d, message, level);
+        }
+    };
+    std::string_view const a = encoded_of(first);
+    std::string_view const b = encoded_of(second);
+    auto const x = resolve(first, first_at);
+    if (!x) [[unlikely]]
+        return std::unexpected(x.error());
+    auto const y = resolve(second, second_at);
+    if (!y) [[unlikely]]
+        return std::unexpected(y.error());
+    auto const h = heads::raw_head_read(a, *x);
+    if (!h) [[unlikely]]
+        return std::unexpected(h.error());
+    auto const k = heads::raw_head_read(b, *y);
+    if (!k) [[unlikely]]
+        return std::unexpected(k.error());
+    if (error const c = check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
+        return std::unexpected(c);
+    if (error const c = check_definite_length(k->major, k->info).error_or(error{}); c != error{}) [[unlikely]]
+        return std::unexpected(c);
+    if (h->major != k->major)
+        return false;
+    switch (h->major) {
+    case major_type::unsigned_integer:
+    case major_type::negative_integer:
+        return h->argument == k->argument;
+    case major_type::byte_string:
+    case major_type::text_string: {
+        heads::decoder d{std::string_view(std::span(a).subspan(h->at))};
+        auto const s = d.byte_string_decode(h->argument);
+        if (!s) [[unlikely]]
+            return std::unexpected(s.error());
+        heads::decoder e{std::string_view(std::span(b).subspan(k->at))};
+        auto const t = e.byte_string_decode(k->argument);
+        if (!t) [[unlikely]]
+            return std::unexpected(t.error());
+        return *s == *t;
+    }
+    case major_type::array: {
+        if (h->argument != k->argument)
+            return false;
+        heads::decoder d{std::string_view(std::span(a).subspan(h->at))};
+        heads::decoder e{std::string_view(std::span(b).subspan(k->at))};
+        for (std::uint64_t i = 0; i < h->argument; ++i) {
+            auto const equal = keys_equivalent<DepthMax>(first, a.size() - d.encoded.size(), second,
+                                                         b.size() - e.encoded.size(), depth + 1);
+            if (!equal || !*equal)
+                return equal;
+            if (auto const r = skip(first, d, depth + 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (auto const r = skip(second, e, depth + 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
+        }
+        return true;
+    }
+    case major_type::map: {
+        if (h->argument != k->argument)
+            return false;
+        if (auto const r = check_keys_unique<DepthMax>(first, h->at, h->argument, depth + 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (auto const r = check_keys_unique<DepthMax>(second, k->at, k->argument, depth + 1); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
+        heads::decoder d{std::string_view(std::span(a).subspan(h->at))};
+        for (std::uint64_t i = 0; i < h->argument; ++i) {
+            std::size_t const key = a.size() - d.encoded.size();
+            if (auto const r = skip(first, d, depth + 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            std::size_t const value = a.size() - d.encoded.size();
+            if (auto const r = skip(first, d, depth + 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            bool paired = false;
+            heads::decoder e{std::string_view(std::span(b).subspan(k->at))};
+            for (std::uint64_t j = 0; j < k->argument && !paired; ++j) {
+                std::size_t const other = b.size() - e.encoded.size();
+                if (auto const r = skip(second, e, depth + 1); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                std::size_t const other_value = b.size() - e.encoded.size();
+                if (auto const r = skip(second, e, depth + 1); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                auto const key_same = keys_equivalent<DepthMax>(first, key, second, other, depth + 1);
+                if (!key_same) [[unlikely]]
+                    return key_same;
+                if (!*key_same)
+                    continue;
+                auto const value_same =
+                    keys_equivalent<DepthMax>(first, value, second, other_value, depth + 1);
+                if (!value_same || !*value_same)
+                    return value_same;
+                paired = true;
+            }
+            if (!paired)
+                return false;
+        }
+        return true;
+    }
+    case major_type::tag:
+        if (h->argument != k->argument)
+            return false;
+        return keys_equivalent<DepthMax>(first, h->at, second, k->at, depth + 1);
+    case major_type::simple_float:
+        break;
+    }
+    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+    constexpr std::uint8_t twice =
+        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+    bool const h_float = h->info >= half && h->info <= twice;
+    bool const k_float = k->info >= half && k->info <= twice;
+    if (h_float != k_float)
+        return false;
+    if (!h_float)
+        return h->argument == k->argument;
+    heads::float_key const p = heads::float_key_of(h->info, h->argument);
+    heads::float_key const q = heads::float_key_of(k->info, k->argument);
+    if (p.nan || q.nan) {
+        constexpr std::uint64_t significand =
+            (std::uint64_t{1} << heads::double_precision.significand_bits) - 1u;
+        return p.nan && q.nan && (p.widened & significand) == (q.widened & significand);
+    }
+    return p.value == q.value;
+}
+
+template <std::size_t DepthMax, class Message>
+std::expected<void, error> validity::check_keys_unique(Message &message, std::size_t const first_key,
+                                                       std::uint64_t const count, std::size_t const depth)
+{
+    if (count < 2)
+        return {};
+    std::string_view encoded;
+    if constexpr (std::same_as<Message, std::string_view const>)
+        encoded = message;
+    else
+        encoded = message.encoded;
+    auto const pair_skip = []<class M>(M &m, heads::decoder &d,
+                                       std::size_t const level) -> std::expected<void, error> {
+        well_formedness::no_marks none;
+        auto &marks = [&]() -> auto & {
+            if constexpr (std::same_as<M, std::string_view const>)
+                return none;
+            else
+                return m;
+        }();
+        if (auto const r = well_formedness::item_skip<DepthMax>(d, marks, level); !r) [[unlikely]]
+            return r;
+        return well_formedness::item_skip<DepthMax>(d, marks, level);
+    };
+    heads::decoder walk{std::string_view(std::span(encoded).subspan(first_key))};
+    for (std::uint64_t i = 0; i < count; ++i)
+        if (auto const r = pair_skip(message, walk, depth); !r) [[unlikely]]
+            return r;
+    heads::decoder d{std::string_view(std::span(encoded).subspan(first_key))};
+    for (std::uint64_t i = 0; i + 1 < count; ++i) {
+        std::size_t const key = encoded.size() - d.encoded.size();
+        if (auto const r = pair_skip(message, d, depth); !r) [[unlikely]]
+            return r;
+        heads::decoder e = d;
+        for (std::uint64_t j = i + 1; j < count; ++j) {
+            auto const equal =
+                keys_equivalent<DepthMax>(message, key, message, encoded.size() - e.encoded.size(), depth);
+            if (!equal) [[unlikely]]
+                return std::unexpected(equal.error());
+            if (error const c = check_key_unique(*equal).error_or(error{}); c != error{}) [[unlikely]]
+                return std::unexpected(c);
+            if (auto const r = pair_skip(message, e, depth); !r) [[unlikely]]
+                return r;
+        }
+    }
+    return {};
+}
+
+} // namespace cbor

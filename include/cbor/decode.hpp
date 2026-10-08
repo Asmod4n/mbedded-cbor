@@ -77,6 +77,13 @@ class decoding
                 return array;
             }
             case major_type::map: {
+                if (error const c = validity::check_keys_unique<DepthMax>(before->top_level,
+                                                                          before->top_level.encoded.size() -
+                                                                              d.encoded.size(),
+                                                                          h->argument, depth + 1)
+                                        .error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
                 auto map = binding.map_decode(std::min<std::uint64_t>(h->argument, d.encoded.size() / 2));
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())

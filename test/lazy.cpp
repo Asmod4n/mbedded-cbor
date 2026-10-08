@@ -161,15 +161,13 @@ TEST_CASE("lazy: a reference to its own enclosing mark ends")
     CHECK_FALSE(cbor::lazy_decode<16>(binding, lazy_of(doc)).has_value());
 }
 
-// Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. Before the fix the scan for
-// marks before the value of its first key went on through the claimed pairs after it reached the
-// target; now it stops there.
+// Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs and holds one. A lookup reads every key
+// of the map, because a second key "a" makes the map not valid (RFC 8949 5.6), so it ends at the end of the
+// bytes with too_little_data and does not go on through the claimed pairs.
 TEST_CASE("lazy: a value inside a huge claimed map")
 {
     std::string const doc = "\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s;
-    auto const a = lazy_of(doc).at<16>("a");
-    REQUIRE(a.has_value());
-    CHECK(value_at(*a) == V(0));
+    CHECK_EQ(lazy_of(doc).at<16>("a").error(), error::too_little_data);
 }
 
 // Found by the fuzzer: [28(28(29(0))), ...] leads from the reference through two marks back to the
@@ -732,4 +730,117 @@ TEST_CASE("lazy: DepthMax is at most 1024")
 {
     CHECK(std::ranges::all_of(lazy_compiles<1024>(), std::identity{}));
     CHECK(std::ranges::none_of(lazy_compiles<1025>(), std::identity{}));
+}
+
+// RFC 8949 5.6: a map with two equal keys is not valid. RFC 8949 5.6.1 says when two keys are equal. Each
+// pair is written from the text of 5.6.1, and a map with the two keys is refused exactly when the two keys
+// are equal.
+TEST_CASE("lazy: entries refuse a map with two keys that RFC 8949 5.6.1 makes equal")
+{
+    struct pair {
+        std::string first;
+        std::string second;
+        bool equal;
+    };
+    std::vector<pair> const pairs{
+        // Numeric values are distinct unless they are numerically equal.
+        {"\x01"s, "\x18\x01"s, true},
+        {"\x20"s, "\x38\x00"s, true},
+        {"\x01"s, "\x20"s, false},
+        {"\x01"s, "\x02"s, false},
+        // An integer and a floating-point value are distinct, also when they are numerically equal.
+        {"\x01"s, "\xf9\x3c\x00"s, false},
+        // -0.0 is equal to 0.0, and a value is equal in every width.
+        {"\xf9\x00\x00"s, "\xfb\x80\x00\x00\x00\x00\x00\x00\x00"s, true},
+        {"\xf9\x3c\x00"s, "\xfa\x3f\x80\x00\x00"s, true},
+        {"\xf9\x3c\x00"s, "\xf9\x40\x00"s, false},
+        // Two NaN are equal when their significands are equal after zero-extension at the right to 64 bits.
+        // The
+        // sign is no part of the significand.
+        {"\xf9\x7e\x00"s, "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x00"s, true},
+        {"\xf9\x7e\x00"s, "\xf9\xfe\x00"s, true},
+        {"\xf9\x7e\x00"s, "\xf9\x7e\x01"s, false},
+        {"\xf9\x7c\x00"s, "\xf9\x7e\x00"s, false},
+        // Strings are compared byte by byte. A text string is distinct from a byte string of the same bytes.
+        {"\x62\x61\x62"s, "\x62\x61\x62"s, true},
+        {"\x62\x61\x62"s, "\x62\x61\x63"s, false},
+        {"\x61\x61"s, "\x62\x61\x62"s, false},
+        {"\x61\x61"s, "\x41\x61"s, false},
+        // A big number is distinct from an integer, and a tagged value from an untagged one. Tagged values
+        // are
+        // equal when the tag numbers and the contents are equal.
+        {"\x01"s, "\xc2\x41\x01"s, false},
+        {"\xc2\x41\x01"s, "\xc2\x42\x00\x01"s, false},
+        {"\xc2\x41\x01"s, "\xc3\x41\x01"s, false},
+        {"\xc1\x00"s, "\x00"s, false},
+        {"\xc1\x00"s, "\xc1\x18\x00"s, true},
+        // Simple values are equal when they have the same value. A simple value is never an integer.
+        {"\xf4"s, "\xf4"s, true},
+        {"\xf4"s, "\xf5"s, false},
+        {"\xf8\x20"s, "\xf8\x20"s, true},
+        {"\xf8\x20"s, "\xf8\x21"s, false},
+        {"\xf0"s, "\x10"s, false},
+        // Arrays are compared element by element.
+        {"\x82\x01\x02"s, "\x82\x01\x18\x02"s, true},
+        {"\x82\x01\x02"s, "\x82\x02\x01"s, false},
+        {"\x81\x01"s, "\x82\x01\x02"s, false},
+        // Maps are equal when they have the same set of pairs, in any order. An array is never a map.
+        {"\xa2\x01\x02\x03\x04"s, "\xa2\x03\x04\x01\x02"s, true},
+        {"\xa1\x01\x02"s, "\xa1\x01\x03"s, false},
+        {"\xa1\x01\x02"s, "\xa1\x03\x02"s, false},
+        {"\x80"s, "\xa0"s, false},
+        // The registration of tags 28 and 29: a tag 28 marks a value and leaves it as it is, and a tag 29
+        // stands
+        // for the value that it names.
+        {"\xd8\x1c\x61x"s, "\x61x"s, true},
+        {"\xd8\x1c\x61x"s, "\xd8\x1d\x00"s, true},
+        {"\xd8\x1c\x61x"s, "\x61y"s, false},
+    };
+    for (pair const &p : pairs) {
+        std::string const map = "\xa2"s + p.first + "\x00"s + p.second + "\x00"s;
+        CAPTURE(map);
+        auto const entries = lazy_of(map).entries<16>();
+        if (p.equal)
+            CHECK_EQ(entries.error(), error::duplicate_key);
+        else
+            CHECK(entries.has_value());
+    }
+}
+
+// RFC 8949 5.6: the entries of a map with a repeated key are refused before the first entry, wherever the two
+// keys stand.
+TEST_CASE("lazy: entries refuse a repeated key at any position")
+{
+    CHECK_EQ(lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x62\x03"s).entries<16>().error(),
+             error::duplicate_key);
+    CHECK_EQ(lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x61\x03"s).entries<16>().error(),
+             error::duplicate_key);
+    CHECK(lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x63\x03"s).entries<16>().has_value());
+}
+
+// RFC 8949 5.6: a lookup meets every key that is equal to the key it looks for. When it meets two, the map is
+// not valid and the lookup gives duplicate_key, also when the second one stands after the first. A lookup
+// compares the keys with its own key only, so a repeated key that is not looked for does not stop it.
+TEST_CASE("lazy: at gives duplicate_key for a key that occurs twice")
+{
+    CHECK_EQ(lazy_of("\xa2\x61\x61\x01\x61\x61\x02"s).at<16>("a").error(), error::duplicate_key);
+    CHECK_EQ(lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x61\x03"s).at<16>("a").error(), error::duplicate_key);
+    CHECK_EQ(lazy_of("\xa2\x01\x01\x18\x01\x02"s).at<16>(1).error(), error::duplicate_key);
+    CHECK_EQ(lazy_of("\xa2\x20\x01\x38\x00\x02"s).at<16>(-1).error(), error::duplicate_key);
+    CHECK_EQ(lazy_of("\xa2\xd8\x1c\x61\x61\x01\xd8\x1d\x00\x02"s).at<16>("a").error(), error::duplicate_key);
+    auto const other = lazy_of("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x03"s).at<16>("b");
+    REQUIRE(other.has_value());
+    CHECK_EQ(*other->get<std::uint64_t>(), 3u);
+}
+
+// RFC 8949 5.6: lazy_decode delivers every entry of every map, so it refuses a map with a repeated key, also
+// inside an array. An integer key and a float key of the same number are distinct (RFC 8949 5.6.1).
+TEST_CASE("lazy_decode: a map with a repeated key gives duplicate_key")
+{
+    test_binding binding;
+    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of("\xa2\x61\x61\x01\x61\x61\x02"s)).error(),
+             error::duplicate_key);
+    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of("\x81\xa2\x01\x00\x18\x01\x00"s)).error(),
+             error::duplicate_key);
+    CHECK(cbor::lazy_decode<16>(binding, lazy_of("\xa2\x01\x00\xf9\x3c\x00\x00"s)).has_value());
 }
