@@ -369,7 +369,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
     } else if constexpr (std::is_same_v<T, typed_array>) {
         if (h.major != major_type::tag) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        if (auto const r = heads::typed_array_check(h.argument, 0); !r) [[unlikely]]
+        if (auto const r = validity::typed_array_check(h.argument, 0); !r) [[unlikely]]
             return std::unexpected(r.error());
         auto const content = value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size());
         if (!content) [[unlikely]]
@@ -383,7 +383,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
         auto const bytes = d.byte_string_decode(r->argument);
         if (!bytes) [[unlikely]]
             return std::unexpected(bytes.error());
-        if (auto const c = heads::typed_array_check(h.argument, bytes->size()); !c) [[unlikely]]
+        if (auto const c = validity::typed_array_check(h.argument, bytes->size()); !c) [[unlikely]]
             return std::unexpected(c.error());
         return owning_ref<T>(source->owner, typed_array{h.argument, std::as_bytes(std::span(*bytes))});
     } else {

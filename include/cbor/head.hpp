@@ -65,25 +65,7 @@ class heads
         indefinite_length = 31
     };
 
-    enum class tag_number : std::uint64_t {
-        unsigned_bignum = 2,
-        negative_bignum = 3,
-        encoded_cbor_data_item = 24,
-        shareable = 28,
-        sharedref = 29,
-        typed_array_first = 64,
-        typed_array_reserved = 76,
-        float128_big_endian = 83,
-        typed_array_last = 87,
-        reference = 6,
-        basic_packed_cbor = 113,
-        record_function = 114,
-        straight_argument_first = 128,
-        straight_argument_last = 135,
-        inverted_argument_first = 136,
-        inverted_argument_last = 143,
-        split_basic_packed_cbor = 1113
-    };
+    using tag_number = validity::tag_number;
 
     template <class V>
     static V unsigned_read(std::span<char const, sizeof(V)> const field)
@@ -501,19 +483,6 @@ class heads
     static constexpr bool break_at(std::string_view const encoded, std::size_t const at)
     {
         return at < encoded.size() && static_cast<std::uint8_t>(encoded[at]) == 0xff;
-    }
-
-    static std::expected<void, error> typed_array_check(std::uint64_t const tag, std::size_t const size)
-    {
-        if (tag < std::to_underlying(tag_number::typed_array_first) ||
-            tag > std::to_underlying(tag_number::typed_array_last) ||
-            tag == std::to_underlying(tag_number::typed_array_reserved)) [[unlikely]]
-            return std::unexpected(error::incorrect_type);
-        std::uint64_t const f = tag >> 4 & 1;
-        std::uint64_t const ll = tag & 3;
-        if (size % (std::uint64_t{1} << (f + ll)) != 0) [[unlikely]]
-            return std::unexpected(error::inadmissible_type_for_tag_content);
-        return {};
     }
 
     friend class decoding;

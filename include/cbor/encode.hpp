@@ -588,7 +588,7 @@ class walker
                     return;
                 }
                 cbor::typed_array const a = binding.typed_array_of(item);
-                if (auto const r = heads::typed_array_check(a.tag, a.bytes.size()); !r) [[unlikely]] {
+                if (auto const r = validity::typed_array_check(a.tag, a.bytes.size()); !r) [[unlikely]] {
                     keep_error(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
                     return;
                 }

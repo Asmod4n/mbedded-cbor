@@ -884,6 +884,8 @@ class packed
                                                                                   std::size_t const end, std::size_t const element)
     {
         if constexpr (is_typed_array_element<E>) {
+            static_assert(validity::typed_array_check(typed_array_tag<E>(), sizeof(E)).has_value(),
+                          "The tag of a typed array of E admits elements of sizeof(E) bytes.");
             if (end < item + typed_array_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             static constexpr std::array<char, 3> head{
@@ -896,7 +898,7 @@ class packed
                 heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 3).template first<sizeof(std::uint32_t)>());
             if (size > end - item - typed_array_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            if (size % sizeof(E) != 0) [[unlikely]]
+            if (!validity::typed_array_check(typed_array_tag<E>(), size)) [[unlikely]]
                 return std::unexpected(error::inadmissible_type_for_tag_content);
             return reference{item + typed_array_head, size / sizeof(E)};
         } else {
