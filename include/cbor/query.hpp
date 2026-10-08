@@ -1320,14 +1320,34 @@ std::expected<void, error> jsonpath::selector_apply(query_view const &v, selecto
             children.push_back(*element);
         }
     } else if (found->h.major == major_type::map && s.kind != selector::kind::slice) {
-        auto const entries = node.entries<DepthMax>();
-        if (!entries) [[unlikely]]
-            return std::unexpected(entries.error());
-        for (auto const entry : *entries) {
-            if (!entry) [[unlikely]]
-                return std::unexpected(entry.error());
-            children.push_back(entry->second);
+        auto const &source = found->source;
+        heads::decoder d = found->d;
+        std::array<std::size_t, validity::stack_keys> keys;
+        bool const keys_recorded = found->h.argument <= validity::stack_keys;
+        if (!keys_recorded)
+            if (error const c = validity::check_keys_unique<DepthMax>(
+                                    *source, source->encoded.size() - d.encoded.size(), found->h.argument, 1)
+                                    .error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
+        for (std::uint64_t i = 0; i < found->h.argument; ++i) {
+            if (keys_recorded)
+                keys[i] = source->encoded.size() - d.encoded.size();
+            if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            children.push_back(lazy{source, source->encoded.size() - d.encoded.size()});
+            if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
         }
+        if (keys_recorded)
+            if (error const c =
+                    validity::check_keys_unique<DepthMax>(
+                        *source,
+                        std::span<std::size_t const>(keys).first(static_cast<std::size_t>(found->h.argument)),
+                        1)
+                        .error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
     }
     if (s.kind == selector::kind::slice) {
         auto const len = static_cast<std::int64_t>(children.size());

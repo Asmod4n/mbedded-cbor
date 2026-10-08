@@ -29,6 +29,7 @@ class decoding
     struct prefix {
         value_sharing::top_level_item &top_level;
         std::vector<bool> evaluating;
+        std::vector<std::size_t> keys;
     };
 
     template <class Binding>
@@ -77,18 +78,13 @@ class decoding
                 return array;
             }
             case major_type::map: {
-                if (error const c = validity::check_keys_unique<DepthMax>(before->top_level,
-                                                                          before->top_level.encoded.size() -
-                                                                              d.encoded.size(),
-                                                                          h->argument, depth + 1)
-                                        .error_or(error{});
-                    c != error{}) [[unlikely]]
-                    return std::unexpected(c);
+                std::size_t const keys_from = before->keys.size();
                 auto map = binding.map_decode(std::min<std::uint64_t>(h->argument, d.encoded.size() / 2));
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
                         shared[*mark] = map;
                 for (std::uint64_t i = 0; i < h->argument; ++i) {
+                    before->keys.push_back(before->top_level.encoded.size() - d.encoded.size());
                     if constexpr (requires(std::string_view const t) { binding.map_key_decode(t); }) {
                         heads::decoder probe = d;
                         auto const k = probe.head_decode();
@@ -113,6 +109,14 @@ class decoding
                         return value;
                     map = binding.map_insert(std::move(map), std::move(*key), std::move(*value));
                 }
+                if (error const c =
+                        validity::check_keys_unique<DepthMax>(
+                            before->top_level, std::span<std::size_t const>(before->keys).subspan(keys_from),
+                            depth + 1)
+                            .error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
+                before->keys.resize(keys_from);
                 return map;
             }
             case major_type::tag: {

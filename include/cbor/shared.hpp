@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -425,30 +426,16 @@ std::expected<void, error> validity::check_keys_unique(Message &message, std::si
         encoded = message;
     else
         encoded = message.encoded;
-    auto const pair_skip = []<class M>(M &m, heads::decoder &d,
-                                       std::size_t const level) -> std::expected<void, error> {
-        well_formedness::no_marks none;
-        auto &marks = [&]() -> auto & {
-            if constexpr (std::same_as<M, std::string_view const>)
-                return none;
-            else
-                return m;
-        }();
-        if (auto const r = well_formedness::item_skip<DepthMax>(d, marks, level); !r) [[unlikely]]
-            return r;
-        return well_formedness::item_skip<DepthMax>(d, marks, level);
-    };
-    struct key {
-        std::size_t at;
-        major_type major;
-        std::uint64_t argument;
-        std::string_view payload;
-        bool direct;
-    };
-    constexpr std::size_t stack_keys = 64;
-    std::array<key, stack_keys> on_stack;
-    std::vector<key> on_heap;
-    std::span<key> keys;
+    well_formedness::no_marks none;
+    auto &marks = [&]() -> auto & {
+        if constexpr (std::same_as<Message, std::string_view const>)
+            return none;
+        else
+            return message;
+    }();
+    std::array<std::size_t, stack_keys> on_stack;
+    std::vector<std::size_t> on_heap;
+    std::span<std::size_t> keys;
     if (count <= stack_keys) [[likely]]
         keys = std::span(on_stack).first(static_cast<std::size_t>(count));
     else {
@@ -458,16 +445,40 @@ std::expected<void, error> validity::check_keys_unique(Message &message, std::si
         keys = on_heap;
     }
     heads::decoder walk{std::string_view(std::span(encoded).subspan(first_key))};
-    for (key &k : keys) {
-        k.at = encoded.size() - walk.encoded.size();
-        if (auto const r = pair_skip(message, walk, depth); !r) [[unlikely]]
+    for (std::size_t &k : keys) {
+        k = encoded.size() - walk.encoded.size();
+        if (auto const r = well_formedness::item_skip<DepthMax>(walk, marks, depth); !r) [[unlikely]]
             return r;
-        auto const h = heads::raw_head_read(encoded, k.at);
+        if (auto const r = well_formedness::item_skip<DepthMax>(walk, marks, depth); !r) [[unlikely]]
+            return r;
+    }
+    return check_keys_unique<DepthMax>(message, std::span<std::size_t const>(keys), depth);
+}
+
+template <std::size_t DepthMax, class Message>
+std::expected<void, error> validity::check_keys_unique(Message &message,
+                                                       std::span<std::size_t const> const key_offsets,
+                                                       std::size_t const depth)
+{
+    if (key_offsets.size() < 2)
+        return {};
+    std::string_view encoded;
+    if constexpr (std::same_as<Message, std::string_view const>)
+        encoded = message;
+    else
+        encoded = message.encoded;
+    struct key {
+        std::size_t at;
+        major_type major;
+        std::uint64_t argument;
+        std::string_view payload;
+        bool direct;
+    };
+    auto const key_read = [encoded](std::size_t const at) -> std::expected<key, error> {
+        auto const h = heads::raw_head_read(encoded, at);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        k.major = h->major;
-        k.argument = h->argument;
-        k.payload = {};
+        key k{at, h->major, h->argument, {}, false};
         bool const definite_string =
             (h->major == major_type::text_string || h->major == major_type::byte_string) &&
             check_definite_length(h->major, h->info).has_value();
@@ -480,6 +491,48 @@ std::expected<void, error> validity::check_keys_unique(Message &message, std::si
                 return std::unexpected(s.error());
             k.payload = *s;
         }
+        return k;
+    };
+    if (key_offsets.size() <= stack_keys) [[likely]] {
+        std::array<std::uint64_t, stack_keys> prints;
+        bool direct = true;
+        for (std::size_t i = 0; i < key_offsets.size(); ++i) {
+            auto const k = key_read(key_offsets[i]);
+            if (!k) [[unlikely]]
+                return std::unexpected(k.error());
+            direct &= k->direct;
+            std::span<char const> const bytes(k->payload);
+            std::uint64_t first = 0;
+            std::uint64_t last = 0;
+            if (bytes.size() >= sizeof(std::uint64_t)) {
+                first = heads::unsigned_read<std::uint64_t>(bytes.first<sizeof(std::uint64_t)>());
+                last = heads::unsigned_read<std::uint64_t>(bytes.last<sizeof(std::uint64_t)>());
+            } else {
+                for (char const c : bytes)
+                    first = first << 8 | static_cast<std::uint8_t>(c);
+            }
+            prints[i] = first ^ std::rotl(last, 29) ^
+                        ((k->argument << 3 | std::to_underlying(k->major)) * 0x9e3779b97f4a7c15u);
+        }
+        std::span<std::uint64_t> const sorted = std::span(prints).first(key_offsets.size());
+        std::ranges::sort(sorted);
+        if (direct && std::ranges::adjacent_find(sorted) == sorted.end()) [[likely]]
+            return {};
+    }
+    std::array<key, stack_keys> on_stack;
+    std::vector<key> on_heap;
+    std::span<key> keys;
+    if (key_offsets.size() <= stack_keys) [[likely]]
+        keys = std::span(on_stack).first(key_offsets.size());
+    else {
+        on_heap.resize(key_offsets.size());
+        keys = on_heap;
+    }
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        auto const k = key_read(key_offsets[i]);
+        if (!k) [[unlikely]]
+            return std::unexpected(k.error());
+        keys[i] = *k;
     }
     auto const others = std::ranges::partition(keys, &key::direct);
     std::span<key> const direct = keys.first(keys.size() - others.size());
