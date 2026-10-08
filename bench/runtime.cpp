@@ -470,9 +470,7 @@ static std::uint64_t mb_path()
 }
 #endif
 
-#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_STATIC) || \
-    defined(ARM_MB_AT_PATH_R) || defined(ARM_MB_AT_PATH_ERROR_OR_R) || defined(ARM_MB_AT_PATH_HAS_VALUE_SKIP) || \
-    defined(ARM_MB_AT_PATH_HAS_VALUE_WALK) || defined(ARM_MB_AT_PATH_HAS_VALUE) || defined(ARM_MB_AT_PATH_HAS_VALUE_LIKELY)
+#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_STATIC)
 static std::uint64_t mb_at_path()
 {
 #if defined(DOC_twitter)
@@ -606,9 +604,7 @@ static std::uint64_t op()
     return t;
 #elif defined(ARM_MB_PATH)
     return mb_path();
-#elif defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_STATIC) || \
-    defined(ARM_MB_AT_PATH_R) || defined(ARM_MB_AT_PATH_ERROR_OR_R) || defined(ARM_MB_AT_PATH_HAS_VALUE_SKIP) || \
-    defined(ARM_MB_AT_PATH_HAS_VALUE_WALK) || defined(ARM_MB_AT_PATH_HAS_VALUE) || defined(ARM_MB_AT_PATH_HAS_VALUE_LIKELY)
+#elif defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_STATIC)
     return mb_at_path();
 #elif defined(ARM_MB_PATH_ALL)
     read_binding b;

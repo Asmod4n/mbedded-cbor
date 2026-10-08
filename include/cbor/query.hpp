@@ -696,9 +696,8 @@ class jsonpath
                 auto const r = d.head_decode();
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (error const content = validity::check_tag_content(h.argument, r->major).error_or(error{});
-                    content != error{}) [[unlikely]]
-                    return std::unexpected(content);
+                if (!validity::check_tag_content(h.argument, r->major).has_value()) [[unlikely]]
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
                 auto const embedded = d.byte_string_decode(r->argument);
                 if (!embedded) [[unlikely]]
                     return std::unexpected(embedded.error());

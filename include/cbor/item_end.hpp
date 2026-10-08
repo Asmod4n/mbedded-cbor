@@ -47,8 +47,8 @@ class well_formedness
                 --level;
             }
             --left[level];
-            if (auto const r = validity::check_nesting_depth(depth + level, DepthMax); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (!validity::check_nesting_depth(depth + level, DepthMax).has_value()) [[unlikely]]
+                return std::unexpected(error::nesting_depth_exceeded);
             if (d.encoded.size() >= heads::initial_byte_size + sizeof(std::uint64_t)) {
                 auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                 auto const major = static_cast<major_type>(initial >> 5);
@@ -102,9 +102,8 @@ class well_formedness
                 left[++level] = 1;
                 break;
             case major_type::simple_float:
-                if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
-                    r != error{}) [[unlikely]]
-                    return std::unexpected(r);
+                if (!validity::check_simple_value(h->info, h->argument).has_value()) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
                 break;
             default:
                 break;
