@@ -401,7 +401,7 @@ static std::uint64_t jc_text(jc_cursor const &c)
 
 static std::string doc;
 static std::string_view in;
-#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED)
+#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_STATIC)
 static std::string const *copy = &doc;
 #endif
 static std::shared_ptr<void const> const keep = std::make_shared<int const>(0);
@@ -473,7 +473,7 @@ static std::uint64_t mb_path()
 }
 #endif
 
-#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED)
+#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_STATIC)
 static std::uint64_t mb_at_path()
 {
 #if defined(DOC_twitter)
@@ -626,7 +626,7 @@ static std::uint64_t op()
     return t;
 #elif defined(ARM_MB_PATH)
     return mb_path();
-#elif defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_OWNED)
+#elif defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_STATIC) || defined(ARM_MB_AT_PATH_OWNED)
     return mb_at_path();
 #elif defined(ARM_MB_PATH_ALL)
     read_binding b;
@@ -834,7 +834,7 @@ static void run(benchmark::State &state)
     std::size_t i = 0;
     for (auto _ : state) {
         in = copies[i];
-#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED)
+#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_STATIC)
         copy = &copies[i];
 #endif
         i = i + 1 == copies.size() ? 0 : i + 1;
