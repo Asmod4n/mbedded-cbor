@@ -193,6 +193,31 @@ TEST_CASE("decode: a map of 65536 keys is checked for a repeated key")
     CHECK_EQ(twice->decode().error(), cbor::error::duplicate_key);
 }
 
+// A fuzzer held one core for more than 10 s with one map of 65535 integer keys, because integer keys were
+// compared pair by pair. An integer key is the same key in every encoding of its argument (RFC 8949 4.2.1 does
+// not make the preferred one the only one), and an unsigned and a negative integer with one argument differ.
+TEST_CASE("decode: a map of 65535 integer keys is checked for a repeated key")
+{
+    constexpr std::size_t count = 65535;
+    std::string map = "\xb9\xff\xff"s;
+    for (std::size_t i = 0; i < count; ++i) {
+        map += '\x19';
+        map += static_cast<char>(i >> 8 & 0xff);
+        map += static_cast<char>(i & 0xff);
+        map += '\x00';
+    }
+    std::string negative = map;
+    negative[3] = '\x39';
+    auto const unique = cbor::lazy::from(std::move(negative));
+    REQUIRE(unique.has_value());
+    CHECK(unique->decode().has_value());
+    std::string longer = map;
+    longer.replace(map.size() - 4, 4, "\x1a\x00\x00\x00\x00\x00"sv);
+    auto const twice = cbor::lazy::from(std::move(longer));
+    REQUIRE(twice.has_value());
+    CHECK_EQ(twice->decode().error(), cbor::error::duplicate_key);
+}
+
 template <class Lazy>
 concept decodable = requires(Lazy &&l) { std::forward<Lazy>(l).decode(); };
 

@@ -441,8 +441,9 @@ std::expected<void, error> validity::check_keys_unique(Message &message, std::si
     struct key {
         std::size_t at;
         major_type major;
+        std::uint64_t argument;
         std::string_view payload;
-        bool definite_string;
+        bool direct;
     };
     constexpr std::size_t stack_keys = 64;
     std::array<key, stack_keys> on_stack;
@@ -465,9 +466,14 @@ std::expected<void, error> validity::check_keys_unique(Message &message, std::si
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         k.major = h->major;
-        k.definite_string = (h->major == major_type::text_string || h->major == major_type::byte_string) &&
-                            check_definite_length(h->major, h->info).has_value();
-        if (k.definite_string) {
+        k.argument = h->argument;
+        k.payload = {};
+        bool const definite_string =
+            (h->major == major_type::text_string || h->major == major_type::byte_string) &&
+            check_definite_length(h->major, h->info).has_value();
+        k.direct = definite_string || h->major == major_type::unsigned_integer ||
+                   h->major == major_type::negative_integer;
+        if (definite_string) {
             heads::decoder d{std::string_view(std::span(encoded).subspan(h->at))};
             auto const s = d.byte_string_decode(h->argument);
             if (!s) [[unlikely]]
@@ -475,24 +481,26 @@ std::expected<void, error> validity::check_keys_unique(Message &message, std::si
             k.payload = *s;
         }
     }
-    auto const others = std::ranges::partition(keys, &key::definite_string);
-    std::span<key> const strings = keys.first(keys.size() - others.size());
+    auto const others = std::ranges::partition(keys, &key::direct);
+    std::span<key> const direct = keys.first(keys.size() - others.size());
     auto const before = [](key const &x, key const &y) {
         if (x.major != y.major)
             return x.major < y.major;
-        if (x.payload.size() != y.payload.size())
-            return x.payload.size() < y.payload.size();
+        if (x.argument != y.argument)
+            return x.argument < y.argument;
         return x.payload < y.payload;
     };
-    std::ranges::sort(strings, before);
-    auto const same = [](key const &x, key const &y) { return x.major == y.major && x.payload == y.payload; };
-    if (error const c = check_key_unique(std::ranges::adjacent_find(strings, same) != strings.end())
+    std::ranges::sort(direct, before);
+    auto const same = [](key const &x, key const &y) {
+        return x.major == y.major && x.argument == y.argument && x.payload == y.payload;
+    };
+    if (error const c = check_key_unique(std::ranges::adjacent_find(direct, same) != direct.end())
                             .error_or(error{});
         c != error{}) [[unlikely]]
         return std::unexpected(c);
-    for (std::size_t i = strings.size(); i < keys.size(); ++i)
+    for (std::size_t i = direct.size(); i < keys.size(); ++i)
         for (std::size_t j = 0; j < keys.size(); ++j)
-            if (j < strings.size() || j > i) {
+            if (j < direct.size() || j > i) {
                 auto const equal = keys_equivalent<DepthMax>(message, keys[i].at, message, keys[j].at, depth);
                 if (!equal) [[unlikely]]
                     return std::unexpected(equal.error());
