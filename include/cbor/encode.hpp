@@ -31,6 +31,7 @@ namespace cbor
 enum class sharedrefs { off, on };
 
 template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
+    requires(DepthMax <= 1024)
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value);
 
 class encoding
@@ -126,6 +127,7 @@ class encoding
     friend class walker;
 
     template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
+        requires(DepthMax <= 1024)
     friend std::expected<void, error> encode(Binding &binding, Writer &&target,
                                                        typename Binding::value const &value);
 
@@ -732,6 +734,7 @@ std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer, 
 }
 
 template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
+    requires(DepthMax <= 1024)
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value)
 {
     decltype(auto) message = encoding::message_of(target, 0);

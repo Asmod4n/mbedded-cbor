@@ -2251,4 +2251,27 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     CHECK_EQ(cbor::schema<login>::path("").error(), error::too_little_data);
 }
 
+namespace
+{
+
+template <std::size_t DepthMax>
+std::array<bool, 3> schema_compiles()
+{
+    return {
+        requires(std::string_view const s) { cbor::schema<login>::decode<DepthMax>(s); },
+        requires(std::string &&s) { cbor::schema<login>::decode<DepthMax>(std::move(s)); },
+        requires(std::shared_ptr<void const> const &o, std::string_view const s) { cbor::schema<login>::decode<DepthMax>(o, s); },
+    };
+}
+
+} // namespace
+
+// DepthMax has an upper bound of 1024 on every form that takes it, so no form can be given a depth that overflows the
+// stack. Each form is checked alone: each one compiles with 1024, and none compiles with 1025.
+TEST_CASE("schema: DepthMax is at most 1024")
+{
+    CHECK(std::ranges::all_of(schema_compiles<1024>(), std::identity{}));
+    CHECK(std::ranges::none_of(schema_compiles<1025>(), std::identity{}));
+}
+
 #endif

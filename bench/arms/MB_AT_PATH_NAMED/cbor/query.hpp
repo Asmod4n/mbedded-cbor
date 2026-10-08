@@ -33,6 +33,7 @@ namespace cbor
 struct lazy;
 
 template <std::size_t DepthMax = 128, class Binding>
+    requires(DepthMax <= 1024)
 std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
 template <fixed_string Path, std::size_t DepthMax>
@@ -902,7 +903,8 @@ class jsonpath
     }
 
     template <fixed_string Path, std::size_t DepthMax, class T>
-    static std::expected<owning_ref<T>, error> query_walk(std::shared_ptr<void const> owner, std::string_view const encoded)
+    static std::expected<owning_ref<T>, error> query_walk(std::shared_ptr<void const> owner,
+                                                          std::string_view const encoded)
     {
         auto const r = query_walk<Path, DepthMax, T>(encoded);
         if (!r) [[unlikely]]
@@ -923,12 +925,14 @@ class jsonpath
         requires(singular_query<Path, DepthMax>::value &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, typed_array>))
-    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view encoded);
+    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner,
+                                                       std::string_view encoded);
 
     template <fixed_string, std::size_t>
     friend class verify_path;
 
     template <std::size_t DepthMax, class Binding>
+        requires(DepthMax <= 1024)
     friend std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
     template <fixed_string Path, std::size_t DepthMax, class Binding>
@@ -937,7 +941,8 @@ class jsonpath
 };
 
 template <fixed_string Path, std::size_t DepthMax>
-class verify_path : public std::bool_constant<jsonpath::query_parse(Path.view(), true, DepthMax).has_value()>
+class verify_path
+    : public std::bool_constant<DepthMax <= 1024 && jsonpath::query_parse(Path.view(), true, DepthMax).has_value()>
 {
 };
 
@@ -1569,6 +1574,7 @@ std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &bind
 }
 
 template <std::size_t DepthMax, class Binding>
+    requires(DepthMax <= 1024)
 std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view const path, lazy const &l)
 {
     auto const q = jsonpath::query_parse(path, false, DepthMax);
@@ -1605,7 +1611,7 @@ std::expected<typename Binding::value, error> at_path(Binding &binding, lazy con
 }
 
 template <fixed_string Path, std::size_t DepthMax>
-class singular_query : public std::bool_constant<[] {
+class singular_query : public std::bool_constant<DepthMax <= 1024 && [] {
     std::array const text = Path.value;
     auto const q = jsonpath::query_parse(std::string_view(text.data(), text.size() - 1), true, DepthMax);
     return q.has_value() && q->top.singular &&

@@ -64,6 +64,7 @@ class value_sharing
     friend struct lazy_entries;
 
     template <std::size_t DepthMax>
+        requires(DepthMax <= 1024)
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
 
     friend class decoding;
@@ -89,9 +90,11 @@ struct lazy {
     static std::expected<lazy, error> from(std::shared_ptr<void const> owner, std::string_view encoded);
 
     template <std::size_t DepthMax = 128>
+        requires(DepthMax <= 1024)
     std::expected<lazy, error> at(std::string_view key) const;
 
     template <std::size_t DepthMax = 128>
+        requires(DepthMax <= 1024)
     std::expected<lazy, error> at(std::int64_t index) const;
 
     template <class T>
@@ -103,15 +106,19 @@ struct lazy {
                                owning_ref<T>, T>, error> get() const;
 
     template <std::size_t DepthMax = 128>
+        requires(DepthMax <= 1024)
     std::expected<lazy_elements<DepthMax>, error> elements() const;
 
     template <std::size_t DepthMax = 128>
+        requires(DepthMax <= 1024)
     std::expected<lazy_entries<DepthMax>, error> entries() const;
 
     template <std::size_t DepthMax = 128>
+        requires(DepthMax <= 1024)
     std::expected<std::reference_wrapper<item const>, error> decode() const &;
 
     template <std::size_t DepthMax = 128>
+        requires(DepthMax <= 1024)
     std::expected<std::reference_wrapper<item const>, error> decode() const && = delete;
 };
 

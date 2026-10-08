@@ -1027,10 +1027,12 @@ class diagnostic_notation
     friend class jsonpath;
 
     template <std::size_t DepthMax>
+        requires(DepthMax <= 1024)
     friend std::expected<std::string, error> inspect(std::string_view encoded);
 };
 
 template <std::size_t DepthMax>
+    requires(DepthMax <= 1024)
 std::expected<std::string, error> inspect(std::string_view const encoded)
 {
     heads::decoder d{encoded};

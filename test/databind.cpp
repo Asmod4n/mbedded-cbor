@@ -1,7 +1,9 @@
 #include "binding.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -390,6 +392,30 @@ TEST_CASE("databind: decode takes a moved string as the owner and refuses every 
     auto const held = cbor::databind<std::string_view>::decode(owner, *owner);
     REQUIRE(held.has_value());
     CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(owner->data() + 2));
+}
+
+namespace
+{
+
+template <std::size_t DepthMax>
+std::array<bool, 2> databind_compiles()
+{
+    return {
+        requires(std::string &&s) { cbor::databind<std::uint64_t>::decode<DepthMax>(std::move(s)); },
+        requires(std::shared_ptr<void const> const &o, std::string_view const s) {
+            cbor::databind<std::uint64_t>::decode<DepthMax>(o, s);
+        },
+    };
+}
+
+} // namespace
+
+// DepthMax has an upper bound of 1024 on every form that takes it, so no form can be given a depth that overflows the
+// stack. Each form is checked alone: each one compiles with 1024, and none compiles with 1025.
+TEST_CASE("databind: DepthMax is at most 1024")
+{
+    CHECK(std::ranges::all_of(databind_compiles<1024>(), std::identity{}));
+    CHECK(std::ranges::none_of(databind_compiles<1025>(), std::identity{}));
 }
 
 #endif

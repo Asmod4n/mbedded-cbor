@@ -223,6 +223,7 @@ class decoding
     };
 
     template <std::size_t DepthMax, class Binding>
+        requires(DepthMax <= 1024)
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 };
 

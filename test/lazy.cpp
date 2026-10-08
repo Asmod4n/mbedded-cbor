@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -653,4 +654,33 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     char const *const pointer = "\x62" "ab";
     CHECK_EQ(text_of(*cbor::lazy::from(pointer)), "ab");
     CHECK_EQ(text_of(*cbor::decode<16>("\x61" "a"sv)), "a");
+}
+
+namespace
+{
+
+template <std::size_t DepthMax>
+std::array<bool, 9> lazy_compiles()
+{
+    return {
+        requires(std::string_view const s) { cbor::decode<DepthMax>(s); },
+        requires(std::string &&s) { cbor::decode<DepthMax>(std::move(s)); },
+        requires(std::shared_ptr<std::string const> const &s) { cbor::decode<DepthMax>(s); },
+        requires(cbor::lazy const &l) { l.template at<DepthMax>(std::string_view{}); },
+        requires(cbor::lazy const &l) { l.template at<DepthMax>(std::int64_t{0}); },
+        requires(cbor::lazy const &l) { l.template elements<DepthMax>(); },
+        requires(cbor::lazy const &l) { l.template entries<DepthMax>(); },
+        requires(cbor::lazy const &l) { l.template decode<DepthMax>(); },
+        requires(test_binding &b, cbor::lazy const &l) { cbor::lazy_decode<DepthMax>(b, l); },
+    };
+}
+
+} // namespace
+
+// DepthMax has an upper bound of 1024 on every form that takes it, so no form can be given a depth that overflows the
+// stack. Each form is checked alone: each one compiles with 1024, and none compiles with 1025.
+TEST_CASE("lazy: DepthMax is at most 1024")
+{
+    CHECK(std::ranges::all_of(lazy_compiles<1024>(), std::identity{}));
+    CHECK(std::ranges::none_of(lazy_compiles<1025>(), std::identity{}));
 }

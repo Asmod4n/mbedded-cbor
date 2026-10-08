@@ -1,5 +1,7 @@
 #include "binding.hpp"
 
+#include <algorithm>
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -839,4 +841,30 @@ TEST_CASE("path: a typed read that is not safe does not compile")
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", float>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[0][0]", std::int64_t, 2>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[0][0][0]", std::int64_t, 2>(std::forward<S>(s)); }; }(std::string_view(text))));
+}
+
+namespace
+{
+
+template <std::size_t DepthMax>
+std::array<bool, 4> at_path_compiles()
+{
+    return {
+        requires(test_binding &b, cbor::lazy const &l) { cbor::at_path<DepthMax>(b, std::string_view{}, l); },
+        requires(test_binding &b, cbor::lazy const &l) { cbor::at_path<"$.a", DepthMax>(b, l); },
+        requires(std::string_view const s) { cbor::at_path<"$.a", std::int64_t, DepthMax>(s); },
+        requires(std::shared_ptr<void const> const &o, std::string_view const s) {
+            cbor::at_path<"$.a", std::string_view, DepthMax>(o, s);
+        },
+    };
+}
+
+} // namespace
+
+// DepthMax has an upper bound of 1024 on every form that takes it, so no form can be given a depth that overflows the
+// stack. Each form is checked alone: each one compiles with 1024, and none compiles with 1025.
+TEST_CASE("path: DepthMax is at most 1024")
+{
+    CHECK(std::ranges::all_of(at_path_compiles<1024>(), std::identity{}));
+    CHECK(std::ranges::none_of(at_path_compiles<1025>(), std::identity{}));
 }

@@ -51,6 +51,7 @@ enum class pass;
 struct lazy;
 
 template <std::size_t DepthMax = 128>
+    requires(DepthMax <= 1024)
 std::expected<std::string, error> inspect(std::string_view encoded);
 
 class heads
@@ -551,12 +552,15 @@ class heads
     friend struct lazy_entries;
 
     template <std::size_t DepthMax>
+        requires(DepthMax <= 1024)
     friend std::expected<std::size_t, error> item_end(std::string_view encoded);
 
     template <std::size_t DepthMax>
+        requires(DepthMax <= 1024)
     friend std::expected<std::string, error> inspect(std::string_view encoded);
 
     template <std::size_t DepthMax, class Binding>
+        requires(DepthMax <= 1024)
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 
 #ifdef __cpp_impl_reflection
