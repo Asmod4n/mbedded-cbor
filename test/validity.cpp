@@ -1,8 +1,11 @@
 #include "binding.hpp"
 
+#include <array>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <stdexcept>
+#include <system_error>
 
 using cbor::error;
 using cbor::validity;
@@ -79,3 +82,56 @@ TEST_CASE("validity: throw_logic_error_if_null for every state of a shared_ptr")
             CHECK_NOTHROW(validity::throw_logic_error_if_null(c.pointer, "null"));
     }
 }
+
+namespace
+{
+
+constexpr std::size_t size_max = std::numeric_limits<std::size_t>::max();
+
+// Factors around each width a product can have: zero, one, small numbers, the borders of 32 bits, the halves and
+// the top of std::size_t.
+constexpr std::array<std::size_t, 13> factors{0,
+                                              1,
+                                              2,
+                                              3,
+                                              std::size_t{0xffffffff},
+                                              std::size_t{0xffffffff} + 1,
+                                              std::size_t{0xffffffff} + 2,
+                                              size_max / 3,
+                                              size_max / 2,
+                                              size_max / 2 + 1,
+                                              size_max - 1,
+                                              size_max,
+                                              std::size_t{1} << (std::numeric_limits<std::size_t>::digits / 2)};
+
+constexpr auto products_at_compile_time = [] {
+    std::array<std::array<bool, factors.size()>, factors.size()> fits{};
+    for (std::size_t i = 0; i < factors.size(); ++i)
+        for (std::size_t j = 0; j < factors.size(); ++j)
+            fits[i][j] = cbor::validity::checked_mul(factors[i], factors[j]).has_value();
+    return fits;
+}();
+
+} // namespace
+
+#ifdef __SIZEOF_INT128__
+// C23 ckd_mul gives the product when it is representable and reports an overflow otherwise. The compiler and the run
+// time use the same function, so both must give the answer of the exact product, which a wider type computes here.
+TEST_CASE("validity: checked_mul for every pair of factors, at compile time and at run time")
+{
+    for (std::size_t i = 0; i < factors.size(); ++i)
+        for (std::size_t j = 0; j < factors.size(); ++j) {
+            std::size_t const a = factors[i];
+            std::size_t const b = factors[j];
+            cbor::uint128 const exact = static_cast<cbor::uint128>(a) * b;
+            bool const fits = exact <= size_max;
+            auto const product = validity::checked_mul(a, b);
+            CHECK_EQ(product.has_value(), fits);
+            CHECK_EQ(products_at_compile_time[i][j], fits);
+            if (fits)
+                CHECK_EQ(*product, a * b);
+            else
+                CHECK_EQ(product.error(), std::errc::value_too_large);
+        }
+}
+#endif

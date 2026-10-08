@@ -902,14 +902,14 @@ class packed
                 return std::unexpected(error::inadmissible_type_for_tag_content);
             return reference{item + typed_array_head, size / sizeof(E)};
         } else {
-            std::size_t size;
             if (end < item + item_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             if (encoded[item] != heads::initial_byte(Major, std::to_underlying(heads::additional_information::four_byte_argument))) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             std::size_t const length =
                 heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 1).template first<sizeof(std::uint32_t)>());
-            if (ckd_mul(&size, length, element) || size > end - item - item_head) [[unlikely]]
+            auto const size = validity::checked_mul(length, element);
+            if (!size || *size > end - item - item_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             return reference{item + item_head, length};
         }
@@ -954,9 +954,11 @@ class packed
         static constexpr auto prefix = packing_prefix_of<T>();
         constexpr std::size_t fillers = shared_first_of<T>() - 1 - packing_table_of<T>().size();
         static_assert(prefix.size() >= 8, "The packing prefix must hold the eight bytes that are compared and read.");
-        static_assert(fixed_size<T, T>() <= std::numeric_limits<std::size_t>::max() - directory_at<T>() - fillers,
-                      "The least size of an encoded item must fit in std::size_t.");
-        constexpr std::size_t least = directory_at<T>() + fillers + fixed_size<T, T>();
+        constexpr auto least_size = validity::checked_add(directory_at<T>(), fillers).and_then([](std::size_t const head) {
+            return validity::checked_add(head, fixed_size<T, T>());
+        });
+        static_assert(least_size.has_value(), "The least size of an encoded item must fit in std::size_t.");
+        constexpr std::size_t least = *least_size;
         if (encoded.size() < least) [[unlikely]]
             return std::unexpected(error::too_little_data);
         if (!std::ranges::equal(std::span(encoded).template first<4>(), std::span(prefix).template first<4>()) ||
@@ -1390,15 +1392,14 @@ class packed
     template <class T>
     static std::expected<std::size_t, std::errc> encoded_size(second_item<T> const &second)
     {
-        static_assert(fixed_size<T, T>() <= std::numeric_limits<std::size_t>::max() - directory_at<T>() -
-                                                (shared_first_of<T>() - 1 - packing_table_of<T>().size()),
-                      "The fixed part of an encoded item must fit in std::size_t.");
+        constexpr auto fixed_part =
+            validity::checked_add(directory_at<T>(), shared_first_of<T>() - 1 - packing_table_of<T>().size())
+                .and_then([](std::size_t const head) { return validity::checked_add(head, fixed_size<T, T>()); });
+        static_assert(fixed_part.has_value(), "The fixed part of an encoded item must fit in std::size_t.");
         std::size_t second_size;
         std::size_t size;
         if (second.overflow || ckd_mul(&second_size, second.items, sizeof(std::uint32_t)) ||
-            ckd_add(&second_size, second_size, second.bytes) ||
-            ckd_add(&size, directory_at<T>() + shared_first_of<T>() - 1 - packing_table_of<T>().size() + fixed_size<T, T>(),
-                    second_size) ||
+            ckd_add(&second_size, second_size, second.bytes) || ckd_add(&size, *fixed_part, second_size) ||
             !std::in_range<std::uint32_t>(size)) [[unlikely]]
             return std::unexpected(std::errc::value_too_large);
         return size;
@@ -1690,11 +1691,15 @@ consteval std::size_t packed::fixed_size()
         constexpr std::size_t n = packed::fixed_length<U>::value;
         if constexpr (std::same_as<E, char> || std::same_as<E, char8_t> || std::same_as<E, unsigned char> ||
                       std::same_as<E, std::byte>) {
-            static_assert(n <= std::numeric_limits<std::size_t>::max() - heads::head_size(n), "The fixed size must fit in std::size_t.");
+            static_assert(validity::checked_add(heads::head_size(n), n).has_value(), "The fixed size must fit in std::size_t.");
             return heads::head_size(n) + n;
         } else {
             constexpr std::size_t element = fixed_size<E, Root>();
-            static_assert(n <= (std::numeric_limits<std::size_t>::max() - heads::head_size(n)) / element,
+            static_assert(validity::checked_mul(n, element)
+                              .and_then([](std::size_t const elements) {
+                                  return validity::checked_add(heads::head_size(n), elements);
+                              })
+                              .has_value(),
                           "The fixed size must fit in std::size_t.");
             return heads::head_size(n) + n * element;
         }
@@ -1709,15 +1714,16 @@ consteval std::size_t packed::fixed_size()
                 if constexpr (!std::meta::has_identifier(m) || std::meta::is_bit_field(m) || !std::meta::is_public(m))
                     return no_fixed_size<U>();
                 constexpr std::size_t member = fixed_size<typename[:std::meta::type_of(m):], Root>();
-                if (member > std::numeric_limits<std::size_t>::max() - size)
+                auto const sum = validity::checked_add(size, member);
+                if (!sum)
                     return no_fixed_size<U>();
-                size += member;
+                size = *sum;
             }
             return size;
         }
     } else if constexpr (packed::is_inline_optional<U>) {
         constexpr std::size_t value = fixed_size<typename U::value_type, Root>();
-        static_assert(value <= std::numeric_limits<std::size_t>::max() - packed::inline_optional_head,
+        static_assert(validity::checked_add(packed::inline_optional_head, value).has_value(),
                       "The fixed size must fit in std::size_t.");
         return packed::inline_optional_head + value;
     }
