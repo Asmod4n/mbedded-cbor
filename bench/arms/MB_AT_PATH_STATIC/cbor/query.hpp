@@ -33,33 +33,33 @@ namespace cbor
 
 struct lazy;
 
-template <std::size_t DepthMax = 128, class Binding>
-    requires(DepthMax <= 1024)
+template <std::size_t DepthMax = validity::nesting_depth_default, class Binding>
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
 template <fixed_string Path, std::size_t DepthMax>
 class verify_path;
 
-template <fixed_string Path, std::size_t DepthMax = 128, class Binding>
+template <fixed_string Path, std::size_t DepthMax = validity::nesting_depth_default, class Binding>
     requires(verify_path<Path, DepthMax>::value)
 std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
 
 template <fixed_string Path, std::size_t DepthMax>
 class singular_query;
 
-template <fixed_string Path, class T, std::size_t DepthMax = 128>
+template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default>
     requires(singular_query<Path, DepthMax>::value &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
               std::is_same_v<T, std::nullptr_t>))
 std::expected<T, error> at_path(std::string_view encoded);
 
-template <fixed_string Path, class T, std::size_t DepthMax = 128>
+template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default>
     requires(singular_query<Path, DepthMax>::value &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view encoded);
 
-template <fixed_string Path, class T, std::size_t DepthMax = 128, class Encoded>
+template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default, class Encoded>
     requires std::same_as<std::remove_const_t<Encoded>, std::string>
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
@@ -830,7 +830,7 @@ class jsonpath
         } else if constexpr (std::is_same_v<T, typed_array>) {
             if (h.major != major_type::tag) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (auto const r = heads::typed_array_check(h.argument, 0); !r) [[unlikely]]
+            if (auto const r = validity::typed_array_check(h.argument, 0); !r) [[unlikely]]
                 return std::unexpected(r.error());
             for (;;) {
                 heads::decoder const before = d;
@@ -852,7 +852,7 @@ class jsonpath
             auto const bytes = d.byte_string_decode(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            if (auto const c = heads::typed_array_check(h.argument, bytes->size()); !c) [[unlikely]]
+            if (auto const c = validity::typed_array_check(h.argument, bytes->size()); !c) [[unlikely]]
                 return std::unexpected(c.error());
             return typed_array{h.argument, std::as_bytes(std::span(*bytes))};
         } else {
@@ -946,7 +946,7 @@ class jsonpath
     friend class verify_path;
 
     template <std::size_t DepthMax, class Binding>
-        requires(DepthMax <= 1024)
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
     template <fixed_string Path, std::size_t DepthMax, class Binding>
@@ -955,8 +955,10 @@ class jsonpath
 };
 
 template <fixed_string Path, std::size_t DepthMax>
-class verify_path : public std::bool_constant<DepthMax <= 1024 &&
-                                              jsonpath::query_parse(Path.view(), true, DepthMax).has_value()>
+class verify_path
+    : public std::bool_constant<
+          validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+          jsonpath::query_parse(Path.view(), true, DepthMax).has_value()>
 {
 };
 
@@ -1556,8 +1558,7 @@ template <std::size_t DepthMax, class Binding>
 std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &binding, query_view const &v, parsed_query const &top,
                                                             lazy const &root)
 {
-    if (!root.top_level) [[unlikely]]
-        validity::throw_logic_error("cbor::at_path: the lazy holds no top-level item");
+    validity::throw_logic_error_if_null(root.top_level, "cbor::at_path: the lazy holds no top-level item");
     if (top.singular) {
         lazy node = root;
         for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
@@ -1588,7 +1589,7 @@ std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &bind
 }
 
 template <std::size_t DepthMax, class Binding>
-    requires(DepthMax <= 1024)
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view const path, lazy const &l)
 {
     auto const q = jsonpath::query_parse(path, false, DepthMax);
@@ -1625,7 +1626,9 @@ std::expected<typename Binding::value, error> at_path(Binding &binding, lazy con
 }
 
 template <fixed_string Path, std::size_t DepthMax>
-class singular_query : public std::bool_constant<DepthMax <= 1024 && [] {
+class singular_query
+    : public std::bool_constant<
+          validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() && [] {
     std::array const text = Path.value;
     auto const q = jsonpath::query_parse(std::string_view(text.data(), text.size() - 1), true, DepthMax);
     return q.has_value() && q->top.singular &&
@@ -1653,8 +1656,7 @@ template <fixed_string Path, class T, std::size_t DepthMax>
               std::is_same_v<T, typed_array>))
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view const encoded)
 {
-    if (owner.use_count() == 0) [[unlikely]]
-        validity::throw_logic_error("cbor::at_path: the owner of the encoded data item is empty");
+    validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
     return jsonpath::query_walk<Path, DepthMax, T>(std::move(owner), encoded);
 }
 
