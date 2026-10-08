@@ -1,0 +1,1281 @@
+{
+ "time": "2026-10-08-114038Z",
+ "commit": "3f173570b792050ff838e79acd5971ba5c892bf9 (clean)",
+ "purpose": "at_path<Path, T> (MB_AT_PATH in bench/runtime.cpp) at 3f17357 against six forms of the checks in well_formedness::item_skip and the walk of jsonpath::query_walk, each a bench arm over include/: MB_AT_PATH_R (check_simple_value with !r), MB_AT_PATH_ERROR_OR_R (check_nesting_depth with error_or, check_simple_value with !r), MB_AT_PATH_HAS_VALUE_SKIP (has_value() of check_nesting_depth and check_simple_value), MB_AT_PATH_HAS_VALUE_WALK (has_value() of check_tag_content at tag 24 in the walk), MB_AT_PATH_HAS_VALUE (both), MB_AT_PATH_HAS_VALUE_LIKELY (both and [[likely]] on the short head path of item_skip). MB_PATH is the lazy chain. ns per message, real_time. The slowdown of eac8835 (bench/results/2026-10-08-095747Z.json) was measured in localhost/mbedded-cbor-tw-gb; this run is in Debian sid and has no f25d348 arm.",
+ "aa": "MB_PATH_AA and MB_AT_PATH_AA are the same arms built a second time; each is byte-identical to its first build",
+ "steal_rule": "a round whose steal is above 0.1 percent of the CPU time is excluded from every median",
+ "rounds_excluded_for_steal": [
+  2,
+  3
+ ],
+ "order": "each round runs every binary once, in the order of the file names",
+ "wait": "the run started when the 1-minute load was below 1.5 and podman ps was empty; load then: 1.35 1.12 1.18 1/106 26612",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG -Werror",
+ "processes": 10,
+ "min_time": "0.2s",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-3) 16.2.0",
+  "Debian clang version 23.1.2 (1)"
+ ],
+ "packages": [
+  "clang-23 1:23.1.2-1",
+  "g++-16 16.2.0-3",
+  "libbenchmark-dev 1.9.1-1+b2",
+  "libc6 2.43-7",
+  "libcbor0.10 0.10.2-2.2",
+  "libflatbuffers-dev 23.5.26+dfsg-4+b2",
+  "libjsoncons-dev 1.5.0-2",
+  "libmsgpack-cxx-dev 8.0.0-1",
+  "libstdc++6 16.2.0-3",
+  "libtinycbor0 7.0-1"
+ ],
+ "ldd_sample": {
+  "clang++-23.twitter.MB_AT_PATH": "linux-vdso.so.1 (0x00007f5630120000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f56300aa000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f562fdfa000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f562fce4000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f562fcb6000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f562fac0000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f5630122000)",
+  "clang++-23.twitter.MB_AT_PATH_AA": "linux-vdso.so.1 (0x00007f9c942ad000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f9c94237000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f9c93f87000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f9c93e71000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f9c93e43000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f9c93c4d000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f9c942af000)",
+  "clang++-23.twitter.MB_AT_PATH_ERROR_OR_R": "linux-vdso.so.1 (0x00007f0b1530b000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f0b15295000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f0b14fe5000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f0b14ecf000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f0b14ea1000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f0b14cab000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f0b1530d000)",
+  "clang++-23.twitter.MB_AT_PATH_HAS_VALUE": "linux-vdso.so.1 (0x00007f94bb676000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f94bb600000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f94bb350000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f94bb23a000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f94bb20c000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f94bb016000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f94bb678000)",
+  "clang++-23.twitter.MB_AT_PATH_HAS_VALUE_LIKELY": "linux-vdso.so.1 (0x00007fa5024d3000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007fa50245d000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fa5021ad000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007fa502097000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fa502069000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007fa501e73000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fa5024d5000)",
+  "clang++-23.twitter.MB_AT_PATH_HAS_VALUE_SKIP": "linux-vdso.so.1 (0x00007f038f7b3000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f038f73d000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f038f48d000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f038f377000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f038f349000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f038f153000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f038f7b5000)",
+  "clang++-23.twitter.MB_AT_PATH_HAS_VALUE_WALK": "linux-vdso.so.1 (0x00007f079fa44000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f079f9ce000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f079f71e000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f079f608000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f079f5da000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f079f3e4000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f079fa46000)",
+  "clang++-23.twitter.MB_AT_PATH_R": "linux-vdso.so.1 (0x00007fd0b74b0000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007fd0b743a000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fd0b718a000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007fd0b7074000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fd0b7046000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007fd0b6e50000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fd0b74b2000)",
+  "clang++-23.twitter.MB_PATH": "linux-vdso.so.1 (0x00007fdf3577a000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007fdf35707000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fdf35457000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007fdf35341000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fdf35313000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007fdf3511d000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fdf3577c000)",
+  "clang++-23.twitter.MB_PATH_AA": "linux-vdso.so.1 (0x00007f6db99c5000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f6db9952000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f6db96a2000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f6db958c000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f6db955e000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f6db9368000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f6db99c7000)",
+  "g++-16.twitter.MB_AT_PATH": "linux-vdso.so.1 (0x00007f90cbf5b000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f90cbee5000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f90cbc35000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f90cbc07000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f90cba11000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f90cb8fb000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f90cbf5d000)",
+  "g++-16.twitter.MB_AT_PATH_AA": "linux-vdso.so.1 (0x00007fabf0df8000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007fabf0d82000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fabf0ad2000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fabf0aa4000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007fabf08ae000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007fabf0798000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fabf0dfa000)",
+  "g++-16.twitter.MB_AT_PATH_ERROR_OR_R": "linux-vdso.so.1 (0x00007fee71469000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007fee713f3000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fee71143000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fee71115000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007fee70f1f000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007fee70e09000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fee7146b000)",
+  "g++-16.twitter.MB_AT_PATH_HAS_VALUE": "linux-vdso.so.1 (0x00007f960beeb000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f960be75000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f960bbc5000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f960bb97000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f960b9a1000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f960b88b000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f960beed000)",
+  "g++-16.twitter.MB_AT_PATH_HAS_VALUE_LIKELY": "linux-vdso.so.1 (0x00007f8e297eb000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f8e29775000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f8e294c5000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f8e29497000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f8e292a1000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f8e2918b000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f8e297ed000)",
+  "g++-16.twitter.MB_AT_PATH_HAS_VALUE_SKIP": "linux-vdso.so.1 (0x00007fe2f7e3f000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007fe2f7dc9000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fe2f7b19000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fe2f7aeb000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007fe2f78f5000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007fe2f77df000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fe2f7e41000)",
+  "g++-16.twitter.MB_AT_PATH_HAS_VALUE_WALK": "linux-vdso.so.1 (0x00007f268f6ae000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f268f638000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f268f388000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f268f35a000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f268f164000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f268f04e000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f268f6b0000)",
+  "g++-16.twitter.MB_AT_PATH_R": "linux-vdso.so.1 (0x00007f9260b1b000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f9260aa5000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f92607f5000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f92607c7000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f92605d1000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f92604bb000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f9260b1d000)",
+  "g++-16.twitter.MB_PATH": "linux-vdso.so.1 (0x00007f7411c18000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f7411ba5000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f74118f5000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f74118c7000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f74116d1000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f74115bb000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f7411c1a000)",
+  "g++-16.twitter.MB_PATH_AA": "linux-vdso.so.1 (0x00007f66b96c0000)\n\tlibbenchmark.so.1.9.1 => /usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1 (0x00007f66b964d000)\n\tlibstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f66b939d000)\n\tlibgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f66b936f000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x00007f66b9179000)\n\tlibm.so.6 => /usr/lib/x86_64-linux-gnu/libm.so.6 (0x00007f66b9063000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f66b96c2000)"
+ },
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "kernel": "6.18.44-fc-v80",
+ "scheduler": "CFS/EEVDF (no sched_ext state)",
+ "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-sid-gb (debian:sid)",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 1000,
+ "priority": "1 (process ID) old priority 0, new priority -10\nnice -10",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; 3 of 4 cpus stay to the rest of the machine",
+ "cold": "each process rotates over copies of the input that hold twice the L3 size",
+ "loadavg_start": "1.35 1.12 1.18 1/121 18",
+ "loadavg_end": "1.00 1.02 1.10 1/121 1259",
+ "run": {
+  "rounds": [
+   {
+    "round": 1,
+    "wall_s": 43.73192834854126,
+    "steal_ticks": 3,
+    "steal_percent_of_cpu_time": 0.0171291538198013
+   },
+   {
+    "round": 2,
+    "wall_s": 44.03133726119995,
+    "steal_ticks": 40,
+    "steal_percent_of_cpu_time": 0.22673166307674866
+   },
+   {
+    "round": 3,
+    "wall_s": 43.40409851074219,
+    "steal_ticks": 35,
+    "steal_percent_of_cpu_time": 0.20108008732620936
+   },
+   {
+    "round": 4,
+    "wall_s": 42.92776679992676,
+    "steal_ticks": 2,
+    "steal_percent_of_cpu_time": 0.01163534818779452
+   },
+   {
+    "round": 5,
+    "wall_s": 43.31166696548462,
+    "steal_ticks": 2,
+    "steal_percent_of_cpu_time": 0.011536686663590217
+   },
+   {
+    "round": 6,
+    "wall_s": 43.60239338874817,
+    "steal_ticks": 2,
+    "steal_percent_of_cpu_time": 0.011442302191200869
+   },
+   {
+    "round": 7,
+    "wall_s": 43.36103844642639,
+    "steal_ticks": 6,
+    "steal_percent_of_cpu_time": 0.03455027064378671
+   },
+   {
+    "round": 8,
+    "wall_s": 43.7407500743866,
+    "steal_ticks": 3,
+    "steal_percent_of_cpu_time": 0.01714383679067375
+   },
+   {
+    "round": 9,
+    "wall_s": 43.02497839927673,
+    "steal_ticks": 5,
+    "steal_percent_of_cpu_time": 0.029020836960937952
+   },
+   {
+    "round": 10,
+    "wall_s": 43.14385747909546,
+    "steal_ticks": 2,
+    "steal_percent_of_cpu_time": 0.01157340431687981
+   }
+  ],
+  "steal_percent_of_cpu_time_max": 0.22673166307674866
+ },
+ "failed": [],
+ "arms": {
+  "clang++-23.floats.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 194710.6405182246,
+    "2": 191000.8179344874,
+    "3": 189250.07894667806,
+    "4": 182614.85694985543,
+    "5": 183411.52864564947,
+    "6": 181778.8238249676,
+    "7": 192509.7549495183,
+    "8": 201959.1179996496,
+    "9": 194092.7268030875,
+    "10": 203708.4989988216
+   },
+   "rounds_used": 8,
+   "median_ns": 193301.2408763029,
+   "spread": 0.12063932812641465,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 195552.92828154447,
+    "2": 190926.96588468022,
+    "3": 191696.15257614016,
+    "4": 183007.88224021028,
+    "5": 184392.16045005518,
+    "6": 183483.53974601725,
+    "7": 183162.9554546395,
+    "8": 183596.96210086925,
+    "9": 201413.943001171,
+    "10": 187456.89675029507
+   },
+   "rounds_used": 8,
+   "median_ns": 183994.5612754622,
+   "spread": 0.1005752349879745,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_ERROR_OR_R": {
+   "repetitions_ns_by_round": {
+    "1": 192358.4899856264,
+    "2": 193429.17320683796,
+    "3": 198095.77917508452,
+    "4": 181554.41113354647,
+    "5": 186765.95857089394,
+    "6": 183316.11730474906,
+    "7": 193745.59999917456,
+    "8": 188114.87957784368,
+    "9": 206743.007529975,
+    "10": 179995.05528752925
+   },
+   "rounds_used": 8,
+   "median_ns": 187440.4190743688,
+   "spread": 0.14860381691995816,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_HAS_VALUE": {
+   "repetitions_ns_by_round": {
+    "1": 203313.25921026233,
+    "2": 205585.27579317067,
+    "3": 180534.21048765868,
+    "4": 178694.35856310153,
+    "5": 198634.9467125179,
+    "6": 183819.29554358436,
+    "7": 199672.31963767472,
+    "8": 192031.92981253596,
+    "9": 194970.33837279654,
+    "10": 182832.1259359194
+   },
+   "rounds_used": 8,
+   "median_ns": 193501.13409266627,
+   "spread": 0.13777100097128825,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_HAS_VALUE_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 189220.461698801,
+    "2": 197166.73182134895,
+    "3": 203977.35000005926,
+    "4": 190755.31653230937,
+    "5": 189765.07865206111,
+    "6": 194268.92085817695,
+    "7": 196245.51784397181,
+    "8": 191480.89491754145,
+    "9": 198311.4005868059,
+    "10": 179557.82167534393
+   },
+   "rounds_used": 8,
+   "median_ns": 191118.1057249254,
+   "spread": 0.10444311885989599,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_HAS_VALUE_SKIP": {
+   "repetitions_ns_by_round": {
+    "1": 186286.55766674352,
+    "2": 200804.92901492445,
+    "3": 193575.12894466825,
+    "4": 202270.7050000463,
+    "5": 186926.51962130988,
+    "6": 191123.59459409144,
+    "7": 202019.76640276605,
+    "8": 188170.83694986103,
+    "9": 185180.2830185503,
+    "10": 179433.08742445402
+   },
+   "rounds_used": 8,
+   "median_ns": 187548.67828558545,
+   "spread": 0.12727651239466908,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_HAS_VALUE_WALK": {
+   "repetitions_ns_by_round": {
+    "1": 188055.89220129585,
+    "2": 201750.9399993287,
+    "3": 191882.36237848888,
+    "4": 194102.98373899976,
+    "5": 223252.05500055745,
+    "6": 201919.1538467557,
+    "7": 208515.23500095936,
+    "8": 188308.86138518565,
+    "9": 187256.9912862751,
+    "10": 185783.37760407256
+   },
+   "rounds_used": 8,
+   "median_ns": 191205.92256209272,
+   "spread": 0.20167938531258311,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_R": {
+   "repetitions_ns_by_round": {
+    "1": 188814.75488870824,
+    "2": 201577.255864176,
+    "3": 183236.80893004558,
+    "4": 199064.41958483553,
+    "5": 199426.39932165638,
+    "6": 231294.08648708556,
+    "7": 214746.24739159114,
+    "8": 192029.44766598957,
+    "9": 198718.50316234198,
+    "10": 193441.17078380432
+   },
+   "rounds_used": 8,
+   "median_ns": 198891.46137358877,
+   "spread": 0.2249788774368593,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 181843.6099925939,
+    "2": 178273.80983207366,
+    "3": 175945.80183025,
+    "4": 178622.0967531816,
+    "5": 174246.0025384551,
+    "6": 187516.1601593077,
+    "7": 200345.5135137129,
+    "8": 187297.4013981643,
+    "9": 186985.44818696674,
+    "10": 206685.2749994723
+   },
+   "rounds_used": 8,
+   "median_ns": 187141.42479256552,
+   "spread": 0.18616939263130616,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 178587.0941931799,
+    "2": 194926.86175110476,
+    "3": 179460.31972741155,
+    "4": 193846.5802707016,
+    "5": 183602.08004904346,
+    "6": 262829.2177506589,
+    "7": 186852.9735376219,
+    "8": 180328.71796583117,
+    "9": 176308.47422733685,
+    "10": 190069.6701426452
+   },
+   "rounds_used": 8,
+   "median_ns": 185227.52679333268,
+   "spread": 0.49073502508881073,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.records.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 108347.55751510577,
+    "2": 109363.10826530392,
+    "3": 109395.23768546058,
+    "4": 108936.62000013977,
+    "5": 106047.13597173047,
+    "6": 114774.14109408174,
+    "7": 121754.04442710585,
+    "8": 107777.25296125685,
+    "9": 109987.33918097227,
+    "10": 109460.90357954685
+   },
+   "rounds_used": 8,
+   "median_ns": 109198.76178984331,
+   "spread": 0.1481125191307613,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 109761.31607600689,
+    "2": 108175.80186853136,
+    "3": 108399.30146470417,
+    "4": 107100.22090813071,
+    "5": 108352.82719384633,
+    "6": 109808.64227324801,
+    "7": 110999.1786706503,
+    "8": 106983.33028193556,
+    "9": 109057.41594439278,
+    "10": 109033.7861295624
+   },
+   "rounds_used": 8,
+   "median_ns": 109045.60103697759,
+   "spread": 0.037537141329697654,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_ERROR_OR_R": {
+   "repetitions_ns_by_round": {
+    "1": 108141.32574194504,
+    "2": 109169.79496269072,
+    "3": 107889.81233133982,
+    "4": 109879.45945886313,
+    "5": 107699.7996108939,
+    "6": 108405.26197824784,
+    "7": 107980.29737196768,
+    "8": 106981.91322582428,
+    "9": 109550.44219500369,
+    "10": 110345.13489475909
+   },
+   "rounds_used": 8,
+   "median_ns": 108273.29386009644,
+   "spread": 0.03143729222560743,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_HAS_VALUE": {
+   "repetitions_ns_by_round": {
+    "1": 108618.11089360053,
+    "2": 115243.7072086346,
+    "3": 108720.63226095497,
+    "4": 110421.29103882796,
+    "5": 110457.60433061812,
+    "6": 111459.35108471516,
+    "7": 110123.91627397428,
+    "8": 107364.38414455544,
+    "9": 111020.70239477152,
+    "10": 110063.45108885082
+   },
+   "rounds_used": 8,
+   "median_ns": 110272.60365640112,
+   "spread": 0.03814083201600882,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_HAS_VALUE_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 110868.00757898521,
+    "2": 108809.91295778197,
+    "3": 108717.857864691,
+    "4": 110981.10996329282,
+    "5": 109526.6517159912,
+    "6": 107566.78160015591,
+    "7": 112109.89611424874,
+    "8": 110443.25969907224,
+    "9": 110550.793382296,
+    "10": 108359.5640029826
+   },
+   "rounds_used": 8,
+   "median_ns": 110497.02654068412,
+   "spread": 0.04223529277821436,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_HAS_VALUE_SKIP": {
+   "repetitions_ns_by_round": {
+    "1": 110273.45256036735,
+    "2": 109770.94643606014,
+    "3": 107575.86653828465,
+    "4": 109455.08180092975,
+    "5": 109674.85928300973,
+    "6": 106701.12305352921,
+    "7": 112067.34227191581,
+    "8": 108617.91972256407,
+    "9": 109454.39287074088,
+    "10": 109551.33569187071
+   },
+   "rounds_used": 8,
+   "median_ns": 109503.20874640023,
+   "spread": 0.05029205939748649,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_HAS_VALUE_WALK": {
+   "repetitions_ns_by_round": {
+    "1": 110830.89592147905,
+    "2": 111027.6392660071,
+    "3": 109389.87061942459,
+    "4": 109611.25116837508,
+    "5": 108125.19319483718,
+    "6": 110799.61858117155,
+    "7": 109990.56800338514,
+    "8": 110905.97967199703,
+    "9": 108352.73165993382,
+    "10": 110338.11888063855
+   },
+   "rounds_used": 8,
+   "median_ns": 110164.34344201184,
+   "spread": 0.025718210483554937,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_R": {
+   "repetitions_ns_by_round": {
+    "1": 109532.1587244822,
+    "2": 108762.46529544579,
+    "3": 115740.29407155013,
+    "4": 112920.04520462612,
+    "5": 107225.83165655521,
+    "6": 110460.62720517529,
+    "7": 111673.84579073914,
+    "8": 107861.30042386979,
+    "9": 110568.6627166911,
+    "10": 109551.57581682988
+   },
+   "rounds_used": 8,
+   "median_ns": 110006.10151100258,
+   "spread": 0.05310486717705776,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 109204.49980528973,
+    "2": 116627.28950455702,
+    "3": 110001.09596002047,
+    "4": 108476.76611325702,
+    "5": 109333.46428579814,
+    "6": 110925.75297344936,
+    "7": 108657.88483912795,
+    "8": 110251.37342292721,
+    "9": 110082.35903923745,
+    "10": 111647.5733866654
+   },
+   "rounds_used": 8,
+   "median_ns": 109707.91166251778,
+   "spread": 0.02923028946214945,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 110175.75116979096,
+    "2": 115629.73533084524,
+    "3": 109658.08006131319,
+    "4": 109773.19391815548,
+    "5": 108590.74883729035,
+    "6": 110918.93036005922,
+    "7": 108067.80935936599,
+    "8": 108209.1731825203,
+    "9": 107737.40400175075,
+    "10": 110320.29145350753
+   },
+   "rounds_used": 8,
+   "median_ns": 109181.97137772292,
+   "spread": 0.029530378866904794,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.twitter.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 83528.95614339513,
+    "2": 85966.76236147636,
+    "3": 84610.01117148,
+    "4": 84155.80727270218,
+    "5": 81110.68459481848,
+    "6": 82568.67637732385,
+    "7": 81803.28606297684,
+    "8": 83370.14950498371,
+    "9": 83239.20369242378,
+    "10": 94238.68874437491
+   },
+   "rounds_used": 8,
+   "median_ns": 83304.67659870375,
+   "spread": 0.16185295704426927,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 82263.50964386309,
+    "2": 84132.02881145355,
+    "3": 84456.32831515551,
+    "4": 87185.64913361576,
+    "5": 81392.31217406316,
+    "6": 83623.76125337294,
+    "7": 82556.32843294025,
+    "8": 82794.8561026045,
+    "9": 82792.11094922022,
+    "10": 82822.20296300862
+   },
+   "rounds_used": 8,
+   "median_ns": 82793.48352591236,
+   "spread": 0.07117793812225348,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_ERROR_OR_R": {
+   "repetitions_ns_by_round": {
+    "1": 82914.42128386915,
+    "2": 88674.6291789582,
+    "3": 85531.75355868964,
+    "4": 82533.06562722822,
+    "5": 83255.94051504167,
+    "6": 84489.89823000548,
+    "7": 84775.56063304658,
+    "8": 82873.06567452766,
+    "9": 85088.30091458793,
+    "10": 82669.55789823353
+   },
+   "rounds_used": 8,
+   "median_ns": 83085.18089945542,
+   "spread": 0.030960140253371682,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_HAS_VALUE": {
+   "repetitions_ns_by_round": {
+    "1": 82847.08810336566,
+    "2": 83040.91784345663,
+    "3": 82598.46012480104,
+    "4": 82362.40542172274,
+    "5": 83181.02791781658,
+    "6": 85283.89970036616,
+    "7": 85856.06022669474,
+    "8": 84096.46142467897,
+    "9": 82945.54553649528,
+    "10": 82638.7638888513
+   },
+   "rounds_used": 8,
+   "median_ns": 83063.28672715594,
+   "spread": 0.042418076391568915,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_HAS_VALUE_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 84854.99043608314,
+    "2": 86133.71476796422,
+    "3": 87622.21964262034,
+    "4": 85059.9945991344,
+    "5": 84205.62455005599,
+    "6": 84842.91331702,
+    "7": 85616.88854839098,
+    "8": 84739.55277298963,
+    "9": 82602.7276756085,
+    "10": 85092.34523080521
+   },
+   "rounds_used": 8,
+   "median_ns": 84848.95187655157,
+   "spread": 0.0364898467350796,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_HAS_VALUE_SKIP": {
+   "repetitions_ns_by_round": {
+    "1": 83288.39658242854,
+    "2": 81935.4856071749,
+    "3": 83213.75449830804,
+    "4": 84401.12355228371,
+    "5": 81762.59444441888,
+    "6": 83121.08023780609,
+    "7": 84061.5774397753,
+    "8": 81395.4220425437,
+    "9": 84125.08166872947,
+    "10": 83259.77837377564
+   },
+   "rounds_used": 8,
+   "median_ns": 83274.0874781021,
+   "spread": 0.036927156765266256,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_HAS_VALUE_WALK": {
+   "repetitions_ns_by_round": {
+    "1": 83013.39392150118,
+    "2": 82591.63703444971,
+    "3": 84748.44372019982,
+    "4": 83340.15043195015,
+    "5": 80987.3518193572,
+    "6": 81797.73469380448,
+    "7": 84282.7855419262,
+    "8": 83936.15667129598,
+    "9": 83848.94000015782,
+    "10": 82279.1687815477
+   },
+   "rounds_used": 8,
+   "median_ns": 83176.77217672567,
+   "spread": 0.04069072081674552,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_R": {
+   "repetitions_ns_by_round": {
+    "1": 84098.1653637961,
+    "2": 82330.50731876711,
+    "3": 84953.23580198735,
+    "4": 83013.81780298332,
+    "5": 82854.40695570347,
+    "6": 82889.87237163653,
+    "7": 84447.36543067535,
+    "8": 83235.93731499441,
+    "9": 85028.22318997685,
+    "10": 85078.60217939898
+   },
+   "rounds_used": 8,
+   "median_ns": 83667.05133939526,
+   "spread": 0.02684462185438896,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 85344.76727019894,
+    "2": 84258.9056379271,
+    "3": 85822.91012584564,
+    "4": 83786.00443394302,
+    "5": 84972.01110728708,
+    "6": 86394.43316996546,
+    "7": 82685.79854579414,
+    "8": 83720.45592702132,
+    "9": 86005.77654673236,
+    "10": 83985.1830834692
+   },
+   "rounds_used": 8,
+   "median_ns": 84478.59709537814,
+   "spread": 0.04485213530492005,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 84229.57980623071,
+    "2": 85221.87761894519,
+    "3": 85279.82515758749,
+    "4": 82039.83553583534,
+    "5": 83307.85983291986,
+    "6": 87965.25943275302,
+    "7": 83667.2440756215,
+    "8": 83839.83479289927,
+    "9": 83034.95681719766,
+    "10": 87257.22792484726
+   },
+   "rounds_used": 8,
+   "median_ns": 83753.53943426038,
+   "spread": 0.07222617961404154,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.floats.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 162659.00745761464,
+    "2": 172329.2679018391,
+    "3": 174084.21907882593,
+    "4": 179890.9999990424,
+    "5": 174380.80313957855,
+    "6": 169214.0083779443,
+    "7": 177932.86523150388,
+    "8": 179756.8703231293,
+    "9": 172687.44520501795,
+    "10": 165094.99234685715
+   },
+   "rounds_used": 8,
+   "median_ns": 173534.12417229824,
+   "spread": 0.10593936856474451,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 179191.8727390899,
+    "2": 176447.88820586633,
+    "3": 230476.3419997471,
+    "4": 185678.5028259059,
+    "5": 165319.9242612801,
+    "6": 176613.24508563583,
+    "7": 162458.2958546311,
+    "8": 185633.7069794151,
+    "9": 234538.40399997716,
+    "10": 177325.781993596
+   },
+   "rounds_used": 8,
+   "median_ns": 178258.82736634294,
+   "spread": 0.4436837636770723,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_ERROR_OR_R": {
+   "repetitions_ns_by_round": {
+    "1": 173602.06702901254,
+    "2": 170600.28190307305,
+    "3": 178714.30415137368,
+    "4": 165420.28712251785,
+    "5": 160329.63515941313,
+    "6": 175380.40952309704,
+    "7": 171871.67983074256,
+    "8": 174211.12594015346,
+    "9": 178194.78169504862,
+    "10": 178084.8000001017
+   },
+   "rounds_used": 8,
+   "median_ns": 173906.596484583,
+   "spread": 0.11142760050487532,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_HAS_VALUE": {
+   "repetitions_ns_by_round": {
+    "1": 161073.8793606245,
+    "2": 161073.47557479164,
+    "3": 163689.91648156056,
+    "4": 153449.62435082093,
+    "5": 178792.01582878886,
+    "6": 164248.1578655582,
+    "7": 157700.5287354819,
+    "8": 159597.1448276083,
+    "9": 155332.6642598002,
+    "10": 179914.4382829032
+   },
+   "rounds_used": 8,
+   "median_ns": 160335.51209411642,
+   "spread": 0.17246581113537074,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_HAS_VALUE_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 162446.42361163677,
+    "2": 179743.93442701656,
+    "3": 172618.11252195697,
+    "4": 158318.65453374054,
+    "5": 163472.99999922985,
+    "6": 197898.40476199548,
+    "7": 168716.33276172218,
+    "8": 175974.28354601198,
+    "9": 164833.76038349277,
+    "10": 183268.10652096343
+   },
+   "rounds_used": 8,
+   "median_ns": 166775.04657260748,
+   "spread": 0.25000054696535967,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_HAS_VALUE_SKIP": {
+   "repetitions_ns_by_round": {
+    "1": 183680.30275168235,
+    "2": 159089.5383245835,
+    "3": 169202.99612871942,
+    "4": 155950.3816118078,
+    "5": 160801.42054375328,
+    "6": 163536.88868758624,
+    "7": 164922.25818561215,
+    "8": 169916.13510372423,
+    "9": 165268.95079083473,
+    "10": 170651.02310050995
+   },
+   "rounds_used": 8,
+   "median_ns": 165095.60448822344,
+   "spread": 0.17781246094607162,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_HAS_VALUE_WALK": {
+   "repetitions_ns_by_round": {
+    "1": 174388.91396486814,
+    "2": 179318.0918361193,
+    "3": 191240.61796248044,
+    "4": 179117.35333761465,
+    "5": 168340.8546510733,
+    "6": 171359.60560694925,
+    "7": 161827.48888921685,
+    "8": 170124.47910739022,
+    "9": 171863.55914006702,
+    "10": 173076.08374403795
+   },
+   "rounds_used": 8,
+   "median_ns": 171611.58237350814,
+   "spread": 0.10684133188418943,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_R": {
+   "repetitions_ns_by_round": {
+    "1": 175453.934754392,
+    "2": 174122.44667122324,
+    "3": 163291.23253123998,
+    "4": 174299.4820513279,
+    "5": 177069.0976215459,
+    "6": 207560.92864264507,
+    "7": 169226.55321739527,
+    "8": 174665.5147672821,
+    "9": 174554.4193754133,
+    "10": 182292.00000061851
+   },
+   "rounds_used": 8,
+   "median_ns": 175059.72476083704,
+   "spread": 0.2265269527531173,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 186408.4764743915,
+    "2": 178880.2192385038,
+    "3": 183334.4703201022,
+    "4": 242079.594862397,
+    "5": 178003.63965174358,
+    "6": 191613.54261781598,
+    "7": 201033.08563974663,
+    "8": 201339.09042985155,
+    "9": 172561.77720567188,
+    "10": 182060.85436234222
+   },
+   "rounds_used": 8,
+   "median_ns": 189011.00954610374,
+   "spread": 0.40285756662014816,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 182297.94578331505,
+    "2": 180561.71086756236,
+    "3": 183622.99416777855,
+    "4": 181697.19181165416,
+    "5": 185777.98040353841,
+    "6": 182714.6361892912,
+    "7": 177324.11381530255,
+    "8": 186749.66097001193,
+    "9": 200505.9598387784,
+    "10": 193944.75206061424
+   },
+   "rounds_used": 8,
+   "median_ns": 184246.3082964148,
+   "spread": 0.13073149232045012,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.records.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 69756.0857657464,
+    "2": 74028.9470162614,
+    "3": 74903.36898715961,
+    "4": 76377.07470173607,
+    "5": 70909.14412593623,
+    "6": 74408.15892728722,
+    "7": 72378.22772243335,
+    "8": 74906.9121084601,
+    "9": 76310.15903433484,
+    "10": 75802.22487292542
+   },
+   "rounds_used": 8,
+   "median_ns": 74657.53551787366,
+   "spread": 0.0949162910061232,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 76879.90296442682,
+    "2": 72859.43171023228,
+    "3": 76412.05509261665,
+    "4": 90610.53969102858,
+    "5": 70440.51300166798,
+    "6": 74802.32385169379,
+    "7": 72177.37959393312,
+    "8": 74390.68846954561,
+    "9": 75005.73484849234,
+    "10": 75530.1843781476
+   },
+   "rounds_used": 8,
+   "median_ns": 74904.02935009307,
+   "spread": 0.286341280462892,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_ERROR_OR_R": {
+   "repetitions_ns_by_round": {
+    "1": 75072.5038597011,
+    "2": 77928.27694694999,
+    "3": 80448.52337157297,
+    "4": 73227.90580368954,
+    "5": 72960.74973928019,
+    "6": 68287.42498148026,
+    "7": 75448.71185072935,
+    "8": 74303.70831160284,
+    "9": 74161.50321214115,
+    "10": 73323.7179557456
+   },
+   "rounds_used": 8,
+   "median_ns": 73742.61058394337,
+   "spread": 0.10486977465018255,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_HAS_VALUE": {
+   "repetitions_ns_by_round": {
+    "1": 71767.02857105923,
+    "2": 66666.99612766765,
+    "3": 80471.32851345232,
+    "4": 69883.79811030706,
+    "5": 63614.09699673093,
+    "6": 75967.44693038419,
+    "7": 71104.68036782056,
+    "8": 70462.10925232814,
+    "9": 65889.28936590812,
+    "10": 68035.72228984551
+   },
+   "rounds_used": 8,
+   "median_ns": 70172.9536813176,
+   "spread": 0.19419201901566074,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_HAS_VALUE_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 70061.36409480013,
+    "2": 66320.19596342139,
+    "3": 65068.510657634055,
+    "4": 68160.77534395366,
+    "5": 73628.29205181394,
+    "6": 68880.97524291508,
+    "7": 68738.51082536884,
+    "8": 72328.13201688207,
+    "9": 64990.42787556479,
+    "10": 68363.23237445451
+   },
+   "rounds_used": 8,
+   "median_ns": 68809.74303414195,
+   "spread": 0.13290979085085897,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_HAS_VALUE_SKIP": {
+   "repetitions_ns_by_round": {
+    "1": 68010.3016025828,
+    "2": 68724.29301278036,
+    "3": 69652.74600879884,
+    "4": 73316.58175467586,
+    "5": 70699.94443043378,
+    "6": 72808.30681232728,
+    "7": 70369.1388197191,
+    "8": 72712.76956195827,
+    "9": 68096.8070133446,
+    "10": 67486.03742753813
+   },
+   "rounds_used": 8,
+   "median_ns": 70534.54162507644,
+   "spread": 0.08639630580471058,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_HAS_VALUE_WALK": {
+   "repetitions_ns_by_round": {
+    "1": 73207.42884329693,
+    "2": 73421.50748311779,
+    "3": 72672.65736624463,
+    "4": 74319.71382484304,
+    "5": 69960.64525135714,
+    "6": 73111.30564377454,
+    "7": 70577.62355233562,
+    "8": 73660.80597000575,
+    "9": 77355.36783225345,
+    "10": 79709.84736418998
+   },
+   "rounds_used": 8,
+   "median_ns": 73434.11740665135,
+   "spread": 0.13935266145424396,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_R": {
+   "repetitions_ns_by_round": {
+    "1": 81696.84945632188,
+    "2": 77500.92721378768,
+    "3": 75571.90013546494,
+    "4": 77370.31882080359,
+    "5": 80702.28297893141,
+    "6": 77199.33886133734,
+    "7": 74621.93710692362,
+    "8": 78899.71585316447,
+    "9": 79128.70703642695,
+    "10": 80892.8746092842
+   },
+   "rounds_used": 8,
+   "median_ns": 79014.21144479571,
+   "spread": 0.09481008700244309,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 74266.08267591205,
+    "2": 77555.32641817999,
+    "3": 74581.23018952634,
+    "4": 72162.73515440422,
+    "5": 79275.43847215123,
+    "6": 76885.71305556656,
+    "7": 75509.20537092944,
+    "8": 73434.76870581556,
+    "9": 73771.17892627136,
+    "10": 74985.2496613493
+   },
+   "rounds_used": 8,
+   "median_ns": 74625.66616863068,
+   "spread": 0.09856476895627919,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 76989.0801488659,
+    "2": 78256.75495521871,
+    "3": 73475.22964149082,
+    "4": 71775.15870519748,
+    "5": 77054.12645897862,
+    "6": 86891.55379452018,
+    "7": 77689.80664495322,
+    "8": 76293.72727256833,
+    "9": 71859.48471473654,
+    "10": 77744.56098211893
+   },
+   "rounds_used": 8,
+   "median_ns": 77021.60330392225,
+   "spread": 0.210607616367807,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.twitter.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 62790.201304273476,
+    "2": 63705.60633044642,
+    "3": 60820.9923663312,
+    "4": 64241.8189031531,
+    "5": 60882.34306911284,
+    "6": 62126.07719828283,
+    "7": 66308.66674210044,
+    "8": 70572.29823622746,
+    "9": 63831.80975458956,
+    "10": 62959.34174011721
+   },
+   "rounds_used": 8,
+   "median_ns": 63395.57574735339,
+   "spread": 0.1591587097118572,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 61497.77665633864,
+    "2": 63054.256605478804,
+    "3": 62885.10434414718,
+    "4": 65398.74029639464,
+    "5": 60070.302150502015,
+    "6": 60491.18398796562,
+    "7": 70838.30617358298,
+    "8": 61085.98062006796,
+    "9": 61755.45603067488,
+    "10": 62899.043718349836
+   },
+   "rounds_used": 8,
+   "median_ns": 61626.61634350676,
+   "spread": 0.17925669819509937,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_ERROR_OR_R": {
+   "repetitions_ns_by_round": {
+    "1": 62370.66554071511,
+    "2": 63448.07848291004,
+    "3": 62212.906925175215,
+    "4": 63532.75533090384,
+    "5": 62282.438413928605,
+    "6": 65472.2105142095,
+    "7": 62001.62460725291,
+    "8": 63687.072017000195,
+    "9": 65145.55527832929,
+    "10": 74046.7697463104
+   },
+   "rounds_used": 8,
+   "median_ns": 63609.91367395202,
+   "spread": 0.19427144393968754,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_HAS_VALUE": {
+   "repetitions_ns_by_round": {
+    "1": 60610.298556466,
+    "2": 62637.26271003809,
+    "3": 62551.599287370474,
+    "4": 64367.83333305761,
+    "5": 59199.211433411205,
+    "6": 61368.65674912513,
+    "7": 59551.30607332567,
+    "8": 62228.79634145787,
+    "9": 62058.573351319865,
+    "10": 61347.72302944332
+   },
+   "rounds_used": 8,
+   "median_ns": 61358.18988928423,
+   "spread": 0.08730896534762467,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_HAS_VALUE_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 64009.19986316161,
+    "2": 61367.02038010098,
+    "3": 60281.87328954434,
+    "4": 66328.47330566784,
+    "5": 61038.89318662798,
+    "6": 60257.077370806655,
+    "7": 61633.64887019057,
+    "8": 60973.79531894419,
+    "9": 60101.57965379792,
+    "10": 62228.71916299626
+   },
+   "rounds_used": 8,
+   "median_ns": 61336.271028409275,
+   "spread": 0.10360615623979585,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_HAS_VALUE_SKIP": {
+   "repetitions_ns_by_round": {
+    "1": 64443.144367193556,
+    "2": 65346.05883740858,
+    "3": 60546.2786566175,
+    "4": 66372.25243130409,
+    "5": 60583.367030103866,
+    "6": 62316.23705059233,
+    "7": 61255.563226100305,
+    "8": 59176.77297607066,
+    "9": 69581.05680783455,
+    "10": 67720.49502079234
+   },
+   "rounds_used": 8,
+   "median_ns": 63379.690708892944,
+   "spread": 0.17581701922088722,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_HAS_VALUE_WALK": {
+   "repetitions_ns_by_round": {
+    "1": 60532.57583675323,
+    "2": 62920.97791567483,
+    "3": 62592.488466272145,
+    "4": 61623.65424029943,
+    "5": 64290.13206762005,
+    "6": 67755.89037466032,
+    "7": 60181.00809277834,
+    "8": 62177.4295805377,
+    "9": 70897.45199339271,
+    "10": 61472.36477691636
+   },
+   "rounds_used": 8,
+   "median_ns": 61900.541910418564,
+   "spread": 0.17807019590122697,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_R": {
+   "repetitions_ns_by_round": {
+    "1": 63470.22784158231,
+    "2": 66538.26103862039,
+    "3": 66700.89179974247,
+    "4": 65143.80435952346,
+    "5": 62932.562798181476,
+    "6": 66525.79475203351,
+    "7": 64640.4478558763,
+    "8": 69764.16773095356,
+    "9": 65163.4396885879,
+    "10": 69825.24734974545
+   },
+   "rounds_used": 8,
+   "median_ns": 65153.62202405569,
+   "spread": 0.10952493026016019,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 66227.1985527359,
+    "2": 60895.731867976094,
+    "3": 66061.7976839336,
+    "4": 71568.13955374596,
+    "5": 66096.25310420293,
+    "6": 66201.41251422388,
+    "7": 64628.17760452338,
+    "8": 66049.76681620239,
+    "9": 71277.45247692864,
+    "10": 75182.62944878578
+   },
+   "rounds_used": 8,
+   "median_ns": 66214.3055334799,
+   "spread": 0.16331037382560654,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 63841.76924823624,
+    "2": 64430.55390086012,
+    "3": 77154.09033040037,
+    "4": 65449.558111999955,
+    "5": 64446.7925091456,
+    "6": 63676.72129323235,
+    "7": 69209.2785052915,
+    "8": 68781.75269819926,
+    "9": 69253.50696066508,
+    "10": 64536.718296913816
+   },
+   "rounds_used": 8,
+   "median_ns": 64993.13820445689,
+   "spread": 0.08757966104679826,
+   "check": "1227",
+   "copies": "1354"
+  }
+ }
+}
