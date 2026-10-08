@@ -93,7 +93,8 @@ public:
 
     static constexpr std::size_t nesting_depth_default = 128;
 
-    static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth, std::size_t const depth_max)
+    static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth,
+                                                                    std::size_t const depth_max)
     {
         if (depth > depth_max) [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
