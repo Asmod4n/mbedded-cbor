@@ -180,7 +180,8 @@ std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &enco
     validity::throw_logic_error_if_null(encoded, "cbor::decode: the encoded data item is null");
     validity::throw_logic_error_if_empty(encoded,
                                          "cbor::decode: the owner of the encoded data item is empty");
-    return lazy{std::make_shared<value_sharing::top_level_item>(encoded, *encoded, std::vector<lazy>{}, 0), 0};
+    std::string_view const content = heads::self_described_cbor_content(*encoded);
+    return lazy{std::make_shared<value_sharing::top_level_item>(encoded, content, std::vector<lazy>{}, 0), 0};
 }
 
 template <std::size_t DepthMax>
@@ -201,7 +202,9 @@ inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner, 
 {
     validity::throw_logic_error_if_empty(owner,
                                          "cbor::lazy::from: the owner of the encoded data item is empty");
-    return lazy{std::make_shared<value_sharing::top_level_item>(std::move(owner), encoded, std::vector<lazy>{}, 0), 0};
+    std::string_view const content = heads::self_described_cbor_content(encoded);
+    return lazy{
+        std::make_shared<value_sharing::top_level_item>(std::move(owner), content, std::vector<lazy>{}, 0), 0};
 }
 
 inline std::expected<lazy, error> lazy::from(std::shared_ptr<std::string const> encoded)
