@@ -1,0 +1,3105 @@
+{
+ "time": "2026-10-08-151513Z",
+ "commit": "11828ed1cdf99aab4b279a2d47decbe54f5b167d",
+ "purpose": "MB_PATH (lazy chain), MB_AT_PATH (at_path<Path, T>) and seven arms of at_path, each one change against HEAD (bench/arms/MB_AT_PATH_<arm>), g++-16 and clang 23, twitter, floats and records. MB_PATH_LOCAL_DECODER and MB_PATH_HEAD_LIKELY are the lazy chain over the headers of the arm. MB_PATH_AA and MB_AT_PATH_AA are HEAD built a second time. ns per message, real_time.",
+ "rule": "an arm differs from a reference when it lies outside both binaries of the reference (built twice) and the gap to the nearer one is above the A/A of the reference in that cell and above the floor of 2.65 percent",
+ "steal_rule": "a round whose steal is above 0.1 percent of the CPU time is excluded from every median",
+ "rounds_excluded_for_steal": [],
+ "order": "each round runs every binary once, in an order from shuf",
+ "order_by_round": {
+  "1": [
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_PATH",
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_AA",
+   "clang++-23.floats.MB_PATH_AA",
+   "g++-16.floats.MB_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.twitter.MB_PATH_AA",
+   "clang++-23.records.MB_PATH",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH",
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.floats.MB_AT_PATH",
+   "g++-16.floats.MB_PATH",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.records.MB_PATH",
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.records.MB_AT_PATH",
+   "clang++-23.twitter.MB_PATH",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_AA",
+   "clang++-23.floats.MB_PATH",
+   "clang++-23.records.MB_AT_PATH",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_PATH_AA",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE"
+  ],
+  "2": [
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_AT_PATH",
+   "g++-16.floats.MB_AT_PATH",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.floats.MB_PATH",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "g++-16.records.MB_PATH_AA",
+   "g++-16.records.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.twitter.MB_AT_PATH_AA",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "g++-16.twitter.MB_PATH",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.floats.MB_AT_PATH",
+   "clang++-23.twitter.MB_PATH_AA",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_PATH",
+   "g++-16.twitter.MB_AT_PATH",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.records.MB_AT_PATH",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_PATH_AA",
+   "clang++-23.twitter.MB_PATH",
+   "clang++-23.records.MB_PATH",
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_PATH",
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH",
+   "clang++-23.floats.MB_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY"
+  ],
+  "3": [
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.twitter.MB_PATH",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_PATH_AA",
+   "g++-16.floats.MB_PATH_AA",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_PATH",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.twitter.MB_PATH",
+   "clang++-23.records.MB_PATH",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_PATH_AA",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_AT_PATH",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_PATH",
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_PATH_AA",
+   "clang++-23.records.MB_AT_PATH",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.twitter.MB_AT_PATH_AA",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.floats.MB_PATH",
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER"
+  ],
+  "4": [
+   "g++-16.records.MB_AT_PATH_AA",
+   "clang++-23.records.MB_PATH",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "clang++-23.records.MB_AT_PATH",
+   "clang++-23.floats.MB_PATH_AA",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_PATH_AA",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_PATH",
+   "g++-16.records.MB_PATH_AA",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.twitter.MB_AT_PATH_AA",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_AT_PATH",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.floats.MB_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.twitter.MB_PATH",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_PATH",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_PATH_AA",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_PATH",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_AT_PATH",
+   "g++-16.floats.MB_PATH"
+  ],
+  "5": [
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_PATH",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_PATH_AA",
+   "g++-16.floats.MB_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_PATH",
+   "clang++-23.floats.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.floats.MB_AT_PATH",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_PATH",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_PATH",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH",
+   "clang++-23.twitter.MB_PATH_AA",
+   "g++-16.records.MB_AT_PATH_AA",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_PATH_AA",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH",
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.twitter.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.twitter.MB_AT_PATH",
+   "g++-16.twitter.MB_PATH",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_PATH",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.twitter.MB_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER"
+  ],
+  "6": [
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH",
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_PATH",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_PATH_AA",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_PATH",
+   "g++-16.floats.MB_AT_PATH",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_PATH",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_PATH",
+   "clang++-23.records.MB_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH",
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH",
+   "g++-16.records.MB_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_PATH",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_AT_PATH_AA",
+   "g++-16.twitter.MB_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_PATH_AA",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_PATH",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH"
+  ],
+  "7": [
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_PATH_AA",
+   "g++-16.floats.MB_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_PATH",
+   "g++-16.twitter.MB_AT_PATH",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_PATH",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.floats.MB_PATH",
+   "clang++-23.records.MB_AT_PATH",
+   "g++-16.records.MB_PATH_AA",
+   "clang++-23.twitter.MB_PATH",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_PATH_AA",
+   "clang++-23.twitter.MB_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_AT_PATH",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_AT_PATH",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.records.MB_PATH",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_PATH",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_AA"
+  ],
+  "8": [
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH",
+   "g++-16.records.MB_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.twitter.MB_PATH",
+   "g++-16.floats.MB_PATH",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH",
+   "g++-16.records.MB_AT_PATH_AA",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_PATH_AA",
+   "clang++-23.floats.MB_PATH_AA",
+   "clang++-23.twitter.MB_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_PATH_AA",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_PATH_AA",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_AA",
+   "clang++-23.records.MB_AT_PATH",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_PATH",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_PATH",
+   "g++-16.records.MB_PATH",
+   "clang++-23.floats.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH",
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_PATH",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_AT_PATH",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE"
+  ],
+  "9": [
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_PATH_AA",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_PATH_AA",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_PATH",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.twitter.MB_PATH_AA",
+   "g++-16.floats.MB_PATH_AA",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_PATH",
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.twitter.MB_AT_PATH",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_PATH_AA",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.twitter.MB_PATH",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_PATH",
+   "g++-16.records.MB_PATH",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_AT_PATH",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.records.MB_AT_PATH_AA",
+   "g++-16.floats.MB_AT_PATH",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.floats.MB_PATH",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE"
+  ],
+  "10": [
+   "g++-16.floats.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_PATH",
+   "clang++-23.records.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.floats.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.twitter.MB_AT_PATH_AA",
+   "g++-16.floats.MB_PATH",
+   "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_PATH_AA",
+   "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_PATH",
+   "clang++-23.records.MB_PATH_HEAD_LIKELY",
+   "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_AA",
+   "clang++-23.records.MB_PATH",
+   "clang++-23.records.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_AT_PATH_KEY_BREAK",
+   "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.floats.MB_PATH_AA",
+   "clang++-23.twitter.MB_AT_PATH",
+   "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_AA",
+   "clang++-23.twitter.MB_PATH",
+   "clang++-23.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH",
+   "clang++-23.twitter.MB_PATH_AA",
+   "g++-16.records.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_PATH_AA",
+   "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH",
+   "g++-16.twitter.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH",
+   "clang++-23.records.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_PATH_LOCAL_DECODER",
+   "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "g++-16.records.MB_AT_PATH_KEY_BREAK",
+   "g++-16.records.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH",
+   "g++-16.floats.MB_AT_PATH_LOCAL_DECODER",
+   "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_PATH",
+   "clang++-23.records.MB_AT_PATH",
+   "g++-16.records.MB_AT_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_AA",
+   "clang++-23.records.MB_PATH_LOCAL_DECODER",
+   "g++-16.twitter.MB_AT_PATH_KEY_BREAK",
+   "g++-16.floats.MB_AT_PATH_KEY_ENCODED",
+   "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY",
+   "clang++-23.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE",
+   "g++-16.twitter.MB_PATH_HEAD_LIKELY",
+   "g++-16.records.MB_AT_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_AT_PATH_KEY_ENCODED",
+   "g++-16.floats.MB_PATH_AA",
+   "clang++-23.floats.MB_PATH_HEAD_LIKELY",
+   "g++-16.twitter.MB_AT_PATH_AA",
+   "g++-16.floats.MB_PATH_LOCAL_DECODER",
+   "g++-16.records.MB_PATH_AA",
+   "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE",
+   "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE",
+   "clang++-23.twitter.MB_AT_PATH_KEY_BREAK",
+   "clang++-23.twitter.MB_PATH_HEAD_LIKELY"
+  ]
+ },
+ "wait": "the run started 150 s after the previous build or run ended; load 0.08 0.66 1.26 1/105 21823; podman ps: 0 running",
+ "build": {
+  "start_unix": "1791471551",
+  "end_unix": "1791471652",
+  "status": "0"
+ },
+ "flags": "-std=c++23 -O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG -Werror, default PIE mode of the compiler of the image",
+ "elf_type_count": {
+  "Type: DYN clang++-23": 39,
+  "Type: EXEC g++-16": 39
+ },
+ "processes": 10,
+ "min_time": "0.2s",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.0",
+  "clang version 23.1.2"
+ ],
+ "packages": [
+  "gcc16-c++-16.2.0+git9497-3.1.x86_64",
+  "clang23-23.1.2-1.1.x86_64",
+  "libstdc++6-16.2.0+git9497-3.1.x86_64",
+  "glibc-2.44-2.1.x86_64",
+  "benchmark-devel-1.9.5-2.3.x86_64"
+ ],
+ "ldd_sample": "== g++-16.twitter.MB_AT_PATH\nlinux-vdso.so.1 (0x00007fd6ff8cf000)\n\tlibbenchmark.so.1 => /lib64/libbenchmark.so.1 (0x00007fd6ff862000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fd6ff5bf000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007fd6ff49b000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007fd6ff46b000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007fd6ff257000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fd6ff8d1000)\n== clang++-23.twitter.MB_AT_PATH\nlinux-vdso.so.1 (0x00007f2a3a6c7000)\n\tlibbenchmark.so.1 => /lib64/libbenchmark.so.1 (0x00007f2a3a64b000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f2a3a3a8000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007f2a3a284000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007f2a3a254000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007f2a3a040000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f2a3a6c9000)",
+ "libc": "ldd (GNU libc) 2.44",
+ "kernel": "6.18.44-fc-v80",
+ "scheduler": "CFS/EEVDF (no sched_ext state)",
+ "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-tw-gb",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 1000,
+ "priority": "1 (process ID) old priority 0, new priority -10\nnice -10",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; 3 of 4 cpus stay to the rest of the machine",
+ "cold": "each process rotates over copies of the input that hold twice the L3 size",
+ "loadavg_start": "0.08 0.66 1.26 1/118 415",
+ "loadavg_end": "1.03 1.03 1.18 1/120 1256",
+ "run": {
+  "rounds": [
+   {
+    "round": 1,
+    "wall_s": 56.08256125450134,
+    "steal_ticks": 4,
+    "steal_percent_of_cpu_time": 0.017811818141336776
+   },
+   {
+    "round": 2,
+    "wall_s": 55.3729784488678,
+    "steal_ticks": 3,
+    "steal_percent_of_cpu_time": 0.013522040926710539
+   },
+   {
+    "round": 3,
+    "wall_s": 55.32603192329407,
+    "steal_ticks": 3,
+    "steal_percent_of_cpu_time": 0.013548299688389108
+   },
+   {
+    "round": 4,
+    "wall_s": 55.36055326461792,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.004505722267279445
+   },
+   {
+    "round": 5,
+    "wall_s": 55.52275276184082,
+    "steal_ticks": 2,
+    "steal_percent_of_cpu_time": 0.008994423457456376
+   },
+   {
+    "round": 6,
+    "wall_s": 54.754594802856445,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.004556016219417741
+   },
+   {
+    "round": 7,
+    "wall_s": 55.89503860473633,
+    "steal_ticks": 11,
+    "steal_percent_of_cpu_time": 0.04912468738835298
+   },
+   {
+    "round": 8,
+    "wall_s": 54.402183294296265,
+    "steal_ticks": 2,
+    "steal_percent_of_cpu_time": 0.009180207472688882
+   },
+   {
+    "round": 9,
+    "wall_s": 55.280969858169556,
+    "steal_ticks": 2,
+    "steal_percent_of_cpu_time": 0.009034647874599087
+   },
+   {
+    "round": 10,
+    "wall_s": 55.788798809051514,
+    "steal_ticks": 3,
+    "steal_percent_of_cpu_time": 0.013421617752326413
+   }
+  ],
+  "status": "0",
+  "steal_percent_of_cpu_time_max_used": 0.04912468738835298
+ },
+ "failed": [],
+ "stderr_head": "2026-10-08T15:15:14+00:00\nRunning /b/bin/g++-16.twitter.MB_AT_PATH_HEAD_LIKELY\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.08, 0.66, 1.26\ncheck: 1227\ncopies: 1354\ndocument: /src/bench/docs/twitter.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.\n2026-10-08T15:15:15+00:00\nRunning /b/bin/clang++-23.twitter.MB_AT_PATH\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.08, 0.66, 1.26\ncheck: 1227\ncopies: 1354\ndocument: /src/bench/docs/twitter.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.\n2026-10-08T15:15:15+00:00\nRunning /b/bin/clang++-23.records.MB_PATH_LOCAL_DECODER\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.08, 0.66, 1.26\ncheck: 640\ncopies: 1656\ndocument: /src/bench/docs/records.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.\n2026-10-08T15:15:16+00:00\nRunning /b/bin/clang++-23.twitter.MB_PATH_HEAD_LIKELY\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.15, 0.67, 1.26\ncheck: 1227\ncopies: 1354\ndocument: /src/bench/docs/twitter.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.\n2026-10-08T15:15:17+00:00\nRunning /b/bin/g++-16.twitter.MB_PATH_HEAD_LIKELY\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.15, 0.67, 1.26\ncheck: 1227\ncopies: 1354\ndocument: /src/bench/docs/twitter.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in",
+ "arms": {
+  "clang++-23.floats.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 214929.6551168619,
+    "2": 206692.20270291818,
+    "3": 199131.44195753548,
+    "4": 209209.82799998455,
+    "5": 202559.667279027,
+    "6": 200346.7701730654,
+    "7": 221534.58999946452,
+    "8": 200451.8290004853,
+    "9": 201516.72500014683,
+    "10": 189698.13833471847
+   },
+   "rounds_used": 10,
+   "median_ns": 202038.19613958691,
+   "spread": 0.1678269061796025,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 206429.3561547032,
+    "2": 200430.30785564173,
+    "3": 202685.43800011685,
+    "4": 204863.560999911,
+    "5": 221344.9131049649,
+    "6": 266826.5649999739,
+    "7": 203552.1666668231,
+    "8": 202703.49962921478,
+    "9": 196590.01568911035,
+    "10": 199994.38128460545
+   },
+   "rounds_used": 10,
+   "median_ns": 203127.83314801892,
+   "spread": 0.3572742443946717,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 190107.929093006,
+    "2": 194467.6450303811,
+    "3": 191745.42151549156,
+    "4": 191224.1523746101,
+    "5": 174440.5794738526,
+    "6": 203742.17144935278,
+    "7": 183267.20987622248,
+    "8": 195910.50789103858,
+    "9": 199707.88079509954,
+    "10": 189346.73180582357
+   },
+   "rounds_used": 10,
+   "median_ns": 191484.78694505082,
+   "spread": 0.16797463103986243,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_KEY_BREAK": {
+   "repetitions_ns_by_round": {
+    "1": 207132.62463792437,
+    "2": 215204.63600063522,
+    "3": 232668.53954169585,
+    "4": 207241.05599947507,
+    "5": 194203.42583431653,
+    "6": 199454.20614996672,
+    "7": 198328.886710195,
+    "8": 209839.48460972685,
+    "9": 199787.63946057152,
+    "10": 199330.21522704075
+   },
+   "rounds_used": 10,
+   "median_ns": 203460.13204924794,
+   "spread": 0.19806609251165108,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_KEY_ENCODED": {
+   "repetitions_ns_by_round": {
+    "1": 210271.69430758027,
+    "2": 199944.45914666582,
+    "3": 215811.3380000941,
+    "4": 201336.43299959658,
+    "5": 203749.61600009556,
+    "6": 193398.5758898433,
+    "7": 203682.18776316615,
+    "8": 205426.2090005068,
+    "9": 204603.9047278793,
+    "10": 197303.99207473543
+   },
+   "rounds_used": 10,
+   "median_ns": 203715.90188163085,
+   "spread": 0.11588897181443958,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_KEY_READ_ONCE": {
+   "repetitions_ns_by_round": {
+    "1": 200103.95600002084,
+    "2": 220518.25606869586,
+    "3": 201090.2090005402,
+    "4": 208546.11699996894,
+    "5": 193027.02857145848,
+    "6": 210038.6045626502,
+    "7": 233283.23399982764,
+    "8": 200762.71607649687,
+    "9": 200978.41679300042,
+    "10": 205112.82387243392
+   },
+   "rounds_used": 10,
+   "median_ns": 203101.51643648706,
+   "spread": 0.2085521687107479,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 226379.59900021087,
+    "2": 211027.5782056599,
+    "3": 215451.0959999243,
+    "4": 197370.18089713124,
+    "5": 209017.66495169944,
+    "6": 208196.86671539053,
+    "7": 193062.2709762667,
+    "8": 201812.27609188648,
+    "9": 206494.18636367045,
+    "10": 210948.81139074
+   },
+   "rounds_used": 10,
+   "median_ns": 208607.26583354498,
+   "spread": 0.17257296236839514,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_SHAREDREF_INLINE": {
+   "repetitions_ns_by_round": {
+    "1": 203907.1248206581,
+    "2": 207338.04242841728,
+    "3": 193062.60249353037,
+    "4": 186947.13674057365,
+    "5": 196203.98392747558,
+    "6": 213687.8969988279,
+    "7": 191896.34249304942,
+    "8": 195891.2370689919,
+    "9": 207118.94459969344,
+    "10": 192526.0505657567
+   },
+   "rounds_used": 10,
+   "median_ns": 196047.61049823376,
+   "spread": 0.14303915387247867,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_AT_PATH_TAG_INITIAL_BYTE": {
+   "repetitions_ns_by_round": {
+    "1": 197256.94600138615,
+    "2": 201124.15899984626,
+    "3": 201064.23100060056,
+    "4": 191489.9277592159,
+    "5": 204814.6209999686,
+    "6": 220708.42105297357,
+    "7": 226844.30882334567,
+    "8": 193991.1672519972,
+    "9": 201291.5021157834,
+    "10": 198657.76382203618
+   },
+   "rounds_used": 10,
+   "median_ns": 201094.1950002234,
+   "spread": 0.1846278886719579,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 193754.48930483367,
+    "2": 195099.79542294252,
+    "3": 184702.5003276105,
+    "4": 194170.686771653,
+    "5": 190345.0248352695,
+    "6": 188470.2971592951,
+    "7": 196024.88933857653,
+    "8": 194768.9965013387,
+    "9": 204078.09765008595,
+    "10": 197993.43181794233
+   },
+   "rounds_used": 10,
+   "median_ns": 194469.84163649584,
+   "spread": 0.10490165151044839,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 199661.76514119087,
+    "2": 213086.03284650133,
+    "3": 203022.5899233332,
+    "4": 190193.52016948556,
+    "5": 180742.1197003364,
+    "6": 203541.01526688025,
+    "7": 210156.52107560652,
+    "8": 184634.49106580272,
+    "9": 199254.75178879607,
+    "10": 179014.4214662668
+   },
+   "rounds_used": 10,
+   "median_ns": 199458.25846499347,
+   "spread": 0.1903288634578244,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 189374.76579420536,
+    "2": 183615.82529728033,
+    "3": 169453.92288247816,
+    "4": 171845.9698827284,
+    "5": 163907.3411043554,
+    "6": 209202.5043817157,
+    "7": 189281.66317215873,
+    "8": 164876.18113874114,
+    "9": 181061.92229723846,
+    "10": 170444.59396607598
+   },
+   "rounds_used": 10,
+   "median_ns": 176453.94608998342,
+   "spread": 0.27634615369986437,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.floats.MB_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 511499.2462966728,
+    "2": 515994.697417056,
+    "3": 515455.9342105828,
+    "4": 511048.52862596186,
+    "5": 519662.65406500176,
+    "6": 514081.39560384693,
+    "7": 546942.8576846628,
+    "8": 512781.11355287494,
+    "9": 523138.1750460496,
+    "10": 509217.08302549494
+   },
+   "rounds_used": 10,
+   "median_ns": 514768.6649072149,
+   "spread": 0.07408583866633367,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "clang++-23.records.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 110368.36654922392,
+    "2": 109929.60272371194,
+    "3": 110245.42550606969,
+    "4": 111035.24114845753,
+    "5": 107744.16963222921,
+    "6": 111039.92778694684,
+    "7": 111418.4970344927,
+    "8": 109495.07378648121,
+    "9": 113270.39041907754,
+    "10": 111030.86578730158
+   },
+   "rounds_used": 10,
+   "median_ns": 110699.61616826276,
+   "spread": 0.05129020721688571,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 111909.53111197785,
+    "2": 112826.66248975023,
+    "3": 107539.80308906989,
+    "4": 110435.09494931017,
+    "5": 110933.90724520986,
+    "6": 109808.22581904661,
+    "7": 110425.79643556266,
+    "8": 107655.81291049925,
+    "9": 111596.77629454702,
+    "10": 111121.12640460965
+   },
+   "rounds_used": 10,
+   "median_ns": 110684.50109726001,
+   "spread": 0.04916188470515892,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 107638.81522144318,
+    "2": 120382.5113587541,
+    "3": 107671.3104371541,
+    "4": 105237.13192329663,
+    "5": 107517.37110590271,
+    "6": 108463.16955157432,
+    "7": 109060.8903839729,
+    "8": 106766.10183786349,
+    "9": 107300.38043915867,
+    "10": 106041.80858738905
+   },
+   "rounds_used": 10,
+   "median_ns": 107578.09316367295,
+   "spread": 0.14391668756704967,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_KEY_BREAK": {
+   "repetitions_ns_by_round": {
+    "1": 110827.04891328063,
+    "2": 110083.2542306128,
+    "3": 109504.32022240563,
+    "4": 111003.60947224738,
+    "5": 109715.7285051124,
+    "6": 109897.13716297799,
+    "7": 108247.24621941801,
+    "8": 108794.96561245775,
+    "9": 111485.8160827205,
+    "10": 112551.23166948363
+   },
+   "rounds_used": 10,
+   "median_ns": 109990.19569679539,
+   "spread": 0.03976069230751067,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_KEY_ENCODED": {
+   "repetitions_ns_by_round": {
+    "1": 109957.56108947401,
+    "2": 112478.89543829573,
+    "3": 110244.9327354266,
+    "4": 109497.74558729414,
+    "5": 110206.49824688445,
+    "6": 109493.80062574036,
+    "7": 110438.63385351055,
+    "8": 111700.8504672142,
+    "9": 112344.73599055657,
+    "10": 109394.23334608748
+   },
+   "rounds_used": 10,
+   "median_ns": 110225.71549115553,
+   "spread": 0.028197666347268946,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_KEY_READ_ONCE": {
+   "repetitions_ns_by_round": {
+    "1": 109970.18567531985,
+    "2": 113610.15164904576,
+    "3": 109976.87470076208,
+    "4": 110618.20063575383,
+    "5": 109395.60643670964,
+    "6": 111182.32681553446,
+    "7": 108996.8971780849,
+    "8": 107498.25465122845,
+    "9": 110272.79749295939,
+    "10": 111903.58254723078
+   },
+   "rounds_used": 10,
+   "median_ns": 110124.83609686073,
+   "spread": 0.056855778892847875,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 114950.39563028837,
+    "2": 106768.24880768932,
+    "3": 106891.4577113947,
+    "4": 106600.70532532658,
+    "5": 107352.69427700368,
+    "6": 111143.7978183732,
+    "7": 109708.04470128671,
+    "8": 112571.37231940126,
+    "9": 105400.55542840864,
+    "10": 105270.27890127913
+   },
+   "rounds_used": 10,
+   "median_ns": 107122.0759941992,
+   "spread": 0.09195488821766218,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_SHAREDREF_INLINE": {
+   "repetitions_ns_by_round": {
+    "1": 112897.7779167902,
+    "2": 118009.17812613687,
+    "3": 112716.83621744452,
+    "4": 112072.16874227168,
+    "5": 113255.35040324184,
+    "6": 115172.1463316387,
+    "7": 112605.2583500748,
+    "8": 113992.72047914338,
+    "9": 112583.13522125871,
+    "10": 113721.94117622708
+   },
+   "rounds_used": 10,
+   "median_ns": 113076.56416001602,
+   "spread": 0.05297487726429506,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_AT_PATH_TAG_INITIAL_BYTE": {
+   "repetitions_ns_by_round": {
+    "1": 110422.24132475544,
+    "2": 109298.65965068432,
+    "3": 115269.51884456021,
+    "4": 109938.00776406535,
+    "5": 108713.93960805304,
+    "6": 112223.76255546535,
+    "7": 111804.71354784012,
+    "8": 107918.24038453623,
+    "9": 109587.77364334831,
+    "10": 111168.5951542596
+   },
+   "rounds_used": 10,
+   "median_ns": 110180.12454441038,
+   "spread": 0.0681189614825981,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 112954.80354974206,
+    "2": 109613.46587746144,
+    "3": 110822.99480410288,
+    "4": 110068.10714306893,
+    "5": 111059.13365543459,
+    "6": 111054.91873719363,
+    "7": 111494.38081627856,
+    "8": 107446.68404789254,
+    "9": 113649.74435500406,
+    "10": 111740.53210632819
+   },
+   "rounds_used": 10,
+   "median_ns": 111057.02619631411,
+   "spread": 0.05773151923745368,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 108656.82323019727,
+    "2": 115439.09130100004,
+    "3": 110093.7670277263,
+    "4": 108163.11196106093,
+    "5": 110627.72741274966,
+    "6": 110775.81612397467,
+    "7": 110965.09589033546,
+    "8": 113726.59567043203,
+    "9": 110335.1170632734,
+    "10": 108765.17702728663
+   },
+   "rounds_used": 10,
+   "median_ns": 110481.42223801152,
+   "spread": 0.06726858360508792,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 107655.03234400705,
+    "2": 108583.28279176255,
+    "3": 111582.12831852688,
+    "4": 112129.23836025585,
+    "5": 110538.18913719225,
+    "6": 110352.84538970649,
+    "7": 109311.77364331544,
+    "8": 110030.86340707027,
+    "9": 109773.81332295065,
+    "10": 110578.14645857766
+   },
+   "rounds_used": 10,
+   "median_ns": 110191.85439838839,
+   "spread": 0.041560584013868196,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.records.MB_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 121629.38874452822,
+    "2": 120651.91223510743,
+    "3": 116303.45205467113,
+    "4": 121472.90652654575,
+    "5": 120076.3145262547,
+    "6": 116974.12404097969,
+    "7": 123206.33514257669,
+    "8": 117468.31901568311,
+    "9": 121077.6036825623,
+    "10": 119007.8768832312
+   },
+   "rounds_used": 10,
+   "median_ns": 120364.11338068107,
+   "spread": 0.05935234910018572,
+   "check": "640",
+   "copies": "1656"
+  },
+  "clang++-23.twitter.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 85164.23880578122,
+    "2": 84035.58525363528,
+    "3": 82993.97070361035,
+    "4": 84578.91283000211,
+    "5": 81040.6381064406,
+    "6": 80804.695227299,
+    "7": 85273.10305449215,
+    "8": 82611.78507708879,
+    "9": 83411.891639013,
+    "10": 82825.26609835238
+   },
+   "rounds_used": 10,
+   "median_ns": 83202.93117131168,
+   "spread": 0.05529886369379611,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 86723.20928069894,
+    "2": 88304.63222756871,
+    "3": 85456.47449290655,
+    "4": 81980.6509240866,
+    "5": 84641.50615807489,
+    "6": 86018.26393828155,
+    "7": 86117.33354295457,
+    "8": 82809.57532203663,
+    "9": 84816.03278170826,
+    "10": 86082.27350971907
+   },
+   "rounds_used": 10,
+   "median_ns": 85737.36921559405,
+   "spread": 0.07713992548483262,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 83241.83219905778,
+    "2": 84414.50673592435,
+    "3": 86030.20965261632,
+    "4": 83528.18332848212,
+    "5": 83592.24707644331,
+    "6": 85156.63933923983,
+    "7": 86080.44763924308,
+    "8": 80235.5183697287,
+    "9": 83207.08074150076,
+    "10": 82880.20972557896
+   },
+   "rounds_used": 10,
+   "median_ns": 83560.21520246271,
+   "spread": 0.07284715532815156,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_KEY_BREAK": {
+   "repetitions_ns_by_round": {
+    "1": 85354.80332815464,
+    "2": 84979.06039039975,
+    "3": 88410.6721410947,
+    "4": 82940.37317341263,
+    "5": 83572.62580838693,
+    "6": 83151.99616512672,
+    "7": 90730.07898783697,
+    "8": 83986.79947393808,
+    "9": 83664.19308689071,
+    "10": 84677.71117159308
+   },
+   "rounds_used": 10,
+   "median_ns": 84332.25532276559,
+   "spread": 0.09391934851965922,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_KEY_ENCODED": {
+   "repetitions_ns_by_round": {
+    "1": 84645.07722468075,
+    "2": 84510.72080455326,
+    "3": 85304.5784779721,
+    "4": 83050.99138942534,
+    "5": 82150.98464731203,
+    "6": 85006.73934233793,
+    "7": 85862.27201442767,
+    "8": 82157.09704004205,
+    "9": 86154.79920779048,
+    "10": 84825.53049517717
+   },
+   "rounds_used": 10,
+   "median_ns": 84735.30385992896,
+   "spread": 0.04873726806401035,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_KEY_READ_ONCE": {
+   "repetitions_ns_by_round": {
+    "1": 86452.18484847837,
+    "2": 84498.0088901046,
+    "3": 86554.61334139525,
+    "4": 85854.26919600496,
+    "5": 81627.03787862623,
+    "6": 85278.14857663494,
+    "7": 84803.87880650435,
+    "8": 83637.52224803981,
+    "9": 82531.7711938524,
+    "10": 86474.72854539129
+   },
+   "rounds_used": 10,
+   "median_ns": 85041.01369156965,
+   "spread": 0.060366951819273096,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 83645.09997033881,
+    "2": 93554.3946348402,
+    "3": 86095.01985582961,
+    "4": 84450.84126035903,
+    "5": 83785.68910064618,
+    "6": 82142.47017342193,
+    "7": 84215.81009154243,
+    "8": 82827.77684212476,
+    "9": 82434.11658939952,
+    "10": 84697.74361329587
+   },
+   "rounds_used": 10,
+   "median_ns": 84000.7495960943,
+   "spread": 0.1389284305344729,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_SHAREDREF_INLINE": {
+   "repetitions_ns_by_round": {
+    "1": 83717.29455961674,
+    "2": 86877.60054195965,
+    "3": 85665.20422979433,
+    "4": 85494.43411338468,
+    "5": 83377.2051738713,
+    "6": 83648.11443090811,
+    "7": 84644.54306457739,
+    "8": 85014.81507283747,
+    "9": 85086.83830169376,
+    "10": 88224.51828361109
+   },
+   "rounds_used": 10,
+   "median_ns": 85050.82668726562,
+   "spread": 0.05813715031142386,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_AT_PATH_TAG_INITIAL_BYTE": {
+   "repetitions_ns_by_round": {
+    "1": 84865.70214034432,
+    "2": 86121.59732363187,
+    "3": 84281.02289864457,
+    "4": 83787.83607514438,
+    "5": 82230.79201171141,
+    "6": 84566.10073014628,
+    "7": 82881.57692306908,
+    "8": 83301.66995211382,
+    "9": 82918.07460406149,
+    "10": 84031.94481290244
+   },
+   "rounds_used": 10,
+   "median_ns": 83909.89044402342,
+   "spread": 0.04731567356625144,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 90804.6720197715,
+    "2": 84149.11187562629,
+    "3": 88251.94296320868,
+    "4": 84176.59389168589,
+    "5": 85848.62647214133,
+    "6": 84992.57635467163,
+    "7": 84612.7405420735,
+    "8": 83083.74178257963,
+    "9": 86223.40885736817,
+    "10": 83974.92887034648
+   },
+   "rounds_used": 10,
+   "median_ns": 84802.65844837256,
+   "spread": 0.09292949585006216,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 85243.9394500824,
+    "2": 83163.53705921426,
+    "3": 84570.9821700066,
+    "4": 89901.23519589739,
+    "5": 85309.71480801092,
+    "6": 86822.24127265169,
+    "7": 85471.48761081006,
+    "8": 84581.96465557163,
+    "9": 87737.1867170125,
+    "10": 87557.05311125818
+   },
+   "rounds_used": 10,
+   "median_ns": 85390.6012094105,
+   "spread": 0.08101745518454484,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 82374.32812967693,
+    "2": 86642.59081024665,
+    "3": 85799.5311634453,
+    "4": 85653.7814895052,
+    "5": 84201.62992814925,
+    "6": 84246.55881447633,
+    "7": 86068.36523623666,
+    "8": 87552.3268456368,
+    "9": 84812.12674774935,
+    "10": 82952.1404837433
+   },
+   "rounds_used": 10,
+   "median_ns": 85232.95411862727,
+   "spread": 0.06285937419493681,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "clang++-23.twitter.MB_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 84492.31332925473,
+    "2": 84701.09268267972,
+    "3": 86978.39267331423,
+    "4": 87366.48474566947,
+    "5": 84160.13074089664,
+    "6": 84874.14894905014,
+    "7": 82099.83089965757,
+    "8": 83324.80480491101,
+    "9": 84875.82695205616,
+    "10": 84012.94740233227
+   },
+   "rounds_used": 10,
+   "median_ns": 84596.70300596723,
+   "spread": 0.06414938725572794,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.floats.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 183185.12068955574,
+    "2": 186922.61815857902,
+    "3": 180956.1525094994,
+    "4": 189898.5792274486,
+    "5": 182144.7463256142,
+    "6": 179802.25938307846,
+    "7": 207022.81453652895,
+    "8": 173413.08416501444,
+    "9": 183529.1096095271,
+    "10": 183226.37818908668
+   },
+   "rounds_used": 10,
+   "median_ns": 183205.74943932123,
+   "spread": 0.19381311700524595,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 193848.92555299096,
+    "2": 192571.49371232188,
+    "3": 189849.80119676812,
+    "4": 190071.97274486945,
+    "5": 185780.37293573312,
+    "6": 190309.33026217055,
+    "7": 186816.35036978044,
+    "8": 203646.0171133231,
+    "9": 182050.77552377718,
+    "10": 202165.0890001183
+   },
+   "rounds_used": 10,
+   "median_ns": 190190.65150352,
+   "spread": 0.11862207962264582,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 194133.35532615284,
+    "2": 166636.7811921698,
+    "3": 175441.5246430821,
+    "4": 188327.56727285663,
+    "5": 178282.04337096136,
+    "6": 180496.0672111131,
+    "7": 168567.47941877562,
+    "8": 167847.05582828398,
+    "9": 180723.8259727189,
+    "10": 210251.00400038355
+   },
+   "rounds_used": 10,
+   "median_ns": 179389.05529103725,
+   "spread": 0.2617322688075494,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_KEY_BREAK": {
+   "repetitions_ns_by_round": {
+    "1": 192537.67574728315,
+    "2": 177645.01749884264,
+    "3": 187792.51153637862,
+    "4": 185274.09881456336,
+    "5": 178651.94132975265,
+    "6": 180082.51325159124,
+    "7": 189844.04614373227,
+    "8": 166070.5758242176,
+    "9": 190663.52374947033,
+    "10": 187052.06521783271
+   },
+   "rounds_used": 10,
+   "median_ns": 186163.08201619802,
+   "spread": 0.159372602832909,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_KEY_ENCODED": {
+   "repetitions_ns_by_round": {
+    "1": 180242.49312339944,
+    "2": 184656.53237855682,
+    "3": 224270.9931770502,
+    "4": 180108.8478104054,
+    "5": 180112.99933555757,
+    "6": 186521.2882703243,
+    "7": 190484.54889149236,
+    "8": 181206.45409290123,
+    "9": 184584.69261500254,
+    "10": 176829.1581571805
+   },
+   "rounds_used": 10,
+   "median_ns": 182895.57335395188,
+   "spread": 0.2682919237657595,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_KEY_READ_ONCE": {
+   "repetitions_ns_by_round": {
+    "1": 182165.36991814477,
+    "2": 209377.4079994546,
+    "3": 208685.68992241766,
+    "4": 189215.0710270705,
+    "5": 178965.65617103956,
+    "6": 207107.8180006225,
+    "7": 180960.3693575538,
+    "8": 216450.87109782262,
+    "9": 183951.617379951,
+    "10": 198409.28943777762
+   },
+   "rounds_used": 10,
+   "median_ns": 193812.18023242406,
+   "spread": 0.20945479556679847,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 172352.4049429088,
+    "2": 179566.49089765985,
+    "3": 187927.46097927398,
+    "4": 185463.4300388554,
+    "5": 168482.8579877481,
+    "6": 182864.54346471565,
+    "7": 177828.54632020512,
+    "8": 176409.14752042436,
+    "9": 167992.33393853658,
+    "10": 176419.98047141597
+   },
+   "rounds_used": 10,
+   "median_ns": 177124.26339581056,
+   "spread": 0.11866688540699166,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_SHAREDREF_INLINE": {
+   "repetitions_ns_by_round": {
+    "1": 188698.73452533415,
+    "2": 183100.08533473,
+    "3": 194673.63419713662,
+    "4": 189975.3417463137,
+    "5": 205625.71742220438,
+    "6": 181565.2713333596,
+    "7": 185679.7448366158,
+    "8": 192533.99458350925,
+    "9": 182741.68231488686,
+    "10": 182855.86732721035
+   },
+   "rounds_used": 10,
+   "median_ns": 187189.23968097498,
+   "spread": 0.13251678535301536,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_AT_PATH_TAG_INITIAL_BYTE": {
+   "repetitions_ns_by_round": {
+    "1": 172504.2959311691,
+    "2": 212439.99834171173,
+    "3": 189732.48962915209,
+    "4": 162806.72105292775,
+    "5": 173155.14904482957,
+    "6": 162813.57511208233,
+    "7": 180294.7206773446,
+    "8": 169146.97022784196,
+    "9": 191659.10474738185,
+    "10": 173527.28270288566
+   },
+   "rounds_used": 10,
+   "median_ns": 173341.2158738576,
+   "spread": 0.3048601247404794,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 182612.43551527028,
+    "2": 197241.35699080673,
+    "3": 177828.73958320045,
+    "4": 180862.44568104972,
+    "5": 184333.92262284274,
+    "6": 192656.52044648005,
+    "7": 195231.66712828883,
+    "8": 177299.5348544431,
+    "9": 185088.37086523446,
+    "10": 183104.75090898268
+   },
+   "rounds_used": 10,
+   "median_ns": 183719.3367659127,
+   "spread": 0.11247532122819837,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 181927.85326797425,
+    "2": 195212.97085884167,
+    "3": 211505.09499966574,
+    "4": 185165.74216753882,
+    "5": 178436.46884998257,
+    "6": 178786.43930597507,
+    "7": 187641.89620222032,
+    "8": 205862.60066449293,
+    "9": 176180.43804191498,
+    "10": 186432.6444299858
+   },
+   "rounds_used": 10,
+   "median_ns": 185799.19329876231,
+   "spread": 0.20050271954339616,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 187665.12785115506,
+    "2": 182181.2795030142,
+    "3": 191202.6277516963,
+    "4": 187138.54987079947,
+    "5": 183886.18349784732,
+    "6": 184321.9891372265,
+    "7": 193573.2974771367,
+    "8": 181898.26522600712,
+    "9": 190430.8532893514,
+    "10": 197882.0850592305
+   },
+   "rounds_used": 10,
+   "median_ns": 187401.83886097727,
+   "spread": 0.08787230495773901,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.floats.MB_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 221781.6701605557,
+    "2": 216172.6616657481,
+    "3": 195098.56419528436,
+    "4": 184649.56504979247,
+    "5": 171036.3194358972,
+    "6": 198479.14145608302,
+    "7": 204130.21874990786,
+    "8": 184395.15310713337,
+    "9": 180146.39255233016,
+    "10": 196440.8791583624
+   },
+   "rounds_used": 10,
+   "median_ns": 195769.7216768234,
+   "spread": 0.29669342097645734,
+   "check": "13864225899743805440",
+   "copies": "1626"
+  },
+  "g++-16.records.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 85730.5700056896,
+    "2": 80759.30620163745,
+    "3": 83488.94352662477,
+    "4": 84594.65676773946,
+    "5": 81886.32370734667,
+    "6": 78489.86567566768,
+    "7": 79001.30160499284,
+    "8": 76246.33823522642,
+    "9": 82617.39994081054,
+    "10": 84337.10775863864
+   },
+   "rounds_used": 10,
+   "median_ns": 82251.8618240786,
+   "spread": 0.12438934104879285,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 79351.38152039572,
+    "2": 83329.5452650636,
+    "3": 76675.0011022852,
+    "4": 79661.87342146155,
+    "5": 80325.06888485442,
+    "6": 82600.42051288603,
+    "7": 81781.12354635444,
+    "8": 78188.47179639999,
+    "9": 78486.50251408754,
+    "10": 74046.01484876571
+   },
+   "rounds_used": 10,
+   "median_ns": 79506.62747092864,
+   "spread": 0.125375152670389,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 73174.87035128738,
+    "2": 73829.73996823214,
+    "3": 77531.57671548119,
+    "4": 70531.6003587284,
+    "5": 72812.19847336107,
+    "6": 70071.58756349952,
+    "7": 82335.48457774972,
+    "8": 69997.02503676729,
+    "9": 70386.85108611816,
+    "10": 71346.62032771464
+   },
+   "rounds_used": 10,
+   "median_ns": 72079.40940053786,
+   "spread": 0.17627119916169898,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_KEY_BREAK": {
+   "repetitions_ns_by_round": {
+    "1": 81064.47529398257,
+    "2": 86109.95956108776,
+    "3": 80700.48657913196,
+    "4": 81805.34142057633,
+    "5": 83908.923325404,
+    "6": 80707.41339031007,
+    "7": 87464.00711108302,
+    "8": 85495.99713210245,
+    "9": 77771.95184561498,
+    "10": 85012.6634864537
+   },
+   "rounds_used": 10,
+   "median_ns": 82857.13237299016,
+   "spread": 0.12462147387926858,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_KEY_ENCODED": {
+   "repetitions_ns_by_round": {
+    "1": 80843.93357451413,
+    "2": 87948.16742484248,
+    "3": 86725.689665376,
+    "4": 82938.22097638773,
+    "5": 81286.17811925335,
+    "6": 80564.20438603777,
+    "7": 93314.93284155663,
+    "8": 82219.51751705812,
+    "9": 88805.21868683897,
+    "10": 80819.62113614252
+   },
+   "rounds_used": 10,
+   "median_ns": 82578.86924672293,
+   "spread": 0.15826791256351846,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_KEY_READ_ONCE": {
+   "repetitions_ns_by_round": {
+    "1": 78798.63923157362,
+    "2": 82556.90155605062,
+    "3": 74910.39167118604,
+    "4": 84088.06497578746,
+    "5": 84693.3597733605,
+    "6": 83822.90105241977,
+    "7": 83190.30710511364,
+    "8": 82518.85634610461,
+    "9": 81151.52457995356,
+    "10": 77989.44779258729
+   },
+   "rounds_used": 10,
+   "median_ns": 82537.87895107761,
+   "spread": 0.13059560741740772,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 74411.23030303336,
+    "2": 73495.63485140525,
+    "3": 74796.00830210354,
+    "4": 75544.28636733322,
+    "5": 72222.84916191889,
+    "6": 73572.65086085552,
+    "7": 76477.21126386887,
+    "8": 74770.26978709627,
+    "9": 71521.94752852296,
+    "10": 75606.71875844314
+   },
+   "rounds_used": 10,
+   "median_ns": 74590.75004506481,
+   "spread": 0.06928312086817479,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_SHAREDREF_INLINE": {
+   "repetitions_ns_by_round": {
+    "1": 76634.23289655703,
+    "2": 74458.05436805173,
+    "3": 73735.45078950739,
+    "4": 74228.54172078436,
+    "5": 78853.83441654644,
+    "6": 74101.93018481559,
+    "7": 76191.53680225041,
+    "8": 83092.1593881528,
+    "9": 80261.23054930376,
+    "10": 73299.9389373106
+   },
+   "rounds_used": 10,
+   "median_ns": 75324.79558515106,
+   "spread": 0.13359111334617824,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_AT_PATH_TAG_INITIAL_BYTE": {
+   "repetitions_ns_by_round": {
+    "1": 85774.02888402609,
+    "2": 84408.05399884896,
+    "3": 80442.08224854963,
+    "4": 82858.14174137122,
+    "5": 74459.01454633,
+    "6": 78081.00055420568,
+    "7": 82512.0902387979,
+    "8": 78157.56066932662,
+    "9": 83289.29619724129,
+    "10": 82534.20475624398
+   },
+   "rounds_used": 10,
+   "median_ns": 82523.14749752094,
+   "spread": 0.151962988049696,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 71412.83530003014,
+    "2": 72157.62983280336,
+    "3": 75711.70903473136,
+    "4": 71149.63915446936,
+    "5": 68216.07576874075,
+    "6": 72090.61674694569,
+    "7": 73230.33940546618,
+    "8": 72587.87876413419,
+    "9": 73182.87840938018,
+    "10": 68281.98040254616
+   },
+   "rounds_used": 10,
+   "median_ns": 72124.12328987452,
+   "spread": 0.10988074557970107,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 71497.94230765171,
+    "2": 69155.2694883631,
+    "3": 74249.92855359695,
+    "4": 71549.55377163592,
+    "5": 71588.4375477727,
+    "6": 69917.4609818406,
+    "7": 71395.9325138714,
+    "8": 72455.52839496084,
+    "9": 69400.42607536554,
+    "10": 75714.1482853006
+   },
+   "rounds_used": 10,
+   "median_ns": 71523.74803964382,
+   "spread": 0.09484279138036134,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 71618.39379962122,
+    "2": 75343.01561278438,
+    "3": 91383.02860848028,
+    "4": 74925.01268512783,
+    "5": 84676.41862463803,
+    "6": 72568.8750977637,
+    "7": 76935.26003016839,
+    "8": 71151.32388670744,
+    "9": 71914.85358837349,
+    "10": 73724.79043620202
+   },
+   "rounds_used": 10,
+   "median_ns": 74324.90156066493,
+   "spread": 0.2843475513398359,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.records.MB_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 85837.21238928678,
+    "2": 76963.98870355223,
+    "3": 84698.05195764788,
+    "4": 79391.93075649539,
+    "5": 75029.52930365282,
+    "6": 81780.97382786953,
+    "7": 79675.02849899034,
+    "8": 74624.4640797228,
+    "9": 79229.71993417265,
+    "10": 98104.38550391297
+   },
+   "rounds_used": 10,
+   "median_ns": 79533.47962774287,
+   "spread": 0.31464107265287833,
+   "check": "640",
+   "copies": "1656"
+  },
+  "g++-16.twitter.MB_AT_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 63908.373045068394,
+    "2": 68267.79899642787,
+    "3": 64230.02419723106,
+    "4": 68317.74566914952,
+    "5": 65527.508028713666,
+    "6": 65253.33680802383,
+    "7": 65789.8419332835,
+    "8": 64472.687529205985,
+    "9": 64932.91230956889,
+    "10": 65575.26498366334
+   },
+   "rounds_used": 10,
+   "median_ns": 65390.42241836875,
+   "spread": 0.068995225726864,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 65361.77866614751,
+    "2": 64583.78470003689,
+    "3": 65633.83060881683,
+    "4": 64900.17161641263,
+    "5": 68261.57098306711,
+    "6": 63835.643133690544,
+    "7": 64736.8954061946,
+    "8": 64999.84151985723,
+    "9": 65592.69898079398,
+    "10": 67761.38416424685
+   },
+   "rounds_used": 10,
+   "median_ns": 65180.81009300237,
+   "spread": 0.06933317551304952,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 60487.51221109237,
+    "2": 62241.55130236701,
+    "3": 60428.89922979864,
+    "4": 61643.89235882512,
+    "5": 62799.766584830184,
+    "6": 58649.457811254484,
+    "7": 62243.6763327069,
+    "8": 63037.15590451113,
+    "9": 62247.727929682784,
+    "10": 60518.786284087175
+   },
+   "rounds_used": 10,
+   "median_ns": 61942.72183059606,
+   "spread": 0.07481225329272645,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_KEY_BREAK": {
+   "repetitions_ns_by_round": {
+    "1": 68557.6904761918,
+    "2": 73295.22188900803,
+    "3": 75181.33412459871,
+    "4": 73437.48509734706,
+    "5": 67440.11819656949,
+    "6": 68099.54786204119,
+    "7": 65895.21456377226,
+    "8": 67679.77372441984,
+    "9": 62237.03995544839,
+    "10": 63942.13243378227
+   },
+   "rounds_used": 10,
+   "median_ns": 67889.66079323052,
+   "spread": 0.20798376944688135,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_KEY_ENCODED": {
+   "repetitions_ns_by_round": {
+    "1": 64184.76635732338,
+    "2": 67580.62526627557,
+    "3": 64914.98111755667,
+    "4": 67496.82955110293,
+    "5": 62852.60115603282,
+    "6": 65657.96794125313,
+    "7": 65570.00447909177,
+    "8": 66006.7124134382,
+    "9": 64267.56971555658,
+    "10": 67813.86475611744
+   },
+   "rounds_used": 10,
+   "median_ns": 65613.98621017244,
+   "spread": 0.07893489702626932,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_KEY_READ_ONCE": {
+   "repetitions_ns_by_round": {
+    "1": 64467.6754247365,
+    "2": 69109.94028012952,
+    "3": 66279.76801550543,
+    "4": 71106.33062400234,
+    "5": 66312.00734949602,
+    "6": 70552.88034453786,
+    "7": 67363.97691925582,
+    "8": 63375.333560795836,
+    "9": 64467.914400266105,
+    "10": 64243.19962606196
+   },
+   "rounds_used": 10,
+   "median_ns": 66295.88768250073,
+   "spread": 0.12198747728546744,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 63754.674690454216,
+    "2": 66996.28969486446,
+    "3": 73401.25223096024,
+    "4": 64466.97338236939,
+    "5": 62764.0353547352,
+    "6": 66799.06161481893,
+    "7": 67138.01909758593,
+    "8": 68987.15347962675,
+    "9": 67423.56060982957,
+    "10": 66824.91150855612
+   },
+   "rounds_used": 10,
+   "median_ns": 66910.60060171029,
+   "spread": 0.1694794927716916,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_SHAREDREF_INLINE": {
+   "repetitions_ns_by_round": {
+    "1": 65788.43563659344,
+    "2": 63959.27008985047,
+    "3": 65084.70718112641,
+    "4": 65373.26533045518,
+    "5": 65550.62474837407,
+    "6": 63083.383580324626,
+    "7": 65130.205709103146,
+    "8": 63286.061731190675,
+    "9": 65046.45714293084,
+    "10": 64009.96187416124
+   },
+   "rounds_used": 10,
+   "median_ns": 65065.58216202863,
+   "spread": 0.042880579682674114,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_AT_PATH_TAG_INITIAL_BYTE": {
+   "repetitions_ns_by_round": {
+    "1": 68842.05253133993,
+    "2": 67510.38997856199,
+    "3": 70859.91261606512,
+    "4": 83583.06678383195,
+    "5": 64285.054335088375,
+    "6": 63662.31136768341,
+    "7": 66224.1358759654,
+    "8": 64557.46635958331,
+    "9": 66252.76719201088,
+    "10": 64939.270232571296
+   },
+   "rounds_used": 10,
+   "median_ns": 66238.45153398815,
+   "spread": 0.3129128520184521,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_PATH": {
+   "repetitions_ns_by_round": {
+    "1": 65717.2440909645,
+    "2": 65894.81901761072,
+    "3": 62577.26832604057,
+    "4": 61340.77348925045,
+    "5": 65224.05124208577,
+    "6": 61675.952305504026,
+    "7": 65245.54837942979,
+    "8": 64670.12405065017,
+    "9": 65834.46470856082,
+    "10": 62304.521710100445
+   },
+   "rounds_used": 10,
+   "median_ns": 64947.087646367974,
+   "spread": 0.07424173627608943,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_PATH_AA": {
+   "repetitions_ns_by_round": {
+    "1": 65721.04621949645,
+    "2": 64291.546177111595,
+    "3": 63799.62454965615,
+    "4": 64672.054527111286,
+    "5": 64933.02829979308,
+    "6": 64801.498599338556,
+    "7": 64590.95958155541,
+    "8": 63935.02846580211,
+    "9": 62976.62647641442,
+    "10": 63641.29494861957
+   },
+   "rounds_used": 10,
+   "median_ns": 64441.25287933351,
+   "spread": 0.043578386087572474,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_PATH_HEAD_LIKELY": {
+   "repetitions_ns_by_round": {
+    "1": 64143.09395168465,
+    "2": 61760.14887441199,
+    "3": 63670.99804984627,
+    "4": 58980.42705063826,
+    "5": 60394.693548311385,
+    "6": 64315.175324697535,
+    "7": 60491.42361571006,
+    "8": 60330.44196527854,
+    "9": 65831.69973664448,
+    "10": 60085.916453855796
+   },
+   "rounds_used": 10,
+   "median_ns": 61125.78624506103,
+   "spread": 0.11616180195039938,
+   "check": "1227",
+   "copies": "1354"
+  },
+  "g++-16.twitter.MB_PATH_LOCAL_DECODER": {
+   "repetitions_ns_by_round": {
+    "1": 67003.99690002466,
+    "2": 67934.99358340168,
+    "3": 65672.15484179146,
+    "4": 66171.24765815157,
+    "5": 62770.38545288605,
+    "6": 63433.6049998798,
+    "7": 66554.02351854487,
+    "8": 62100.81479052894,
+    "9": 66851.57619696844,
+    "10": 65687.85821960444
+   },
+   "rounds_used": 10,
+   "median_ns": 65929.55293887801,
+   "spread": 0.09394689606814177,
+   "check": "1227",
+   "copies": "1354"
+  }
+ },
+ "cells": {
+  "g++-16.twitter": {
+   "MB_PATH_ns": 64947.087646367974,
+   "MB_PATH_AA_ns": 64441.25287933351,
+   "MB_PATH_aa_percent": 0.7849548921428391,
+   "MB_AT_PATH_ns": 65390.42241836875,
+   "MB_AT_PATH_AA_ns": 65180.81009300237,
+   "MB_AT_PATH_aa_percent": 0.32158594694863857,
+   "MB_AT_PATH_against_MB_PATH": [
+    "equal",
+    0.6826091639623594
+   ],
+   "arms": {
+    "LOCAL_DECODER": {
+     "ns": 66910.60060171029,
+     "against_MB_PATH": [
+      "slower",
+      3.023250197196676
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      2.3247719270192584
+     ],
+     "MB_PATH_over_arm": 0.9706546804589268,
+     "MB_AT_PATH_over_arm": 0.9772804582581689,
+     "lazy_chain_ns": 65929.55293887801,
+     "lazy_chain_against_MB_PATH": [
+      "equal",
+      1.5127164713828094
+     ]
+    },
+    "HEAD_LIKELY": {
+     "ns": 61942.72183059606,
+     "against_MB_PATH": [
+      "faster",
+      4.033615209177516
+     ],
+     "against_MB_AT_PATH": [
+      "faster",
+      5.227552433459396
+     ],
+     "MB_PATH_over_arm": 1.0485023216123501,
+     "MB_AT_PATH_over_arm": 1.055659494544034,
+     "lazy_chain_ns": 61125.78624506103,
+     "lazy_chain_against_MB_PATH": [
+      "faster",
+      5.424006524808295
+     ]
+    },
+    "KEY_BREAK": {
+     "ns": 67889.66079323052,
+     "against_MB_PATH": [
+      "slower",
+      4.530723783774009
+     ],
+     "against_MB_AT_PATH": [
+      "slower",
+      3.8220251260522735
+     ],
+     "MB_PATH_over_arm": 0.9566565348466735,
+     "MB_AT_PATH_over_arm": 0.9631867600211816
+    },
+    "KEY_READ_ONCE": {
+     "ns": 66295.88768250073,
+     "against_MB_PATH": [
+      "equal",
+      2.076767542644672
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      1.3847062469466955
+     ],
+     "MB_PATH_over_arm": 0.9796548461257155,
+     "MB_AT_PATH_over_arm": 0.986342059880571
+    },
+    "KEY_ENCODED": {
+     "ns": 65613.98621017244,
+     "against_MB_PATH": [
+      "equal",
+      1.0268336702573662
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.3418907288491448
+     ],
+     "MB_PATH_over_arm": 0.9898360303599254,
+     "MB_AT_PATH_over_arm": 0.9965927418113635
+    },
+    "TAG_INITIAL_BYTE": {
+     "ns": 66238.45153398815,
+     "against_MB_PATH": [
+      "equal",
+      1.9883322477084002
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      1.2968705266861542
+     ],
+     "MB_PATH_over_arm": 0.9805043164851529,
+     "MB_AT_PATH_over_arm": 0.987197328802527
+    },
+    "SHAREDREF_INLINE": {
+     "ns": 65065.58216202863,
+     "against_MB_PATH": [
+      "equal",
+      0.18244777395693124
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.17709505877746184
+     ],
+     "MB_PATH_over_arm": 0.9981788449173393,
+     "MB_AT_PATH_over_arm": 1.0049925051854787
+    }
+   },
+   "checks_equal": true
+  },
+  "g++-16.floats": {
+   "MB_PATH_ns": 183719.3367659127,
+   "MB_PATH_AA_ns": 185799.19329876231,
+   "MB_PATH_aa_percent": 1.1320836279197264,
+   "MB_AT_PATH_ns": 183205.74943932123,
+   "MB_AT_PATH_AA_ns": 190190.65150352,
+   "MB_AT_PATH_aa_percent": 3.8125998150031926,
+   "MB_AT_PATH_against_MB_PATH": [
+    "equal",
+    0.2803336293556596
+   ],
+   "arms": {
+    "LOCAL_DECODER": {
+     "ns": 177124.26339581056,
+     "against_MB_PATH": [
+      "faster",
+      3.7234161168334565
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      3.4334573518709184
+     ],
+     "MB_PATH_over_arm": 1.0372341611683347,
+     "MB_AT_PATH_over_arm": 1.0343345735187093,
+     "lazy_chain_ns": 195769.7216768234,
+     "lazy_chain_against_MB_PATH": [
+      "slower",
+      5.366292609262634
+     ]
+    },
+    "HEAD_LIKELY": {
+     "ns": 179389.05529103725,
+     "against_MB_PATH": [
+      "equal",
+      2.413905055606708
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      2.127607028250328
+     ],
+     "MB_PATH_over_arm": 1.024139050556067,
+     "MB_AT_PATH_over_arm": 1.0212760702825032,
+     "lazy_chain_ns": 187401.83886097727,
+     "lazy_chain_against_MB_PATH": [
+      "equal",
+      0.8625686332436985
+     ]
+    },
+    "KEY_BREAK": {
+     "ns": 186163.08201619802,
+     "against_MB_PATH": [
+      "equal",
+      0.1958505367946244
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 0.9868730941504681,
+     "MB_AT_PATH_over_arm": 0.9841142908419432
+    },
+    "KEY_READ_ONCE": {
+     "ns": 193812.18023242406,
+     "against_MB_PATH": [
+      "slower",
+      4.3127135222686235
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      1.9041570656994309
+     ],
+     "MB_PATH_over_arm": 0.947924617253633,
+     "MB_AT_PATH_over_arm": 0.9452746943954536
+    },
+    "KEY_ENCODED": {
+     "ns": 182895.57335395188,
+     "against_MB_PATH": [
+      "equal",
+      0.4504009565975792
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.16959190410205696
+     ],
+     "MB_PATH_over_arm": 1.0045040095659759,
+     "MB_AT_PATH_over_arm": 1.0016959190410206
+    },
+    "TAG_INITIAL_BYTE": {
+     "ns": 173341.2158738576,
+     "against_MB_PATH": [
+      "faster",
+      5.987105166960048
+     ],
+     "against_MB_AT_PATH": [
+      "faster",
+      5.690818260235436
+     ],
+     "MB_PATH_over_arm": 1.0598710516696004,
+     "MB_AT_PATH_over_arm": 1.0569081826023543
+    },
+    "SHAREDREF_INLINE": {
+     "ns": 187189.23968097498,
+     "against_MB_PATH": [
+      "equal",
+      0.7481444658252571
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 0.9814631283241708,
+     "MB_AT_PATH_over_arm": 0.978719448572777
+    }
+   },
+   "checks_equal": true
+  },
+  "g++-16.records": {
+   "MB_PATH_ns": 72124.12328987452,
+   "MB_PATH_AA_ns": 71523.74803964382,
+   "MB_PATH_aa_percent": 0.8394068637145952,
+   "MB_AT_PATH_ns": 82251.8618240786,
+   "MB_AT_PATH_AA_ns": 79506.62747092864,
+   "MB_AT_PATH_aa_percent": 3.452837128771122,
+   "MB_AT_PATH_against_MB_PATH": [
+    "slower",
+    14.042095865068088
+   ],
+   "arms": {
+    "LOCAL_DECODER": {
+     "ns": 74590.75004506481,
+     "against_MB_PATH": [
+      "slower",
+      3.4199746806996187
+     ],
+     "against_MB_AT_PATH": [
+      "faster",
+      6.590465202312417
+     ],
+     "MB_PATH_over_arm": 0.9669311978536206,
+     "MB_AT_PATH_over_arm": 1.1027086036054772,
+     "lazy_chain_ns": 79533.47962774287,
+     "lazy_chain_against_MB_PATH": [
+      "slower",
+      10.27306260360262
+     ]
+    },
+    "HEAD_LIKELY": {
+     "ns": 72079.40940053786,
+     "against_MB_PATH": [
+      "equal",
+      0.0
+     ],
+     "against_MB_AT_PATH": [
+      "faster",
+      10.304216047496302
+     ],
+     "MB_PATH_over_arm": 1.0006203420603546,
+     "MB_AT_PATH_over_arm": 1.1411284097378416,
+     "lazy_chain_ns": 74324.90156066493,
+     "lazy_chain_against_MB_PATH": [
+      "slower",
+      3.051376114403845
+     ]
+    },
+    "KEY_BREAK": {
+     "ns": 82857.13237299016,
+     "against_MB_PATH": [
+      "slower",
+      14.88130266759505
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.735874587503104
+     ],
+     "MB_PATH_over_arm": 0.8704636670890339,
+     "MB_AT_PATH_over_arm": 0.9926950096922632
+    },
+    "KEY_READ_ONCE": {
+     "ns": 82537.87895107761,
+     "against_MB_PATH": [
+      "slower",
+      14.438658227219065
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.34773331649409583
+     ],
+     "MB_PATH_over_arm": 0.8738305879246594,
+     "MB_AT_PATH_over_arm": 0.9965347167793281
+    },
+    "KEY_ENCODED": {
+     "ns": 82578.86924672293,
+     "against_MB_PATH": [
+      "slower",
+      14.495491217036593
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.39756841412749144
+     ],
+     "MB_PATH_over_arm": 0.8733968380505126,
+     "MB_AT_PATH_over_arm": 0.9960400593320391
+    },
+    "TAG_INITIAL_BYTE": {
+     "ns": 82523.14749752094,
+     "against_MB_PATH": [
+      "slower",
+      14.418233086663163
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.3298231400798803
+     ],
+     "MB_PATH_over_arm": 0.8739865780330445,
+     "MB_AT_PATH_over_arm": 0.9967126111682726
+    },
+    "SHAREDREF_INLINE": {
+     "ns": 75324.79558515106,
+     "against_MB_PATH": [
+      "slower",
+      4.437727835404943
+     ],
+     "against_MB_AT_PATH": [
+      "faster",
+      5.551733467434656
+     ],
+     "MB_PATH_over_arm": 0.9575083839204271,
+     "MB_AT_PATH_over_arm": 1.0919626291065978
+    }
+   },
+   "checks_equal": true
+  },
+  "clang++-23.twitter": {
+   "MB_PATH_ns": 84802.65844837256,
+   "MB_PATH_AA_ns": 85390.6012094105,
+   "MB_PATH_aa_percent": 0.693306992723432,
+   "MB_AT_PATH_ns": 83202.93117131168,
+   "MB_AT_PATH_AA_ns": 85737.36921559405,
+   "MB_AT_PATH_aa_percent": 3.0460922573317317,
+   "MB_AT_PATH_against_MB_PATH": [
+    "equal",
+    1.922681394201252
+   ],
+   "arms": {
+    "LOCAL_DECODER": {
+     "ns": 84000.7495960943,
+     "against_MB_PATH": [
+      "equal",
+      0.9546448765446974
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 1.009546448765447,
+     "MB_AT_PATH_over_arm": 0.9905022463654334,
+     "lazy_chain_ns": 84596.70300596723,
+     "lazy_chain_against_MB_PATH": [
+      "equal",
+      0.24345563726142774
+     ]
+    },
+    "HEAD_LIKELY": {
+     "ns": 83560.21520246271,
+     "against_MB_PATH": [
+      "equal",
+      1.4868837315694567
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 1.0148688373156947,
+     "MB_AT_PATH_over_arm": 0.9957242327549618,
+     "lazy_chain_ns": 85232.95411862727,
+     "lazy_chain_against_MB_PATH": [
+      "equal",
+      0.0
+     ]
+    },
+    "KEY_BREAK": {
+     "ns": 84332.25532276559,
+     "against_MB_PATH": [
+      "equal",
+      0.557797397693912
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 1.005577973976939,
+     "MB_AT_PATH_over_arm": 0.9866086333499366
+    },
+    "KEY_READ_ONCE": {
+     "ns": 85041.01369156965,
+     "against_MB_PATH": [
+      "equal",
+      0.0
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 0.9971971730715539,
+     "MB_AT_PATH_over_arm": 0.978385928853995
+    },
+    "KEY_ENCODED": {
+     "ns": 84735.30385992896,
+     "against_MB_PATH": [
+      "equal",
+      0.07948822435916739
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 1.0007948822435917,
+     "MB_AT_PATH_over_arm": 0.9819157704190173
+    },
+    "TAG_INITIAL_BYTE": {
+     "ns": 83909.89044402342,
+     "against_MB_PATH": [
+      "equal",
+      1.0639603980232943
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 1.010639603980233,
+     "MB_AT_PATH_over_arm": 0.9915747801722687
+    },
+    "SHAREDREF_INLINE": {
+     "ns": 85050.82668726562,
+     "against_MB_PATH": [
+      "equal",
+      0.0
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 0.9970821184395352,
+     "MB_AT_PATH_over_arm": 0.9782730446260245
+    }
+   },
+   "checks_equal": true
+  },
+  "clang++-23.floats": {
+   "MB_PATH_ns": 194469.84163649584,
+   "MB_PATH_AA_ns": 199458.25846499347,
+   "MB_PATH_aa_percent": 2.5651364687291776,
+   "MB_AT_PATH_ns": 202038.19613958691,
+   "MB_AT_PATH_AA_ns": 203127.83314801892,
+   "MB_AT_PATH_aa_percent": 0.5393222812577403,
+   "MB_AT_PATH_against_MB_PATH": [
+    "equal",
+    1.2934724761202314
+   ],
+   "arms": {
+    "LOCAL_DECODER": {
+     "ns": 208607.26583354498,
+     "against_MB_PATH": [
+      "slower",
+      4.586928332254156
+     ],
+     "against_MB_AT_PATH": [
+      "slower",
+      2.6975292359532066
+     ],
+     "MB_PATH_over_arm": 0.9322294736927818,
+     "MB_AT_PATH_over_arm": 0.9685098710837821,
+     "lazy_chain_ns": 514768.6649072149,
+     "lazy_chain_against_MB_PATH": [
+      "slower",
+      158.08340495340326
+     ]
+    },
+    "HEAD_LIKELY": {
+     "ns": 191484.78694505082,
+     "against_MB_PATH": [
+      "equal",
+      1.5588991371422245
+     ],
+     "against_MB_AT_PATH": [
+      "faster",
+      5.511356470091039
+     ],
+     "MB_PATH_over_arm": 1.0155889913714222,
+     "MB_AT_PATH_over_arm": 1.0551135647009104,
+     "lazy_chain_ns": 176453.94608998342,
+     "lazy_chain_against_MB_PATH": [
+      "faster",
+      10.209970332613098
+     ]
+    },
+    "KEY_BREAK": {
+     "ns": 203460.13204924794,
+     "against_MB_PATH": [
+      "equal",
+      2.006371465915928
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.16359102348464197
+     ],
+     "MB_PATH_over_arm": 0.9558130120028823,
+     "MB_AT_PATH_over_arm": 0.9930112307736199
+    },
+    "KEY_READ_ONCE": {
+     "ns": 203101.51643648706,
+     "against_MB_PATH": [
+      "equal",
+      1.8265766479320817
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.0
+     ],
+     "MB_PATH_over_arm": 0.9575006875800927,
+     "MB_AT_PATH_over_arm": 0.9947645871111324
+    },
+    "KEY_ENCODED": {
+     "ns": 203715.90188163085,
+     "against_MB_PATH": [
+      "equal",
+      2.1346037258139554
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.2895067231792923
+     ],
+     "MB_PATH_over_arm": 0.9546129675703596,
+     "MB_AT_PATH_over_arm": 0.991764483152529
+    },
+    "TAG_INITIAL_BYTE": {
+     "ns": 201094.1950002234,
+     "against_MB_PATH": [
+      "equal",
+      0.8201899223526288
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.46943231720958334
+     ],
+     "MB_PATH_over_arm": 0.9670584555475596,
+     "MB_AT_PATH_over_arm": 1.0046943231720957
+    },
+    "SHAREDREF_INLINE": {
+     "ns": 196047.61049823376,
+     "against_MB_PATH": [
+      "equal",
+      0.0
+     ],
+     "against_MB_AT_PATH": [
+      "faster",
+      3.05567898845017
+     ],
+     "MB_PATH_over_arm": 0.9919521137864002,
+     "MB_AT_PATH_over_arm": 1.0305567898845016
+    }
+   },
+   "checks_equal": true
+  },
+  "clang++-23.records": {
+   "MB_PATH_ns": 111057.02619631411,
+   "MB_PATH_AA_ns": 110481.42223801152,
+   "MB_PATH_aa_percent": 0.5209961517897136,
+   "MB_AT_PATH_ns": 110699.61616826276,
+   "MB_AT_PATH_AA_ns": 110684.50109726001,
+   "MB_AT_PATH_aa_percent": 0.013655995964115503,
+   "MB_AT_PATH_against_MB_PATH": [
+    "equal",
+    0.0
+   ],
+   "arms": {
+    "LOCAL_DECODER": {
+     "ns": 107122.0759941992,
+     "against_MB_PATH": [
+      "faster",
+      3.1359980775524154
+     ],
+     "against_MB_AT_PATH": [
+      "faster",
+      3.3255751160514513
+     ],
+     "MB_PATH_over_arm": 1.0367333265864638,
+     "MB_AT_PATH_over_arm": 1.033396852524192,
+     "lazy_chain_ns": 120364.11338068107,
+     "lazy_chain_against_MB_PATH": [
+      "slower",
+      8.380457773031791
+     ]
+    },
+    "HEAD_LIKELY": {
+     "ns": 107578.09316367295,
+     "against_MB_PATH": [
+      "faster",
+      2.6988106862252614
+     ],
+     "against_MB_AT_PATH": [
+      "faster",
+      2.8875841188789884
+     ],
+     "MB_PATH_over_arm": 1.032338675378343,
+     "MB_AT_PATH_over_arm": 1.0290163444321383,
+     "lazy_chain_ns": 110191.85439838839,
+     "lazy_chain_against_MB_PATH": [
+      "equal",
+      0.2627851588523343
+     ]
+    },
+    "KEY_BREAK": {
+     "ns": 109990.19569679539,
+     "against_MB_PATH": [
+      "equal",
+      0.4466093892316332
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.6312429904012385
+     ],
+     "MB_PATH_over_arm": 1.0096993235875278,
+     "MB_AT_PATH_over_arm": 1.0064498518888265
+    },
+    "KEY_READ_ONCE": {
+     "ns": 110124.83609686073,
+     "against_MB_PATH": [
+      "equal",
+      0.32380174517322985
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.5082096103253475
+     ],
+     "MB_PATH_over_arm": 1.0084648489159473,
+     "MB_AT_PATH_over_arm": 1.0052193500737334
+    },
+    "KEY_ENCODED": {
+     "ns": 110225.71549115553,
+     "against_MB_PATH": [
+      "equal",
+      0.23198465595491272
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.4162237496578559
+     ],
+     "MB_PATH_over_arm": 1.0075418943887489,
+     "MB_AT_PATH_over_arm": 1.0042993658512043
+    },
+    "TAG_INITIAL_BYTE": {
+     "ns": 110180.12454441038,
+     "against_MB_PATH": [
+      "equal",
+      0.27345920586584177
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      0.45777453504904164
+     ],
+     "MB_PATH_over_arm": 1.0079588006959483,
+     "MB_AT_PATH_over_arm": 1.004714930446852
+    },
+    "SHAREDREF_INLINE": {
+     "ns": 113076.56416001602,
+     "against_MB_PATH": [
+      "equal",
+      1.8184693331622215
+     ],
+     "against_MB_AT_PATH": [
+      "equal",
+      2.147205269565083
+     ],
+     "MB_PATH_over_arm": 0.9821400837679855,
+     "MB_AT_PATH_over_arm": 0.9789793047798162
+    }
+   },
+   "checks_equal": true
+  }
+ }
+}
