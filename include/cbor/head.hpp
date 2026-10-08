@@ -388,12 +388,40 @@ class heads
         }
     }
 
+    static constexpr bool is_nan(precision const p, std::uint64_t const argument)
+    {
+        return (argument >> p.significand_bits & p.exponent_max) == p.exponent_max &&
+               (argument & ((std::uint64_t{1} << p.significand_bits) - 1u)) != 0;
+    }
+
+    static constexpr std::uint64_t significand_zero_pad(precision const p, std::uint64_t const argument)
+    {
+        constexpr precision d = double_precision;
+        return (argument >> (p.significand_bits + std::bit_width(p.exponent_max)))
+                   << (d.significand_bits + std::bit_width(d.exponent_max)) |
+               (argument & ((std::uint64_t{1} << p.significand_bits) - 1u))
+                   << (d.significand_bits - p.significand_bits);
+    }
+
+    static constexpr double nan_decode(precision const p, std::uint64_t const argument)
+    {
+        constexpr precision d = double_precision;
+        constexpr std::uint64_t exponent = std::uint64_t{d.exponent_max} << d.significand_bits;
+        return std::bit_cast<double>(significand_zero_pad(p, argument) | exponent);
+    }
+
     static constexpr double float_decode(std::uint8_t const info, std::uint64_t const argument)
     {
-        if (info == std::to_underlying(rfc8949::simple_float_information::half_precision_float))
+        if (info == std::to_underlying(rfc8949::simple_float_information::half_precision_float)) {
+            if (is_nan(half_precision, argument)) [[unlikely]]
+                return nan_decode(half_precision, argument);
             return static_cast<double>(float_decode_binary16(static_cast<std::uint16_t>(argument)));
-        if (info == std::to_underlying(rfc8949::simple_float_information::single_precision_float))
+        }
+        if (info == std::to_underlying(rfc8949::simple_float_information::single_precision_float)) {
+            if (is_nan(single_precision, argument)) [[unlikely]]
+                return nan_decode(single_precision, argument);
             return static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(argument)));
+        }
         return std::bit_cast<double>(argument);
     }
 
@@ -405,32 +433,13 @@ class heads
 
     static constexpr float_key float_key_of(std::uint8_t const info, std::uint64_t const argument)
     {
-        constexpr precision h = half_precision;
-        constexpr precision f = single_precision;
-        constexpr precision d = double_precision;
-        double const value = float_decode(info, argument);
-        if (info == std::to_underlying(rfc8949::simple_float_information::half_precision_float))
-            return {(argument >> h.significand_bits & h.exponent_max) == h.exponent_max &&
-                        (argument & ((std::uint64_t{1} << h.significand_bits) - 1u)) != 0,
-                    (argument >> (h.significand_bits + std::bit_width(h.exponent_max)))
-                            << (d.significand_bits + std::bit_width(d.exponent_max)) |
-                        (argument & ((std::uint64_t{1} << h.significand_bits) - 1u))
-                            << (d.significand_bits - h.significand_bits),
-                    value};
-        if (info == std::to_underlying(rfc8949::simple_float_information::single_precision_float))
-            return {(argument >> f.significand_bits & f.exponent_max) == f.exponent_max &&
-                        (argument & ((std::uint64_t{1} << f.significand_bits) - 1u)) != 0,
-                    (argument >> (f.significand_bits + std::bit_width(f.exponent_max)))
-                            << (d.significand_bits + std::bit_width(d.exponent_max)) |
-                        (argument & ((std::uint64_t{1} << f.significand_bits) - 1u))
-                            << (d.significand_bits - f.significand_bits),
-                    value};
-        return {(argument >> d.significand_bits & d.exponent_max) == d.exponent_max &&
-                    (argument & ((std::uint64_t{1} << d.significand_bits) - 1u)) != 0,
-                (argument >> (d.significand_bits + std::bit_width(d.exponent_max)))
-                        << (d.significand_bits + std::bit_width(d.exponent_max)) |
-                    (argument & ((std::uint64_t{1} << d.significand_bits) - 1u)),
-                value};
+        precision const p =
+            info == std::to_underlying(rfc8949::simple_float_information::half_precision_float)
+                ? half_precision
+            : info == std::to_underlying(rfc8949::simple_float_information::single_precision_float)
+                ? single_precision
+                : double_precision;
+        return {is_nan(p, argument), significand_zero_pad(p, argument), float_decode(info, argument)};
     }
 
     static constexpr bool is_boolean(head const &h)
