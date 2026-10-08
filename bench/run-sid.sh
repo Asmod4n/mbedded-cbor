@@ -19,12 +19,28 @@ arm_libraries() {
 	esac
 }
 
+arm_directory() {
+	case "$1" in
+	MB_PATH_*) echo "$here/arms/MB_AT_PATH_${1#MB_PATH_}" ;;
+	*) echo "$here/arms/$1" ;;
+	esac
+}
+
+arm_read() {
+	if [ -d "$(arm_directory "$1")" ]; then
+		case "$1" in
+		MB_PATH_*) echo -DARM_MB_PATH ;;
+		MB_AT_PATH_*) echo -DARM_MB_AT_PATH ;;
+		esac
+	fi
+}
+
 arm_include() {
 	local a=$1
-	if [ -d "$here/arms/$a" ]; then
+	if [ -d "$(arm_directory "$a")" ]; then
 		if [ ! -d "$build/include-$a" ]; then
 			cp -r "$root/include" "$build/include-$a"
-			cp -r "$here/arms/$a/." "$build/include-$a/"
+			cp -r "$(arm_directory "$a")/." "$build/include-$a/"
 		fi
 		echo "$build/include-$a"
 	else
@@ -34,7 +50,7 @@ arm_include() {
 
 compile() {
 	local cc=$1 a=$2 d=$3 out=$4
-	"$cc" -std=c++23 $flags -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" -DDOC_$d \
+	"$cc" -std=c++23 $flags -DDOCTEST_CONFIG_DISABLE -DARM_$a $(arm_read "$a") -DARM_NAME="\"$a\"" -DDOC_$d \
 		-DDOC_PATH="\"$here/docs/$d.cbor\"" -I"$(arm_include "$a")" \
 		"$here/runtime.cpp" $(arm_libraries "$a") -lbenchmark -lpthread -o "$out"
 }
