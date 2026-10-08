@@ -401,6 +401,9 @@ static std::uint64_t jc_text(jc_cursor const &c)
 
 static std::string doc;
 static std::string_view in;
+#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED)
+static std::string const *copy = &doc;
+#endif
 static std::shared_ptr<void const> const keep = std::make_shared<int const>(0);
 
 #if defined(ARM_MB_DECODE)
@@ -464,6 +467,44 @@ static std::uint64_t mb_path()
                        .and_then([](cbor::lazy const &r) { return r.at("user"); })
                        .and_then([](cbor::lazy const &u) { return u.at("name"); })
                        .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
+    if (!v) [[unlikely]] std::abort();
+    return bytes_sum(**v);
+#endif
+}
+#endif
+
+#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED)
+static std::uint64_t mb_at_path()
+{
+#if defined(DOC_twitter)
+    auto const v = cbor::at_path<"$.statuses[50].user.screen_name", std::string_view>(*copy);
+    if (!v) [[unlikely]] std::abort();
+    return bytes_sum(*v);
+#elif defined(DOC_floats)
+    auto const v = cbor::at_path<"$[30000]", double>(in);
+    if (!v) [[unlikely]] std::abort();
+    return std::bit_cast<std::uint64_t>(*v);
+#elif defined(DOC_records)
+    auto const v = cbor::at_path<"$[1000].user.name", std::string_view>(*copy);
+    if (!v) [[unlikely]] std::abort();
+    return bytes_sum(*v);
+#endif
+}
+#endif
+
+#if defined(ARM_MB_AT_PATH_OWNED)
+static std::uint64_t mb_at_path()
+{
+#if defined(DOC_twitter)
+    auto const v = cbor::at_path<"$.statuses[50].user.screen_name", std::string_view>(keep, in);
+    if (!v) [[unlikely]] std::abort();
+    return bytes_sum(**v);
+#elif defined(DOC_floats)
+    auto const v = cbor::at_path<"$[30000]", double>(in);
+    if (!v) [[unlikely]] std::abort();
+    return std::bit_cast<std::uint64_t>(*v);
+#elif defined(DOC_records)
+    auto const v = cbor::at_path<"$[1000].user.name", std::string_view>(keep, in);
     if (!v) [[unlikely]] std::abort();
     return bytes_sum(**v);
 #endif
@@ -585,6 +626,8 @@ static std::uint64_t op()
     return t;
 #elif defined(ARM_MB_PATH)
     return mb_path();
+#elif defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED) || defined(ARM_MB_AT_PATH_OWNED)
+    return mb_at_path();
 #elif defined(ARM_MB_PATH_ALL)
     read_binding b;
     auto const r = cbor::at_path<"$..*">(b, *cbor::lazy::from(keep, in));
@@ -791,6 +834,9 @@ static void run(benchmark::State &state)
     std::size_t i = 0;
     for (auto _ : state) {
         in = copies[i];
+#if defined(ARM_MB_AT_PATH) || defined(ARM_MB_AT_PATH_NAMED)
+        copy = &copies[i];
+#endif
         i = i + 1 == copies.size() ? 0 : i + 1;
         benchmark::DoNotOptimize(op());
         benchmark::ClobberMemory();
