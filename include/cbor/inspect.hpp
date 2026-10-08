@@ -623,7 +623,7 @@ class diagnostic_notation
                 return std::unexpected(error::invalid_path);
             next = blank_end(text, next);
             if (next >= text.size() || text[next] != ')' || value > 255 ||
-                (value >= 24 && value < validity::simple_value_one_byte_min)) [[unlikely]]
+                !validity::check_simple_value(heads::preferred_argument_info(value), value)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             if (auto const r = head_append(out, major_type::simple_float, value, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
