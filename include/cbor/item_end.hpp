@@ -35,6 +35,8 @@ class well_formedness
     template <std::size_t DepthMax, class Marks>
     static std::expected<void, error> item_skip(heads::decoder &d, Marks &marks, std::size_t const depth)
     {
+        static_assert(DepthMax <= std::numeric_limits<std::size_t>::max() - 2,
+                      "The stack array of item_skip must hold DepthMax + 2 levels.");
         std::array<std::uint64_t, DepthMax + 2> left;
         std::size_t level = 0;
         left[0] = 1;
