@@ -6,7 +6,7 @@ build=${BUILD:?the build directory}
 PROCESSES=${PROCESSES:-10}
 MIN_TIME=${MIN_TIME:-0.2s}
 docs=${DOCS:-"twitter floats records"}
-arms=${ARMS:-"MB_DECODE LC_DECODE JC_DECODE READ TC_READ JC_READ LC_READ FB_READ FB_READ_V MP_READ MB_PATH MB_AT_PATH MB_AT_PATH_NAMED MB_AT_PATH_OWNED MB_AT_PATH_STATIC TC_PATH JC_PATH FB_PATH FB_PATH_V"}
+arms=${ARMS:-"MB_DECODE LC_DECODE JC_DECODE READ TC_READ JC_READ LC_READ FB_READ FB_READ_V MP_READ MB_PATH MB_AT_PATH MB_AT_PATH_NAMED MB_AT_PATH_STATIC TC_PATH JC_PATH FB_PATH FB_PATH_V"}
 compilers=${COMPILERS:-"g++-16 clang++-23"}
 flags="-O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG -Werror"
 export GLIBC_TUNABLES=glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456

@@ -14,6 +14,8 @@ class databind;
 
 struct lazy;
 
+class jsonpath;
+
 template <class T>
 class owning_ref
 {
@@ -31,6 +33,8 @@ class owning_ref
     friend class databind;
 
     friend struct lazy;
+
+    friend class jsonpath;
 
 public:
     T const &operator*() const &

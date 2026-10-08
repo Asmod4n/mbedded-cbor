@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -229,12 +230,13 @@ using step = std::variant<std::string_view, std::int64_t>;
 template <cbor::fixed_string Path, class T>
 void typed_read_check(std::string const &document, std::vector<step> const &steps)
 {
-    auto const typed = [&document] {
+    auto const owner = std::make_shared<std::string const>(document);
+    auto const typed = [&owner] {
         if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                       std::is_same_v<T, cbor::typed_array>)
-            return cbor::at_path<Path, T, 16>(document);
+            return cbor::at_path<Path, T, 16>(owner, *owner);
         else
-            return cbor::at_path<Path, T, 16>(std::string_view(document));
+            return cbor::at_path<Path, T, 16>(std::string_view(*owner));
     }();
     auto const root = cbor::lazy::from(std::string(document));
     require(root.has_value());
@@ -251,7 +253,7 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     }
     if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, cbor::typed_array>)
-        require(comparable(*typed) == comparable(**chained));
+        require(comparable(**typed) == comparable(**chained));
     else
         require(comparable(*typed) == comparable(*chained));
 }

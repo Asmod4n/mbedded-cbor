@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <memory>
 #include <new>
 #include <string>
 #include <string_view>
@@ -94,21 +95,22 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
     CHECK_LE(after - before, 2 * bytes.size());
 }
 
-// The typed read of a path walks the bytes of the caller and builds no top-level item: a text, an integer from a
-// std::string_view and a value under a mark of tag 28 are read with no allocation.
+// The typed read of a path walks the bytes of the caller and builds no top-level item: a text with the owner of the
+// caller, an integer from a std::string_view and a value under a mark of tag 28 are read with no allocation.
 TEST_CASE("path: a typed read allocates nothing")
 {
-    std::string const doc = encoded(M("statuses"s, A(M("user"s, M("screen_name"s, "ann"s)), M("user"s, M("screen_name"s, "bob"s)))));
+    auto const doc = std::make_shared<std::string const>(
+        encoded(M("statuses"s, A(M("user"s, M("screen_name"s, "ann"s)), M("user"s, M("screen_name"s, "bob"s))))));
     std::string const numbers = "\x83\x01\x39\x03\xe7\x03"s;
     std::string const marked = "\xa1\x61\x61\xd8\x1c\x82\x01\x02"s;
     std::size_t const before = allocations;
-    auto const name = cbor::at_path<"$.statuses[1].user.screen_name", std::string_view>(doc);
+    auto const name = cbor::at_path<"$.statuses[1].user.screen_name", std::string_view>(doc, *doc);
     auto const number = cbor::at_path<"$[1]", std::int64_t>(std::string_view(numbers));
     auto const shared = cbor::at_path<"$.a[1]", std::uint64_t>(std::string_view(marked));
     std::size_t const after = allocations;
     CHECK_EQ(after, before);
     REQUIRE(name.has_value());
-    CHECK_EQ(*name, "bob"sv);
+    CHECK_EQ(**name, "bob"sv);
     REQUIRE(number.has_value());
     CHECK_EQ(*number, -1000);
     REQUIRE(shared.has_value());
