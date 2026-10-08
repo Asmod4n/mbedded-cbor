@@ -1568,18 +1568,19 @@ public:
         return bytes.empty();
     }
 
-    CBOR_ALWAYS_INLINE iterator begin() const &
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    CBOR_ALWAYS_INLINE iterator begin(this Self &&self)
     {
-        return iterator(bytes.begin());
+        return iterator(self.bytes.begin());
     }
 
-    CBOR_ALWAYS_INLINE iterator end() const &
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    CBOR_ALWAYS_INLINE iterator end(this Self &&self)
     {
-        return iterator(bytes.end());
+        return iterator(self.bytes.end());
     }
-
-    iterator begin() const && = delete;
-    iterator end() const && = delete;
 
     CBOR_ALWAYS_INLINE std::expected<E, error> front() const
     {
@@ -1803,20 +1804,20 @@ public:
         friend class packed;
 
     public:
-        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+        template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(((Path.view().starts_with('@') && packed::path_valid<U, Path, 1>()) ||
                       (Path.view().starts_with('$') && packed::path_valid<T, Path, 1>())) &&
-                     sizeof...(Index) == packed::index_slots<Path>())
-        CBOR_ALWAYS_INLINE auto at(Index const... indexes) const &
+                     sizeof...(Index) == packed::index_slots<Path>() && std::is_lvalue_reference_v<Self>)
+        CBOR_ALWAYS_INLINE auto at(this Self &&self, Index const... indexes)
         {
             std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
             constexpr std::string_view path = Path.view();
             if constexpr (path.starts_with('$') && std::same_as<U, T>) {
-                return packed::path_walk<T, T, Path, 1>(encoded, field, dir, i);
+                return packed::path_walk<T, T, Path, 1>(self.encoded, self.field, self.dir, i);
             } else if constexpr (path.starts_with('$')) {
                 constexpr std::size_t root = packed::fixed_size<T, T>();
                 return packed::path_walk<T, T, Path, 1>(
-                    encoded, std::span<char const>(encoded).subspan(encoded.size() - root).template first<root>(), dir, i);
+                    self.encoded, std::span<char const>(self.encoded).subspan(self.encoded.size() - root).template first<root>(), self.dir, i);
             } else if constexpr (packed::is_typed_array<U> && path.size() > 1) {
                 using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
                 constexpr std::size_t close = packed::index_end(path, 1);
@@ -1825,10 +1826,10 @@ public:
                     at = std::get<0>(i);
                 else
                     at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
-                if (at >= items.length) [[unlikely]]
+                if (at >= self.items.length) [[unlikely]]
                     return std::expected<E, error>(std::unexpect, error::index_out_of_bounds);
                 return std::expected<E, error>(packed::typed_array_element_read<E>(
-                    std::span<char const>(encoded).subspan(items.data + at * sizeof(E)).template first<sizeof(E)>()));
+                    std::span<char const>(self.encoded).subspan(self.items.data + at * sizeof(E)).template first<sizeof(E)>()));
             } else if constexpr (packed::is_list<U> && path.size() > 1) {
                 using E = std::ranges::range_value_t<U>;
                 constexpr std::size_t close = packed::index_end(path, 1);
@@ -1838,18 +1839,16 @@ public:
                     at = std::get<0>(i);
                 else
                     at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
-                if (at >= items.length) [[unlikely]]
+                if (at >= self.items.length) [[unlikely]]
                     return std::expected<X, error>(std::unexpect, error::index_out_of_bounds);
                 return packed::path_walk<T, E, Path, close + 1>(
-                    encoded, std::span<char const>(encoded).subspan(items.data + at * packed::fixed_size<E, T>()).template first<packed::fixed_size<E, T>()>(),
-                    dir, i);
+                    self.encoded, std::span<char const>(self.encoded).subspan(self.items.data + at * packed::fixed_size<E, T>()).template first<packed::fixed_size<E, T>()>(),
+                    self.dir, i);
             } else {
-                return packed::path_walk<T, U, Path, 1>(encoded, field, dir, i);
+                return packed::path_walk<T, U, Path, 1>(self.encoded, self.field, self.dir, i);
             }
         }
 
-        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
-        auto at(Index const... indexes) const && = delete;
 
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(std::same_as<U, T> && Path.view().starts_with('$') && packed::path_valid<T, Path, 1>() &&

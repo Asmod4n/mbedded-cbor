@@ -55,18 +55,19 @@ public:
         return *this;
     }
 
-    T const &operator*() const &
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    T const &operator*(this Self &&self)
     {
-        return value;
+        return self.value;
     }
 
-    T const *operator->() const &
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    T const *operator->(this Self &&self)
     {
-        return &value;
+        return &self.value;
     }
-
-    T const &operator*() const && = delete;
-    T const *operator->() const && = delete;
 };
 
 template <class T>

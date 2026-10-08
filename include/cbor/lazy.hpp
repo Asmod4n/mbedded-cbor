@@ -524,11 +524,12 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
     std::unreachable();
 }
 
-template <std::size_t DepthMax>
-    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
-std::expected<std::reference_wrapper<item const>, error> lazy::decode() const &
+template <std::size_t DepthMax, class Self>
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+             std::is_lvalue_reference_v<Self>)
+std::expected<std::reference_wrapper<item const>, error> lazy::decode(this Self &&self)
 {
-    auto const built = value_sharing::item_decode<DepthMax>(*top_level, offset, 0);
+    auto const built = value_sharing::item_decode<DepthMax>(*self.top_level, self.offset, 0);
     if (!built) [[unlikely]]
         return std::unexpected(built.error());
     return std::cref(*built->first);
