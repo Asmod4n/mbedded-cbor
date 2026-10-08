@@ -307,7 +307,8 @@ std::expected<lazy, error> lazy::at(std::int64_t const index) const
 
 template <class T>
     requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-             std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
+             std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
+                 std::is_same_v<T, std::string_view> ||
              std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
 std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                std::is_same_v<T, typed_array>,
@@ -366,6 +367,13 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
         if (!heads::is_boolean(h)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         return h.info == std::to_underlying(simple_value::true_value);
+    } else if constexpr (std::is_same_v<T, simple_value>) {
+        if (!heads::is_simple_value(h)) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        if (error const c = validity::check_simple_value(h.info, h.argument).error_or(error{}); c != error{})
+            [[unlikely]]
+            return std::unexpected(c);
+        return static_cast<simple_value>(h.argument);
     } else if constexpr (std::is_same_v<T, std::nullptr_t>) {
         if (!heads::is_null(h)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
@@ -542,7 +550,7 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
             if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
-            node->content = std::monostate{};
+            node->content = static_cast<simple_value>(h->argument);
             break;
         }
         return std::pair{node, h->at};

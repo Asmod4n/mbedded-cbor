@@ -339,10 +339,10 @@ struct encoder {
 
     std::expected<void, std::errc> simple_value_encode(simple_value const value)
     {
-        if (std::to_underlying(value) >=
-            std::to_underlying(rfc8949::simple_float_information::simple_value_follows)) [[unlikely]]
+        std::uint8_t const info = heads::preferred_argument_info(std::to_underlying(value));
+        if (!validity::check_simple_value(info, std::to_underlying(value))) [[unlikely]]
             return std::unexpected(std::errc::invalid_argument);
-        return head_encode(major_type::simple_float, std::to_underlying(value), std::to_underlying(value));
+        return head_encode(major_type::simple_float, info, std::to_underlying(value));
     }
 
     template <std::unsigned_integral T>

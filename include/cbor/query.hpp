@@ -51,7 +51,7 @@ class singular_query;
 template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default>
     requires(singular_query<Path, DepthMax>::value &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t>))
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
 std::expected<T, error> at_path(std::string_view encoded);
 
 template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default>
@@ -791,6 +791,13 @@ class jsonpath
             if (!heads::is_boolean(h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return h.info == std::to_underlying(simple_value::true_value);
+        } else if constexpr (std::is_same_v<T, simple_value>) {
+            if (!heads::is_simple_value(h)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            if (error const c = validity::check_simple_value(h.info, h.argument).error_or(error{}); c != error{})
+                [[unlikely]]
+                return std::unexpected(c);
+            return static_cast<simple_value>(h.argument);
         } else if constexpr (std::is_same_v<T, std::nullptr_t>) {
             if (!heads::is_null(h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
@@ -915,7 +922,7 @@ class jsonpath
     template <fixed_string Path, class T, std::size_t DepthMax>
         requires(singular_query<Path, DepthMax>::value &&
                  ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-                  std::is_same_v<T, std::nullptr_t>))
+                  std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
     friend std::expected<T, error> at_path(std::string_view encoded);
 
     template <fixed_string Path, class T, std::size_t DepthMax>
@@ -1485,7 +1492,7 @@ class singular_query
 template <fixed_string Path, class T, std::size_t DepthMax>
     requires(singular_query<Path, DepthMax>::value &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t>))
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
 std::expected<T, error> at_path(std::string_view const encoded)
 {
     return jsonpath::query_walk<Path, DepthMax, T>(encoded);

@@ -106,7 +106,8 @@ struct lazy {
 
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-                 std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, std::string_view> ||
+                 std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
+                 std::is_same_v<T, std::string_view> ||
                  std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
     std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                    std::is_same_v<T, typed_array>,

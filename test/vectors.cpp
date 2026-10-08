@@ -174,7 +174,8 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
                 REQUIRE(std::holds_alternative<double>(it.content));
                 CHECK_EQ(std::bit_cast<std::uint64_t>(std::get<double>(it.content)), argument);
             } else {
-                CHECK(std::holds_alternative<std::monostate>(it.content));
+                REQUIRE(std::holds_alternative<cbor::simple_value>(it.content));
+                CHECK_EQ(std::to_underlying(std::get<cbor::simple_value>(it.content)), argument);
             }
             break;
         }

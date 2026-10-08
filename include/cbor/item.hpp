@@ -29,7 +29,7 @@ struct item {
     cbor::major_type major_type;
     std::uint8_t additional_information;
     std::uint64_t argument;
-    std::variant<std::monostate, lazy, std::span<std::byte const>, std::string_view, item const *, record,
+    std::variant<std::monostate, lazy, std::span<std::byte const>, std::string_view, item const *, record, simple_value,
 #if defined(__STDCPP_FLOAT16_T__)
                  std::float16_t,
 #endif

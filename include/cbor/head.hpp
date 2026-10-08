@@ -449,6 +449,12 @@ class heads
                (h.info == std::to_underlying(simple_value::false_value) || h.info == std::to_underlying(simple_value::true_value));
     }
 
+    static constexpr bool is_simple_value(head const &h)
+    {
+        return h.major == major_type::simple_float &&
+               h.info <= std::to_underlying(rfc8949::simple_float_information::simple_value_follows);
+    }
+
     static constexpr bool is_null(head const &h)
     {
         return h.major == major_type::simple_float && h.info == std::to_underlying(simple_value::null);
