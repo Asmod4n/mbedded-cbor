@@ -721,12 +721,12 @@ template <class T>
 class databind
 {
 public:
-    template <std::size_t DepthMax = 128>
-        requires(DepthMax <= 1024)
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     static std::expected<owning_ref<T>, error> decode(std::string_view encoded) = delete;
 
-    template <std::size_t DepthMax = 128, std::same_as<std::string> Encoded>
-        requires(DepthMax <= 1024)
+    template <std::size_t DepthMax = validity::nesting_depth_default, std::same_as<std::string> Encoded>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
     {
         auto owner = std::make_shared<std::string const>(std::move(encoded));
@@ -734,8 +734,8 @@ public:
         return decode<DepthMax>(std::move(owner), view);
     }
 
-    template <std::size_t DepthMax = 128>
-        requires(DepthMax <= 1024)
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         if (owner.use_count() == 0) [[unlikely]]
@@ -746,7 +746,7 @@ public:
         return owning_ref<T>(std::move(owner), std::move(*value));
     }
 
-    template <std::size_t DepthMax = 128, class Encoded>
+    template <std::size_t DepthMax = validity::nesting_depth_default, class Encoded>
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 

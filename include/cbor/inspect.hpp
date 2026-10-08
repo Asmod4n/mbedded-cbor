@@ -623,7 +623,7 @@ class diagnostic_notation
                 return std::unexpected(error::invalid_path);
             next = blank_end(text, next);
             if (next >= text.size() || text[next] != ')' || value > 255 ||
-                (value >= 24 && value < heads::simple_value_one_byte_min)) [[unlikely]]
+                (value >= 24 && value < validity::simple_value_one_byte_min)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             if (auto const r = head_append(out, major_type::simple_float, value, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -1027,12 +1027,12 @@ class diagnostic_notation
     friend class jsonpath;
 
     template <std::size_t DepthMax>
-        requires(DepthMax <= 1024)
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<std::string, error> inspect(std::string_view encoded);
 };
 
 template <std::size_t DepthMax>
-    requires(DepthMax <= 1024)
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<std::string, error> inspect(std::string_view const encoded)
 {
     heads::decoder d{encoded};

@@ -35,7 +35,8 @@ class well_formedness
     template <std::size_t DepthMax, class Marks>
     static std::expected<void, error> item_skip(heads::decoder &d, Marks &marks, std::size_t const depth)
     {
-        static_assert(DepthMax <= 1024, "DepthMax is at most 1024.");
+        static_assert(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value(),
+                      "DepthMax is at most validity::nesting_depth_limit.");
         std::array<std::uint64_t, DepthMax + 2> left;
         std::size_t level = 0;
         left[0] = 1;
@@ -111,7 +112,7 @@ class well_formedness
     }
 
     template <std::size_t DepthMax>
-        requires(DepthMax <= 1024)
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<std::size_t, error> item_end(std::string_view encoded);
 
     friend class decoding;
@@ -134,7 +135,7 @@ class well_formedness
 };
 
 template <std::size_t DepthMax>
-    requires(DepthMax <= 1024)
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<std::size_t, error> item_end(std::string_view const encoded)
 {
     heads::decoder d{encoded};

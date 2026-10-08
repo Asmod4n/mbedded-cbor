@@ -15,7 +15,6 @@
 
 #include "binding.hpp"
 #include "error.hpp"
-#include "head.hpp"
 
 namespace cbor
 {
@@ -26,7 +25,28 @@ struct lazy;
 
 class validity
 {
+    enum class simple_float_information : std::uint8_t {
+        simple_value_follows = 24,
+        half_precision_float,
+        single_precision_float,
+        double_precision_float,
+        break_stop_code = 31
+    };
+
+    static constexpr std::uint8_t simple_value_one_byte_min = 32;
+
 public:
+    static constexpr std::size_t nesting_depth_limit = 1024;
+
+    static constexpr std::size_t nesting_depth_default = 128;
+
+    static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth, std::size_t const depth_max)
+    {
+        if (depth > depth_max) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
+        return {};
+    }
+
     [[noreturn]] static void throw_logic_error(char const *const what)
     {
 #if defined(__cpp_exceptions)
@@ -49,13 +69,6 @@ public:
     }
 
 private:
-    static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth, std::size_t const depth_max)
-    {
-        if (depth > depth_max) [[unlikely]]
-            return std::unexpected(error::nesting_depth_exceeded);
-        return {};
-    }
-
     static constexpr std::expected<std::size_t, std::errc> checked_add(std::size_t const a, std::size_t const b)
     {
         std::size_t sum;
@@ -88,11 +101,13 @@ private:
 
     static constexpr std::expected<void, error> check_simple_value(std::uint8_t const info, std::uint64_t const argument)
     {
-        if (info == std::to_underlying(heads::simple_float_information::simple_value_follows) &&
-            argument < heads::simple_value_one_byte_min) [[unlikely]]
+        if (info == std::to_underlying(simple_float_information::simple_value_follows) &&
+            argument < simple_value_one_byte_min) [[unlikely]]
             return std::unexpected(error::syntax_error);
         return {};
     }
+
+    friend class heads;
 
     friend class decoding;
 
