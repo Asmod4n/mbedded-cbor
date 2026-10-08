@@ -8,6 +8,7 @@ MIN_TIME=${MIN_TIME:-0.2s}
 docs=${DOCS:-"twitter floats records"}
 arms=${ARMS:-"MB_DECODE LC_DECODE JC_DECODE READ TC_READ JC_READ LC_READ FB_READ FB_READ_V MP_READ MB_PATH MB_AT_PATH TC_PATH JC_PATH FB_PATH FB_PATH_V"}
 compilers=${COMPILERS:-"g++-16 clang++-23"}
+JOBS=4
 flags="-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -Werror"
 export GLIBC_TUNABLES=glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456
 
@@ -28,24 +29,29 @@ compile() {
 
 mkdir -p "$build/bin" "$build/out"
 [ -n "${RUN_ONLY:-}" ] && compilers=""
-pids=""
+running=0
+spawn() {
+	if [ "$running" -ge "$JOBS" ]; then
+		wait -n
+		running=$((running - 1))
+	fi
+	"$@" &
+	running=$((running + 1))
+}
 for cc in $compilers; do
 	for d in $docs; do
 		for a in $arms; do
-			compile "$cc" "$a" "$d" "$build/bin/$cc.$d.$a" &
-			pids="$pids $!"
-			if [ "$(echo $pids | wc -w)" -ge 4 ]; then
-				for p in $pids; do wait "$p"; done
-				pids=""
-			fi
+			spawn compile "$cc" "$a" "$d" "$build/bin/$cc.$d.$a"
 		done
 		for a in ${AA:-}; do
-			compile "$cc" "$a" "$d" "$build/bin/$cc.$d.${a}_AA" &
-			pids="$pids $!"
+			spawn compile "$cc" "$a" "$d" "$build/bin/$cc.$d.${a}_AA"
 		done
 	done
 done
-for p in $pids; do wait "$p"; done
+while [ "$running" -gt 0 ]; do
+	wait -n
+	running=$((running - 1))
+done
 [ -n "${BUILD_ONLY:-}" ] && exit 0
 
 steal() {
