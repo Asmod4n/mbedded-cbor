@@ -729,7 +729,7 @@ class diagnostic_notation
                 ++next;
             if (map) {
                 std::ranges::sort(items);
-                if (std::ranges::adjacent_find(items, {}, &std::pair<std::string, std::string>::first) != items.end()) [[unlikely]]
+                if (!validity::keys_unique(items, &std::pair<std::string, std::string>::first)) [[unlikely]]
                     return std::unexpected(error::duplicate_key);
             }
             if (auto const r = head_append(out, h->major, items.size(), no_indicator); !r) [[unlikely]]

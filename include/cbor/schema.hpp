@@ -136,7 +136,7 @@ class packed
         for (std::meta::info const m : members)
             keys.push_back(key_of(m));
         std::ranges::sort(keys);
-        return std::ranges::adjacent_find(keys) == keys.end();
+        return validity::keys_unique(keys);
     }
 
     static consteval bool annotated(std::meta::info const entity, std::meta::info const type)
@@ -1646,7 +1646,7 @@ consteval bool tags_registered()
         numbers.push_back(*number);
     }
     std::ranges::sort(numbers);
-    return std::ranges::adjacent_find(numbers) == numbers.end();
+    return validity::keys_unique(numbers);
 }
 
 template <class T, class Root>
