@@ -55,8 +55,6 @@ class rfc8949
 
     friend class decoding;
 
-    friend class encoding;
-
     friend class well_formedness;
 
     friend class value_sharing;
@@ -73,22 +71,10 @@ class rfc8949
 
     friend struct lazy;
 
-    template <std::size_t>
-    friend struct lazy_elements;
-
-    template <std::size_t>
-    friend struct lazy_entries;
-
 #ifdef __cpp_impl_reflection
     friend class packed;
 
     friend class generic;
-
-    template <class>
-    friend class schema;
-
-    template <class>
-    friend class databind;
 #endif
 };
 

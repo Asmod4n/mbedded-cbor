@@ -49,7 +49,7 @@ class well_formedness
             --left[level];
             if (auto const r = validity::check_nesting_depth(depth + level, DepthMax); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (d.encoded.size() >= 9) {
+            if (d.encoded.size() >= heads::initial_byte_size + sizeof(std::uint64_t)) {
                 auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                 auto const major = static_cast<major_type>(initial >> 5);
                 std::uint8_t const info = initial & 0x1f;

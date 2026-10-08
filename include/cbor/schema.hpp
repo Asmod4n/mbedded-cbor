@@ -891,7 +891,7 @@ class packed
         constexpr std::size_t fillers = shared_first_of<Root>() - shared_first;
         auto const info = static_cast<unsigned char>(field[1]);
         if (field[0] != reference_tag_byte ||
-            (info & 0xdf) != std::to_underlying(rfc8949::additional_information::one_byte_argument) + 2)
+            (info & 0xdf) != std::to_underlying(rfc8949::additional_information::four_byte_argument))
             [[unlikely]]
             return std::unexpected(error::incorrect_type);
         std::size_t const m = 2 * std::size_t{heads::unsigned_read<std::uint32_t>(field.subspan<2, sizeof(std::uint32_t)>())} + (info >> 5);
@@ -987,9 +987,14 @@ class packed
         constexpr std::size_t least = *least_size;
         if (encoded.size() < least) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (!std::ranges::equal(std::span(encoded).template first<4>(), std::span(prefix).template first<4>()) ||
-            !std::ranges::equal(std::span(encoded).template subspan<8, prefix.size() - 8>(), std::span(prefix).template subspan<8>()) ||
-            static_cast<unsigned char>(encoded[prefix.size()]) != 0x5a) [[unlikely]]
+        if (!std::ranges::equal(std::span(encoded).template first<4>(),
+                                std::span(prefix).template first<4>()) ||
+            !std::ranges::equal(std::span(encoded).template subspan<8, prefix.size() - 8>(),
+                                std::span(prefix).template subspan<8>()) ||
+            encoded[prefix.size()] !=
+                heads::initial_byte(major_type::byte_string,
+                                    std::to_underlying(rfc8949::additional_information::four_byte_argument)))
+            [[unlikely]]
             return std::unexpected(error::incorrect_type);
         std::size_t const length = heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(prefix.size() + 1).template first<4>());
         std::size_t const count = length / 4;
