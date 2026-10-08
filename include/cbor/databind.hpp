@@ -722,9 +722,11 @@ class databind
 {
 public:
     template <std::size_t DepthMax = 128>
+        requires(DepthMax <= 1024)
     static std::expected<owning_ref<T>, error> decode(std::string_view encoded) = delete;
 
     template <std::size_t DepthMax = 128, std::same_as<std::string> Encoded>
+        requires(DepthMax <= 1024)
     static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
     {
         auto owner = std::make_shared<std::string const>(std::move(encoded));
@@ -733,6 +735,7 @@ public:
     }
 
     template <std::size_t DepthMax = 128>
+        requires(DepthMax <= 1024)
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         if (!owner) [[unlikely]]

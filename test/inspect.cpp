@@ -1,6 +1,7 @@
 #include "binding.hpp"
 
 #include <charconv>
+#include <cstddef>
 #include <fstream>
 #include <memory>
 #include <iterator>
@@ -207,4 +208,20 @@ TEST_CASE("inspect: an item that is not well-formed is an error")
     CHECK_EQ(cbor::inspect("\x00\x00"sv).error(), error::syntax_error);
     CHECK_EQ(cbor::inspect<4>("\x81\x81\x81\x81\x81\x00"sv).error(), error::nesting_depth_exceeded);
     CHECK(cbor::inspect<5>("\x81\x81\x81\x81\x81\x00"sv).has_value());
+}
+
+namespace
+{
+
+template <std::size_t DepthMax>
+concept inspect_compiles = requires(std::string_view const s) { cbor::inspect<DepthMax>(s); };
+
+} // namespace
+
+// DepthMax has an upper bound of 1024 on every form that takes it, so no form can be given a depth that overflows the
+// stack.
+TEST_CASE("inspect: DepthMax is at most 1024")
+{
+    CHECK(inspect_compiles<1024>);
+    CHECK_FALSE(inspect_compiles<1025>);
 }

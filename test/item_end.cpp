@@ -1,5 +1,6 @@
 #include "binding.hpp"
 
+#include <cstddef>
 #include <string>
 #include <string_view>
 
@@ -41,4 +42,22 @@ TEST_CASE("item_end: malformed and too deep")
     CHECK_EQ(cbor::item_end<16>("\x1c"sv).error(), error::syntax_error);
     CHECK_EQ(cbor::item_end<16>("\xf8\x1f"sv).error(), error::syntax_error);
     CHECK_EQ(cbor::item_end<16>(std::string(17, '\x81') + '\x00').error(), error::nesting_depth_exceeded);
+}
+
+namespace
+{
+
+template <std::size_t DepthMax>
+concept item_end_compiles = requires(std::string_view const s) { cbor::item_end<DepthMax>(s); };
+
+} // namespace
+
+// DepthMax sizes the stack array of the skip, so a large DepthMax would overflow the stack. The bound is 1024: an
+// item nested 1024 deep is read with DepthMax 1024, and DepthMax 1025 does not compile.
+TEST_CASE("item_end: DepthMax is at most 1024")
+{
+    CHECK(item_end_compiles<1024>);
+    CHECK_FALSE(item_end_compiles<1025>);
+    CHECK_EQ(cbor::item_end<1024>(std::string(1024, '\x81') + '\x00').value(), 1025u);
+    CHECK_EQ(cbor::item_end<1024>(std::string(1025, '\x81') + '\x00').error(), error::nesting_depth_exceeded);
 }

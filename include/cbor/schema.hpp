@@ -1924,7 +1924,7 @@ public:
 
 
     template <std::size_t DepthMax = 128>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && DepthMax <= 1024)
     static std::expected<owning_ref<T>, error> decode(std::string_view const encoded)
     {
         auto copy = std::make_shared<std::string const>(encoded);
@@ -1935,7 +1935,7 @@ public:
     }
 
     template <std::size_t DepthMax = 128, std::same_as<std::string> Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && DepthMax <= 1024)
     static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
     {
         auto owner = std::make_shared<std::string const>(std::move(encoded));
@@ -1944,7 +1944,7 @@ public:
     }
 
     template <std::size_t DepthMax = 128>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && DepthMax <= 1024)
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         if (!owner) [[unlikely]]

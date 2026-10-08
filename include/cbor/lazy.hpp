@@ -174,6 +174,7 @@ struct lazy_entries {
 };
 
 template <std::size_t DepthMax>
+    requires(DepthMax <= 1024)
 std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded)
 {
     if (!encoded) [[unlikely]]
@@ -182,12 +183,14 @@ std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &enco
 }
 
 template <std::size_t DepthMax>
+    requires(DepthMax <= 1024)
 std::expected<lazy, error> decode(std::string_view const encoded)
 {
     return decode<DepthMax>(std::make_shared<std::string const>(encoded));
 }
 
 template <std::size_t DepthMax, std::same_as<std::string> Encoded>
+    requires(DepthMax <= 1024)
 std::expected<lazy, error> decode(Encoded &&encoded)
 {
     return decode<DepthMax>(std::make_shared<std::string const>(std::move(encoded)));
@@ -246,6 +249,7 @@ std::expected<lazy, error> value_sharing::key_find(resolved const &found, Match 
 }
 
 template <std::size_t DepthMax>
+    requires(DepthMax <= 1024)
 std::expected<lazy, error> lazy::at(std::string_view const key) const
 {
     auto const found = value_sharing::container_resolve(top_level, offset);
@@ -264,6 +268,7 @@ std::expected<lazy, error> lazy::at(std::string_view const key) const
 }
 
 template <std::size_t DepthMax>
+    requires(DepthMax <= 1024)
 std::expected<lazy, error> lazy::at(std::int64_t const index) const
 {
     auto const found = value_sharing::container_resolve(top_level, offset);
@@ -389,6 +394,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
     }
 }
 template <std::size_t DepthMax>
+    requires(DepthMax <= 1024)
 std::expected<lazy_elements<DepthMax>, error> lazy::elements() const
 {
     auto const found = value_sharing::container_resolve(top_level, offset);
@@ -400,6 +406,7 @@ std::expected<lazy_elements<DepthMax>, error> lazy::elements() const
     return lazy_elements<DepthMax>{source, source->encoded.size() - d.encoded.size(), h.argument};
 }
 template <std::size_t DepthMax>
+    requires(DepthMax <= 1024)
 std::expected<lazy_entries<DepthMax>, error> lazy::entries() const
 {
     auto const found = value_sharing::container_resolve(top_level, offset);
@@ -516,6 +523,7 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
 }
 
 template <std::size_t DepthMax>
+    requires(DepthMax <= 1024)
 std::expected<std::reference_wrapper<item const>, error> lazy::decode() const &
 {
     auto const built = value_sharing::item_decode<DepthMax>(*top_level, offset, 0);
@@ -525,6 +533,7 @@ std::expected<std::reference_wrapper<item const>, error> lazy::decode() const &
 }
 
 template <std::size_t DepthMax, class Binding>
+    requires(DepthMax <= 1024)
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {
     decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size())};
