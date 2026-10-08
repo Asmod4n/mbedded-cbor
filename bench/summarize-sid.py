@@ -73,8 +73,7 @@ print(json.dumps({
     "resolved_march": run("g++-16", "-march=native", "-Q", "--help=target").split("-march=", 1)[1].split()[0],
     "compilers": [run("g++-16", "--version").splitlines()[0], run("clang++-23", "--version").splitlines()[0]],
     "packages": packages.splitlines(),
-    "ldd_sample": {os.path.basename(p): run("ldd", p) for p in sample if p.endswith((".TC_READ", ".JC_READ", ".LC_READ", ".FB_READ", ".READ"))
-                   and "g++" in p and ".twitter." in p},
+    "ldd_sample": {os.path.basename(p): run("ldd", p) for p in sample if "g++" in p and ".twitter." in p},
     "libc": run("ldd", "--version").splitlines()[0],
     "kernel": platform.release(),
     "scheduler": read("/sys/kernel/sched_ext/state") or "CFS/EEVDF (no sched_ext state)",
