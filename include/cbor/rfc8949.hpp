@@ -46,7 +46,8 @@ class rfc8949
         negative_bignum = 3,
         encoded_cbor_data_item = 24,
         shareable = 28,
-        sharedref = 29
+        sharedref = 29,
+        self_described_cbor = 55799
     };
 
     friend class validity;

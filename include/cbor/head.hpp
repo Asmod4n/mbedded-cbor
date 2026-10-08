@@ -9,6 +9,7 @@
 #include <expected>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -484,6 +485,15 @@ class heads
         return raw_head{major, info, argument, at + 1 + size};
     }
 
+    static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
+    {
+        auto const h = raw_head_read(encoded, 0);
+        if (h && h->major == major_type::tag &&
+            h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))
+            return std::string_view(std::span(encoded).subspan(h->at));
+        return encoded;
+    }
+
     static constexpr bool break_at(std::string_view const encoded, std::size_t const at)
     {
         return at < encoded.size() &&
@@ -523,6 +533,10 @@ class heads
     template <std::size_t DepthMax>
         requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<std::size_t, error> item_end(std::string_view encoded);
+
+    template <std::size_t DepthMax>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
 
     template <std::size_t DepthMax>
         requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())

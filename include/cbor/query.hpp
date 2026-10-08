@@ -888,12 +888,15 @@ class jsonpath
             return c;
         }();
         query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys)};
-        auto const walked = query_walk<DepthMax, T>(v, top, encoded);
+        std::string_view const content = heads::self_described_cbor_content(encoded);
+        auto const walked = query_walk<DepthMax, T>(v, top, content);
         if (walked) [[likely]]
             return *walked;
         return query_walk<DepthMax, T>(
             v, top,
-            lazy{std::make_shared<value_sharing::top_level_item>(std::shared_ptr<void const>{}, encoded, std::vector<lazy>{}, 0), 0});
+            lazy{std::make_shared<value_sharing::top_level_item>(std::shared_ptr<void const>{}, content,
+                                                                 std::vector<lazy>{}, 0),
+                 0});
     }
 
     template <fixed_string Path, std::size_t DepthMax, class T>
