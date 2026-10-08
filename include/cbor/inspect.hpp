@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <ranges>
@@ -951,7 +952,8 @@ class diagnostic_notation
     }
 
     template <std::size_t DepthMax>
-    static std::expected<void, error> diagnostic_write(std::string &out, heads::decoder &d, std::size_t const depth)
+    static std::expected<void, error> diagnostic_write(std::string &out, heads::decoder &d, std::string_view const encoded,
+                                                       std::vector<std::size_t> &marks, std::size_t const depth)
     {
         if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -996,7 +998,7 @@ class diagnostic_notation
                             .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
-                if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                if (auto const r = diagnostic_write<DepthMax>(out, d, encoded, marks, depth + 1); !r) [[unlikely]]
                     return r;
             }
             out += ")";
@@ -1012,11 +1014,11 @@ class diagnostic_notation
             for (std::uint64_t i = 0; indefinite ? !break_found(d) : i < h->argument; ++i) {
                 if (i != 0)
                     out += ", ";
-                if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                if (auto const r = diagnostic_write<DepthMax>(out, d, encoded, marks, depth + 1); !r) [[unlikely]]
                     return r;
                 if (map) {
                     out += ": ";
-                    if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                    if (auto const r = diagnostic_write<DepthMax>(out, d, encoded, marks, depth + 1); !r) [[unlikely]]
                         return r;
                 }
             }
@@ -1024,19 +1026,15 @@ class diagnostic_notation
             return {};
         }
         case major_type::tag: {
-            heads::decoder content_decoder = d;
-            auto c = content_decoder.head_decode();
-            while (c && c->major == major_type::tag &&
-                   c->argument == std::to_underlying(rfc8949::tag_number::shareable))
-                c = content_decoder.head_decode();
-            if (!c) [[unlikely]]
-                return std::unexpected(c.error());
-            if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
-                if (error const e = validity::check_tag_content(h->argument, c->major, c->info).error_or(error{});
-                    e != error{}) [[unlikely]]
-                    return std::unexpected(e);
+            std::size_t const content_at = encoded.size() - d.encoded.size();
+            if (error const e =
+                    validity::check_tag_content(h->argument, encoded, content_at, marks, std::identity{}).error_or(error{});
+                e != error{}) [[unlikely]]
+                return std::unexpected(e);
+            if (h->argument == std::to_underlying(rfc8949::tag_number::shareable))
+                marks.push_back(content_at);
             out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument) + "(";
-            if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+            if (auto const r = diagnostic_write<DepthMax>(out, d, encoded, marks, depth + 1); !r) [[unlikely]]
                 return r;
             out += ")";
             return {};
@@ -1089,7 +1087,8 @@ std::expected<std::string, error> inspect(std::string_view const encoded)
 {
     heads::decoder d{encoded};
     std::string out;
-    if (auto const r = diagnostic_notation::diagnostic_write<DepthMax>(out, d, 0); !r) [[unlikely]]
+    std::vector<std::size_t> marks;
+    if (auto const r = diagnostic_notation::diagnostic_write<DepthMax>(out, d, encoded, marks, 0); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (!d.encoded.empty()) [[unlikely]]
         return std::unexpected(error::syntax_error);

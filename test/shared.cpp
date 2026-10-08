@@ -138,10 +138,11 @@ TEST_CASE("tag 28/29: two groups keep their own index")
     CHECK_FALSE(same(element(r, 0), element(r, 1)));
 }
 
-// Only an array or a map exists before its content; any other value does not.
+// Only an array or a map exists before its content; any other value does not. Tag 6 takes every content, so
+// the check of the tag content (RFC 8949 3.4.1, 3.4.2) does not answer first.
 TEST_CASE("tag 29: a reference to a mark that is not complete")
 {
-    CHECK_EQ(ref_decode_error("\xd8\x1c\xc1\xd8\x1d\x00"sv), error::sharedref_not_complete);
+    CHECK_EQ(ref_decode_error("\xd8\x1c\xc6\xd8\x1d\x00"sv), error::sharedref_not_complete);
 }
 
 // value-sharing: a cyclic data structure needs a reference to a value before it is completely decoded. A binding

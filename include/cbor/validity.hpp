@@ -13,6 +13,7 @@
 #if defined(__cpp_exceptions)
 #include <stdexcept>
 #endif
+#include <string_view>
 #include <system_error>
 #include <utility>
 #if __has_include(<stdckdint.h>)
@@ -161,6 +162,11 @@ public:
     template <std::size_t DepthMax, class Message>
     static std::expected<void, error> check_keys_unique(Message &message, std::size_t first_key,
                                                         std::uint64_t count, std::size_t depth);
+
+    template <class Marks, class Projection>
+    static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
+                                                        std::size_t content_at, Marks const &marks,
+                                                        Projection offset_of);
 
     static constexpr error writer_error(std::errc const e) noexcept
     {

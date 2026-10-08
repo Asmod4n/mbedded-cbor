@@ -565,4 +565,37 @@ class heads
 #endif
 };
 
+template <class Marks, class Projection>
+std::expected<void, error> validity::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
+                                                       std::size_t const content_at, Marks const &marks,
+                                                       Projection const offset_of)
+{
+    std::size_t at = content_at;
+    for (;;) {
+        heads::decoder d{std::string_view(std::span(encoded).subspan(at))};
+        auto const c = d.head_decode();
+        if (!c) [[unlikely]]
+            return std::unexpected(c.error());
+        if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
+            at = encoded.size() - d.encoded.size();
+            continue;
+        }
+        if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
+            return check_tag_content(tag, c->major, c->info);
+        auto const n = d.head_decode();
+        if (!n) [[unlikely]]
+            return std::unexpected(n.error());
+        if (error const e = check_tag_content(c->argument, n->major, n->info).error_or(error{}); e != error{})
+            [[unlikely]]
+            return std::unexpected(e);
+        auto const index = check_sharedref_index(n->argument, std::ranges::size(marks));
+        if (!index) [[unlikely]]
+            return std::unexpected(index.error());
+        std::size_t const marked = std::invoke(offset_of, marks[*index]);
+        if (marked >= at) [[unlikely]]
+            return std::unexpected(error::sharedref_not_complete);
+        at = marked;
+    }
+}
+
 }

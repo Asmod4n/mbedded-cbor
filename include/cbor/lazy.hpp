@@ -528,8 +528,8 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
             node->content = lazy{{}, at};
             return std::unexpected(content.error());
         }
-        if (error const c = validity::check_tag_content(h->argument, content->first->major_type,
-                                                        content->first->additional_information)
+        if (error const c = validity::check_tag_content(h->argument, top_level.encoded, h->at,
+                                                        top_level.sharedrefs, &lazy::offset)
                                 .error_or(error{});
             c != error{}) [[unlikely]] {
             node->content = lazy{{}, at};
