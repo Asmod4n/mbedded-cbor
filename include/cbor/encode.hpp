@@ -170,7 +170,9 @@ struct encoder {
         }
     }
 
-    std::expected<void, std::errc> item_write(std::array<char, 9> const &item, std::size_t const size)
+    std::expected<void, std::errc>
+    item_write(std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> const &item,
+               std::size_t const size)
     {
         if (block.size() - used < item.size()) [[unlikely]] {
             if constexpr (direct) {
@@ -193,10 +195,10 @@ struct encoder {
         std::size_t const bytes = heads::argument_size(info);
         std::uint64_t const big = std::byteswap(argument << ((64 - 8 * bytes) & 63));
         if constexpr (!direct) {
-            if (block.size() - used < 9) [[unlikely]]
+            if (block.size() - used < heads::initial_byte_size + sizeof(std::uint64_t)) [[unlikely]]
                 if (auto const r = flush(); !r) [[unlikely]]
                     return r;
-            std::array<char, 9> head;
+            std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> head;
             static_assert(std::tuple_size_v<decltype(block)> >= std::tuple_size_v<decltype(head)>,
                           "The block must hold one whole head.");
             static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(head)>,
@@ -209,11 +211,13 @@ struct encoder {
         } else {
             std::span<char> const out = block;
             std::size_t const at = used;
-            std::array<char, 9> tail;
+            std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
             static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(tail)>,
                           "A head must hold the initial byte and the eight argument bytes.");
             bool const near_end = out.size() - at < tail.size();
-            std::span<char, 9> const item = near_end ? std::span(tail) : out.subspan(at).template first<9>();
+            std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const item =
+                near_end ? std::span(tail)
+                         : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
             item.front() = heads::initial_byte(major, info);
             std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), item.template subspan<1>().begin());
             if (near_end) [[unlikely]]
@@ -272,7 +276,7 @@ struct encoder {
 
     std::expected<void, std::errc> float_encode(double const value)
     {
-        std::array<char, 9> tail;
+        std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
         if constexpr (!direct)
             static_assert(std::tuple_size_v<decltype(block)> >= std::tuple_size_v<decltype(tail)>,
                           "The block must hold one whole float.");
@@ -285,8 +289,10 @@ struct encoder {
                     return r;
         std::span<char> const out = block;
         std::size_t const at = used;
-        std::span<char, 9> const item =
-            direct && near_end ? std::span(tail) : out.subspan(at).template first<9>();
+        std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const item =
+            direct && near_end
+                ? std::span(tail)
+                : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
         std::size_t size;
         switch (heads::preferred_float_info(value)) {
         case rfc8949::simple_float_information::half_precision_float: {
@@ -295,7 +301,7 @@ struct encoder {
                 std::to_underlying(rfc8949::simple_float_information::half_precision_float));
             auto const v = std::byteswap(heads::float_encode_binary16(static_cast<float>(value)));
             std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
-            size = 3;
+            size = heads::initial_byte_size + sizeof v;
         } break;
         case rfc8949::simple_float_information::single_precision_float: {
             item.front() = heads::initial_byte(
@@ -303,7 +309,7 @@ struct encoder {
                 std::to_underlying(rfc8949::simple_float_information::single_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
             std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
-            size = 5;
+            size = heads::initial_byte_size + sizeof v;
         } break;
         default: {
             item.front() = heads::initial_byte(
@@ -311,7 +317,7 @@ struct encoder {
                 std::to_underlying(rfc8949::simple_float_information::double_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint64_t>(value));
             std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
-            size = 9;
+            size = heads::initial_byte_size + sizeof v;
         } break;
         }
         if constexpr (direct)

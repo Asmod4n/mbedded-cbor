@@ -327,4 +327,5 @@ public:
     friend class databind;
 #endif
 };
+
 }

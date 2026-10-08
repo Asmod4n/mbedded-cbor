@@ -405,15 +405,32 @@ class heads
 
     static constexpr float_key float_key_of(std::uint8_t const info, std::uint64_t const argument)
     {
+        constexpr precision h = half_precision;
+        constexpr precision f = single_precision;
+        constexpr precision d = double_precision;
         double const value = float_decode(info, argument);
         if (info == std::to_underlying(rfc8949::simple_float_information::half_precision_float))
-            return {(argument >> 10 & 0x1f) == 0x1f && (argument & 0x3ff) != 0,
-                    (argument >> 15) << 63 | (argument & 0x3ff) << 42, value};
+            return {(argument >> h.significand_bits & h.exponent_max) == h.exponent_max &&
+                        (argument & ((std::uint64_t{1} << h.significand_bits) - 1u)) != 0,
+                    (argument >> (h.significand_bits + std::bit_width(h.exponent_max)))
+                            << (d.significand_bits + std::bit_width(d.exponent_max)) |
+                        (argument & ((std::uint64_t{1} << h.significand_bits) - 1u))
+                            << (d.significand_bits - h.significand_bits),
+                    value};
         if (info == std::to_underlying(rfc8949::simple_float_information::single_precision_float))
-            return {(argument >> 23 & 0xff) == 0xff && (argument & 0x7fffff) != 0,
-                    (argument >> 31) << 63 | (argument & 0x7fffff) << 29, value};
-        return {(argument >> 52 & 0x7ff) == 0x7ff && (argument & 0xfffffffffffff) != 0,
-                (argument >> 63) << 63 | (argument & 0xfffffffffffff), value};
+            return {(argument >> f.significand_bits & f.exponent_max) == f.exponent_max &&
+                        (argument & ((std::uint64_t{1} << f.significand_bits) - 1u)) != 0,
+                    (argument >> (f.significand_bits + std::bit_width(f.exponent_max)))
+                            << (d.significand_bits + std::bit_width(d.exponent_max)) |
+                        (argument & ((std::uint64_t{1} << f.significand_bits) - 1u))
+                            << (d.significand_bits - f.significand_bits),
+                    value};
+        return {(argument >> d.significand_bits & d.exponent_max) == d.exponent_max &&
+                    (argument & ((std::uint64_t{1} << d.significand_bits) - 1u)) != 0,
+                (argument >> (d.significand_bits + std::bit_width(d.exponent_max)))
+                        << (d.significand_bits + std::bit_width(d.exponent_max)) |
+                    (argument & ((std::uint64_t{1} << d.significand_bits) - 1u)),
+                value};
     }
 
     static constexpr bool is_boolean(head const &h)
@@ -460,7 +477,10 @@ class heads
 
     static constexpr bool break_at(std::string_view const encoded, std::size_t const at)
     {
-        return at < encoded.size() && static_cast<std::uint8_t>(encoded[at]) == 0xff;
+        return at < encoded.size() &&
+               encoded[at] ==
+                   initial_byte(major_type::simple_float,
+                                std::to_underlying(rfc8949::simple_float_information::break_stop_code));
     }
 
     friend class decoding;
@@ -513,4 +533,5 @@ class heads
     friend class databind;
 #endif
 };
+
 }
