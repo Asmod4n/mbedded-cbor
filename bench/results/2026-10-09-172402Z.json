@@ -1,0 +1,1173 @@
+{
+ "context": {
+  "stamp": "2026-10-09-172402Z",
+  "operation": "item_size (HEAD) or item_end<nesting_depth_default = 128> (e7636d9) on one CBOR array of 20000 maps, 1200003 bytes; each map has 4 pairs: id (uint32), name (text 21), score (float64), tags (array of 3)",
+  "commit": "16ad3b1 (clean) against e7636d9",
+  "base": "e7636d9",
+  "head": "16ad3b1",
+  "aa": "16ad3b1 include built twice, two binaries (head, head2)",
+  "march_resolved": "sapphirerapids",
+  "kernel": "6.18.44-fc-v80",
+  "scheduler": "EEVDF (Linux 6.18)",
+  "vm": "Firecracker, 4 vcpus",
+  "container": "podman 4.9.3, --network none, --cap-add SYS_NICE",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "l3": "266240K",
+  "cpu_flags_sha256": "39a8dd34f3afdd3862e81b993fb5c5915e50fcc574062958b655b40b631b8663",
+  "threads": 1,
+  "rounds": 10,
+  "order": "shuf per round",
+  "min_time": "0.2s",
+  "pinned": false,
+  "user": "uid 1000 (setpriv from container root)",
+  "unit": "ns real time per call (results), us (summary)",
+  "cold": "each call reads the next of 455 copies (twice the L3)",
+  "gate": "before each image: podman ps empty and 1-minute load below 1.5",
+  "builds": "in their own container before the runs, at most four at a time",
+  "cachegrind": "image mbedded-cbor-tw-vg (g++-16 16.2.0, clang 23.1.2, valgrind-3.27.1), same flags plus -DCOUNT_ONLY (no Google Benchmark), --cache-sim=no; Ir per call = (Ir of 11 calls - Ir of 1 call) / 10 on one warm copy. Not run in sid: the image has no valgrind."
+ },
+ "images": {
+  "tw": {
+   "image": "mbedded-cbor-tw-gb",
+   "os": "openSUSE Tumbleweed, glibc 2.44",
+   "compilers": "g++-16 (SUSE Linux) 16.2.0; clang version 23.1.2",
+   "cxx_library": "libstdc++.so.6 (both compilers)",
+   "c_library": "libc.so.6",
+   "benchmark": "libbenchmark.so.1.9.1",
+   "priority": "uid=1000 nice=-10",
+   "loadavg_start": "1.35 2.38 2.46 1/108 14830",
+   "loadavg_end": "1.35 2.23 2.41 1/109 15225",
+   "podman_ps_start": "empty",
+   "steal_percent": 0.017,
+   "flags": "-std=c++23 -O2 -march=native -fPIE -pie -DNDEBUG -Wall -Wextra -Werror",
+   "elf_type": {
+    "clang++-23.base": "DYN",
+    "clang++-23.head": "DYN",
+    "clang++-23.head2": "DYN",
+    "g++-16.base": "DYN",
+    "g++-16.head": "DYN",
+    "g++-16.head2": "DYN"
+   },
+   "needed": "[libbenchmark.so.1] [libstdc++.so.6] [libm.so.6] [libgcc_s.so.1] [libc.so.6]"
+  },
+  "sid": {
+   "image": "mbedded-cbor-sid-gb",
+   "os": "Debian forky/sid, glibc 2.43",
+   "compilers": "g++-16 (Debian 16.2.0-3) 16.2.0; Debian clang version 23.1.2 (1)",
+   "cxx_library": "libstdc++.so.6 (both compilers)",
+   "c_library": "libc.so.6",
+   "benchmark": "libbenchmark.so.1.9.1",
+   "priority": "uid=1000 nice=-10",
+   "loadavg_start": "1.35 2.23 2.41 1/109 15238",
+   "loadavg_end": "1.21 2.07 2.34 1/108 15416",
+   "podman_ps_start": "empty",
+   "steal_percent": 0.017,
+   "flags": "-std=c++23 -O2 -march=native -fPIE -pie -DNDEBUG -Wall -Wextra -Werror",
+   "elf_type": {
+    "clang++-23.base": "DYN",
+    "clang++-23.head": "DYN",
+    "clang++-23.head2": "DYN",
+    "g++-16.base": "DYN",
+    "g++-16.head": "DYN",
+    "g++-16.head2": "DYN"
+   },
+   "needed": "[libbenchmark.so.1.9.1] [libstdc++.so.6] [libm.so.6] [libgcc_s.so.1] [libc.so.6]"
+  }
+ },
+ "summary": [
+  {
+   "image": "tw",
+   "compiler": "g++-16",
+   "median_us": {
+    "base": 765.6,
+    "head": 704.2,
+    "head2": 707.7
+   },
+   "min_max_us": {
+    "base": [
+     743.1,
+     867.3
+    ],
+    "head": [
+     688.5,
+     720.3
+    ],
+    "head2": [
+     691.1,
+     768.3
+    ]
+   },
+   "aa_percent_head2_vs_head": 0.5,
+   "head_vs_base_percent": -8.02
+  },
+  {
+   "image": "tw",
+   "compiler": "clang++-23",
+   "median_us": {
+    "base": 1215.1,
+    "head": 1053.2,
+    "head2": 1033.4
+   },
+   "min_max_us": {
+    "base": [
+     1200.8,
+     1246.7
+    ],
+    "head": [
+     1016.1,
+     1159.0
+    ],
+    "head2": [
+     1018.4,
+     1262.4
+    ]
+   },
+   "aa_percent_head2_vs_head": -1.88,
+   "head_vs_base_percent": -13.33
+  },
+  {
+   "image": "sid",
+   "compiler": "g++-16",
+   "median_us": {
+    "base": 761.7,
+    "head": 706.5,
+    "head2": 715.3
+   },
+   "min_max_us": {
+    "base": [
+     742.2,
+     852.5
+    ],
+    "head": [
+     694.8,
+     726.8
+    ],
+    "head2": [
+     690.5,
+     843.7
+    ]
+   },
+   "aa_percent_head2_vs_head": 1.25,
+   "head_vs_base_percent": -7.25
+  },
+  {
+   "image": "sid",
+   "compiler": "clang++-23",
+   "median_us": {
+    "base": 1199.2,
+    "head": 1065.8,
+    "head2": 1069.9
+   },
+   "min_max_us": {
+    "base": [
+     1184.5,
+     1232.2
+    ],
+    "head": [
+     1057.9,
+     1084.5
+    ],
+    "head2": [
+     1050.6,
+     1119.9
+    ]
+   },
+   "aa_percent_head2_vs_head": 0.39,
+   "head_vs_base_percent": -11.13
+  }
+ ],
+ "cachegrind_tw": {
+  "g++-16.base": {
+   "Ir_total_1_call": 37384329,
+   "Ir_total_11_calls": 141384990,
+   "Ir_per_call": 10400066
+  },
+  "g++-16.head": {
+   "Ir_total_1_call": 36104297,
+   "Ir_total_11_calls": 133704798,
+   "Ir_per_call": 9760050
+  },
+  "g++-16.head2": {
+   "Ir_total_1_call": 36104297,
+   "Ir_total_11_calls": 133704798,
+   "Ir_per_call": 9760050
+  },
+  "clang++-23.base": {
+   "Ir_total_1_call": 40882848,
+   "Ir_total_11_calls": 155883199,
+   "Ir_per_call": 11500035
+  },
+  "clang++-23.head": {
+   "Ir_total_1_call": 39282836,
+   "Ir_total_11_calls": 146283127,
+   "Ir_per_call": 10700029
+  },
+  "clang++-23.head2": {
+   "Ir_total_1_call": 39282836,
+   "Ir_total_11_calls": 146283127,
+   "Ir_per_call": 10700029
+  }
+ },
+ "results": [
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 1,
+   "real_time_ns": 1222428.965517424,
+   "cpu_time_ns": 1222238.2887931038,
+   "iterations": 232
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 1,
+   "real_time_ns": 1066671.1044771194,
+   "cpu_time_ns": 1064704.951492537,
+   "iterations": 268
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 1,
+   "real_time_ns": 1030671.4548876601,
+   "cpu_time_ns": 1030626.0037593985,
+   "iterations": 266
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 1,
+   "real_time_ns": 765297.9728260087,
+   "cpu_time_ns": 765284.8858695654,
+   "iterations": 368
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 1,
+   "real_time_ns": 718256.8203757672,
+   "cpu_time_ns": 718198.1581769438,
+   "iterations": 373
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 1,
+   "real_time_ns": 700855.1871795367,
+   "cpu_time_ns": 700841.6128205128,
+   "iterations": 390
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 10,
+   "real_time_ns": 1218634.7831857346,
+   "cpu_time_ns": 1218483.557522124,
+   "iterations": 226
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 10,
+   "real_time_ns": 1068242.2936504676,
+   "cpu_time_ns": 1068176.7341269841,
+   "iterations": 252
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 10,
+   "real_time_ns": 1063926.3231939087,
+   "cpu_time_ns": 1063942.2623574145,
+   "iterations": 263
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 10,
+   "real_time_ns": 780923.6218485702,
+   "cpu_time_ns": 780737.6218487393,
+   "iterations": 357
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 10,
+   "real_time_ns": 701271.7999998586,
+   "cpu_time_ns": 701257.955,
+   "iterations": 400
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 10,
+   "real_time_ns": 737824.5816326222,
+   "cpu_time_ns": 737832.4438775511,
+   "iterations": 392
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 2,
+   "real_time_ns": 1200830.8119655913,
+   "cpu_time_ns": 1200757.5427350427,
+   "iterations": 234
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 2,
+   "real_time_ns": 1039665.4349437741,
+   "cpu_time_ns": 1039464.4052044612,
+   "iterations": 269
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 2,
+   "real_time_ns": 1025353.7472524194,
+   "cpu_time_ns": 1025321.7985347986,
+   "iterations": 273
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 2,
+   "real_time_ns": 765940.3494623499,
+   "cpu_time_ns": 765815.1639784946,
+   "iterations": 372
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 2,
+   "real_time_ns": 699588.6384617897,
+   "cpu_time_ns": 699500.4871794874,
+   "iterations": 390
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 2,
+   "real_time_ns": 722351.6892953652,
+   "cpu_time_ns": 722332.4595300261,
+   "iterations": 383
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 3,
+   "real_time_ns": 1246716.1315791935,
+   "cpu_time_ns": 1246639.2192982456,
+   "iterations": 228
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 3,
+   "real_time_ns": 1158952.9529409641,
+   "cpu_time_ns": 1158672.792156863,
+   "iterations": 255
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 3,
+   "real_time_ns": 1262422.3146067108,
+   "cpu_time_ns": 1262382.254681648,
+   "iterations": 267
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 3,
+   "real_time_ns": 852376.2465750361,
+   "cpu_time_ns": 851711.2602739726,
+   "iterations": 365
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 3,
+   "real_time_ns": 703215.8753179171,
+   "cpu_time_ns": 702976.2111959287,
+   "iterations": 393
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 3,
+   "real_time_ns": 768341.0816328581,
+   "cpu_time_ns": 768125.5663265307,
+   "iterations": 392
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 4,
+   "real_time_ns": 1201817.431193176,
+   "cpu_time_ns": 1201534.2018348626,
+   "iterations": 218
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 4,
+   "real_time_ns": 1035179.4253726589,
+   "cpu_time_ns": 1035107.0,
+   "iterations": 268
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 4,
+   "real_time_ns": 1036087.0855017942,
+   "cpu_time_ns": 1036099.940520446,
+   "iterations": 269
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 4,
+   "real_time_ns": 779160.3826814158,
+   "cpu_time_ns": 779118.2653631283,
+   "iterations": 358
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 4,
+   "real_time_ns": 720275.7087625709,
+   "cpu_time_ns": 720056.5721649486,
+   "iterations": 388
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 4,
+   "real_time_ns": 697753.9117645161,
+   "cpu_time_ns": 697742.5392156863,
+   "iterations": 408
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 5,
+   "real_time_ns": 1204584.0786030206,
+   "cpu_time_ns": 1204495.8427947604,
+   "iterations": 229
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 5,
+   "real_time_ns": 1034511.3099636807,
+   "cpu_time_ns": 1034523.036900369,
+   "iterations": 271
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 5,
+   "real_time_ns": 1018414.029411307,
+   "cpu_time_ns": 1018345.132352941,
+   "iterations": 272
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 5,
+   "real_time_ns": 743145.4426232748,
+   "cpu_time_ns": 743098.1038251368,
+   "iterations": 366
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 5,
+   "real_time_ns": 717107.8277632283,
+   "cpu_time_ns": 717036.233933162,
+   "iterations": 389
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 5,
+   "real_time_ns": 705826.3156568961,
+   "cpu_time_ns": 705772.5227272727,
+   "iterations": 396
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 6,
+   "real_time_ns": 1204348.7844825198,
+   "cpu_time_ns": 1204061.8146551726,
+   "iterations": 232
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 6,
+   "real_time_ns": 1061822.600746185,
+   "cpu_time_ns": 1061837.7537313432,
+   "iterations": 268
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 6,
+   "real_time_ns": 1057830.1818187893,
+   "cpu_time_ns": 1057788.6515151516,
+   "iterations": 264
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 6,
+   "real_time_ns": 757755.7014494654,
+   "cpu_time_ns": 757640.7188405799,
+   "iterations": 345
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 6,
+   "real_time_ns": 708904.274405826,
+   "cpu_time_ns": 708659.2532981532,
+   "iterations": 379
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 6,
+   "real_time_ns": 691109.284946134,
+   "cpu_time_ns": 691050.680107527,
+   "iterations": 372
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 7,
+   "real_time_ns": 1226803.8831162022,
+   "cpu_time_ns": 1226643.4935064937,
+   "iterations": 231
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 7,
+   "real_time_ns": 1077119.5038764498,
+   "cpu_time_ns": 1077019.11627907,
+   "iterations": 258
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 7,
+   "real_time_ns": 1039028.7777782861,
+   "cpu_time_ns": 1038949.0037037038,
+   "iterations": 270
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 7,
+   "real_time_ns": 762195.8186812482,
+   "cpu_time_ns": 762085.4642857144,
+   "iterations": 364
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 7,
+   "real_time_ns": 688540.6040610546,
+   "cpu_time_ns": 688472.314720812,
+   "iterations": 394
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 7,
+   "real_time_ns": 708288.9822333924,
+   "cpu_time_ns": 708276.5050761421,
+   "iterations": 394
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 8,
+   "real_time_ns": 1219878.2987015324,
+   "cpu_time_ns": 1219760.5324675322,
+   "iterations": 231
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 8,
+   "real_time_ns": 1016120.7022053652,
+   "cpu_time_ns": 1016093.8492647059,
+   "iterations": 272
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 8,
+   "real_time_ns": 1025485.8259258982,
+   "cpu_time_ns": 1025461.1629629628,
+   "iterations": 270
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 8,
+   "real_time_ns": 758410.1878451569,
+   "cpu_time_ns": 758317.8591160222,
+   "iterations": 362
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 8,
+   "real_time_ns": 694713.8193067581,
+   "cpu_time_ns": 694608.4826732674,
+   "iterations": 404
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 8,
+   "real_time_ns": 734258.064039302,
+   "cpu_time_ns": 734185.2857142857,
+   "iterations": 406
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.base",
+   "repetition": 9,
+   "real_time_ns": 1211614.8078610613,
+   "cpu_time_ns": 1211506.5414847163,
+   "iterations": 229
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head",
+   "repetition": 9,
+   "real_time_ns": 1044489.7241373921,
+   "cpu_time_ns": 1044042.5134099617,
+   "iterations": 261
+  },
+  {
+   "image": "tw",
+   "binary": "clang++-23.head2",
+   "repetition": 9,
+   "real_time_ns": 1030537.1291515359,
+   "cpu_time_ns": 1030508.1143911441,
+   "iterations": 271
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.base",
+   "repetition": 9,
+   "real_time_ns": 867284.8993902201,
+   "cpu_time_ns": 867212.8323170734,
+   "iterations": 328
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head",
+   "repetition": 9,
+   "real_time_ns": 705142.373433495,
+   "cpu_time_ns": 705083.320802005,
+   "iterations": 399
+  },
+  {
+   "image": "tw",
+   "binary": "g++-16.head2",
+   "repetition": 9,
+   "real_time_ns": 707113.5138537998,
+   "cpu_time_ns": 706984.1738035263,
+   "iterations": 397
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 1,
+   "real_time_ns": 1232168.1731601998,
+   "cpu_time_ns": 1231921.12987013,
+   "iterations": 231
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 1,
+   "real_time_ns": 1065626.9461535956,
+   "cpu_time_ns": 1065639.0692307693,
+   "iterations": 260
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 1,
+   "real_time_ns": 1065771.2596898712,
+   "cpu_time_ns": 1065705.7093023253,
+   "iterations": 258
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 1,
+   "real_time_ns": 773106.8746664581,
+   "cpu_time_ns": 772974.3440000002,
+   "iterations": 375
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 1,
+   "real_time_ns": 708589.2463415004,
+   "cpu_time_ns": 708340.9414634146,
+   "iterations": 410
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 1,
+   "real_time_ns": 721328.9373437663,
+   "cpu_time_ns": 721313.2005012531,
+   "iterations": 399
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 10,
+   "real_time_ns": 1223632.230769512,
+   "cpu_time_ns": 1223568.713675214,
+   "iterations": 234
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 10,
+   "real_time_ns": 1084468.9206345764,
+   "cpu_time_ns": 1084548.1428571432,
+   "iterations": 252
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 10,
+   "real_time_ns": 1084743.4581677248,
+   "cpu_time_ns": 1084538.2788844623,
+   "iterations": 251
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 10,
+   "real_time_ns": 761114.1591512243,
+   "cpu_time_ns": 761030.3527851459,
+   "iterations": 377
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 10,
+   "real_time_ns": 702677.256997498,
+   "cpu_time_ns": 702688.0788804073,
+   "iterations": 393
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 10,
+   "real_time_ns": 710172.4207652664,
+   "cpu_time_ns": 710006.5819672131,
+   "iterations": 366
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 2,
+   "real_time_ns": 1199926.5213682102,
+   "cpu_time_ns": 1198880.277777778,
+   "iterations": 234
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 2,
+   "real_time_ns": 1074322.9921876818,
+   "cpu_time_ns": 1074300.3906249998,
+   "iterations": 256
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 2,
+   "real_time_ns": 1074584.1621623444,
+   "cpu_time_ns": 1074600.2084942085,
+   "iterations": 259
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 2,
+   "real_time_ns": 766024.267441713,
+   "cpu_time_ns": 765663.0552325582,
+   "iterations": 344
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 2,
+   "real_time_ns": 696836.7146530332,
+   "cpu_time_ns": 696712.4010282776,
+   "iterations": 389
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 2,
+   "real_time_ns": 691289.7513511534,
+   "cpu_time_ns": 691081.0081081081,
+   "iterations": 370
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 3,
+   "real_time_ns": 1184967.3262714779,
+   "cpu_time_ns": 1184518.1016949154,
+   "iterations": 236
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 3,
+   "real_time_ns": 1057877.0783579908,
+   "cpu_time_ns": 1057544.2164179105,
+   "iterations": 268
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 3,
+   "real_time_ns": 1068027.9622638922,
+   "cpu_time_ns": 1067732.758490566,
+   "iterations": 265
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 3,
+   "real_time_ns": 760239.4148936118,
+   "cpu_time_ns": 760216.625,
+   "iterations": 376
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 3,
+   "real_time_ns": 695741.4224996228,
+   "cpu_time_ns": 695751.2950000002,
+   "iterations": 400
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 3,
+   "real_time_ns": 713733.8719209358,
+   "cpu_time_ns": 713465.8128078817,
+   "iterations": 406
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 4,
+   "real_time_ns": 1184486.8050845542,
+   "cpu_time_ns": 1184498.771186441,
+   "iterations": 236
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 4,
+   "real_time_ns": 1063977.7538463373,
+   "cpu_time_ns": 1063802.173076923,
+   "iterations": 260
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 4,
+   "real_time_ns": 1062591.7471693442,
+   "cpu_time_ns": 1062513.4264150944,
+   "iterations": 265
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 4,
+   "real_time_ns": 762381.3798886023,
+   "cpu_time_ns": 762392.8882681566,
+   "iterations": 358
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 4,
+   "real_time_ns": 707841.3836635795,
+   "cpu_time_ns": 707608.6361386139,
+   "iterations": 404
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 4,
+   "real_time_ns": 716952.4607331763,
+   "cpu_time_ns": 716930.6387434555,
+   "iterations": 382
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 5,
+   "real_time_ns": 1194322.6462885654,
+   "cpu_time_ns": 1193831.9912663756,
+   "iterations": 229
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 5,
+   "real_time_ns": 1059013.6781603277,
+   "cpu_time_ns": 1058736.521072797,
+   "iterations": 261
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 5,
+   "real_time_ns": 1050646.1842106048,
+   "cpu_time_ns": 1050569.2368421052,
+   "iterations": 266
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 5,
+   "real_time_ns": 766467.5176149256,
+   "cpu_time_ns": 766324.6802168022,
+   "iterations": 369
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 5,
+   "real_time_ns": 707694.727735027,
+   "cpu_time_ns": 707705.5063613233,
+   "iterations": 393
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 5,
+   "real_time_ns": 741246.1432096156,
+   "cpu_time_ns": 740906.7160493828,
+   "iterations": 405
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 6,
+   "real_time_ns": 1198553.3203465086,
+   "cpu_time_ns": 1198522.7445887448,
+   "iterations": 231
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 6,
+   "real_time_ns": 1065932.7832692082,
+   "cpu_time_ns": 1065881.7984790877,
+   "iterations": 263
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 6,
+   "real_time_ns": 1071704.5534356101,
+   "cpu_time_ns": 1071639.114503817,
+   "iterations": 262
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 6,
+   "real_time_ns": 751938.695999949,
+   "cpu_time_ns": 751314.6506666667,
+   "iterations": 375
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 6,
+   "real_time_ns": 717173.7404579144,
+   "cpu_time_ns": 717075.6386768449,
+   "iterations": 393
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 6,
+   "real_time_ns": 690531.5671641874,
+   "cpu_time_ns": 690518.6592039802,
+   "iterations": 402
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 7,
+   "real_time_ns": 1190190.0519477478,
+   "cpu_time_ns": 1190203.588744589,
+   "iterations": 231
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 7,
+   "real_time_ns": 1076924.8378374416,
+   "cpu_time_ns": 1076715.1776061775,
+   "iterations": 259
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 7,
+   "real_time_ns": 1065744.2824426547,
+   "cpu_time_ns": 1065763.56870229,
+   "iterations": 262
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 7,
+   "real_time_ns": 742247.8961751815,
+   "cpu_time_ns": 742084.6448087434,
+   "iterations": 366
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 7,
+   "real_time_ns": 705296.5213027901,
+   "cpu_time_ns": 705111.1077694235,
+   "iterations": 399
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 7,
+   "real_time_ns": 698745.9183166027,
+   "cpu_time_ns": 698755.3663366338,
+   "iterations": 404
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 8,
+   "real_time_ns": 1219333.9170298157,
+   "cpu_time_ns": 1218947.2925764192,
+   "iterations": 229
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 8,
+   "real_time_ns": 1065884.083969712,
+   "cpu_time_ns": 1065330.4618320614,
+   "iterations": 262
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 8,
+   "real_time_ns": 1119914.1415094999,
+   "cpu_time_ns": 1119443.7452830193,
+   "iterations": 212
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 8,
+   "real_time_ns": 852541.9491012079,
+   "cpu_time_ns": 852294.0269461077,
+   "iterations": 334
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 8,
+   "real_time_ns": 694752.6039603457,
+   "cpu_time_ns": 694379.235148515,
+   "iterations": 404
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 8,
+   "real_time_ns": 843664.0387593121,
+   "cpu_time_ns": 843232.6589147288,
+   "iterations": 387
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.base",
+   "repetition": 9,
+   "real_time_ns": 1199819.9871236212,
+   "cpu_time_ns": 1199671.231759657,
+   "iterations": 233
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head",
+   "repetition": 9,
+   "real_time_ns": 1061008.7481202418,
+   "cpu_time_ns": 1060845.7067669176,
+   "iterations": 266
+  },
+  {
+   "image": "sid",
+   "binary": "clang++-23.head2",
+   "repetition": 9,
+   "real_time_ns": 1080638.2117643096,
+   "cpu_time_ns": 1080428.4196078433,
+   "iterations": 255
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.base",
+   "repetition": 9,
+   "real_time_ns": 745637.9383381072,
+   "cpu_time_ns": 745014.710455764,
+   "iterations": 373
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head",
+   "repetition": 9,
+   "real_time_ns": 726804.9271357799,
+   "cpu_time_ns": 726814.4371859296,
+   "iterations": 398
+  },
+  {
+   "image": "sid",
+   "binary": "g++-16.head2",
+   "repetition": 9,
+   "real_time_ns": 729805.892230563,
+   "cpu_time_ns": 729667.5238095237,
+   "iterations": 399
+  }
+ ]
+}
