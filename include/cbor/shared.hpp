@@ -85,19 +85,13 @@ class value_sharing
 #endif
 };
 
-struct lazy_elements {
-    std::shared_ptr<value_sharing::top_level_item> top_level;
-    std::size_t offset;
-    std::uint64_t count;
-
+struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     struct iterator {
+        using iterator_concept = std::forward_iterator_tag;
         using value_type = std::expected<lazy, error>;
         using difference_type = std::ptrdiff_t;
 
-        std::shared_ptr<value_sharing::top_level_item> top_level;
-        std::size_t offset{};
-        std::uint64_t left{};
-        error failure{};
+        iterator() = default;
 
         value_type operator*() const;
 
@@ -116,27 +110,85 @@ struct lazy_elements {
         {
             return left == 0;
         }
+
+    private:
+        iterator(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const l)
+            : top_level(std::move(t)), offset(o), left(l)
+        {
+        }
+
+        std::shared_ptr<value_sharing::top_level_item> top_level;
+        std::size_t offset{};
+        std::uint64_t left{};
+        error failure{};
+
+        friend struct lazy_elements;
     };
 
     iterator begin() const
     {
-        return iterator{top_level, offset, count, error{}};
+        return iterator{top_level, offset, count};
     }
 
     std::default_sentinel_t end() const
     {
         return {};
     }
-};
 
-struct lazy_entries {
+    std::uint64_t size() const
+    {
+        return count;
+    }
+
+    void front() const = delete;
+
+private:
+    lazy_elements(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const c)
+        : top_level(std::move(t)), offset(o), count(c)
+    {
+    }
+
     std::shared_ptr<value_sharing::top_level_item> top_level;
     std::size_t offset;
     std::uint64_t count;
 
+    friend struct lazy;
+};
+
+struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     struct iterator {
+        using iterator_concept = std::forward_iterator_tag;
         using value_type = std::expected<std::pair<lazy, lazy>, error>;
         using difference_type = std::ptrdiff_t;
+
+        iterator() = default;
+
+        value_type operator*() const;
+
+        iterator &operator++();
+
+        iterator operator++(int)
+        {
+            iterator const before = *this;
+            ++*this;
+            return before;
+        }
+
+        bool operator==(iterator const &) const = default;
+
+        bool operator==(std::default_sentinel_t) const
+        {
+            return left == 0;
+        }
+
+    private:
+        iterator(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const k, std::uint64_t const l)
+            : top_level(std::move(t)), key(k), value(k), left(l)
+        {
+            value_find();
+        }
+
+        void value_find();
 
         std::shared_ptr<value_sharing::top_level_item> top_level;
         std::size_t key{};
@@ -144,38 +196,41 @@ struct lazy_entries {
         std::uint64_t left{};
         error failure{};
 
-        void value_find();
+        friend struct lazy_entries;
 
-        value_type operator*() const;
+        friend struct lazy;
 
-        iterator &operator++();
-
-        iterator operator++(int)
-        {
-            iterator const before = *this;
-            ++*this;
-            return before;
-        }
-
-        bool operator==(iterator const &) const = default;
-
-        bool operator==(std::default_sentinel_t) const
-        {
-            return left == 0;
-        }
+        friend class value_sharing;
     };
 
     iterator begin() const
     {
-        iterator first{top_level, offset, offset, count, error{}};
-        first.value_find();
-        return first;
+        return iterator{top_level, offset, count};
     }
 
     std::default_sentinel_t end() const
     {
         return {};
     }
+
+    std::uint64_t size() const
+    {
+        return count;
+    }
+
+    void front() const = delete;
+
+private:
+    lazy_entries(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const c)
+        : top_level(std::move(t)), offset(o), count(c)
+    {
+    }
+
+    std::shared_ptr<value_sharing::top_level_item> top_level;
+    std::size_t offset;
+    std::uint64_t count;
+
+    friend struct lazy;
 };
 
 struct lazy {
@@ -238,6 +293,12 @@ struct lazy {
 };
 
 }
+
+template <>
+inline constexpr bool std::ranges::enable_borrowed_range<cbor::lazy_elements> = true;
+
+template <>
+inline constexpr bool std::ranges::enable_borrowed_range<cbor::lazy_entries> = true;
 
 #include "item.hpp"
 
