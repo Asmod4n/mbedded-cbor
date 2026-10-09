@@ -1279,3 +1279,53 @@ TEST_CASE("lazy: count of a map that is cut off")
     CHECK_EQ(lazy_of("\xa2\x61" "a\x01\x61"s).count("a").error(), error::too_little_data);
     CHECK_EQ(lazy_of("\xa2\x61"s).count("a").error(), error::too_little_data);
 }
+
+// Fault p30: a truncated array or map gave one value more than size(),
+// so ranges::distance and the loop disagreed with size().
+TEST_CASE("lazy: a cut-off array or map yields exactly size() values")
+{
+    CHECK_EQ(lazy_of("\x82\x01"s).elements().error(), error::too_little_data);
+    auto const one = *lazy_of("\xa1\x61\x61"s).entries();
+    CHECK_EQ(std::ranges::distance(one.begin(), one.end()), 1);
+    auto const e = *lazy_of("\x83\x01\x19\x00"s).elements();
+    std::uint64_t n = 0, with_value = 0;
+    for (auto const x : e) {
+        ++n;
+        with_value += x.has_value();
+    }
+    CHECK_EQ(n, e.size());
+    CHECK_EQ(with_value, 2u);
+    CHECK_EQ(static_cast<std::uint64_t>(std::ranges::distance(e)), e.size());
+    auto const m = *lazy_of("\xa2\x61" "a\x01\x61"s).entries();
+    n = 0;
+    with_value = 0;
+    for (auto const x : m) {
+        ++n;
+        with_value += x.has_value();
+    }
+    CHECK_EQ(n, m.size());
+    CHECK_EQ(with_value, 1u);
+    CHECK_EQ(static_cast<std::uint64_t>(std::ranges::distance(m)), m.size());
+}
+
+// Fault p09: a head that claims 2^64-1 elements gave ssize -1 and
+// distance -1, because size() came from the head with no check.
+TEST_CASE("lazy: a head that claims more items than bytes is too little data")
+{
+    CHECK_EQ(lazy_of("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"s).elements().error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s).entries().error(), error::too_little_data);
+    auto const l = lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x61" "a\x01"s);
+    auto it = *l.find("a");
+    REQUIRE(it != std::default_sentinel);
+    CHECK(++it != std::default_sentinel);
+    CHECK_FALSE((*it).has_value());
+    CHECK(std::ranges::distance(it, std::default_sentinel) <= 3);
+}
+
+// The count check of elements() and entries() reads the argument of the
+// head, and an indefinite length has no count, so it is refused first.
+TEST_CASE("lazy: elements and entries refuse indefinite length")
+{
+    CHECK_EQ(lazy_of("\x9f\x01\xff"s).elements().error(), error::indefinite_length);
+    CHECK_EQ(lazy_of("\xbf\x61" "a\x01\xff"s).entries().error(), error::indefinite_length);
+}
