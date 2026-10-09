@@ -65,6 +65,10 @@ class value_sharing
     template <class Iterator>
     static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
 
+    template <class Key, class Entries = lazy_entries>
+        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+    static std::expected<std::size_t, error> key_count(std::expected<typename Entries::iterator, error> found, Key key);
+
     friend class validity;
 
     friend struct lazy;
@@ -253,6 +257,18 @@ struct lazy {
     std::expected<lazy_entries::iterator, error> find(std::string_view key) const;
 
     std::expected<lazy_entries::iterator, error> find(std::int64_t key) const;
+
+    std::expected<bool, error> contains(std::string_view key) const;
+
+    std::expected<bool, error> contains(std::int64_t key) const;
+
+    std::expected<std::size_t, error> count(std::string_view key) const;
+
+    std::expected<std::size_t, error> count(std::int64_t key) const;
+
+    std::expected<std::uint64_t, error> size() const;
+
+    std::expected<bool, error> empty() const;
 
     template <class Last>
         requires(std::same_as<Last, lazy_entries::iterator> || std::same_as<Last, std::default_sentinel_t>)

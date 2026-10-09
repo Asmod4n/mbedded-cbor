@@ -1197,3 +1197,52 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
     CHECK_EQ(*(cbor::at_path<"$[63].b", int>(doc)), 2);
     CHECK_EQ(*lazy_of(doc).at(63)->at("a")->get<std::uint64_t>(), 1u);
 }
+
+// contains and count answer as std::map::contains and std::map::count do, and size and empty as the size and
+// empty of a container. Each comes in std::expected, because the bytes are not checked before the call.
+TEST_CASE("lazy: contains, count, size and empty")
+{
+    cbor::lazy const map = lazy_of(encoded(M("a"s, 1, 2, "b"s)));
+    CHECK(map.contains("a").value());
+    CHECK_FALSE(map.contains("z").value());
+    CHECK(map.contains(std::int64_t{2}).value());
+    CHECK_FALSE(map.contains(std::int64_t{3}).value());
+    CHECK_EQ(map.count("a").value(), 1u);
+    CHECK_EQ(map.count("z").value(), 0u);
+    CHECK_EQ(map.count(std::int64_t{2}).value(), 1u);
+    CHECK_EQ(map.size().value(), 2u);
+    CHECK_FALSE(map.empty().value());
+
+    cbor::lazy const array = lazy_of(encoded(A(1, 2, 3)));
+    CHECK_EQ(array.size().value(), 3u);
+    CHECK_FALSE(array.empty().value());
+    CHECK(lazy_of(encoded(A())).empty().value());
+    CHECK(lazy_of("\xa0"s).empty().value());
+    CHECK_EQ(array.contains("a").error(), error::not_indexable);
+    CHECK_EQ(array.count("a").error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encoded(V(1))).size().error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encoded(V("a"s))).empty().error(), error::not_indexable);
+    CHECK_EQ(lazy_of("\xd8\x1c\x82\x01\x02"s).size().value(), 2u);
+}
+
+// lazy does not reject a map with a repeated key (RFC 8949 5.6 leaves that to the decoder), so count is not
+// limited to 0 or 1: it counts every pair with the key, as std::multimap::count does. contains and find see
+// the first pair.
+TEST_CASE("lazy: count counts every pair of a repeated key")
+{
+    cbor::lazy const twice = lazy_of("\xa3\x61" "a\x01\x61" "b\x02\x61" "a\x03"s);
+    CHECK(twice.entries().has_value());
+    CHECK_EQ(twice.count("a").value(), 2u);
+    CHECK_EQ(twice.count("b").value(), 1u);
+    CHECK(twice.contains("a").value());
+    CHECK(value_at(twice.at("a").value()) == V(1));
+    CHECK_EQ(lazy_of("\xa3\x01\x01\x01\x02\x01\x03"s).count(std::int64_t{1}).value(), 3u);
+}
+
+// count reads every pair after the first match, so a pair that is cut off after a match is an error, and a cut
+// before the match is the error of find.
+TEST_CASE("lazy: count of a map that is cut off")
+{
+    CHECK_EQ(lazy_of("\xa2\x61" "a\x01\x61"s).count("a").error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\xa2\x61"s).count("a").error(), error::too_little_data);
+}
