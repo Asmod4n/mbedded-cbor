@@ -22,7 +22,7 @@
 #include "binding.hpp"
 #include "error.hpp"
 #include "head.hpp"
-#include "item_end.hpp"
+#include "item_size.hpp"
 #include "owning_ref.hpp"
 #include "validity.hpp"
 

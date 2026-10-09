@@ -316,7 +316,7 @@ void read_all(std::string_view const message)
     if (!lot)
         return;
     template for (constexpr std::meta::info text : texts)
-        consume(lot->template at<path_text<text>>(), message);
+        consume(lot->template at_path<path_text<text>>(), message);
 }
 
 template <class T>
@@ -402,7 +402,7 @@ void compare_all(T const &native, std::string_view const message)
     auto lot = cbor::schema<T>::path(message);
     require(lot.has_value());
     template for (constexpr std::meta::info text : texts)
-        compare(native_at<T, text, 1>(native), lot->template at<path_text<text>>());
+        compare(native_at<T, text, 1>(native), lot->template at_path<path_text<text>>());
 }
 
 // A struct from the bytes of the input, written and read back through every path of its type. The message
@@ -435,7 +435,7 @@ void round_trip(source &in)
     require(back.has_value());
     auto const again = cbor::schema<T>::encode(**back);
     require(again.has_value() && *again == w.encoded);
-    auto const end = cbor::item_end(w.encoded);
+    auto const end = cbor::item_size(w.encoded);
     require(end.has_value() && *end == w.encoded.size());
     compare_all(native, w.encoded);
 }

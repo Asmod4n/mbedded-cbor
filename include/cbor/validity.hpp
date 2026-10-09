@@ -372,7 +372,7 @@ public:
 
     friend class value_sharing;
 
-    friend class diagnostic_notation;
+    friend class extended_diagnostic_notation;
 
     friend class jsonpath;
 

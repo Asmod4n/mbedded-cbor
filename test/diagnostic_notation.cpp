@@ -29,7 +29,7 @@ std::string bytes_of_hex(std::string_view const hex)
 
 std::string inspected(std::string_view const hex)
 {
-    auto const r = cbor::inspect(bytes_of_hex(hex));
+    auto const r = cbor::diagnostic_notation(bytes_of_hex(hex));
     REQUIRE(r.has_value());
     return *r;
 }
@@ -39,7 +39,7 @@ std::string inspected(std::string_view const hex)
 // RFC 8949 Appendix A gives the diagnostic notation of each example. The text is the table of the RFC, except where
 // the draft of EDN asks for another form: an encoding indicator on a float that is not in its preferred
 // serialization (Table 2 of the draft). A bignum shows as its tag, and a text string shows its UTF-8 unescaped.
-TEST_CASE("inspect: the examples of RFC 8949 Appendix A")
+TEST_CASE("diagnostic_notation: the examples of RFC 8949 Appendix A")
 {
     std::pair<std::string_view, std::string_view> const examples[] = {
         {"00", "0"},
@@ -135,7 +135,7 @@ TEST_CASE("inspect: the examples of RFC 8949 Appendix A")
 // The test vectors carry the diagnostic notation where the JSON value cannot say it. Each one is checked against
 // the output, except the floats that are not in their preferred serialization, which the draft writes with an
 // encoding indicator.
-TEST_CASE("inspect: the diagnostic field of the test vectors")
+TEST_CASE("diagnostic_notation: the diagnostic field of the test vectors")
 {
     std::ifstream in(TEST_VECTORS "/appendix_a.json");
     REQUIRE(in.good());
@@ -169,7 +169,7 @@ TEST_CASE("inspect: the diagnostic field of the test vectors")
 // draft-ietf-cbor-edn-literals-28 4.1 Table 7 and 4.2 (the table writes "A"_1 beside 79000161, whose content is
 // the letter a): a head that is not the preferred one carries _0 to _3,
 // an empty indefinite-length string is ''_ or ""_ (4.3), and 3.7 notes a NaN with a payload as float''.
-TEST_CASE("inspect: encoding indicators of the EDN draft")
+TEST_CASE("diagnostic_notation: encoding indicators of the EDN draft")
 {
     CHECK_EQ(inspected("190001"), "1_1");
     CHECK_EQ(inspected("1801"), "1_0");
@@ -193,23 +193,23 @@ TEST_CASE("inspect: encoding indicators of the EDN draft")
 }
 
 // An item that is not well-formed has no diagnostic notation: the error comes back.
-TEST_CASE("inspect: an item that is not well-formed is an error")
+TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
 {
-    CHECK_EQ(cbor::inspect(""sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::inspect("\xff"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\xf8\x18"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\xf8\x10"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x1c"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x1f"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x62\x61"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::inspect("\x5f\x61\x61\xff"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x5f\x5f\xff\xff"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x9f\x01"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::inspect("\x00\x00"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation(""sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\xff"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\xf8\x18"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\xf8\x10"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x1c"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x1f"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x62\x61"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\x5f\x61\x61\xff"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x5f\x5f\xff\xff"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x9f\x01"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\x00\x00"sv).error(), error::syntax_error);
     {
         test::nesting_depth_max_guard const depth{4};
-        CHECK_EQ(cbor::inspect("\x81\x81\x81\x81\x81\x00"sv).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).error(), error::nesting_depth_exceeded);
     }
     test::nesting_depth_max_guard const depth{5};
-    CHECK(cbor::inspect("\x81\x81\x81\x81\x81\x00"sv).has_value());
+    CHECK(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).has_value());
 }

@@ -1864,7 +1864,7 @@ public:
             requires(((Path.view().starts_with('@') && packed::path_valid<U, Path, 1>()) ||
                       (Path.view().starts_with('$') && packed::path_valid<T, Path, 1>())) &&
                      sizeof...(Index) == packed::index_slots<Path>() && std::is_lvalue_reference_v<Self>)
-        CBOR_ALWAYS_INLINE auto at(this Self &&self, Index const... indexes)
+        CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
             std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
             constexpr std::string_view path = Path.view();
@@ -1917,7 +1917,7 @@ public:
                 static_assert(packed::is_typed_array<V>, "cbor::schema::accessor::view: the path does not end at a typed array");
                 return std::type_identity<std::remove_cv_t<std::ranges::range_value_t<V>>>{};
             }(std::type_identity<X>{}))::type;
-            auto const list = self.template at<Path>(indexes...);
+            auto const list = self.template at_path<Path>(indexes...);
             if (!list) [[unlikely]]
                 return std::expected<typed_array_view<E>, error>(std::unexpect, list.error());
             return std::expected<typed_array_view<E>, error>(
@@ -1955,7 +1955,7 @@ public:
                  packed::path_valid<T, Path, 1>() && sizeof...(Index) == packed::index_slots<Path>() &&
                  std::is_trivially_copyable_v<X> && !std::same_as<X, std::string_view> &&
                  !std::same_as<X, std::optional<std::string_view>>)
-    static std::expected<X, error> at(std::string_view const encoded, Index const... indexes)
+    static std::expected<X, error> at_path(std::string_view const encoded, Index const... indexes)
     {
         auto const dir = packed::directory_read<T>(encoded);
         if (!dir) [[unlikely]]

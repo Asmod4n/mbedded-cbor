@@ -204,7 +204,7 @@ TEST_CASE("path: a query that is not valid does not compile")
     CHECK(path_compiles<"$[0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0]">);
 }
 
-// Every key of the map below is a different kind of CBOR item. inspect gives the diagnostic notation of each key,
+// Every key of the map below is a different kind of CBOR item. diagnostic_notation gives the diagnostic notation of each key,
 // and that text in a compile-time query finds the entry. Other notations of the same item find it too: b64''
 // for h'', 0x10 for 16, 0x1.8p0 for 1.5, <<1>> for h'01'. RFC 8949 5.6.1 compares keys by value, so an encoding
 // indicator changes nothing: [1_0] finds the key 1_1 and [1.5_2] the key 1.5. An integer and a float stay apart.
@@ -242,7 +242,7 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
         {"\x10"sv, "16"sv},
     };
     for (auto const &[bytes, text] : keys)
-        CHECK_EQ(cbor::inspect(bytes).value_or("not well-formed"), text);
+        CHECK_EQ(cbor::diagnostic_notation(bytes).value_or("not well-formed"), text);
     CHECK(found(compiled_at<"$[-3]">(doc)) == V(1));
     CHECK(found(compiled_at<"$[h'0102']">(doc)) == V(2));
     CHECK(found(compiled_at<"$[1000(\"x\")]">(doc)) == V(3));

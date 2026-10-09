@@ -38,8 +38,8 @@ A row marked "not checked" was not compared with the code.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `inspect(string_view)` friend decl, :553-555 | not given here | not given here | Body in inspect.hpp. |
-| `item_end`, `lazy_decode` friend decls, :545-559 | not given here | not given here | Bodies in other headers. |
+| `diagnostic_notation(string_view)` friend decl, :553-555 | not given here | not given here | Body in diagnostic_notation.hpp. |
+| `item_size`, `lazy_decode` friend decls, :545-559 | not given here | not given here | Bodies in other headers. |
 | `heads::unsigned_read<V>(span<char const, sizeof(V)>)` :45 | O(1); sizeof(V) <= 8 | O(1) | No allocation. Confirmed. |
 | `heads::initial_byte(major_type, uint64_t)` :55 | O(1) | O(1) | constexpr. Confirmed. |
 | `heads::preferred_argument_info(uint64_t)` :60 | O(1) | O(1) | Confirmed. |
@@ -118,14 +118,14 @@ defined in shared.hpp. See that section.
 
 Enums and constants only. No function found by grep.
 
-## item_end.hpp
+## item_size.hpp
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `well_formedness::no_marks::mark(decoder const&)` :30 | O(1) | O(1) | Empty body. Confirmed. |
 | `well_formedness::item_skip<Marks>(decoder&, Marks&)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(1): one count of the items still to read. No allocation. | Iterative. No depth check: nothing recurses. Each add to the count goes through checked_add, and a count larger than the bytes left is too_little_data at once (check_pending_items). Used with no_marks and with top_level_item. |
 | `well_formedness::item_skip<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 2, about 8 KiB. No allocation. | Iterative. Only for marks that record a depth (decoding::prefix). check_nesting_depth on every item. |
-| `item_end(string_view)` | O(i), bounded by O(n) | O(1). No allocation. | One item_skip with no_marks. No depth check. |
+| `item_size(string_view)` | O(i), bounded by O(n) | O(1). No allocation. | One item_skip with no_marks. No depth check. |
 
 ## item.hpp
 
@@ -251,8 +251,8 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `jsonpath::segment_apply` :1398 | child: sum of selector_apply; descendant: O(c·n·d) | O(i) children vectors; O(d) frames | |
 | `jsonpath::segments_apply` :1419 | worst O(p·N·c·n·d); common O(p·n) | O(N), N <= n | |
 | `query_walk<Binding>(Binding&, ...)` :1435 | singular O(n·p) + lazy_decode; else segments_apply + decodes | O(1) or O(N) | |
-| `verify_path<Path>` :985 | O(t) compile time | none at run time | |
-| `singular_query<Path>` :1506 | O(t + c) compile time | none at run time | |
+| `is_valid_path<Path>`, `is_valid_path_v<Path>` :985 | O(t) compile time | none at run time | |
+| `is_singular_query<Path>`, `is_singular_query_v<Path>` :1506 | O(t + c) compile time | none at run time | |
 | `at_path<Binding>(Binding&, string_view, lazy const&)` :1470 | O(t) + query_walk :1435 | O(t) | Parses at run time. |
 | `at_path<Path, Binding>(Binding&, lazy const&)` :1480 | query_walk :1435 | as :1435 | |
 | `at_path<Path, T>(string_view)` :1525 | O(n); fallback O(n·p) | O(1); fallback allocates | |
@@ -308,11 +308,11 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `fixed_string<N>::fixed_string` :80 | O(N) compile time | O(N) | |
 | `fixed_string<N>::view` :85 | O(1) | O(1) | |
 
-## inspect.hpp
+## diagnostic_notation.hpp
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `diagnostic_notation::blank` :48 | O(1) | O(1) | |
+| `extended_diagnostic_notation::blank` :48 | O(1) | O(1) | |
 | `blank_end` :53 | O(b) | O(1) | |
 | `digit`, `hex_digit_value` :60, :65 | O(1) | O(1) | |
 | `head_append` :76 | O(1) amortized | O(1) amortized | Not confirmed. |
@@ -338,7 +338,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `diagnostic_head_decode` :927 | O(1) | O(1) | Changes d. |
 | `break_found` :943 | O(1) | O(1) | Changes d. |
 | `diagnostic_write` :954 | O(n) common; worst depends on check_tag_content | O(n) output; O(s) marks; O(d) frames | |
-| `inspect` :1084 | O(n) common | O(n) string; O(s); O(d) | |
+| `diagnostic_notation` :1084 | O(n) common | O(n) string; O(s); O(d) | |
 
 ## schema.hpp
 
@@ -401,11 +401,11 @@ All rows marked "compile time" have no run-time cost.
 | `packed::member_offset` :1790 | O(c) compile time | O(1) | |
 | `schema::fixed_size`, `member_offset` :1813, :1820 | compile time | O(1) | |
 | `schema::accessor` constructors :1837-1850 | O(1) | O(1) | |
-| `schema::accessor::at`, `view` :1866, :1912 | O(p) | O(1) | |
+| `schema::accessor::at_path`, `view` :1866, :1912 | O(p) | O(1) | |
 | `schema::accessor::size()` :1926 | O(1) | O(1) | |
 | `schema::path(shared_ptr<void const>, string_view)` :1933 | O(1) in n | O(1) | |
 | `schema::path(shared_ptr, Encoded&&) = delete` :1949 | - | - | |
-| `schema::at<Path>(string_view, Index...)` :1957 | O(q + p) | O(1) | |
+| `schema::at_path<Path>(string_view, Index...)` :1957 | O(q + p) | O(1) | |
 | `schema::path(string_view)` :1967 | O(n) | O(n) | Copies. |
 | `schema::path<Encoded>(Encoded&&)` :1977 | O(1) | O(1) | One make_shared. |
 | `schema::decode(string_view)` :1987 | O(n); + k log k ordered | O(n) copy + O(n) output | |
@@ -449,7 +449,7 @@ Above linear in the input:
 - `jsonpath::segment_apply`, `segments_apply`: O(c·n·d), O(p·N·c·n·d).
 - `query_walk` lazy forms and the tag 29 fallback of `at_path`: O(n·p).
 - `walker::child`, `encode_from` with sharing off, `cycle_find`: exponential in d for a DAG.
-- `container_parse`, `literal_parse`, `canonical_append` (inspect.hpp): O(t·d), O(n·d); maps add O(k log k).
+- `container_parse`, `literal_parse`, `canonical_append` (diagnostic_notation.hpp): O(t·d), O(n·d); maps add O(k log k).
 - `generic_read`, `databind::read`: O((n/d)^d) with tag 29.
 - `value_sharing::item_decode`: rebuilt scalars skip O(n_item) again on each call.
 - `std::map` targets in schema and databind: O(n + k log k).
@@ -461,4 +461,4 @@ Allocation on a success path:
 - `lazy::from`, `schema::path`, `schema::decode`, `databind::decode`, `container_resolve` (tag 24), `lazy_decode`.
 - jsonpath: every parser, `at_path(string_view path)`, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `encode_from` with sharing on, `walker` embeds, `cycle_find`, `string_sink`, `container_message`.
-- inspect.hpp: `canonical_append`, `container_parse`, `inspect`, the `*_of` functions.
+- diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.

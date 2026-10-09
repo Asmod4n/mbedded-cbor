@@ -159,7 +159,7 @@ class well_formedness
         }
     }
 
-    friend std::expected<std::size_t, error> item_end(std::string_view encoded);
+    friend std::expected<std::size_t, error> item_size(std::string_view encoded);
 
     friend class validity;
 
@@ -180,7 +180,7 @@ class well_formedness
 #endif
 };
 
-inline std::expected<std::size_t, error> item_end(std::string_view const encoded)
+inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
 {
     heads::decoder d{encoded};
     well_formedness::no_marks none;

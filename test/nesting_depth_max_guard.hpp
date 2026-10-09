@@ -16,7 +16,8 @@ struct nesting_depth_max_guard {
     explicit nesting_depth_max_guard(std::size_t const depth_max)
         : before(cbor::validity::nesting_depth_max_read())
     {
-        REQUIRE(cbor::validity::nesting_depth_max_set(depth_max).has_value());
+        [[maybe_unused]] auto const set = cbor::validity::nesting_depth_max_set(depth_max);
+        REQUIRE(set.has_value());
     }
 
     nesting_depth_max_guard(nesting_depth_max_guard const &) = delete;

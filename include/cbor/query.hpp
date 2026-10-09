@@ -19,11 +19,11 @@
 #include <vector>
 
 #include "binding.hpp"
-#include "item_end.hpp"
+#include "item_size.hpp"
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
-#include "inspect.hpp"
+#include "diagnostic_notation.hpp"
 #include "lazy.hpp"
 #include "owning_ref.hpp"
 #include "rfc9535.hpp"
@@ -38,23 +38,29 @@ template <class Binding>
 std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
 template <fixed_string Path>
-class verify_path;
+class is_valid_path;
+
+template <fixed_string Path>
+inline constexpr bool is_valid_path_v = is_valid_path<Path>::value;
 
 template <fixed_string Path, class Binding>
-    requires(requires { typename Binding::value; } && verify_path<Path>::value)
+    requires(requires { typename Binding::value; } && is_valid_path_v<Path>)
 std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
 
 template <fixed_string Path>
-class singular_query;
+class is_singular_query;
+
+template <fixed_string Path>
+inline constexpr bool is_singular_query_v = is_singular_query<Path>::value;
 
 template <fixed_string Path, class T>
-    requires(singular_query<Path>::value &&
+    requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
               std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
 std::expected<T, error> at_path(std::string_view encoded);
 
 template <fixed_string Path, class T>
-    requires(singular_query<Path>::value &&
+    requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view encoded);
@@ -124,7 +130,7 @@ class jsonpath
 
     static constexpr bool function_name_char(char const c)
     {
-        return (c >= 'a' && c <= 'z') || c == '_' || diagnostic_notation::digit(c);
+        return (c >= 'a' && c <= 'z') || c == '_' || extended_diagnostic_notation::digit(c);
     }
 
     static constexpr std::expected<std::optional<integer>, error> int_read(std::string_view const text, std::size_t const at)
@@ -134,7 +140,7 @@ class jsonpath
         bool const negative = text[at] == '-';
         std::size_t const digits_at = at + (negative ? 1 : 0);
         std::size_t digits_end = digits_at;
-        while (digits_end < text.size() && diagnostic_notation::digit(text[digits_end]))
+        while (digits_end < text.size() && extended_diagnostic_notation::digit(text[digits_end]))
             ++digits_end;
         if (digits_end == digits_at || digits_end - digits_at > 16 ||
             (text[digits_at] == '0' && (digits_end > digits_at + 1 || negative)))
@@ -150,7 +156,7 @@ class jsonpath
     static constexpr std::optional<std::size_t> number_end(std::string_view const text, std::size_t at)
     {
         auto const digits = [&text](std::size_t i) {
-            while (i < text.size() && diagnostic_notation::digit(text[i]))
+            while (i < text.size() && extended_diagnostic_notation::digit(text[i]))
                 ++i;
             return i;
         };
@@ -189,7 +195,7 @@ class jsonpath
         constexpr std::expected<std::size_t, error> string_parse(std::string_view const text, std::size_t const at)
         {
             std::string name;
-            auto const next = diagnostic_notation::quoted_parse(text, at, name);
+            auto const next = extended_diagnostic_notation::quoted_parse(text, at, name);
             if (!next) [[unlikely]]
                 return next;
             char const quote = text[at];
@@ -201,7 +207,7 @@ class jsonpath
                     [[unlikely]]
                     return std::unexpected(error::invalid_path);
             }
-            if (auto const r = diagnostic_notation::head_append(keys, major_type::text_string, name.size(), diagnostic_notation::no_indicator); !r) [[unlikely]]
+            if (auto const r = extended_diagnostic_notation::head_append(keys, major_type::text_string, name.size(), extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             keys += name;
             return next;
@@ -210,10 +216,10 @@ class jsonpath
         constexpr std::expected<std::size_t, error> literal_parse(std::string_view const text, std::size_t const at)
         {
             std::string literal;
-            auto const next = diagnostic_notation::literal_parse({text, at}, literal, {0, depth_max});
+            auto const next = extended_diagnostic_notation::literal_parse({text, at}, literal, {0, depth_max});
             if (!next) [[unlikely]]
                 return next;
-            if (auto const r = diagnostic_notation::canonical_append(keys, {literal, 0}, {0, depth_max}); !r) [[unlikely]]
+            if (auto const r = extended_diagnostic_notation::canonical_append(keys, {literal, 0}, {0, depth_max}); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
         }
@@ -235,7 +241,7 @@ class jsonpath
                 return std::pair{*next, s};
             }
             if (c == '?') {
-                auto const e = logical_or_parse(text, diagnostic_notation::blank_end(text, at + 1), depth + 1);
+                auto const e = logical_or_parse(text, extended_diagnostic_notation::blank_end(text, at + 1), depth + 1);
                 if (!e) [[unlikely]]
                     return std::unexpected(e.error());
                 s.kind = selector::kind::filter;
@@ -245,21 +251,21 @@ class jsonpath
             auto const first = int_read(text, at);
             if (!first) [[unlikely]]
                 return std::unexpected(first.error());
-            std::size_t next = *first ? diagnostic_notation::blank_end(text, (*first)->at) : at;
+            std::size_t next = *first ? extended_diagnostic_notation::blank_end(text, (*first)->at) : at;
             if (next < text.size() && text[next] == ':') {
                 s.kind = selector::kind::slice;
                 if (*first)
                     s.start = (*first)->value;
-                next = diagnostic_notation::blank_end(text, next + 1);
+                next = extended_diagnostic_notation::blank_end(text, next + 1);
                 auto const end = int_read(text, next);
                 if (!end) [[unlikely]]
                     return std::unexpected(end.error());
                 if (*end) {
                     s.end = (*end)->value;
-                    next = diagnostic_notation::blank_end(text, (*end)->at);
+                    next = extended_diagnostic_notation::blank_end(text, (*end)->at);
                 }
                 if (next < text.size() && text[next] == ':') {
-                    next = diagnostic_notation::blank_end(text, next + 1);
+                    next = extended_diagnostic_notation::blank_end(text, next + 1);
                     auto const step = int_read(text, next);
                     if (!step) [[unlikely]]
                         return std::unexpected(step.error());
@@ -289,14 +295,14 @@ class jsonpath
         {
             std::vector<selector> chosen;
             for (;;) {
-                at = diagnostic_notation::blank_end(text, at + 1);
+                at = extended_diagnostic_notation::blank_end(text, at + 1);
                 if (at >= text.size()) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 auto const s = selector_parse(text, at, depth);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
                 chosen.push_back(s->second);
-                at = diagnostic_notation::blank_end(text, s->first);
+                at = extended_diagnostic_notation::blank_end(text, s->first);
                 if (at >= text.size() || (text[at] != ',' && text[at] != ']')) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 if (text[at] == ']')
@@ -312,7 +318,7 @@ class jsonpath
             std::vector<selector> found_selectors;
             bool singular = true;
             for (;;) {
-                std::size_t const next = diagnostic_notation::blank_end(text, at);
+                std::size_t const next = extended_diagnostic_notation::blank_end(text, at);
                 if (next >= text.size() || (text[next] != '.' && text[next] != '['))
                     break;
                 at = next;
@@ -336,12 +342,12 @@ class jsonpath
                         ++at;
                     } else {
                         std::size_t end = at;
-                        while (end < text.size() && (name_first(text[end]) || (end != at && diagnostic_notation::digit(text[end]))))
+                        while (end < text.size() && (name_first(text[end]) || (end != at && extended_diagnostic_notation::digit(text[end]))))
                             ++end;
                         if (end == at) [[unlikely]]
                             return std::unexpected(error::invalid_path);
                         std::size_t const key_at = keys.size();
-                        if (auto const r = diagnostic_notation::head_append(keys, major_type::text_string, end - at, diagnostic_notation::no_indicator); !r) [[unlikely]]
+                        if (auto const r = extended_diagnostic_notation::head_append(keys, major_type::text_string, end - at, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
                             return std::unexpected(r.error());
                         keys += std::string_view(std::span(text).subspan(at, end - at));
                         chosen.push_back({selector::kind::key, key_at, keys.size() - key_at, 0, std::nullopt, std::nullopt, 1, 0});
@@ -380,7 +386,7 @@ class jsonpath
                                                                          std::string_view const name, std::size_t const depth)
         {
             std::vector<std::size_t> arguments;
-            std::size_t next = diagnostic_notation::blank_end(text, at + name.size() + 1);
+            std::size_t next = extended_diagnostic_notation::blank_end(text, at + name.size() + 1);
             if (next < text.size() && text[next] == ')')
                 ++next;
             else
@@ -389,12 +395,12 @@ class jsonpath
                     if (!a) [[unlikely]]
                         return a;
                     arguments.push_back(a->index);
-                    next = diagnostic_notation::blank_end(text, a->at);
+                    next = extended_diagnostic_notation::blank_end(text, a->at);
                     if (next >= text.size() || (text[next] != ',' && text[next] != ')')) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     if (text[next++] == ')')
                         break;
-                    next = diagnostic_notation::blank_end(text, next);
+                    next = extended_diagnostic_notation::blank_end(text, next);
                 }
             if (arguments.size() != 1) [[unlikely]]
                 return std::unexpected(error::invalid_path);
@@ -459,7 +465,7 @@ class jsonpath
                 if (!end) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 std::string number;
-                auto const next = diagnostic_notation::number_parse(text, at, number);
+                auto const next = extended_diagnostic_notation::number_parse(text, at, number);
                 if (!next || *next != *end) [[unlikely]]
                     return std::unexpected(error::invalid_path);
             }
@@ -486,10 +492,10 @@ class jsonpath
 
         constexpr std::expected<parsed_expression, error> paren_parse(std::string_view const text, std::size_t const at, std::size_t const depth)
         {
-            auto const inner = logical_or_parse(text, diagnostic_notation::blank_end(text, at + 1), depth + 1);
+            auto const inner = logical_or_parse(text, extended_diagnostic_notation::blank_end(text, at + 1), depth + 1);
             if (!inner) [[unlikely]]
                 return inner;
-            std::size_t const close = diagnostic_notation::blank_end(text, inner->at);
+            std::size_t const close = extended_diagnostic_notation::blank_end(text, inner->at);
             if (close >= text.size() || text[close] != ')') [[unlikely]]
                 return std::unexpected(error::invalid_path);
             return parsed_expression{close + 1, inner->index};
@@ -500,7 +506,7 @@ class jsonpath
             if (at >= text.size()) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             if (text[at] == '!') {
-                std::size_t const next = diagnostic_notation::blank_end(text, at + 1);
+                std::size_t const next = extended_diagnostic_notation::blank_end(text, at + 1);
                 bool const paren = next < text.size() && text[next] == '(';
                 auto const operand = paren ? paren_parse(text, next, depth) : primary_parse(text, next, depth);
                 if (!operand) [[unlikely]]
@@ -515,14 +521,14 @@ class jsonpath
             auto const left = primary_parse(text, at, depth);
             if (!left) [[unlikely]]
                 return left;
-            std::size_t const next = diagnostic_notation::blank_end(text, left->at);
+            std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
             auto const op = comparison_op_read(text, next);
             if (!op) {
                 if (expressions[left->index].kind != expression::kind::query) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 return left;
             }
-            auto const right = primary_parse(text, diagnostic_notation::blank_end(text, next + op->second), depth);
+            auto const right = primary_parse(text, extended_diagnostic_notation::blank_end(text, next + op->second), depth);
             if (!right) [[unlikely]]
                 return right;
             if (!comparable(left->index) || !comparable(right->index)) [[unlikely]]
@@ -538,10 +544,10 @@ class jsonpath
             for (;;) {
                 if (!left) [[unlikely]]
                     return left;
-                std::size_t const next = diagnostic_notation::blank_end(text, left->at);
+                std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
                 if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("&&")))
                     return left;
-                auto const right = basic_parse(text, diagnostic_notation::blank_end(text, next + 2), depth);
+                auto const right = basic_parse(text, extended_diagnostic_notation::blank_end(text, next + 2), depth);
                 if (!right) [[unlikely]]
                     return right;
                 left = parsed_expression{right->at, expression_add({expression::kind::logical_and, left->index, right->index,
@@ -558,10 +564,10 @@ class jsonpath
             for (;;) {
                 if (!left) [[unlikely]]
                     return left;
-                std::size_t const next = diagnostic_notation::blank_end(text, left->at);
+                std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
                 if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("||")))
                     return left;
-                auto const right = logical_and_parse(text, diagnostic_notation::blank_end(text, next + 2), depth);
+                auto const right = logical_and_parse(text, extended_diagnostic_notation::blank_end(text, next + 2), depth);
                 if (!right) [[unlikely]]
                     return right;
                 left = parsed_expression{right->at, expression_add({expression::kind::logical_or, left->index, right->index,
@@ -904,34 +910,34 @@ class jsonpath
     }
 
     template <fixed_string>
-    friend class singular_query;
+    friend class is_singular_query;
 
     template <fixed_string Path, class T>
-        requires(singular_query<Path>::value &&
+        requires(is_singular_query_v<Path> &&
                  ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
                   std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
     friend std::expected<T, error> at_path(std::string_view encoded);
 
     template <fixed_string Path, class T>
-        requires(singular_query<Path>::value &&
+        requires(is_singular_query_v<Path> &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, typed_array>))
     friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner,
                                                        std::string_view encoded);
 
     template <fixed_string>
-    friend class verify_path;
+    friend class is_valid_path;
 
     template <class Binding>
     friend std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
     template <fixed_string Path, class Binding>
-        requires(requires { typename Binding::value; } && verify_path<Path>::value)
+        requires(requires { typename Binding::value; } && is_valid_path_v<Path>)
     friend std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
 };
 
 template <fixed_string Path>
-class verify_path
+class is_valid_path
     : public std::bool_constant<
           jsonpath::query_parse(Path.view(), true, validity::nesting_depth_default).has_value()>
 {
@@ -1139,7 +1145,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
     expression const &e = v.expressions[index];
     auto const unsigned_integer = [](std::uint64_t const n) -> std::expected<std::optional<lazy>, error> {
         std::string encoded;
-        if (auto const r = diagnostic_notation::head_append(encoded, major_type::unsigned_integer, n, diagnostic_notation::no_indicator); !r) [[unlikely]]
+        if (auto const r = extended_diagnostic_notation::head_append(encoded, major_type::unsigned_integer, n, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
             return std::unexpected(r.error());
         auto const l = lazy::from(std::move(encoded));
         if (!l) [[unlikely]]
@@ -1421,7 +1427,7 @@ std::expected<typename Binding::value, error> at_path(Binding &binding, std::str
 }
 
 template <fixed_string Path, class Binding>
-    requires(requires { typename Binding::value; } && verify_path<Path>::value)
+    requires(requires { typename Binding::value; } && is_valid_path_v<Path>)
 std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l)
 {
     constexpr auto q = [] { return *jsonpath::query_parse(Path.view(), true, validity::nesting_depth_default); };
@@ -1451,7 +1457,7 @@ std::expected<typename Binding::value, error> at_path(Binding &binding, lazy con
 }
 
 template <fixed_string Path>
-class singular_query
+class is_singular_query
     : public std::bool_constant<
           [] {
     std::array const text = Path.value;
@@ -1467,7 +1473,7 @@ class singular_query
 };
 
 template <fixed_string Path, class T>
-    requires(singular_query<Path>::value &&
+    requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
               std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
 std::expected<T, error> at_path(std::string_view const encoded)
@@ -1476,7 +1482,7 @@ std::expected<T, error> at_path(std::string_view const encoded)
 }
 
 template <fixed_string Path, class T>
-    requires(singular_query<Path>::value &&
+    requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view const encoded)

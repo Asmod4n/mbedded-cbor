@@ -97,7 +97,7 @@ TEST_CASE("test vectors: not well-formed items fail")
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
         std::string const wire = bytes_of_hex(c.hex);
-        auto const end = cbor::item_end(wire);
+        auto const end = cbor::item_size(wire);
         bool const one_item = end.has_value() && *end == wire.size();
         CHECK_FALSE((one_item && decoded(wire).has_value()));
     }
@@ -231,7 +231,7 @@ std::string member_bytes(cbor::lazy const &object, std::string_view const key)
     return out;
 }
 
-// The files are CBOR. They are read with the library under test: lazy finds the members, and item_end gives
+// The files are CBOR. They are read with the library under test: lazy finds the members, and item_size gives
 // the bytes of each "decoded" item, which the tests below decode as the expectation.
 std::vector<wg_vector> wg_vectors_of(std::string const &path)
 {
@@ -258,7 +258,7 @@ std::vector<wg_vector> wg_vectors_of(std::string const &path)
                     member_bool(*t, "fail", file_fail)};
         if (auto const decoded = t->at("decoded")) {
             std::string_view const rest = std::string_view(file).substr(decoded->offset);
-            auto const end = cbor::item_end(rest);
+            auto const end = cbor::item_size(rest);
             REQUIRE(end.has_value());
             v.decoded = std::string(rest.substr(0, *end));
         }
@@ -479,7 +479,7 @@ struct wg_count {
     std::size_t nesting_depth_exceeded;
 };
 
-// The steps of the README of the vectors, through decode, lazy and inspect, for a test that does not fail.
+// The steps of the README of the vectors, through decode, lazy and diagnostic_notation, for a test that does not fail.
 void wg_good_check(wg_vector const &v, wg_count &count)
 {
     CAPTURE(v.description);
@@ -503,11 +503,11 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     REQUIRE(l.has_value());
     CHECK(equivalent(*l, *expected));
 
-    auto const text = cbor::inspect(v.encoded);
+    auto const text = cbor::diagnostic_notation(v.encoded);
     REQUIRE(text.has_value());
-    auto const expected_text = cbor::inspect(v.decoded);
+    auto const expected_text = cbor::diagnostic_notation(v.decoded);
     REQUIRE(expected_text.has_value());
-    // inspect writes the basic generic data model. A bignum is its tag and the byte string of the wire, so a
+    // diagnostic_notation writes the basic generic data model. A bignum is its tag and the byte string of the wire, so a
     // vector that makes it an integer or drops its leading zeros (RFC 8949 3.4.3) has another text. A NaN
     // with a payload is float'' of its bits on the wire (EDN draft 3.7), so its shorter form is another text.
     bool const bignum_tag = text->starts_with("2(") || text->starts_with("3(");
@@ -527,7 +527,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
 } // namespace
 
 // The test vectors of the CBOR working group (github.com/cbor-wg/cbor-test-vectors, BSD 2-Clause) that are
-// well-formed and valid. Each one goes through decode, lazy and inspect, and is compared with its "decoded"
+// well-formed and valid. Each one goes through decode, lazy and diagnostic_notation, and is compared with its "decoded"
 // item in the extended generic data model.
 TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
 {
@@ -548,7 +548,7 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
     CHECK_EQ(count.nesting_depth_exceeded, 3u);
 }
 
-// bad.cbor holds items that are not well-formed or not valid. Each one fails in decode, lazy and inspect,
+// bad.cbor holds items that are not well-formed or not valid. Each one fails in decode, lazy and diagnostic_notation,
 // except where a decision of this library differs from the vector.
 TEST_CASE("cbor-wg test vectors: every bad vector fails")
 {
@@ -560,7 +560,7 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
         REQUIRE(v.fail);
         auto const d = decoded(v.encoded);
         auto const l = lazy_value_of(v.encoded);
-        auto const text = cbor::inspect(v.encoded);
+        auto const text = cbor::diagnostic_notation(v.encoded);
         if (v.encoded == "\x62\xc0\xae"sv) {
             // The library never checks UTF-8 (owner, 2026-10-05 and 2026-10-08): the text is the
             // application's.
@@ -585,7 +585,7 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
 
 // streaming.cbor holds indefinite-length items, also in its "decoded" members, so the library cannot read the
 // file: indefinite length is never read (owner, 2026-10-02 and 2026-10-08). The encoded items are taken from
-// streaming.edn. decode and lazy give indefinite_length; inspect writes the item.
+// streaming.edn. decode and lazy give indefinite_length; diagnostic_notation writes the item.
 TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
     test::nesting_depth_max_guard const depth{depth_limit};
@@ -609,7 +609,7 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
         std::string const wire = bytes_of_hex(hex);
         CHECK_EQ(decoded(wire).error(), error::indefinite_length);
         CHECK_EQ(lazy_value_of(wire).error(), error::indefinite_length);
-        CHECK(cbor::inspect(wire).has_value());
+        CHECK(cbor::diagnostic_notation(wire).has_value());
         ++checked;
     }
     CHECK_EQ(checked, 11u);
@@ -618,8 +618,8 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 // RFC 8949 3.4.1: the content of tag 0 is a text string. RFC 8949 3.4.2: the content of tag 1 is an unsigned or
 // negative integer (major types 0 and 1) or a float (major type 7 with additional information 25, 26 or 27).
 // Every other content is invalid. One item of each major type, each float width and two simple values goes
-// into each tag, and decode, lazy and inspect give the same answer.
-TEST_CASE("tags 0 and 1: decode, lazy and inspect refuse every content that RFC 8949 3.4.1 and 3.4.2 forbid")
+// into each tag, and decode, lazy and diagnostic_notation give the same answer.
+TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation refuse every content that RFC 8949 3.4.1 and 3.4.2 forbid")
 {
     test::nesting_depth_max_guard const depth{depth_limit};
     struct content {
@@ -648,7 +648,7 @@ TEST_CASE("tags 0 and 1: decode, lazy and inspect refuse every content that RFC 
             bool const admitted = tag == '\xc0' ? c.date_time_string : c.epoch_based_date_time;
             auto const d = decoded(wire);
             auto const l = lazy_value_of(wire);
-            auto const text = cbor::inspect(wire);
+            auto const text = cbor::diagnostic_notation(wire);
             if (admitted) {
                 CHECK(d.has_value());
                 CHECK(l.has_value());
@@ -663,7 +663,7 @@ TEST_CASE("tags 0 and 1: decode, lazy and inspect refuse every content that RFC 
 
 // A content of tag 0 or 1 may be a tag 28 or a tag 29 (RFC 8949 3.4.1, 3.4.2; value-sharing). The check of the
 // content type must read the value that a tag 29 names. A fuzzer found [28(0), 0(29(0))] accepted by decode,
-// and the encoder wrote 0(0), which no reader accepts. decode, lazy and inspect give the same answer for each.
+// and the encoder wrote 0(0), which no reader accepts. decode, lazy and diagnostic_notation give the same answer for each.
 TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the value it names")
 {
     test::nesting_depth_max_guard const depth{depth_limit};
@@ -689,7 +689,7 @@ TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the val
         CAPTURE(c.encoded);
         auto const d = decoded(c.encoded);
         auto const l = lazy_value_of(c.encoded);
-        auto const text = cbor::inspect(c.encoded);
+        auto const text = cbor::diagnostic_notation(c.encoded);
         if (c.refused == error{}) {
             CHECK(d.has_value());
             CHECK(l.has_value());

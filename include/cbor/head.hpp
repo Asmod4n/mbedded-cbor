@@ -34,7 +34,7 @@ enum class pass;
 
 struct lazy;
 
-std::expected<std::string, error> inspect(std::string_view encoded);
+std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
 class heads
 {
@@ -543,7 +543,7 @@ class heads
 
     friend class value_sharing;
 
-    friend class diagnostic_notation;
+    friend class extended_diagnostic_notation;
 
     friend class jsonpath;
 
@@ -559,11 +559,11 @@ class heads
 
     friend struct lazy_entries;
 
-    friend std::expected<std::size_t, error> item_end(std::string_view encoded);
+    friend std::expected<std::size_t, error> item_size(std::string_view encoded);
 
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
 
-    friend std::expected<std::string, error> inspect(std::string_view encoded);
+    friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
     template <class Binding>
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
