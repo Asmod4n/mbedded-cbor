@@ -200,6 +200,9 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy::find(iterator first, Last last, key)` two forms | O(bytes in [first, the pair]) | O(1) | No container_resolve. |
 | `lazy::equal_range(iterator first, Last last, key)` two forms | as find; a miss in a sorted map stops at the first greater key; a hit adds one item_skip | O(1) | |
 | `value_sharing::value_of(expected<...>)` :414 | O(1) | O(1) | |
+| `lazy::contains(string_view)`, `contains(int64_t)` | as find | O(1) | |
+| `lazy::count(string_view)`, `count(int64_t)` | O(n_map): reads every pair after the first match | O(1) plus marks | Counts every pair with the key. |
+| `lazy::size()`, `empty()` | container_resolve | O(1) | The count of the head of an array or a map. |
 | `lazy::at(string_view)` :425 | as find | O(1) | |
 | `lazy::at(int64_t)` :432 | array O(n_array) worst; map linear key_find | O(1) plus marks | check_index. |
 | `lazy::get<T>() const` :476 | container_resolve + O(1); bignum + O(len) | O(1) | |

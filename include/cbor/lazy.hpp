@@ -210,6 +210,58 @@ inline std::expected<lazy_entries::iterator, error> lazy::find(std::int64_t cons
     return value_sharing::key_find(std::move(*found), key);
 }
 
+inline std::expected<bool, error> lazy::contains(std::string_view const key) const
+{
+    return find(key).transform([](lazy_entries::iterator const &it) { return it != std::default_sentinel; });
+}
+
+inline std::expected<bool, error> lazy::contains(std::int64_t const key) const
+{
+    return find(key).transform([](lazy_entries::iterator const &it) { return it != std::default_sentinel; });
+}
+
+template <class Key, class Entries>
+    requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+std::expected<std::size_t, error> value_sharing::key_count(std::expected<typename Entries::iterator, error> found, Key const key)
+{
+    std::size_t n = 0;
+    while (found && *found != std::default_sentinel) {
+        ++n;
+        auto next = key_find<false>(std::ranges::next(std::move(*found)), std::default_sentinel, key);
+        if (!next) [[unlikely]]
+            return std::unexpected(next.error());
+        found = std::move(next->first);
+    }
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    return n;
+}
+
+inline std::expected<std::size_t, error> lazy::count(std::string_view const key) const
+{
+    return value_sharing::key_count(find(key), key);
+}
+
+inline std::expected<std::size_t, error> lazy::count(std::int64_t const key) const
+{
+    return value_sharing::key_count(find(key), key);
+}
+
+inline std::expected<std::uint64_t, error> lazy::size() const
+{
+    auto const found = value_sharing::container_resolve(top_level, offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    if (found->h.major != major_type::array && found->h.major != major_type::map) [[unlikely]]
+        return std::unexpected(error::not_indexable);
+    return found->h.argument;
+}
+
+inline std::expected<bool, error> lazy::empty() const
+{
+    return size().transform([](std::uint64_t const n) { return n == 0; });
+}
+
 template <class Last>
     requires(std::same_as<Last, lazy_entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
 std::expected<lazy_entries::iterator, error>
