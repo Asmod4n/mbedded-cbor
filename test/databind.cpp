@@ -544,6 +544,19 @@ TEST_CASE("databind: decode reserves no more than the remaining bytes and return
     CHECK_EQ(full.error(), error::not_enough_memory);
 }
 
+// An array head of 2^20 elements before 4 MiB of input made decode reserve min(2^20, 4 MiB / 4096) = 1024
+// elements of 4096 bytes before the first element was read. The allocator refuses more than 512 such
+// elements, so the decode ended with not_enough_memory. Memory now grows only with the elements that were
+// read, and the first element, a null, ends the read with incorrect_type.
+TEST_CASE("databind: decode allocates nothing for the count of an array head")
+{
+    std::string message = "\xa1\x61v\x9a\x00\x10\x00\x00"s;
+    message += std::string(std::size_t{1} << 22, '\xf6');
+    auto const r = cbor::databind<large_elements>::decode(std::move(message));
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::incorrect_type);
+}
+
 struct one_int {
     int a;
 };

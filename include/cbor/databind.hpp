@@ -394,9 +394,6 @@ class generic
             if (h->major != major_type::array) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             out.clear();
-            if constexpr (requires { out.reserve(std::size_t{}); })
-                out.reserve(static_cast<std::size_t>(
-                    std::min<std::uint64_t>(h->argument, d.encoded.size() / sizeof(E))));
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 if (auto const r = d.decoded_bytes_count(1, sizeof(E)); !r) [[unlikely]]
                     return r;
