@@ -502,3 +502,21 @@ TEST_CASE("validity: check_tag_content refuses a tag 29 that names a mark at or 
     std::vector<std::size_t> const before{0};
     CHECK(validity::check_tag_content(1, "\x05\xc1\xd8\x1d\x00"sv, 2, before, std::identity{}).has_value());
 }
+
+// RFC 8949 5.6 lets a map repeat a key outside a deterministic profile. Two maps are equal only when each pair
+// occurs the same number of times in both. A check that each pair has a partner in the other map finds the
+// first two maps equal, because every pair of each occurs in the other.
+TEST_CASE("validity: keys_equivalent compares the pairs of two maps as multisets")
+{
+    std::string_view const kkj = "\xa3\x61k\x01\x61k\x01\x61j\x01"sv;
+    std::string_view const kjj = "\xa3\x61k\x01\x61j\x01\x61j\x01"sv;
+    std::string_view const jkk = "\xa3\x61j\x01\x61k\x01\x61k\x01"sv;
+    std::string_view const kk = "\xa2\x61k\x01\x61k\x01"sv;
+    std::string_view const kj = "\xa2\x61k\x01\x61j\x01"sv;
+    CHECK_FALSE(*validity::keys_equivalent<16>(kkj, 0, kjj, 0, 0));
+    CHECK_FALSE(*validity::keys_equivalent<16>(kjj, 0, kkj, 0, 0));
+    CHECK(*validity::keys_equivalent<16>(kkj, 0, jkk, 0, 0));
+    CHECK(*validity::keys_equivalent<16>(jkk, 0, kkj, 0, 0));
+    CHECK_FALSE(*validity::keys_equivalent<16>(kk, 0, kj, 0, 0));
+    CHECK(*validity::keys_equivalent<16>(kk, 0, kk, 0, 0));
+}
