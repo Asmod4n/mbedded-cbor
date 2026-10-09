@@ -72,6 +72,11 @@ public:
     {
         return {};
     }
+
+    bool empty() const
+    {
+        return encoded.empty();
+    }
 };
 
 }
