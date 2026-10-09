@@ -10,6 +10,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -257,6 +258,32 @@ class heads
             }
             encoded.remove_prefix(1 + size);
             return head{major, info, argument};
+        }
+
+        CBOR_ALWAYS_INLINE std::optional<head> head_decode_where_no_check_is_needed()
+        {
+            std::uint8_t const initial = encoded.empty() ? 0xff : static_cast<std::uint8_t>(encoded.front());
+            auto const major = static_cast<major_type>(initial >> 5);
+            std::uint8_t const info = initial & 0x1f;
+            if (encoded.size() >= initial_byte_size + sizeof(std::uint64_t) &&
+                info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument) &&
+                major != major_type::tag &&
+                (major != major_type::simple_float ||
+                 info != std::to_underlying(rfc8949::additional_information::one_byte_argument))) [[likely]] {
+                bool const immediate =
+                    info < std::to_underlying(rfc8949::additional_information::one_byte_argument);
+                std::size_t const size = argument_size(info);
+                std::uint64_t argument = info;
+                if (info == std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
+                    argument = static_cast<std::uint8_t>(encoded[1]);
+                } else if (!immediate) {
+                    argument = unsigned_read<std::uint64_t>(std::span<char const>(encoded).subspan<1, 8>()) >>
+                               ((64 - 8 * size) & 63);
+                }
+                encoded.remove_prefix(1 + size);
+                return head{major, info, argument};
+            }
+            return std::nullopt;
         }
 
         constexpr std::expected<std::string_view, error> byte_string_decode(std::uint64_t const length)
