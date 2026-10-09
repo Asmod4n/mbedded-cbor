@@ -11,6 +11,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -59,6 +60,11 @@ class value_sharing
     template <std::size_t DepthMax, class Key>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
     static std::expected<typename lazy_entries<DepthMax>::iterator, error> key_find(resolved found, Key key);
+
+    template <std::size_t DepthMax, bool Sorted, class Last, class Key>
+        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+    static std::expected<std::pair<typename lazy_entries<DepthMax>::iterator, bool>, error>
+    key_find(typename lazy_entries<DepthMax>::iterator first, Last last, Key key);
 
     template <std::size_t DepthMax>
     static std::expected<lazy, error> value_of(std::expected<typename lazy_entries<DepthMax>::iterator, error> found);
@@ -117,6 +123,34 @@ struct lazy {
     template <std::size_t DepthMax = validity::nesting_depth_default>
         requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<typename lazy_entries<DepthMax>::iterator, error> find(std::int64_t key) const;
+
+    template <std::size_t DepthMax = validity::nesting_depth_default, class Last>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+                 (std::same_as<Last, typename lazy_entries<DepthMax>::iterator> ||
+                  std::same_as<Last, std::default_sentinel_t>))
+    static std::expected<typename lazy_entries<DepthMax>::iterator, error>
+    find(typename lazy_entries<DepthMax>::iterator first, Last last, std::string_view key);
+
+    template <std::size_t DepthMax = validity::nesting_depth_default, class Last>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+                 (std::same_as<Last, typename lazy_entries<DepthMax>::iterator> ||
+                  std::same_as<Last, std::default_sentinel_t>))
+    static std::expected<typename lazy_entries<DepthMax>::iterator, error>
+    find(typename lazy_entries<DepthMax>::iterator first, Last last, std::int64_t key);
+
+    template <std::size_t DepthMax = validity::nesting_depth_default, class Last>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+                 (std::same_as<Last, typename lazy_entries<DepthMax>::iterator> ||
+                  std::same_as<Last, std::default_sentinel_t>))
+    static std::expected<std::ranges::subrange<typename lazy_entries<DepthMax>::iterator>, error>
+    equal_range(typename lazy_entries<DepthMax>::iterator first, Last last, std::string_view key);
+
+    template <std::size_t DepthMax = validity::nesting_depth_default, class Last>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+                 (std::same_as<Last, typename lazy_entries<DepthMax>::iterator> ||
+                  std::same_as<Last, std::default_sentinel_t>))
+    static std::expected<std::ranges::subrange<typename lazy_entries<DepthMax>::iterator>, error>
+    equal_range(typename lazy_entries<DepthMax>::iterator first, Last last, std::int64_t key);
 
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||

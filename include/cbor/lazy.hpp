@@ -242,7 +242,38 @@ std::expected<typename lazy_entries<DepthMax>::iterator, error> value_sharing::k
     std::size_t const first = found.source->encoded.size() - found.d.encoded.size();
     typename lazy_entries<DepthMax>::iterator it{std::move(found.source), first, first, found.h.argument, error{}};
     it.value_find();
-    for (; it != std::default_sentinel; ++it) {
+    auto found_at = key_find<DepthMax, false>(std::move(it), std::default_sentinel, key);
+    if (!found_at) [[unlikely]]
+        return std::unexpected(found_at.error());
+    return std::move(found_at->first);
+}
+
+template <std::size_t DepthMax, bool Sorted, class Last, class Key>
+    requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+std::expected<std::pair<typename lazy_entries<DepthMax>::iterator, bool>, error>
+value_sharing::key_find(typename lazy_entries<DepthMax>::iterator it, Last const last, Key const key)
+{
+    std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> head{};
+    std::string_view wanted_head;
+    std::string_view wanted_content;
+    bool plain = Sorted;
+    if constexpr (Sorted) {
+        std::size_t size = 0;
+        if constexpr (std::same_as<Key, std::string_view>) {
+            size = heads::head_write(head, 0, major_type::text_string, key.size());
+            wanted_content = key;
+        } else {
+            size = heads::head_write(head, 0, key < 0 ? major_type::negative_integer : major_type::unsigned_integer,
+                                     key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key));
+        }
+        wanted_head = std::string_view(head.data(), size);
+    }
+    for (; it != last; ++it) {
+        if (it == std::default_sentinel) [[unlikely]] {
+            if constexpr (!std::same_as<Last, std::default_sentinel_t>)
+                validity::throw_logic_error("cbor::lazy: the last iterator is not a later pair of the same map");
+            break;
+        }
         if (it.failure != error{}) [[unlikely]]
             return std::unexpected(it.failure);
         auto const key_at = shared_resolve(*it.top_level, it.key);
@@ -252,21 +283,33 @@ std::expected<typename lazy_entries<DepthMax>::iterator, error> value_sharing::k
         auto const k = probe.head_decode();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
+        bool equal = false;
         if constexpr (std::same_as<Key, std::string_view>) {
-            if (k->major != major_type::text_string)
-                continue;
-            auto const content = probe.byte_string_decode(k->argument);
-            if (!content) [[unlikely]]
-                return std::unexpected(content.error());
-            if (*content == key)
-                return it;
+            if (k->major == major_type::text_string) {
+                auto const content = probe.byte_string_decode(k->argument);
+                if (!content) [[unlikely]]
+                    return std::unexpected(content.error());
+                equal = *content == key;
+            }
         } else {
-            if ((k->major == major_type::unsigned_integer && key >= 0 && k->argument == static_cast<std::uint64_t>(key)) ||
-                (k->major == major_type::negative_integer && key < 0 && k->argument == static_cast<std::uint64_t>(-1 - key)))
-                return it;
+            equal = (k->major == major_type::unsigned_integer && key >= 0 && k->argument == static_cast<std::uint64_t>(key)) ||
+                    (k->major == major_type::negative_integer && key < 0 && k->argument == static_cast<std::uint64_t>(-1 - key));
+        }
+        if (equal)
+            return std::pair{std::move(it), true};
+        if constexpr (Sorted) {
+            plain = plain && *key_at == it.key && k->major != major_type::tag;
+            if (plain) {
+                std::string_view const read = std::string_view(std::span(it.top_level->encoded).subspan(it.key, it.value - it.key));
+                auto order = read.substr(0, wanted_head.size()) <=> wanted_head;
+                if (order == 0)
+                    order = read.substr(wanted_head.size()) <=> wanted_content;
+                if (order > 0)
+                    return std::pair{std::move(it), false};
+            }
         }
     }
-    return it;
+    return std::pair{std::move(it), false};
 }
 
 template <std::size_t DepthMax>
@@ -287,6 +330,70 @@ std::expected<typename lazy_entries<DepthMax>::iterator, error> lazy::find(std::
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     return value_sharing::key_find<DepthMax>(std::move(*found), key);
+}
+
+template <std::size_t DepthMax, class Last>
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+             (std::same_as<Last, typename lazy_entries<DepthMax>::iterator> ||
+              std::same_as<Last, std::default_sentinel_t>))
+std::expected<typename lazy_entries<DepthMax>::iterator, error>
+lazy::find(typename lazy_entries<DepthMax>::iterator first, Last const last, std::string_view const key)
+{
+    auto found = value_sharing::key_find<DepthMax, false>(std::move(first), last, key);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    return std::move(found->first);
+}
+
+template <std::size_t DepthMax, class Last>
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+             (std::same_as<Last, typename lazy_entries<DepthMax>::iterator> ||
+              std::same_as<Last, std::default_sentinel_t>))
+std::expected<typename lazy_entries<DepthMax>::iterator, error>
+lazy::find(typename lazy_entries<DepthMax>::iterator first, Last const last, std::int64_t const key)
+{
+    auto found = value_sharing::key_find<DepthMax, false>(std::move(first), last, key);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    return std::move(found->first);
+}
+
+template <std::size_t DepthMax, class Last>
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+             (std::same_as<Last, typename lazy_entries<DepthMax>::iterator> ||
+              std::same_as<Last, std::default_sentinel_t>))
+std::expected<std::ranges::subrange<typename lazy_entries<DepthMax>::iterator>, error>
+lazy::equal_range(typename lazy_entries<DepthMax>::iterator first, Last const last, std::string_view const key)
+{
+    auto found = value_sharing::key_find<DepthMax, true>(std::move(first), last, key);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto &[at, equal] = *found;
+    if (!equal)
+        return std::ranges::subrange{at, at};
+    auto after = std::ranges::next(at);
+    if (after.failure != error{}) [[unlikely]]
+        return std::unexpected(after.failure);
+    return std::ranges::subrange{std::move(at), std::move(after)};
+}
+
+template <std::size_t DepthMax, class Last>
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value() &&
+             (std::same_as<Last, typename lazy_entries<DepthMax>::iterator> ||
+              std::same_as<Last, std::default_sentinel_t>))
+std::expected<std::ranges::subrange<typename lazy_entries<DepthMax>::iterator>, error>
+lazy::equal_range(typename lazy_entries<DepthMax>::iterator first, Last const last, std::int64_t const key)
+{
+    auto found = value_sharing::key_find<DepthMax, true>(std::move(first), last, key);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto &[at, equal] = *found;
+    if (!equal)
+        return std::ranges::subrange{at, at};
+    auto after = std::ranges::next(at);
+    if (after.failure != error{}) [[unlikely]]
+        return std::unexpected(after.failure);
+    return std::ranges::subrange{std::move(at), std::move(after)};
 }
 
 template <std::size_t DepthMax>

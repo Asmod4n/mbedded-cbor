@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 #include <variant>
 #include <vector>
 
@@ -356,6 +357,162 @@ TEST_CASE("lazy: find in a truncated map gives the error")
     CHECK_EQ(l.find<16>("z").error(), error::too_little_data);
     CHECK_EQ(l.at<16>("z").error(), error::too_little_data);
     CHECK(value_at(at(l, "a")) == V(1));
+}
+
+// The owner wants a search that starts at a position the caller already has. find from first to the
+// end reads the pairs from first on, so a key after first is found.
+TEST_CASE("lazy: find from an iterator to the end finds a later key")
+{
+    cbor::lazy const l = lazy_of(encoded(M("a"s, 1, "b"s, 2, 3, "c"s, "d"s, 4)));
+    auto const b = l.find<16>("b");
+    REQUIRE(b.has_value());
+    auto const d = cbor::lazy::find<16>(*b, std::default_sentinel, "d");
+    REQUIRE(d.has_value());
+    REQUIRE(*d != std::default_sentinel);
+    CHECK(value_at((**d)->second) == V(4));
+    auto const three = cbor::lazy::find<16>(*b, std::default_sentinel, 3);
+    REQUIRE(three.has_value());
+    CHECK(value_at((**three)->second) == V("c"s));
+    auto const self = cbor::lazy::find<16>(*b, std::default_sentinel, "b");
+    REQUIRE(self.has_value());
+    CHECK(*self == *b);
+}
+
+// A key before first is outside [first, end), so the search gives the end. The search over [begin, first)
+// is the backward search: it reads forward from begin and stops at first, and finds the key.
+TEST_CASE("lazy: a key before the iterator is found only over the part before it")
+{
+    cbor::lazy const l = lazy_of(encoded(M("a"s, 1, "b"s, 2, 3, "c"s, "d"s, 4)));
+    auto const entries = l.entries<16>();
+    REQUIRE(entries.has_value());
+    auto const three = l.find<16>(3);
+    REQUIRE(three.has_value());
+    auto const forward = cbor::lazy::find<16>(*three, std::default_sentinel, "a");
+    REQUIRE(forward.has_value());
+    CHECK(*forward == std::default_sentinel);
+    auto const backward = cbor::lazy::find<16>(entries->begin(), *three, "a");
+    REQUIRE(backward.has_value());
+    REQUIRE(*backward != *three);
+    CHECK(value_at((**backward)->second) == V(1));
+    auto const after = cbor::lazy::find<16>(entries->begin(), *three, "d");
+    REQUIRE(after.has_value());
+    CHECK(*after == *three);
+    auto const whole = cbor::lazy::find<16>(entries->begin(), std::default_sentinel, "a");
+    REQUIRE(whole.has_value());
+    CHECK(*whole == *backward);
+}
+
+// An element iterator holds its position too. std::ranges::next with the end as bound steps n elements
+// from it and stops at the end; std::ranges::find_if over [begin, from) searches the part before it.
+TEST_CASE("lazy: an element iterator steps on and searches back with std::ranges")
+{
+    auto const elements = lazy_of(encoded(A(1, 2, 3, 4))).elements<16>();
+    REQUIRE(elements.has_value());
+    auto const two = std::ranges::next(elements->begin(), 1, std::default_sentinel);
+    auto const four = std::ranges::next(two, 2, std::default_sentinel);
+    CHECK(value_at(**two) == V(2));
+    CHECK(value_at(**four) == V(4));
+    CHECK(std::ranges::next(four, 5, std::default_sentinel) == std::default_sentinel);
+    auto const one = std::ranges::find_if(elements->begin(), four, [](auto const &e) { return value_at(*e) == V(1); });
+    REQUIRE(one != four);
+    CHECK(value_at(**one) == V(1));
+    auto const missing = std::ranges::find_if(elements->begin(), two, [](auto const &e) { return value_at(*e) == V(3); });
+    CHECK(missing == two);
+}
+
+// The iterator holds the owner of the encoded item. A search from it after the lazy and the string are
+// gone reads memory that is alive; ASan checks it.
+TEST_CASE("lazy: find from an iterator outlives the lazy that gave it")
+{
+    std::optional<cbor::lazy_entries<16>::iterator> kept;
+    {
+        std::string message = encoded(M("a"s, 1, "b"s, 2, "c"s, 3));
+        auto const l = cbor::lazy::from(std::move(message));
+        REQUIRE(l.has_value());
+        auto const a = l->find<16>("a");
+        REQUIRE(a.has_value());
+        kept = *a;
+    }
+    auto const c = cbor::lazy::find<16>(*kept, std::default_sentinel, "c");
+    REQUIRE(c.has_value());
+    REQUIRE(*c != std::default_sentinel);
+    CHECK(value_at((**c)->second) == V(3));
+}
+
+// With two known positions a and b, a search reads only [a, b). In a map whose keys are sorted by their
+// encoded bytes (RFC 8949 4.2.1), equal_range gives the pair of the key, as std::ranges::equal_range does
+// over a sorted range.
+TEST_CASE("lazy: equal_range between two iterators finds a key between them")
+{
+    cbor::lazy const l = lazy_of(encoded(M(1, 1, "b"s, 2, "d"s, 4, "f"s, 6, "h"s, 8)));
+    auto const a = l.find<16>("b");
+    auto const b = l.find<16>("h");
+    REQUIRE(a.has_value());
+    REQUIRE(b.has_value());
+    auto const hit = cbor::lazy::equal_range<16>(*a, *b, "f");
+    REQUIRE(hit.has_value());
+    REQUIRE(std::ranges::distance(*hit) == 1);
+    CHECK(value_at((*hit->begin())->second) == V(6));
+    auto const number = cbor::lazy::equal_range<16>(l.entries<16>()->begin(), *b, 1);
+    REQUIRE(number.has_value());
+    REQUIRE(std::ranges::distance(*number) == 1);
+    CHECK(value_at((*number->begin())->second) == V(1));
+}
+
+// A missing key in a sorted map stops at the first key whose encoded bytes are greater. The empty range
+// stands there, where the key would be, as std::ranges::equal_range gives it. Nothing after it is read.
+TEST_CASE("lazy: equal_range stops at the first greater key for a missing key")
+{
+    cbor::lazy const l = lazy_of(encoded(M("b"s, 2, "d"s, 4, "f"s, 6, "h"s, 8)));
+    auto const entries = l.entries<16>();
+    REQUIRE(entries.has_value());
+    auto const h = l.find<16>("h");
+    REQUIRE(h.has_value());
+    auto const miss = cbor::lazy::equal_range<16>(entries->begin(), *h, "e");
+    REQUIRE(miss.has_value());
+    CHECK(miss->empty());
+    CHECK(value_at((*miss->begin())->first) == V("f"s));
+    auto const after = cbor::lazy::equal_range<16>(entries->begin(), *h, "z");
+    REQUIRE(after.has_value());
+    CHECK(after->empty());
+    CHECK(after->begin() == *h);
+
+    cbor::lazy const truncated = lazy_of("\xa3\x61" "b\x02\x61" "f\x06\x61"s);
+    auto const early = cbor::lazy::equal_range<16>(truncated.entries<16>()->begin(), std::default_sentinel, "e");
+    REQUIRE(early.has_value());
+    CHECK(value_at((*early->begin())->first) == V("f"s));
+    CHECK_EQ(truncated.find<16>("e").error(), error::too_little_data);
+}
+
+// A key under tag 28 sorts by its tagged bytes, after every text key, but a key under tag 29 is compared by
+// the content it refers to. After a tagged key the search reads to b and does not stop early. Here the key
+// 28("z") sorts after "q" by its bytes, and the key 29(0) after it refers to "q".
+TEST_CASE("lazy: equal_range reads past a tagged key")
+{
+    cbor::lazy const l = lazy_of("\xa3\x61" "a\xd8\x1c\x61q\xd8\x1c\x61z\x03\xd8\x1d\x00\x02"s);
+    auto const entries = l.entries<16>();
+    REQUIRE(entries.has_value());
+    auto const q = cbor::lazy::equal_range<16>(entries->begin(), std::default_sentinel, "q");
+    REQUIRE(q.has_value());
+    REQUIRE(std::ranges::distance(*q) == 1);
+    CHECK(value_at((*q->begin())->second) == V(2));
+}
+
+// a and b of two different maps hold no range. The scan from a reaches the end of its map without b, and
+// that is a wrong use of the library.
+TEST_CASE("lazy: a range over two maps is a logic error")
+{
+    cbor::lazy const one = lazy_of(encoded(M("a"s, 1, "b"s, 2)));
+    cbor::lazy const two = lazy_of(encoded(M("a"s, 1, "b"s, 2)));
+    auto const a = one.find<16>("a");
+    auto const b = two.find<16>("b");
+    REQUIRE(a.has_value());
+    REQUIRE(b.has_value());
+    CHECK_THROWS_AS(std::ignore = cbor::lazy::equal_range<16>(*a, *b, "x"), std::logic_error);
+    CHECK_THROWS_AS(std::ignore = cbor::lazy::find<16>(*a, *b, "x"), std::logic_error);
+    auto const b_one = one.find<16>("b");
+    REQUIRE(b_one.has_value());
+    CHECK_THROWS_AS(std::ignore = cbor::lazy::find<16>(*b_one, *a, "x"), std::logic_error);
 }
 
 // decode reads nothing ahead, so a step finds a truncated element. The step gives the error once and
