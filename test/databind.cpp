@@ -2,13 +2,19 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstdint>
+#include <deque>
 #include <functional>
+#include <limits>
+#include <list>
 #include <map>
 #include <memory>
-#include <stdexcept>
+#include <new>
 #include <optional>
+#include <set>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -428,6 +434,131 @@ TEST_CASE("databind: decode takes a moved string as the owner and refuses every 
     auto const held = cbor::databind<std::string_view>::decode(owner, *owner);
     REQUIRE(held.has_value());
     CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(owner->data() + 2));
+}
+
+struct float_member {
+    float f;
+};
+
+// A double that a float cannot hold exactly gives number_out_of_range, as an integer that does not fit does.
+// Before the fix 1e300 and DBL_MAX read as inf and 0.1 lost its precision, all with no error.
+TEST_CASE("databind: a double that a float cannot hold is number_out_of_range")
+{
+    auto const huge = cbor::databind<float>::decode("\xfb\x7e\x37\xe4\x3c\x88\x00\x75\x9c"s);
+    REQUIRE_FALSE(huge.has_value());
+    CHECK_EQ(huge.error(), error::number_out_of_range);
+    auto const max = cbor::databind<float_member>::decode("\xa1\x61"
+                                                          "f\xfb\x7f\xef\xff\xff\xff\xff\xff\xff"s);
+    REQUIRE_FALSE(max.has_value());
+    CHECK_EQ(max.error(), error::number_out_of_range);
+    auto const tenth = cbor::databind<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s);
+    REQUIRE_FALSE(tenth.has_value());
+    CHECK_EQ(tenth.error(), error::number_out_of_range);
+    auto const payload = cbor::databind<float>::decode("\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s);
+    REQUIRE_FALSE(payload.has_value());
+    CHECK_EQ(payload.error(), error::number_out_of_range);
+
+    auto const exact = cbor::databind<float_member>::decode("\xa1\x61"
+                                                            "f\xfb\x3f\xf8\x00\x00\x00\x00\x00\x00"s);
+    REQUIRE(exact.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>((*exact)->f), 0x3fc00000u);
+    auto const infinite = cbor::databind<float>::decode("\xfb\xff\xf0\x00\x00\x00\x00\x00\x00"s);
+    REQUIRE(infinite.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>(**infinite), 0xff800000u);
+    auto const nan = cbor::databind<float>::decode("\xfb\xff\xf0\x00\x00\x20\x00\x00\x00"s);
+    REQUIRE(nan.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>(**nan), 0xff800001u);
+    auto const half = cbor::databind<float>::decode("\xf9\x7c\x01"s);
+    REQUIRE(half.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>(**half), 0x7f802000u);
+}
+
+struct standard_containers {
+    std::list<int> l;
+    std::deque<int> q;
+    std::vector<bool> b;
+    std::set<int> s;
+    std::multiset<int> m;
+    std::multimap<int, int> mm;
+    bool operator==(standard_containers const &) const = default;
+};
+
+// decode reads every standard container that encode writes. Before the fix std::list, std::deque, std::set
+// and std::vector<bool> encoded but did not compile in decode: the branch tested push_back and called reserve
+// and emplace_back, and a std::set fell through to the struct reader.
+TEST_CASE("databind: every standard container that encode writes decodes")
+{
+    round_trip("\x82\xf5\xf4"s, std::vector<bool>{true, false});
+    round_trip("\x82\x01\x02"s, std::set<int>{1, 2});
+    round_trip("\x83\x01\x02\x03"s, std::list<int>{1, 2, 3});
+    round_trip("\x82\x01\x02"s, std::deque<int>{1, 2});
+    round_trip("\xa6\x61l\x82\x01\x02\x61q\x81\x03\x61"
+               "b\x81\xf5\x61s\x82\x04\x05\x61m\x82\x06\x06\x62mm\xa2\x01\x02\x01\x03"s,
+               standard_containers{{1, 2}, {3}, {true}, {4, 5}, {6, 6}, {{1, 2}, {1, 3}}});
+}
+
+template <class T>
+struct bounded_allocator {
+    using value_type = T;
+    static constexpr std::size_t limit = std::size_t{1} << 21;
+    bounded_allocator() = default;
+    template <class U>
+    constexpr bounded_allocator(bounded_allocator<U> const &) noexcept
+    {
+    }
+    T *allocate(std::size_t const n)
+    {
+        if (n > limit / sizeof(T))
+            throw std::bad_alloc();
+        return std::allocator<T>{}.allocate(n);
+    }
+    void deallocate(T *const p, std::size_t const n) noexcept
+    {
+        std::allocator<T>{}.deallocate(p, n);
+    }
+    bool operator==(bounded_allocator const &) const = default;
+};
+
+struct large_elements {
+    std::vector<std::array<std::uint64_t, 512>, bounded_allocator<std::array<std::uint64_t, 512>>> v;
+};
+
+// An array head of 2^20 elements before 1 MiB of input made decode reserve 2^20 elements of 4096 bytes, 4
+// GiB, and std::bad_alloc escaped decode. The reserve is now at most what the remaining bytes hold, so the
+// allocator that refuses more than 2 MiB is not reached, and the read ends at the first element that is no
+// array. A std::bad_alloc that does happen inside decode comes back as not_enough_memory.
+TEST_CASE("databind: decode reserves no more than the remaining bytes and returns std::bad_alloc as an error")
+{
+    std::string message = "\xa1\x61v\x9a\x00\x10\x00\x00"s;
+    message += std::string(std::size_t{1} << 20, '\xf6');
+    auto const r = cbor::databind<large_elements>::decode(std::move(message));
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::incorrect_type);
+
+    std::string many = "\xa1\x61v\x9a\x00\x00\x02\x01"s;
+    std::string const element = "\x99\x02\x00"s + std::string(512, '\x00');
+    for (int i = 0; i < 0x201; ++i)
+        many += element;
+    auto const full = cbor::databind<large_elements>::decode(std::move(many));
+    REQUIRE_FALSE(full.has_value());
+    CHECK_EQ(full.error(), error::not_enough_memory);
+}
+
+struct one_int {
+    int a;
+};
+
+// A key is read with the same well-formedness checks as a value: f8 10 is simple value 16 in two bytes, which
+// RFC 8949 3.3 forbids. Before the fix the key reader accepted it.
+TEST_CASE("databind: a map key that is not well-formed is a syntax error")
+{
+    auto const r = cbor::databind<one_int>::decode("\xa2\xf8\x10\x00\x61"
+                                                   "a\x05"s);
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::syntax_error);
+    auto const alone = cbor::databind<cbor::simple_value>::decode("\xf8\x10"s);
+    REQUIRE_FALSE(alone.has_value());
+    CHECK_EQ(alone.error(), error::syntax_error);
 }
 
 #endif
