@@ -97,6 +97,22 @@ public:
         }
         return "unknown cbor error";
     }
+
+    std::error_condition default_error_condition(int const condition) const noexcept override
+    {
+        switch (static_cast<error>(condition)) {
+        case error::no_buffer_space:
+            return std::make_error_condition(std::errc::no_buffer_space);
+        case error::value_too_large:
+            return std::make_error_condition(std::errc::value_too_large);
+        case error::not_enough_memory:
+            return std::make_error_condition(std::errc::not_enough_memory);
+        case error::io_error:
+            return std::make_error_condition(std::errc::io_error);
+        default:
+            return std::error_condition(condition, *this);
+        }
+    }
 };
 
 inline std::error_category const &category() noexcept
