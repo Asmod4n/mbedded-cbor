@@ -610,7 +610,7 @@ static std::uint64_t op()
     return mb_at_path();
 #elif defined(ARM_MB_PATH_ALL)
     read_binding b;
-    auto const r = cbor::at_path<"$..*">(b, *cbor::lazy::from(keep, in));
+    auto const r = cbor::query<"$..*">(b, *cbor::lazy::from(keep, in));
     if (!r) [[unlikely]]
         std::abort();
     return *r;

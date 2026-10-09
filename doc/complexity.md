@@ -406,7 +406,10 @@ All rows marked "compile time" have no run-time cost.
 | `typed_array_view<E>` constructor :1505 | O(1) | O(1) | |
 | `typed_array_view::iterator` members :1517-1604 | O(1) | O(1) | |
 | `typed_array_view::size`, `empty`, `begin`, `end` | O(1) | O(1) | |
-| `typed_array_view::front`, `back`, `first`, `last`, `operator[]` | O(1) | O(1) | Checked. |
+| `typed_array_view::cbegin`, `cend`, `rbegin`, `rend`, `crbegin`, `crend` | O(1) | O(1) | std::reverse_iterator over the iterator. |
+| `typed_array_view::at` | O(1) | O(1) | Checked; index_out_of_bounds as an error value. |
+| `typed_array_view::front`, `back`, `operator[]` | O(1) | O(1) | Checked; a wrong index or an empty view throws std::logic_error. |
+| `typed_array_view::first`, `last` | O(1) | O(1) | Checked. |
 | `tags_registered<Root>()` :1687 | O(t log t + t·a) compile time | O(t) | |
 | `packed::fixed_size<T, Root>()` :1701 | compile time | O(1) | |
 | `packed::member_offset` :1790 | O(c) compile time | O(1) | |

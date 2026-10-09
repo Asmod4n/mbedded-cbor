@@ -1624,19 +1624,47 @@ public:
         return iterator(self.bytes.end());
     }
 
-    CBOR_ALWAYS_INLINE std::expected<E, error> front() const
+    CBOR_ALWAYS_INLINE iterator cbegin() const
     {
-        if (error const c = validity::check_index(std::size_t{0}, size()).error_or(error{}); c != error{})
-            [[unlikely]]
-            return std::unexpected(c);
+        return begin();
+    }
+
+    CBOR_ALWAYS_INLINE iterator cend() const
+    {
+        return end();
+    }
+
+    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> rbegin() const
+    {
+        return std::reverse_iterator<iterator>(end());
+    }
+
+    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> rend() const
+    {
+        return std::reverse_iterator<iterator>(begin());
+    }
+
+    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> crbegin() const
+    {
+        return rbegin();
+    }
+
+    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> crend() const
+    {
+        return rend();
+    }
+
+    CBOR_ALWAYS_INLINE E front() const
+    {
+        if (!validity::check_index(std::size_t{0}, size())) [[unlikely]]
+            validity::throw_logic_error("cbor::typed_array_view::front: the view is empty");
         return packed::typed_array_element_read<E>(bytes.template first<sizeof(E)>());
     }
 
-    CBOR_ALWAYS_INLINE std::expected<E, error> back() const
+    CBOR_ALWAYS_INLINE E back() const
     {
-        if (error const c = validity::check_index(std::size_t{0}, size()).error_or(error{}); c != error{})
-            [[unlikely]]
-            return std::unexpected(c);
+        if (!validity::check_index(std::size_t{0}, size())) [[unlikely]]
+            validity::throw_logic_error("cbor::typed_array_view::back: the view is empty");
         return packed::typed_array_element_read<E>(bytes.template last<sizeof(E)>());
     }
 
@@ -1668,10 +1696,17 @@ public:
         return typed_array_view(std::move(owner), bytes.last(n * sizeof(E)));
     }
 
-    CBOR_ALWAYS_INLINE std::expected<E, error> operator[](std::size_t const i) const
+    CBOR_ALWAYS_INLINE std::expected<E, error> at(std::size_t const i) const
     {
         if (error const c = validity::check_index(i, size()).error_or(error{}); c != error{}) [[unlikely]]
             return std::unexpected(c);
+        return packed::typed_array_element_read<E>(bytes.subspan(i * sizeof(E)).template first<sizeof(E)>());
+    }
+
+    CBOR_ALWAYS_INLINE E operator[](std::size_t const i) const
+    {
+        if (!validity::check_index(i, size())) [[unlikely]]
+            validity::throw_logic_error("cbor::typed_array_view::operator[]: the index is outside of the view");
         return packed::typed_array_element_read<E>(bytes.subspan(i * sizeof(E)).template first<sizeof(E)>());
     }
 };

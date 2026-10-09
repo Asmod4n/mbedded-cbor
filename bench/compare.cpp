@@ -385,11 +385,8 @@ static double mb_read_view()
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
     double s = 0;
-    for (std::size_t i = 0; i < v->size(); ++i) {
-        auto const x = (*v)[i];
-        if (!x) [[unlikely]] std::abort();
-        s += *x;
-    }
+    for (std::size_t i = 0; i < v->size(); ++i)
+        s += (*v)[i];
     return s;
 }
 static double mb_field_view()
@@ -398,9 +395,7 @@ static double mb_field_view()
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
-    auto const x = (*v)[30000];
-    if (!x) [[unlikely]] std::abort();
-    return *x;
+    return (*v)[30000];
 }
 static double mb_field_view_moved()
 {
@@ -408,9 +403,7 @@ static double mb_field_view_moved()
     if (!opened) [[unlikely]] std::abort();
     auto const v = std::move(*opened).view<"$.values">();
     if (!v) [[unlikely]] std::abort();
-    auto const x = (*v)[30000];
-    if (!x) [[unlikely]] std::abort();
-    return *x;
+    return (*v)[30000];
 }
 static double mb_front()
 {
@@ -418,9 +411,7 @@ static double mb_front()
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
-    auto const x = v->front();
-    if (!x) [[unlikely]] std::abort();
-    return *x;
+    return v->front();
 }
 static double mb_back()
 {
@@ -428,9 +419,7 @@ static double mb_back()
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
-    auto const x = v->back();
-    if (!x) [[unlikely]] std::abort();
-    return *x;
+    return v->back();
 }
 static double mb_read_for()
 {
