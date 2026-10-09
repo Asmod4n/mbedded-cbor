@@ -413,6 +413,15 @@ class heads
     static constexpr std::uint64_t float_encode(rfc8949::simple_float_information const info,
                                                 double const value)
     {
+        constexpr precision d = double_precision;
+        constexpr precision f = single_precision;
+        std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
+        if (info == rfc8949::simple_float_information::single_precision_float && is_nan(d, bits)) [[unlikely]]
+            return bits >> (d.significand_bits + std::bit_width(d.exponent_max))
+                               << (f.significand_bits + std::bit_width(f.exponent_max)) |
+                   std::uint64_t{f.exponent_max} << f.significand_bits |
+                   (bits & ((std::uint64_t{1} << d.significand_bits) - 1u)) >>
+                       (d.significand_bits - f.significand_bits);
         switch (info) {
         case rfc8949::simple_float_information::half_precision_float:
             return float_encode_binary16(static_cast<float>(value));

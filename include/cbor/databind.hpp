@@ -10,6 +10,7 @@
 #include <expected>
 #include <limits>
 #include <memory>
+#include <new>
 #include <ranges>
 #include <span>
 #include <string>
@@ -131,7 +132,7 @@ class generic
             return h.major == major_type::array && h.argument == std::tuple_size_v<U>;
         else if constexpr (packed::is_map<U>)
             return h.major == major_type::map;
-        else if constexpr (requires { typename U::value_type; std::declval<U &>().push_back(std::declval<typename U::value_type>()); })
+        else if constexpr (requires(U const &c) { typename U::value_type; c.size(); })
             return h.major == major_type::array;
         else
             return h.major == major_type::map;
@@ -262,20 +263,33 @@ class generic
         } else if constexpr (std::is_integral_v<U>) {
             return integer_read<U>(d, out);
         } else if constexpr (std::is_floating_point_v<U>) {
+            static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::databind reads and writes float and double only.");
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
-            if (h->major != major_type::simple_float) [[unlikely]]
+            if (!head_accepted<U>(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            switch (static_cast<rfc8949::simple_float_information>(h->info)) {
-            case rfc8949::simple_float_information::half_precision_float:
-            case rfc8949::simple_float_information::single_precision_float:
-            case rfc8949::simple_float_information::double_precision_float:
-                out = static_cast<U>(heads::float_decode(h->info, h->argument));
-                return {};
-            [[unlikely]] default:
-                return std::unexpected(error::incorrect_type);
+            if constexpr (std::same_as<U, double>) {
+                out = heads::float_decode(h->info, h->argument);
+            } else if (h->info ==
+                       std::to_underlying(rfc8949::simple_float_information::half_precision_float)) {
+                out = heads::float_decode_binary16(static_cast<std::uint16_t>(h->argument));
+            } else if (h->info ==
+                       std::to_underlying(rfc8949::simple_float_information::single_precision_float)) {
+                out = std::bit_cast<float>(static_cast<std::uint32_t>(h->argument));
+            } else {
+                double const value = std::bit_cast<double>(h->argument);
+                constexpr int narrow =
+                    heads::double_precision.significand_bits - heads::single_precision.significand_bits;
+                if (heads::is_nan(heads::double_precision, h->argument)
+                        ? (h->argument & ((std::uint64_t{1} << narrow) - 1u)) != 0
+                        : heads::preferred_float_info(value) ==
+                              rfc8949::simple_float_information::double_precision_float) [[unlikely]]
+                    return std::unexpected(error::number_out_of_range);
+                out = std::bit_cast<float>(static_cast<std::uint32_t>(
+                    heads::float_encode(rfc8949::simple_float_information::single_precision_float, value)));
             }
+            return {};
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
@@ -356,20 +370,39 @@ class generic
                 typename U::mapped_type value{};
                 if (auto const r = generic_read(d, value, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
-                out.try_emplace(std::move(key), std::move(value));
+                if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); })
+                    out.try_emplace(std::move(key), std::move(value));
+                else
+                    out.emplace(std::move(key), std::move(value));
             }
             return {};
-        } else if constexpr (requires { out.push_back(std::declval<typename U::value_type>()); }) {
+        } else if constexpr (requires { typename U::value_type; out.size(); }) {
+            using E = typename U::value_type;
+            static_assert(
+                requires(E &&e) { out.insert(out.end(), std::move(e)); },
+                "cbor::databind decodes a container with insert(end(), value); this container has none.");
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
             if (h->major != major_type::array) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             out.clear();
-            out.reserve(std::min<std::uint64_t>(h->argument, d.encoded.size()));
+            if constexpr (requires { out.reserve(std::size_t{}); })
+                out.reserve(static_cast<std::size_t>(
+                    std::min<std::uint64_t>(h->argument, d.encoded.size() / sizeof(E))));
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                if (auto const r = generic_read(d, out.emplace_back(), depth + 1, depth_max); !r) [[unlikely]]
-                    return r;
+                if constexpr (requires {
+                                  { out.emplace_back() } -> std::same_as<E &>;
+                              }) {
+                    if (auto const r = generic_read(d, out.emplace_back(), depth + 1, depth_max); !r)
+                        [[unlikely]]
+                        return r;
+                } else {
+                    E element{};
+                    if (auto const r = generic_read(d, element, depth + 1, depth_max); !r) [[unlikely]]
+                        return r;
+                    out.insert(out.end(), std::move(element));
+                }
             }
             return {};
         } else {
@@ -437,6 +470,10 @@ class generic
                 } else if (k->major == major_type::array || k->major == major_type::map ||
                            k->major == major_type::tag) [[unlikely]] {
                     return std::unexpected(error::unsupported_value);
+                } else if (error const c =
+                               validity::check_simple_value(k->info, k->argument).error_or(error{});
+                           c != error{}) [[unlikely]] {
+                    return std::unexpected(c);
                 }
             }
             bool matched = false;
@@ -521,6 +558,7 @@ class generic
             else
                 return heads::head_size(value);
         } else if constexpr (std::is_floating_point_v<U>) {
+            static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::databind reads and writes float and double only.");
             return float_size(static_cast<double>(value));
         } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view> ||
                              std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
@@ -733,19 +771,35 @@ public:
     template <std::same_as<std::string> Encoded>
     static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
     {
-        auto owner = std::make_shared<std::string const>(std::move(encoded));
-        std::string_view const view = *owner;
-        return decode(std::move(owner), view);
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            auto owner = std::make_shared<std::string const>(std::move(encoded));
+            std::string_view const view = *owner;
+            return decode(std::move(owner), view);
+#if defined(__cpp_exceptions)
+        } catch (std::bad_alloc const &) {
+            return std::unexpected(error::not_enough_memory);
+        }
+#endif
     }
 
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::databind::decode: the owner of the encoded data item is empty");
-        auto value = read(encoded, validity::nesting_depth_max_read());
-        if (!value) [[unlikely]]
-            return std::unexpected(value.error());
-        return owning_ref<T>(std::move(owner), std::move(*value));
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            auto value = read(encoded, validity::nesting_depth_max_read());
+            if (!value) [[unlikely]]
+                return std::unexpected(value.error());
+            return owning_ref<T>(std::move(owner), std::move(*value));
+#if defined(__cpp_exceptions)
+        } catch (std::bad_alloc const &) {
+            return std::unexpected(error::not_enough_memory);
+        }
+#endif
     }
 
     template <class Encoded>

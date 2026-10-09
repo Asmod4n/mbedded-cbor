@@ -1485,7 +1485,15 @@ class packed
     static consteval auto members_of()
     {
         auto const members = data_members<U>();
-        if (!has_integer_keys<U> && !keys_unique(members))
+        if constexpr (has_integer_keys<U>)
+            static_assert(
+                [] {
+                    auto keys = U::keys;
+                    std::ranges::sort(keys);
+                    return validity::keys_unique(keys);
+                }(),
+                "The integer keys of a struct must be unique.");
+        else if (!keys_unique(members))
             std::unreachable();
         return members;
     }
