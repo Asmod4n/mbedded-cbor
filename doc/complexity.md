@@ -139,6 +139,7 @@ Enums and constants only. No function found by grep.
 |---|---|---|---|
 | `sequence(string_view)` :25 | O(1) | O(1) | Parses nothing. |
 | `sequence(Encoded&&) = delete` :30 | none | none | A std::string does not compile. |
+| `sequence::empty()` | O(1) | O(1) | Reads no item. |
 | `iterator::operator*() const` :39 | O(1) | O(1) | Returns the cached size. |
 | `iterator::operator++()` :46 | O(n_next); O(1) on error | O(1) | Full walk O(N). |
 | `iterator::operator++(int)` :57 | O(n_next) | O(1) | Returns void. |

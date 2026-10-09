@@ -33,11 +33,19 @@ bool inside(std::string const &bytes, char const *const p)
 
 } // namespace
 
-// RFC 8742 2: an empty sequence of bytes is a CBOR Sequence of no data items.
+// RFC 8742 2: an empty sequence of bytes is a CBOR Sequence of no data items. empty() answers that without a
+// read, as std::ranges::empty does for any range; a sequence of bytes that are not well-formed is not empty.
+// The iterator is an input iterator: the size of each item is read once, on the step to it.
 TEST_CASE("sequence: an empty CBOR Sequence has no element")
 {
     CHECK(elements_of(""sv).empty());
-    CHECK(std::ranges::input_range<cbor::sequence>);
+    static_assert(std::ranges::input_range<cbor::sequence>);
+    static_assert(!std::ranges::forward_range<cbor::sequence>);
+    static_assert(!std::ranges::sized_range<cbor::sequence>);
+    CHECK(cbor::sequence{""sv}.empty());
+    CHECK(std::ranges::empty(cbor::sequence{""sv}));
+    CHECK_FALSE(cbor::sequence{"\x01"sv}.empty());
+    CHECK_FALSE(cbor::sequence{"\x18"sv}.empty());
 }
 
 // RFC 8742 2: the elements are the encoded data items, one after the other, with no marker between them. Each
