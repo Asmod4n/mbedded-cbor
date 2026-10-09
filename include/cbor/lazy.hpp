@@ -289,10 +289,9 @@ inline std::optional<bool> value_sharing::key_equal(heads::decoder d, std::array
 }
 
 template <std::size_t DepthMax, class Marks>
-std::optional<std::pair<heads::decoder, std::uint64_t>> value_sharing::key_find(heads::decoder d, Marks &marks,
-                                                                               std::uint64_t const count,
-                                                                               std::array<std::string_view, 2> const key,
-                                                                               position_index<DepthMax> const &hint)
+std::optional<std::tuple<heads::decoder, heads::decoder, std::uint64_t>>
+value_sharing::key_find(heads::decoder d, Marks &marks, std::uint64_t const count, std::array<std::string_view, 2> const key,
+                        position_index<DepthMax> const &hint)
 {
     auto const remembered = hint.positions.find(key);
     if (remembered != hint.positions.end()) {
@@ -305,7 +304,10 @@ std::optional<std::pair<heads::decoder, std::uint64_t>> value_sharing::key_find(
                     return std::nullopt;
         if (key_equal(d, key) != true)
             return std::nullopt;
-        return std::pair{d, left};
+        heads::decoder value = d;
+        if (!well_formedness::item_skip<DepthMax>(value, marks, 1)) [[unlikely]]
+            return std::nullopt;
+        return std::tuple{d, value, left};
     }
     if (!hint.core_deterministic)
         return std::nullopt;
@@ -319,30 +321,34 @@ std::optional<std::pair<heads::decoder, std::uint64_t>> value_sharing::key_find(
     heads::decoder above_key{above->first};
     if (!below_key.head_decode() || !above_key.head_decode()) [[unlikely]]
         return std::nullopt;
+    std::array<std::string_view, 2> const below_encoded{
+        std::string_view(below->first).substr(0, below->first.size() - below_key.encoded.size()), below_key.encoded};
+    std::array<std::string_view, 2> const above_encoded{
+        std::string_view(above->first).substr(0, above->first.size() - above_key.encoded.size()), above_key.encoded};
     for (std::uint64_t i = 0; i < count - below->second; ++i)
         for (int n = 0; n < 2; ++n)
             if (!well_formedness::item_skip<DepthMax>(d, marks, 1)) [[unlikely]]
                 return std::nullopt;
-    if (key_equal(d, {std::string_view(below->first).substr(0, below->first.size() - below_key.encoded.size()),
-                      below_key.encoded}) != true)
-        return std::nullopt;
-    for (std::uint64_t left = below->second; left > above->second + 1; --left) {
-        for (int n = 0; n < 2; ++n)
-            if (!well_formedness::item_skip<DepthMax>(d, marks, 1)) [[unlikely]]
-                return std::nullopt;
-        auto const equal = key_equal(d, key);
-        if (!equal)
+    for (std::uint64_t left = below->second;; --left) {
+        heads::decoder value = d;
+        if (!well_formedness::item_skip<DepthMax>(value, marks, 1)) [[unlikely]]
             return std::nullopt;
-        if (*equal)
-            return std::pair{d, left - 1};
-    }
-    for (int n = 0; n < 2; ++n)
+        if (left == below->second || left == above->second) {
+            if (key_equal(d, left == below->second ? below_encoded : above_encoded) != true)
+                return std::nullopt;
+        } else {
+            auto const equal = key_equal(d, key);
+            if (!equal)
+                return std::nullopt;
+            if (*equal)
+                return std::tuple{d, value, left};
+        }
+        d = value;
         if (!well_formedness::item_skip<DepthMax>(d, marks, 1)) [[unlikely]]
             return std::nullopt;
-    if (key_equal(d, {std::string_view(above->first).substr(0, above->first.size() - above_key.encoded.size()),
-                      above_key.encoded}) != true)
-        return std::nullopt;
-    return std::pair{d, std::uint64_t{0}};
+        if (left == 1)
+            return std::tuple{d, value, std::uint64_t{0}};
+    }
 }
 
 template <std::size_t DepthMax, class Key>
@@ -353,21 +359,11 @@ value_sharing::key_find(resolved found, Key const key, position_index<DepthMax> 
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> bytes;
-    std::array<std::string_view, 2> encoded;
-    if constexpr (std::same_as<Key, std::string_view>) {
-        std::size_t const size = heads::head_write(bytes, 0, major_type::text_string, key.size());
-        encoded = {std::string_view(bytes.data(), size), key};
-    } else {
-        std::size_t const size =
-            heads::head_write(bytes, 0, key < 0 ? major_type::negative_integer : major_type::unsigned_integer,
-                              key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key));
-        encoded = {std::string_view(bytes.data(), size), std::string_view{}};
-    }
-    if (auto const r = key_find<DepthMax>(found.d, *found.source, found.h.argument, encoded, hint)) {
-        std::size_t const at = found.source->encoded.size() - r->first.encoded.size();
-        typename lazy_entries<DepthMax>::iterator it{std::move(found.source), at, at, r->second, error{}};
-        it.value_find();
-        return it;
+    if (auto const r = key_find<DepthMax>(found.d, *found.source, found.h.argument, position_index<DepthMax>::key_encode(bytes, key), hint)) {
+        std::size_t const size = found.source->encoded.size();
+        auto const &[at, value, left] = *r;
+        return typename lazy_entries<DepthMax>::iterator{std::move(found.source), size - at.encoded.size(),
+                                                         size - value.encoded.size(), left, error{}};
     }
     return key_find<DepthMax>(std::move(found), key);
 }

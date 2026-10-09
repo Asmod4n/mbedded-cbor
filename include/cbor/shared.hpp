@@ -17,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -70,22 +71,32 @@ struct position_index {
     std::map<std::string, std::uint64_t, encoded_key_less> positions;
     bool core_deterministic{};
 
+    static std::array<std::string_view, 2> key_encode(std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const out,
+                                                     std::string_view const key)
+    {
+        std::size_t const size = heads::head_write(out, 0, major_type::text_string, key.size());
+        return {std::string_view(out.data(), size), key};
+    }
+
+    static std::array<std::string_view, 2> key_encode(std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const out,
+                                                     std::int64_t const key)
+    {
+        std::size_t const size =
+            heads::head_write(out, 0, key < 0 ? major_type::negative_integer : major_type::unsigned_integer,
+                              key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key));
+        return {std::string_view(out.data(), size), std::string_view{}};
+    }
+
     void insert_or_assign(std::string_view const key, typename lazy_entries<DepthMax>::iterator const &found)
     {
         std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> bytes;
-        std::size_t const size = heads::head_write(bytes, 0, major_type::text_string, key.size());
-        std::string encoded(std::string_view(bytes.data(), size));
-        encoded.append(key);
-        positions.insert_or_assign(std::move(encoded), found.left);
+        positions.insert_or_assign(std::ranges::to<std::string>(key_encode(bytes, key) | std::views::join), found.left);
     }
 
     void insert_or_assign(std::int64_t const key, typename lazy_entries<DepthMax>::iterator const &found)
     {
         std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> bytes;
-        std::size_t const size =
-            heads::head_write(bytes, 0, key < 0 ? major_type::negative_integer : major_type::unsigned_integer,
-                              key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key));
-        positions.insert_or_assign(std::string(std::string_view(bytes.data(), size)), found.left);
+        positions.insert_or_assign(std::ranges::to<std::string>(key_encode(bytes, key) | std::views::join), found.left);
     }
 };
 
@@ -119,7 +130,7 @@ class value_sharing
     static std::optional<bool> key_equal(heads::decoder d, std::array<std::string_view, 2> key);
 
     template <std::size_t DepthMax, class Marks>
-    static std::optional<std::pair<heads::decoder, std::uint64_t>> key_find(heads::decoder d, Marks &marks, std::uint64_t count,
+    static std::optional<std::tuple<heads::decoder, heads::decoder, std::uint64_t>> key_find(heads::decoder d, Marks &marks, std::uint64_t count,
                                                                             std::array<std::string_view, 2> key,
                                                                             position_index<DepthMax> const &hint);
 

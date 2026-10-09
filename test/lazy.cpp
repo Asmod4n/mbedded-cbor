@@ -439,14 +439,14 @@ TEST_CASE("lazy: a position index never reads a key out of a string")
 }
 
 // In a map whose keys are sorted by RFC 8949 4.2.1, a key that lies between two remembered neighbours stands between
-// them, if it is present. The last pair of the message has a key that a search fails on, so the answer without an
-// error shows that only the pairs up to the upper neighbour were read. A key between neighbours that are further
+// them, if it is present. The first pair of the message has a key that a search fails on, so the answer without an
+// error shows that no key before the lower neighbour was read. A key between neighbours that are further
 // apart is found between them. A key below the first or above the last remembered key goes to the search.
 TEST_CASE("lazy: a deterministic position index answers a missing key from its neighbours")
 {
     cbor::lazy const first = lazy_of(encoded(M("a"s, 1, "b"s, 2, "d"s, 4, "e"s, 5)));
     cbor::position_index<16> index = index_of(first, {"b", "d"});
-    cbor::lazy const same = lazy_of("\xa4\x61" "a\x01\x61" "b\x02\x61" "d\x04\xd8\x1d\x05\x06"s);
+    cbor::lazy const same = lazy_of("\xa4\xd8\x1d\x05\x01\x61" "b\x02\x61" "d\x04\x61" "e\x05"s);
     CHECK_EQ(same.at<16>("c").error(), error::sharedref_index_not_marked);
     CHECK_EQ(same.at("c", index).error(), error::sharedref_index_not_marked);
     index.core_deterministic = true;
@@ -499,7 +499,7 @@ TEST_CASE("path: at_path with a position index")
     CHECK_EQ(cbor::at_path<"$.d", int>(same, index), 40);
     CHECK_EQ(cbor::at_path<"$.e", int>(same, index), 50);
     CHECK_EQ(cbor::at_path<"$.c", int>(same, index).error(), error::key_not_found);
-    std::string const sharedref = "\xa4\x61" "a\x01\x61" "b\x02\x61" "d\x04\xd8\x1d\x05\x06"s;
+    std::string const sharedref = "\xa4\xd8\x1d\x05\x01\x61" "b\x02\x61" "d\x04\x61" "e\x05"s;
     CHECK_EQ(cbor::at_path<"$.c", int>(sharedref, index).error(), error::sharedref_index_not_marked);
     index.core_deterministic = true;
     CHECK_EQ(cbor::at_path<"$.c", int>(sharedref, index).error(), error::key_not_found);
@@ -509,6 +509,40 @@ TEST_CASE("path: at_path with a position index")
     auto const text = cbor::at_path<"$.b", std::string_view>(owner, *owner, index);
     REQUIRE(text.has_value());
     CHECK_EQ(**text, "x");
+}
+
+// RFC 8949 4.2.1 sorts keys by their bytes and allows a tag on a key. A key under tag 28 sorts after every text key,
+// outside the window of the remembered neighbours, and it is still the key "b". A tag on a key after the window
+// sends the lookup to the search from the first pair.
+TEST_CASE("lazy: a key under a tag after the window of the position index is found")
+{
+    std::string const sorted = "\xa3\x61" "a\x01\x61" "c\x03\xd8\x1c\x61" "b\x02"s;
+    cbor::position_index<16> index = index_of(lazy_of(sorted), {"a", "c"});
+    index.core_deterministic = true;
+    CHECK(value_at(*lazy_of(sorted).at("b", index)) == V(2));
+    CHECK_EQ(cbor::at_path<"$.b", int>(sorted, index), 2);
+    std::string const referenced = "\xa3\x61" "a\xd8\x1c\x61" "b\x61" "c\x03\xd8\x1d\x00\x02"s;
+    CHECK(value_at(*lazy_of(referenced).at("b", index)) == V(2));
+}
+
+// A missing key gives the end of a full walk, with and without the index, so the three iterators are equal.
+TEST_CASE("lazy: a missing key with a position index gives the end of a full walk")
+{
+    cbor::lazy const l = lazy_of(encoded(M("a"s, 1, "c"s, 3, "d"s, 4)));
+    cbor::position_index<16> index = index_of(l, {"a", "c"});
+    index.core_deterministic = true;
+    auto const hinted = l.find("b", index);
+    auto const searched = l.find<16>("b");
+    REQUIRE(hinted.has_value());
+    REQUIRE(searched.has_value());
+    CHECK(*hinted == std::default_sentinel);
+    CHECK(*hinted == *searched);
+    auto const entries = l.entries<16>();
+    REQUIRE(entries.has_value());
+    auto walked = entries->begin();
+    while (walked != std::default_sentinel)
+        ++walked;
+    CHECK(*hinted == walked);
 }
 
 // decode reads nothing ahead, so a step finds a truncated element. The step gives the error once and
