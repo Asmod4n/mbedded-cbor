@@ -46,7 +46,7 @@ class well_formedness
                 if (h->major == major_type::array)
                     added = h->argument;
                 else if (h->major == major_type::map)
-                    added = validity::checked_mul(h->argument, 2)
+                    added = validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
                                 .value_or(std::numeric_limits<std::uint64_t>::max());
                 else
                     continue;
@@ -64,7 +64,7 @@ class well_formedness
                     added = slow->argument;
                     break;
                 case major_type::map:
-                    added = validity::checked_mul(slow->argument, 2)
+                    added = validity::checked_mul(slow->argument, rfc8949::data_items_per_pair)
                                 .value_or(std::numeric_limits<std::uint64_t>::max());
                     break;
                 case major_type::tag:
@@ -118,7 +118,7 @@ class well_formedness
                 } else if (h->major == major_type::array) {
                     children = h->argument;
                 } else if (h->major == major_type::map) {
-                    children = validity::checked_mul(h->argument, 2)
+                    children = validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
                                    .value_or(std::numeric_limits<std::uint64_t>::max());
                 }
             } else {
@@ -135,7 +135,7 @@ class well_formedness
                     children = slow->argument;
                     break;
                 case major_type::map:
-                    children = validity::checked_mul(slow->argument, 2)
+                    children = validity::checked_mul(slow->argument, rfc8949::data_items_per_pair)
                                    .value_or(std::numeric_limits<std::uint64_t>::max());
                     break;
                 case major_type::tag:

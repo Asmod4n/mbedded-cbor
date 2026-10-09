@@ -78,8 +78,8 @@ struct directory {
 
 class packed
 {
-    static constexpr std::size_t dynamic_type_sizes = 2 * heads::initial_byte_size + sizeof(std::uint32_t);
     static constexpr std::size_t item_head = heads::initial_byte_size + sizeof(std::uint32_t);
+    static constexpr std::size_t dynamic_type_sizes = heads::initial_byte_size + item_head;
     static constexpr std::size_t shared_first = 16;
 
     template <class T>
@@ -216,7 +216,9 @@ class packed
         constexpr std::uint64_t s = std::is_signed_v<E> && !std::is_floating_point_v<E> ? 1 : 0;
         constexpr std::uint64_t e = sizeof(E) > 1 ? 1 : 0;
         constexpr std::uint64_t ll = static_cast<std::uint64_t>(std::countr_zero(sizeof(E))) - f;
-        return std::to_underlying(rfc8746::tag_number::typed_array_first) | f << 4 | s << 3 | e << 2 | ll;
+        return std::to_underlying(rfc8746::tag_number::typed_array_first) | f << std::to_underlying(rfc8746::bit_field::f) |
+               s << std::to_underlying(rfc8746::bit_field::s) | e << std::to_underlying(rfc8746::bit_field::e) |
+               ll << std::to_underlying(rfc8746::bit_field::ll);
     }
 
     template <class E>
@@ -229,8 +231,8 @@ class packed
     template <class E>
     static constexpr bool is_typed_array_float = requires {
         requires std::is_floating_point_v<E> && std::numeric_limits<E>::is_iec559;
-        requires(sizeof(E) == 2 && std::numeric_limits<E>::digits == 11) ||
-                    (sizeof(E) == 4 && std::numeric_limits<E>::digits == 24) ||
+        requires(sizeof(E) == sizeof(std::uint16_t) && std::numeric_limits<E>::digits == heads::half_precision.significand_bits + 1) ||
+                    (sizeof(E) == sizeof(float) && std::numeric_limits<E>::digits == std::numeric_limits<float>::digits) ||
                     (sizeof(E) == sizeof(double) &&
                      std::numeric_limits<E>::digits == std::numeric_limits<double>::digits);
     };
@@ -650,8 +652,9 @@ class packed
             std::size_t const length = std::ranges::size(value);
             out[item] = heads::initial_byte(
                 major_type::tag, std::to_underlying(rfc8949::additional_information::one_byte_argument));
-            out[item + 1] = static_cast<char>(typed_array_tag<E>());
-            heads::item_head_write(out, item + 2, major_type::byte_string, length * sizeof(E));
+            out[item + heads::initial_byte_size] = static_cast<char>(typed_array_tag<E>());
+            heads::item_head_write(out, item + heads::initial_byte_size + sizeof(std::uint8_t), major_type::byte_string,
+                                   length * sizeof(E));
             std::size_t const elements = item + typed_array_head;
             c.position = elements + length * sizeof(E);
             if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U>) {
@@ -807,7 +810,7 @@ class packed
             return heads::unsigned_read<U>(field.template last<sizeof(U)>());
         } else if constexpr (std::signed_integral<U>) {
             using M = std::make_unsigned_t<U>;
-            M const sign = static_cast<M>(-static_cast<M>((head >> 5) & 1));
+            M const sign = static_cast<M>(-static_cast<M>((head >> rfc8949::additional_information_bits) & 1));
             return static_cast<U>(heads::unsigned_read<M>(field.template last<sizeof(M)>()) ^ sign);
         } else {
             using B = decltype(float_bits(U{}));
@@ -854,7 +857,7 @@ class packed
                 if constexpr (std::same_as<U, int128>)
                     return (head & 0xfe) == expected && static_cast<unsigned char>(field[1]) == static_cast<unsigned char>(zero_initialized<void, U>()[1]);
                 else
-                    return (head & 0xdf) == expected;
+                    return (head & static_cast<unsigned char>(~(1 << rfc8949::additional_information_bits))) == expected;
             } else if constexpr (std::same_as<U, uint128>) {
                 return head == expected && static_cast<unsigned char>(field[1]) == static_cast<unsigned char>(zero_initialized<void, U>()[1]);
             } else {
@@ -886,10 +889,10 @@ class packed
         constexpr std::size_t fillers = shared_first_of<Root>() - shared_first;
         auto const info = static_cast<unsigned char>(field[1]);
         if (field[0] != reference_tag_byte ||
-            (info & 0xdf) != std::to_underlying(rfc8949::additional_information::four_byte_argument))
+            (info & static_cast<unsigned char>(~(1 << rfc8949::additional_information_bits))) != std::to_underlying(rfc8949::additional_information::four_byte_argument))
             [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        std::size_t const m = 2 * std::size_t{heads::unsigned_read<std::uint32_t>(field.subspan<2, sizeof(std::uint32_t)>())} + (info >> 5);
+        std::size_t const m = 2 * std::size_t{heads::unsigned_read<std::uint32_t>(field.subspan<2, sizeof(std::uint32_t)>())} + (info >> rfc8949::additional_information_bits);
         if (m < fillers) [[unlikely]]
             return std::unexpected(error::unpopulated_table_index);
         return m - fillers;
@@ -904,7 +907,7 @@ class packed
                           "The elements of the typed array tag of E are sizeof(E) bytes.");
             if (end < item + typed_array_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            static constexpr std::array<char, 3> head{
+            static constexpr std::array head{
                 heads::initial_byte(major_type::tag,
                                     std::to_underlying(rfc8949::additional_information::one_byte_argument)),
                 static_cast<char>(typed_array_tag<E>()),
@@ -913,7 +916,7 @@ class packed
             if (!std::ranges::equal(std::span<char const>(encoded).subspan(item).template first<head.size()>(), head)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             std::size_t const size =
-                heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 3).template first<sizeof(std::uint32_t)>());
+                heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + head.size()).template first<sizeof(std::uint32_t)>());
             if (size > end - item - typed_array_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             if (!validity::typed_array_check(typed_array_tag<E>(), size)) [[unlikely]]

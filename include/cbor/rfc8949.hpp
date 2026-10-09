@@ -8,6 +8,12 @@ namespace cbor
 
 enum class pass;
 
+template <std::size_t N>
+struct fixed_string;
+
+template <fixed_string Path>
+class is_singular_query;
+
 enum class major_type : std::uint8_t {
     unsigned_integer,
     negative_integer,
@@ -23,6 +29,10 @@ enum class simple_value : std::uint8_t { false_value = 20, true_value, null, und
 
 class rfc8949
 {
+    static constexpr int additional_information_bits = 5;
+
+    static constexpr std::size_t data_items_per_pair = 2;
+
     enum class additional_information : std::uint8_t {
         one_byte_argument = 24,
         two_byte_argument,
@@ -73,6 +83,9 @@ class rfc8949
     friend class walker;
 
     friend struct lazy;
+
+    template <fixed_string Path>
+    friend class is_singular_query;
 
 #ifdef __cpp_impl_reflection
     friend class packed;

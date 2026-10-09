@@ -290,8 +290,9 @@ public:
 
     CBOR_ALWAYS_INLINE static constexpr std::size_t typed_array_element_size(std::uint64_t const tag)
     {
-        std::uint64_t const f = tag >> 4 & 1;
-        std::uint64_t const ll = tag & 3;
+        std::uint64_t const f = tag >> std::to_underlying(rfc8746::bit_field::f) & 1;
+        std::uint64_t const ll = tag >> std::to_underlying(rfc8746::bit_field::ll) &
+                                 ((1 << (std::to_underlying(rfc8746::bit_field::e) - std::to_underlying(rfc8746::bit_field::ll))) - 1);
         return std::size_t{1} << (f + ll);
     }
 

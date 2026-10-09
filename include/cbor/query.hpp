@@ -155,7 +155,7 @@ class jsonpath
             return std::nullopt;
         std::int64_t value = 0;
         for (char const d : std::span(text).subspan(digits_at, digits_end - digits_at))
-            value = value * 10 + (d - '0');
+            value = value * extended_diagnostic_notation::decimal + (d - '0');
         if (value > rfc9535::exact_integer_max) [[unlikely]]
             return std::unexpected(error::invalid_path);
         return integer{negative ? -value : value, digits_end};
@@ -1590,7 +1590,7 @@ class is_singular_query
            std::ranges::all_of(q->selectors, [&q](jsonpath::selector const &s) {
                return s.kind == jsonpath::selector::kind::index ||
                       (s.kind == jsonpath::selector::kind::key &&
-                       static_cast<major_type>(static_cast<std::uint8_t>(q->keys[s.key_at]) >> 5) == major_type::text_string);
+                       static_cast<major_type>(static_cast<std::uint8_t>(q->keys[s.key_at]) >> rfc8949::additional_information_bits) == major_type::text_string);
            });
 }()>
 {

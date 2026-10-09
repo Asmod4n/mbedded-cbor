@@ -50,7 +50,7 @@ class heads
 
     static constexpr char initial_byte(major_type const major, std::uint64_t const info)
     {
-        return static_cast<char>(std::uint64_t{std::to_underlying(major)} << 5 | info);
+        return static_cast<char>(std::uint64_t{std::to_underlying(major)} << rfc8949::additional_information_bits | info);
     }
 
     static constexpr std::uint8_t preferred_argument_info(std::uint64_t const argument)
@@ -224,8 +224,8 @@ class heads
             if (encoded.empty()) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             auto const initial = static_cast<std::uint8_t>(encoded.front());
-            auto const major = static_cast<major_type>(initial >> 5);
-            std::uint8_t const info = initial & 0x1f;
+            auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
+            std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
             if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
                 encoded.remove_prefix(initial_byte_size);
                 return head{major, info, info};
@@ -268,8 +268,8 @@ class heads
         CBOR_ALWAYS_INLINE std::optional<head> head_decode_where_no_check_is_needed()
         {
             std::uint8_t const initial = encoded.empty() ? 0xff : static_cast<std::uint8_t>(encoded.front());
-            auto const major = static_cast<major_type>(initial >> 5);
-            std::uint8_t const info = initial & 0x1f;
+            auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
+            std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
             if (encoded.size() >= initial_byte_size + sizeof(std::uint64_t) &&
                 info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument) &&
                 major != major_type::tag &&
@@ -311,7 +311,7 @@ class heads
         std::uint32_t exponent_max;
     };
 
-    static constexpr precision half_precision{10, 15, 31};
+    static constexpr precision half_precision{.significand_bits = 10, .exponent_bias = 15, .exponent_max = 31};
     static constexpr precision single_precision{std::numeric_limits<float>::digits - 1,
                                                 std::numeric_limits<float>::max_exponent - 1,
                                                 2 * std::numeric_limits<float>::max_exponent - 1};
@@ -516,8 +516,8 @@ class heads
         if (at >= encoded.size()) [[unlikely]]
             return std::unexpected(error::too_little_data);
         auto const initial = static_cast<std::uint8_t>(encoded[at]);
-        auto const major = static_cast<major_type>(initial >> 5);
-        std::uint8_t const info = initial & 0x1f;
+        auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
+        std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument))
             return raw_head{major, info, info, at + initial_byte_size};
         if (error const r = validity::check_additional_information(major, info).error_or(error{});

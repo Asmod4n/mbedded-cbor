@@ -83,7 +83,7 @@ class decoding
                 return array;
             }
             case major_type::map: {
-                auto map = binding.map_decode(std::min<std::uint64_t>(h->argument, d.encoded.size() / 2));
+                auto map = binding.map_decode(std::min<std::uint64_t>(h->argument, d.encoded.size() / (rfc8949::data_items_per_pair * heads::initial_byte_size)));
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
                         shared[*mark] = map;
