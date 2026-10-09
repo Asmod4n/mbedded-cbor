@@ -4,6 +4,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <memory_resource>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -155,4 +156,17 @@ TEST_CASE("sequence: a temporary std::string does not compile")
 {
     CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::string &&>);
     CHECK(std::is_constructible_v<cbor::sequence, std::string_view>);
+}
+
+// A const std::string prvalue and a std::pmr::string prvalue passed the old constraint, which named
+// std::string alone. The string_view constructor then took the temporary, and begin() read freed memory.
+TEST_CASE("sequence: a temporary of any string type does not compile")
+{
+    CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::string const &&>);
+    CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::string const>);
+    CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::pmr::string &&>);
+    CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::pmr::string const &&>);
+    CHECK(std::is_constructible_v<cbor::sequence, std::string const &>);
+    CHECK(std::is_constructible_v<cbor::sequence, std::pmr::string &>);
+    CHECK(std::is_constructible_v<cbor::sequence, char const (&)[3]>);
 }
