@@ -224,16 +224,17 @@ template <class Key, class Entries>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
 std::expected<std::size_t, error> value_sharing::key_count(std::expected<typename Entries::iterator, error> found, Key const key)
 {
+    std::size_t n = 0;
+    while (found && *found != std::default_sentinel) {
+        ++n;
+        auto next = key_find<false>(std::ranges::next(std::move(*found)), std::default_sentinel, key);
+        if (!next) [[unlikely]]
+            return std::unexpected(next.error());
+        found = std::move(next->first);
+    }
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    if (*found == std::default_sentinel)
-        return 0;
-    auto const next = key_find<false>(std::ranges::next(std::move(*found)), std::default_sentinel, key);
-    if (!next) [[unlikely]]
-        return std::unexpected(next.error());
-    if (auto const r = validity::check_key_unique(next->second); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    return 1;
+    return n;
 }
 
 inline std::expected<std::size_t, error> lazy::count(std::string_view const key) const
