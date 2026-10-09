@@ -10,7 +10,10 @@
 #include <expected>
 #include <functional>
 #include <iterator>
+#include <map>
 #include <memory>
+#include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -38,6 +41,54 @@ struct lazy_elements;
 template <std::size_t DepthMax>
 struct lazy_entries;
 
+struct encoded_key_less {
+    using is_transparent = void;
+
+    bool operator()(std::array<std::string_view, 2> const a, std::array<std::string_view, 2> const b) const
+    {
+        return std::ranges::lexicographical_compare(a | std::views::join, b | std::views::join, std::char_traits<char>::lt);
+    }
+
+    bool operator()(std::string const &a, std::string const &b) const
+    {
+        return a < b;
+    }
+
+    bool operator()(std::string const &a, std::array<std::string_view, 2> const b) const
+    {
+        return (*this)({std::string_view(a), std::string_view{}}, b);
+    }
+
+    bool operator()(std::array<std::string_view, 2> const a, std::string const &b) const
+    {
+        return (*this)(a, {std::string_view(b), std::string_view{}});
+    }
+};
+
+template <std::size_t DepthMax = validity::nesting_depth_default>
+struct position_index {
+    std::map<std::string, std::uint64_t, encoded_key_less> positions;
+    bool core_deterministic{};
+
+    void insert_or_assign(std::string_view const key, typename lazy_entries<DepthMax>::iterator const &found)
+    {
+        std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> bytes;
+        std::size_t const size = heads::head_write(bytes, 0, major_type::text_string, key.size());
+        std::string encoded(std::string_view(bytes.data(), size));
+        encoded.append(key);
+        positions.insert_or_assign(std::move(encoded), found.left);
+    }
+
+    void insert_or_assign(std::int64_t const key, typename lazy_entries<DepthMax>::iterator const &found)
+    {
+        std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> bytes;
+        std::size_t const size =
+            heads::head_write(bytes, 0, key < 0 ? major_type::negative_integer : major_type::unsigned_integer,
+                              key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key));
+        positions.insert_or_assign(std::string(std::string_view(bytes.data(), size)), found.left);
+    }
+};
+
 class value_sharing
 {
     struct top_level_item;
@@ -59,6 +110,18 @@ class value_sharing
     template <std::size_t DepthMax, class Key>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
     static std::expected<typename lazy_entries<DepthMax>::iterator, error> key_find(resolved found, Key key);
+
+    template <std::size_t DepthMax, class Key>
+        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+    static std::expected<typename lazy_entries<DepthMax>::iterator, error> key_find(resolved found, Key key,
+                                                                                   position_index<DepthMax> const &hint);
+
+    static std::optional<bool> key_equal(heads::decoder d, std::array<std::string_view, 2> key);
+
+    template <std::size_t DepthMax, class Marks>
+    static std::optional<std::pair<heads::decoder, std::uint64_t>> key_find(heads::decoder d, Marks &marks, std::uint64_t count,
+                                                                            std::array<std::string_view, 2> key,
+                                                                            position_index<DepthMax> const &hint);
 
     template <std::size_t DepthMax>
     static std::expected<lazy, error> value_of(std::expected<typename lazy_entries<DepthMax>::iterator, error> found);
@@ -117,6 +180,24 @@ struct lazy {
     template <std::size_t DepthMax = validity::nesting_depth_default>
         requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<typename lazy_entries<DepthMax>::iterator, error> find(std::int64_t key) const;
+
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    std::expected<typename lazy_entries<DepthMax>::iterator, error> find(std::string_view key,
+                                                                         position_index<DepthMax> const &hint) const;
+
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    std::expected<typename lazy_entries<DepthMax>::iterator, error> find(std::int64_t key,
+                                                                         position_index<DepthMax> const &hint) const;
+
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    std::expected<lazy, error> at(std::string_view key, position_index<DepthMax> const &hint) const;
+
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    std::expected<lazy, error> at(std::int64_t key, position_index<DepthMax> const &hint) const;
 
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
