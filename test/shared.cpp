@@ -542,14 +542,14 @@ TEST_CASE("path: a wildcard over a shared array")
     std::string const doc = encoded_shared(
         obj({{s("primary"), obj({{s("users"), users}})}, {s("backup"), obj({{s("users"), users}})}}));
     ref_binding binding;
-    auto const r = cbor::at_path(binding, "$.backup.users[*].name", *cbor::lazy::from(doc));
+    auto const r = cbor::query(binding, "$.backup.users[*].name", *cbor::lazy::from(doc));
     REQUIRE(r.has_value());
     CHECK_EQ(std::get<std::string>(element(*r, 0)->kind), "alice");
     CHECK_EQ(std::get<std::string>(element(*r, 1)->kind), "bob");
     auto const shared_leaf = arr({u(1), u(2), u(3)});
     std::string const leaf = encoded_shared(obj({{s("a"), shared_leaf}, {s("b"), shared_leaf}}));
     for (std::string_view const p : {"$.a[*]"sv, "$.b[*]"sv}) {
-        auto const v = cbor::at_path(binding, p, *cbor::lazy::from(leaf));
+        auto const v = cbor::query(binding, p, *cbor::lazy::from(leaf));
         REQUIRE(v.has_value());
         CHECK_EQ(std::get<std::uint64_t>(element(*v, 2)->kind), 3);
     }
@@ -645,7 +645,7 @@ TEST_CASE("path: two wildcards over a shared array")
     std::string const doc =
         encoded_shared(obj({{s("p"), obj({{s("teams"), teams}})}, {s("b"), obj({{s("teams"), teams}})}}));
     ref_binding binding;
-    auto const r = cbor::at_path(binding, "$.b.teams[*].members[*].n", *cbor::lazy::from(doc));
+    auto const r = cbor::query(binding, "$.b.teams[*].members[*].n", *cbor::lazy::from(doc));
     REQUIRE(r.has_value());
     CHECK_EQ(std::get<std::vector<handle>>((*r)->kind).size(), 3);
     CHECK_EQ(std::get<std::string>(element(*r, 0)->kind), "a");

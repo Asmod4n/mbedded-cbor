@@ -202,7 +202,9 @@ namespace
 {
 
 // A language with text and nothing else, as bash or zsh: it answers only kind_of and text_of.
-struct text_binding : cbor::binding<std::string> {
+struct text_binding {
+    using value = std::string;
+
     cbor::kind kind_of(std::string const &v)
     {
         return v == "array" ? cbor::kind::array : cbor::kind::text_string;

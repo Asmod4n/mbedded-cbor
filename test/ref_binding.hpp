@@ -35,7 +35,9 @@ struct node {
 // The binding keeps a weak reference to every node it makes. When the binding ends, every node that only
 // other nodes hold is garbage, as a tracing collector finds it, and is emptied; so a cycle that a
 // failed decode left behind is freed, and a value the caller still holds keeps its whole graph.
-struct ref_binding : cbor::binding<handle> {
+struct ref_binding {
+    using value = handle;
+
     handle unsigned_integer_decode(std::uint64_t const a)
     {
         return make(node{a});

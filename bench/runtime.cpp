@@ -23,7 +23,9 @@ static std::uint64_t bytes_sum(std::string_view const s)
 }
 
 #if defined(ARM_READ) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
-struct read_binding : cbor::binding<std::uint64_t> {
+struct read_binding {
+    using value = std::uint64_t;
+
     std::uint64_t unsigned_integer_decode(std::uint64_t a) { return a; }
     std::uint64_t negative_integer_decode(std::uint64_t a) { return a; }
     std::uint64_t unsigned_bignum_decode(std::string_view m) { return bytes_sum(m); }

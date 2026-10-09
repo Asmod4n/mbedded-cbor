@@ -34,8 +34,11 @@ namespace cbor
 
 struct lazy;
 
-template <class Binding>
+template <binding Binding>
 std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
+
+template <binding Binding>
+std::expected<typename Binding::value, error> query(Binding &binding, std::string_view path, lazy const &l);
 
 template <fixed_string Path>
 class is_valid_path;
@@ -43,9 +46,13 @@ class is_valid_path;
 template <fixed_string Path>
 inline constexpr bool is_valid_path_v = is_valid_path<Path>::value;
 
-template <fixed_string Path, class Binding>
-    requires(requires { typename Binding::value; } && is_valid_path_v<Path>)
+template <fixed_string Path, binding Binding>
+    requires is_valid_path_v<Path>
 std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
+
+template <fixed_string Path, binding Binding>
+    requires is_valid_path_v<Path>
+std::expected<typename Binding::value, error> query(Binding &binding, lazy const &l);
 
 template <fixed_string Path>
 class is_singular_query;
@@ -183,7 +190,7 @@ class jsonpath
         return next;
     }
 
-    struct query {
+    struct syntax_tree {
         std::vector<segment> segments;
         std::vector<selector> selectors;
         std::vector<expression> expressions;
@@ -576,10 +583,10 @@ class jsonpath
         }
     };
 
-    static constexpr std::expected<query, error> query_parse(std::string_view const text, bool const literals,
+    static constexpr std::expected<syntax_tree, error> query_parse(std::string_view const text, bool const literals,
                                                              std::size_t const depth_max)
     {
-        query q{{}, {}, {}, {}, literals, depth_max, {}};
+        syntax_tree q{{}, {}, {}, {}, literals, depth_max, {}};
         if (text.empty() || text.front() != '$') [[unlikely]]
             return std::unexpected(error::invalid_path);
         auto const top = q.segments_parse(text, 1, 0);
@@ -617,8 +624,16 @@ class jsonpath
                                                                   lazy const &start, lazy const &root, std::size_t depth_max);
 
     template <class Binding>
+    static std::expected<typename Binding::value, error> singular_query_walk(Binding &binding, query_view const &v,
+                                                                             parsed_query const &top, lazy const &root,
+                                                                             std::size_t depth_max);
+
+    template <class Binding>
     static std::expected<typename Binding::value, error> query_walk(Binding &binding, query_view const &v, parsed_query const &top,
                                                              lazy const &root, std::size_t depth_max);
+
+    template <fixed_string Path, class Walk>
+    static auto compiled_apply(Walk const &walk);
 
     template <class T>
     static std::optional<std::expected<T, error>> query_walk(query_view const &v, parsed_query const &top,
@@ -930,12 +945,19 @@ class jsonpath
     template <fixed_string>
     friend class is_valid_path;
 
-    template <class Binding>
+    template <binding Binding>
     friend std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
 
-    template <fixed_string Path, class Binding>
-        requires(requires { typename Binding::value; } && is_valid_path_v<Path>)
+    template <binding Binding>
+    friend std::expected<typename Binding::value, error> query(Binding &binding, std::string_view path, lazy const &l);
+
+    template <fixed_string Path, binding Binding>
+        requires is_valid_path_v<Path>
     friend std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
+
+    template <fixed_string Path, binding Binding>
+        requires is_valid_path_v<Path>
+    friend std::expected<typename Binding::value, error> query(Binding &binding, lazy const &l);
 };
 
 template <fixed_string Path>
@@ -1403,26 +1425,32 @@ inline std::expected<std::vector<lazy>, error> jsonpath::segments_apply(query_vi
 }
 
 template <class Binding>
+std::expected<typename Binding::value, error> jsonpath::singular_query_walk(Binding &binding, query_view const &v,
+                                                                            parsed_query const &top, lazy const &root,
+                                                                            std::size_t const depth_max)
+{
+    validity::throw_logic_error_if_null(root.top_level, "cbor::at_path: the lazy holds no top-level item");
+    lazy node = root;
+    for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
+        selector const &each = v.selectors[s.selector_at];
+        auto const child = each.kind == selector::kind::index
+                               ? index_select(node, each.index)
+                               : key_find(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)), depth_max);
+        if (!child) [[unlikely]]
+            return std::unexpected(child.error());
+        node = *child;
+    }
+    auto value = lazy_decode(binding, node);
+    if (!value) [[unlikely]]
+        return std::unexpected(value.error());
+    return std::move(*value);
+}
+
+template <class Binding>
 std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &binding, query_view const &v, parsed_query const &top,
                                                             lazy const &root, std::size_t const depth_max)
 {
-    validity::throw_logic_error_if_null(root.top_level, "cbor::at_path: the lazy holds no top-level item");
-    if (top.singular) {
-        lazy node = root;
-        for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
-            selector const &each = v.selectors[s.selector_at];
-            auto const child = each.kind == selector::kind::index
-                                   ? index_select(node, each.index)
-                                   : key_find(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)), depth_max);
-            if (!child) [[unlikely]]
-                return std::unexpected(child.error());
-            node = *child;
-        }
-        auto value = lazy_decode(binding, node);
-        if (!value) [[unlikely]]
-            return std::unexpected(value.error());
-        return std::move(*value);
-    }
+    validity::throw_logic_error_if_null(root.top_level, "cbor::query: the lazy holds no top-level item");
     auto const nodes = segments_apply(v, top.segment_at, top.segment_count, root, root, depth_max);
     if (!nodes) [[unlikely]]
         return std::unexpected(nodes.error());
@@ -1436,8 +1464,50 @@ std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &bind
     return array;
 }
 
-template <class Binding>
+template <fixed_string Path, class Walk>
+auto jsonpath::compiled_apply(Walk const &walk)
+{
+    constexpr auto q = [] { return *query_parse(Path.view(), true, validity::nesting_depth_default); };
+    constexpr std::size_t segments = q().segments.size();
+    constexpr std::size_t selectors = q().selectors.size();
+    constexpr std::size_t expressions = q().expressions.size();
+    constexpr std::size_t keys = q().keys.size();
+    constexpr auto top = q().top;
+    constexpr auto compiled = [q] {
+        auto const parsed = q();
+        std::tuple<std::array<segment, segments>, std::array<selector, selectors>,
+                   std::array<expression, expressions>, std::array<char, keys>>
+            c{};
+        std::ranges::copy(parsed.segments, std::get<0>(c).begin());
+        std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
+        std::ranges::copy(parsed.expressions, std::get<2>(c).begin());
+        std::ranges::copy(parsed.keys, std::get<3>(c).begin());
+        return c;
+    }();
+    using result = decltype(walk(query_view{}, top, std::size_t{}));
+    std::size_t const depth_max = validity::nesting_depth_max_read();
+    if (auto const r = validity::check_nesting_depth(top.segment_count, depth_max); !r) [[unlikely]]
+        return result(std::unexpect, r.error());
+    return walk(query_view{std::get<0>(compiled), std::get<1>(compiled), std::get<2>(compiled),
+                           std::string_view(std::get<3>(compiled).data(), keys)},
+                top, depth_max);
+}
+
+template <binding Binding>
 std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view const path, lazy const &l)
+{
+    std::size_t const depth_max = validity::nesting_depth_max_read();
+    auto const q = jsonpath::query_parse(path, false, depth_max);
+    if (!q) [[unlikely]]
+        return std::unexpected(q.error());
+    if (!q->top.singular) [[unlikely]]
+        return std::unexpected(error::invalid_path);
+    return jsonpath::singular_query_walk(binding, {q->segments, q->selectors, q->expressions, q->keys}, q->top, l,
+                                         depth_max);
+}
+
+template <binding Binding>
+std::expected<typename Binding::value, error> query(Binding &binding, std::string_view const path, lazy const &l)
 {
     std::size_t const depth_max = validity::nesting_depth_max_read();
     auto const q = jsonpath::query_parse(path, false, depth_max);
@@ -1446,34 +1516,26 @@ std::expected<typename Binding::value, error> at_path(Binding &binding, std::str
     return jsonpath::query_walk(binding, {q->segments, q->selectors, q->expressions, q->keys}, q->top, l, depth_max);
 }
 
-template <fixed_string Path, class Binding>
-    requires(requires { typename Binding::value; } && is_valid_path_v<Path>)
+template <fixed_string Path, binding Binding>
+    requires is_valid_path_v<Path>
 std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l)
 {
-    constexpr auto q = [] { return *jsonpath::query_parse(Path.view(), true, validity::nesting_depth_default); };
-    constexpr std::size_t segments = q().segments.size();
-    constexpr std::size_t selectors = q().selectors.size();
-    constexpr std::size_t expressions = q().expressions.size();
-    constexpr std::size_t keys = q().keys.size();
-    constexpr auto top = q().top;
-    std::size_t const depth_max = validity::nesting_depth_max_read();
-    if (auto const r = validity::check_nesting_depth(top.segment_count, depth_max); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    constexpr auto compiled = [q] {
-        auto const parsed = q();
-        std::tuple<std::array<jsonpath::segment, segments>, std::array<jsonpath::selector, selectors>,
-                   std::array<jsonpath::expression, expressions>, std::array<char, keys>>
-            c{};
-        std::ranges::copy(parsed.segments, std::get<0>(c).begin());
-        std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
-        std::ranges::copy(parsed.expressions, std::get<2>(c).begin());
-        std::ranges::copy(parsed.keys, std::get<3>(c).begin());
-        return c;
-    }();
-    return jsonpath::query_walk(binding,
-                                          {std::get<0>(compiled), std::get<1>(compiled), std::get<2>(compiled),
-                                           std::string_view(std::get<3>(compiled).data(), keys)},
-                                          top, l, depth_max);
+    static_assert(jsonpath::query_parse(Path.view(), true, validity::nesting_depth_default)->top.singular,
+                  "cbor::at_path: the path is not a singular query (RFC 9535 2.3.5.1); cbor::query reads its nodelist");
+    return jsonpath::compiled_apply<Path>(
+        [&binding, &l](jsonpath::query_view const &v, jsonpath::parsed_query const &top, std::size_t const depth_max) {
+            return jsonpath::singular_query_walk(binding, v, top, l, depth_max);
+        });
+}
+
+template <fixed_string Path, binding Binding>
+    requires is_valid_path_v<Path>
+std::expected<typename Binding::value, error> query(Binding &binding, lazy const &l)
+{
+    return jsonpath::compiled_apply<Path>(
+        [&binding, &l](jsonpath::query_view const &v, jsonpath::parsed_query const &top, std::size_t const depth_max) {
+            return jsonpath::query_walk(binding, v, top, l, depth_max);
+        });
 }
 
 template <fixed_string Path>
