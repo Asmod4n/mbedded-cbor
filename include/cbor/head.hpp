@@ -227,6 +227,8 @@ class heads
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
             if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
+                if (error const r = validity::check_argument(major, info).error_or(error{}); r != error{}) [[unlikely]]
+                    return std::unexpected(r);
                 encoded.remove_prefix(initial_byte_size);
                 return head{major, info, info};
             }
@@ -261,6 +263,8 @@ class heads
                 argument = unsigned_read<std::uint64_t>(rest.first<sizeof(std::uint64_t)>());
                 break;
             }
+            if (error const r = validity::check_argument(major, argument).error_or(error{}); r != error{}) [[unlikely]]
+                return std::unexpected(r);
             encoded.remove_prefix(initial_byte_size + size);
             return head{major, info, argument};
         }
@@ -289,6 +293,8 @@ class heads
                                  std::numeric_limits<std::uint8_t>::digits * size) &
                                 (std::numeric_limits<std::uint64_t>::digits - 1));
                 }
+                if (!validity::check_argument(major, argument)) [[unlikely]]
+                    return std::nullopt;
                 encoded.remove_prefix(initial_byte_size + size);
                 return head{major, info, argument};
             }
@@ -518,8 +524,13 @@ class heads
         auto const initial = static_cast<std::uint8_t>(encoded[at]);
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
         std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
-        if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument))
+        if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
+            if !consteval {
+                if (error const r = validity::check_argument(major, info).error_or(error{}); r != error{}) [[unlikely]]
+                    return std::unexpected(r);
+            }
             return raw_head{major, info, info, at + initial_byte_size};
+        }
         if (error const r = validity::check_additional_information(major, info).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
@@ -531,6 +542,10 @@ class heads
         std::uint64_t argument = 0;
         for (char const c : std::span(encoded).subspan(at + initial_byte_size, size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
+        if !consteval {
+            if (error const r = validity::check_argument(major, argument).error_or(error{}); r != error{}) [[unlikely]]
+                return std::unexpected(r);
+        }
         return raw_head{major, info, argument, at + initial_byte_size + size};
     }
 

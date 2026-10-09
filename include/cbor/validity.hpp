@@ -38,6 +38,22 @@
 #define CBOR_NESTING_DEPTH_DEFAULT 128
 #endif
 
+#ifndef CBOR_DECODED_BYTES_DEFAULT
+#define CBOR_DECODED_BYTES_DEFAULT SIZE_MAX
+#endif
+
+#ifndef CBOR_STRING_LENGTH_DEFAULT
+#define CBOR_STRING_LENGTH_DEFAULT SIZE_MAX
+#endif
+
+#ifndef CBOR_CONTAINER_ELEMENTS_DEFAULT
+#define CBOR_CONTAINER_ELEMENTS_DEFAULT SIZE_MAX
+#endif
+
+#ifndef CBOR_INPUT_BYTES_DEFAULT
+#define CBOR_INPUT_BYTES_DEFAULT SIZE_MAX
+#endif
+
 namespace cbor
 {
 
@@ -63,30 +79,28 @@ public:
 
     static constexpr std::size_t nesting_depth_default = CBOR_NESTING_DEPTH_DEFAULT;
 
+    static constexpr std::size_t size_limit = std::numeric_limits<std::size_t>::max();
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_limit(std::uint64_t const value,
+                                                                               std::size_t const limit,
+                                                                               error const exceeded)
+    {
+        if (value > limit) [[unlikely]]
+            return std::unexpected(exceeded);
+        return {};
+    }
+
     static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth,
                                                                     std::size_t const depth_max)
     {
-        if (depth > depth_max) [[unlikely]]
-            return std::unexpected(error::nesting_depth_exceeded);
-        return {};
+        return check_limit(depth, depth_max, error::nesting_depth_exceeded);
     }
 
-private:
-    inline static std::atomic<std::size_t> nesting_depth_max{nesting_depth_default};
+    static std::expected<void, error> check_input_bytes(std::size_t size);
 
-public:
-    static std::size_t nesting_depth_max_read() noexcept
-    {
-        return nesting_depth_max.load(std::memory_order_relaxed);
-    }
+    CBOR_ALWAYS_INLINE static std::expected<void, error> check_argument(major_type major, std::uint64_t argument);
 
-    static std::expected<void, error> nesting_depth_max_set(std::size_t const depth_max) noexcept
-    {
-        if (auto const r = check_nesting_depth(depth_max, nesting_depth_limit); !r) [[unlikely]]
-            return r;
-        nesting_depth_max.store(depth_max, std::memory_order_relaxed);
-        return {};
-    }
+    static std::expected<std::size_t, error> check_decoded_bytes(std::size_t decoded, std::size_t added);
 
     static constexpr std::expected<void, error> check_pending_items(std::uint64_t const pending,
                                                                     std::size_t const bytes_left)
@@ -393,7 +407,120 @@ public:
 #endif
 };
 
-static_assert(validity::check_nesting_depth(validity::nesting_depth_default, validity::nesting_depth_limit).has_value(),
+template <std::size_t Bound, error Exceeded>
+class limit
+{
+    std::atomic<std::size_t> value;
+
+public:
+    constexpr explicit limit(std::size_t const initial) noexcept
+        : value(initial)
+    {
+    }
+
+    limit(limit const &) = delete;
+
+    limit &operator=(limit const &) = delete;
+
+    limit &operator=(std::size_t const v)
+    {
+        if (!validity::check_limit(v, Bound, Exceeded)) [[unlikely]]
+            validity::throw_logic_error("cbor::limits: the value is above the bound of the limit");
+        value.store(v, std::memory_order_relaxed);
+        return *this;
+    }
+
+    operator std::size_t() const noexcept
+    {
+        return value.load(std::memory_order_relaxed);
+    }
+};
+
+struct limit_values {
+    std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
+    std::size_t decoded_bytes = CBOR_DECODED_BYTES_DEFAULT;
+    std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
+    std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
+    std::size_t input_bytes = CBOR_INPUT_BYTES_DEFAULT;
+};
+
+class resource_limits
+{
+public:
+    limit<validity::nesting_depth_limit, error::nesting_depth_exceeded> nesting_depth;
+    limit<validity::size_limit, error::decoded_bytes_exceeded> decoded_bytes;
+    limit<validity::size_limit, error::string_length_exceeded> string_length;
+    limit<validity::size_limit, error::container_elements_exceeded> container_elements;
+    limit<validity::size_limit, error::input_bytes_exceeded> input_bytes;
+
+    constexpr resource_limits() noexcept
+        : resource_limits(limit_values{})
+    {
+    }
+
+    constexpr explicit resource_limits(limit_values const v) noexcept
+        : nesting_depth(v.nesting_depth), decoded_bytes(v.decoded_bytes), string_length(v.string_length),
+          container_elements(v.container_elements), input_bytes(v.input_bytes)
+    {
+    }
+
+    resource_limits(resource_limits const &) = delete;
+
+    resource_limits &operator=(resource_limits const &) = delete;
+
+    resource_limits &operator=(limit_values const v)
+    {
+        nesting_depth = v.nesting_depth;
+        decoded_bytes = v.decoded_bytes;
+        string_length = v.string_length;
+        container_elements = v.container_elements;
+        input_bytes = v.input_bytes;
+        return *this;
+    }
+};
+
+static_assert(validity::check_nesting_depth(limit_values{}.nesting_depth, validity::nesting_depth_limit).has_value(),
               "CBOR_NESTING_DEPTH_DEFAULT is at most validity::nesting_depth_limit.");
+static_assert(validity::check_limit(limit_values{}.decoded_bytes, validity::size_limit, error::decoded_bytes_exceeded)
+                  .has_value(),
+              "CBOR_DECODED_BYTES_DEFAULT fits in std::size_t.");
+static_assert(validity::check_limit(limit_values{}.string_length, validity::size_limit, error::string_length_exceeded)
+                  .has_value(),
+              "CBOR_STRING_LENGTH_DEFAULT fits in std::size_t.");
+static_assert(validity::check_limit(limit_values{}.container_elements, validity::size_limit,
+                                    error::container_elements_exceeded)
+                  .has_value(),
+              "CBOR_CONTAINER_ELEMENTS_DEFAULT fits in std::size_t.");
+static_assert(validity::check_limit(limit_values{}.input_bytes, validity::size_limit, error::input_bytes_exceeded)
+                  .has_value(),
+              "CBOR_INPUT_BYTES_DEFAULT fits in std::size_t.");
+
+inline constinit resource_limits limits{};
+
+inline std::expected<void, error> validity::check_input_bytes(std::size_t const size)
+{
+    return check_limit(size, limits.input_bytes, error::input_bytes_exceeded);
+}
+
+CBOR_ALWAYS_INLINE inline std::expected<void, error> validity::check_argument(major_type const major,
+                                                                              std::uint64_t const argument)
+{
+    if (major == major_type::byte_string || major == major_type::text_string)
+        return check_limit(argument, limits.string_length, error::string_length_exceeded);
+    if (major == major_type::array || major == major_type::map)
+        return check_limit(argument, limits.container_elements, error::container_elements_exceeded);
+    return {};
+}
+
+inline std::expected<std::size_t, error> validity::check_decoded_bytes(std::size_t const decoded,
+                                                                       std::size_t const added)
+{
+    auto const sum = checked_add(decoded, added);
+    if (!sum) [[unlikely]]
+        return std::unexpected(error::decoded_bytes_exceeded);
+    if (auto const r = check_limit(*sum, limits.decoded_bytes, error::decoded_bytes_exceeded); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return *sum;
+}
 
 }

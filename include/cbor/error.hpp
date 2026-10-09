@@ -32,7 +32,11 @@ enum class error {
     no_buffer_space,
     value_too_large,
     not_enough_memory,
-    io_error
+    io_error,
+    decoded_bytes_exceeded,
+    string_length_exceeded,
+    container_elements_exceeded,
+    input_bytes_exceeded
 };
 
 class error_category : public std::error_category
@@ -94,6 +98,14 @@ public:
             return "not enough memory";
         case error::io_error:
             return "io error";
+        case error::decoded_bytes_exceeded:
+            return "decoded bytes exceeded";
+        case error::string_length_exceeded:
+            return "string length exceeded";
+        case error::container_elements_exceeded:
+            return "container elements exceeded";
+        case error::input_bytes_exceeded:
+            return "input bytes exceeded";
         }
         return "unknown cbor error";
     }

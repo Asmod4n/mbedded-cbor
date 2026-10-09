@@ -516,7 +516,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
 
     // The nesting depth defaults to 128 (owner, 2026-10-06). A vector nested deeper is read with the depth set to
     // the limit and gives nesting_depth_exceeded at the default.
-    test::nesting_depth_max_guard const shallow_depth{cbor::validity::nesting_depth_default};
+    test::limits_guard const shallow_depth{{.nesting_depth = cbor::validity::nesting_depth_default}};
     if (auto const shallow = decoded(v.encoded); !shallow) {
         CHECK_EQ(shallow.error(), error::nesting_depth_exceeded);
         ++count.nesting_depth_exceeded;
@@ -531,7 +531,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
 // item in the extended generic data model.
 TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
 {
-    test::nesting_depth_max_guard const depth{depth_limit};
+    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     wg_count count{};
     for (char const *const file :
          {"/rfc8949/good.cbor", "/rfc8949-appendixA/mt0.cbor", "/rfc8949-appendixA/mt1.cbor",
@@ -552,7 +552,7 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
 // except where a decision of this library differs from the vector.
 TEST_CASE("cbor-wg test vectors: every bad vector fails")
 {
-    test::nesting_depth_max_guard const depth{depth_limit};
+    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     std::size_t checked = 0;
     for (wg_vector const &v : wg_vectors_of(CBOR_TEST_VECTORS "/tests/rfc8949/bad.cbor")) {
         CAPTURE(v.description);
@@ -588,7 +588,7 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
 // streaming.edn. decode and lazy give indefinite_length; diagnostic_notation writes the item.
 TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
-    test::nesting_depth_max_guard const depth{depth_limit};
+    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
     auto const top = cbor::lazy::from(std::string_view(file));
     REQUIRE(top.has_value());
@@ -621,7 +621,7 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 // into each tag, and decode, lazy and diagnostic_notation give the same answer.
 TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation refuse every content that RFC 8949 3.4.1 and 3.4.2 forbid")
 {
-    test::nesting_depth_max_guard const depth{depth_limit};
+    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     struct content {
         std::string_view encoded;
         bool date_time_string;
@@ -666,7 +666,7 @@ TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation refuse every conte
 // and the encoder wrote 0(0), which no reader accepts. decode, lazy and diagnostic_notation give the same answer for each.
 TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the value it names")
 {
-    test::nesting_depth_max_guard const depth{depth_limit};
+    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     struct shared_content {
         std::string_view encoded;
         error refused;

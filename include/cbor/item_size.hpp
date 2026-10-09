@@ -182,6 +182,8 @@ class well_formedness
 
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
 {
+    if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
+        return std::unexpected(r.error());
     heads::decoder d{encoded};
     well_formedness::no_marks none;
     if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]

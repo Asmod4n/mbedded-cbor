@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cbor/cbor.hpp>
-#include "nesting_depth_max_guard.hpp"
+#include "limits_guard.hpp"
 #include <doctest/doctest.h>
 
 #include <algorithm>

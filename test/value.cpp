@@ -116,7 +116,7 @@ TEST_CASE("major 5: empty, string, integer, nested keys")
 // The limit is 16 here; the limit itself must pass and one level more must fail.
 TEST_CASE("depth: nested arrays and maps past the limit")
 {
-    test::nesting_depth_max_guard const depth{16};
+    test::limits_guard const depth{{.nesting_depth = 16}};
     CHECK(decoded(std::string(16, '\x81') + '\x00').has_value());
     CHECK_EQ(decode_error(std::string(17, '\x81') + '\x00'), error::nesting_depth_exceeded);
     CHECK(decoded(repeat("\xa1\x61"
@@ -170,7 +170,7 @@ TEST_CASE("major 6: a tag reaches the binding with its content")
 // the encode part. The core counts the depth on encode as on decode.
 TEST_CASE("depth: encode past the limit")
 {
-    test::nesting_depth_max_guard const depth{16};
+    test::limits_guard const depth{{.nesting_depth = 16}};
     value deep = V(0);
     for (int i = 0; i < 16; ++i)
         deep = A(deep);

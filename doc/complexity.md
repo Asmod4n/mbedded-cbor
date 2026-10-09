@@ -18,7 +18,7 @@ A row marked "not checked" was not compared with the code.
 | n_item, n_map, n_array | Bytes of one item, one map, one array. |
 | n_out | Bytes of the encoded output. |
 | i | Data items in the input. |
-| d | Nesting depth. The nesting depth in force bounds it: validity::nesting_depth_max_read(), at most nesting_depth_limit. |
+| d | Nesting depth. The nesting depth in force bounds it: cbor::limits.nesting_depth, at most nesting_depth_limit. |
 | s | Shared values (tag 28) in the input. |
 | m | Elements of an array. |
 | k | Entries of a map. |

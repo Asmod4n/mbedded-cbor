@@ -930,7 +930,9 @@ class jsonpath
             return c;
         }();
         query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys), {}};
-        std::size_t const depth_max = validity::nesting_depth_max_read();
+        if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        std::size_t const depth_max = limits.nesting_depth;
         if (auto const r = validity::check_nesting_depth(top.segment_count, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         std::string_view const content = heads::self_described_cbor_content(encoded);
@@ -1527,7 +1529,7 @@ auto jsonpath::compiled_apply(Walk const &walk)
         return c;
     }();
     using result = decltype(walk(query_view{}, top, std::size_t{}));
-    std::size_t const depth_max = validity::nesting_depth_max_read();
+    std::size_t const depth_max = limits.nesting_depth;
     if (auto const r = validity::check_nesting_depth(top.segment_count, depth_max); !r) [[unlikely]]
         return result(std::unexpect, r.error());
     return walk(query_view{std::get<0>(compiled), std::get<1>(compiled), std::get<2>(compiled),
@@ -1538,7 +1540,7 @@ auto jsonpath::compiled_apply(Walk const &walk)
 template <binding Binding>
 std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view const path, lazy const &l)
 {
-    std::size_t const depth_max = validity::nesting_depth_max_read();
+    std::size_t const depth_max = limits.nesting_depth;
     auto const q = jsonpath::query_parse(path, false, depth_max);
     if (!q) [[unlikely]]
         return std::unexpected(q.error());
@@ -1551,7 +1553,7 @@ std::expected<typename Binding::value, error> at_path(Binding &binding, std::str
 template <binding Binding>
 std::expected<typename Binding::value, error> query(Binding &binding, std::string_view const path, lazy const &l)
 {
-    std::size_t const depth_max = validity::nesting_depth_max_read();
+    std::size_t const depth_max = limits.nesting_depth;
     auto const q = jsonpath::query_parse(path, false, depth_max);
     if (!q) [[unlikely]]
         return std::unexpected(q.error());

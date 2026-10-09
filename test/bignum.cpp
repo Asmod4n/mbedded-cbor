@@ -108,7 +108,7 @@ TEST_CASE("bignum tag 3: an empty magnitude is refused")
 // tag. The encoder wrote a bignum at the depth limit without that level, so its own output did not decode.
 TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
 {
-    test::nesting_depth_max_guard const depth{16};
+    test::limits_guard const depth{{.nesting_depth = 16}};
     value deep = V(value{bignum{false, std::string(9, '\x01')}});
     for (int i = 0; i < 16; ++i)
         deep = A(deep);

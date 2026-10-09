@@ -306,6 +306,9 @@ class generic
             auto const text = d.byte_string_decode(h->argument);
             if (!text) [[unlikely]]
                 return std::unexpected(text.error());
+            if constexpr (std::same_as<U, std::string>)
+                if (auto const r = d.decoded_bytes_add(text->size()); !r) [[unlikely]]
+                    return r;
             out = U(*text);
             return {};
         } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
@@ -325,6 +328,8 @@ class generic
                     return std::unexpected(error::incorrect_type);
                 std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
             } else {
+                if (auto const r = d.decoded_bytes_add(view.size() * sizeof(typename U::value_type)); !r) [[unlikely]]
+                    return r;
                 out.resize(view.size());
                 std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
             }
@@ -370,6 +375,8 @@ class generic
                 typename U::mapped_type value{};
                 if (auto const r = generic_read(d, value, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
+                if (auto const r = d.decoded_bytes_add(sizeof(typename U::value_type)); !r) [[unlikely]]
+                    return r;
                 if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); })
                     out.try_emplace(std::move(key), std::move(value));
                 else
@@ -391,6 +398,8 @@ class generic
                 out.reserve(static_cast<std::size_t>(
                     std::min<std::uint64_t>(h->argument, d.encoded.size() / sizeof(E))));
             for (std::uint64_t i = 0; i < h->argument; ++i) {
+                if (auto const r = d.decoded_bytes_add(sizeof(E)); !r) [[unlikely]]
+                    return r;
                 if constexpr (requires {
                                   { out.emplace_back() } -> std::same_as<E &>;
                               }) {
@@ -791,7 +800,7 @@ public:
 #if defined(__cpp_exceptions)
         try {
 #endif
-            auto value = read(encoded, validity::nesting_depth_max_read());
+            auto value = read(encoded, limits.nesting_depth);
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
             return owning_ref<T>(std::move(owner), std::move(*value));
@@ -873,6 +882,8 @@ public:
 private:
     static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max)
     {
+        if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
+            return std::unexpected(r.error());
         value_sharing::sharing_decoder d{{encoded}, {{}, encoded, {}, 0}};
         T out{};
         if (auto const r = generic::generic_read(d, out, 0, depth_max); !r) [[unlikely]]

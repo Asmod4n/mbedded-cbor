@@ -207,10 +207,10 @@ TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01"sv).error(), error::too_little_data);
     CHECK_EQ(cbor::diagnostic_notation("\x00\x00"sv).error(), error::syntax_error);
     {
-        test::nesting_depth_max_guard const depth{4};
+        test::limits_guard const depth{{.nesting_depth = 4}};
         CHECK_EQ(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).error(), error::nesting_depth_exceeded);
     }
-    test::nesting_depth_max_guard const depth{5};
+    test::limits_guard const depth{{.nesting_depth = 5}};
     CHECK(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).has_value());
 }
 

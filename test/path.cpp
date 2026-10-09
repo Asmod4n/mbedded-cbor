@@ -195,10 +195,10 @@ TEST_CASE("path: the grammar")
     std::string const deep = encoded(A(A(A(A(1)))));
     test_binding binding;
     {
-        test::nesting_depth_max_guard const depth{3};
+        test::limits_guard const depth{{.nesting_depth = 3}};
         CHECK_EQ(cbor::at_path(binding, "$[0][0][0][0]", *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
     }
-    test::nesting_depth_max_guard const depth{4};
+    test::limits_guard const depth{{.nesting_depth = 4}};
     CHECK(cbor::at_path(binding, "$[0][0][0][0]", *cbor::lazy::from(deep)).has_value());
 }
 
@@ -465,7 +465,7 @@ TEST_CASE("path: the descendant segment")
         CHECK_EQ(path_error(bad, doc), error::invalid_path);
     std::string const deep = encoded(A(A(A(A(A(1))))));
     test_binding binding;
-    test::nesting_depth_max_guard const depth{3};
+    test::limits_guard const depth{{.nesting_depth = 3}};
     CHECK_EQ(cbor::query(binding, "$..[0]", *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
 }
 
@@ -926,7 +926,7 @@ TEST_CASE("path: a typed read skips an item of any nesting depth")
     check_path<"$[1]", std::uint64_t>(deeper, {std::int64_t{1}}, 1u);
     std::string const keyed = "\xa2\x61k"s + repeat("\x81", 2000) + "\x00\x61\x61\x01"s;
     check_path<"$.a", std::uint64_t>(keyed, {"a"sv}, 1u);
-    test::nesting_depth_max_guard const depth{4};
+    test::limits_guard const depth{{.nesting_depth = 4}};
     CHECK(path_get<"$[1]", std::uint64_t>("\x82\x81\x81\x81\x81\x00\x01"s) == 1u);
 }
 
@@ -978,7 +978,7 @@ TEST_CASE("path: a typed read that is not safe does not compile")
 TEST_CASE("at_path: a compiled path with more segments than the nesting depth in force is refused")
 {
     std::string const text = "\x81\x81\x81\x07";
-    test::nesting_depth_max_guard const depth{2};
+    test::limits_guard const depth{{.nesting_depth = 2}};
     CHECK_EQ(cbor::at_path<"$[0][0]", std::int64_t>(std::string_view(text)).error(), error::incorrect_type);
     CHECK_EQ(cbor::at_path<"$[0][0][0]", std::int64_t>(std::string_view(text)).error(), error::nesting_depth_exceeded);
     auto const owner = std::make_shared<std::string const>(text);

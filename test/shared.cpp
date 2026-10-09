@@ -182,7 +182,7 @@ TEST_CASE("tag 28/29: a held cycle outlives its binding")
 TEST_CASE("tag 28: a chain past the limit")
 {
     CHECK_EQ(ref_decode_error(repeat("\xd8\x1c"sv, 129) + '\x00'), error::nesting_depth_exceeded);
-    test::nesting_depth_max_guard const depth{16};
+    test::limits_guard const depth{{.nesting_depth = 16}};
     CHECK_EQ(ref_decode_error(repeat("\xd8\x1c"sv, 17) + '\x00'), error::nesting_depth_exceeded);
     CHECK(decoded_ref(repeat("\xd8\x1c"sv, 16) + '\x00'));
 }
@@ -288,7 +288,7 @@ TEST_CASE("tag 28/29: a cyclic array and a cyclic map")
 // exception. A value that is only deep stays nesting_depth_exceeded.
 TEST_CASE("tag 28/29: encode without sharing refuses a cycle as a value")
 {
-    test::nesting_depth_max_guard const depth{16};
+    test::limits_guard const depth{{.nesting_depth = 16}};
     auto const a = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
     ref_binding binding;
     string_writer w;
@@ -720,7 +720,7 @@ struct nesting_binding : ref_binding {
 // reference, so at_path and lazy_decode accept every item that the decode of the whole item accepts.
 TEST_CASE("tag 29: a mark before the start of a lazy is built at the depth of its own position")
 {
-    test::nesting_depth_max_guard const depth{16};
+    test::limits_guard const depth{{.nesting_depth = 16}};
     for (std::size_t h = 0; h <= 15; ++h) {
         for (std::size_t r = 0; r <= 15; ++r) {
             CAPTURE(h);
@@ -741,7 +741,7 @@ TEST_CASE("tag 29: a mark before the start of a lazy is built at the depth of it
             REQUIRE(lazy.has_value());
             test_binding expected_binding;
             auto const expected = [&] {
-                test::nesting_depth_max_guard const wide{32};
+                test::limits_guard const wide{{.nesting_depth = 32}};
                 return cbor::lazy_decode(expected_binding, *cbor::lazy::from(repeat("\x81"sv, r) + target));
             }();
             REQUIRE(expected.has_value());

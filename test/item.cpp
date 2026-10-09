@@ -1,7 +1,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
-#include "nesting_depth_max_guard.hpp"
+#include "limits_guard.hpp"
 
 #include <bit>
 #include <cstddef>
@@ -297,12 +297,12 @@ TEST_CASE("decode: the nesting depth is limited by the nesting depth in force")
     auto const top_level = cbor::lazy::from(std::string("\xd8\x64\xd8\x64\xd8\x64\x00"sv));
     REQUIRE(top_level.has_value());
     {
-        test::nesting_depth_max_guard const depth{2};
+        test::limits_guard const depth{{.nesting_depth = 2}};
         auto const refused = top_level->decode();
         REQUIRE_FALSE(refused.has_value());
         CHECK_EQ(refused.error(), cbor::error::nesting_depth_exceeded);
     }
-    test::nesting_depth_max_guard const depth{3};
+    test::limits_guard const depth{{.nesting_depth = 3}};
     CHECK(top_level->decode().has_value());
 }
 

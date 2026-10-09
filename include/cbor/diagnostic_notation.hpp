@@ -1114,10 +1114,12 @@ class extended_diagnostic_notation
 
 inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
 {
+    if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
+        return std::unexpected(r.error());
     heads::decoder d{encoded};
     std::string out;
     std::vector<std::size_t> marks;
-    if (auto const r = extended_diagnostic_notation::diagnostic_write(out, d, encoded, marks, 0, validity::nesting_depth_max_read()); !r) [[unlikely]]
+    if (auto const r = extended_diagnostic_notation::diagnostic_write(out, d, encoded, marks, 0, limits.nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (!d.encoded.empty()) [[unlikely]]
         return std::unexpected(error::syntax_error);
