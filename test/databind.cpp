@@ -215,7 +215,7 @@ TEST_CASE("databind: a CTAP2 getAssertion response")
     REQUIRE(exact.has_value());
     CHECK_EQ(std::string_view(tight.data(), *exact), message);
     std::array<char, 8> small{};
-    CHECK_EQ(cbor::databind<get_assertion_response>::encode(**r, std::span(small)).error(), std::errc::no_buffer_space);
+    CHECK_EQ(cbor::databind<get_assertion_response>::encode(**r, std::span(small)).error(), cbor::error::no_buffer_space);
     std::string text = "x";
     CHECK_EQ(*cbor::databind<get_assertion_response>::encode(**r, text), message.size());
     CHECK_EQ(text, "x" + message);

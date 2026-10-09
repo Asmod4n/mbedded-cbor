@@ -1260,7 +1260,7 @@ TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
     std::array<char, 8> small{};
     auto const too_small = cbor::schema<garage>::encode(sample_garage, std::span(small));
     REQUIRE_FALSE(too_small.has_value());
-    CHECK_EQ(too_small.error(), std::errc::no_buffer_space);
+    CHECK_EQ(too_small.error(), cbor::error::no_buffer_space);
 
     struct counting {
         std::string sent;

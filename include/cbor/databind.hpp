@@ -747,14 +747,14 @@ public:
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
-    CBOR_ALWAYS_INLINE static std::expected<std::string, std::errc> encode(T const &value)
+    CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
         auto const counted = generic::generic_size(value);
         if (!counted) [[unlikely]]
-            return std::unexpected(counted.error());
+            return std::unexpected(validity::writer_error(counted.error()));
         auto const sum = validity::checked_add(*counted, heads::head_padding);
         if (!sum) [[unlikely]]
-            return std::unexpected(sum.error());
+            return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::string out;
         out.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
@@ -764,22 +764,22 @@ public:
     }
 
     template <class Target>
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, std::errc> encode(T const &value, Target &&target)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
         using U = std::remove_cvref_t<Target>;
         auto const counted = generic::generic_size(value);
         if (!counted) [[unlikely]]
-            return std::unexpected(counted.error());
+            return std::unexpected(validity::writer_error(counted.error()));
         auto const sum = validity::checked_add(*counted, heads::head_padding);
         if (!sum) [[unlikely]]
-            return std::unexpected(sum.error());
+            return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::size_t const size = *counted;
         if constexpr (std::same_as<U, std::string>) {
             std::size_t const at = target.size();
             auto const total = validity::checked_add(at, padded);
             if (!total) [[unlikely]]
-                return std::unexpected(total.error());
+                return std::unexpected(validity::writer_error(total.error()));
             target.resize_and_overwrite(*total, [&](char *const p, std::size_t const n) {
                 return generic::generic_write(std::span<char>(p, n), at, value);
             });
@@ -789,7 +789,7 @@ public:
             std::size_t const at = std::ranges::size(target);
             auto const total = validity::checked_add(at, padded);
             if (!total) [[unlikely]]
-                return std::unexpected(total.error());
+                return std::unexpected(validity::writer_error(total.error()));
             target.resize(*total);
             generic::generic_write(std::span<char>(target), at, value);
             target.resize(at + size);
@@ -805,9 +805,9 @@ public:
         encoded.resize(generic::generic_write(std::span<char>(encoded), 0, value));
         decltype(auto) message = encoding::message_of(target, encoded.size());
         if (auto const r = message.append(encoded); !r) [[unlikely]]
-            return std::unexpected(r.error());
+            return std::unexpected(validity::writer_error(r.error()));
         if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
-            return std::unexpected(r.error());
+            return std::unexpected(validity::writer_error(r.error()));
         return encoded.size();
     }
 
