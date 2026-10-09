@@ -756,7 +756,7 @@ template <sharedrefs Sharing, class Binding, class Writer>
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value)
 {
     decltype(auto) message = encoding::message_of(target, 0);
-    auto const size = encoding::encode_from<Sharing>(binding, message, value, 0, false, validity::nesting_depth_max_read());
+    auto const size = encoding::encode_from<Sharing>(binding, message, value, 0, false, limits.nesting_depth);
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
     if (auto const r = message.done(*size); !r) [[unlikely]]

@@ -380,6 +380,16 @@ struct value_sharing::top_level_item {
 
 struct value_sharing::sharing_decoder : heads::decoder {
     top_level_item message;
+    std::size_t decoded_bytes = 0;
+
+    std::expected<void, error> decoded_bytes_add(std::size_t const added)
+    {
+        auto const sum = validity::check_decoded_bytes(decoded_bytes, added);
+        if (!sum) [[unlikely]]
+            return std::unexpected(sum.error());
+        decoded_bytes = *sum;
+        return {};
+    }
 };
 
 struct value_sharing::resolved {

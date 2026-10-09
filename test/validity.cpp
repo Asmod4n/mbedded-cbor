@@ -25,42 +25,41 @@ TEST_CASE("validity: the limit and the default of the nesting depth")
     CHECK_EQ(validity::nesting_depth_default, 128u);
 }
 
-// One function decides whether a depth is allowed, at compile time for the default and at run time for the depth
-// of an item. A depth up to the maximum is allowed and every depth above it is refused, for every depth up to
-// one past the limit.
-// The nesting depth in force starts at the default. One function sets it, and that function refuses every value
-// above the limit with the check that every reader of a depth uses, so the depth in force never exceeds the limit.
-TEST_CASE("validity: nesting_depth_max_set lowers and raises the nesting depth and refuses a value above the limit")
+// The nesting depth in force starts at the default. Its operator= refuses every value above the limit with the check
+// that every reader of a depth uses, so the depth in force never exceeds the limit.
+TEST_CASE("validity: cbor::limits.nesting_depth lowers and raises the nesting depth and refuses a value above the limit")
 {
-    CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_default);
+    CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_default);
     std::string const deep = std::string(200, '\x81') + '\x00';
     test_binding binding;
     CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
     {
-        test::nesting_depth_max_guard const raised{200};
-        CHECK_EQ(validity::nesting_depth_max_read(), 200u);
+        test::limits_guard const raised{{.nesting_depth = 200}};
+        CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, 200u);
         CHECK(cbor::lazy_decode(binding, *cbor::lazy::from(deep)).has_value());
         CHECK(cbor::diagnostic_notation(deep).has_value());
-        test::nesting_depth_max_guard const lowered{199};
+        test::limits_guard const lowered{{.nesting_depth = 199}};
         CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
         CHECK_EQ(cbor::diagnostic_notation(deep).error(), error::nesting_depth_exceeded);
     }
-    CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_default);
-    CHECK_EQ(validity::nesting_depth_max_set(513).error(), error::nesting_depth_exceeded);
-    CHECK_EQ(validity::nesting_depth_max_set(std::numeric_limits<std::size_t>::max()).error(),
-             error::nesting_depth_exceeded);
-    CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_default);
+    CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_default);
+    CHECK_THROWS_AS(cbor::limits.nesting_depth = 513, std::logic_error);
+    CHECK_THROWS_AS(cbor::limits.nesting_depth = std::numeric_limits<std::size_t>::max(), std::logic_error);
+    CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_default);
     {
-        test::nesting_depth_max_guard const limit{validity::nesting_depth_limit};
-        CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_limit);
+        test::limits_guard const limit{{.nesting_depth = validity::nesting_depth_limit}};
+        CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_limit);
     }
     {
-        test::nesting_depth_max_guard const zero{0};
+        test::limits_guard const zero{{.nesting_depth = 0}};
         CHECK(cbor::lazy_decode(binding, *cbor::lazy::from("\x00"sv)).has_value());
         CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from("\x81\x00"sv)).error(), error::nesting_depth_exceeded);
     }
 }
 
+// One function decides whether a depth is allowed, at compile time for the default and at run time for the depth
+// of an item. A depth up to the maximum is allowed and every depth above it is refused, for every depth up to
+// one past the limit.
 TEST_CASE("validity: check_nesting_depth for every depth up to one past the limit")
 {
     for (std::size_t depth = 0; depth <= 513; ++depth) {

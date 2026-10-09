@@ -921,6 +921,9 @@ class packed
                 return std::unexpected(error::too_little_data);
             if (!validity::typed_array_check(typed_array_tag<E>(), size)) [[unlikely]]
                 return std::unexpected(error::inadmissible_type_for_tag_content);
+            if (error const r = validity::check_argument(major_type::byte_string, size).error_or(error{}); r != error{})
+                [[unlikely]]
+                return std::unexpected(r);
             return reference{item + typed_array_head, size / sizeof(E)};
         } else {
             if (end < item + item_head) [[unlikely]]
@@ -935,6 +938,8 @@ class packed
             auto const size = validity::checked_mul(length, element);
             if (!size || *size > end - item - item_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
+            if (error const r = validity::check_argument(Major, length).error_or(error{}); r != error{}) [[unlikely]]
+                return std::unexpected(r);
             return reference{item + item_head, length};
         }
     }
@@ -1247,6 +1252,16 @@ class packed
         std::size_t index;
         std::size_t at;
         std::size_t end;
+        std::size_t decoded_bytes = 0;
+
+        std::expected<void, error> decoded_bytes_add(std::size_t const added)
+        {
+            auto const sum = validity::check_decoded_bytes(decoded_bytes, added);
+            if (!sum) [[unlikely]]
+                return std::unexpected(sum.error());
+            decoded_bytes = *sum;
+            return {};
+        }
 
         template <class Root, major_type Major, class E = void>
         CBOR_ALWAYS_INLINE std::expected<reference, error> reference_take(std::span<char const, dynamic_type_sizes> const field,
@@ -1336,6 +1351,9 @@ class packed
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 std::string_view const part{std::span(encoded).subspan(r->data, r->length)};
+                if constexpr (!std::ranges::view<U>)
+                    if (auto const c = decoded_bytes_add(r->length * sizeof(std::ranges::range_value_t<U>)); !c) [[unlikely]]
+                        return c;
                 if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>) {
                     auto const raw = std::as_bytes(std::span(part));
                     out = U(raw.begin(), raw.end());
@@ -1352,6 +1370,8 @@ class packed
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
+                if (auto const c = decoded_bytes_add(r->length * sizeof(typename U::value_type)); !c) [[unlikely]]
+                    return c;
                 out.clear();
                 for (std::size_t i = 0; i < r->length; ++i) {
                     auto const entry = std::span<char const>(encoded).subspan(r->data + i * pair).template first<pair>();
@@ -1373,6 +1393,9 @@ class packed
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
+                if constexpr (!std::ranges::view<U>)
+                    if (auto const c = decoded_bytes_add(r->length * sizeof(E)); !c) [[unlikely]]
+                        return c;
                 auto const from = std::span<char const>(encoded).subspan(r->data, r->length * sizeof(E));
                 if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U> &&
                               requires { out.resize(std::size_t{}); }) {
@@ -1392,6 +1415,8 @@ class packed
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
+                if (auto const c = decoded_bytes_add(r->length * sizeof(E)); !c) [[unlikely]]
+                    return c;
                 out.clear();
                 out.reserve(r->length);
                 for (std::size_t i = 0; i < r->length; ++i) {
@@ -1415,6 +1440,8 @@ class packed
     template <class T>
     static std::expected<void, error> root_read(T &out, std::string_view const encoded, std::size_t const depth_max)
     {
+        if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto const dir = directory_read<T>(encoded);
         if (!dir) [[unlikely]]
             return std::unexpected(dir.error());
@@ -1983,6 +2010,8 @@ public:
     {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::schema::path: the owner of the encoded data item is empty");
+        if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto const dir = packed::directory_read<T>(encoded);
         if (!dir) [[unlikely]]
             return std::unexpected(dir.error());
@@ -2034,7 +2063,7 @@ public:
     {
         auto copy = std::make_shared<std::string const>(encoded);
         T value{};
-        if (auto const r = packed::root_read<T>(value, *copy, validity::nesting_depth_max_read()); !r) [[unlikely]]
+        if (auto const r = packed::root_read<T>(value, *copy, limits.nesting_depth); !r) [[unlikely]]
             return std::unexpected(r.error());
         return owning_ref<T>(std::move(copy), std::move(value));
     }
@@ -2054,7 +2083,7 @@ public:
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::schema::decode: the owner of the encoded data item is empty");
         T value{};
-        if (auto const r = packed::root_read<T>(value, encoded, validity::nesting_depth_max_read()); !r) [[unlikely]]
+        if (auto const r = packed::root_read<T>(value, encoded, limits.nesting_depth); !r) [[unlikely]]
             return std::unexpected(r.error());
         return owning_ref<T>(std::move(owner), std::move(value));
     }

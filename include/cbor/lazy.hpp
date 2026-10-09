@@ -110,6 +110,8 @@ inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner, 
 {
     validity::throw_logic_error_if_empty(owner,
                                          "cbor::lazy::from: the owner of the encoded data item is empty");
+    if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
+        return std::unexpected(r.error());
     std::string_view const content = heads::self_described_cbor_content(encoded);
     return lazy{
         std::make_shared<value_sharing::top_level_item>(std::move(owner), content, std::vector<lazy>{}, 0), 0};
@@ -637,7 +639,7 @@ std::expected<std::reference_wrapper<item const>, error> lazy::decode(this Self 
 {
     validity::throw_logic_error_if_null(self.top_level,
                                         "cbor::lazy::decode: the lazy holds no top-level item");
-    auto const built = value_sharing::item_decode(*self.top_level, self.offset, 0, validity::nesting_depth_max_read());
+    auto const built = value_sharing::item_decode(*self.top_level, self.offset, 0, limits.nesting_depth);
     if (!built) [[unlikely]]
         return std::unexpected(built.error());
     return std::cref(*built->first);
@@ -650,7 +652,7 @@ std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy
     decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size()), {}};
     decoding::value_decoder<Binding> v{
         {std::string_view(std::span(l.top_level->encoded).subspan(l.offset))}, binding, decoding::marks<Binding>(l.top_level->sharedrefs.size()), &before};
-    return v.value_decode(0, std::nullopt, validity::nesting_depth_max_read());
+    return v.value_decode(0, std::nullopt, limits.nesting_depth);
 }
 
 }

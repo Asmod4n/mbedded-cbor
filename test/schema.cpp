@@ -1226,7 +1226,7 @@ TEST_CASE("decode: a struct that holds itself stops at the nesting depth in forc
     CHECK_EQ(over.error(), error::nesting_depth_exceeded);
 
     {
-        test::nesting_depth_max_guard const depth{3};
+        test::limits_guard const depth{{.nesting_depth = 3}};
         auto const small = cbor::schema<node>::decode(node_chain(3));
         REQUIRE(small.has_value());
         CHECK_EQ(depth_of(**small), 3u);
@@ -1242,7 +1242,7 @@ TEST_CASE("decode: a struct that holds itself stops at the nesting depth in forc
 // thread holds the deepest chain that the library accepts.
 TEST_CASE("nesting depth limit: schema")
 {
-    test::nesting_depth_max_guard const depth{cbor::validity::nesting_depth_limit};
+    test::limits_guard const depth{{.nesting_depth = cbor::validity::nesting_depth_limit}};
     auto const deepest = cbor::schema<node>::decode(node_chain(cbor::validity::nesting_depth_limit));
     REQUIRE(deepest.has_value());
     CHECK_EQ(depth_of(**deepest), cbor::validity::nesting_depth_limit);
