@@ -1358,10 +1358,7 @@ class packed
                     if (auto const e = value_read<DepthMax, Root>(value, entry.template last<fixed_size<V, Root>()>(), depth + 1);
                         !e) [[unlikely]]
                         return e;
-                    if (error const c = validity::check_key_unique(out.contains(key)).error_or(error{});
-                        c != error{}) [[unlikely]]
-                        return std::unexpected(c);
-                    out.insert_or_assign(std::move(key), std::move(value));
+                    out.try_emplace(std::move(key), std::move(value));
                 }
                 return {};
             } else if constexpr (is_typed_array<U>) {

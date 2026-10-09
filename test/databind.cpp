@@ -122,34 +122,23 @@ TEST_CASE("databind: an unknown key is skipped, a missing key is an error")
     CHECK_EQ(cbor::databind<std::uint64_t>::decode("\x00\x00"s).error(), error::syntax_error);
 }
 
-// The owner decided that a map with a duplicate key is not valid. A struct took the last of two equal member
-// keys and a std::map took the last value of a repeated key, with no error, before this test existed.
-TEST_CASE("databind: a repeated key is duplicate_key")
+// RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. A
+// struct member and a std::map take the first entry of a repeated key, with no error. A struct took the last
+// one before this test existed.
+TEST_CASE("databind: a repeated key gives the first entry")
 {
-    CHECK_EQ(cbor::databind<pair_ab>::decode("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x80"s).error(),
-             error::duplicate_key);
-    CHECK_EQ(
-        (cbor::databind<std::map<std::string, std::string>>::decode("\xa2\x61\x61\x61\x41\x61\x61\x61\x42"s)
-             .error()),
-        error::duplicate_key);
-    auto const distinct = cbor::databind<pair_ab>::decode("\xa2\x61\x61\x01\x61\x62\x80"s);
-    REQUIRE(distinct.has_value());
-    CHECK_EQ((*distinct)->a, 1u);
-}
-
-// RFC 8949 5.6: a key that no member takes is still a key of the map, so two equal keys of that kind make the
-// map not valid. The keys of a std::map are compared after they are read, so an integer key in two widths is
-// one key (RFC 8949 5.6.1).
-TEST_CASE("databind: a repeated key that no member takes is duplicate_key")
-{
-    CHECK_EQ(cbor::databind<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\x80\x61x\x01\x61x\x02"s).error(),
-             error::duplicate_key);
-    CHECK_EQ(cbor::databind<pair_ab>::decode("\xa4\x61x\x01\x61\x61\x01\x61\x62\x80\x61x\x02"s).error(),
-             error::duplicate_key);
-    CHECK(cbor::databind<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\x80\x61x\x01\x61y\x02"s).has_value());
-    CHECK_EQ(
-        (cbor::databind<std::map<std::uint64_t, std::uint64_t>>::decode("\xa2\x01\x00\x18\x01\x00"s).error()),
-        error::duplicate_key);
+    auto const twice = cbor::databind<pair_ab>::decode("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x80"s);
+    REQUIRE(twice.has_value());
+    CHECK_EQ((*twice)->a, 1u);
+    auto const map =
+        cbor::databind<std::map<std::string, std::string>>::decode("\xa2\x61\x61\x61\x41\x61\x61\x61\x42"s);
+    REQUIRE(map.has_value());
+    CHECK_EQ((*map)->at("a"), "A");
+    CHECK(cbor::databind<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\x80\x61x\x01\x61x\x02"s).has_value());
+    auto const widths = cbor::databind<std::map<std::uint64_t, std::uint64_t>>::decode("\xa2\x01\x00\x18\x01\x05"s);
+    REQUIRE(widths.has_value());
+    CHECK_EQ((*widths)->size(), 1u);
+    CHECK_EQ((*widths)->at(1), 0u);
 }
 
 // RFC 8428 6, the CBOR form of the example in 5.1.2: the integer labels come from the keys of the struct.

@@ -149,28 +149,24 @@ TEST_CASE("decode: an array is its count and a view on the bytes of its elements
     CHECK_EQ(elements[1], std::byte{0x62});
 }
 
-// RFC 8949 5.6: a map with a repeated key is not valid. decode builds the item of a map and refuses the map
-// when two of its keys are equal by RFC 8949 5.6.1. An array holds its elements as bytes, so a map inside it
-// is refused when the map itself is decoded.
-TEST_CASE("decode: a map with a repeated key gives duplicate_key")
+// RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. decode
+// builds the item of such a map with no error, at the top and inside an array.
+TEST_CASE("decode: a map with a repeated key is read with no error")
 {
     auto const twice = cbor::lazy::from(std::string("\xa2\x61k\x01\x61k\x02"sv));
     REQUIRE(twice.has_value());
-    CHECK_EQ(twice->decode().error(), cbor::error::duplicate_key);
+    CHECK(twice->decode().has_value());
     auto const nested = cbor::lazy::from(std::string("\x81\xa2\x01\x00\x18\x01\x00"sv));
     REQUIRE(nested.has_value());
     REQUIRE(nested->decode().has_value());
     auto const inner = nested->at(0);
     REQUIRE(inner.has_value());
-    CHECK_EQ(inner->decode().error(), cbor::error::duplicate_key);
-    auto const distinct = cbor::lazy::from(std::string("\xa2\x61k\x01\x61j\x02"sv));
-    REQUIRE(distinct.has_value());
-    CHECK(distinct->decode().has_value());
+    CHECK(inner->decode().has_value());
 }
 
-// A large map is checked by its key views, not pair by pair over the whole map. 65536 distinct text keys
-// decode, and the same map with its last key equal to its first gives duplicate_key.
-TEST_CASE("decode: a map of 65536 keys is checked for a repeated key")
+// decode compares no keys, so a map of 65536 text keys reads in one walk, with its last key equal to its first
+// or not.
+TEST_CASE("decode: a map of 65536 keys is read with a repeated key")
 {
     constexpr std::size_t count = 65536;
     std::string map = "\xba\x00\x01\x00\x00"s;
@@ -190,13 +186,12 @@ TEST_CASE("decode: a map of 65536 keys is checked for a repeated key")
     CHECK(unique->decode().has_value());
     auto const twice = cbor::lazy::from(std::move(map));
     REQUIRE(twice.has_value());
-    CHECK_EQ(twice->decode().error(), cbor::error::duplicate_key);
+    CHECK(twice->decode().has_value());
 }
 
 // A fuzzer held one core for more than 10 s with one map of 65535 integer keys, because integer keys were
-// compared pair by pair. An integer key is the same key in every encoding of its argument (RFC 8949 4.2.1 does
-// not make the preferred one the only one), and an unsigned and a negative integer with one argument differ.
-TEST_CASE("decode: a map of 65535 integer keys is checked for a repeated key")
+// compared pair by pair. decode compares no keys, so the map reads in one walk with a repeated key or not.
+TEST_CASE("decode: a map of 65535 integer keys is read with a repeated key")
 {
     constexpr std::size_t count = 65535;
     std::string map = "\xb9\xff\xff"s;
@@ -215,7 +210,7 @@ TEST_CASE("decode: a map of 65535 integer keys is checked for a repeated key")
     longer.replace(map.size() - 4, 4, "\x1a\x00\x00\x00\x00\x00"sv);
     auto const twice = cbor::lazy::from(std::move(longer));
     REQUIRE(twice.has_value());
-    CHECK_EQ(twice->decode().error(), cbor::error::duplicate_key);
+    CHECK(twice->decode().has_value());
 }
 
 template <class Lazy>

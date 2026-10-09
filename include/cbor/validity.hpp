@@ -11,7 +11,6 @@
 #include <ranges>
 #include <type_traits>
 #if defined(__cpp_exceptions)
-#include <span>
 #include <stdexcept>
 #endif
 #include <string_view>
@@ -161,14 +160,8 @@ public:
                                                       std::size_t second_at, std::size_t depth);
 
     template <std::size_t DepthMax, class Message>
-    static std::expected<void, error> check_keys_unique(Message &message, std::size_t first_key,
-                                                        std::uint64_t count, std::size_t depth);
-
-    template <std::size_t DepthMax, class Message>
-    static std::expected<void, error>
-    check_keys_unique(Message &message, std::span<std::size_t const> key_offsets, std::size_t depth);
-
-    static constexpr std::size_t stack_keys = 64;
+    static std::expected<void, error> check_sorted_keys_unique(Message &message, std::size_t first_key,
+                                                               std::uint64_t count, std::size_t depth);
 
     template <class Marks, class Projection>
     static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,

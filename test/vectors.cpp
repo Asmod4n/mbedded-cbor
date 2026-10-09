@@ -582,15 +582,15 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
 
 // streaming.cbor holds indefinite-length items, also in its "decoded" members, so the library cannot read the
 // file: indefinite length is never read (owner, 2026-10-02 and 2026-10-08). The encoded items are taken from
-// streaming.edn. decode and lazy give indefinite_length; inspect writes the item. A lookup reads every pair
-// of the map for its keys (RFC 8949 5.6), the value of "tests" too, so the lookup of "tests" gives
-// indefinite_length.
+// streaming.edn. decode and lazy give indefinite_length; inspect writes the item.
 TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
     auto const top = cbor::decode<depth_limit>(std::string_view(file));
     REQUIRE(top.has_value());
-    CHECK_EQ(top->at<depth_limit>("tests").error(), error::indefinite_length);
+    auto const tests = top->at<depth_limit>("tests");
+    REQUIRE(tests.has_value());
+    CHECK_EQ(tests->at<depth_limit>(1).error(), error::indefinite_length);
 
     std::string const edn = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.edn");
     std::size_t checked = 0;

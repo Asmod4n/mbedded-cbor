@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <bit>
 #include <concepts>
 #include <cstddef>
@@ -233,8 +232,6 @@ std::expected<lazy, error> value_sharing::key_find(resolved const &found, Match 
         return std::unexpected(error::not_indexable);
     top_level_item &source = *found.source;
     heads::decoder d = found.d;
-    bool seen = false;
-    std::size_t value = 0;
     for (std::uint64_t i = 0; i < found.h.argument; ++i) {
         auto const key_at = shared_resolve(source, source.encoded.size() - d.encoded.size());
         if (!key_at) [[unlikely]]
@@ -248,18 +245,12 @@ std::expected<lazy, error> value_sharing::key_find(resolved const &found, Match 
             return std::unexpected(matched.error());
         if (auto const r = well_formedness::item_skip<DepthMax>(d, source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
-        if (*matched) {
-            if (error const c = validity::check_key_unique(seen).error_or(error{}); c != error{}) [[unlikely]]
-                return std::unexpected(c);
-            seen = true;
-            value = source.encoded.size() - d.encoded.size();
-        }
+        if (*matched)
+            return lazy{found.source, source.encoded.size() - d.encoded.size()};
         if (auto const r = well_formedness::item_skip<DepthMax>(d, source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
-    if (!seen) [[unlikely]]
-        return std::unexpected(error::key_not_found);
-    return lazy{found.source, value};
+    return std::unexpected(error::key_not_found);
 }
 
 template <std::size_t DepthMax>
@@ -440,12 +431,7 @@ std::expected<lazy_entries<DepthMax>, error> lazy::entries() const
     auto const &[source, h, d] = *found;
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    std::size_t const first_key = source->encoded.size() - d.encoded.size();
-    if (error const c =
-            validity::check_keys_unique<DepthMax>(*source, first_key, h.argument, 1).error_or(error{});
-        c != error{}) [[unlikely]]
-        return std::unexpected(c);
-    return lazy_entries<DepthMax>{source, first_key, h.argument};
+    return lazy_entries<DepthMax>{source, source->encoded.size() - d.encoded.size(), h.argument};
 }
 template <std::size_t DepthMax>
 std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(top_level_item &top_level, std::size_t const at,
@@ -507,43 +493,11 @@ std::expected<std::pair<item *, std::size_t>, error> value_sharing::item_decode(
             node->content = std::as_bytes(std::span(string));
         return std::pair{node, h->at + string.size()};
     }
-    case major_type::array: {
+    case major_type::array:
+    case major_type::map: {
         heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(at))};
         if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
             return std::unexpected(r.error());
-        std::size_t const end = top_level.encoded.size() - d.encoded.size();
-        node->content = std::as_bytes(std::span(top_level.encoded).subspan(h->at, end - h->at));
-        return std::pair{node, end};
-    }
-    case major_type::map: {
-        heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
-        if (h->argument > validity::stack_keys) {
-            if (error const c =
-                    validity::check_keys_unique<DepthMax>(top_level, h->at, h->argument, depth + 1)
-                        .error_or(error{});
-                c != error{}) [[unlikely]]
-                return std::unexpected(c);
-            d = heads::decoder{std::string_view(std::span(top_level.encoded).subspan(at))};
-            if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth); !r) [[unlikely]]
-                return std::unexpected(r.error());
-        } else {
-            std::array<std::size_t, validity::stack_keys> keys;
-            std::size_t const count = static_cast<std::size_t>(h->argument);
-            for (std::size_t &k : std::span(keys).first(count)) {
-                k = top_level.encoded.size() - d.encoded.size();
-                if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth + 1); !r)
-                    [[unlikely]]
-                    return std::unexpected(r.error());
-                if (auto const r = well_formedness::item_skip<DepthMax>(d, top_level, depth + 1); !r)
-                    [[unlikely]]
-                    return std::unexpected(r.error());
-            }
-            if (error const c = validity::check_keys_unique<DepthMax>(
-                                    top_level, std::span<std::size_t const>(keys).first(count), depth + 1)
-                                    .error_or(error{});
-                c != error{}) [[unlikely]]
-                return std::unexpected(c);
-        }
         std::size_t const end = top_level.encoded.size() - d.encoded.size();
         node->content = std::as_bytes(std::span(top_level.encoded).subspan(h->at, end - h->at));
         return std::pair{node, end};
@@ -610,7 +564,7 @@ template <std::size_t DepthMax, class Binding>
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {
     validity::throw_logic_error_if_null(l.top_level, "cbor::lazy_decode: the lazy holds no top-level item");
-    decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size()), {}, {}};
+    decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size()), {}};
     decoding::value_decoder<Binding> v{
         {std::string_view(std::span(l.top_level->encoded).subspan(l.offset))}, binding, decoding::marks<Binding>(l.top_level->sharedrefs.size()), &before};
     return v.template value_decode<DepthMax>(0, std::nullopt);

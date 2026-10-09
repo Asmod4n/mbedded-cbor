@@ -352,13 +352,10 @@ class generic
                 typename U::key_type key{};
                 if (auto const r = generic_read<DepthMax>(d, key, depth + 1); !r) [[unlikely]]
                     return r;
-                if (error const c = validity::check_key_unique(out.contains(key)).error_or(error{});
-                    c != error{}) [[unlikely]]
-                    return std::unexpected(c);
                 typename U::mapped_type value{};
                 if (auto const r = generic_read<DepthMax>(d, value, depth + 1); !r) [[unlikely]]
                     return r;
-                out.insert_or_assign(std::move(key), std::move(value));
+                out.try_emplace(std::move(key), std::move(value));
             }
             return {};
         } else if constexpr (requires { out.push_back(std::declval<typename U::value_type>()); }) {
@@ -404,9 +401,7 @@ class generic
             return std::unexpected(h.error());
         if (h->major != major_type::map) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        std::size_t const first_key = d.message.encoded.size() - d.encoded.size();
         std::bitset<count> found;
-        bool unknown = false;
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
             std::size_t const key_at = d.message.encoded.size() - d.encoded.size();
             auto k = d.head_decode();
@@ -448,9 +443,8 @@ class generic
             template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, count))) {
                 if (!matched && key_matches<U, i>(*k, text)) {
                     matched = true;
-                    if (error const c = validity::check_key_unique(found.test(i)).error_or(error{});
-                        c != error{}) [[unlikely]] {
-                        r = std::unexpected(c);
+                    if (found.test(i)) {
+                        r = well_formedness::item_skip<DepthMax>(d, d.message, depth + 1);
                     } else {
                         found.set(i);
                         r = generic_read<DepthMax>(d, out.[:members[i]:], depth + 1);
@@ -458,19 +452,12 @@ class generic
                 }
             }
             if (!matched) {
-                unknown = true;
                 if (auto const s = well_formedness::item_skip<DepthMax>(d, d.message, depth + 1); !s) [[unlikely]]
                     return s;
             } else if (!r) [[unlikely]] {
                 return r;
             }
         }
-        if (unknown)
-            if (error const c =
-                    validity::check_keys_unique<DepthMax>(d.message, first_key, h->argument, depth + 1)
-                        .error_or(error{});
-                c != error{}) [[unlikely]]
-                return std::unexpected(c);
         template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, count))) {
             using M = std::remove_cvref_t<decltype(out.[:members[i]:])>;
             if constexpr (!packed::is_optional<M>)

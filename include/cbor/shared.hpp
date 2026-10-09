@@ -351,43 +351,46 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
     case major_type::map: {
         if (h->argument != k->argument)
             return false;
-        if (auto const r = check_keys_unique<DepthMax>(first, h->at, h->argument, depth + 1); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        if (auto const r = check_keys_unique<DepthMax>(second, k->at, k->argument, depth + 1); !r)
-            [[unlikely]]
-            return std::unexpected(r.error());
-        heads::decoder d{std::string_view(std::span(a).subspan(h->at))};
-        for (std::uint64_t i = 0; i < h->argument; ++i) {
-            std::size_t const key = a.size() - d.encoded.size();
-            if (auto const r = skip(first, d, depth + 1); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            std::size_t const value = a.size() - d.encoded.size();
-            if (auto const r = skip(first, d, depth + 1); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            bool paired = false;
-            heads::decoder e{std::string_view(std::span(b).subspan(k->at))};
-            for (std::uint64_t j = 0; j < k->argument && !paired; ++j) {
-                std::size_t const other = b.size() - e.encoded.size();
-                if (auto const r = skip(second, e, depth + 1); !r) [[unlikely]]
+        auto const pairs_found = [&]<class From, class In>(From &from, std::string_view const from_encoded,
+                                                         std::size_t const from_at, In &in,
+                                                         std::string_view const in_encoded,
+                                                         std::size_t const in_at) -> std::expected<bool, error> {
+            heads::decoder d{std::string_view(std::span(from_encoded).subspan(from_at))};
+            for (std::uint64_t i = 0; i < h->argument; ++i) {
+                std::size_t const key = from_encoded.size() - d.encoded.size();
+                if (auto const r = skip(from, d, depth + 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                std::size_t const other_value = b.size() - e.encoded.size();
-                if (auto const r = skip(second, e, depth + 1); !r) [[unlikely]]
+                std::size_t const value = from_encoded.size() - d.encoded.size();
+                if (auto const r = skip(from, d, depth + 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                auto const key_same = keys_equivalent<DepthMax>(first, key, second, other, depth + 1);
-                if (!key_same) [[unlikely]]
-                    return key_same;
-                if (!*key_same)
-                    continue;
-                auto const value_same =
-                    keys_equivalent<DepthMax>(first, value, second, other_value, depth + 1);
-                if (!value_same || !*value_same)
-                    return value_same;
-                paired = true;
+                bool paired = false;
+                heads::decoder e{std::string_view(std::span(in_encoded).subspan(in_at))};
+                for (std::uint64_t j = 0; j < h->argument && !paired; ++j) {
+                    std::size_t const other = in_encoded.size() - e.encoded.size();
+                    if (auto const r = skip(in, e, depth + 1); !r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    std::size_t const other_value = in_encoded.size() - e.encoded.size();
+                    if (auto const r = skip(in, e, depth + 1); !r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    auto const key_same = keys_equivalent<DepthMax>(from, key, in, other, depth + 1);
+                    if (!key_same) [[unlikely]]
+                        return key_same;
+                    if (!*key_same)
+                        continue;
+                    auto const value_same = keys_equivalent<DepthMax>(from, value, in, other_value, depth + 1);
+                    if (!value_same) [[unlikely]]
+                        return value_same;
+                    paired = *value_same;
+                }
+                if (!paired)
+                    return false;
             }
-            if (!paired)
-                return false;
-        }
-        return true;
+            return true;
+        };
+        auto const forward = pairs_found(first, a, h->at, second, b, k->at);
+        if (!forward || !*forward)
+            return forward;
+        return pairs_found(second, b, k->at, first, a, h->at);
     }
     case major_type::tag:
         if (h->argument != k->argument)
@@ -416,11 +419,9 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
 }
 
 template <std::size_t DepthMax, class Message>
-std::expected<void, error> validity::check_keys_unique(Message &message, std::size_t const first_key,
-                                                       std::uint64_t const count, std::size_t const depth)
+std::expected<void, error> validity::check_sorted_keys_unique(Message &message, std::size_t const first_key,
+                                                              std::uint64_t const count, std::size_t const depth)
 {
-    if (count < 2)
-        return {};
     std::string_view encoded;
     if constexpr (std::same_as<Message, std::string_view const>)
         encoded = message;
@@ -433,133 +434,23 @@ std::expected<void, error> validity::check_keys_unique(Message &message, std::si
         else
             return message;
     }();
-    std::array<std::size_t, stack_keys> on_stack;
-    std::vector<std::size_t> on_heap;
-    std::span<std::size_t> keys;
-    if (count <= stack_keys) [[likely]]
-        keys = std::span(on_stack).first(static_cast<std::size_t>(count));
-    else {
-        if (count > encoded.size() - first_key) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        on_heap.resize(static_cast<std::size_t>(count));
-        keys = on_heap;
-    }
     heads::decoder walk{std::string_view(std::span(encoded).subspan(first_key))};
-    for (std::size_t &k : keys) {
-        k = encoded.size() - walk.encoded.size();
+    std::size_t previous = 0;
+    for (std::uint64_t i = 0; i < count; ++i) {
+        std::size_t const key = encoded.size() - walk.encoded.size();
+        if (i != 0) {
+            auto const equal = keys_equivalent<DepthMax>(message, previous, message, key, depth);
+            if (!equal) [[unlikely]]
+                return std::unexpected(equal.error());
+            if (error const c = check_key_unique(*equal).error_or(error{}); c != error{}) [[unlikely]]
+                return std::unexpected(c);
+        }
+        previous = key;
         if (auto const r = well_formedness::item_skip<DepthMax>(walk, marks, depth); !r) [[unlikely]]
             return r;
         if (auto const r = well_formedness::item_skip<DepthMax>(walk, marks, depth); !r) [[unlikely]]
             return r;
     }
-    return check_keys_unique<DepthMax>(message, std::span<std::size_t const>(keys), depth);
-}
-
-template <std::size_t DepthMax, class Message>
-std::expected<void, error> validity::check_keys_unique(Message &message,
-                                                       std::span<std::size_t const> const key_offsets,
-                                                       std::size_t const depth)
-{
-    if (key_offsets.size() < 2)
-        return {};
-    std::string_view encoded;
-    if constexpr (std::same_as<Message, std::string_view const>)
-        encoded = message;
-    else
-        encoded = message.encoded;
-    struct key {
-        std::size_t at;
-        major_type major;
-        std::uint64_t argument;
-        std::string_view payload;
-        bool direct;
-    };
-    auto const key_read = [encoded](std::size_t const at) -> std::expected<key, error> {
-        auto const h = heads::raw_head_read(encoded, at);
-        if (!h) [[unlikely]]
-            return std::unexpected(h.error());
-        key k{at, h->major, h->argument, {}, false};
-        bool const definite_string =
-            (h->major == major_type::text_string || h->major == major_type::byte_string) &&
-            check_definite_length(h->major, h->info).has_value();
-        k.direct = definite_string || h->major == major_type::unsigned_integer ||
-                   h->major == major_type::negative_integer;
-        if (definite_string) {
-            heads::decoder d{std::string_view(std::span(encoded).subspan(h->at))};
-            auto const s = d.byte_string_decode(h->argument);
-            if (!s) [[unlikely]]
-                return std::unexpected(s.error());
-            k.payload = *s;
-        }
-        return k;
-    };
-    if (key_offsets.size() <= stack_keys) [[likely]] {
-        std::array<std::uint64_t, stack_keys> prints;
-        bool direct = true;
-        for (std::size_t i = 0; i < key_offsets.size(); ++i) {
-            auto const k = key_read(key_offsets[i]);
-            if (!k) [[unlikely]]
-                return std::unexpected(k.error());
-            direct &= k->direct;
-            std::span<char const> const bytes(k->payload);
-            std::uint64_t first = 0;
-            std::uint64_t last = 0;
-            if (bytes.size() >= sizeof(std::uint64_t)) {
-                first = heads::unsigned_read<std::uint64_t>(bytes.first<sizeof(std::uint64_t)>());
-                last = heads::unsigned_read<std::uint64_t>(bytes.last<sizeof(std::uint64_t)>());
-            } else {
-                for (char const c : bytes)
-                    first = first << 8 | static_cast<std::uint8_t>(c);
-            }
-            prints[i] = first ^ std::rotl(last, 29) ^
-                        ((k->argument << 3 | std::to_underlying(k->major)) * 0x9e3779b97f4a7c15u);
-        }
-        std::span<std::uint64_t> const sorted = std::span(prints).first(key_offsets.size());
-        std::ranges::sort(sorted);
-        if (direct && std::ranges::adjacent_find(sorted) == sorted.end()) [[likely]]
-            return {};
-    }
-    std::array<key, stack_keys> on_stack;
-    std::vector<key> on_heap;
-    std::span<key> keys;
-    if (key_offsets.size() <= stack_keys) [[likely]]
-        keys = std::span(on_stack).first(key_offsets.size());
-    else {
-        on_heap.resize(key_offsets.size());
-        keys = on_heap;
-    }
-    for (std::size_t i = 0; i < keys.size(); ++i) {
-        auto const k = key_read(key_offsets[i]);
-        if (!k) [[unlikely]]
-            return std::unexpected(k.error());
-        keys[i] = *k;
-    }
-    auto const others = std::ranges::partition(keys, &key::direct);
-    std::span<key> const direct = keys.first(keys.size() - others.size());
-    auto const before = [](key const &x, key const &y) {
-        if (x.major != y.major)
-            return x.major < y.major;
-        if (x.argument != y.argument)
-            return x.argument < y.argument;
-        return x.payload < y.payload;
-    };
-    std::ranges::sort(direct, before);
-    auto const same = [](key const &x, key const &y) {
-        return x.major == y.major && x.argument == y.argument && x.payload == y.payload;
-    };
-    if (error const c = check_key_unique(std::ranges::adjacent_find(direct, same) != direct.end())
-                            .error_or(error{});
-        c != error{}) [[unlikely]]
-        return std::unexpected(c);
-    for (std::size_t i = direct.size(); i < keys.size(); ++i)
-        for (std::size_t j = 0; j < keys.size(); ++j)
-            if (j < direct.size() || j > i) {
-                auto const equal = keys_equivalent<DepthMax>(message, keys[i].at, message, keys[j].at, depth);
-                if (!equal) [[unlikely]]
-                    return std::unexpected(equal.error());
-                if (error const c = check_key_unique(*equal).error_or(error{}); c != error{}) [[unlikely]]
-                    return std::unexpected(c);
-            }
     return {};
 }
 

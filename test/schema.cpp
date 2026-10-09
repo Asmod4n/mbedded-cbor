@@ -951,9 +951,9 @@ TEST_CASE("at_path: a list of structs, strings and lists, by index")
     CHECK_EQ(at_path<garage, "$.rows[1][0]">(bytes).error(), error::index_out_of_bounds);
 }
 
-// RFC 8949 5.6: a map with a repeated key is not valid. decode read the second of two equal keys over the
-// first before this test existed. The key 9 of the sample is written over with 7, the other key.
-TEST_CASE("schema: decode refuses a map with a repeated key")
+// RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. The key
+// 9 of the sample is written over with 7, the other key, and decode keeps the first entry with no error.
+TEST_CASE("schema: decode keeps the first entry of a repeated key")
 {
     std::string bytes = schema_bytes(sample_garage);
     std::string const nine = "\x19\x00\x09"s;
@@ -961,7 +961,9 @@ TEST_CASE("schema: decode refuses a map with a repeated key")
     REQUIRE(at != std::string::npos);
     REQUIRE(bytes.find(nine, at + 1) == std::string::npos);
     bytes.replace(at, nine.size(), "\x19\x00\x07"s);
-    CHECK_EQ(cbor::schema<garage>::decode(bytes).error(), error::duplicate_key);
+    auto const read = cbor::schema<garage>::decode(bytes);
+    REQUIRE(read.has_value());
+    CHECK_EQ((*read)->owners, (std::map<std::uint16_t, std::string>{{7, "seven"}}));
     CHECK(cbor::schema<garage>::decode(schema_bytes(sample_garage)).has_value());
 }
 
