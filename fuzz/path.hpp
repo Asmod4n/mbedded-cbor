@@ -243,7 +243,8 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     std::expected<cbor::lazy, cbor::error> node = *root;
     for (step const &s : steps)
         node = node.and_then([&s](cbor::lazy const &l) {
-            return std::holds_alternative<std::int64_t>(s) ? l.at(std::get<std::int64_t>(s)) : l.at(std::get<std::string_view>(s));
+            return std::holds_alternative<std::int64_t>(s) ? test::index_select(l, std::get<std::int64_t>(s))
+                                                           : l.at(std::get<std::string_view>(s));
         });
     auto const chained = node.and_then([](cbor::lazy const &l) { return l.get<T>(); });
     require(typed.has_value() == chained.has_value());

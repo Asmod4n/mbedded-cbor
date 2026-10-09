@@ -333,14 +333,21 @@ inline std::expected<lazy, error> lazy::at(std::string_view const key) const
     return value_sharing::value_of(find(key));
 }
 
-inline std::expected<lazy, error> lazy::at(std::int64_t const index) const
+inline std::expected<lazy, error> lazy::at(key const k) const
+{
+    if (k.text != nullptr)
+        return at(std::string_view(k.text));
+    return value_sharing::value_of(find(k.number));
+}
+
+inline std::expected<lazy, error> lazy::at(std::size_t const index) const
 {
     auto found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    if (found->h.major != major_type::array)
-        return value_sharing::value_of(value_sharing::key_find(std::move(*found), index));
     auto &[source, h, d] = *found;
+    if (h.major != major_type::array) [[unlikely]]
+        return std::unexpected(error::not_indexable);
     auto const position = validity::check_index(index, h.argument);
     if (!position) [[unlikely]]
         return std::unexpected(position.error());

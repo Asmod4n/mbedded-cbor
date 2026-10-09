@@ -33,7 +33,7 @@ inline void lazy_channels(std::string_view const input)
                         break;
                     if (auto const d = cbor::lazy_decode(binding, *e))
                         require(same(*d, a->at(i)));
-                    if (auto const at = root.at(static_cast<std::int64_t>(i)))
+                    if (auto const at = root.at(i))
                         if (auto const d = cbor::lazy_decode(binding, *at))
                             require(same(*d, a->at(i)));
                     ++i;
@@ -56,11 +56,12 @@ inline void lazy_channels(std::string_view const input)
         }
     }
     std::string_view const key = input.substr(0, 4);
-    (void)root.at(std::int64_t{0});
-    (void)root.at(std::int64_t{-1});
+    (void)root.at(0);
+    (void)root.at(cbor::key{0});
+    (void)root.at(cbor::key{-1});
     (void)root.at("a");
     if (auto const a = root.at(key))
-        if (auto const b = a->at(std::int64_t{0}))
+        if (auto const b = a->at(0))
             (void)b->at(key);
 }
 

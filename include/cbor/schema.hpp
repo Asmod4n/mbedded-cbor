@@ -52,14 +52,6 @@ struct allow {};
 
 struct allowlist {};
 
-struct key {
-    char const *text;
-
-    consteval explicit key(char const *const s) : text(std::define_static_string(std::string_view(s)))
-    {
-    }
-};
-
 struct tag {
     std::uint64_t number;
 };

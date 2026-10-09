@@ -595,6 +595,8 @@ class jsonpath
 
     static std::expected<lazy, error> key_find(lazy const &node, std::string_view key, std::size_t depth_max);
 
+    static std::expected<lazy, error> index_select(lazy const &node, std::int64_t index);
+
     static std::expected<bool, error> value_equal(lazy const &a, lazy const &b, std::size_t depth, std::size_t depth_max);
 
     static std::expected<bool, error> value_less(lazy const &a, lazy const &b);
@@ -849,7 +851,7 @@ class jsonpath
         for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
             selector const &each = v.selectors[s.selector_at];
             auto const child = each.kind == selector::kind::index
-                                   ? node.at(each.index)
+                                   ? index_select(node, each.index)
                                    : key_find(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)), depth_max);
             if (!child) [[unlikely]]
                 return std::unexpected(child.error());
@@ -942,6 +944,24 @@ class is_valid_path
           jsonpath::query_parse(Path.view(), true, validity::nesting_depth_default).has_value()>
 {
 };
+
+inline std::expected<lazy, error> jsonpath::index_select(lazy const &node, std::int64_t const index)
+{
+    auto found = value_sharing::container_resolve(node.top_level, node.offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    if (found->h.major != major_type::array)
+        return value_sharing::value_of(value_sharing::key_find(std::move(*found), index));
+    auto &[source, h, d] = *found;
+    auto const position = validity::check_index(index, h.argument);
+    if (!position) [[unlikely]]
+        return std::unexpected(position.error());
+    for (std::uint64_t i = 0; i < *position; ++i)
+        if (auto const r = well_formedness::item_skip(d, *source); !r) [[unlikely]]
+            return std::unexpected(r.error());
+    std::size_t const element = source->encoded.size() - d.encoded.size();
+    return lazy{source, element};
+}
 
 inline std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const key,
                                                    std::size_t const depth_max)
@@ -1277,7 +1297,7 @@ inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, 
         return {};
     };
     if (s.kind == selector::kind::key || s.kind == selector::kind::index) {
-        auto const child = s.kind == selector::kind::index ? node.at(s.index)
+        auto const child = s.kind == selector::kind::index ? index_select(node, s.index)
                                                            : key_find(node, std::string_view(std::span(v.keys).subspan(s.key_at, s.key_size)), depth_max);
         if (child)
             return append(*child);
@@ -1392,7 +1412,7 @@ std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &bind
         for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
             selector const &each = v.selectors[s.selector_at];
             auto const child = each.kind == selector::kind::index
-                                   ? node.at(each.index)
+                                   ? index_select(node, each.index)
                                    : key_find(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)), depth_max);
             if (!child) [[unlikely]]
                 return std::unexpected(child.error());

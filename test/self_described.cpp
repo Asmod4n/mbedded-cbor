@@ -66,12 +66,12 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     REQUIRE(l.has_value());
     auto const a = l->at("a"sv);
     REQUIRE(a.has_value());
-    auto const second = a->at(std::int64_t{1});
+    auto const second = a->at(1);
     REQUIRE(second.has_value());
     CHECK_EQ(second->get<std::uint64_t>().value(), 6u);
     auto const owned = cbor::lazy::from(std::make_shared<std::string const>(document));
     REQUIRE(owned.has_value());
-    CHECK_EQ(owned->at("a"sv)->at(std::int64_t{0})->get<std::uint64_t>().value(), 5u);
+    CHECK_EQ(owned->at("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
 }
 
 // Both forms of at_path read through a leading tag 55799: the typed read on the bytes and the read into a

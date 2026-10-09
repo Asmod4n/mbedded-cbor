@@ -511,6 +511,21 @@ inline std::string repeat(std::string_view part, std::size_t n)
     return s;
 }
 
+// The index selector of RFC 9535 through the public interface of lazy: an index counts from the end when it
+// is negative, and on a map it names the integer key, as at_path reads it.
+inline std::expected<cbor::lazy, cbor::error> index_select(cbor::lazy const &l, std::int64_t const index)
+{
+    if (!l.elements())
+        return l.at(cbor::key{index});
+    std::uint64_t const size = *l.size();
+    if (index >= 0)
+        return l.at(static_cast<std::size_t>(index));
+    std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(index);
+    if (back > size)
+        return std::unexpected(cbor::error::index_out_of_bounds);
+    return l.at(static_cast<std::size_t>(size - back));
+}
+
 } // namespace test
 
 using namespace test;

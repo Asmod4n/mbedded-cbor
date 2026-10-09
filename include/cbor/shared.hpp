@@ -252,7 +252,9 @@ struct lazy {
 
     std::expected<lazy, error> at(std::string_view key) const;
 
-    std::expected<lazy, error> at(std::int64_t index) const;
+    std::expected<lazy, error> at(key k) const;
+
+    std::expected<lazy, error> at(std::size_t index) const;
 
     std::expected<lazy_entries::iterator, error> find(std::string_view key) const;
 
