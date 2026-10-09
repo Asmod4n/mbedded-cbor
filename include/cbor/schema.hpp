@@ -1263,8 +1263,9 @@ class packed
             return r;
         }
 
-        template <std::size_t DepthMax, class Root, class T>
-        std::expected<void, error> value_read(T &out, std::span<char const, fixed_size<T, Root>()> const field, std::size_t const depth)
+        template <class Root, class T>
+        std::expected<void, error> value_read(T &out, std::span<char const, fixed_size<T, Root>()> const field, std::size_t const depth,
+                                              std::size_t const depth_max)
         {
             using U = std::remove_cv_t<T>;
             if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
@@ -1274,9 +1275,9 @@ class packed
                 template for (constexpr std::meta::info m : data_members<U>()) {
                     using M = typename[:std::meta::type_of(m):];
                     if (done)
-                        done = value_read<DepthMax, Root>(out.[:m:],
+                        done = value_read<Root>(out.[:m:],
                                                     field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(),
-                                                    depth);
+                                                    depth, depth_max);
                 }
                 return done;
             } else if constexpr (is_fixed_string<U>) {
@@ -1291,9 +1292,9 @@ class packed
                 std::expected<void, error> done;
                 template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, n))) {
                     if (done)
-                        done = value_read<DepthMax, Root>(
+                        done = value_read<Root>(
                             std::span(out).template subspan<i, 1>().front(),
-                            field.template subspan<heads::head_size(n) + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(), depth);
+                            field.template subspan<heads::head_size(n) + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(), depth, depth_max);
                 }
                 return done;
             } else if constexpr (is_inline_optional<U>) {
@@ -1302,9 +1303,9 @@ class packed
                     out.reset();
                     return {};
                 }
-                return value_read<DepthMax, Root>(
+                return value_read<Root>(
                     out.emplace(),
-                    field.template subspan<inline_optional_head, fixed_size<typename U::value_type, Root>()>(), depth);
+                    field.template subspan<inline_optional_head, fixed_size<typename U::value_type, Root>()>(), depth, depth_max);
             } else if constexpr (is_optional<U>) {
                 using E = typename U::value_type;
                 auto const r = reference_take<Root, major_type::array>(field, fixed_size<E, Root>());
@@ -1316,12 +1317,12 @@ class packed
                     out.reset();
                     return {};
                 }
-                if (auto const nesting = validity::check_nesting_depth(depth + 1, DepthMax); !nesting) [[unlikely]]
+                if (auto const nesting = validity::check_nesting_depth(depth + 1, depth_max); !nesting) [[unlikely]]
                     return std::unexpected(nesting.error());
                 E element{};
-                if (auto const e = value_read<DepthMax, Root>(
+                if (auto const e = value_read<Root>(
                         element, std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>(),
-                        depth + 1);
+                        depth + 1, depth_max);
                     !e) [[unlikely]]
                     return e;
                 out = std::move(element);
@@ -1345,17 +1346,17 @@ class packed
                 auto const r = reference_take<Root, major_type::map>(field, pair);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, DepthMax); !c) [[unlikely]]
+                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
                 out.clear();
                 for (std::size_t i = 0; i < r->length; ++i) {
                     auto const entry = std::span<char const>(encoded).subspan(r->data + i * pair).template first<pair>();
                     K key{};
                     V value{};
-                    if (auto const e = value_read<DepthMax, Root>(key, entry.template first<fixed_size<K, Root>()>(), depth + 1);
+                    if (auto const e = value_read<Root>(key, entry.template first<fixed_size<K, Root>()>(), depth + 1, depth_max);
                         !e) [[unlikely]]
                         return e;
-                    if (auto const e = value_read<DepthMax, Root>(value, entry.template last<fixed_size<V, Root>()>(), depth + 1);
+                    if (auto const e = value_read<Root>(value, entry.template last<fixed_size<V, Root>()>(), depth + 1, depth_max);
                         !e) [[unlikely]]
                         return e;
                     out.try_emplace(std::move(key), std::move(value));
@@ -1366,7 +1367,7 @@ class packed
                 auto const r = reference_take<Root, major_type::array, E>(field, sizeof(E));
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, DepthMax); !c) [[unlikely]]
+                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
                 auto const from = std::span<char const>(encoded).subspan(r->data, r->length * sizeof(E));
                 if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U> &&
@@ -1385,7 +1386,7 @@ class packed
                 auto const r = reference_take<Root, major_type::array>(field, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, DepthMax); !c) [[unlikely]]
+                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
                 out.clear();
                 out.reserve(r->length);
@@ -1393,7 +1394,7 @@ class packed
                     E element{};
                     auto const entry =
                         std::span<char const>(encoded).subspan(r->data + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>();
-                    if (auto const e = value_read<DepthMax, Root>(element, entry, depth + 1); !e) [[unlikely]]
+                    if (auto const e = value_read<Root>(element, entry, depth + 1, depth_max); !e) [[unlikely]]
                         return e;
                     out.push_back(std::move(element));
                 }
@@ -1407,8 +1408,8 @@ class packed
         }
     };
 
-    template <class T, std::size_t DepthMax>
-    static std::expected<void, error> root_read(T &out, std::string_view const encoded)
+    template <class T>
+    static std::expected<void, error> root_read(T &out, std::string_view const encoded, std::size_t const depth_max)
     {
         auto const dir = directory_read<T>(encoded);
         if (!dir) [[unlikely]]
@@ -1419,7 +1420,7 @@ class packed
             return std::unexpected(error::incorrect_type);
         constexpr std::size_t fillers = shared_first_of<T>() - 1 - packing_table_of<T>().size();
         decode_cursor c{encoded, *dir, 0, dir->at + 4 * dir->count + fillers, root};
-        if (auto const r = c.value_read<DepthMax, T>(out, field, 0); !r) [[unlikely]]
+        if (auto const r = c.value_read<T>(out, field, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (c.index != dir->count || c.at != root) [[unlikely]]
             return std::unexpected(error::syntax_error);
@@ -1981,42 +1982,37 @@ public:
         return path(std::move(owner), view);
     }
 
-    template <std::size_t DepthMax = validity::nesting_depth_default>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() &&
-                 validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     static std::expected<owning_ref<T>, error> decode(std::string_view const encoded)
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         auto copy = std::make_shared<std::string const>(encoded);
         T value{};
-        if (auto const r = packed::root_read<T, DepthMax>(value, *copy); !r) [[unlikely]]
+        if (auto const r = packed::root_read<T>(value, *copy, validity::nesting_depth_max_read()); !r) [[unlikely]]
             return std::unexpected(r.error());
         return owning_ref<T>(std::move(copy), std::move(value));
     }
 
-    template <std::size_t DepthMax = validity::nesting_depth_default, std::same_as<std::string> Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() &&
-                 validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    template <std::same_as<std::string> Encoded>
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
     {
         auto owner = std::make_shared<std::string const>(std::move(encoded));
         std::string_view const view = *owner;
-        return decode<DepthMax>(std::move(owner), view);
+        return decode(std::move(owner), view);
     }
 
-    template <std::size_t DepthMax = validity::nesting_depth_default>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() &&
-                 validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::schema::decode: the owner of the encoded data item is empty");
         T value{};
-        if (auto const r = packed::root_read<T, DepthMax>(value, encoded); !r) [[unlikely]]
+        if (auto const r = packed::root_read<T>(value, encoded, validity::nesting_depth_max_read()); !r) [[unlikely]]
             return std::unexpected(r.error());
         return owning_ref<T>(std::move(owner), std::move(value));
     }
 
-    template <std::size_t DepthMax = validity::nesting_depth_default, class Encoded>
+    template <class Encoded>
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 

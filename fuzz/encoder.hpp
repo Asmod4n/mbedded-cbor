@@ -150,11 +150,11 @@ inline void encoder_target(std::string_view const input)
     std::string_view rest = w.encoded;
     test_binding binding;
     for (auto const &item : items) {
-        auto const end = cbor::item_end<16>(rest);
+        auto const end = cbor::item_end(rest);
         require(end.has_value());
         if (item.size)
             require(*end == *item.size);
-        auto const back = cbor::lazy_decode<16>(binding, *cbor::decode<16>(rest.substr(0, *end)));
+        auto const back = cbor::lazy_decode(binding, *cbor::decode(rest.substr(0, *end)));
         require(back.has_value() && same(*back, item.value));
         rest.remove_prefix(*end);
     }

@@ -99,8 +99,8 @@ TEST_CASE("bignum tag 3: an empty magnitude is refused")
 {
     test_binding binding;
     string_writer w;
-    CHECK_EQ(cbor::encode<16>(binding, w, big(true, "")).error(), cbor::error{error::unsupported_value});
-    CHECK_EQ(cbor::encode<16>(binding, w, big(true, std::string(2, '\0'))).error(),
+    CHECK_EQ(cbor::encode(binding, w, big(true, "")).error(), cbor::error{error::unsupported_value});
+    CHECK_EQ(cbor::encode(binding, w, big(true, std::string(2, '\0'))).error(),
              cbor::error{error::unsupported_value});
 }
 
@@ -108,18 +108,19 @@ TEST_CASE("bignum tag 3: an empty magnitude is refused")
 // tag. The encoder wrote a bignum at the depth limit without that level, so its own output did not decode.
 TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
 {
+    test::nesting_depth_max_guard const depth{16};
     value deep = V(value{bignum{false, std::string(9, '\x01')}});
     for (int i = 0; i < 16; ++i)
         deep = A(deep);
     test_binding binding;
     string_writer w;
-    auto const r = cbor::encode<16>(binding, w, deep);
+    auto const r = cbor::encode(binding, w, deep);
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), cbor::error{error::nesting_depth_exceeded});
     value shallow = V(value{bignum{false, std::string(9, '\x01')}});
     for (int i = 0; i < 15; ++i)
         shallow = A(shallow);
     string_writer ok;
-    REQUIRE(cbor::encode<16>(binding, ok, shallow).has_value());
-    CHECK(decoded<16>(ok.encoded).has_value());
+    REQUIRE(cbor::encode(binding, ok, shallow).has_value());
+    CHECK(decoded(ok.encoded).has_value());
 }

@@ -951,11 +951,11 @@ class diagnostic_notation
         return true;
     }
 
-    template <std::size_t DepthMax>
     static std::expected<void, error> diagnostic_write(std::string &out, heads::decoder &d, std::string_view const encoded,
-                                                       std::vector<std::size_t> &marks, std::size_t const depth)
+                                                       std::vector<std::size_t> &marks, std::size_t const depth,
+                                                       std::size_t const depth_max)
     {
-        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         auto const h = diagnostic_head_decode(d);
         if (!h) [[unlikely]]
@@ -998,7 +998,7 @@ class diagnostic_notation
                             .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
-                if (auto const r = diagnostic_write<DepthMax>(out, d, encoded, marks, depth + 1); !r) [[unlikely]]
+                if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
             }
             out += ")";
@@ -1014,11 +1014,11 @@ class diagnostic_notation
             for (std::uint64_t i = 0; indefinite ? !break_found(d) : i < h->argument; ++i) {
                 if (i != 0)
                     out += ", ";
-                if (auto const r = diagnostic_write<DepthMax>(out, d, encoded, marks, depth + 1); !r) [[unlikely]]
+                if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
                 if (map) {
                     out += ": ";
-                    if (auto const r = diagnostic_write<DepthMax>(out, d, encoded, marks, depth + 1); !r) [[unlikely]]
+                    if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
                         return r;
                 }
             }
@@ -1034,7 +1034,7 @@ class diagnostic_notation
             if (h->argument == std::to_underlying(rfc8949::tag_number::shareable))
                 marks.push_back(content_at);
             out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument) + "(";
-            if (auto const r = diagnostic_write<DepthMax>(out, d, encoded, marks, depth + 1); !r) [[unlikely]]
+            if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
                 return r;
             out += ")";
             return {};
@@ -1076,19 +1076,15 @@ class diagnostic_notation
 
     friend class jsonpath;
 
-    template <std::size_t DepthMax>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<std::string, error> inspect(std::string_view encoded);
 };
 
-template <std::size_t DepthMax>
-    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
-std::expected<std::string, error> inspect(std::string_view const encoded)
+inline std::expected<std::string, error> inspect(std::string_view const encoded)
 {
     heads::decoder d{encoded};
     std::string out;
     std::vector<std::size_t> marks;
-    if (auto const r = diagnostic_notation::diagnostic_write<DepthMax>(out, d, encoded, marks, 0); !r) [[unlikely]]
+    if (auto const r = diagnostic_notation::diagnostic_write(out, d, encoded, marks, 0, validity::nesting_depth_max_read()); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (!d.encoded.empty()) [[unlikely]]
         return std::unexpected(error::syntax_error);

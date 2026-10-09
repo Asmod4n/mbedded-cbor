@@ -435,7 +435,7 @@ void round_trip(source &in)
     require(back.has_value());
     auto const again = cbor::schema<T>::encode(**back);
     require(again.has_value() && *again == w.encoded);
-    auto const end = cbor::item_end<64>(w.encoded);
+    auto const end = cbor::item_end(w.encoded);
     require(end.has_value() && *end == w.encoded.size());
     compare_all(native, w.encoded);
 }

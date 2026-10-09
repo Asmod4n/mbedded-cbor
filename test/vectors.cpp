@@ -97,7 +97,7 @@ TEST_CASE("test vectors: not well-formed items fail")
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
         std::string const wire = bytes_of_hex(c.hex);
-        auto const end = cbor::item_end<16>(wire);
+        auto const end = cbor::item_end(wire);
         bool const one_item = end.has_value() && *end == wire.size();
         CHECK_FALSE((one_item && decoded(wire).has_value()));
     }
@@ -208,7 +208,7 @@ std::string file_read(std::string const &path)
 // The value of an optional boolean member of a test. An absent member gives the default of the README.
 bool member_bool(cbor::lazy const &object, std::string_view const key, bool const absent)
 {
-    auto const member = object.at<depth_limit>(key);
+    auto const member = object.at(key);
     if (!member) {
         REQUIRE_EQ(member.error(), error::key_not_found);
         return absent;
@@ -220,7 +220,7 @@ bool member_bool(cbor::lazy const &object, std::string_view const key, bool cons
 
 std::string member_bytes(cbor::lazy const &object, std::string_view const key)
 {
-    auto const member = object.at<depth_limit>(key);
+    auto const member = object.at(key);
     REQUIRE(member.has_value());
     auto const bytes = member->get<std::span<std::byte const>>();
     REQUIRE(bytes.has_value());
@@ -236,17 +236,17 @@ std::string member_bytes(cbor::lazy const &object, std::string_view const key)
 std::vector<wg_vector> wg_vectors_of(std::string const &path)
 {
     std::string const file = file_read(path);
-    auto const top = cbor::decode<depth_limit>(std::string_view(file));
+    auto const top = cbor::decode(std::string_view(file));
     REQUIRE(top.has_value());
     bool const file_fail = member_bool(*top, "fail", false);
-    auto const tests = top->at<depth_limit>("tests");
+    auto const tests = top->at("tests");
     REQUIRE(tests.has_value());
-    auto const elements = tests->elements<depth_limit>();
+    auto const elements = tests->elements();
     REQUIRE(elements.has_value());
     std::vector<wg_vector> vectors;
     for (auto const t : *elements) {
         REQUIRE(t.has_value());
-        auto const description = t->at<depth_limit>("description");
+        auto const description = t->at("description");
         REQUIRE(description.has_value());
         auto const text = description->get<std::string_view>();
         REQUIRE(text.has_value());
@@ -256,9 +256,9 @@ std::vector<wg_vector> wg_vectors_of(std::string const &path)
                     {},
                     member_bool(*t, "roundtrip", true),
                     member_bool(*t, "fail", file_fail)};
-        if (auto const decoded = t->at<depth_limit>("decoded")) {
+        if (auto const decoded = t->at("decoded")) {
             std::string_view const rest = std::string_view(file).substr(decoded->offset);
-            auto const end = cbor::item_end<depth_limit>(rest);
+            auto const end = cbor::item_end(rest);
             REQUIRE(end.has_value());
             v.decoded = std::string(rest.substr(0, *end));
         }
@@ -355,7 +355,7 @@ bool equivalent(value const &a, value const &b)
 // get<double> gives a float. A tag stays a tag, so a bignum compares through integer_of.
 std::expected<value, error> lazy_value(cbor::lazy const &l)
 {
-    auto const decoded_item = l.decode<depth_limit>();
+    auto const decoded_item = l.decode();
     if (!decoded_item)
         return std::unexpected(decoded_item.error());
     cbor::item const &it = decoded_item->get();
@@ -373,7 +373,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
     case cbor::major_type::text_string:
         return value{std::string(std::get<std::string_view>(it.content))};
     case cbor::major_type::array: {
-        auto const elements = l.elements<depth_limit>();
+        auto const elements = l.elements();
         if (!elements)
             return std::unexpected(elements.error());
         array a;
@@ -388,7 +388,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         return value{std::move(a)};
     }
     case cbor::major_type::map: {
-        auto const entries = l.entries<depth_limit>();
+        auto const entries = l.entries();
         if (!entries)
             return std::unexpected(entries.error());
         map m;
@@ -437,7 +437,7 @@ std::string wire_encoded(value const &v)
 {
     test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<depth_limit>(binding, w, v).has_value());
+    REQUIRE(cbor::encode(binding, w, v).has_value());
     return w.encoded;
 }
 
@@ -485,10 +485,10 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     CAPTURE(v.description);
     CAPTURE(v.encoded);
     REQUIRE_FALSE(v.decoded.empty());
-    auto const expected = decoded<depth_limit>(v.decoded);
+    auto const expected = decoded(v.decoded);
     REQUIRE(expected.has_value());
 
-    auto const d = decoded<depth_limit>(v.encoded);
+    auto const d = decoded(v.encoded);
     REQUIRE(d.has_value());
     CHECK(equivalent(*d, *expected));
     if (v.roundtrip) {
@@ -503,9 +503,9 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     REQUIRE(l.has_value());
     CHECK(equivalent(*l, *expected));
 
-    auto const text = cbor::inspect<depth_limit>(v.encoded);
+    auto const text = cbor::inspect(v.encoded);
     REQUIRE(text.has_value());
-    auto const expected_text = cbor::inspect<depth_limit>(v.decoded);
+    auto const expected_text = cbor::inspect(v.decoded);
     REQUIRE(expected_text.has_value());
     // inspect writes the basic generic data model. A bignum is its tag and the byte string of the wire, so a
     // vector that makes it an integer or drops its leading zeros (RFC 8949 3.4.3) has another text. A NaN
@@ -514,9 +514,10 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     if (!bignum_tag && !text->starts_with("float'"))
         CHECK_EQ(without_encoding_indicators(*text), without_encoding_indicators(*expected_text));
 
-    // DepthMax defaults to 128 (owner, 2026-10-06). A vector nested deeper is read with a larger DepthMax and
-    // gives nesting_depth_exceeded at the default.
-    if (auto const shallow = decoded<cbor::validity::nesting_depth_default>(v.encoded); !shallow) {
+    // The nesting depth defaults to 128 (owner, 2026-10-06). A vector nested deeper is read with the depth set to
+    // the limit and gives nesting_depth_exceeded at the default.
+    test::nesting_depth_max_guard const shallow_depth{cbor::validity::nesting_depth_default};
+    if (auto const shallow = decoded(v.encoded); !shallow) {
         CHECK_EQ(shallow.error(), error::nesting_depth_exceeded);
         ++count.nesting_depth_exceeded;
     }
@@ -530,6 +531,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
 // item in the extended generic data model.
 TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
 {
+    test::nesting_depth_max_guard const depth{depth_limit};
     wg_count count{};
     for (char const *const file :
          {"/rfc8949/good.cbor", "/rfc8949-appendixA/mt0.cbor", "/rfc8949-appendixA/mt1.cbor",
@@ -550,14 +552,15 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
 // except where a decision of this library differs from the vector.
 TEST_CASE("cbor-wg test vectors: every bad vector fails")
 {
+    test::nesting_depth_max_guard const depth{depth_limit};
     std::size_t checked = 0;
     for (wg_vector const &v : wg_vectors_of(CBOR_TEST_VECTORS "/tests/rfc8949/bad.cbor")) {
         CAPTURE(v.description);
         CAPTURE(v.encoded);
         REQUIRE(v.fail);
-        auto const d = decoded<depth_limit>(v.encoded);
+        auto const d = decoded(v.encoded);
         auto const l = lazy_value_of(v.encoded);
-        auto const text = cbor::inspect<depth_limit>(v.encoded);
+        auto const text = cbor::inspect(v.encoded);
         if (v.encoded == "\x62\xc0\xae"sv) {
             // The library never checks UTF-8 (owner, 2026-10-05 and 2026-10-08): the text is the
             // application's.
@@ -585,12 +588,13 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
 // streaming.edn. decode and lazy give indefinite_length; inspect writes the item.
 TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
+    test::nesting_depth_max_guard const depth{depth_limit};
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
-    auto const top = cbor::decode<depth_limit>(std::string_view(file));
+    auto const top = cbor::decode(std::string_view(file));
     REQUIRE(top.has_value());
-    auto const tests = top->at<depth_limit>("tests");
+    auto const tests = top->at("tests");
     REQUIRE(tests.has_value());
-    CHECK_EQ(tests->at<depth_limit>(1).error(), error::indefinite_length);
+    CHECK_EQ(tests->at(1).error(), error::indefinite_length);
 
     std::string const edn = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.edn");
     std::size_t checked = 0;
@@ -603,9 +607,9 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
                 hex.push_back(edn.at(at));
         CAPTURE(hex);
         std::string const wire = bytes_of_hex(hex);
-        CHECK_EQ(decoded<depth_limit>(wire).error(), error::indefinite_length);
+        CHECK_EQ(decoded(wire).error(), error::indefinite_length);
         CHECK_EQ(lazy_value_of(wire).error(), error::indefinite_length);
-        CHECK(cbor::inspect<depth_limit>(wire).has_value());
+        CHECK(cbor::inspect(wire).has_value());
         ++checked;
     }
     CHECK_EQ(checked, 11u);
@@ -617,6 +621,7 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 // into each tag, and decode, lazy and inspect give the same answer.
 TEST_CASE("tags 0 and 1: decode, lazy and inspect refuse every content that RFC 8949 3.4.1 and 3.4.2 forbid")
 {
+    test::nesting_depth_max_guard const depth{depth_limit};
     struct content {
         std::string_view encoded;
         bool date_time_string;
@@ -641,9 +646,9 @@ TEST_CASE("tags 0 and 1: decode, lazy and inspect refuse every content that RFC 
             std::string const wire = std::string(1, tag) + std::string(c.encoded);
             CAPTURE(wire);
             bool const admitted = tag == '\xc0' ? c.date_time_string : c.epoch_based_date_time;
-            auto const d = decoded<depth_limit>(wire);
+            auto const d = decoded(wire);
             auto const l = lazy_value_of(wire);
-            auto const text = cbor::inspect<depth_limit>(wire);
+            auto const text = cbor::inspect(wire);
             if (admitted) {
                 CHECK(d.has_value());
                 CHECK(l.has_value());
@@ -661,6 +666,7 @@ TEST_CASE("tags 0 and 1: decode, lazy and inspect refuse every content that RFC 
 // and the encoder wrote 0(0), which no reader accepts. decode, lazy and inspect give the same answer for each.
 TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the value it names")
 {
+    test::nesting_depth_max_guard const depth{depth_limit};
     struct shared_content {
         std::string_view encoded;
         error refused;
@@ -681,9 +687,9 @@ TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the val
     }};
     for (shared_content const &c : contents) {
         CAPTURE(c.encoded);
-        auto const d = decoded<depth_limit>(c.encoded);
+        auto const d = decoded(c.encoded);
         auto const l = lazy_value_of(c.encoded);
-        auto const text = cbor::inspect<depth_limit>(c.encoded);
+        auto const text = cbor::inspect(c.encoded);
         if (c.refused == error{}) {
             CHECK(d.has_value());
             CHECK(l.has_value());

@@ -64,14 +64,14 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     std::string const document = "\xd9\xd9\xf7\xa1\x61\x61\x82\x05\x06"s;
     auto const l = cbor::lazy::from(document);
     REQUIRE(l.has_value());
-    auto const a = l->at<16>("a"sv);
+    auto const a = l->at("a"sv);
     REQUIRE(a.has_value());
-    auto const second = a->at<16>(std::int64_t{1});
+    auto const second = a->at(std::int64_t{1});
     REQUIRE(second.has_value());
     CHECK_EQ(second->get<std::uint64_t>().value(), 6u);
-    auto const owned = cbor::decode<16>(std::make_shared<std::string const>(document));
+    auto const owned = cbor::decode(std::make_shared<std::string const>(document));
     REQUIRE(owned.has_value());
-    CHECK_EQ(owned->at<16>("a"sv)->at<16>(std::int64_t{0})->get<std::uint64_t>().value(), 5u);
+    CHECK_EQ(owned->at("a"sv)->at(std::int64_t{0})->get<std::uint64_t>().value(), 5u);
 }
 
 // Both forms of at_path read through a leading tag 55799: the typed read on the bytes and the read into a
@@ -79,15 +79,15 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
 TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")
 {
     std::string const document = "\xd9\xd9\xf7\xa1\x61\x61\x82\x05\x06"s;
-    CHECK_EQ(cbor::at_path<"$.a[1]", std::uint64_t, 16>(document).value(), 6u);
+    CHECK_EQ(cbor::at_path<"$.a[1]", std::uint64_t>(document).value(), 6u);
     auto const owner = std::make_shared<std::string const>("\xd9\xd9\xf7\xa1\x61\x61\x62\x68\x69"s);
-    auto const text = cbor::at_path<"$.a", std::string_view, 16>(owner, *owner);
+    auto const text = cbor::at_path<"$.a", std::string_view>(owner, *owner);
     REQUIRE(text.has_value());
     CHECK_EQ(**text, "hi"sv);
     test_binding binding;
     auto const l = cbor::lazy::from(document);
     REQUIRE(l.has_value());
-    auto const v = cbor::at_path<16>(binding, "$.a"sv, *l);
+    auto const v = cbor::at_path(binding, "$.a"sv, *l);
     REQUIRE(v.has_value());
     CHECK(*v == A(5, 6));
 }
@@ -120,7 +120,7 @@ TEST_CASE("RFC 9277: the label of a Labeled CBOR Sequence is the first element a
     CHECK_EQ(encoded(expected), label);
     std::string const file = label + "\x00\x08\x0f"s;
     std::vector<std::string_view> elements;
-    for (auto const e : cbor::sequence<16>{file})
+    for (auto const e : cbor::sequence{file})
         elements.push_back(e.value());
     REQUIRE_EQ(elements.size(), 4u);
     CHECK_EQ(elements[0], std::string_view(label));
@@ -133,7 +133,7 @@ TEST_CASE("RFC 9277: the header of CBOR-Labeled Non-CBOR Data ends after 12 byte
 {
     std::string const header = "\xd9\xd9\xf9\xda\x63\x74\x01\x01\x43\x42\x4f\x52"s;
     std::string const file = header + "text/plain"s;
-    CHECK_EQ(cbor::item_end<16>(file).value(), 12u);
+    CHECK_EQ(cbor::item_end(file).value(), 12u);
     auto const v = decoded(file);
     REQUIRE(v.has_value());
     CHECK(*v == tag(55801, tag(1668546817, {bytes{"BOR"}})));

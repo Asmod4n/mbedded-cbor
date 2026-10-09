@@ -69,7 +69,7 @@ class rfc8949
     template <class Writer>
     friend struct encoder;
 
-    template <std::size_t, class, class, pass>
+    template <class, class, pass>
     friend class walker;
 
     friend struct lazy;

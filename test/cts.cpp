@@ -38,10 +38,10 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
     std::ifstream in(JSONPATH_CTS "/cts.cbor", std::ios::binary);
     REQUIRE(in.good());
     std::string const suite{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    auto const root = cbor::decode<64>(suite);
+    auto const root = cbor::decode(suite);
     REQUIRE(root.has_value());
     test_binding binding;
-    auto const all = cbor::lazy_decode<64>(binding, *root);
+    auto const all = cbor::lazy_decode(binding, *root);
     REQUIRE(all.has_value());
     array const *const suite_cases = get_if<array>(*all);
     REQUIRE(suite_cases != nullptr);
@@ -58,18 +58,18 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         CAPTURE(name);
         CAPTURE(selector);
         if (c.size() == 2 || function_without_support(selector)) {
-            auto const document = c.size() == 2 ? cbor::decode<64>(std::string_view("\xf6")) : root->at<64>(static_cast<std::int64_t>(i))->at<64>(std::int64_t{2});
+            auto const document = c.size() == 2 ? cbor::decode(std::string_view("\xf6")) : root->at(static_cast<std::int64_t>(i))->at(std::int64_t{2});
             REQUIRE(document.has_value());
-            auto const r = cbor::at_path<64>(binding, selector, *document);
+            auto const r = cbor::at_path(binding, selector, *document);
             bool const invalid = !r && r.error() == error::invalid_path;
             CHECK(invalid);
             refused += c.size() == 2 ? 0uz : 1uz;
             passed += invalid ? 1uz : 0uz;
             continue;
         }
-        auto const document = root->at<64>(static_cast<std::int64_t>(i))->at<64>(std::int64_t{2});
+        auto const document = root->at(static_cast<std::int64_t>(i))->at(std::int64_t{2});
         REQUIRE(document.has_value());
-        auto const r = cbor::at_path<64>(binding, selector, *document);
+        auto const r = cbor::at_path(binding, selector, *document);
         CAPTURE((r.has_value() ? error{} : r.error()));
         bool matched = false;
         array const *const results = get_if<array>(c.at(3));

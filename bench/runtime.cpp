@@ -535,7 +535,7 @@ static void setup()
 {
 #if defined(ARM_S) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
     bench::binding b;
-    auto t = cbor::lazy_decode<128>(b, *cbor::decode<128>(std::string_view(doc)));
+    auto t = cbor::lazy_decode(b, *cbor::decode(std::string_view(doc)));
     if (!t)
         std::abort();
     tree = std::move(*t);
@@ -576,19 +576,19 @@ static std::uint64_t op()
 {
 #if defined(ARM_S)
     bench::binding b;
-    if (!cbor::encode<128>(b, std::span<char>(buf), tree))
+    if (!cbor::encode(b, std::span<char>(buf), tree))
         std::abort();
     benchmark::ClobberMemory();
     return buf.size();
 #elif defined(ARM_READ)
     read_binding b;
-    auto const r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, in));
+    auto const r = cbor::lazy_decode(b, *cbor::lazy::from(keep, in));
     if (!r)
         std::abort();
     return *r;
 #elif defined(ARM_MB_DECODE)
     bench::binding b;
-    auto r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, in));
+    auto r = cbor::lazy_decode(b, *cbor::lazy::from(keep, in));
     if (!r) [[unlikely]]
         std::abort();
     benchmark::DoNotOptimize(&*r);
@@ -830,7 +830,7 @@ int main(int argc, char **argv)
 #if defined(ARM_MB_DECODE)
     {
         bench::binding b;
-        auto const r = cbor::lazy_decode<128>(b, *cbor::lazy::from(keep, std::string_view(doc)));
+        auto const r = cbor::lazy_decode(b, *cbor::lazy::from(keep, std::string_view(doc)));
         benchmark::AddCustomContext("check", std::to_string(value_sum(*r)));
     }
 #elif defined(ARM_LC_DECODE)

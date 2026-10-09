@@ -254,7 +254,7 @@ auto at_path(std::shared_ptr<void const> const &owner, std::string_view const by
 // the generic decoder finds its end at the end of the message.
 void check_one_item(std::string const &bytes)
 {
-    auto const end = cbor::item_end<16>(bytes);
+    auto const end = cbor::item_end(bytes);
     REQUIRE(end.has_value());
     CHECK_EQ(*end, bytes.size());
 }
@@ -1193,7 +1193,7 @@ TEST_CASE("schema: an annotation gives the key of a member")
 // A struct that holds a list of itself is read by recursion, and the bytes decide how deep. Without a limit, a
 // chain of 100000 nodes in 2.2 MB overflowed a stack of 8 MiB. Each reference that is followed counts one
 // level, as each nested item counts one in the other decoders.
-TEST_CASE("decode: a struct that holds itself stops at DepthMax")
+TEST_CASE("decode: a struct that holds itself stops at the nesting depth in force")
 {
     REQUIRE_EQ(cbor::schema<node>::fixed_size(), 16u);
 
@@ -1205,10 +1205,13 @@ TEST_CASE("decode: a struct that holds itself stops at DepthMax")
     REQUIRE_FALSE(over.has_value());
     CHECK_EQ(over.error(), error::nesting_depth_exceeded);
 
-    auto const small = cbor::schema<node>::decode<3>(node_chain(3));
-    REQUIRE(small.has_value());
-    CHECK_EQ(depth_of(**small), 3u);
-    CHECK_EQ(cbor::schema<node>::decode<3>(node_chain(4)).error(), error::nesting_depth_exceeded);
+    {
+        test::nesting_depth_max_guard const depth{3};
+        auto const small = cbor::schema<node>::decode(node_chain(3));
+        REQUIRE(small.has_value());
+        CHECK_EQ(depth_of(**small), 3u);
+        CHECK_EQ(cbor::schema<node>::decode(node_chain(4)).error(), error::nesting_depth_exceeded);
+    }
 
     auto const deep = cbor::schema<node>::decode(node_chain(100000));
     REQUIRE_FALSE(deep.has_value());
@@ -1360,7 +1363,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
     REQUIRE(absent.has_value());
     CHECK_FALSE(absent->has_value());
     for (std::string_view message : {std::string_view(bytes), std::string_view(none)}) {
-        auto const end = cbor::item_end<64>(message);
+        auto const end = cbor::item_end(message);
         REQUIRE(end.has_value());
         CHECK_EQ(*end, message.size());
     }
@@ -1497,8 +1500,6 @@ C chain_of(std::uint8_t const v)
 // index 21 to 6(-3) = c6 3a 00 00 00 02 and index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4
 // entries. A record of index 8 or more is one byte longer, so its size depends on the root. The class tag of chainK
 // is 1600 + K, 3 bytes in front of each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
-// A generic reader counts the class tag, the reference and the value array as three levels of nesting, so 20 nested
-// records need more than a DepthMax of 64.
 TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
 {
     CHECK_EQ(cbor::schema<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
@@ -1509,8 +1510,7 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
 
     chain0 const value = chain_of<chain0>(0);
     std::string const bytes = *cbor::schema<chain0>::encode(value);
-    CHECK_EQ(cbor::item_end<64>(bytes).error(), error::nesting_depth_exceeded);
-    CHECK_EQ(cbor::item_end<128>(bytes), bytes.size());
+    CHECK_EQ(cbor::item_end(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x19"s);
     CHECK_EQ(bytes.substr(bytes.size() - 25),
              "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x03"s);
@@ -1539,7 +1539,7 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
 {
     chain3 const value = chain_of<chain3>(3);
     std::string const bytes = *cbor::schema<chain3>::encode(value);
-    CHECK_EQ(cbor::item_end<64>(bytes), bytes.size());
+    CHECK_EQ(cbor::item_end(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x16"s);
     CHECK_EQ(bytes.substr(bytes.size() - 25),
              "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x1a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"s);
@@ -2289,29 +2289,6 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     char const *const empty = "";
     CHECK_EQ(cbor::schema<login>::decode(empty).error(), error::too_little_data);
     CHECK_EQ(cbor::schema<login>::path("").error(), error::too_little_data);
-}
-
-namespace
-{
-
-template <std::size_t DepthMax>
-std::array<bool, 3> schema_compiles()
-{
-    return {
-        requires(std::string_view const s) { cbor::schema<login>::decode<DepthMax>(s); },
-        requires(std::string &&s) { cbor::schema<login>::decode<DepthMax>(std::move(s)); },
-        requires(std::shared_ptr<void const> const &o, std::string_view const s) { cbor::schema<login>::decode<DepthMax>(o, s); },
-    };
-}
-
-} // namespace
-
-// DepthMax has an upper bound of 1024 on every form that takes it, so no form can be given a depth that overflows the
-// stack. Each form is checked alone: each one compiles with 1024, and none compiles with 1025.
-TEST_CASE("schema: DepthMax is at most 1024")
-{
-    CHECK(std::ranges::all_of(schema_compiles<1024>(), std::identity{}));
-    CHECK(std::ranges::none_of(schema_compiles<1025>(), std::identity{}));
 }
 
 #endif

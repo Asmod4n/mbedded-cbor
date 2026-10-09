@@ -44,10 +44,10 @@ class decoding
         marks<Binding> shared;
         prefix *before;
 
-        template <std::size_t DepthMax>
-        std::expected<typename Binding::value, error> value_decode(std::size_t const depth, std::optional<std::size_t> const mark)
+        std::expected<typename Binding::value, error> value_decode(std::size_t const depth, std::optional<std::size_t> const mark,
+                                                                   std::size_t const depth_max)
         {
-            if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
@@ -75,7 +75,7 @@ class decoding
                     if (mark && binding.cyclic_data_structures())
                         shared[*mark] = array;
                 for (std::uint64_t i = 0; i < h->argument; ++i) {
-                    auto element = value_decode<DepthMax>(depth + 1, std::nullopt);
+                    auto element = value_decode(depth + 1, std::nullopt, depth_max);
                     if (!element) [[unlikely]]
                         return element;
                     array = binding.array_append(std::move(array), std::move(*element));
@@ -97,17 +97,17 @@ class decoding
                                 return std::unexpected(t.error());
                             d = probe;
                             auto key = binding.map_key_decode(*t);
-                            auto value = value_decode<DepthMax>(depth + 1, std::nullopt);
+                            auto value = value_decode(depth + 1, std::nullopt, depth_max);
                             if (!value) [[unlikely]]
                                 return value;
                             map = binding.map_insert(std::move(map), std::move(key), std::move(*value));
                             continue;
                         }
                     }
-                    auto key = value_decode<DepthMax>(depth + 1, std::nullopt);
+                    auto key = value_decode(depth + 1, std::nullopt, depth_max);
                     if (!key) [[unlikely]]
                         return key;
-                    auto value = value_decode<DepthMax>(depth + 1, std::nullopt);
+                    auto value = value_decode(depth + 1, std::nullopt, depth_max);
                     if (!value) [[unlikely]]
                         return value;
                     map = binding.map_insert(std::move(map), std::move(*key), std::move(*value));
@@ -115,13 +115,13 @@ class decoding
                 return map;
             }
             case major_type::tag: {
-                if (auto const r = validity::check_nesting_depth(depth + 1, DepthMax); !r) [[unlikely]]
+                if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
                     if (!before) {
                         std::size_t const index = shared.size();
                         shared.emplace_back();
-                        auto content = value_decode<DepthMax>(depth + 1, index);
+                        auto content = value_decode(depth + 1, index, depth_max);
                         if (!content) [[unlikely]]
                             return content;
                         shared[index] = *content;
@@ -133,12 +133,12 @@ class decoding
                         before->evaluating.resize(index + 1);
                     }
                     if (shared[index]) {
-                        if (auto const r = well_formedness::item_skip<DepthMax>(d, before->top_level, depth + 1); !r) [[unlikely]]
+                        if (auto const r = well_formedness::item_skip(d, before->top_level); !r) [[unlikely]]
                             return std::unexpected(r.error());
                         return *shared[index];
                     }
                     before->evaluating[index] = true;
-                    auto content = value_decode<DepthMax>(depth + 1, index);
+                    auto content = value_decode(depth + 1, index, depth_max);
                     before->evaluating[index] = false;
                     if (!content) [[unlikely]]
                         return content;
@@ -183,7 +183,7 @@ class decoding
                         before->top_level.sharedrefs[index].offset < before->top_level.encoded.size() - d.encoded.size()) {
                         if (before->mark_depths.empty()) {
                             heads::decoder all{before->top_level.encoded};
-                            if (auto const s = well_formedness::item_skip<DepthMax>(all, *before, 0); !s) [[unlikely]]
+                            if (auto const s = well_formedness::item_skip(all, *before, 0, depth_max); !s) [[unlikely]]
                                 return std::unexpected(s.error());
                         }
                         if (auto const c = validity::check_sharedref_index(index, before->mark_depths.size()); !c)
@@ -195,7 +195,7 @@ class decoding
                                 continue;
                             d.encoded = std::string_view(std::span(before->top_level.encoded).subspan(before->top_level.sharedrefs[i].offset));
                             before->evaluating[i] = true;
-                            auto content = value_decode<DepthMax>(before->mark_depths[i] + 1, i);
+                            auto content = value_decode(before->mark_depths[i] + 1, i, depth_max);
                             before->evaluating[i] = false;
                             if (!content) [[unlikely]] {
                                 d.encoded = rest;
@@ -221,13 +221,13 @@ class decoding
                         if constexpr (requires { binding.cyclic_data_structures(); })
                             if (mark && binding.cyclic_data_structures())
                                 shared[*mark] = *object;
-                        auto content = value_decode<DepthMax>(depth + 1, std::nullopt);
+                        auto content = value_decode(depth + 1, std::nullopt, depth_max);
                         if (!content) [[unlikely]]
                             return content;
                         return binding.after_decode(binding.registered_decode(std::move(*object), std::move(*content)));
                     }
                 }
-                auto content = value_decode<DepthMax>(depth + 1, std::nullopt);
+                auto content = value_decode(depth + 1, std::nullopt, depth_max);
                 if (!content) [[unlikely]]
                     return content;
                 return binding.tag_decode(h->argument, std::move(*content));
@@ -250,8 +250,7 @@ class decoding
         }
     };
 
-    template <std::size_t DepthMax, class Binding>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    template <class Binding>
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 };
 

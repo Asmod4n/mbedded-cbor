@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cbor/cbor.hpp>
+#include "nesting_depth_max_guard.hpp"
 #include <doctest/doctest.h>
 
 #include <algorithm>
@@ -436,21 +437,19 @@ inline std::string encoded([[maybe_unused]] value const &v)
 {
     [[maybe_unused]] test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<16>(binding, w, v).has_value());
+    REQUIRE(cbor::encode(binding, w, v).has_value());
     return w.encoded;
 }
 
-template <std::size_t DepthMax = 16>
 inline std::expected<value, error> decoded(std::string_view wire)
 {
     test_binding binding;
-    return cbor::lazy_decode<DepthMax>(binding, *cbor::decode<DepthMax>(wire));
+    return cbor::lazy_decode(binding, *cbor::decode(wire));
 }
 
-template <std::size_t DepthMax = 16>
 inline error decode_error(std::string_view wire)
 {
-    auto const v = decoded<DepthMax>(wire);
+    auto const v = decoded(wire);
     REQUIRE_FALSE(v.has_value());
     return v.error();
 }

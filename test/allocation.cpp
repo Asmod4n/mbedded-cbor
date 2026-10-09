@@ -50,9 +50,9 @@ TEST_CASE("path: a key is compared without an allocation")
     auto const root = *cbor::lazy::from(std::string(bytes));
     auto const map = *root.at(1);
     test_binding binding;
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]", 16>(binding, map).has_value());
+    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(binding, map).has_value());
     std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]", 16>(binding, map);
+    auto const found = cbor::at_path<"$[[1, \"x\"]]">(binding, map);
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
     CHECK_EQ(after, before);
@@ -67,12 +67,12 @@ TEST_CASE("path: a top-level item with shared values allocates only the table of
     auto const root = *cbor::lazy::from(std::string(bytes));
     auto const map = *root.at(1);
     test_binding binding;
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]", 16>(binding, map).has_value());
+    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(binding, map).has_value());
     // The top-level item marks one shared value. The decoder keeps one flag and one entry for each mark, in two arrays,
     // and an array that holds at least one element is one allocation.
     constexpr std::size_t marks_allocations = 2;
     std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]", 16>(binding, map);
+    auto const found = cbor::at_path<"$[[1, \"x\"]]">(binding, map);
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
     CHECK_EQ(after - before, marks_allocations);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -33,6 +34,10 @@
 #define CBOR_ASSUME(condition) [[assume(condition)]]
 #endif
 
+#ifndef CBOR_NESTING_DEPTH_DEFAULT
+#define CBOR_NESTING_DEPTH_DEFAULT 128
+#endif
+
 namespace cbor
 {
 
@@ -56,13 +61,38 @@ class validity
 public:
     static constexpr std::size_t nesting_depth_limit = 1024;
 
-    static constexpr std::size_t nesting_depth_default = 128;
+    static constexpr std::size_t nesting_depth_default = CBOR_NESTING_DEPTH_DEFAULT;
 
     static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth,
                                                                     std::size_t const depth_max)
     {
         if (depth > depth_max) [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
+        return {};
+    }
+
+private:
+    inline static std::atomic<std::size_t> nesting_depth_max{nesting_depth_default};
+
+public:
+    static std::size_t nesting_depth_max_read() noexcept
+    {
+        return nesting_depth_max.load(std::memory_order_relaxed);
+    }
+
+    static std::expected<void, error> nesting_depth_max_set(std::size_t const depth_max) noexcept
+    {
+        if (auto const r = check_nesting_depth(depth_max, nesting_depth_limit); !r) [[unlikely]]
+            return r;
+        nesting_depth_max.store(depth_max, std::memory_order_relaxed);
+        return {};
+    }
+
+    static constexpr std::expected<void, error> check_pending_items(std::uint64_t const pending,
+                                                                    std::size_t const bytes_left)
+    {
+        if (pending > bytes_left) [[unlikely]]
+            return std::unexpected(error::too_little_data);
         return {};
     }
 
@@ -155,13 +185,15 @@ public:
         return {};
     }
 
-    template <std::size_t DepthMax, class First, class Second>
+    template <class First, class Second>
     static std::expected<bool, error> keys_equivalent(First &first, std::size_t first_at, Second &second,
-                                                      std::size_t second_at, std::size_t depth);
+                                                      std::size_t second_at, std::size_t depth,
+                                                      std::size_t depth_max);
 
-    template <std::size_t DepthMax, class Message>
+    template <class Message>
     static std::expected<void, error> check_sorted_keys_unique(Message &message, std::size_t first_key,
-                                                               std::uint64_t count, std::size_t depth);
+                                                               std::uint64_t count, std::size_t depth,
+                                                               std::size_t depth_max);
 
     template <class Marks, class Projection>
     static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
@@ -344,7 +376,7 @@ public:
 
     friend class jsonpath;
 
-    template <std::size_t, class, class, pass>
+    template <class, class, pass>
     friend class walker;
 
 #ifdef __cpp_impl_reflection
@@ -359,5 +391,8 @@ public:
     friend class databind;
 #endif
 };
+
+static_assert(validity::check_nesting_depth(validity::nesting_depth_default, validity::nesting_depth_limit).has_value(),
+              "CBOR_NESTING_DEPTH_DEFAULT is at most validity::nesting_depth_limit.");
 
 }

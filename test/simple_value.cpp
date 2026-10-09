@@ -137,7 +137,7 @@ TEST_CASE("simple value: decode and encode through a binding for every simple va
             CHECK_EQ(decode_error(wire_of(v)), error::syntax_error);
             test_binding binding;
             string_writer w;
-            auto const r = cbor::encode<16>(binding, w, V(simple{v}));
+            auto const r = cbor::encode(binding, w, V(simple{v}));
             REQUIRE_FALSE(r.has_value());
             CHECK((r.error() == cbor::error{error::reserved_simple_value}));
             continue;

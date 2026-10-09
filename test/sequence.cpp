@@ -20,7 +20,7 @@ namespace
 std::vector<std::expected<std::string_view, error>> elements_of(std::string_view const encoded)
 {
     std::vector<std::expected<std::string_view, error>> out;
-    for (auto const e : cbor::sequence<16>{encoded})
+    for (auto const e : cbor::sequence{encoded})
         out.push_back(e);
     return out;
 }
@@ -37,7 +37,7 @@ bool inside(std::string const &bytes, char const *const p)
 TEST_CASE("sequence: an empty CBOR Sequence has no element")
 {
     CHECK(elements_of(""sv).empty());
-    CHECK(std::ranges::input_range<cbor::sequence<16>>);
+    CHECK(std::ranges::input_range<cbor::sequence>);
 }
 
 // RFC 8742 2: the elements are the encoded data items, one after the other, with no marker between them. Each
@@ -59,7 +59,7 @@ TEST_CASE("sequence: each element is the view of one encoded data item")
 TEST_CASE("sequence: a partial last item gives too_little_data and keeps its bytes")
 {
     std::string const bytes = "\x01\x19\x01"s;
-    cbor::sequence<16> const s{bytes};
+    cbor::sequence const s{bytes};
     auto it = s.begin();
     REQUIRE(it != s.end());
     CHECK_EQ((*it).value(), "\x01"sv);
@@ -72,8 +72,8 @@ TEST_CASE("sequence: a partial last item gives too_little_data and keeps its byt
 }
 
 // RFC 8742 2: after an item that is not well formed the rest cannot be read reliably, so the sequence ends
-// there. Indefinite length is never read (decision of the owner), and the nesting depth has the limit of the
-// reader.
+// there. Indefinite length is never read (decision of the owner). The end of an item is found with no stack,
+// so a deep item is no error there.
 TEST_CASE("sequence: an error ends the sequence")
 {
     std::vector<std::expected<std::string_view, error>> const reserved = elements_of("\x01\x1c\x01"sv);
@@ -85,7 +85,7 @@ TEST_CASE("sequence: an error ends the sequence")
     std::string const deep = "\x01"s + std::string(20, '\x81') + "\x01"s;
     std::vector<std::expected<std::string_view, error>> const nested = elements_of(deep);
     REQUIRE_EQ(nested.size(), 2u);
-    CHECK_EQ(nested[1].error(), error::nesting_depth_exceeded);
+    CHECK_EQ(nested[1].value().size(), 21u);
 }
 
 // Each element is a top-level item of its own (RFC 8742 2). lazy, path and decode read it with the one owner
@@ -94,25 +94,25 @@ TEST_CASE("sequence: lazy, path and decode read each element with the owner of t
 {
     auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz\x82\x01\x02"s);
     std::vector<cbor::lazy> items;
-    for (auto const e : cbor::sequence<16>{*owner}) {
+    for (auto const e : cbor::sequence{*owner}) {
         REQUIRE(e.has_value());
         auto const l = cbor::lazy::from(owner, *e);
         REQUIRE(l.has_value());
         items.push_back(*l);
     }
     REQUIRE_EQ(items.size(), 2u);
-    auto const text = items[0].at<16>("a");
+    auto const text = items[0].at("a");
     REQUIRE(text.has_value());
     auto const view = text->get<std::string_view>();
     REQUIRE(view.has_value());
     CHECK_EQ(**view, "xyz"sv);
     CHECK(inside(*owner, (*view)->data()));
-    auto const second = items[1].at<16>(1);
+    auto const second = items[1].at(1);
     REQUIRE(second.has_value());
     CHECK_EQ(second->get<std::uint64_t>().value(), 2u);
 
     std::vector<std::string_view> views;
-    for (auto const e : cbor::sequence<16>{*owner})
+    for (auto const e : cbor::sequence{*owner})
         views.push_back(e.value());
     auto const path = cbor::at_path<"$.a", std::string_view>(owner, views[0]);
     REQUIRE(path.has_value());
@@ -121,7 +121,7 @@ TEST_CASE("sequence: lazy, path and decode read each element with the owner of t
     CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]).value(), 1u);
 
     test_binding binding;
-    auto const decoded = cbor::lazy_decode<16>(binding, items[1]);
+    auto const decoded = cbor::lazy_decode(binding, items[1]);
     REQUIRE(decoded.has_value());
     CHECK(*decoded == A(1, 2));
 }
@@ -132,12 +132,12 @@ TEST_CASE("sequence: shared references do not cross elements")
 {
     auto const owner = std::make_shared<std::string const>("\xd8\x1c\x01\x81\xd8\x1d\x00"s);
     std::vector<std::string_view> views;
-    for (auto const e : cbor::sequence<16>{*owner})
+    for (auto const e : cbor::sequence{*owner})
         views.push_back(e.value());
     REQUIRE_EQ(views.size(), 2u);
     auto const l = cbor::lazy::from(owner, views[1]);
     REQUIRE(l.has_value());
-    auto const element = l->at<16>(0).and_then([](cbor::lazy const &e) { return e.get<std::uint64_t>(); });
+    auto const element = l->at(0).and_then([](cbor::lazy const &e) { return e.get<std::uint64_t>(); });
     CHECK_EQ(element.error(), error::sharedref_index_not_marked);
     CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]).error(), error::sharedref_index_not_marked);
 }
@@ -145,6 +145,6 @@ TEST_CASE("sequence: shared references do not cross elements")
 // A sequence of views has no owner: a temporary std::string would free the bytes under the views.
 TEST_CASE("sequence: a temporary std::string does not compile")
 {
-    CHECK_FALSE(std::is_constructible_v<cbor::sequence<16>, std::string &&>);
-    CHECK(std::is_constructible_v<cbor::sequence<16>, std::string_view>);
+    CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::string &&>);
+    CHECK(std::is_constructible_v<cbor::sequence, std::string_view>);
 }

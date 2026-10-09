@@ -169,7 +169,7 @@ TEST_CASE("head: encode returns the error of the Writer")
 {
     full_writer w;
     test_binding binding;
-    CHECK_EQ(cbor::encode<16>(binding, w, U(0)).error(), cbor::error{cbor::error::not_enough_memory});
+    CHECK_EQ(cbor::encode(binding, w, U(0)).error(), cbor::error{cbor::error::not_enough_memory});
 }
 
 // A Writer error that has no member of its own must still fail, and never read as success.
@@ -177,21 +177,5 @@ TEST_CASE("head: encode returns io_error for any other error of the Writer")
 {
     broken_writer w;
     test_binding binding;
-    CHECK_EQ(cbor::encode<16>(binding, w, U(0)).error(), cbor::error::io_error);
-}
-
-namespace
-{
-
-template <std::size_t DepthMax>
-concept encode_compiles = requires(test_binding &b, string_writer &w, value const &v) { cbor::encode<DepthMax>(b, w, v); };
-
-} // namespace
-
-// DepthMax has an upper bound of 1024 on every form that takes it, so no form can be given a depth that overflows the
-// stack.
-TEST_CASE("head: encode takes a DepthMax of at most 1024")
-{
-    CHECK(encode_compiles<1024>);
-    CHECK_FALSE(encode_compiles<1025>);
+    CHECK_EQ(cbor::encode(binding, w, U(0)).error(), cbor::error::io_error);
 }

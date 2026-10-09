@@ -1,6 +1,8 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include "nesting_depth_max_guard.hpp"
+
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -288,16 +290,20 @@ TEST_CASE("decode: a forward shared reference is refused")
     CHECK_EQ(r.error(), cbor::error::sharedref_not_complete);
 }
 
-// The nesting depth is checked as in every decoder: [[[0]]] holds an
-// integer at depth 3.
-TEST_CASE("decode: the nesting depth is limited by DepthMax")
+// The nesting depth is checked where the decode recurses: 100(100(100(0))) holds an
+// integer at depth 3. An array or a map is not entered by the decode, so it adds no depth there.
+TEST_CASE("decode: the nesting depth is limited by the nesting depth in force")
 {
-    auto const top_level = cbor::lazy::from(std::string("\x81\x81\x81\x00"sv));
+    auto const top_level = cbor::lazy::from(std::string("\xd8\x64\xd8\x64\xd8\x64\x00"sv));
     REQUIRE(top_level.has_value());
-    auto const refused = top_level->decode<2>();
-    REQUIRE_FALSE(refused.has_value());
-    CHECK_EQ(refused.error(), cbor::error::nesting_depth_exceeded);
-    CHECK(top_level->decode<3>().has_value());
+    {
+        test::nesting_depth_max_guard const depth{2};
+        auto const refused = top_level->decode();
+        REQUIRE_FALSE(refused.has_value());
+        CHECK_EQ(refused.error(), cbor::error::nesting_depth_exceeded);
+    }
+    test::nesting_depth_max_guard const depth{3};
+    CHECK(top_level->decode().has_value());
 }
 
 // Indefinite length is never read; a streaming reader is the place for it.
