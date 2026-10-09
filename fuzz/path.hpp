@@ -155,7 +155,7 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
                 if (!b)
                     return std::nullopt;
                 test_binding binding;
-                auto inner = cbor::lazy_decode<16>(binding, *cbor::decode<16>(b->b));
+                auto inner = cbor::lazy_decode(binding, *cbor::decode(b->b));
                 if (!inner)
                     throw undecided{};
                 v = *inner;
@@ -243,7 +243,7 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     std::expected<cbor::lazy, cbor::error> node = *root;
     for (step const &s : steps)
         node = node.and_then([&s](cbor::lazy const &l) {
-            return std::holds_alternative<std::int64_t>(s) ? l.at<16>(std::get<std::int64_t>(s)) : l.at<16>(std::get<std::string_view>(s));
+            return std::holds_alternative<std::int64_t>(s) ? l.at(std::get<std::int64_t>(s)) : l.at(std::get<std::string_view>(s));
         });
     auto const chained = node.and_then([](cbor::lazy const &l) { return l.get<T>(); });
     require(typed.has_value() == chained.has_value());
@@ -288,7 +288,7 @@ inline void path_target(std::string_view const input)
 
     if (auto const any = cbor::lazy::from(std::string(1, '\0'))) {
         test_binding any_binding;
-        (void)cbor::at_path<16>(any_binding, input, *any);
+        (void)cbor::at_path(any_binding, input, *any);
     }
 
     if (input.empty())
@@ -297,7 +297,7 @@ inline void path_target(std::string_view const input)
     std::string_view const path_bytes = input.substr(1, split);
     std::string_view const document = input.substr(1 + split);
     test_binding binding;
-    auto const eager = cbor::lazy_decode<16>(binding, *cbor::decode<16>(document));
+    auto const eager = cbor::lazy_decode(binding, *cbor::decode(document));
     if (!eager)
         return;
     std::vector<std::string> keys;
@@ -306,7 +306,7 @@ inline void path_target(std::string_view const input)
     query const q = query_from(pin, keys);
     auto const root = cbor::lazy::from(std::string{document});
     require(root.has_value());
-    auto const found = cbor::at_path<16>(binding, q.text, *root);
+    auto const found = cbor::at_path(binding, q.text, *root);
     if (!q.valid)
         return;
     std::optional<test::value> expected;

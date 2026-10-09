@@ -33,8 +33,6 @@ enum class pass;
 
 struct lazy;
 
-template <std::size_t DepthMax = validity::nesting_depth_default>
-    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<std::string, error> inspect(std::string_view encoded);
 
 class heads
@@ -525,31 +523,22 @@ class heads
     template <class Writer>
     friend struct encoder;
 
-    template <std::size_t, class, class, pass>
+    template <class, class, pass>
     friend class walker;
 
     friend struct lazy;
 
-    template <std::size_t>
     friend struct lazy_elements;
 
-    template <std::size_t>
     friend struct lazy_entries;
 
-    template <std::size_t DepthMax>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<std::size_t, error> item_end(std::string_view encoded);
 
-    template <std::size_t DepthMax>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
 
-    template <std::size_t DepthMax>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     friend std::expected<std::string, error> inspect(std::string_view encoded);
 
-    template <std::size_t DepthMax, class Binding>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    template <class Binding>
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 
 #ifdef __cpp_impl_reflection

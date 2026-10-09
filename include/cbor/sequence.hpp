@@ -15,8 +15,6 @@
 namespace cbor
 {
 
-template <std::size_t DepthMax = validity::nesting_depth_default>
-    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 class sequence
 {
     std::string_view encoded;
@@ -50,7 +48,7 @@ public:
                 return *this;
             }
             encoded = std::string_view(std::span(encoded).subspan(*size));
-            size = item_end<DepthMax>(encoded);
+            size = item_end(encoded);
             return *this;
         }
 
@@ -67,7 +65,7 @@ public:
 
     iterator begin() const
     {
-        return iterator{encoded, item_end<DepthMax>(encoded)};
+        return iterator{encoded, item_end(encoded)};
     }
 
     std::default_sentinel_t end() const

@@ -1,7 +1,8 @@
 # Cost of each function in mbedded-cbor
 
 This document describes the state at commit `da9a611` on branch
-`views-only-item` of `/home/user/mbedded-cbor`. A later change to a
+`views-only-item` of `/home/user/mbedded-cbor`, with the change that
+removed DepthMax from every name. Line numbers are those of `da9a611`. A later change to a
 function must keep the O form that this document gives for it.
 
 A row marked "not checked" was not compared with the code.
@@ -16,7 +17,7 @@ A row marked "not checked" was not compared with the code.
 | n_item, n_map, n_array | Bytes of one item, one map, one array. |
 | n_out | Bytes of the encoded output. |
 | i | Data items in the input. |
-| d | Nesting depth. DepthMax bounds it. |
+| d | Nesting depth. The nesting depth in force bounds it: validity::nesting_depth_max_read(), at most nesting_depth_limit. |
 | s | Shared values (tag 28) in the input. |
 | m | Elements of an array. |
 | k | Entries of a map. |
@@ -37,7 +38,7 @@ A row marked "not checked" was not compared with the code.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `inspect<DepthMax>(string_view)` friend decl, :553-555 | not given here | not given here | Body in inspect.hpp. |
+| `inspect(string_view)` friend decl, :553-555 | not given here | not given here | Body in inspect.hpp. |
 | `item_end`, `decode`, `lazy_decode` friend decls, :545-559 | not given here | not given here | Bodies in other headers. |
 | `heads::unsigned_read<V>(span<char const, sizeof(V)>)` :45 | O(1); sizeof(V) <= 8 | O(1) | No allocation. Confirmed. |
 | `heads::initial_byte(major_type, uint64_t)` :55 | O(1) | O(1) | constexpr. Confirmed. |
@@ -86,7 +87,7 @@ A row marked "not checked" was not compared with the code.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `check_nesting_depth(size_t, size_t)` :61 | O(1) | O(1) | The DepthMax check. |
+| `check_nesting_depth(size_t, size_t)` :61 | O(1) | O(1) | The depth check. |
 | `throw_logic_error(char const*)` :69 | O(1) plus a throw | O(1) plus the exception object | std::logic_error allocates its message. Without exceptions: std::abort. |
 | `throw_logic_error_if_empty<T>(shared_ptr<T> const&, char const*)` :79 | O(1) | O(1); allocates only on the throw | |
 | `throw_logic_error_if_null<T>(shared_ptr<T> const&, char const*)` :86 | O(1) | O(1); allocates only on the throw | |
@@ -120,9 +121,9 @@ Enums and constants only. No function found by grep.
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `well_formedness::no_marks::mark(decoder const&)` :30 | O(1) | O(1) | Empty body. Confirmed. |
-| `well_formedness::item_skip<DepthMax, Marks>(decoder&, Marks&, size_t depth)` :36 | O(i) heads, so O(n); plus marks.mark per tag 28 | O(DepthMax) stack: std::array of DepthMax+2. No allocation. | Confirmed. Iterative. Strings cost O(1), byte_string_decode removes the prefix only. check_nesting_depth at :50. Bytes left bound the count. Cost of top_level_item::mark here not checked. |
-| `item_end<DepthMax>` friend decl :121 | none | none | |
-| `item_end<DepthMax>(string_view)` :146 | O(i), bounded by O(n) | O(DepthMax) stack. No allocation. | Confirmed. One item_skip with no_marks. |
+| `well_formedness::item_skip<Marks>(decoder&, Marks&)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(1): one count of the items still to read. No allocation. | Iterative. No depth check: nothing recurses. Each add to the count goes through checked_add, and a count larger than the bytes left is too_little_data at once (check_pending_items). Used with no_marks and with top_level_item. |
+| `well_formedness::item_skip<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 2, about 8 KiB. No allocation. | Iterative. Only for marks that record a depth (decoding::prefix). check_nesting_depth on every item. |
+| `item_end(string_view)` | O(i), bounded by O(n) | O(1). No allocation. | One item_skip with no_marks. No depth check. |
 
 ## item.hpp
 
@@ -137,10 +138,10 @@ Enums and constants only. No function found by grep.
 | `sequence(string_view)` :25 | O(1) | O(1) | Parses nothing. |
 | `sequence(Encoded&&) = delete` :30 | none | none | A std::string does not compile. |
 | `iterator::operator*() const` :39 | O(1) | O(1) | Returns the cached size. |
-| `iterator::operator++()` :46 | O(n_next); O(1) on error | O(DepthMax) stack | Full walk O(N). |
-| `iterator::operator++(int)` :57 | O(n_next) | O(DepthMax) stack | Returns void. |
+| `iterator::operator++()` :46 | O(n_next); O(1) on error | O(1) | Full walk O(N). |
+| `iterator::operator++(int)` :57 | O(n_next) | O(1) | Returns void. |
 | `iterator::operator==(default_sentinel_t) const` :62 | O(1) | O(1) | |
-| `begin() const` :68 | O(n_first) | O(DepthMax) stack | Parses the first item. |
+| `begin() const` :68 | O(n_first) | O(1) | Parses the first item. |
 | `end() const` :73 | O(1) | O(1) | |
 
 ## decode.hpp
@@ -150,7 +151,7 @@ Enums and constants only. No function found by grep.
 | `decoding::marks<Binding>` alias :27 | none | O(s) heap when filled | One slot for each tag 28. |
 | `decoding::prefix` aggregate :29 | none beyond mark | evaluating O(s) bits, mark_depths O(s) | |
 | `decoding::prefix::mark(decoder const&, size_t)` :34 | O(1) amortized; O(s) on growth | O(1) amortized | mark_depths.push_back allocates. |
-| `decoding::value_decoder<Binding>::value_decode<DepthMax>(size_t, optional<size_t>)` :48 | Common: O(n) plus binding costs. Bignum: O(length). Forward tag 29: one item_skip over the top-level item, O(N_top), once; total stays O(N_top). | Stack O(d). Heap: shared O(s), evaluating O(s), mark_depths O(s); magnitude_plus_one O(length) for a negative bignum over 8 bytes; plus binding values. | Recursive. Reserve hints min(count, bytes left) and min(count, bytes left / 2). A stored shared value is copied on each use. :212 dereferences before with no null check. Cost of check_tag_content at :212 and top_level.mark at :130 not checked. |
+| `decoding::value_decoder<Binding>::value_decode(size_t, optional<size_t>)` :48 | Common: O(n) plus binding costs. Bignum: O(length). Forward tag 29: one item_skip over the top-level item, O(N_top), once; total stays O(N_top). | Stack O(d). Heap: shared O(s), evaluating O(s), mark_depths O(s); magnitude_plus_one O(length) for a negative bignum over 8 bytes; plus binding values. | Recursive. Reserve hints min(count, bytes left) and min(count, bytes left / 2). A stored shared value is copied on each use. :212 dereferences before with no null check. Cost of check_tag_content at :212 and top_level.mark at :130 not checked. |
 | `lazy_decode` friend decl :255 | not checked | not checked | Defined in lazy.hpp. |
 
 ## shared.hpp
@@ -160,11 +161,11 @@ Enums and constants only. No function found by grep.
 | `value_sharing::top_level_item::entry(size_t)` :251 | Common O(1); known offset O(log e); worst O(e) for an insert in the middle | O(1) amortized per new item | deque emplace_back and vector insert. |
 | `top_level_item::mark(decoder const&)` :266 | O(1) amortized; O(log s) for a known offset | O(1) amortized | push_back on sharedrefs. |
 | `top_level_item::sharedref_decode(decoder&, size_t) const` :278 | O(1) | O(1) | Target strictly earlier. |
-| `value_sharing::shared_resolve(top_level_item&, size_t)` :308 | Common O(1); worst O(c log s + tag 29 steps), bounded by O(n) | O(1) plus marks | No DepthMax check in the loop. Bytes left bound it. |
+| `value_sharing::shared_resolve(top_level_item&, size_t)` :308 | Common O(1); worst O(c log s + tag 29 steps), bounded by O(n) | O(1) plus marks | No depth check in the loop. Bytes left bound it. |
 | `value_sharing::item_resolve(top_level_item&, size_t)` :333 | Common O(log e); worst O(n + e) | O(1) amortized | Can allocate one item. |
-| `value_sharing::container_resolve(shared_ptr<top_level_item>, size_t)` :341 | Common O(1); worst O(t) shared_resolve, t = tag 24 levels <= n/2 | Common O(1); one top_level_item per tag 24 level | make_shared per tag 24 level. DepthMax does not bound tag 24 nesting. |
-| `validity::keys_equivalent<DepthMax, First, Second>` :376 | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | check_nesting_depth bounds d. No heap except marks. |
-| `validity::check_sorted_keys_unique<DepthMax, Message>` :530 | Common O(n_map); worst O(n_map) plus k-1 keys_equivalent | Stack O(d) | Adjacent keys only; keys must be sorted. |
+| `value_sharing::container_resolve(shared_ptr<top_level_item>, size_t)` :341 | Common O(1); worst O(t) shared_resolve, t = tag 24 levels <= n/2 | Common O(1); one top_level_item per tag 24 level | make_shared per tag 24 level. The nesting depth does not bound tag 24 nesting. |
+| `validity::keys_equivalent<First, Second>` :376 | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | check_nesting_depth bounds d. No heap except marks. |
+| `validity::check_sorted_keys_unique<Message>` :530 | Common O(n_map); worst O(n_map) plus k-1 keys_equivalent | Stack O(d) | Adjacent keys only; keys must be sorted. |
 | `lazy::from(shared_ptr<void const>, Encoded&&) = delete` :177 | - | - | |
 
 ## lazy.hpp
@@ -185,26 +186,26 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy_entries::iterator::operator==` :163, :165 | O(1) | O(1) | |
 | `lazy_entries::begin()` :171 | O(bytes of the first key) | O(1) plus marks | |
 | `lazy_entries::end()` :178 | O(1) | O(1) | |
-| `decode<DepthMax>(shared_ptr<string const> const&)` :186 | O(1) | O(1) | One make_shared. |
-| `decode<DepthMax>(string_view)` :197 | O(n) | O(n) | Copies the input. |
-| `decode<DepthMax, Encoded>(Encoded&&)` :204 | O(1) | O(1) | Moves; two make_shared. |
+| `decode(shared_ptr<string const> const&)` :186 | O(1) | O(1) | One make_shared. |
+| `decode(string_view)` :197 | O(n) | O(n) | Copies the input. |
+| `decode<Encoded>(Encoded&&)` :204 | O(1) | O(1) | Moves; two make_shared. |
 | `lazy::from(shared_ptr<void const>, string_view)` :209 | O(1) | O(1) | One top_level_item. |
 | `lazy::from(shared_ptr<string const>)` :218 | O(1) | O(1) | |
 | `lazy::from<Encoded>(Encoded&&)` :226 | O(1) | O(1) | Moves; two allocations. |
 | `lazy::from(string_view)` :231 | O(n) | O(n) | Copies the input. |
-| `value_sharing::key_find<DepthMax, Key>(resolved, Key)` :238 | O(bytes up to the pair); worst O(n_map) + k shared_resolve | O(1) plus marks | Linear scan. |
-| `value_sharing::key_find<DepthMax, Sorted, Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to last); Sorted stops at the first plain key with greater encoded bytes | O(1) plus marks | No allocation. Throws std::logic_error when the end of the map comes before last. |
+| `value_sharing::key_find<Key>(resolved, Key)` :238 | O(bytes up to the pair); worst O(n_map) + k shared_resolve | O(1) plus marks | Linear scan. |
+| `value_sharing::key_find<Sorted, Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to last); Sorted stops at the first plain key with greater encoded bytes | O(1) plus marks | No allocation. Throws std::logic_error when the end of the map comes before last. |
 | `lazy::find(string_view)`, `find(int64_t)` :373, :383 | container_resolve + O(n_map) | O(1) | |
 | `lazy::find(iterator first, Last last, key)` two forms | O(bytes in [first, the pair]) | O(1) | No container_resolve. |
 | `lazy::equal_range(iterator first, Last last, key)` two forms | as find; a miss in a sorted map stops at the first greater key; a hit adds one item_skip | O(1) | |
-| `value_sharing::value_of<DepthMax>(expected<...>)` :414 | O(1) | O(1) | |
+| `value_sharing::value_of(expected<...>)` :414 | O(1) | O(1) | |
 | `lazy::at(string_view)` :425 | as find | O(1) | |
 | `lazy::at(int64_t)` :432 | array O(n_array) worst; map linear key_find | O(1) plus marks | check_index. |
 | `lazy::get<T>() const` :476 | container_resolve + O(1); bignum + O(len) | O(1) | |
 | `lazy::elements()`, `entries()` :583, :595 | container_resolve | O(1) | |
-| `value_sharing::item_decode<DepthMax>(top_level_item&, size_t, size_t)` :606 | First time: O(log e), worst O(e); containers + O(n_item). Built scalar or string: O(n_item) again. | O(1) amortized per item; stack O(d + s) | Tag 29 recursion is at the same depth, bounded by s. |
-| `lazy::decode<DepthMax, Self>(this Self&&)` :721 | as item_decode | as item_decode | |
-| `lazy_decode<DepthMax, Binding>(Binding&, lazy const&)` :733 | O(s) + value_decode | O(s) plus the binding | Two allocations of size s. |
+| `value_sharing::item_decode(top_level_item&, size_t, size_t)` :606 | First time: O(log e), worst O(e); containers + O(n_item). Built scalar or string: O(n_item) again. | O(1) amortized per item; stack O(d + s) | Tag 29 recursion is at the same depth, bounded by s. |
+| `lazy::decode<Self>(this Self&&)` :721 | as item_decode | as item_decode | |
+| `lazy_decode<Binding>(Binding&, lazy const&)` :733 | O(s) + value_decode | O(s) plus the binding | Two allocations of size s. |
 
 ## owning_ref.hpp
 
@@ -238,25 +239,25 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `query::logical_and_parse` :553 | O(t) | O(t) | A loop. |
 | `query::logical_or_parse` :571 | O(t) | O(t) | Depth checked. |
 | `jsonpath::query_parse(string_view, bool, size_t)` :592 | O(t) | O(t) | Compile time in the fixed_string forms. |
-| `query_walk<DepthMax, T>(query_view const&, parsed_query const&, string_view)` :642 | O(n) worst; common O(bytes before the target) | O(1) | No allocation. nullopt on tag 29. |
-| `query_walk<DepthMax, T>(..., lazy const&)` :879 | O(n·p) worst; common O(n) | O(1); O(n) per tag 24 level | |
-| `query_walk<Path, DepthMax, T>(string_view)` :902 | O(n); fallback O(n·p) | O(1); fallback allocates | Allocation only on tag 29. |
-| `query_walk<Path, DepthMax, T>(shared_ptr<void const>, string_view, ...)` :933 | as :902 | as :902 | |
-| `jsonpath::key_find<DepthMax>(lazy const&, string_view)` :993 | text key O(n_map); other key O(k·(n_map + value_equal)) | O(1); tag 24 allocates | |
-| `jsonpath::value_equal<DepthMax>` :1021 | map: 2k² key compares + O(k·n_map) per level; product over d levels worst | O(d) stack | |
-| `jsonpath::value_less<DepthMax>` :1143 | O(1) or O(min len) | O(1) | |
-| `jsonpath::comparable_value<DepthMax>` :1189 | literal O(size); query: segments_apply | allocates per count, length or literal | |
-| `jsonpath::expression_test<DepthMax>` :1246 | sum of subexpressions | O(e) stack | |
-| `jsonpath::selector_apply<DepthMax>` :1318 | O(bytes of the node); filter adds one expression_test per child | O(m) or O(k) | Changes nodelist. nodelist bounded by root bytes. |
-| `jsonpath::segment_apply<DepthMax>` :1398 | child: sum of selector_apply; descendant: O(c·n·d) | O(i) children vectors; O(d) frames | |
-| `jsonpath::segments_apply<DepthMax>` :1419 | worst O(p·N·c·n·d); common O(p·n) | O(N), N <= n | |
-| `query_walk<DepthMax, Binding>(Binding&, ...)` :1435 | singular O(n·p) + lazy_decode; else segments_apply + decodes | O(1) or O(N) | |
-| `verify_path<Path, DepthMax>` :985 | O(t) compile time | none at run time | |
-| `singular_query<Path, DepthMax>` :1506 | O(t + c) compile time | none at run time | |
-| `at_path<DepthMax, Binding>(Binding&, string_view, lazy const&)` :1470 | O(t) + query_walk :1435 | O(t) | Parses at run time. |
-| `at_path<Path, DepthMax, Binding>(Binding&, lazy const&)` :1480 | query_walk :1435 | as :1435 | |
-| `at_path<Path, T, DepthMax>(string_view)` :1525 | O(n); fallback O(n·p) | O(1); fallback allocates | |
-| `at_path<Path, T, DepthMax>(shared_ptr<void const>, string_view)` :1543 | as :1525 | as :1525 | |
+| `query_walk<T>(query_view const&, parsed_query const&, string_view)` :642 | O(n) worst; common O(bytes before the target) | O(1) | No allocation. nullopt on tag 29. |
+| `query_walk<T>(..., lazy const&)` :879 | O(n·p) worst; common O(n) | O(1); O(n) per tag 24 level | |
+| `query_walk<Path, T>(string_view)` :902 | O(n); fallback O(n·p) | O(1); fallback allocates | Allocation only on tag 29. |
+| `query_walk<Path, T>(shared_ptr<void const>, string_view, ...)` :933 | as :902 | as :902 | |
+| `jsonpath::key_find(lazy const&, string_view)` :993 | text key O(n_map); other key O(k·(n_map + value_equal)) | O(1); tag 24 allocates | |
+| `jsonpath::value_equal` :1021 | map: 2k² key compares + O(k·n_map) per level; product over d levels worst | O(d) stack | |
+| `jsonpath::value_less` :1143 | O(1) or O(min len) | O(1) | |
+| `jsonpath::comparable_value` :1189 | literal O(size); query: segments_apply | allocates per count, length or literal | |
+| `jsonpath::expression_test` :1246 | sum of subexpressions | O(e) stack | |
+| `jsonpath::selector_apply` :1318 | O(bytes of the node); filter adds one expression_test per child | O(m) or O(k) | Changes nodelist. nodelist bounded by root bytes. |
+| `jsonpath::segment_apply` :1398 | child: sum of selector_apply; descendant: O(c·n·d) | O(i) children vectors; O(d) frames | |
+| `jsonpath::segments_apply` :1419 | worst O(p·N·c·n·d); common O(p·n) | O(N), N <= n | |
+| `query_walk<Binding>(Binding&, ...)` :1435 | singular O(n·p) + lazy_decode; else segments_apply + decodes | O(1) or O(N) | |
+| `verify_path<Path>` :985 | O(t) compile time | none at run time | |
+| `singular_query<Path>` :1506 | O(t + c) compile time | none at run time | |
+| `at_path<Binding>(Binding&, string_view, lazy const&)` :1470 | O(t) + query_walk :1435 | O(t) | Parses at run time. |
+| `at_path<Path, Binding>(Binding&, lazy const&)` :1480 | query_walk :1435 | as :1435 | |
+| `at_path<Path, T>(string_view)` :1525 | O(n); fallback O(n·p) | O(1); fallback allocates | |
+| `at_path<Path, T>(shared_ptr<void const>, string_view)` :1543 | as :1525 | as :1525 | |
 | `at_path(shared_ptr<void const>, Encoded&&) = delete` :71 | none | none | |
 | local lambdas :171, :446, :1322, :1364, :1036-1045 | O(digits) or O(1) amortized | O(1) | Included in the rows above. |
 
@@ -297,9 +298,9 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `walker::bignum` :627 | O(len) | negative: O(len) std::string | |
 | `walker::simple` :660 | O(1) | O(1) | |
 | `walker` copy = delete :670 | none | none | |
-| `cycle_find<DepthMax, Binding>` :673 | O(r·d); r exponential in d for a DAG | O(d) vector + O(d) stack | Cold path only. |
-| `encode_from<DepthMax, Sharing, Binding, Writer>` :707 | off: O(r + n_out); on: O(i + n_out) expected | off: O(d); on: O(i) hash entries | |
-| `encode<DepthMax, Sharing, Binding, Writer>` :745 | as encode_from | as encode_from plus target | |
+| `cycle_find<Binding>` :673 | O(r·d); r exponential in d for a DAG | O(d) vector + O(d) stack | Cold path only. |
+| `encode_from<Sharing, Binding, Writer>` :707 | off: O(r + n_out); on: O(i + n_out) expected | off: O(d); on: O(i) hash entries | |
+| `encode<Sharing, Binding, Writer>` :745 | as encode_from | as encode_from plus target | |
 
 ## binding.hpp
 
@@ -338,8 +339,8 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `float_of` :899 | O(1) | O(1) | |
 | `diagnostic_head_decode` :927 | O(1) | O(1) | Changes d. |
 | `break_found` :943 | O(1) | O(1) | Changes d. |
-| `diagnostic_write<DepthMax>` :954 | O(n) common; worst depends on check_tag_content | O(n) output; O(s) marks; O(d) frames | |
-| `inspect<DepthMax>` :1084 | O(n) common | O(n) string; O(s); O(d) | |
+| `diagnostic_write` :954 | O(n) common; worst depends on check_tag_content | O(n) output; O(s) marks; O(d) frames | |
+| `inspect` :1084 | O(n) common | O(n) string; O(s); O(d) | |
 
 ## schema.hpp
 
@@ -388,8 +389,8 @@ All rows marked "compile time" have no run-time cost.
 | `packed::path_valid`, `path_result` :1034, :1074 | O(p·(L + c·len)) compile time | O(p) instantiations | |
 | `packed::path_walk` :1102 | O(p) | O(1) | check_index. |
 | `decode_cursor::reference_take` :1248 | O(1) | O(1) | Changes the cursor. |
-| `decode_cursor::value_read<DepthMax, Root, T>` :1267 | O(n); O(n + k log k) with an ordered map | O(n) output; O(d) stack | Allocates per string, list and node. |
-| `packed::root_read<T, DepthMax>` :1411 | as value_read | as value_read | |
+| `decode_cursor::value_read<Root, T>` :1267 | O(n); O(n + k log k) with an ordered map | O(n) output; O(d) stack | Allocates per string, list and node. |
+| `packed::root_read<T>` :1411 | as value_read | as value_read | |
 | `packed::encoded_size<T>` :1433 | O(1) | O(1) | |
 | `packed::encoded_write<Exact, T>` :1455 | O(n) | O(1) heap | |
 | `packed::members_of<U>()` :1483 | O(c log c·len) compile time | O(c) static | |
@@ -409,8 +410,8 @@ All rows marked "compile time" have no run-time cost.
 | `schema::at<Path>(string_view, Index...)` :1957 | O(q + p) | O(1) | |
 | `schema::path(string_view)` :1967 | O(n) | O(n) | Copies. |
 | `schema::path<Encoded>(Encoded&&)` :1977 | O(1) | O(1) | One make_shared. |
-| `schema::decode<DepthMax>(string_view)` :1987 | O(n); + k log k ordered | O(n) copy + O(n) output | |
-| `schema::decode<DepthMax, Encoded>(Encoded&&)` :1999 | as decode(owner, view) | O(1) + output | |
+| `schema::decode(string_view)` :1987 | O(n); + k log k ordered | O(n) copy + O(n) output | |
+| `schema::decode<Encoded>(Encoded&&)` :1999 | as decode(owner, view) | O(1) + output | |
 | `schema::decode(shared_ptr<void const>, string_view)` :2009 | O(n); + k log k ordered | O(n) output | |
 | `schema::decode(shared_ptr, Encoded&&) = delete` :2021 | - | - | |
 | `schema::encode(T const&)` :2023 | O(i + n) | O(n) | One std::string. |
@@ -424,10 +425,10 @@ All rows marked "compile time" have no run-time cost.
 | `generic::head_accepted<U>` :98 | O(1) | O(1) | |
 | `generic::wide_integer_read<U>` :142 | O(len), at most 16 steps | O(1) | |
 | `generic::variant_read` :184 | O(alternatives) + read | output | |
-| `generic::generic_read<DepthMax, U>` :197 | common O(n); worst O((n/d)^d) with tag 29 | output; O(s) | Each tag 29 adds 1 to depth. |
+| `generic::generic_read<U>` :197 | common O(n); worst O((n/d)^d) with tag 29 | output; O(s) | Each tag 29 adds 1 to depth. |
 | `generic::generic_value_read` :228 | scalar O(1); string O(len); array O(m); std::map O(k log k); unordered_map O(k) | output; O(d) stack | Duplicate key dropped by try_emplace. |
 | `generic::key_matches<U, I>` :380 | O(1) or O(len) | O(1) | |
-| `generic::struct_read` :395 | O(k·c·len) + members + skipped | bitset; O(DepthMax) | |
+| `generic::struct_read` :395 | O(k·c·len) + members + skipped | bitset; O(1) | |
 | `generic::member_present`, `float_size` :471, :479 | O(1) | O(1) | |
 | `generic::generic_size<U>` :492 | O(i) | O(1) heap | |
 | `generic::bytes_write` :603 | O(len) | O(1) | |
@@ -438,7 +439,7 @@ All rows marked "compile time" have no run-time cost.
 | `databind::decode(shared_ptr, Encoded&&) = delete` :753 | - | - | |
 | `databind::encode(T const&)` :755 | O(i + n) | O(n) | |
 | `databind::encode<Target>(T const&, Target&&)` :772 | O(i + n) | container O(n); else O(n) temporary | Not opened. |
-| `databind::read<DepthMax>(string_view)` :821 | common O(n); worst O((n/d)^d) | output; O(s); O(d) | |
+| `databind::read(string_view)` :821 | common O(n); worst O((n/d)^d) | output; O(s); O(d) | |
 
 ## Above linear, or allocation on a success path
 

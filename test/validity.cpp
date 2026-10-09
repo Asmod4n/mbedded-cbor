@@ -17,17 +17,50 @@ using cbor::error;
 using cbor::major_type;
 using cbor::validity;
 
-// The owner set the bound of DepthMax to 1024 and its default to 128. Every form that takes DepthMax reads
-// both from these two constants, so this test is the one place that holds the two numbers.
+// The owner set the bound of the nesting depth to 1024 and its default to 128. Every function that reads the
+// nesting depth reads both from these two constants, so this test is the one place that holds the two numbers.
 TEST_CASE("validity: the limit and the default of the nesting depth")
 {
     CHECK_EQ(validity::nesting_depth_limit, 1024u);
     CHECK_EQ(validity::nesting_depth_default, 128u);
 }
 
-// One function decides whether a depth is allowed, at compile time for DepthMax and at run time for the depth
+// One function decides whether a depth is allowed, at compile time for the default and at run time for the depth
 // of an item. A depth up to the maximum is allowed and every depth above it is refused, for every depth up to
 // one past the limit.
+// The nesting depth in force starts at the default. One function sets it, and that function refuses every value
+// above the limit with the check that every reader of a depth uses, so the depth in force never exceeds the limit.
+TEST_CASE("validity: nesting_depth_max_set lowers and raises the nesting depth and refuses a value above the limit")
+{
+    CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_default);
+    std::string const deep = std::string(200, '\x81') + '\x00';
+    test_binding binding;
+    CHECK_EQ(cbor::lazy_decode(binding, *cbor::decode(deep)).error(), error::nesting_depth_exceeded);
+    {
+        test::nesting_depth_max_guard const raised{200};
+        CHECK_EQ(validity::nesting_depth_max_read(), 200u);
+        CHECK(cbor::lazy_decode(binding, *cbor::decode(deep)).has_value());
+        CHECK(cbor::inspect(deep).has_value());
+        test::nesting_depth_max_guard const lowered{199};
+        CHECK_EQ(cbor::lazy_decode(binding, *cbor::decode(deep)).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(cbor::inspect(deep).error(), error::nesting_depth_exceeded);
+    }
+    CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_default);
+    CHECK_EQ(validity::nesting_depth_max_set(1025).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(validity::nesting_depth_max_set(std::numeric_limits<std::size_t>::max()).error(),
+             error::nesting_depth_exceeded);
+    CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_default);
+    {
+        test::nesting_depth_max_guard const limit{validity::nesting_depth_limit};
+        CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_limit);
+    }
+    {
+        test::nesting_depth_max_guard const zero{0};
+        CHECK(cbor::lazy_decode(binding, *cbor::decode("\x00"sv)).has_value());
+        CHECK_EQ(cbor::lazy_decode(binding, *cbor::decode("\x81\x00"sv)).error(), error::nesting_depth_exceeded);
+    }
+}
+
 TEST_CASE("validity: check_nesting_depth for every depth up to one past the limit")
 {
     for (std::size_t depth = 0; depth <= 1025; ++depth) {
@@ -513,10 +546,10 @@ TEST_CASE("validity: keys_equivalent compares the pairs of two maps as multisets
     std::string_view const jkk = "\xa3\x61j\x01\x61k\x01\x61k\x01"sv;
     std::string_view const kk = "\xa2\x61k\x01\x61k\x01"sv;
     std::string_view const kj = "\xa2\x61k\x01\x61j\x01"sv;
-    CHECK_FALSE(*validity::keys_equivalent<16>(kkj, 0, kjj, 0, 0));
-    CHECK_FALSE(*validity::keys_equivalent<16>(kjj, 0, kkj, 0, 0));
-    CHECK(*validity::keys_equivalent<16>(kkj, 0, jkk, 0, 0));
-    CHECK(*validity::keys_equivalent<16>(jkk, 0, kkj, 0, 0));
-    CHECK_FALSE(*validity::keys_equivalent<16>(kk, 0, kj, 0, 0));
-    CHECK(*validity::keys_equivalent<16>(kk, 0, kk, 0, 0));
+    CHECK_FALSE(*validity::keys_equivalent(kkj, 0, kjj, 0, 0, 16));
+    CHECK_FALSE(*validity::keys_equivalent(kjj, 0, kkj, 0, 0, 16));
+    CHECK(*validity::keys_equivalent(kkj, 0, jkk, 0, 0, 16));
+    CHECK(*validity::keys_equivalent(jkk, 0, kkj, 0, 0, 16));
+    CHECK_FALSE(*validity::keys_equivalent(kk, 0, kj, 0, 0, 16));
+    CHECK(*validity::keys_equivalent(kk, 0, kk, 0, 0, 16));
 }

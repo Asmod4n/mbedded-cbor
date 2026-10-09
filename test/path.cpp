@@ -30,7 +30,7 @@ value at(std::string_view const path, value const &data)
 {
     std::string const doc = encoded(data);
     test_binding binding;
-    auto const r = cbor::at_path<16>(binding, path, *cbor::decode<16>(doc));
+    auto const r = cbor::at_path(binding, path, *cbor::decode(doc));
     REQUIRE(r.has_value());
     return *r;
 }
@@ -39,7 +39,7 @@ error path_error(std::string_view const path, value const &data)
 {
     std::string const doc = encoded(data);
     test_binding binding;
-    auto const r = cbor::at_path<16>(binding, path, *cbor::decode<16>(doc));
+    auto const r = cbor::at_path(binding, path, *cbor::decode(doc));
     REQUIRE_FALSE(r.has_value());
     return r.error();
 }
@@ -48,7 +48,7 @@ template <cbor::fixed_string Path>
 std::expected<value, cbor::error> compiled_at(std::string const &doc)
 {
     test_binding binding;
-    return cbor::at_path<Path, 16>(binding, *cbor::decode<16>(doc));
+    return cbor::at_path<Path>(binding, *cbor::decode(doc));
 }
 
 value found(std::expected<value, cbor::error> const &r)
@@ -59,7 +59,7 @@ value found(std::expected<value, cbor::error> const &r)
 }
 
 template <cbor::fixed_string Path>
-concept path_compiles = requires(test_binding &b, cbor::lazy const &l) { cbor::at_path<Path, 4>(b, l); };
+concept path_compiles = requires(test_binding &b, cbor::lazy const &l) { cbor::at_path<Path>(b, l); };
 
 } // namespace
 
@@ -160,7 +160,7 @@ TEST_CASE("path: a wildcard over records with large fields")
 
 // RFC 9535 2.2 to 2.5: blanks before a segment and inside brackets, names in single or double quotes with their
 // escapes, an index without leading zeros in the range of I-JSON. At run time a bracket holds the selectors of
-// RFC 9535 and nothing else; every other form is invalid_path. A query has at most DepthMax segments.
+// RFC 9535 and nothing else; every other form is invalid_path. A query has at most as many segments as the nesting depth.
 TEST_CASE("path: the grammar")
 {
     value const doc = M("a"s, M("b c"s, A(1, 2, 3)), "ü'\""s, 4);
@@ -177,12 +177,16 @@ TEST_CASE("path: the grammar")
     CHECK_EQ(path_error("$[9007199254740991]", A(1)), error::index_out_of_bounds);
     std::string const deep = encoded(A(A(A(A(1)))));
     test_binding binding;
-    CHECK_EQ(cbor::at_path<3>(binding, "$[0][0][0][0]", *cbor::decode<16>(deep)).error(), error::nesting_depth_exceeded);
-    CHECK(cbor::at_path<4>(binding, "$[0][0][0][0]", *cbor::decode<16>(deep)).has_value());
+    {
+        test::nesting_depth_max_guard const depth{3};
+        CHECK_EQ(cbor::at_path(binding, "$[0][0][0][0]", *cbor::decode(deep)).error(), error::nesting_depth_exceeded);
+    }
+    test::nesting_depth_max_guard const depth{4};
+    CHECK(cbor::at_path(binding, "$[0][0][0][0]", *cbor::decode(deep)).has_value());
 }
 
 // The compile-time form reads the same grammar and, inside brackets, any literal of CBOR diagnostic notation
-// (draft-ietf-cbor-edn-literals-28) as a map key. A query that is not valid, or that has more than DepthMax
+// (draft-ietf-cbor-edn-literals-28) as a map key. A query that is not valid, or that has more than the default nesting depth of
 // segments, does not compile.
 TEST_CASE("path: a query that is not valid does not compile")
 {
@@ -196,8 +200,8 @@ TEST_CASE("path: a query that is not valid does not compile")
     CHECK_FALSE(path_compiles<"$[1.1_1]">);
     CHECK_FALSE(path_compiles<"$[simple(24)]">);
     CHECK_FALSE(path_compiles<"$[1(]">);
-    CHECK_FALSE(path_compiles<"$[0][0][0][0][0]">);
-    CHECK(path_compiles<"$[0][0][0][0]">);
+    CHECK_FALSE(path_compiles<"$[0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0]">);
+    CHECK(path_compiles<"$[0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0]">);
 }
 
 // Every key of the map below is a different kind of CBOR item. inspect gives the diagnostic notation of each key,
@@ -269,7 +273,7 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
     CHECK_EQ(compiled_at<"$[1.0]">(doc).error(), error::key_not_found);
     std::string runtime_text = "$[16]";
     test_binding binding;
-    CHECK(*cbor::at_path<16>(binding, runtime_text, *cbor::decode<16>(doc)) == V(14));
+    CHECK(*cbor::at_path(binding, runtime_text, *cbor::decode(doc)) == V(14));
 }
 
 // With value sharing (tags 28 and 29) a few bytes can name many nodes. A nodelist may hold as many nodes as the
@@ -280,10 +284,10 @@ TEST_CASE("path: a nodelist is no longer than the message")
     for (char level = 0; level < 6; ++level)
         doc += "\xd8\x1c\x82\xd8\x1d"s + level + "\xd8\x1d"s + level;
     test_binding binding;
-    auto const four = cbor::at_path<16>(binding, "$[2][*][*][*]", *cbor::decode<16>(doc));
+    auto const four = cbor::at_path(binding, "$[2][*][*][*]", *cbor::decode(doc));
     REQUIRE(four.has_value());
     CHECK(*four == A(0, 0, 0, 0, 0, 0, 0, 0));
-    CHECK_EQ(cbor::at_path<16>(binding, "$[6][*][*][*][*][*][*][*]", *cbor::decode<16>(doc)).error(),
+    CHECK_EQ(cbor::at_path(binding, "$[6][*][*][*][*][*][*][*]", *cbor::decode(doc)).error(),
              error::nodelist_too_long);
 }
 
@@ -354,7 +358,7 @@ TEST_CASE("path: every form gives the first entry of a repeated key")
 {
     std::string const doc = "\xa2\x61\x61\x01\x61\x61\x02"s;
     test_binding binding;
-    CHECK(cbor::at_path<16>(binding, "$.a", *cbor::decode<16>(doc)).has_value());
+    CHECK(cbor::at_path(binding, "$.a", *cbor::decode(doc)).has_value());
     CHECK(compiled_at<"$.a">(doc).has_value());
     CHECK_EQ((cbor::at_path<"$.a", int>(doc)), 1);
     auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x61x\x61\x61\x61y"s);
@@ -369,9 +373,9 @@ TEST_CASE("path: every form gives the first entry of a repeated key")
     std::string const deep = "\xa1\x61\x62\xa2\x61\x61\x01\x61\x61\x02"s;
     CHECK_EQ((cbor::at_path<"$.b.a", int>(deep)), 1);
     CHECK(compiled_at<"$.b.a">(deep).has_value());
-    CHECK(cbor::at_path<16>(binding, "$.*", *cbor::decode<16>(doc)).has_value());
-    CHECK(cbor::at_path<16>(binding, "$..c", *cbor::decode<16>(deep)).has_value());
-    CHECK(cbor::at_path<16>(binding, "$[?@ == 1]", *cbor::decode<16>(doc)).has_value());
+    CHECK(cbor::at_path(binding, "$.*", *cbor::decode(doc)).has_value());
+    CHECK(cbor::at_path(binding, "$..c", *cbor::decode(deep)).has_value());
+    CHECK(cbor::at_path(binding, "$[?@ == 1]", *cbor::decode(doc)).has_value());
     std::string const arrays = "\xa2\x81\x01\x00\x81\x18\x01\x01"s;
     CHECK(compiled_at<"$[[1]]">(arrays).has_value());
 }
@@ -408,7 +412,7 @@ TEST_CASE("path: the array slice selector")
 }
 
 // RFC 9535 2.5.2.2: a descendant segment applies its selectors to the input node and then to every descendant,
-// each node before its descendants and an array in its order. A descendant segment deeper than DepthMax fails.
+// each node before its descendants and an array in its order. A descendant segment deeper than the nesting depth fails.
 TEST_CASE("path: the descendant segment")
 {
     value const doc = M("a"s, M("b"s, 1, "c"s, A(M("b"s, 2))), "b"s, 3);
@@ -420,7 +424,8 @@ TEST_CASE("path: the descendant segment")
         CHECK_EQ(path_error(bad, doc), error::invalid_path);
     std::string const deep = encoded(A(A(A(A(A(1))))));
     test_binding binding;
-    CHECK_EQ(cbor::at_path<3>(binding, "$..[0]", *cbor::decode<16>(deep)).error(), error::nesting_depth_exceeded);
+    test::nesting_depth_max_guard const depth{3};
+    CHECK_EQ(cbor::at_path(binding, "$..[0]", *cbor::decode(deep)).error(), error::nesting_depth_exceeded);
 }
 
 // RFC 9535 2.3.5: a filter keeps the children for which the logical expression is true. A comparison of numbers
@@ -533,18 +538,18 @@ std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vect
         return comparable(*v);
 }
 
-template <cbor::fixed_string Path, class T, std::size_t DepthMax = 128>
+template <cbor::fixed_string Path, class T>
 std::expected<comparable_t<T>, error> path_get(std::string const &doc)
 {
     if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, cbor::typed_array>) {
         auto const owner = std::make_shared<std::string const>(doc);
-        auto const r = cbor::at_path<Path, T, DepthMax>(owner, *owner);
+        auto const r = cbor::at_path<Path, T>(owner, *owner);
         if (!r)
             return std::unexpected(r.error());
         return comparable(**r);
     } else {
-        auto const r = cbor::at_path<Path, T, DepthMax>(doc);
+        auto const r = cbor::at_path<Path, T>(doc);
         if (!r)
             return std::unexpected(r.error());
         return comparable(*r);
@@ -872,21 +877,16 @@ TEST_CASE("path: a typed read of the fuzzer findings of lazy")
     check_path<"$.a", std::uint64_t>("\xa2\x41\x61\x01\x61\x61\x02"s, {"a"sv}, 2u);
 }
 
-// DepthMax 128 bounds the nesting of every item that the walk skips, as lazy bounds it: an item at depth 128 is read,
-// one at depth 129 is not. Each skip counts from depth 1, as lazy::at does, so a path one level deeper does not
-// lower the bound.
-TEST_CASE("path: a typed read keeps the nesting depth of lazy")
+// A skip keeps one count of the items still to read and no stack, and nothing recurses in it, so the walk skips an
+// item of any nesting depth. The count of segments is what the nesting depth bounds.
+TEST_CASE("path: a typed read skips an item of any nesting depth")
 {
-    std::string const deepest = "\x82"s + repeat("\x81", 127) + "\x00\x01"s;
-    check_path<"$[1]", std::uint64_t>(deepest, {std::int64_t{1}}, 1u);
-    std::string const deeper = "\x82"s + repeat("\x81", 128) + "\x00\x01"s;
-    check_path<"$[1]", std::uint64_t>(deeper, {std::int64_t{1}}, std::unexpected(error::nesting_depth_exceeded));
-    std::string const below = "\x81\x82"s + repeat("\x81", 127) + "\x00\x01"s;
-    check_path<"$[0][1]", std::uint64_t>(below, {std::int64_t{0}, std::int64_t{1}}, 1u);
-    std::string const keyed = "\xa2\x61k"s + repeat("\x81", 128) + "\x00\x61\x61\x01"s;
-    check_path<"$.a", std::uint64_t>(keyed, {"a"sv}, std::unexpected(error::nesting_depth_exceeded));
-    CHECK(path_get<"$[1]", std::uint64_t, 4>("\x82\x81\x81\x81\x00\x01"s) == 1u);
-    CHECK(path_get<"$[1]", std::uint64_t, 4>("\x82\x81\x81\x81\x81\x00\x01"s) == std::unexpected(error::nesting_depth_exceeded));
+    std::string const deeper = "\x82"s + repeat("\x81", 2000) + "\x00\x01"s;
+    check_path<"$[1]", std::uint64_t>(deeper, {std::int64_t{1}}, 1u);
+    std::string const keyed = "\xa2\x61k"s + repeat("\x81", 2000) + "\x00\x61\x61\x01"s;
+    check_path<"$.a", std::uint64_t>(keyed, {"a"sv}, 1u);
+    test::nesting_depth_max_guard const depth{4};
+    CHECK(path_get<"$[1]", std::uint64_t>("\x82\x81\x81\x81\x81\x00\x01"s) == 1u);
 }
 
 // The typed read compiles only where it is safe. A view is read only with an owner of the bytes, so it cannot outlive
@@ -894,8 +894,8 @@ TEST_CASE("path: a typed read keeps the nesting depth of lazy")
 // moved std::string beside an owner does not compile either, because the owner does not hold it and the view would
 // read freed memory. A std::string that the caller keeps is read beside an owner. A scalar holds no bytes and is read
 // from any of them. The path is a singular query of RFC 9535 2.3.5.1 with names and indexes only: a wildcard, a
-// descendant segment and a literal key of EDN go to at_path with a binding. A path with more segments than DepthMax
-// does not compile.
+// descendant segment and a literal key of EDN go to at_path with a binding. A path with more segments than the
+// default nesting depth does not compile.
 TEST_CASE("path: a typed read that is not safe does not compile")
 {
     std::string text = "\xa1\x61\x61\x61x"s;
@@ -930,32 +930,21 @@ TEST_CASE("path: a typed read that is not safe does not compile")
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[?@.a]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"a", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", float>(std::forward<S>(s)); }; }(std::string_view(text))));
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[0][0]", std::int64_t, 2>(std::forward<S>(s)); }; }(std::string_view(text))));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[0][0][0]", std::int64_t, 2>(std::forward<S>(s)); }; }(std::string_view(text))));
 }
 
-namespace
+// A path that compiles has at most the default nesting depth of segments. The depth in force at run time can be
+// lower, so the walk checks the count of segments against it again.
+TEST_CASE("at_path: a compiled path with more segments than the nesting depth in force is refused")
 {
-
-template <std::size_t DepthMax>
-std::array<bool, 4> at_path_compiles()
-{
-    return {
-        requires(test_binding &b, cbor::lazy const &l) { cbor::at_path<DepthMax>(b, std::string_view{}, l); },
-        requires(test_binding &b, cbor::lazy const &l) { cbor::at_path<"$.a", DepthMax>(b, l); },
-        requires(std::string_view const s) { cbor::at_path<"$.a", std::int64_t, DepthMax>(s); },
-        requires(std::shared_ptr<void const> const &o, std::string_view const s) {
-            cbor::at_path<"$.a", std::string_view, DepthMax>(o, s);
-        },
-    };
-}
-
-} // namespace
-
-// DepthMax has an upper bound of 1024 on every form that takes it, so no form can be given a depth that overflows the
-// stack. Each form is checked alone: each one compiles with 1024, and none compiles with 1025.
-TEST_CASE("path: DepthMax is at most 1024")
-{
-    CHECK(std::ranges::all_of(at_path_compiles<1024>(), std::identity{}));
-    CHECK(std::ranges::none_of(at_path_compiles<1025>(), std::identity{}));
+    std::string const text = "\x81\x81\x81\x07";
+    test::nesting_depth_max_guard const depth{2};
+    CHECK_EQ(cbor::at_path<"$[0][0]", std::int64_t>(std::string_view(text)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$[0][0][0]", std::int64_t>(std::string_view(text)).error(), error::nesting_depth_exceeded);
+    auto const owner = std::make_shared<std::string const>(text);
+    CHECK_EQ(cbor::at_path<"$[0][0][0]", std::string_view>(owner, *owner).error(), error::nesting_depth_exceeded);
+    auto const l = cbor::decode(text);
+    REQUIRE(l.has_value());
+    test_binding binding;
+    CHECK_EQ(cbor::at_path<"$[0][0][0]">(binding, *l).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(cbor::at_path(binding, "$[0][0][0]", *l).error(), error::nesting_depth_exceeded);
 }

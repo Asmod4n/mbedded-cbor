@@ -180,21 +180,21 @@ class generic
     }
 #endif
 
-    template <std::size_t DepthMax, class U, std::size_t I = 0>
-    static std::expected<void, error> variant_read(value_sharing::sharing_decoder &d, U &out, heads::head const &h, std::size_t const depth)
+    template <class U, std::size_t I = 0>
+    static std::expected<void, error> variant_read(value_sharing::sharing_decoder &d, U &out, heads::head const &h, std::size_t const depth, std::size_t const depth_max)
     {
         if constexpr (I == std::variant_size_v<U>) {
             return std::unexpected(error::incorrect_type);
         } else {
             using A = std::variant_alternative_t<I, U>;
             if (head_accepted<A>(h))
-                return generic_value_read<DepthMax>(d, out.template emplace<I>(), depth);
-            return variant_read<DepthMax, U, I + 1>(d, out, h, depth);
+                return generic_value_read(d, out.template emplace<I>(), depth, depth_max);
+            return variant_read<U, I + 1>(d, out, h, depth, depth_max);
         }
     }
 
-    template <std::size_t DepthMax, class U>
-    static std::expected<void, error> generic_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth)
+    template <class U>
+    static std::expected<void, error> generic_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth, std::size_t const depth_max)
     {
         std::size_t const item_at = d.message.encoded.size() - d.encoded.size();
         for (;;) {
@@ -217,17 +217,17 @@ class generic
                 return std::unexpected(target.error());
             std::string_view const rest = d.encoded;
             d.encoded = std::string_view(std::span(d.message.encoded).subspan(target->offset));
-            auto const r = generic_value_read<DepthMax>(d, out, depth + 1);
+            auto const r = generic_value_read(d, out, depth + 1, depth_max);
             d.encoded = rest;
             return r;
         }
-        return generic_value_read<DepthMax>(d, out, depth);
+        return generic_value_read(d, out, depth, depth_max);
     }
 
-    template <std::size_t DepthMax, class U>
-    static std::expected<void, error> generic_value_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth)
+    template <class U>
+    static std::expected<void, error> generic_value_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth, std::size_t const depth_max)
     {
-        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool>) {
             auto const h = d.head_decode();
@@ -255,7 +255,7 @@ class generic
             auto const h = probe.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
-            return variant_read<DepthMax>(d, out, *h, depth);
+            return variant_read(d, out, *h, depth, depth_max);
         } else if constexpr (std::is_enum_v<U>) {
             return integer_read<std::underlying_type_t<U>>(d, out);
         } else if constexpr (std::is_integral_v<U>) {
@@ -321,14 +321,14 @@ class generic
                 out.reset();
                 return {};
             }
-            return generic_read<DepthMax>(d, out.emplace(), depth);
+            return generic_read(d, out.emplace(), depth, depth_max);
         } else if constexpr (is_tagged<U>) {
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
             if (h->major != major_type::tag || h->argument != U::number) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            return generic_read<DepthMax>(d, out.content, depth + 1);
+            return generic_read(d, out.content, depth + 1, depth_max);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
@@ -338,7 +338,7 @@ class generic
             std::expected<void, error> r;
             template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, std::tuple_size_v<U>))) {
                 if (r)
-                    r = generic_read<DepthMax>(d, std::get<i>(out), depth + 1);
+                    r = generic_read(d, std::get<i>(out), depth + 1, depth_max);
             }
             return r;
         } else if constexpr (packed::is_map<U>) {
@@ -350,10 +350,10 @@ class generic
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 typename U::key_type key{};
-                if (auto const r = generic_read<DepthMax>(d, key, depth + 1); !r) [[unlikely]]
+                if (auto const r = generic_read(d, key, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
                 typename U::mapped_type value{};
-                if (auto const r = generic_read<DepthMax>(d, value, depth + 1); !r) [[unlikely]]
+                if (auto const r = generic_read(d, value, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
                 out.try_emplace(std::move(key), std::move(value));
             }
@@ -367,12 +367,12 @@ class generic
             out.clear();
             out.reserve(std::min<std::uint64_t>(h->argument, d.encoded.size()));
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                if (auto const r = generic_read<DepthMax>(d, out.emplace_back(), depth + 1); !r) [[unlikely]]
+                if (auto const r = generic_read(d, out.emplace_back(), depth + 1, depth_max); !r) [[unlikely]]
                     return r;
             }
             return {};
         } else {
-            return struct_read<DepthMax>(d, out, depth);
+            return struct_read(d, out, depth, depth_max);
         }
     }
 
@@ -391,8 +391,8 @@ class generic
         }
     }
 
-    template <std::size_t DepthMax, class U>
-    static std::expected<void, error> struct_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth)
+    template <class U>
+    static std::expected<void, error> struct_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth, std::size_t const depth_max)
     {
         static constexpr auto members = packed::members_of<U>();
         constexpr std::size_t count = members.size();
@@ -444,15 +444,15 @@ class generic
                 if (!matched && key_matches<U, i>(*k, text)) {
                     matched = true;
                     if (found.test(i)) {
-                        r = well_formedness::item_skip<DepthMax>(d, d.message, depth + 1);
+                        r = well_formedness::item_skip(d, d.message);
                     } else {
                         found.set(i);
-                        r = generic_read<DepthMax>(d, out.[:members[i]:], depth + 1);
+                        r = generic_read(d, out.[:members[i]:], depth + 1, depth_max);
                     }
                 }
             }
             if (!matched) {
-                if (auto const s = well_formedness::item_skip<DepthMax>(d, d.message, depth + 1); !s) [[unlikely]]
+                if (auto const s = well_formedness::item_skip(d, d.message); !s) [[unlikely]]
                     return s;
             } else if (!r) [[unlikely]] {
                 return r;
@@ -723,32 +723,27 @@ template <class T>
 class databind
 {
 public:
-    template <std::size_t DepthMax = validity::nesting_depth_default>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     static std::expected<owning_ref<T>, error> decode(std::string_view encoded) = delete;
 
-    template <std::size_t DepthMax = validity::nesting_depth_default, std::same_as<std::string> Encoded>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    template <std::same_as<std::string> Encoded>
     static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
     {
         auto owner = std::make_shared<std::string const>(std::move(encoded));
         std::string_view const view = *owner;
-        return decode<DepthMax>(std::move(owner), view);
+        return decode(std::move(owner), view);
     }
 
-    template <std::size_t DepthMax = validity::nesting_depth_default>
-        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::databind::decode: the owner of the encoded data item is empty");
-        auto value = read<DepthMax>(encoded);
+        auto value = read(encoded, validity::nesting_depth_max_read());
         if (!value) [[unlikely]]
             return std::unexpected(value.error());
         return owning_ref<T>(std::move(owner), std::move(*value));
     }
 
-    template <std::size_t DepthMax = validity::nesting_depth_default, class Encoded>
+    template <class Encoded>
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
@@ -817,12 +812,11 @@ public:
     }
 
 private:
-    template <std::size_t DepthMax>
-    static std::expected<T, error> read(std::string_view const encoded)
+    static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max)
     {
         value_sharing::sharing_decoder d{{encoded}, {{}, encoded, {}, 0}};
         T out{};
-        if (auto const r = generic::generic_read<DepthMax>(d, out, 0); !r) [[unlikely]]
+        if (auto const r = generic::generic_read(d, out, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (!d.encoded.empty()) [[unlikely]]
             return std::unexpected(error::syntax_error);
