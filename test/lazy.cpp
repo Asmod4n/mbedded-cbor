@@ -238,14 +238,84 @@ TEST_CASE("lazy: elements and entries of the wrong kind")
     CHECK_EQ(lazy_of(encoded(V(1))).elements().error(), error::not_indexable);
 }
 
-// The standard algorithms take a forward iterator, so the iterators of entries and elements are
-// forward iterators and both views are forward ranges. The check runs here and not in src/.
-TEST_CASE("lazy: entries and elements are forward ranges")
+// The standard algorithms and views take entries and elements as they take any standard view. Each
+// concept that the two types claim is checked here at compile time: the iterators are forward
+// iterators, the ranges are views, sized ranges and borrowed ranges, and an iterator outlives the range.
+TEST_CASE("lazy: entries and elements model the standard concepts they claim")
 {
-    CHECK(std::forward_iterator<cbor::lazy_entries::iterator>);
-    CHECK(std::forward_iterator<cbor::lazy_elements::iterator>);
-    CHECK(std::ranges::forward_range<cbor::lazy_entries>);
-    CHECK(std::ranges::forward_range<cbor::lazy_elements>);
+    static_assert(std::forward_iterator<cbor::lazy_entries::iterator>);
+    static_assert(std::forward_iterator<cbor::lazy_elements::iterator>);
+    static_assert(std::sentinel_for<std::default_sentinel_t, cbor::lazy_entries::iterator>);
+    static_assert(std::sentinel_for<std::default_sentinel_t, cbor::lazy_elements::iterator>);
+    static_assert(std::ranges::forward_range<cbor::lazy_entries>);
+    static_assert(std::ranges::forward_range<cbor::lazy_elements>);
+    static_assert(std::ranges::view<cbor::lazy_entries>);
+    static_assert(std::ranges::view<cbor::lazy_elements>);
+    static_assert(std::ranges::sized_range<cbor::lazy_entries>);
+    static_assert(std::ranges::sized_range<cbor::lazy_elements>);
+    static_assert(std::ranges::borrowed_range<cbor::lazy_entries>);
+    static_assert(std::ranges::borrowed_range<cbor::lazy_elements>);
+    static_assert(!std::ranges::bidirectional_range<cbor::lazy_entries>);
+    static_assert(!std::ranges::common_range<cbor::lazy_elements>);
+}
+
+namespace
+{
+
+template <class R>
+concept front_reads = requires(R const &r) { r.front(); };
+
+} // namespace
+
+// size and empty come from the count in the head, and read no element. front is not there: on an
+// empty range it would read the byte after the array.
+TEST_CASE("lazy: size and empty of entries and elements")
+{
+    auto const entries = lazy_of(encoded(M("a"s, 1, "b"s, 2))).entries();
+    REQUIRE(entries.has_value());
+    CHECK_EQ(entries->size(), 2u);
+    CHECK_EQ(std::ranges::size(*entries), 2u);
+    CHECK_FALSE(entries->empty());
+    CHECK(static_cast<bool>(*entries));
+    auto const none = lazy_of(encoded(A())).elements();
+    REQUIRE(none.has_value());
+    CHECK_EQ(none->size(), 0u);
+    CHECK(none->empty());
+    CHECK_FALSE(static_cast<bool>(*none));
+    CHECK(none->begin() == none->end());
+    static_assert(!front_reads<cbor::lazy_elements>);
+    static_assert(!front_reads<cbor::lazy_entries>);
+}
+
+// std::views::take and std::views::drop work on elements and entries as on any forward view, and an
+// iterator that std::ranges::find_if gives stays valid after the range is gone (borrowed_range).
+TEST_CASE("lazy: std::views::take, std::views::drop and find_if over entries and elements")
+{
+    auto const elements = lazy_of(encoded(A(1, 2, 3, 4))).elements();
+    REQUIRE(elements.has_value());
+    std::vector<value> taken;
+    for (auto const element : *elements | std::views::take(2))
+        taken.push_back(value_at(*element));
+    CHECK(taken == std::vector<value>{V(1), V(2)});
+    std::vector<value> dropped;
+    for (auto const element : *elements | std::views::drop(3))
+        dropped.push_back(value_at(*element));
+    CHECK(dropped == std::vector<value>{V(4)});
+    CHECK_EQ(std::ranges::size(*elements | std::views::drop(1)), 3u);
+
+    cbor::lazy_entries::iterator found;
+    {
+        cbor::lazy const map = lazy_of(encoded(M("a"s, 1, "b"s, 2, "c"s, 3)));
+        found = std::ranges::find_if(*map.entries(), [](auto const &entry) {
+            return entry.has_value() && value_at(entry->second) == V(2);
+        });
+    }
+    REQUIRE(found != std::default_sentinel);
+    CHECK(value_at((*found)->first) == V("b"s));
+    std::vector<value> rest;
+    for (auto const entry : std::ranges::subrange(found, std::default_sentinel) | std::views::drop(1))
+        rest.push_back(value_at(entry->first));
+    CHECK(rest == std::vector<value>{V("c"s)});
 }
 
 // A forward iterator can be copied and walked twice, and a copy that has not moved stays equal to

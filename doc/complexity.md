@@ -181,6 +181,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy_elements::iterator::operator++(int)` :78 | O(b) | O(1) | |
 | `lazy_elements::iterator::operator==` :85, :87 | O(1) | O(1) | |
 | `lazy_elements::begin()`, `end()` :93, :98 | O(1) | O(1) | |
+| `lazy_elements::size()`, `empty()` (view_interface) | O(1) | O(1) | The count of the head. |
 | `lazy_entries::iterator::value_find()` :120 | O(bytes of the key) | O(1) plus marks | |
 | `lazy_entries::iterator::operator*() const` :132 | O(1) | O(1) | Two shared_ptr copies. |
 | `lazy_entries::iterator::operator++()` :139 | O(value + next key); full walk O(n_map) | O(1) plus marks | |
@@ -188,6 +189,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy_entries::iterator::operator==` :163, :165 | O(1) | O(1) | |
 | `lazy_entries::begin()` :171 | O(bytes of the first key) | O(1) plus marks | |
 | `lazy_entries::end()` :178 | O(1) | O(1) | |
+| `lazy_entries::size()`, `empty()` (view_interface) | O(1) | O(1) | The count of the head. |
 | `lazy::from(shared_ptr<void const>, string_view)` :209 | O(1) | O(1) | One top_level_item. |
 | `lazy::from(shared_ptr<string const>)` :218 | O(1) | O(1) | |
 | `lazy::from<Encoded>(Encoded&&)` :226 | O(1) | O(1) | Moves; two allocations. |

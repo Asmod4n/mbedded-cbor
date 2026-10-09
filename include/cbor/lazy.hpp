@@ -124,8 +124,7 @@ std::expected<typename Entries::iterator, error> value_sharing::key_find(resolve
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     std::size_t const first = found.source->encoded.size() - found.d.encoded.size();
-    typename Entries::iterator it{std::move(found.source), first, first, found.h.argument, error{}};
-    it.value_find();
+    typename Entries::iterator it(std::move(found.source), first, found.h.argument);
     auto found_at = key_find<false>(std::move(it), std::default_sentinel, key);
     if (!found_at) [[unlikely]]
         return std::unexpected(found_at.error());
@@ -421,7 +420,7 @@ inline std::expected<lazy_elements, error> lazy::elements() const
     auto const &[source, h, d] = *found;
     if (h.major != major_type::array) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    return lazy_elements{source, source->encoded.size() - d.encoded.size(), h.argument};
+    return lazy_elements(source, source->encoded.size() - d.encoded.size(), h.argument);
 }
 
 inline std::expected<lazy_entries, error> lazy::entries() const
@@ -432,7 +431,7 @@ inline std::expected<lazy_entries, error> lazy::entries() const
     auto const &[source, h, d] = *found;
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    return lazy_entries{source, source->encoded.size() - d.encoded.size(), h.argument};
+    return lazy_entries(source, source->encoded.size() - d.encoded.size(), h.argument);
 }
 
 inline std::expected<std::pair<item *, std::size_t>, error>
