@@ -25,7 +25,7 @@
 namespace cbor
 {
 
-class diagnostic_notation
+class extended_diagnostic_notation
 {
     struct parsed {
         std::size_t at;
@@ -1076,15 +1076,15 @@ class diagnostic_notation
 
     friend class jsonpath;
 
-    friend std::expected<std::string, error> inspect(std::string_view encoded);
+    friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 };
 
-inline std::expected<std::string, error> inspect(std::string_view const encoded)
+inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
 {
     heads::decoder d{encoded};
     std::string out;
     std::vector<std::size_t> marks;
-    if (auto const r = diagnostic_notation::diagnostic_write(out, d, encoded, marks, 0, validity::nesting_depth_max_read()); !r) [[unlikely]]
+    if (auto const r = extended_diagnostic_notation::diagnostic_write(out, d, encoded, marks, 0, validity::nesting_depth_max_read()); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (!d.encoded.empty()) [[unlikely]]
         return std::unexpected(error::syntax_error);

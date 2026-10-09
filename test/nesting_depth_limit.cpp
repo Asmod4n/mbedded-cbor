@@ -109,12 +109,12 @@ TEST_CASE("nesting depth limit: a descendant segment")
 }
 #endif
 
-// inspect::diagnostic_write counts one level for each array.
-TEST_CASE("nesting depth limit: inspect")
+// extended_diagnostic_notation::diagnostic_write counts one level for each array.
+TEST_CASE("nesting depth limit: diagnostic_notation")
 {
     test::nesting_depth_max_guard const depth{limit};
-    CHECK(cbor::inspect(arrays_around(limit, "\x00"sv)).has_value());
-    CHECK_EQ(cbor::inspect(arrays_around(limit + 1, "\x00"sv)).error(), error::nesting_depth_exceeded);
+    CHECK(cbor::diagnostic_notation(arrays_around(limit, "\x00"sv)).has_value());
+    CHECK_EQ(cbor::diagnostic_notation(arrays_around(limit + 1, "\x00"sv)).error(), error::nesting_depth_exceeded);
 }
 
 // The walker of encode counts one level for each array.

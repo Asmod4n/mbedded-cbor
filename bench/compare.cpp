@@ -196,26 +196,26 @@ static double mb_read()
 {
     auto const opened = S::path(keep, msg);
     if (!opened) [[unlikely]] std::abort();
-    auto const cars = opened->at<"$.cars">();
+    auto const cars = opened->at_path<"$.cars">();
     if (!cars) [[unlikely]] std::abort();
     double s = 0;
     for (std::size_t i = 0; i < cars->size(); ++i) {
-        auto const car = cars->at<"@[]">(i);
+        auto const car = cars->at_path<"@[]">(i);
         if (!car) [[unlikely]] std::abort();
-        auto const wheels = car->at<"@.wheels">();
+        auto const wheels = car->at_path<"@.wheels">();
         if (!wheels) [[unlikely]] std::abort();
         double w = 0;
         for (std::size_t k = 0; k < wheels->size(); ++k) {
-            auto const x = wheels->at<"@[]">(k);
+            auto const x = wheels->at_path<"@[]">(k);
             if (!x) [[unlikely]] std::abort();
-            w += num(x->at<"@.diameter">()) + num(x->at<"@.airPressure">()) + num(x->at<"@.snowTires">());
+            w += num(x->at_path<"@.diameter">()) + num(x->at_path<"@.airPressure">()) + num(x->at_path<"@.snowTires">());
         }
-        s += text(car->at<"@.make">()) + text(car->at<"@.model">()) + num(car->at<"@.color">()) + num(car->at<"@.seats">()) + num(car->at<"@.doors">()) + w +
-             num(car->at<"@.length">()) + num(car->at<"@.width">()) + num(car->at<"@.height">()) + num(car->at<"@.weight">()) +
-             num(car->at<"@.engine.horsepower">()) + num(car->at<"@.engine.cylinders">()) + num(car->at<"@.engine.cc">()) +
-             num(car->at<"@.engine.usesGas">()) + num(car->at<"@.engine.usesElectric">()) + num(car->at<"@.fuelCapacity">()) +
-             num(car->at<"@.fuelLevel">()) + num(car->at<"@.hasPowerWindows">()) + num(car->at<"@.hasPowerSteering">()) +
-             num(car->at<"@.hasCruiseControl">()) + num(car->at<"@.cupHolders">()) + num(car->at<"@.hasNavSystem">());
+        s += text(car->at_path<"@.make">()) + text(car->at_path<"@.model">()) + num(car->at_path<"@.color">()) + num(car->at_path<"@.seats">()) + num(car->at_path<"@.doors">()) + w +
+             num(car->at_path<"@.length">()) + num(car->at_path<"@.width">()) + num(car->at_path<"@.height">()) + num(car->at_path<"@.weight">()) +
+             num(car->at_path<"@.engine.horsepower">()) + num(car->at_path<"@.engine.cylinders">()) + num(car->at_path<"@.engine.cc">()) +
+             num(car->at_path<"@.engine.usesGas">()) + num(car->at_path<"@.engine.usesElectric">()) + num(car->at_path<"@.fuelCapacity">()) +
+             num(car->at_path<"@.fuelLevel">()) + num(car->at_path<"@.hasPowerWindows">()) + num(car->at_path<"@.hasPowerSteering">()) +
+             num(car->at_path<"@.hasCruiseControl">()) + num(car->at_path<"@.cupHolders">()) + num(car->at_path<"@.hasNavSystem">());
     }
     return s;
 }
@@ -255,7 +255,7 @@ static double mb_field()
 {
     auto const opened = S::path(keep, msg);
     if (!opened) [[unlikely]] std::abort();
-    return num(opened->at<"$.cars[500].engine.cc">());
+    return num(opened->at_path<"$.cars[500].engine.cc">());
 }
 static double fb_field() { return fbcar::GetParkingLot(fbmsg.data())->cars()->Get(500)->engine()->cc(); }
 static double cp_field()
@@ -326,11 +326,11 @@ static double mb_read()
 {
     auto const opened = S::path(keep, msg);
     if (!opened) [[unlikely]] std::abort();
-    auto const v = opened->at<"$.values">();
+    auto const v = opened->at_path<"$.values">();
     if (!v) [[unlikely]] std::abort();
     double s = 0;
     for (std::size_t i = 0; i < v->size(); ++i) {
-        auto const x = v->at<"@[]">(i);
+        auto const x = v->at_path<"@[]">(i);
         if (!x) [[unlikely]] std::abort();
         s += *x;
     }
@@ -351,7 +351,7 @@ static double cp_read()
 }
 static double mb_field()
 {
-    auto const x = S::at<"$.values[30000]">(msg);
+    auto const x = S::at_path<"$.values[30000]">(msg);
     if (!x) [[unlikely]] std::abort();
     return *x;
 }
@@ -368,11 +368,11 @@ static double mb_read_path()
 {
     auto const opened = S::path(keep, msg);
     if (!opened) [[unlikely]] std::abort();
-    auto const v = opened->at<"$.values">();
+    auto const v = opened->at_path<"$.values">();
     if (!v) [[unlikely]] std::abort();
     double s = 0;
     for (std::size_t i = 0; i < v->size(); ++i) {
-        auto const x = opened->at<"$.values[]">(i);
+        auto const x = opened->at_path<"$.values[]">(i);
         if (!x) [[unlikely]] std::abort();
         s += *x;
     }
@@ -590,16 +590,16 @@ static double mb_read()
 {
     auto const opened = S::path(keep, msg);
     if (!opened) [[unlikely]] std::abort();
-    auto const v = opened->at<"$.records">();
+    auto const v = opened->at_path<"$.records">();
     if (!v) [[unlikely]] std::abort();
     double s = 0;
     for (std::size_t i = 0; i < v->size(); ++i) {
-        auto const r = v->at<"@[]">(i);
+        auto const r = v->at_path<"@[]">(i);
         if (!r) [[unlikely]] std::abort();
-        s += num(r->at<"@.id">()) + text(r->at<"@.text">()) + text(r->at<"@.user.name">()) + num(r->at<"@.user.followers">()) + num(r->at<"@.ratio">()) + num(r->at<"@.neg">());
-        auto const tags = r->at<"@.tags">();
+        s += num(r->at_path<"@.id">()) + text(r->at_path<"@.text">()) + text(r->at_path<"@.user.name">()) + num(r->at_path<"@.user.followers">()) + num(r->at_path<"@.ratio">()) + num(r->at_path<"@.neg">());
+        auto const tags = r->at_path<"@.tags">();
         if (!tags) [[unlikely]] std::abort();
-        for (std::size_t k = 0; k < tags->size(); ++k) s += text(tags->at<"@[]">(k));
+        for (std::size_t k = 0; k < tags->size(); ++k) s += text(tags->at_path<"@[]">(k));
     }
     return s;
 }
@@ -627,7 +627,7 @@ static double mb_field()
 {
     auto const opened = S::path(keep, msg);
     if (!opened) [[unlikely]] std::abort();
-    return text(opened->at<"$.records[1000].user.name">());
+    return text(opened->at_path<"$.records[1000].user.name">());
 }
 static double fb_field() { return bytes_sum(fbrecords::GetRecords(fbmsg.data())->records()->Get(1000)->user()->name()->string_view()); }
 static double cp_field()

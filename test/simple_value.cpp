@@ -146,13 +146,13 @@ TEST_CASE("simple value: decode and encode through a binding for every simple va
     }
 }
 
-// inspect writes the four names of Table 4 and simple(n) for every other simple value (RFC 8949 8).
-TEST_CASE("simple value: inspect gives every simple value 0 to 255")
+// diagnostic_notation writes the four names of Table 4 and simple(n) for every other simple value (RFC 8949 8).
+TEST_CASE("simple value: diagnostic_notation gives every simple value 0 to 255")
 {
     for (unsigned i = 0; i < 256; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
-        auto const r = cbor::inspect(wire_of(v));
+        auto const r = cbor::diagnostic_notation(wire_of(v));
         if (reserved(v)) {
             CHECK_EQ(r.error(), error::syntax_error);
             continue;

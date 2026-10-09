@@ -234,9 +234,9 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     auto const typed = [&owner] {
         if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                       std::is_same_v<T, cbor::typed_array>)
-            return cbor::at_path<Path, T, 16>(owner, *owner);
+            return cbor::at_path<Path, T>(owner, *owner);
         else
-            return cbor::at_path<Path, T, 16>(std::string_view(*owner));
+            return cbor::at_path<Path, T>(std::string_view(*owner));
     }();
     auto const root = cbor::lazy::from(std::string(document));
     require(root.has_value());

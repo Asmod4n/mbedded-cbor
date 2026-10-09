@@ -40,10 +40,10 @@ TEST_CASE("validity: nesting_depth_max_set lowers and raises the nesting depth a
         test::nesting_depth_max_guard const raised{200};
         CHECK_EQ(validity::nesting_depth_max_read(), 200u);
         CHECK(cbor::lazy_decode(binding, *cbor::lazy::from(deep)).has_value());
-        CHECK(cbor::inspect(deep).has_value());
+        CHECK(cbor::diagnostic_notation(deep).has_value());
         test::nesting_depth_max_guard const lowered{199};
         CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
-        CHECK_EQ(cbor::inspect(deep).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(cbor::diagnostic_notation(deep).error(), error::nesting_depth_exceeded);
     }
     CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_default);
     CHECK_EQ(validity::nesting_depth_max_set(1025).error(), error::nesting_depth_exceeded);

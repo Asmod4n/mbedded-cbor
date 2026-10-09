@@ -62,7 +62,7 @@ class rfc8949
 
     friend class value_sharing;
 
-    friend class diagnostic_notation;
+    friend class extended_diagnostic_notation;
 
     friend class jsonpath;
 

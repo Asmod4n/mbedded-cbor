@@ -23,7 +23,7 @@ inline void decode_encode_decode(std::string_view const input)
     require(again.has_value() && same_number(*value, *again));
     string_writer twice;
     require(cbor::encode(binding, twice, *again).has_value() && twice.encoded == w.encoded);
-    auto const end = cbor::item_end(input);
+    auto const end = cbor::item_size(input);
     require(end.has_value() && *end <= input.size());
 }
 

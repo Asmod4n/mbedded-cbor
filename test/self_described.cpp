@@ -128,12 +128,12 @@ TEST_CASE("RFC 9277: the label of a Labeled CBOR Sequence is the first element a
 }
 
 // RFC 9277 Appendix D: the header of CBOR-Labeled Non-CBOR Data is 12 bytes, and the Non-CBOR data follows it
-// directly. item_end gives the end of the header, and decode keeps tag 55801.
+// directly. item_size gives the end of the header, and decode keeps tag 55801.
 TEST_CASE("RFC 9277: the header of CBOR-Labeled Non-CBOR Data ends after 12 bytes")
 {
     std::string const header = "\xd9\xd9\xf9\xda\x63\x74\x01\x01\x43\x42\x4f\x52"s;
     std::string const file = header + "text/plain"s;
-    CHECK_EQ(cbor::item_end(file).value(), 12u);
+    CHECK_EQ(cbor::item_size(file).value(), 12u);
     auto const v = decoded(file);
     REQUIRE(v.has_value());
     CHECK(*v == tag(55801, tag(1668546817, {bytes{"BOR"}})));

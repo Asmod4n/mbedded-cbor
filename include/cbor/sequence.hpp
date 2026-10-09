@@ -9,7 +9,7 @@
 #include <string_view>
 
 #include "error.hpp"
-#include "item_end.hpp"
+#include "item_size.hpp"
 #include "validity.hpp"
 
 namespace cbor
@@ -48,7 +48,7 @@ public:
                 return *this;
             }
             encoded = std::string_view(std::span(encoded).subspan(*size));
-            size = item_end(encoded);
+            size = item_size(encoded);
             return *this;
         }
 
@@ -65,7 +65,7 @@ public:
 
     iterator begin() const
     {
-        return iterator{encoded, item_end(encoded)};
+        return iterator{encoded, item_size(encoded)};
     }
 
     std::default_sentinel_t end() const
