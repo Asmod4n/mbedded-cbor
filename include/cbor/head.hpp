@@ -33,9 +33,6 @@ enum class pass;
 
 struct lazy;
 
-template <std::size_t DepthMax>
-struct position_index;
-
 template <std::size_t DepthMax = validity::nesting_depth_default>
     requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<std::string, error> inspect(std::string_view encoded);
@@ -538,9 +535,6 @@ class heads
 
     template <std::size_t>
     friend struct lazy_entries;
-
-    template <std::size_t>
-    friend struct position_index;
 
     template <std::size_t DepthMax>
         requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
