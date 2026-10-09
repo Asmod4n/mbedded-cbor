@@ -703,21 +703,14 @@ class jsonpath
             bool found = false;
             if (hint != nullptr) {
                 std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> bytes;
-                std::array<std::string_view, 2> encoded_key;
-                if (each.kind == selector::kind::key) {
-                    encoded_key = {key.substr(0, key.size() - named.encoded.size()), named.encoded};
-                } else {
-                    std::size_t const size = heads::head_write(
-                        bytes, 0, each.index < 0 ? major_type::negative_integer : major_type::unsigned_integer,
-                        each.index < 0 ? static_cast<std::uint64_t>(-1 - each.index) : static_cast<std::uint64_t>(each.index));
-                    encoded_key = {std::string_view(bytes.data(), size), std::string_view{}};
-                }
+                std::array<std::string_view, 2> const encoded_key =
+                    each.kind == selector::kind::key
+                        ? std::array{key.substr(0, key.size() - named.encoded.size()), named.encoded}
+                        : position_index<DepthMax>::key_encode(bytes, each.index);
                 if (auto const r = value_sharing::key_find<DepthMax>(d, none, h.argument, encoded_key, *hint)) {
-                    if (r->second == 0)
+                    if (std::get<2>(*r) == 0)
                         return std::unexpected(error::key_not_found);
-                    d = r->first;
-                    if (auto const s = well_formedness::item_skip<DepthMax>(d, none, 1); !s) [[unlikely]]
-                        return std::unexpected(s.error());
+                    d = std::get<1>(*r);
                     found = true;
                 }
             }
