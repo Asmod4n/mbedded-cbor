@@ -333,49 +333,47 @@ TEST_CASE("path: a shared reference inside a key is followed")
     CHECK_EQ(compiled_at<"$[[1, \"x\"]]">(forward).error(), error::sharedref_index_not_marked);
 }
 
-// RFC 8949 5.6: a map with duplicate keys is not valid. A key map of the top-level item with a duplicate pair is not taken
-// as equal to a literal with as many pairs: the lookup gives duplicate_key. A literal with a duplicate key does not
-// compile.
-TEST_CASE("path: a key map with duplicate keys is not valid")
+// RFC 8949 5.6: a literal with a duplicate key does not compile. A key map of the top-level item with a
+// repeated key is compared with a literal by RFC 8949 5.6.1 and not checked for a repeated key, so it is no
+// match for a literal with other keys.
+TEST_CASE("path: a key map with duplicate keys is no match for other keys")
 {
     std::string const doc = "\xa1\xa2\x61k\x01\x61k\x01\x05"s;
-    CHECK_EQ(compiled_at<"$[{\"k\": 1, \"j\": 1}]">(doc).error(), error::duplicate_key);
+    CHECK_EQ(compiled_at<"$[{\"k\": 1, \"j\": 1}]">(doc).error(), error::key_not_found);
     CHECK_EQ(compiled_at<"$[{\"k\": 1}]">(doc).error(), error::key_not_found);
     CHECK_FALSE(path_compiles<"$[{\"k\": 1, \"k\": 2}]">);
     CHECK_FALSE(path_compiles<"$[{\"k\": 1, \"k\"_0: 2}]">);
 }
 
-// RFC 8949 5.6: a map with a repeated key is not valid. Every form of at_path gives duplicate_key when it
-// meets two keys equal to the key it looks for (RFC 8949 5.6.1): the run-time path, the compiled path, the
-// typed read over the bytes, the typed read of a view, an integer key in two widths, a key under tags 28 and
-// 29 that sends the typed read through lazy, and a repeated key one level down. A wildcard, a descendant
-// segment and a filter deliver every entry of a map, so they refuse a map with a repeated key. A literal key
-// is compared by RFC 8949 5.6.1 as well.
-TEST_CASE("path: every form gives duplicate_key for a repeated key")
+// RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. Every
+// form of at_path stops at the first key that matches (RFC 8949 5.6.1) and gives its value with no error: the
+// run-time path, the compiled path, the typed read over the bytes, the typed read of a view, an integer key in
+// two widths, a key under tags 28 and 29, and a repeated key one level down. A wildcard, a descendant segment
+// and a filter take every entry of the map.
+TEST_CASE("path: every form gives the first entry of a repeated key")
 {
     std::string const doc = "\xa2\x61\x61\x01\x61\x61\x02"s;
     test_binding binding;
-    CHECK_EQ(cbor::at_path<16>(binding, "$.a", *cbor::decode<16>(doc)).error(), error::duplicate_key);
-    CHECK_EQ(compiled_at<"$.a">(doc).error(), error::duplicate_key);
-    CHECK_EQ((cbor::at_path<"$.a", int>(doc)).error(), error::duplicate_key);
+    CHECK(cbor::at_path<16>(binding, "$.a", *cbor::decode<16>(doc)).has_value());
+    CHECK(compiled_at<"$.a">(doc).has_value());
+    CHECK_EQ((cbor::at_path<"$.a", int>(doc)), 1);
     auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x61x\x61\x61\x61y"s);
-    CHECK_EQ((cbor::at_path<"$.a", std::string_view>(owner, *owner)).error(), error::duplicate_key);
+    auto const text = cbor::at_path<"$.a", std::string_view>(owner, *owner);
+    REQUIRE(text.has_value());
+    CHECK_EQ(**text, "x"sv);
     std::string const numbers = "\xa2\x01\x01\x18\x01\x02"s;
-    CHECK_EQ((cbor::at_path<"$[1]", int>(numbers)).error(), error::duplicate_key);
-    CHECK_EQ(compiled_at<"$[1]">(numbers).error(), error::duplicate_key);
+    CHECK_EQ((cbor::at_path<"$[1]", int>(numbers)), 1);
+    CHECK(compiled_at<"$[1]">(numbers).has_value());
     std::string const shared = "\xa2\xd8\x1c\x61\x61\x01\xd8\x1d\x00\x02"s;
-    CHECK_EQ((cbor::at_path<"$.a", int>(shared)).error(), error::duplicate_key);
+    CHECK_EQ((cbor::at_path<"$.a", int>(shared)), 1);
     std::string const deep = "\xa1\x61\x62\xa2\x61\x61\x01\x61\x61\x02"s;
-    CHECK_EQ((cbor::at_path<"$.b.a", int>(deep)).error(), error::duplicate_key);
-    CHECK_EQ(compiled_at<"$.b.a">(deep).error(), error::duplicate_key);
-    CHECK_EQ(cbor::at_path<16>(binding, "$.*", *cbor::decode<16>(doc)).error(), error::duplicate_key);
-    CHECK_EQ(cbor::at_path<16>(binding, "$..c", *cbor::decode<16>(deep)).error(), error::duplicate_key);
-    CHECK_EQ(cbor::at_path<16>(binding, "$[?@ == 1]", *cbor::decode<16>(doc)).error(), error::duplicate_key);
+    CHECK_EQ((cbor::at_path<"$.b.a", int>(deep)), 1);
+    CHECK(compiled_at<"$.b.a">(deep).has_value());
+    CHECK(cbor::at_path<16>(binding, "$.*", *cbor::decode<16>(doc)).has_value());
+    CHECK(cbor::at_path<16>(binding, "$..c", *cbor::decode<16>(deep)).has_value());
+    CHECK(cbor::at_path<16>(binding, "$[?@ == 1]", *cbor::decode<16>(doc)).has_value());
     std::string const arrays = "\xa2\x81\x01\x00\x81\x18\x01\x01"s;
-    CHECK_EQ(compiled_at<"$[[1]]">(arrays).error(), error::duplicate_key);
-    std::string const distinct = "\xa2\x61\x61\x01\x61\x62\x02"s;
-    CHECK_EQ((cbor::at_path<"$.a", int>(distinct)), 1);
-    CHECK_EQ((cbor::at_path<"$.b", int>(distinct)), 2);
+    CHECK(compiled_at<"$[[1]]">(arrays).has_value());
 }
 
 // RFC 9535 2.5.1.2: a child segment with several selectors gives, for each input node, the nodes of the first
@@ -865,8 +863,7 @@ TEST_CASE("path: a typed read through tag 29")
 TEST_CASE("path: a typed read of the fuzzer findings of lazy")
 {
     check_path<"$[0]", std::uint64_t>("\xd8\x1c\xd8\x1d\x00"s, {std::int64_t{0}}, std::unexpected(error::sharedref_not_complete));
-    check_path<"$.a", std::uint64_t>("\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s, {"a"sv},
-                                     std::unexpected(error::too_little_data));
+    check_path<"$.a", std::uint64_t>("\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s, {"a"sv}, 0u);
     check_path<"$[0][0]", std::uint64_t>("\x92\xd8\x1c\xd8\x1c\xd8\x1d\x00"s, {std::int64_t{0}, std::int64_t{0}},
                                          std::unexpected(error::sharedref_not_complete));
     std::string const forward = "\x82\xd8\x1d\x00\xd8\x1c\x05"s;

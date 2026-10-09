@@ -161,13 +161,14 @@ TEST_CASE("lazy: a reference to its own enclosing mark ends")
     CHECK_FALSE(cbor::lazy_decode<16>(binding, lazy_of(doc)).has_value());
 }
 
-// Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs and holds one. A lookup reads every key
-// of the map, because a second key "a" makes the map not valid (RFC 8949 5.6), so it ends at the end of the
-// bytes with too_little_data and does not go on through the claimed pairs.
+// Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. A lookup stops at the first key that
+// matches, so it does not go on through the claimed pairs after it reached the target.
 TEST_CASE("lazy: a value inside a huge claimed map")
 {
     std::string const doc = "\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s;
-    CHECK_EQ(lazy_of(doc).at<16>("a").error(), error::too_little_data);
+    auto const a = lazy_of(doc).at<16>("a");
+    REQUIRE(a.has_value());
+    CHECK(value_at(*a) == V(0));
 }
 
 // Found by the fuzzer: [28(28(29(0))), ...] leads from the reference through two marks back to the
@@ -732,10 +733,10 @@ TEST_CASE("lazy: DepthMax is at most 1024")
     CHECK(std::ranges::none_of(lazy_compiles<1025>(), std::identity{}));
 }
 
-// RFC 8949 5.6: a map with two equal keys is not valid. RFC 8949 5.6.1 says when two keys are equal. Each
-// pair is written from the text of 5.6.1, and a map with the two keys is refused exactly when the two keys
-// are equal.
-TEST_CASE("lazy: entries refuse a map with two keys that RFC 8949 5.6.1 makes equal")
+// RFC 8949 5.6.1 says when two keys are equal. Each pair is written from the text of 5.6.1. Two keys that
+// stand next to each other in a map are found equal by the neighbour compare of a deterministic profile
+// exactly when 5.6.1 makes them equal.
+TEST_CASE("validity: check_sorted_keys_unique compares two neighbours by RFC 8949 5.6.1")
 {
     struct pair {
         std::string first;
@@ -789,107 +790,89 @@ TEST_CASE("lazy: entries refuse a map with two keys that RFC 8949 5.6.1 makes eq
         {"\xa1\x01\x02"s, "\xa1\x01\x03"s, false},
         {"\xa1\x01\x02"s, "\xa1\x03\x02"s, false},
         {"\x80"s, "\xa0"s, false},
-        // The registration of tags 28 and 29: a tag 28 marks a value and leaves it as it is, and a tag 29
-        // stands
-        // for the value that it names.
-        {"\xd8\x1c\x61x"s, "\x61x"s, true},
-        {"\xd8\x1c\x61x"s, "\xd8\x1d\x00"s, true},
-        {"\xd8\x1c\x61x"s, "\x61y"s, false},
+        // A map with a repeated pair holds fewer pairs than its count says, so it is no map of other pairs.
+        {"\xa2\x61k\x01\x61k\x01"s, "\xa2\x61k\x01\x61j\x01"s, false},
+        {"\xa2\x61k\x01\x61j\x01"s, "\xa2\x61k\x01\x61k\x01"s, false},
+        {"\xa2\x61k\x01\x61k\x02"s, "\xa2\x61k\x02\x61k\x01"s, true},
     };
     for (pair const &p : pairs) {
         std::string const map = "\xa2"s + p.first + "\x00"s + p.second + "\x00"s;
         CAPTURE(map);
-        auto const entries = lazy_of(map).entries<16>();
+        std::string_view const encoded = map;
+        auto const checked = cbor::validity::check_sorted_keys_unique<16>(encoded, 1, 2, 1);
         if (p.equal)
-            CHECK_EQ(entries.error(), error::duplicate_key);
+            CHECK_EQ(checked.error(), error::duplicate_key);
         else
-            CHECK(entries.has_value());
+            CHECK(checked.has_value());
     }
 }
 
-// RFC 8949 5.6: the entries of a map with a repeated key are refused before the first entry, wherever the two
-// keys stand.
-TEST_CASE("lazy: entries refuse a repeated key at any position")
+// A deterministic profile sorts the keys of a map (RFC 8949 4.2.1), so two equal keys stand next to each other.
+// The neighbour compare finds the pair at the start, in the middle and at the end, and accepts sorted distinct
+// keys.
+TEST_CASE("validity: check_sorted_keys_unique finds equal neighbours at any position")
 {
-    CHECK_EQ(lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x62\x03"s).entries<16>().error(),
-             error::duplicate_key);
-    CHECK_EQ(lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x61\x03"s).entries<16>().error(),
-             error::duplicate_key);
-    CHECK(lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x63\x03"s).entries<16>().has_value());
+    auto const checked = [](std::string_view const map, std::uint64_t const count) {
+        return cbor::validity::check_sorted_keys_unique<16>(map, 1, count, 1);
+    };
+    CHECK(checked("\xa3\x01\x00\x02\x00\x03\x00"sv, 3).has_value());
+    CHECK_EQ(checked("\xa3\x01\x00\x01\x00\x03\x00"sv, 3).error(), error::duplicate_key);
+    CHECK_EQ(checked("\xa3\x01\x00\x02\x00\x02\x00"sv, 3).error(), error::duplicate_key);
+    CHECK_EQ(checked("\xa3\x61\x61\x00\x61\x62\x00\x61\x62\x00"sv, 3).error(), error::duplicate_key);
+    CHECK(checked("\xa0"sv, 0).has_value());
+    CHECK(checked("\xa1\x01\x00"sv, 1).has_value());
+    CHECK_EQ(checked("\xa2\x01\x00"sv, 2).error(), error::too_little_data);
 }
 
-// RFC 8949 5.6: a lookup meets every key that is equal to the key it looks for. When it meets two, the map is
-// not valid and the lookup gives duplicate_key, also when the second one stands after the first. A lookup
-// compares the keys with its own key only, so a repeated key that is not looked for does not stop it.
-TEST_CASE("lazy: at gives duplicate_key for a key that occurs twice")
+// RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. Every
+// lookup stops at the first key that matches and gives its value with no error, also when the second key
+// stands after it. The entries, decode and lazy_decode read such a map with no error.
+TEST_CASE("lazy: a repeated key gives the first entry with no error")
 {
-    CHECK_EQ(lazy_of("\xa2\x61\x61\x01\x61\x61\x02"s).at<16>("a").error(), error::duplicate_key);
-    CHECK_EQ(lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x61\x03"s).at<16>("a").error(), error::duplicate_key);
-    CHECK_EQ(lazy_of("\xa2\x01\x01\x18\x01\x02"s).at<16>(1).error(), error::duplicate_key);
-    CHECK_EQ(lazy_of("\xa2\x20\x01\x38\x00\x02"s).at<16>(-1).error(), error::duplicate_key);
-    CHECK_EQ(lazy_of("\xa2\xd8\x1c\x61\x61\x01\xd8\x1d\x00\x02"s).at<16>("a").error(), error::duplicate_key);
-    auto const other = lazy_of("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x03"s).at<16>("b");
-    REQUIRE(other.has_value());
-    CHECK_EQ(*other->get<std::uint64_t>(), 3u);
-}
-
-// RFC 8949 5.6: lazy_decode delivers every entry of every map, so it refuses a map with a repeated key, also
-// inside an array. An integer key and a float key of the same number are distinct (RFC 8949 5.6.1).
-TEST_CASE("lazy_decode: a map with a repeated key gives duplicate_key")
-{
+    std::string const twice = "\xa2\x61\x61\x01\x61\x61\x02"s;
+    CHECK_EQ(*lazy_of(twice).at<16>("a")->get<std::uint64_t>(), 1u);
+    CHECK_EQ(*lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x61\x03"s).at<16>("a")->get<std::uint64_t>(), 1u);
+    CHECK_EQ(*lazy_of("\xa2\x01\x01\x18\x01\x02"s).at<16>(1)->get<std::uint64_t>(), 1u);
+    CHECK_EQ(*lazy_of("\xa2\x20\x01\x38\x00\x02"s).at<16>(-1)->get<std::uint64_t>(), 1u);
+    CHECK_EQ(*lazy_of("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x03"s).at<16>("b")->get<std::uint64_t>(), 3u);
+    CHECK(lazy_of(twice).entries<16>().has_value());
+    cbor::lazy const top = lazy_of(twice);
+    CHECK(top.decode().has_value());
     test_binding binding;
-    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of("\xa2\x61\x61\x01\x61\x61\x02"s)).error(),
-             error::duplicate_key);
-    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of("\x81\xa2\x01\x00\x18\x01\x00"s)).error(),
-             error::duplicate_key);
-    CHECK(cbor::lazy_decode<16>(binding, lazy_of("\xa2\x01\x00\xf9\x3c\x00\x00"s)).has_value());
+    CHECK(cbor::lazy_decode<16>(binding, lazy_of(twice)).has_value());
+    CHECK(cbor::lazy_decode<16>(binding, lazy_of("\x81\xa2\x01\x00\x18\x01\x00"s)).has_value());
 }
 
-// RFC 8949 5.6: the keys of each map are recorded in the walk that reads the map and are compared at its end.
-// A repeated key at depth 3 is refused by every reader that reads the whole map or looks up the repeated key,
-// and a repeated key of the outer map after a nested map is refused as well. decode refuses the map at depth
-// 3 when that map itself is decoded. The same maps with distinct keys are read.
-TEST_CASE("lazy: a repeated key at depth 3 gives duplicate_key")
+// A repeated key at depth 3 and a repeated key of the outer map after a nested map are read with no error.
+// A lookup gives the value of the first key.
+TEST_CASE("lazy: a repeated key at depth 3 is read with no error")
 {
     test_binding binding;
     std::string const inner = "\xa1\x61\x61\xa1\x61\x62\xa3\x61\x63\x01\x61\x64\x02\x61\x64\x03"s;
     std::string const outer = "\xa2\x61\x61\xa1\x61\x62\xa1\x61\x63\x01\x61\x61\x00"s;
-    std::string const distinct = "\xa1\x61\x61\xa1\x61\x62\xa2\x61\x63\x01\x61\x64\x02"s;
-    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of(inner)).error(), error::duplicate_key);
-    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of(outer)).error(), error::duplicate_key);
-    CHECK(cbor::lazy_decode<16>(binding, lazy_of(distinct)).has_value());
-    CHECK_EQ(lazy_of(inner).at<16>("a")->at<16>("b")->at<16>("d").error(), error::duplicate_key);
-    CHECK_EQ(lazy_of(outer).at<16>("a").error(), error::duplicate_key);
-    CHECK(lazy_of(distinct).at<16>("a")->at<16>("b")->at<16>("d").has_value());
-    CHECK_EQ((cbor::at_path<"$.a.b.d", int>(inner)).error(), error::duplicate_key);
-    CHECK_EQ((cbor::at_path<"$.a", int>(outer)).error(), error::duplicate_key);
-    CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(distinct)), 2);
-    CHECK_EQ(cbor::at_path<16>(binding, "$..*", lazy_of(inner)).error(), error::duplicate_key);
-    CHECK_EQ(cbor::at_path<16>(binding, "$.a.b.d", lazy_of(inner)).error(), error::duplicate_key);
-    auto const repeated = lazy_of(inner).at<16>("a")->at<16>("b");
-    REQUIRE(repeated.has_value());
-    CHECK_EQ(repeated->decode().error(), error::duplicate_key);
-    auto const read = lazy_of(distinct).at<16>("a")->at<16>("b");
-    REQUIRE(read.has_value());
-    CHECK(read->decode().has_value());
+    CHECK(cbor::lazy_decode<16>(binding, lazy_of(inner)).has_value());
+    CHECK(cbor::lazy_decode<16>(binding, lazy_of(outer)).has_value());
+    CHECK_EQ(*lazy_of(inner).at<16>("a")->at<16>("b")->at<16>("d")->get<std::uint64_t>(), 2u);
+    CHECK(lazy_of(outer).at<16>("a")->at<16>("b").has_value());
+    CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(inner)), 2);
+    CHECK(cbor::at_path<16>(binding, "$..*", lazy_of(inner)).has_value());
+    CHECK(cbor::at_path<16>(binding, "$.a.b.d", lazy_of(inner)).has_value());
+    CHECK(lazy_of(inner).at<16>("a")->at<16>("b")->decode().has_value());
 }
 
-// Two text keys with the same length, the same first eight bytes and the same last eight bytes differ only in
-// the middle. Such keys are compared byte for byte: the distinct pair is read, and the equal pair gives
-// duplicate_key (RFC 8949 5.6).
-TEST_CASE("lazy_decode: keys that differ only in the middle are compared in full")
+// The same map many times in one array is no repeated key: a key is compared only with the keys of its own
+// map. Every reader takes the array.
+TEST_CASE("lazy: an array of the same map many times is read with no error")
 {
+    std::string doc = "\x98\x40"s;
+    for (int i = 0; i < 64; ++i)
+        doc += "\xa2\x61\x61\x01\x61\x62\x02"s;
     test_binding binding;
-    std::string const distinct = "\xa2\x71"
-                                 "aaaaaaaaXbbbbbbbb"
-                                 "\x01\x71"
-                                 "aaaaaaaaYbbbbbbbb"
-                                 "\x02"s;
-    std::string const repeated = "\xa2\x71"
-                                 "aaaaaaaaXbbbbbbbb"
-                                 "\x01\x71"
-                                 "aaaaaaaaXbbbbbbbb"
-                                 "\x02"s;
-    CHECK(cbor::lazy_decode<16>(binding, lazy_of(distinct)).has_value());
-    CHECK_EQ(cbor::lazy_decode<16>(binding, lazy_of(repeated)).error(), error::duplicate_key);
+    cbor::lazy const top = lazy_of(doc);
+    CHECK(top.decode().has_value());
+    CHECK(cbor::lazy_decode<16>(binding, lazy_of(doc)).has_value());
+    CHECK(cbor::at_path<16>(binding, "$..*", lazy_of(doc)).has_value());
+    CHECK(cbor::at_path<16>(binding, "$[*].a", lazy_of(doc)).has_value());
+    CHECK_EQ(*(cbor::at_path<"$[63].b", int>(doc)), 2);
+    CHECK_EQ(*lazy_of(doc).at<16>(63)->at<16>("a")->get<std::uint64_t>(), 1u);
 }

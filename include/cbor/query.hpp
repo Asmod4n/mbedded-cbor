@@ -682,8 +682,7 @@ class jsonpath
             if (each.kind == selector::kind::key && !named.head_decode()) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             bool found = false;
-            heads::decoder value{};
-            for (std::uint64_t i = 0; i < h.argument; ++i) {
+            for (std::uint64_t i = 0; i < h.argument && !found; ++i) {
                 heads::decoder probe = d;
                 for (;;) {
                     heads::decoder const before = probe;
@@ -702,35 +701,27 @@ class jsonpath
                 auto const k = probe.head_decode();
                 if (!k) [[unlikely]]
                     return std::unexpected(k.error());
-                bool matched = false;
                 if (each.kind == selector::kind::key) {
                     if (k->major == major_type::text_string) {
                         auto const content = probe.byte_string_decode(k->argument);
                         if (!content) [[unlikely]]
                             return std::unexpected(content.error());
-                        matched = *content == named.encoded;
+                        found = *content == named.encoded;
                     }
                 } else {
-                    matched = (k->major == major_type::unsigned_integer && each.index >= 0 &&
-                               k->argument == static_cast<std::uint64_t>(each.index)) ||
-                              (k->major == major_type::negative_integer && each.index < 0 &&
-                               k->argument == static_cast<std::uint64_t>(-1 - each.index));
+                    found = (k->major == major_type::unsigned_integer && each.index >= 0 &&
+                             k->argument == static_cast<std::uint64_t>(each.index)) ||
+                            (k->major == major_type::negative_integer && each.index < 0 &&
+                             k->argument == static_cast<std::uint64_t>(-1 - each.index));
                 }
                 if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (matched) {
-                    if (error const c = validity::check_key_unique(found).error_or(error{}); c != error{})
-                        [[unlikely]]
-                        return std::unexpected(c);
-                    found = true;
-                    value = d;
-                }
-                if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
-                    return std::unexpected(r.error());
+                if (!found)
+                    if (auto const r = well_formedness::item_skip<DepthMax>(d, none, 1); !r) [[unlikely]]
+                        return std::unexpected(r.error());
             }
             if (!found) [[unlikely]]
                 return std::unexpected(error::key_not_found);
-            d = value;
         }
         if constexpr (std::integral<T> && !std::is_same_v<T, bool>) {
             bool negative = h.major == major_type::negative_integer;
@@ -965,8 +956,6 @@ std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::string_view
     auto [source, h, d] = *found;
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    bool seen = false;
-    std::size_t value = 0;
     for (std::uint64_t i = 0; i < h.argument; ++i) {
         std::size_t const start = source->encoded.size() - d.encoded.size();
         if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
@@ -974,18 +963,12 @@ std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::string_view
         auto const match = validity::keys_equivalent<DepthMax>(*source, start, key, 0, 0);
         if (!match) [[unlikely]]
             return std::unexpected(match.error());
-        if (*match) {
-            if (error const c = validity::check_key_unique(seen).error_or(error{}); c != error{}) [[unlikely]]
-                return std::unexpected(c);
-            seen = true;
-            value = source->encoded.size() - d.encoded.size();
-        }
+        if (*match)
+            return lazy{source, source->encoded.size() - d.encoded.size()};
         if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
-    if (!seen) [[unlikely]]
-        return std::unexpected(error::key_not_found);
-    return lazy{source, value};
+    return std::unexpected(error::key_not_found);
 }
 
 template <std::size_t DepthMax>
@@ -1320,34 +1303,14 @@ std::expected<void, error> jsonpath::selector_apply(query_view const &v, selecto
             children.push_back(*element);
         }
     } else if (found->h.major == major_type::map && s.kind != selector::kind::slice) {
-        auto const &source = found->source;
-        heads::decoder d = found->d;
-        std::array<std::size_t, validity::stack_keys> keys;
-        bool const keys_recorded = found->h.argument <= validity::stack_keys;
-        if (!keys_recorded)
-            if (error const c = validity::check_keys_unique<DepthMax>(
-                                    *source, source->encoded.size() - d.encoded.size(), found->h.argument, 1)
-                                    .error_or(error{});
-                c != error{}) [[unlikely]]
-                return std::unexpected(c);
-        for (std::uint64_t i = 0; i < found->h.argument; ++i) {
-            if (keys_recorded)
-                keys[i] = source->encoded.size() - d.encoded.size();
-            if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            children.push_back(lazy{source, source->encoded.size() - d.encoded.size()});
-            if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-                return std::unexpected(r.error());
+        auto const entries = node.entries<DepthMax>();
+        if (!entries) [[unlikely]]
+            return std::unexpected(entries.error());
+        for (auto const entry : *entries) {
+            if (!entry) [[unlikely]]
+                return std::unexpected(entry.error());
+            children.push_back(entry->second);
         }
-        if (keys_recorded)
-            if (error const c =
-                    validity::check_keys_unique<DepthMax>(
-                        *source,
-                        std::span<std::size_t const>(keys).first(static_cast<std::size_t>(found->h.argument)),
-                        1)
-                        .error_or(error{});
-                c != error{}) [[unlikely]]
-                return std::unexpected(c);
     }
     if (s.kind == selector::kind::slice) {
         auto const len = static_cast<std::int64_t>(children.size());
