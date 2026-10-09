@@ -14,6 +14,8 @@ class rfc8746
         typed_array_last = 87
     };
 
+    enum class bit_field : std::uint8_t { ll = 0, e = 2, s = 3, f = 4 };
+
     friend class validity;
 
 #ifdef __cpp_impl_reflection

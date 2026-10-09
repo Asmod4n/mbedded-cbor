@@ -2,6 +2,7 @@
 
 #include "error.hpp"
 #include "rfc8949.hpp"
+#include "rfc4648.hpp"
 #include "rfc8746.hpp"
 #include "rfc9535.hpp"
 #include "validity.hpp"

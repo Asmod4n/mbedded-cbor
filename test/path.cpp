@@ -293,6 +293,30 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
     CHECK(*cbor::at_path(binding, runtime_text, *cbor::lazy::from(doc)) == V(14));
 }
 
+// RFC 4648 Table 1 gives each character of the base64 alphabet a value from 0 to 63, and section 5 replaces + and /
+// with - and _. The 64 characters in order decode to the 6-bit groups 0 to 63, which the expected bytes spell out.
+// Each hexadecimal digit in both cases, each radix prefix of the EDN draft and a surrogate pair in a quoted name
+// reach the same entries, so every named constant of the literal parser is read by one query.
+TEST_CASE("path: every base64 and base16 character and every radix in a compile-time query")
+{
+    std::string const doc = "\xa4"
+                            "\x58\x30"
+                            "\x00\x10\x83\x10\x51\x87\x20\x92\x8b\x30\xd3\x8f\x41\x14\x93\x51\x55\x97\x61\x96\x9b\x71"
+                            "\xd7\x9f\x82\x18\xa3\x92\x59\xa7\xa2\x9a\xab\xb2\xdb\xaf\xc3\x1c\xb3\xd3\x5d\xb7\xe3\x9e"
+                            "\xbb\xf3\xdf\xbf\x01"
+                            "\x50\x01\x23\x45\x67\x89\xab\xcd\xef\x01\x23\x45\x67\x89\xab\xcd\xef\x02"
+                            "\x0e\x03"
+                            "\x64\xf0\x9f\x98\x80\x04"s;
+    CHECK(found(compiled_at<"$[b64'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/']">(doc)) == V(1));
+    CHECK(found(compiled_at<"$[b64'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_']">(doc)) == V(1));
+    CHECK(found(compiled_at<"$[h'0123456789abcdef0123456789ABCDEF']">(doc)) == V(2));
+    CHECK(found(compiled_at<"$[14]">(doc)) == V(3));
+    CHECK(found(compiled_at<"$[0b1110]">(doc)) == V(3));
+    CHECK(found(compiled_at<"$[0o16]">(doc)) == V(3));
+    CHECK(found(compiled_at<"$[0xe]">(doc)) == V(3));
+    CHECK(found(compiled_at<"$['\\ud83d\\ude00']">(doc)) == V(4));
+}
+
 // With value sharing (tags 28 and 29) a few bytes can name many nodes. A nodelist may hold as many nodes as the
 // message has bytes; one more is an error. Each level below shares the level before it twice.
 TEST_CASE("path: a nodelist is no longer than the message")
