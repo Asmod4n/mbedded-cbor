@@ -642,7 +642,8 @@ std::uint64_t bits_of(E const value)
 // view checks the tag and the length of a typed array once and then reads an element with one bounds check. The test
 // reads every element type of RFC 8746 that the schema writes. The expected bits come from RFC 8746 figure 6 and IEEE
 // 754: 1.0 is 3c00 in binary16, 3f800000 in binary32 and 3ff0000000000000 in binary64; -2 is all ones but the lowest
-// bit in two's complement. An index equal to the size is index_out_of_bounds, an error value and no read.
+// bit in two's complement. at(i) with an index equal to the size is index_out_of_bounds, an error value and no read,
+// as std::vector::at gives std::out_of_range; operator[] with that index is a wrong use and throws std::logic_error.
 TEST_CASE("view: every typed array gives its elements back, and an index past the end is an error value")
 {
     std::string const bytes = schema_bytes(sample_numbers);
@@ -650,11 +651,14 @@ TEST_CASE("view: every typed array gives its elements back, and an index past th
         auto const v = view_of<Path>(bytes);
         REQUIRE(v.has_value());
         REQUIRE_EQ(v->size(), 1u);
-        auto const x = (*v)[0];
+        auto const x = v->at(0);
         REQUIRE(x.has_value());
         CHECK_EQ(bits_of(*x), expected);
-        CHECK_EQ((*v)[1].error(), error::index_out_of_bounds);
-        CHECK_EQ((*v)[std::numeric_limits<std::size_t>::max()].error(), error::index_out_of_bounds);
+        CHECK_EQ(bits_of((*v)[0]), expected);
+        CHECK_EQ(v->at(1).error(), error::index_out_of_bounds);
+        CHECK_EQ(v->at(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+        CHECK_THROWS_AS((void)(*v)[1], std::logic_error);
+        CHECK_THROWS_AS((void)(*v)[std::numeric_limits<std::size_t>::max()], std::logic_error);
     };
     check.operator()<"$.u16">(0x0102);
     check.operator()<"$.u32">(0x01020304);
@@ -678,7 +682,8 @@ TEST_CASE("view: an empty typed array has no element")
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
     CHECK_EQ(v->size(), 0u);
-    CHECK_EQ((*v)[0].error(), error::index_out_of_bounds);
+    CHECK_EQ(v->at(0).error(), error::index_out_of_bounds);
+    CHECK_THROWS_AS((void)(*v)[0], std::logic_error);
 }
 
 // view makes no view when the tag is not the one of the element type or the length is not a multiple of the element
@@ -721,7 +726,7 @@ TEST_CASE("view: the view keeps the bytes alive after the accessor is gone")
         kept.emplace(std::move(*v));
     }
     REQUIRE_EQ(kept->size(), 2u);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*(*kept)[1]), 0x4000000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>((*kept)[1]), 0x4000000000000000u);
 }
 
 namespace
@@ -758,16 +763,22 @@ TEST_CASE("view: the iterator and the view model the standard concepts")
 {
     using V = cbor::typed_array_view<double>;
     using I = V::iterator;
-    CHECK(std::random_access_iterator<I>);
-    CHECK(std::sized_sentinel_for<I, I>);
-    CHECK(std::same_as<std::iter_value_t<I>, double>);
-    CHECK(std::same_as<std::iter_reference_t<I>, double>);
-    CHECK(std::ranges::random_access_range<V const>);
-    CHECK(std::ranges::sized_range<V const>);
-    CHECK(std::ranges::common_range<V const>);
-    CHECK_FALSE(std::ranges::borrowed_range<V>);
-    CHECK_FALSE(std::ranges::contiguous_range<V>);
-    CHECK_FALSE(std::output_iterator<I, double>);
+    static_assert(std::random_access_iterator<I>);
+    static_assert(std::sized_sentinel_for<I, I>);
+    static_assert(std::same_as<std::iter_value_t<I>, double>);
+    static_assert(std::same_as<std::iter_reference_t<I>, double>);
+    static_assert(std::ranges::random_access_range<V const>);
+    static_assert(std::ranges::sized_range<V const>);
+    static_assert(std::ranges::common_range<V const>);
+    static_assert(std::random_access_iterator<std::ranges::iterator_t<std::ranges::reverse_view<std::ranges::ref_view<V const>>>>);
+    static_assert(std::same_as<decltype(std::declval<V const &>().rbegin()), std::reverse_iterator<I>>);
+    static_assert(std::same_as<decltype(std::declval<V const &>().cbegin()), I>);
+    static_assert(std::same_as<decltype(std::declval<V const &>()[0]), double>);
+    static_assert(std::same_as<decltype(std::declval<V const &>().at(0)), std::expected<double, cbor::error>>);
+    static_assert(std::same_as<decltype(std::declval<V const &>().front()), double>);
+    static_assert(!std::ranges::borrowed_range<V>);
+    static_assert(!std::ranges::contiguous_range<V>);
+    static_assert(!std::output_iterator<I, double>);
 }
 
 // Each element type of RFC 8746 that the schema writes is read three ways: range-for, the iterator with index and
@@ -826,26 +837,33 @@ TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every e
     check.operator()<"$.f64">(three_numbers.f64);
 }
 
-// front and back read the first and the last element with one load each. first(n) and last(n) give a sub-view of n
-// elements, as std::span does. n equal to the size gives the whole view; n one past it is index_out_of_bounds as an
-// error value, where std::span would have undefined behaviour.
+// front and back read the first and the last element with one load each, and rbegin and rend walk the view
+// backwards, as std::span does. first(n) and last(n) give a sub-view of n elements. n equal to the size gives the
+// whole view; n one past it is index_out_of_bounds as an error value, where std::span would have undefined behaviour.
 TEST_CASE("view: front, back, first and last")
 {
     auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*v->front()), 0x3ff0000000000000u);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*v->back()), 0x4010000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(v->front()), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(v->back()), 0x4010000000000000u);
+    std::vector<std::uint64_t> backwards;
+    for (auto i = v->rbegin(); i != v->rend(); ++i)
+        backwards.push_back(std::bit_cast<std::uint64_t>(*i));
+    CHECK(backwards == std::vector<std::uint64_t>{0x4010000000000000u, 0x4000000000000000u, 0x3ff0000000000000u});
+    CHECK(v->crbegin() == v->rbegin());
+    CHECK(v->cbegin() == v->begin());
+    CHECK(v->cend() == v->end());
     auto const head = v->first(2);
     REQUIRE(head.has_value());
     REQUIRE_EQ(head->size(), 2u);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*head->back()), 0x4000000000000000u);
-    CHECK_EQ((*head)[2].error(), error::index_out_of_bounds);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(head->back()), 0x4000000000000000u);
+    CHECK_EQ(head->at(2).error(), error::index_out_of_bounds);
     auto const tail = v->last(2);
     REQUIRE(tail.has_value());
     REQUIRE_EQ(tail->size(), 2u);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*tail->front()), 0x4000000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(tail->front()), 0x4000000000000000u);
     CHECK_EQ(v->first(3)->size(), 3u);
     CHECK_EQ(v->last(3)->size(), 3u);
     CHECK_EQ(v->first(0)->size(), 0u);
@@ -856,7 +874,8 @@ TEST_CASE("view: front, back, first and last")
     CHECK_EQ(v->last(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
 }
 
-// An empty view has no front and no back, which is an error value, and no element to iterate. first(0) and last(0)
+// An empty view has no front and no back: each is a wrong use and throws std::logic_error, as the precondition of
+// std::span::front is. There is no element to iterate. first(0) and last(0)
 // are empty views, and first(1) is out of bounds.
 TEST_CASE("view: an empty view has no front, no back and no element")
 {
@@ -865,8 +884,9 @@ TEST_CASE("view: an empty view has no front, no back and no element")
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
     CHECK(v->empty());
-    CHECK_EQ(v->front().error(), error::index_out_of_bounds);
-    CHECK_EQ(v->back().error(), error::index_out_of_bounds);
+    CHECK_THROWS_AS((void)v->front(), std::logic_error);
+    CHECK_THROWS_AS((void)v->back(), std::logic_error);
+    CHECK(v->rbegin() == v->rend());
     CHECK(v->begin() == v->end());
     CHECK_EQ(std::ranges::fold_left(*v, 0.0, std::plus<>{}), 0.0);
     CHECK(v->first(0)->empty());
@@ -902,12 +922,12 @@ TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is 
         taken.emplace(std::move(*t));
     }
     REQUIRE_EQ(copied->size(), 2u);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*copied->back()), 0x4010000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(copied->back()), 0x4010000000000000u);
     CHECK_EQ(std::ranges::fold_left(*copied, 0.0, std::plus<>{}), 6.0);
     REQUIRE_EQ(moved->size(), 1u);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*moved->front()), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(moved->front()), 0x3ff0000000000000u);
     REQUIRE_EQ(taken->size(), 1u);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*taken->front()), 0x4020000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(taken->front()), 0x4020000000000000u);
 }
 
 namespace
