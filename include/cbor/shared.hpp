@@ -351,46 +351,50 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
     case major_type::map: {
         if (h->argument != k->argument)
             return false;
-        auto const pairs_found = [&]<class From, class In>(From &from, std::string_view const from_encoded,
-                                                         std::size_t const from_at, In &in,
-                                                         std::string_view const in_encoded,
-                                                         std::size_t const in_at) -> std::expected<bool, error> {
-            heads::decoder d{std::string_view(std::span(from_encoded).subspan(from_at))};
-            for (std::uint64_t i = 0; i < h->argument; ++i) {
-                std::size_t const key = from_encoded.size() - d.encoded.size();
-                if (auto const r = skip(from, d, depth + 1); !r) [[unlikely]]
+        auto const pairs_counted = [&]<class From, class In>(From &from, std::size_t const key,
+                                                             std::size_t const value, In &in,
+                                                             std::string_view const in_encoded,
+                                                             std::size_t const in_at)
+            -> std::expected<std::uint64_t, error> {
+            std::uint64_t count = 0;
+            heads::decoder e{std::string_view(std::span(in_encoded).subspan(in_at))};
+            for (std::uint64_t j = 0; j < h->argument; ++j) {
+                std::size_t const other = in_encoded.size() - e.encoded.size();
+                if (auto const r = skip(in, e, depth + 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                std::size_t const value = from_encoded.size() - d.encoded.size();
-                if (auto const r = skip(from, d, depth + 1); !r) [[unlikely]]
+                std::size_t const other_value = in_encoded.size() - e.encoded.size();
+                if (auto const r = skip(in, e, depth + 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                bool paired = false;
-                heads::decoder e{std::string_view(std::span(in_encoded).subspan(in_at))};
-                for (std::uint64_t j = 0; j < h->argument && !paired; ++j) {
-                    std::size_t const other = in_encoded.size() - e.encoded.size();
-                    if (auto const r = skip(in, e, depth + 1); !r) [[unlikely]]
-                        return std::unexpected(r.error());
-                    std::size_t const other_value = in_encoded.size() - e.encoded.size();
-                    if (auto const r = skip(in, e, depth + 1); !r) [[unlikely]]
-                        return std::unexpected(r.error());
-                    auto const key_same = keys_equivalent<DepthMax>(from, key, in, other, depth + 1);
-                    if (!key_same) [[unlikely]]
-                        return key_same;
-                    if (!*key_same)
-                        continue;
-                    auto const value_same = keys_equivalent<DepthMax>(from, value, in, other_value, depth + 1);
-                    if (!value_same) [[unlikely]]
-                        return value_same;
-                    paired = *value_same;
-                }
-                if (!paired)
-                    return false;
+                auto const key_same = keys_equivalent<DepthMax>(from, key, in, other, depth + 1);
+                if (!key_same) [[unlikely]]
+                    return std::unexpected(key_same.error());
+                if (!*key_same)
+                    continue;
+                auto const value_same = keys_equivalent<DepthMax>(from, value, in, other_value, depth + 1);
+                if (!value_same) [[unlikely]]
+                    return std::unexpected(value_same.error());
+                count += *value_same;
             }
-            return true;
+            return count;
         };
-        auto const forward = pairs_found(first, a, h->at, second, b, k->at);
-        if (!forward || !*forward)
-            return forward;
-        return pairs_found(second, b, k->at, first, a, h->at);
+        heads::decoder d{std::string_view(std::span(a).subspan(h->at))};
+        for (std::uint64_t i = 0; i < h->argument; ++i) {
+            std::size_t const key = a.size() - d.encoded.size();
+            if (auto const r = skip(first, d, depth + 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            std::size_t const value = a.size() - d.encoded.size();
+            if (auto const r = skip(first, d, depth + 1); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            auto const own = pairs_counted(first, key, value, first, a, h->at);
+            if (!own) [[unlikely]]
+                return std::unexpected(own.error());
+            auto const other = pairs_counted(first, key, value, second, b, k->at);
+            if (!other) [[unlikely]]
+                return std::unexpected(other.error());
+            if (*own != *other)
+                return false;
+        }
+        return true;
     }
     case major_type::tag:
         if (h->argument != k->argument)
