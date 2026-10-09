@@ -219,6 +219,10 @@ class heads
 
     struct decoder {
         std::string_view encoded;
+        std::size_t string_length = limits.string_length.load();
+        std::size_t container_elements = limits.container_elements.load();
+        std::size_t argument_max = std::min(string_length, container_elements);
+
         CBOR_ALWAYS_INLINE std::expected<head, error> head_decode()
         {
             if (encoded.empty()) [[unlikely]]
@@ -227,7 +231,8 @@ class heads
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
             if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-                if (error const r = validity::check_argument(major, info).error_or(error{}); r != error{}) [[unlikely]]
+                if (error const r = info <= argument_max ? error{} : validity::check_argument(major, info, string_length, container_elements).error_or(error{});
+                    r != error{}) [[unlikely]]
                     return std::unexpected(r);
                 encoded.remove_prefix(initial_byte_size);
                 return head{major, info, info};
@@ -263,7 +268,8 @@ class heads
                 argument = unsigned_read<std::uint64_t>(rest.first<sizeof(std::uint64_t)>());
                 break;
             }
-            if (error const r = validity::check_argument(major, argument).error_or(error{}); r != error{}) [[unlikely]]
+            if (error const r = argument <= argument_max ? error{} : validity::check_argument(major, argument, string_length, container_elements).error_or(error{});
+                r != error{}) [[unlikely]]
                 return std::unexpected(r);
             encoded.remove_prefix(initial_byte_size + size);
             return head{major, info, argument};
@@ -293,7 +299,7 @@ class heads
                                  std::numeric_limits<std::uint8_t>::digits * size) &
                                 (std::numeric_limits<std::uint64_t>::digits - 1));
                 }
-                if (!validity::check_argument(major, argument)) [[unlikely]]
+                if (argument > argument_max && !validity::check_argument(major, argument, string_length, container_elements)) [[unlikely]]
                     return std::nullopt;
                 encoded.remove_prefix(initial_byte_size + size);
                 return head{major, info, argument};
@@ -526,7 +532,7 @@ class heads
         std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
             if !consteval {
-                if (error const r = validity::check_argument(major, info).error_or(error{}); r != error{}) [[unlikely]]
+                if (error const r = validity::check_argument(major, info, limits.string_length, limits.container_elements).error_or(error{}); r != error{}) [[unlikely]]
                     return std::unexpected(r);
             }
             return raw_head{major, info, info, at + initial_byte_size};
@@ -543,7 +549,7 @@ class heads
         for (char const c : std::span(encoded).subspan(at + initial_byte_size, size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
         if !consteval {
-            if (error const r = validity::check_argument(major, argument).error_or(error{}); r != error{}) [[unlikely]]
+            if (error const r = validity::check_argument(major, argument, limits.string_length, limits.container_elements).error_or(error{}); r != error{}) [[unlikely]]
                 return std::unexpected(r);
         }
         return raw_head{major, info, argument, at + initial_byte_size + size};

@@ -43,14 +43,14 @@ class decoding
         Binding &binding;
         marks<Binding> shared;
         prefix *before;
-        std::size_t decoded_bytes = 0;
+        std::size_t decoded_bytes_left = limits.decoded_bytes;
 
-        std::expected<void, error> decoded_bytes_add(std::size_t const added)
+        CBOR_ALWAYS_INLINE std::expected<void, error> decoded_bytes_count(std::uint64_t const count, std::size_t const size)
         {
-            auto const sum = validity::check_decoded_bytes(decoded_bytes, added);
+            auto const sum = validity::check_decoded_bytes(decoded_bytes_left, count, size);
             if (!sum) [[unlikely]]
                 return std::unexpected(sum.error());
-            decoded_bytes = *sum;
+            decoded_bytes_left = *sum;
             return {};
         }
 
@@ -71,7 +71,7 @@ class decoding
                 auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
-                if (auto const r = decoded_bytes_add(s->size()); !r) [[unlikely]]
+                if (auto const r = decoded_bytes_count(s->size(), sizeof(char)); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 return binding.byte_string_decode(*s);
             }
@@ -79,12 +79,15 @@ class decoding
                 auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
-                if (auto const r = decoded_bytes_add(s->size()); !r) [[unlikely]]
+                if (auto const r = decoded_bytes_count(s->size(), sizeof(char)); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 return binding.text_string_decode(*s);
             }
             case major_type::array: {
-                auto array = binding.array_decode(std::min<std::uint64_t>(h->argument, d.encoded.size()));
+                std::uint64_t const elements = std::min<std::uint64_t>(h->argument, d.encoded.size());
+                if (auto const r = decoded_bytes_count(elements, sizeof(typename Binding::value)); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                auto array = binding.array_decode(elements);
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
                         shared[*mark] = array;
@@ -92,14 +95,16 @@ class decoding
                     auto element = value_decode(depth + 1, std::nullopt, depth_max);
                     if (!element) [[unlikely]]
                         return element;
-                    if (auto const r = decoded_bytes_add(sizeof(typename Binding::value)); !r) [[unlikely]]
-                        return std::unexpected(r.error());
                     array = binding.array_append(std::move(array), std::move(*element));
                 }
                 return array;
             }
             case major_type::map: {
-                auto map = binding.map_decode(std::min<std::uint64_t>(h->argument, d.encoded.size() / (rfc8949::data_items_per_pair * heads::initial_byte_size)));
+                std::uint64_t const entries = std::min<std::uint64_t>(h->argument, d.encoded.size() / (rfc8949::data_items_per_pair * heads::initial_byte_size));
+                if (auto const r = decoded_bytes_count(entries, rfc8949::data_items_per_pair * sizeof(typename Binding::value)); !r)
+                    [[unlikely]]
+                    return std::unexpected(r.error());
+                auto map = binding.map_decode(entries);
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
                         shared[*mark] = map;
@@ -112,15 +117,12 @@ class decoding
                             if (!t) [[unlikely]]
                                 return std::unexpected(t.error());
                             d = probe;
-                            if (auto const r = decoded_bytes_add(t->size()); !r) [[unlikely]]
+                            if (auto const r = decoded_bytes_count(t->size(), sizeof(char)); !r) [[unlikely]]
                                 return std::unexpected(r.error());
                             auto key = binding.map_key_decode(*t);
                             auto value = value_decode(depth + 1, std::nullopt, depth_max);
                             if (!value) [[unlikely]]
                                 return value;
-                            if (auto const r = decoded_bytes_add(rfc8949::data_items_per_pair * sizeof(typename Binding::value)); !r)
-                                [[unlikely]]
-                                return std::unexpected(r.error());
                             map = binding.map_insert(std::move(map), std::move(key), std::move(*value));
                             continue;
                         }
@@ -131,9 +133,6 @@ class decoding
                     auto value = value_decode(depth + 1, std::nullopt, depth_max);
                     if (!value) [[unlikely]]
                         return value;
-                    if (auto const r = decoded_bytes_add(rfc8949::data_items_per_pair * sizeof(typename Binding::value)); !r)
-                        [[unlikely]]
-                        return std::unexpected(r.error());
                     map = binding.map_insert(std::move(map), std::move(*key), std::move(*value));
                 }
                 return map;
@@ -183,7 +182,7 @@ class decoding
                     if (!bytes) [[unlikely]]
                         return std::unexpected(bytes.error());
                     std::string_view const magnitude = heads::magnitude_without_leading_zeros(*bytes);
-                    if (auto const counted = decoded_bytes_add(magnitude.size()); !counted) [[unlikely]]
+                    if (auto const counted = decoded_bytes_count(magnitude.size(), sizeof(char)); !counted) [[unlikely]]
                         return std::unexpected(counted.error());
                     if (magnitude.size() <= sizeof(std::uint64_t)) {
                         if (negative)

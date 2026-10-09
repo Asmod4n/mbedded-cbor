@@ -921,7 +921,7 @@ class packed
                 return std::unexpected(error::too_little_data);
             if (!validity::typed_array_check(typed_array_tag<E>(), size)) [[unlikely]]
                 return std::unexpected(error::inadmissible_type_for_tag_content);
-            if (error const r = validity::check_argument(major_type::byte_string, size).error_or(error{}); r != error{})
+            if (error const r = validity::check_argument(major_type::byte_string, size, limits.string_length, limits.container_elements).error_or(error{}); r != error{})
                 [[unlikely]]
                 return std::unexpected(r);
             return reference{item + typed_array_head, size / sizeof(E)};
@@ -938,7 +938,7 @@ class packed
             auto const size = validity::checked_mul(length, element);
             if (!size || *size > end - item - item_head) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            if (error const r = validity::check_argument(Major, length).error_or(error{}); r != error{}) [[unlikely]]
+            if (error const r = validity::check_argument(Major, length, limits.string_length, limits.container_elements).error_or(error{}); r != error{}) [[unlikely]]
                 return std::unexpected(r);
             return reference{item + item_head, length};
         }
@@ -1252,14 +1252,14 @@ class packed
         std::size_t index;
         std::size_t at;
         std::size_t end;
-        std::size_t decoded_bytes = 0;
+        std::size_t decoded_bytes_left = limits.decoded_bytes;
 
-        std::expected<void, error> decoded_bytes_add(std::size_t const added)
+        CBOR_ALWAYS_INLINE std::expected<void, error> decoded_bytes_count(std::uint64_t const count, std::size_t const size)
         {
-            auto const sum = validity::check_decoded_bytes(decoded_bytes, added);
+            auto const sum = validity::check_decoded_bytes(decoded_bytes_left, count, size);
             if (!sum) [[unlikely]]
                 return std::unexpected(sum.error());
-            decoded_bytes = *sum;
+            decoded_bytes_left = *sum;
             return {};
         }
 
@@ -1352,7 +1352,7 @@ class packed
                     return std::unexpected(r.error());
                 std::string_view const part{std::span(encoded).subspan(r->data, r->length)};
                 if constexpr (!std::ranges::view<U>)
-                    if (auto const c = decoded_bytes_add(r->length * sizeof(std::ranges::range_value_t<U>)); !c) [[unlikely]]
+                    if (auto const c = decoded_bytes_count(r->length, sizeof(std::ranges::range_value_t<U>)); !c) [[unlikely]]
                         return c;
                 if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>) {
                     auto const raw = std::as_bytes(std::span(part));
@@ -1370,7 +1370,7 @@ class packed
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
-                if (auto const c = decoded_bytes_add(r->length * sizeof(typename U::value_type)); !c) [[unlikely]]
+                if (auto const c = decoded_bytes_count(r->length, sizeof(typename U::value_type)); !c) [[unlikely]]
                     return c;
                 out.clear();
                 for (std::size_t i = 0; i < r->length; ++i) {
@@ -1394,7 +1394,7 @@ class packed
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
                 if constexpr (!std::ranges::view<U>)
-                    if (auto const c = decoded_bytes_add(r->length * sizeof(E)); !c) [[unlikely]]
+                    if (auto const c = decoded_bytes_count(r->length, sizeof(E)); !c) [[unlikely]]
                         return c;
                 auto const from = std::span<char const>(encoded).subspan(r->data, r->length * sizeof(E));
                 if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U> &&
@@ -1415,7 +1415,7 @@ class packed
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
-                if (auto const c = decoded_bytes_add(r->length * sizeof(E)); !c) [[unlikely]]
+                if (auto const c = decoded_bytes_count(r->length, sizeof(E)); !c) [[unlikely]]
                     return c;
                 out.clear();
                 out.reserve(r->length);
