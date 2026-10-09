@@ -3,7 +3,8 @@
 This document describes the state at commit `da9a611` on branch
 `views-only-item` of `/home/user/mbedded-cbor`, with the change that
 removed DepthMax from every name. Line numbers are those of `da9a611`. A later change to a
-function must keep the O form that this document gives for it.
+function must keep the O form that this document gives for it. The rows that branch
+`standard-library-api` added or renamed carry no line number.
 
 A row marked "not checked" was not compared with the code.
 
