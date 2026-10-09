@@ -58,7 +58,7 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         CAPTURE(name);
         CAPTURE(selector);
         if (c.size() == 2 || function_without_support(selector)) {
-            auto const document = c.size() == 2 ? cbor::lazy::from(std::string_view("\xf6")) : root->at(static_cast<std::int64_t>(i))->at(std::int64_t{2});
+            auto const document = c.size() == 2 ? cbor::lazy::from(std::string_view("\xf6")) : root->at(i)->at(2);
             REQUIRE(document.has_value());
             auto const r = cbor::at_path(binding, selector, *document);
             bool const invalid = !r && r.error() == error::invalid_path;
@@ -67,7 +67,7 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
             passed += invalid ? 1uz : 0uz;
             continue;
         }
-        auto const document = root->at(static_cast<std::int64_t>(i))->at(std::int64_t{2});
+        auto const document = root->at(i)->at(2);
         REQUIRE(document.has_value());
         auto const r = cbor::at_path(binding, selector, *document);
         CAPTURE((r.has_value() ? error{} : r.error()));

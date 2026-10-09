@@ -781,7 +781,7 @@ TEST_CASE("tag 29: a chain of marks before the start of a lazy keeps the stack b
         for (std::size_t i = 1; i < n; ++i)
             doc += "\xd8\x1c\x81\xd8\x1d"s + unsigned_head(0, i - 1);
         doc += "\xd8\x1d"s + unsigned_head(0, n - 1);
-        auto const last = cbor::lazy::from(doc)->at(static_cast<std::int64_t>(n));
+        auto const last = cbor::lazy::from(doc)->at(n);
         REQUIRE(last.has_value());
         nesting_binding binding;
         auto v = cbor::lazy_decode(binding, *last);

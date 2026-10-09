@@ -50,9 +50,16 @@ cbor::lazy at(cbor::lazy const &l, std::string_view const key)
     return *r;
 }
 
-cbor::lazy at(cbor::lazy const &l, std::int64_t const index)
+cbor::lazy at(cbor::lazy const &l, std::size_t const index)
 {
     auto const r = l.at(index);
+    REQUIRE(r.has_value());
+    return *r;
+}
+
+cbor::lazy at(cbor::lazy const &l, cbor::key const key)
+{
+    auto const r = l.at(key);
     REQUIRE(r.has_value());
     return *r;
 }
@@ -65,12 +72,12 @@ TEST_CASE("lazy: key access by string and by integer")
     std::string const a = encoded(M("a"s, 1, "b"s, 2));
     CHECK(value_at(at(lazy_of(a), "a")) == V(1));
     std::string const b = encoded(M(1, "one"s, 2, "two"s));
-    CHECK(value_at(at(lazy_of(b), 1)) == V("one"s));
-    CHECK(value_at(at(lazy_of(b), 2)) == V("two"s));
+    CHECK(value_at(at(lazy_of(b), cbor::key{1})) == V("one"s));
+    CHECK(value_at(at(lazy_of(b), cbor::key{2})) == V("two"s));
     std::string const c = encoded(M(1, "int"s, "str"s, "s"s, 100, "c"s));
-    CHECK(value_at(at(lazy_of(c), 1)) == V("int"s));
+    CHECK(value_at(at(lazy_of(c), cbor::key{1})) == V("int"s));
     CHECK(value_at(at(lazy_of(c), "str")) == V("s"s));
-    CHECK(value_at(at(lazy_of(c), 100)) == V("c"s));
+    CHECK(value_at(at(lazy_of(c), cbor::key{100})) == V("c"s));
 }
 
 // Ported from test.rb: 'lazy: access errors — empty, missing, out-of-bounds'. Each Ruby error class
@@ -89,6 +96,24 @@ TEST_CASE("lazy: access errors")
     CHECK_EQ(lazy_of(three).at(99).error(), error::index_out_of_bounds);
     CHECK_EQ(lazy_of(three).at("invalid").error(), error::not_indexable);
     CHECK_EQ(lazy_of(scalar).at("key").error(), error::not_indexable);
+    CHECK_EQ(lazy_of(one).at(0).error(), error::not_indexable);
+    CHECK_EQ(lazy_of(three).at(cbor::key{0}).error(), error::not_indexable);
+    CHECK_EQ(lazy_of(scalar).at(0).error(), error::not_indexable);
+    CHECK_EQ(lazy_of(empty_map).at(cbor::key{0}).error(), error::key_not_found);
+}
+
+// at(std::size_t) reads an array and at(cbor::key) reads a map, as std::vector::at and std::map::at do. A
+// literal index chooses the array form, so at(1) never reads the map key 1.
+TEST_CASE("lazy: at(std::size_t) reads an array, at(cbor::key) reads a map")
+{
+    std::string const both = encoded(A(M(1, "one"s), 7));
+    cbor::lazy const root = lazy_of(both);
+    CHECK(value_at(at(root, 1)) == V(7));
+    CHECK(value_at(at(at(root, 0), cbor::key{1})) == V("one"s));
+    CHECK_EQ(at(root, 0).at(1).error(), error::not_indexable);
+    CHECK_EQ(root.at(cbor::key{1}).error(), error::not_indexable);
+    CHECK(value_at(at(lazy_of("\xa1\x20\x65minus"s), cbor::key{-1})) == V("minus"s));
+    CHECK_EQ(root.at(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
 }
 
 // Ported from test.rb: 'lazy: deep nesting + wide maps'.
@@ -106,16 +131,21 @@ TEST_CASE("lazy: deep nesting and a wide map")
 }
 
 // Ported from test.rb: 'lazy: dig — missing keys return nil, negative array indices work'. dig maps
-// to a chain of at; a miss is an error value, and the binding makes nil of it.
+// to a chain of at; a miss is an error value, and the binding makes nil of it. at takes a std::size_t, as
+// std::vector::at does, so a binding counts a negative index from size(). A path keeps the negative index of
+// RFC 9535.
 TEST_CASE("lazy: negative indices and misses")
 {
     std::string const h = encoded(M("a"s, 1, "b"s, M("c"s, 42)));
     CHECK_EQ(lazy_of(h).at("missing").error(), error::key_not_found);
     CHECK(value_at(at(at(lazy_of(h), "b"), "c")) == V(42));
     std::string const a = encoded(A(10, 20, 30, 40, 50));
-    CHECK(value_at(at(lazy_of(a), -1)) == V(50));
-    CHECK(value_at(at(lazy_of(a), -5)) == V(10));
-    CHECK_EQ(lazy_of(a).at(-99).error(), error::index_out_of_bounds);
+    cbor::lazy const l = lazy_of(a);
+    CHECK(value_at(at(l, static_cast<std::size_t>(*l.size() - 1))) == V(50));
+    CHECK(value_at(at(l, static_cast<std::size_t>(*l.size() - 5))) == V(10));
+    CHECK_EQ(cbor::at_path<"$[-1]", std::uint64_t>(a).value(), 50u);
+    CHECK_EQ(cbor::at_path<"$[-5]", std::uint64_t>(a).value(), 10u);
+    CHECK_EQ(cbor::at_path<"$[-99]", std::uint64_t>(a).error(), error::index_out_of_bounds);
 }
 
 // Ported from test.rb: 'lazy: can still navigate child lazies after calling .value on parent'.
@@ -135,7 +165,7 @@ TEST_CASE("lazy: random access")
     std::string const doc = encoded(M("statuses"s, value{statuses}));
     std::mt19937 rng(1);
     for (int n = 0; n < 200; ++n) {
-        int const i = static_cast<int>(rng() % 50);
+        std::size_t const i = rng() % 50;
         CHECK(value_at(at(at(at(lazy_of(doc), "statuses"), i), "txt")) == V("msg" + std::to_string(i + 1)));
     }
 }
@@ -907,7 +937,7 @@ TEST_CASE("lazy: a key under tag 28 or tag 29 is the key it marks or names")
     auto const marked = lazy_of("\xa1\xd8\x1c\x61\x61\x01"s).at("a");
     REQUIRE(marked.has_value());
     CHECK_EQ(*marked->get<std::uint64_t>(), 1u);
-    auto const number = lazy_of("\xa1\xd8\x1c\x07\x03"s).at(7);
+    auto const number = lazy_of("\xa1\xd8\x1c\x07\x03"s).at(cbor::key{7});
     REQUIRE(number.has_value());
     CHECK_EQ(*number->get<std::uint64_t>(), 3u);
     auto const root = lazy_of("\x82\xd8\x1c\x61\x61\xa1\xd8\x1d\x00\x02"s);
@@ -986,7 +1016,8 @@ TEST_CASE("lazy: every member refuses a lazy that holds no top-level item")
 {
     cbor::lazy const none{};
     CHECK_THROWS_AS((void)none.at("a"sv), std::logic_error);
-    CHECK_THROWS_AS((void)none.at(std::int64_t{0}), std::logic_error);
+    CHECK_THROWS_AS((void)none.at(0), std::logic_error);
+    CHECK_THROWS_AS((void)none.at(cbor::key{0}), std::logic_error);
     CHECK_THROWS_AS((void)none.get<std::uint64_t>(), std::logic_error);
     CHECK_THROWS_AS((void)none.get<cbor::typed_array>(), std::logic_error);
     CHECK_THROWS_AS((void)none.elements(), std::logic_error);
@@ -1153,8 +1184,8 @@ TEST_CASE("lazy: a repeated key gives the first entry with no error")
     std::string const twice = "\xa2\x61\x61\x01\x61\x61\x02"s;
     CHECK_EQ(*lazy_of(twice).at("a")->get<std::uint64_t>(), 1u);
     CHECK_EQ(*lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x61\x03"s).at("a")->get<std::uint64_t>(), 1u);
-    CHECK_EQ(*lazy_of("\xa2\x01\x01\x18\x01\x02"s).at(1)->get<std::uint64_t>(), 1u);
-    CHECK_EQ(*lazy_of("\xa2\x20\x01\x38\x00\x02"s).at(-1)->get<std::uint64_t>(), 1u);
+    CHECK_EQ(*lazy_of("\xa2\x01\x01\x18\x01\x02"s).at(cbor::key{1})->get<std::uint64_t>(), 1u);
+    CHECK_EQ(*lazy_of("\xa2\x20\x01\x38\x00\x02"s).at(cbor::key{-1})->get<std::uint64_t>(), 1u);
     CHECK_EQ(*lazy_of("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x03"s).at("b")->get<std::uint64_t>(), 3u);
     CHECK(lazy_of(twice).entries().has_value());
     cbor::lazy const top = lazy_of(twice);

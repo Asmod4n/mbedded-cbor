@@ -522,7 +522,7 @@ std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vect
         return std::unexpected(root.error());
     cbor::lazy node = *root;
     for (step const &s : steps) {
-        auto const child = std::holds_alternative<std::int64_t>(s) ? node.at(std::get<std::int64_t>(s))
+        auto const child = std::holds_alternative<std::int64_t>(s) ? test::index_select(node, std::get<std::int64_t>(s))
                                                                    : node.at(std::get<std::string_view>(s));
         if (!child)
             return std::unexpected(child.error());
