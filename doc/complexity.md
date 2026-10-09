@@ -81,7 +81,9 @@ A row marked "not checked" was not compared with the code.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `message(error)` :36 | O(1) | O(1) | Returns a view of a string literal. |
+| `category()` | O(1) | O(1) | Returns the one `std::error_category` of `cbor::error`. |
+| `make_error_code(error)` | O(1) | O(1) | Makes a `std::error_code`; `std::is_error_code_enum<cbor::error>` is true. |
+| `error_category::message(int)` | O(1) | O(n) | Returns the text of the error as a `std::string`. |
 
 ## validity.hpp
 

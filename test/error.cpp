@@ -1,6 +1,8 @@
 #include "binding.hpp"
 
 #include <initializer_list>
+#include <string_view>
+#include <system_error>
 
 using cbor::error;
 
@@ -18,11 +20,14 @@ TEST_CASE("error: no error is the value-initialized enum")
         CHECK_NE(e, error{});
 }
 
-// The text of an error is a static string, read without an allocation.
+// An error converts to std::error_code, so code that handles std::error_code handles a CBOR error too.
 TEST_CASE("error: every error has its own message")
 {
-    CHECK_EQ(cbor::message(error::too_little_data), "too little data");
-    CHECK_EQ(cbor::message(error::index_out_of_bounds), "index outside of array bounds");
+    CHECK_EQ(cbor::make_error_code(error::too_little_data).message(), "too little data");
+    CHECK_EQ(std::error_code(error::index_out_of_bounds).message(), "index outside of array bounds");
+    CHECK_EQ(std::string_view(cbor::category().name()), "cbor");
+    CHECK(std::error_code(error::key_not_found) == error::key_not_found);
+    CHECK(std::error_code(error::key_not_found) != std::errc::no_buffer_space);
     for (error const e :
          {error::too_little_data, error::syntax_error, error::indefinite_length,
           error::nesting_depth_exceeded, error::inadmissible_type_for_tag_content,
@@ -31,5 +36,5 @@ TEST_CASE("error: every error has its own message")
           error::not_indexable, error::index_out_of_bounds, error::key_not_found, error::invalid_path,
           error::incorrect_type, error::number_out_of_range, error::cyclic_data_structure,
           error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key})
-        CHECK_NE(cbor::message(e), "unknown cbor error");
+        CHECK_NE(cbor::make_error_code(e).message(), "unknown cbor error");
 }

@@ -430,7 +430,7 @@ void round_trip(source &in)
     if (placed)
         require(std::string_view(room.data(), *placed) == w.encoded);
     else
-        require(placed.error() == std::errc::no_buffer_space);
+        require(placed.error() == cbor::error::no_buffer_space);
     auto const back = cbor::schema<T>::decode(w.encoded);
     require(back.has_value());
     auto const again = cbor::schema<T>::encode(**back);

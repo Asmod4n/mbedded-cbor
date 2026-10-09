@@ -20,7 +20,7 @@ template <>
 struct doctest::StringMaker<cbor::error> {
     static doctest::String convert(cbor::error const e)
     {
-        return std::string(cbor::message(e)).c_str();
+        return cbor::make_error_code(e).message().c_str();
     }
 };
 

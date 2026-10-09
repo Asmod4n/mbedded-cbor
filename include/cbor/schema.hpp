@@ -2016,17 +2016,17 @@ public:
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
-    CBOR_ALWAYS_INLINE static std::expected<std::string, std::errc> encode(T const &value)
+    CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         packed::second_item<T> second;
         second.add(value);
         auto const size = packed::encoded_size<T>(second);
         if (!size) [[unlikely]]
-            return std::unexpected(size.error());
+            return std::unexpected(validity::writer_error(size.error()));
         auto const sum = validity::checked_add(*size, heads::head_padding);
         if (!sum) [[unlikely]]
-            return std::unexpected(sum.error());
+            return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::string out;
         out.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
@@ -2037,24 +2037,24 @@ public:
 
     template <class Target>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, std::errc> encode(T const &value, Target &&target)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
         using U = std::remove_cvref_t<Target>;
         packed::second_item<T> second;
         second.add(value);
         auto const size = packed::encoded_size<T>(second);
         if (!size) [[unlikely]]
-            return std::unexpected(size.error());
+            return std::unexpected(validity::writer_error(size.error()));
         auto const sum = validity::checked_add(*size, heads::head_padding);
         if (!sum) [[unlikely]]
-            return std::unexpected(sum.error());
+            return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         CBOR_ASSUME(padded >= fixed_size());
         if constexpr (std::same_as<U, std::string>) {
             std::size_t const at = target.size();
             auto const total = validity::checked_add(at, padded);
             if (!total) [[unlikely]]
-                return std::unexpected(total.error());
+                return std::unexpected(validity::writer_error(total.error()));
             target.resize_and_overwrite(*total, [&](char *const p, std::size_t const n) {
                 return at + packed::encoded_write<false>(std::span<char>(p, n).subspan(at), value, second);
             });
@@ -2063,7 +2063,7 @@ public:
             std::size_t const at = std::ranges::size(target);
             auto const total = validity::checked_add(at, padded);
             if (!total) [[unlikely]]
-                return std::unexpected(total.error());
+                return std::unexpected(validity::writer_error(total.error()));
             target.reserve(*total);
             target.insert(target.end(), padded, char{});
             packed::encoded_write<false>(std::span<char>(target).subspan(at), value, second);
@@ -2080,18 +2080,18 @@ public:
         if constexpr (requires { std::span<char>(message); }) {
             std::span<char> const out(message);
             if (out.size() < *size) [[unlikely]]
-                return std::unexpected(std::errc::no_buffer_space);
+                return std::unexpected(error::no_buffer_space);
             packed::encoded_write<true>(out.first(*size), value, second);
             if (auto const r = message.done(*size); !r) [[unlikely]]
-                return std::unexpected(r.error());
+                return std::unexpected(validity::writer_error(r.error()));
             return *size;
         } else {
             std::string encoded(padded, '\0');
             encoded.resize(packed::encoded_write<false>(std::span<char>(encoded), value, second));
             if (auto const r = message.append(encoded); !r) [[unlikely]]
-                return std::unexpected(r.error());
+                return std::unexpected(validity::writer_error(r.error()));
             if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
-                return std::unexpected(r.error());
+                return std::unexpected(validity::writer_error(r.error()));
             return encoded.size();
         }
     }
