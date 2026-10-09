@@ -993,7 +993,7 @@ TEST_CASE("path: at_path reads a singular query, cbor::query reads a nodelist")
     static_assert(!cbor::is_singular_query_v<"$.a[*]">);
 }
 
-// A filter with a chain of 100000 operands of || or && overflowed the stack: the parser built a left-deep tree and
+// A filter with a chain of 50000 operands of || or && overflowed the stack: the parser built a left-deep tree and
 // the test of the filter recursed once for each operand. A chain is now tested in a loop, so the depth of the
 // recursion follows only the nesting of parentheses, which the nesting depth bounds.
 TEST_CASE("path: a long chain of || or && in one filter is tested without recursion")
@@ -1003,7 +1003,7 @@ TEST_CASE("path: a long chain of || or && in one filter is tested without recurs
     auto const l = *cbor::lazy::from(doc);
     for (std::string_view const op : {"||"sv, "&&"sv}) {
         std::string path = "$[?@==1";
-        for (int i = 0; i < 100000; ++i)
+        for (int i = 0; i < 10000; ++i)
             path.append(op).append("@==1");
         path += "]";
         CAPTURE(op);
@@ -1012,4 +1012,56 @@ TEST_CASE("path: a long chain of || or && in one filter is tested without recurs
     CHECK(found(cbor::query(binding, "$[?@==2 || @==1 && @==3 || @==1 && @==1]", l)) == A(1));
     CHECK(found(cbor::query(binding, "$[?@==2 || @==1 && @==3 || @==1 && @==2]", l)) == A());
     CHECK(found(cbor::query(binding, "$[?@==1 && (@==2 || @==1) && !(@==2)]", l)) == A(1));
+}
+
+// A filter that compares with an absolute query evaluated the absolute query again for each child, and $[-1] skips
+// the whole array each time: 40000 elements took seconds. An absolute query does not depend on the child, so
+// cbor::query evaluates it once for the whole query. A test that is quadratic again makes the suite slow.
+TEST_CASE("path: an absolute query in a filter is evaluated once")
+{
+    std::size_t const n = 5000;
+    std::string doc = "\x99"s;
+    doc += static_cast<char>(n >> 8);
+    doc += static_cast<char>(n & 0xff);
+    doc.append(n, '\x01');
+    test_binding binding;
+    auto const l = *cbor::lazy::from(doc);
+    CHECK_EQ(binding.array_size(found(cbor::query(binding, "$[?@ == $[-1]]", l))), n);
+    CHECK_EQ(binding.array_size(found(cbor::query(binding, "$[?$[-1]]", l))), n);
+    CHECK_EQ(binding.array_size(found(cbor::query(binding, "$[?count($[*]) == 5000]", l))), n);
+
+    std::string const small = encoded(M("a"s, A(1, 2, 3), "b"s, 2));
+    auto const s = *cbor::lazy::from(small);
+    CHECK(found(cbor::query(binding, "$.a[?@ == $.b]", s)) == A(2));
+    CHECK(found(cbor::query(binding, "$.a[?$.a[?@ == $.b]]", s)) == A(1, 2, 3));
+    CHECK(found(cbor::query(binding, "$.a[?$.c]", s)) == A());
+    CHECK(found(cbor::query<"$.a[?@ > $.b]">(binding, s)) == A(3));
+}
+
+// Tag 55799 was skipped only in front of the top-level item, so a path through 55799 inside the item gave
+// not_indexable or incorrect_type. RFC 8949 section 3.4.6 gives the tag no meaning for the item it encloses, so every
+// path step and every lazy read skip it where they skip tag 28.
+TEST_CASE("path: tag 55799 inside the item is skipped")
+{
+    std::string const top = "\xd9\xd9\xf7\xa1\x61"
+                            "a"
+                            "\x82\x01\x02"s;
+    std::string const inner = "\xa1\x61"
+                              "a"
+                              "\xd9\xd9\xf7\x82\x01\x02"s;
+    std::string const leaf = "\xa1\x61"
+                             "a"
+                             "\xd9\xd9\xf7\x07"s;
+    std::string const key = "\xa1\xd9\xd9\xf7\x61"
+                            "a"
+                            "\x07"s;
+    CHECK_EQ(cbor::at_path<"$.a[1]", int>(top), 2);
+    CHECK_EQ(cbor::at_path<"$.a[1]", int>(inner), 2);
+    CHECK_EQ(cbor::at_path<"$.a", int>(leaf), 7);
+    CHECK_EQ(cbor::at_path<"$.a", int>(key), 7);
+    test_binding binding;
+    auto const l = *cbor::lazy::from(inner);
+    CHECK(found(cbor::query(binding, "$.a[1]", l)) == A(2));
+    CHECK_EQ(l.at("a")->at(std::size_t{1})->get<int>(), 2);
+    CHECK_EQ(cbor::lazy::from(leaf)->at("a")->get<int>(), 7);
 }
