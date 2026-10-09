@@ -237,7 +237,9 @@ T const *get_if(value const &v)
 }
 
 // The binding of a test: a dynamic language in C++. Every member function builds one kind of value.
-struct test_binding : cbor::binding<test::value> {
+struct test_binding {
+    using value = test::value;
+
     value unsigned_integer_decode(std::uint64_t const a)
     {
         return {a};

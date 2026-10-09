@@ -290,6 +290,7 @@ inline void path_target(std::string_view const input)
     if (auto const any = cbor::lazy::from(std::string(1, '\0'))) {
         test_binding any_binding;
         (void)cbor::at_path(any_binding, input, *any);
+        (void)cbor::query(any_binding, input, *any);
     }
 
     if (input.empty())
@@ -307,7 +308,9 @@ inline void path_target(std::string_view const input)
     query const q = query_from(pin, keys);
     auto const root = cbor::lazy::from(std::string{document});
     require(root.has_value());
-    auto const found = cbor::at_path(binding, q.text, *root);
+    auto found = cbor::at_path(binding, q.text, *root);
+    if (!found && found.error() == cbor::error::invalid_path)
+        found = cbor::query(binding, q.text, *root);
     if (!q.valid)
         return;
     std::optional<test::value> expected;

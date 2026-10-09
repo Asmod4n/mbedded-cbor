@@ -257,11 +257,15 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `jsonpath::selector_apply` :1318 | O(bytes of the node); filter adds one expression_test per child | O(m) or O(k) | Changes nodelist. nodelist bounded by root bytes. |
 | `jsonpath::segment_apply` :1398 | child: sum of selector_apply; descendant: O(c·n·d) | O(i) children vectors; O(d) frames | |
 | `jsonpath::segments_apply` :1419 | worst O(p·N·c·n·d); common O(p·n) | O(N), N <= n | |
-| `query_walk<Binding>(Binding&, ...)` :1435 | singular O(n·p) + lazy_decode; else segments_apply + decodes | O(1) or O(N) | |
+| `singular_query_walk<Binding>(Binding&, ...)` | O(n·p) + lazy_decode | O(1) | |
+| `query_walk<Binding>(Binding&, ...)` | segments_apply + one lazy_decode per node | O(N) | Gives the nodelist as an array of the binding. |
+| `compiled_apply<Path, Walk>(Walk const&)` | O(1) at run time | O(1) | Compiles the path into arrays at compile time and calls the walk. |
 | `is_valid_path<Path>`, `is_valid_path_v<Path>` :985 | O(t) compile time | none at run time | |
 | `is_singular_query<Path>`, `is_singular_query_v<Path>` :1506 | O(t + c) compile time | none at run time | |
-| `at_path<Binding>(Binding&, string_view, lazy const&)` :1470 | O(t) + query_walk :1435 | O(t) | Parses at run time. |
-| `at_path<Path, Binding>(Binding&, lazy const&)` :1480 | query_walk :1435 | as :1435 | |
+| `at_path<Binding>(Binding&, string_view, lazy const&)` | O(t) + singular_query_walk | O(t) | Parses at run time. A path that is not singular is invalid_path. |
+| `query<Binding>(Binding&, string_view, lazy const&)` | O(t) + query_walk | O(t) + O(N) | Parses at run time. |
+| `at_path<Path, Binding>(Binding&, lazy const&)` | singular_query_walk | O(1) | A path that is not singular fails a static_assert. |
+| `query<Path, Binding>(Binding&, lazy const&)` | query_walk | O(N) | |
 | `at_path<Path, T>(string_view)` :1525 | O(n); fallback O(n·p) | O(1); fallback allocates | |
 | `at_path<Path, T>(shared_ptr<void const>, string_view)` :1543 | as :1525 | as :1525 | |
 | `at_path(shared_ptr<void const>, Encoded&&) = delete` :71 | none | none | |
@@ -311,7 +315,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `binding<Value>::*`, 35 members :38-73 | none (deleted) | none | The user binding defines the cost. |
+| `concept binding<B>` | compile time | none | B names its value type. The user binding defines the cost of each callback. |
 | `fixed_string<N>::fixed_string` :80 | O(N) compile time | O(N) | |
 | `fixed_string<N>::view` :85 | O(1) | O(1) | |
 

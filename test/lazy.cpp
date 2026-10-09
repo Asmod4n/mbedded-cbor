@@ -727,7 +727,9 @@ namespace
 {
 
 // A binding whose only value is a typed array, as a language with ArrayBuffers has.
-struct typed_binding : cbor::binding<cbor::typed_array> {
+struct typed_binding {
+    using value = cbor::typed_array;
+
     cbor::kind kind_of(cbor::typed_array const &)
     {
         return cbor::kind::typed_array;
@@ -1207,7 +1209,7 @@ TEST_CASE("lazy: a repeated key at depth 3 is read with no error")
     CHECK_EQ(*lazy_of(inner).at("a")->at("b")->at("d")->get<std::uint64_t>(), 2u);
     CHECK(lazy_of(outer).at("a")->at("b").has_value());
     CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(inner)), 2);
-    CHECK(cbor::at_path(binding, "$..*", lazy_of(inner)).has_value());
+    CHECK(cbor::query(binding, "$..*", lazy_of(inner)).has_value());
     CHECK(cbor::at_path(binding, "$.a.b.d", lazy_of(inner)).has_value());
     CHECK(lazy_of(inner).at("a")->at("b")->decode().has_value());
 }
@@ -1223,8 +1225,8 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
     cbor::lazy const top = lazy_of(doc);
     CHECK(top.decode().has_value());
     CHECK(cbor::lazy_decode(binding, lazy_of(doc)).has_value());
-    CHECK(cbor::at_path(binding, "$..*", lazy_of(doc)).has_value());
-    CHECK(cbor::at_path(binding, "$[*].a", lazy_of(doc)).has_value());
+    CHECK(cbor::query(binding, "$..*", lazy_of(doc)).has_value());
+    CHECK(cbor::query(binding, "$[*].a", lazy_of(doc)).has_value());
     CHECK_EQ(*(cbor::at_path<"$[63].b", int>(doc)), 2);
     CHECK_EQ(*lazy_of(doc).at(63)->at("a")->get<std::uint64_t>(), 1u);
 }
