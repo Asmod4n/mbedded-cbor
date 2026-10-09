@@ -128,6 +128,7 @@ class jsonpath
         std::span<selector const> selectors;
         std::span<expression const> expressions;
         std::string_view keys;
+        std::span<std::expected<std::vector<lazy>, error> const> absolute_nodelists;
     };
 
     static constexpr bool name_first(char const c)
@@ -677,7 +678,8 @@ class jsonpath
                         t->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]]
                         return std::nullopt;
                     if (t->major != major_type::tag ||
-                        t->argument != std::to_underlying(rfc8949::tag_number::shareable)) {
+                        (t->argument != std::to_underlying(rfc8949::tag_number::shareable) &&
+                         t->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))) {
                         d = before;
                         break;
                     }
@@ -731,7 +733,8 @@ class jsonpath
                         t->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]]
                         return std::nullopt;
                     if (t->major != major_type::tag ||
-                        t->argument != std::to_underlying(rfc8949::tag_number::shareable)) {
+                        (t->argument != std::to_underlying(rfc8949::tag_number::shareable) &&
+                         t->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))) {
                         probe = before;
                         break;
                     }
@@ -777,7 +780,8 @@ class jsonpath
                         t->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]]
                         return std::nullopt;
                     if (t->major != major_type::tag ||
-                        t->argument != std::to_underlying(rfc8949::tag_number::shareable)) {
+                        (t->argument != std::to_underlying(rfc8949::tag_number::shareable) &&
+                         t->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))) {
                         d = before;
                         break;
                     }
@@ -853,7 +857,8 @@ class jsonpath
                     t->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]]
                     return std::nullopt;
                 if (t->major != major_type::tag ||
-                    t->argument != std::to_underlying(rfc8949::tag_number::shareable)) {
+                    (t->argument != std::to_underlying(rfc8949::tag_number::shareable) &&
+                     t->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))) {
                     d = before;
                     break;
                 }
@@ -924,7 +929,7 @@ class jsonpath
             std::ranges::copy(parsed.keys, std::get<2>(c).begin());
             return c;
         }();
-        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys)};
+        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys), {}};
         std::size_t const depth_max = validity::nesting_depth_max_read();
         if (auto const r = validity::check_nesting_depth(top.segment_count, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -1227,8 +1232,12 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
     case expression::kind::query:
     case expression::kind::count:
     case expression::kind::value: {
-        expression const &q = e.kind == expression::kind::query ? e : v.expressions[e.first];
-        auto const nodes = segments_apply(v, q.first, q.second, q.relative ? current : root, root, depth_max);
+        std::size_t const at = e.kind == expression::kind::query ? index : e.first;
+        expression const &q = v.expressions[at];
+        std::expected<std::vector<lazy>, error> relative;
+        if (q.relative)
+            relative = segments_apply(v, q.first, q.second, current, root, depth_max);
+        auto const &nodes = q.relative ? relative : v.absolute_nodelists[at];
         if (!nodes) [[unlikely]]
             return std::unexpected(nodes.error());
         if (e.kind == expression::kind::count)
@@ -1280,7 +1289,10 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
         return !*operand;
     }
     case expression::kind::query: {
-        auto const nodes = segments_apply(v, e.first, e.second, e.relative ? current : root, root, depth_max);
+        std::expected<std::vector<lazy>, error> relative;
+        if (e.relative)
+            relative = segments_apply(v, e.first, e.second, current, root, depth_max);
+        auto const &nodes = e.relative ? relative : v.absolute_nodelists[at];
         if (!nodes) [[unlikely]]
             return std::unexpected(nodes.error());
         return !nodes->empty();
@@ -1475,7 +1487,13 @@ std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &bind
                                                             lazy const &root, std::size_t const depth_max)
 {
     validity::throw_logic_error_if_null(root.top_level, "cbor::query: the lazy holds no top-level item");
-    auto const nodes = segments_apply(v, top.segment_at, top.segment_count, root, root, depth_max);
+    std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
+    query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
+    for (std::size_t i = 0; i < v.expressions.size(); ++i)
+        if (v.expressions[i].kind == expression::kind::query && !v.expressions[i].relative)
+            absolute_nodelists[i] =
+                segments_apply(with_nodelists, v.expressions[i].first, v.expressions[i].second, root, root, depth_max);
+    auto const nodes = segments_apply(with_nodelists, top.segment_at, top.segment_count, root, root, depth_max);
     if (!nodes) [[unlikely]]
         return std::unexpected(nodes.error());
     auto array = binding.array_decode(nodes->size());
@@ -1513,7 +1531,7 @@ auto jsonpath::compiled_apply(Walk const &walk)
     if (auto const r = validity::check_nesting_depth(top.segment_count, depth_max); !r) [[unlikely]]
         return result(std::unexpect, r.error());
     return walk(query_view{std::get<0>(compiled), std::get<1>(compiled), std::get<2>(compiled),
-                           std::string_view(std::get<3>(compiled).data(), keys)},
+                           std::string_view(std::get<3>(compiled).data(), keys), {}},
                 top, depth_max);
 }
 
@@ -1526,7 +1544,7 @@ std::expected<typename Binding::value, error> at_path(Binding &binding, std::str
         return std::unexpected(q.error());
     if (!q->top.singular) [[unlikely]]
         return std::unexpected(error::invalid_path);
-    return jsonpath::singular_query_walk(binding, {q->segments, q->selectors, q->expressions, q->keys}, q->top, l,
+    return jsonpath::singular_query_walk(binding, {q->segments, q->selectors, q->expressions, q->keys, {}}, q->top, l,
                                          depth_max);
 }
 
@@ -1537,7 +1555,7 @@ std::expected<typename Binding::value, error> query(Binding &binding, std::strin
     auto const q = jsonpath::query_parse(path, false, depth_max);
     if (!q) [[unlikely]]
         return std::unexpected(q.error());
-    return jsonpath::query_walk(binding, {q->segments, q->selectors, q->expressions, q->keys}, q->top, l, depth_max);
+    return jsonpath::query_walk(binding, {q->segments, q->selectors, q->expressions, q->keys, {}}, q->top, l, depth_max);
 }
 
 template <fixed_string Path, binding Binding>

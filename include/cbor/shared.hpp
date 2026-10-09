@@ -402,6 +402,10 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level
             at = h->at;
             continue;
         }
+        if (h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor)) {
+            at = h->at;
+            continue;
+        }
         if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
             return at;
         heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
