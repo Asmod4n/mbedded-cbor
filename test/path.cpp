@@ -992,3 +992,24 @@ TEST_CASE("path: at_path reads a singular query, cbor::query reads a nodelist")
     static_assert(cbor::is_singular_query_v<"$.a[0]">);
     static_assert(!cbor::is_singular_query_v<"$.a[*]">);
 }
+
+// A filter with a chain of 100000 operands of || or && overflowed the stack: the parser built a left-deep tree and
+// the test of the filter recursed once for each operand. A chain is now tested in a loop, so the depth of the
+// recursion follows only the nesting of parentheses, which the nesting depth bounds.
+TEST_CASE("path: a long chain of || or && in one filter is tested without recursion")
+{
+    std::string const doc = encoded(A(1));
+    test_binding binding;
+    auto const l = *cbor::lazy::from(doc);
+    for (std::string_view const op : {"||"sv, "&&"sv}) {
+        std::string path = "$[?@==1";
+        for (int i = 0; i < 100000; ++i)
+            path.append(op).append("@==1");
+        path += "]";
+        CAPTURE(op);
+        CHECK(found(cbor::query(binding, path, l)) == A(1));
+    }
+    CHECK(found(cbor::query(binding, "$[?@==2 || @==1 && @==3 || @==1 && @==1]", l)) == A(1));
+    CHECK(found(cbor::query(binding, "$[?@==2 || @==1 && @==3 || @==1 && @==2]", l)) == A());
+    CHECK(found(cbor::query(binding, "$[?@==1 && (@==2 || @==1) && !(@==2)]", l)) == A(1));
+}
