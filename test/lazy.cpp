@@ -6,11 +6,13 @@
 #include <cstdint>
 #include <expected>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <random>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -233,6 +235,127 @@ TEST_CASE("lazy: elements and entries of the wrong kind")
     CHECK_EQ(lazy_of(encoded(M("a"s, 1))).elements<16>().error(), error::not_indexable);
     CHECK_EQ(lazy_of(encoded(A(1))).entries<16>().error(), error::not_indexable);
     CHECK_EQ(lazy_of(encoded(V(1))).elements<16>().error(), error::not_indexable);
+}
+
+// The standard algorithms take a forward iterator, so the iterators of entries and elements are
+// forward iterators and both views are forward ranges. The check runs here and not in src/.
+TEST_CASE("lazy: entries and elements are forward ranges")
+{
+    CHECK(std::forward_iterator<cbor::lazy_entries<16>::iterator>);
+    CHECK(std::forward_iterator<cbor::lazy_elements<16>::iterator>);
+    CHECK(std::ranges::forward_range<cbor::lazy_entries<16>>);
+    CHECK(std::ranges::forward_range<cbor::lazy_elements<16>>);
+}
+
+// A forward iterator can be copied and walked twice, and a copy that has not moved stays equal to
+// the place it was copied from.
+TEST_CASE("lazy: a copy of an entries iterator walks the same pairs")
+{
+    auto const entries = lazy_of(encoded(M("a"s, 1, "b"s, 2))).entries<16>();
+    REQUIRE(entries.has_value());
+    auto first = entries->begin();
+    auto const copy = first;
+    CHECK(first == copy);
+    auto const before = first++;
+    CHECK(before == copy);
+    CHECK(first != copy);
+    CHECK(value_at((*first)->first) == V("b"s));
+    CHECK(value_at((*copy)->first) == V("a"s));
+    CHECK(cbor::lazy_entries<16>::iterator{} == cbor::lazy_entries<16>::iterator{});
+}
+
+// The std::ranges algorithms walk the entries and the elements.
+TEST_CASE("lazy: std::ranges algorithms over entries and elements")
+{
+    auto const entries = lazy_of(encoded(M("a"s, 1, 2, "b"s, "c"s, 3))).entries<16>();
+    REQUIRE(entries.has_value());
+    CHECK_EQ(std::ranges::distance(*entries), 3);
+    auto const found = std::ranges::find_if(*entries, [](auto const &entry) {
+        return entry.has_value() && value_at(entry->first) == V(2);
+    });
+    REQUIRE(found != entries->end());
+    CHECK(value_at((*found)->second) == V("b"s));
+    CHECK_EQ(std::ranges::count_if(*entries, [](auto const &entry) {
+                 return entry.has_value() && entry->first.template get<std::string_view>().has_value();
+             }),
+             2);
+
+    auto const elements = lazy_of(encoded(A(1, 2, 3))).elements<16>();
+    REQUIRE(elements.has_value());
+    CHECK_EQ(std::ranges::distance(*elements), 3);
+    CHECK(std::ranges::all_of(*elements, [](auto const &element) { return element.has_value(); }));
+    auto const two = std::ranges::find_if(*elements, [](auto const &element) { return value_at(*element) == V(2); });
+    REQUIRE(two != elements->end());
+    auto const next = std::ranges::next(two);
+    CHECK(value_at(**next) == V(3));
+}
+
+// find gives the iterator at the pair with the key, as std::map::find does, and at gives its value.
+TEST_CASE("lazy: find gives the pair of a present key")
+{
+    cbor::lazy const l = lazy_of("\xa4\x61" "a\x01\x21\x65" "minus\x07\x65" "seven\x61" "b\x02"s);
+    auto const a = l.find<16>("b");
+    REQUIRE(a.has_value());
+    REQUIRE(*a != std::default_sentinel);
+    CHECK(value_at((**a)->first) == V("b"s));
+    CHECK(value_at((**a)->second) == V(2));
+    auto const seven = l.find<16>(7);
+    REQUIRE(seven.has_value());
+    REQUIRE(*seven != std::default_sentinel);
+    CHECK(value_at((**seven)->second) == V("seven"s));
+    auto const minus = l.find<16>(-2);
+    REQUIRE(minus.has_value());
+    REQUIRE(*minus != std::default_sentinel);
+    CHECK(value_at((**minus)->second) == V("minus"s));
+    auto next = *minus;
+    ++next;
+    CHECK(value_at((*next)->first) == V(7));
+}
+
+// A missing key gives the end, as std::map::find does. The end that find gives is equal to the end
+// of a walk over all pairs.
+TEST_CASE("lazy: find gives the end for a missing key")
+{
+    cbor::lazy const l = lazy_of(encoded(M("a"s, 1, 2, "b"s)));
+    auto const missing = l.find<16>("z");
+    REQUIRE(missing.has_value());
+    CHECK(*missing == std::default_sentinel);
+    auto const entries = l.entries<16>();
+    REQUIRE(entries.has_value());
+    CHECK(*missing == std::ranges::next(entries->begin(), entries->end()));
+    auto const number = l.find<16>(1);
+    REQUIRE(number.has_value());
+    CHECK(*number == std::default_sentinel);
+    auto const empty = lazy_of(encoded(M())).find<16>("a");
+    REQUIRE(empty.has_value());
+    CHECK(*empty == std::default_sentinel);
+}
+
+// find is a lookup in a map. An array or a scalar has no keys.
+TEST_CASE("lazy: find in an item that is not a map")
+{
+    CHECK_EQ(lazy_of(encoded(A(1))).find<16>(0).error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encoded(V(1))).find<16>("a").error(), error::not_indexable);
+}
+
+// A key behind a shared reference (tag 29) is compared by its content, in find as in at.
+TEST_CASE("lazy: find resolves a shared key")
+{
+    cbor::lazy const l = lazy_of("\xa2\x61" "a\xd8\x1c\x61k\xd8\x1d\x00\x02"s);
+    auto const shared = l.find<16>("k");
+    REQUIRE(shared.has_value());
+    REQUIRE(*shared != std::default_sentinel);
+    CHECK(value_at((**shared)->second) == V(2));
+    CHECK(value_at(at(l, "k")) == V(2));
+}
+
+// A truncated map gives its error from find and from at.
+TEST_CASE("lazy: find in a truncated map gives the error")
+{
+    cbor::lazy const l = lazy_of("\xa2\x61" "a\x01\x61"s);
+    CHECK_EQ(l.find<16>("z").error(), error::too_little_data);
+    CHECK_EQ(l.at<16>("z").error(), error::too_little_data);
+    CHECK(value_at(at(l, "a")) == V(1));
 }
 
 // decode reads nothing ahead, so a step finds a truncated element. The step gives the error once and
@@ -708,7 +831,7 @@ namespace
 {
 
 template <std::size_t DepthMax>
-std::array<bool, 9> lazy_compiles()
+std::array<bool, 11> lazy_compiles()
 {
     return {
         requires(std::string_view const s) { cbor::decode<DepthMax>(s); },
@@ -716,6 +839,8 @@ std::array<bool, 9> lazy_compiles()
         requires(std::shared_ptr<std::string const> const &s) { cbor::decode<DepthMax>(s); },
         requires(cbor::lazy const &l) { l.template at<DepthMax>(std::string_view{}); },
         requires(cbor::lazy const &l) { l.template at<DepthMax>(std::int64_t{0}); },
+        requires(cbor::lazy const &l) { l.template find<DepthMax>(std::string_view{}); },
+        requires(cbor::lazy const &l) { l.template find<DepthMax>(std::int64_t{0}); },
         requires(cbor::lazy const &l) { l.template elements<DepthMax>(); },
         requires(cbor::lazy const &l) { l.template entries<DepthMax>(); },
         requires(cbor::lazy const &l) { l.template decode<DepthMax>(); },

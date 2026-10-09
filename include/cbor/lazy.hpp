@@ -48,9 +48,9 @@ struct lazy_elements {
         using difference_type = std::ptrdiff_t;
 
         std::shared_ptr<value_sharing::top_level_item> top_level;
-        std::size_t offset;
-        std::uint64_t left;
-        error failure;
+        std::size_t offset{};
+        std::uint64_t left{};
+        error failure{};
 
         value_type operator*() const
         {
@@ -75,10 +75,14 @@ struct lazy_elements {
             return *this;
         }
 
-        void operator++(int)
+        iterator operator++(int)
         {
+            iterator const before = *this;
             ++*this;
+            return before;
         }
+
+        bool operator==(iterator const &) const = default;
 
         bool operator==(std::default_sentinel_t) const
         {
@@ -108,10 +112,10 @@ struct lazy_entries {
         using difference_type = std::ptrdiff_t;
 
         std::shared_ptr<value_sharing::top_level_item> top_level;
-        std::size_t key;
-        std::size_t value;
-        std::uint64_t left;
-        error failure;
+        std::size_t key{};
+        std::size_t value{};
+        std::uint64_t left{};
+        error failure{};
 
         void value_find()
         {
@@ -149,10 +153,14 @@ struct lazy_entries {
             return *this;
         }
 
-        void operator++(int)
+        iterator operator++(int)
         {
+            iterator const before = *this;
             ++*this;
+            return before;
         }
+
+        bool operator==(iterator const &) const = default;
 
         bool operator==(std::default_sentinel_t) const
         {
@@ -225,76 +233,97 @@ inline std::expected<lazy, error> lazy::from(std::string_view const encoded)
     return from(std::make_shared<std::string const>(encoded));
 }
 
-template <std::size_t DepthMax, class Match>
-std::expected<lazy, error> value_sharing::key_find(resolved const &found, Match const &match)
+template <std::size_t DepthMax, class Key>
+    requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+std::expected<typename lazy_entries<DepthMax>::iterator, error> value_sharing::key_find(resolved found, Key const key)
 {
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    top_level_item &source = *found.source;
-    heads::decoder d = found.d;
-    for (std::uint64_t i = 0; i < found.h.argument; ++i) {
-        auto const key_at = shared_resolve(source, source.encoded.size() - d.encoded.size());
+    std::size_t const first = found.source->encoded.size() - found.d.encoded.size();
+    typename lazy_entries<DepthMax>::iterator it{std::move(found.source), first, first, found.h.argument, error{}};
+    it.value_find();
+    for (; it != std::default_sentinel; ++it) {
+        if (it.failure != error{}) [[unlikely]]
+            return std::unexpected(it.failure);
+        auto const key_at = shared_resolve(*it.top_level, it.key);
         if (!key_at) [[unlikely]]
             return std::unexpected(key_at.error());
-        heads::decoder probe{std::string_view(std::span(source.encoded).subspan(*key_at))};
+        heads::decoder probe{std::string_view(std::span(it.top_level->encoded).subspan(*key_at))};
         auto const k = probe.head_decode();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
-        std::expected<bool, error> const matched = match(*k, probe);
-        if (!matched) [[unlikely]]
-            return std::unexpected(matched.error());
-        if (auto const r = well_formedness::item_skip<DepthMax>(d, source, 1); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        if (*matched)
-            return lazy{found.source, source.encoded.size() - d.encoded.size()};
-        if (auto const r = well_formedness::item_skip<DepthMax>(d, source, 1); !r) [[unlikely]]
-            return std::unexpected(r.error());
+        if constexpr (std::same_as<Key, std::string_view>) {
+            if (k->major != major_type::text_string)
+                continue;
+            auto const content = probe.byte_string_decode(k->argument);
+            if (!content) [[unlikely]]
+                return std::unexpected(content.error());
+            if (*content == key)
+                return it;
+        } else {
+            if ((k->major == major_type::unsigned_integer && key >= 0 && k->argument == static_cast<std::uint64_t>(key)) ||
+                (k->major == major_type::negative_integer && key < 0 && k->argument == static_cast<std::uint64_t>(-1 - key)))
+                return it;
+        }
     }
-    return std::unexpected(error::key_not_found);
+    return it;
+}
+
+template <std::size_t DepthMax>
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+std::expected<typename lazy_entries<DepthMax>::iterator, error> lazy::find(std::string_view const key) const
+{
+    auto found = value_sharing::container_resolve(top_level, offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    return value_sharing::key_find<DepthMax>(std::move(*found), key);
+}
+
+template <std::size_t DepthMax>
+    requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+std::expected<typename lazy_entries<DepthMax>::iterator, error> lazy::find(std::int64_t const key) const
+{
+    auto found = value_sharing::container_resolve(top_level, offset);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    return value_sharing::key_find<DepthMax>(std::move(*found), key);
+}
+
+template <std::size_t DepthMax>
+std::expected<lazy, error> value_sharing::value_of(std::expected<typename lazy_entries<DepthMax>::iterator, error> found)
+{
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    if (*found == std::default_sentinel) [[unlikely]]
+        return std::unexpected(error::key_not_found);
+    return lazy{std::move(found->top_level), found->value};
 }
 
 template <std::size_t DepthMax>
     requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<lazy, error> lazy::at(std::string_view const key) const
 {
-    auto const found = value_sharing::container_resolve(top_level, offset);
-    if (!found) [[unlikely]]
-        return std::unexpected(found.error());
-    return value_sharing::key_find<DepthMax>(
-        *found, [key](heads::head const &k, heads::decoder const probe) -> std::expected<bool, error> {
-            if (k.major != major_type::text_string)
-                return false;
-            heads::decoder text = probe;
-            auto const content = text.byte_string_decode(k.argument);
-            if (!content) [[unlikely]]
-                return std::unexpected(content.error());
-            return *content == key;
-        });
+    return value_sharing::value_of<DepthMax>(find<DepthMax>(key));
 }
 
 template <std::size_t DepthMax>
     requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
 std::expected<lazy, error> lazy::at(std::int64_t const index) const
 {
-    auto const found = value_sharing::container_resolve(top_level, offset);
+    auto found = value_sharing::container_resolve(top_level, offset);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    auto [source, h, d] = *found;
-    if (h.major == major_type::array) {
-        auto const position = validity::check_index(index, h.argument);
-        if (!position) [[unlikely]]
-            return std::unexpected(position.error());
-        for (std::uint64_t i = 0; i < *position; ++i)
-            if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
-                return std::unexpected(r.error());
-        std::size_t const element = source->encoded.size() - d.encoded.size();
-        return lazy{source, element};
-    }
-    return value_sharing::key_find<DepthMax>(
-        *found, [index](heads::head const &k, heads::decoder) -> std::expected<bool, error> {
-            return (k.major == major_type::unsigned_integer && index >= 0 && k.argument == static_cast<std::uint64_t>(index)) ||
-                   (k.major == major_type::negative_integer && index < 0 && k.argument == static_cast<std::uint64_t>(-1 - index));
-        });
+    if (found->h.major != major_type::array)
+        return value_sharing::value_of<DepthMax>(value_sharing::key_find<DepthMax>(std::move(*found), index));
+    auto &[source, h, d] = *found;
+    auto const position = validity::check_index(index, h.argument);
+    if (!position) [[unlikely]]
+        return std::unexpected(position.error());
+    for (std::uint64_t i = 0; i < *position; ++i)
+        if (auto const r = well_formedness::item_skip<DepthMax>(d, *source, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+    std::size_t const element = source->encoded.size() - d.encoded.size();
+    return lazy{source, element};
 }
 
 template <class T>
