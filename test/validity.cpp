@@ -17,11 +17,11 @@ using cbor::error;
 using cbor::major_type;
 using cbor::validity;
 
-// The owner set the bound of the nesting depth to 1024 and its default to 128. Every function that reads the
+// The owner set the bound of the nesting depth to 512 and its default to 128. Every function that reads the
 // nesting depth reads both from these two constants, so this test is the one place that holds the two numbers.
 TEST_CASE("validity: the limit and the default of the nesting depth")
 {
-    CHECK_EQ(validity::nesting_depth_limit, 1024u);
+    CHECK_EQ(validity::nesting_depth_limit, 512u);
     CHECK_EQ(validity::nesting_depth_default, 128u);
 }
 
@@ -46,7 +46,7 @@ TEST_CASE("validity: nesting_depth_max_set lowers and raises the nesting depth a
         CHECK_EQ(cbor::diagnostic_notation(deep).error(), error::nesting_depth_exceeded);
     }
     CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_default);
-    CHECK_EQ(validity::nesting_depth_max_set(1025).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(validity::nesting_depth_max_set(513).error(), error::nesting_depth_exceeded);
     CHECK_EQ(validity::nesting_depth_max_set(std::numeric_limits<std::size_t>::max()).error(),
              error::nesting_depth_exceeded);
     CHECK_EQ(validity::nesting_depth_max_read(), validity::nesting_depth_default);
@@ -63,17 +63,17 @@ TEST_CASE("validity: nesting_depth_max_set lowers and raises the nesting depth a
 
 TEST_CASE("validity: check_nesting_depth for every depth up to one past the limit")
 {
-    for (std::size_t depth = 0; depth <= 1025; ++depth) {
-        auto const r = validity::check_nesting_depth(depth, 1024);
-        if (depth <= 1024)
+    for (std::size_t depth = 0; depth <= 513; ++depth) {
+        auto const r = validity::check_nesting_depth(depth, 512);
+        if (depth <= 512)
             CHECK(r.has_value());
         else
             CHECK_EQ(r.error(), error::nesting_depth_exceeded);
     }
     constexpr bool limit_allowed =
-        validity::check_nesting_depth(1024, validity::nesting_depth_limit).has_value();
+        validity::check_nesting_depth(512, validity::nesting_depth_limit).has_value();
     constexpr bool past_limit_allowed =
-        validity::check_nesting_depth(1025, validity::nesting_depth_limit).has_value();
+        validity::check_nesting_depth(513, validity::nesting_depth_limit).has_value();
     CHECK(limit_allowed);
     CHECK_FALSE(past_limit_allowed);
 }
