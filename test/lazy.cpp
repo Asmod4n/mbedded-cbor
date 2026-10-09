@@ -1258,18 +1258,20 @@ TEST_CASE("lazy: contains, count, size and empty")
     CHECK_EQ(lazy_of("\xd8\x1c\x82\x01\x02"s).size().value(), 2u);
 }
 
-// lazy does not reject a map with a repeated key (RFC 8949 5.6 leaves that to the decoder), so count is not
-// limited to 0 or 1: it counts every pair with the key, as std::multimap::count does. contains and find see
-// the first pair.
-TEST_CASE("lazy: count counts every pair of a repeated key")
+// count answers as std::map::count: 0 or 1. It reads every pair after the first match, so a second pair with the
+// key is duplicate_key (RFC 8949 5.6: the keys of a map are unique; owner, 2026-10-08). contains, find and at stop
+// at the first match and do not see the second pair.
+TEST_CASE("lazy: count of a repeated key is duplicate_key")
 {
     cbor::lazy const twice = lazy_of("\xa3\x61" "a\x01\x61" "b\x02\x61" "a\x03"s);
     CHECK(twice.entries().has_value());
-    CHECK_EQ(twice.count("a").value(), 2u);
+    CHECK_EQ(twice.count("a").error(), error::duplicate_key);
     CHECK_EQ(twice.count("b").value(), 1u);
+    CHECK_EQ(twice.count("z").value(), 0u);
     CHECK(twice.contains("a").value());
     CHECK(value_at(twice.at("a").value()) == V(1));
-    CHECK_EQ(lazy_of("\xa3\x01\x01\x01\x02\x01\x03"s).count(std::int64_t{1}).value(), 3u);
+    CHECK_EQ(lazy_of("\xa3\x01\x01\x02\x02\x01\x03"s).count(std::int64_t{1}).error(), error::duplicate_key);
+    CHECK_EQ(lazy_of("\xa3\x01\x01\x02\x02\x01\x03"s).count(std::int64_t{2}).value(), 1u);
 }
 
 // count reads every pair after the first match, so a pair that is cut off after a match is an error, and a cut
