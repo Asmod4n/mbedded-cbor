@@ -1322,6 +1322,24 @@ TEST_CASE("lazy: a head that claims more items than bytes is too little data")
     CHECK(std::ranges::distance(it, std::default_sentinel) <= 3);
 }
 
+// Fault p14: each resolve of tag 24 makes a new top-level item, and the
+// iterators compared that pointer, so two finds of one pair differed.
+TEST_CASE("lazy: iterators into a map inside tag 24 compare equal at the same pair")
+{
+    auto const l = lazy_of("\xd8\x18\x47\xa2\x61" "a\x01\x61" "b\x02"s);
+    auto const f1 = *l.find("b");
+    auto const f2 = *l.find("b");
+    CHECK(f1 == f2);
+    auto it = l.entries()->begin();
+    ++it;
+    CHECK(it == f1);
+    CHECK(it != l.entries()->begin());
+    auto const a = *l.find("a");
+    auto const found = cbor::lazy::find(a, f1, "b");
+    REQUIRE(found.has_value());
+    CHECK(*found == f1);
+}
+
 // The count check of elements() and entries() reads the argument of the
 // head, and an indefinite length has no count, so it is refused first.
 TEST_CASE("lazy: elements and entries refuse indefinite length")
