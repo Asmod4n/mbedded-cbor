@@ -6,7 +6,9 @@
 #include <iterator>
 #include <span>
 #include <string>
+#include <ranges>
 #include <string_view>
+#include <type_traits>
 
 #include "error.hpp"
 #include "item_size.hpp"
@@ -24,7 +26,8 @@ public:
     {
     }
 
-    template <std::same_as<std::string> Encoded>
+    template <class Encoded>
+        requires(!std::is_lvalue_reference_v<Encoded> && !std::ranges::borrowed_range<Encoded>)
     explicit sequence(Encoded &&) = delete;
 
     struct iterator {
