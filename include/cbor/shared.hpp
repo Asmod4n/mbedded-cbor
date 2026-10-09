@@ -108,7 +108,7 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
             return before;
         }
 
-        bool operator==(iterator const &) const = default;
+        bool operator==(iterator const &) const;
 
         bool operator==(std::default_sentinel_t) const
         {
@@ -178,7 +178,7 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
             return before;
         }
 
-        bool operator==(iterator const &) const = default;
+        bool operator==(iterator const &) const;
 
         bool operator==(std::default_sentinel_t) const
         {

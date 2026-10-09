@@ -38,6 +38,13 @@ inline lazy_elements::iterator::value_type lazy_elements::iterator::operator*() 
     return lazy{top_level, offset};
 }
 
+inline bool lazy_elements::iterator::operator==(iterator const &other) const
+{
+    return offset == other.offset && left == other.left && failure == other.failure &&
+           (top_level == other.top_level ||
+            (top_level && other.top_level && top_level->encoded.data() == other.top_level->encoded.data()));
+}
+
 inline lazy_elements::iterator &lazy_elements::iterator::operator++()
 {
     if (failure != error{}) [[unlikely]] {
@@ -72,6 +79,13 @@ inline lazy_entries::iterator::value_type lazy_entries::iterator::operator*() co
     if (failure != error{}) [[unlikely]]
         return std::unexpected(failure);
     return std::pair{lazy{top_level, key}, lazy{top_level, value}};
+}
+
+inline bool lazy_entries::iterator::operator==(iterator const &other) const
+{
+    return key == other.key && value == other.value && left == other.left && failure == other.failure &&
+           (top_level == other.top_level ||
+            (top_level && other.top_level && top_level->encoded.data() == other.top_level->encoded.data()));
 }
 
 inline lazy_entries::iterator &lazy_entries::iterator::operator++()
