@@ -125,7 +125,7 @@ Enums and constants only. No function found by grep.
 |---|---|---|---|
 | `well_formedness::no_marks::mark(decoder const&)` :30 | O(1) | O(1) | Empty body. Confirmed. |
 | `well_formedness::item_skip<Marks>(decoder&, Marks&)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(1): one count of the items still to read. No allocation. | Iterative. No depth check: nothing recurses. Each add to the count goes through checked_add, and a count larger than the bytes left is too_little_data at once (check_pending_items). Used with no_marks and with top_level_item. |
-| `well_formedness::item_skip<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 2, about 8 KiB. No allocation. | Iterative. Only for marks that record a depth (decoding::prefix). check_nesting_depth on every item. |
+| `well_formedness::item_skip<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 1 counts of 8 bytes, about 4 KiB. No allocation. | Iterative. Only for marks that record a depth (decoding::prefix). check_nesting_depth on every item. |
 | `item_size(string_view)` | O(i), bounded by O(n) | O(1). No allocation. | One item_skip with no_marks. No depth check. |
 
 ## item.hpp

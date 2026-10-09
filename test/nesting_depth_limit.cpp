@@ -33,10 +33,6 @@ value arrays_around_zero(std::size_t const n)
 
 } // namespace
 
-// clang with AddressSanitizer gives decoding::value_decode and jsonpath::segment_apply more than 8 KiB of
-// stack for each level, so the item at the limit needs more than 8 MiB of stack there. The test runs in every
-// other build.
-#if !(defined(__clang__) && defined(__SANITIZE_ADDRESS__))
 // decoding::value_decode counts one level for each array.
 TEST_CASE("nesting depth limit: lazy_decode with a binding")
 {
@@ -46,7 +42,6 @@ TEST_CASE("nesting depth limit: lazy_decode with a binding")
     CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(arrays_around(limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
-#endif
 
 // value_sharing::item_decode counts one level for each tag, and none for an array or a map.
 TEST_CASE("nesting depth limit: lazy::decode")
@@ -94,10 +89,6 @@ TEST_CASE("nesting depth limit: a comparison in a filter")
     CHECK_EQ(found(limit + 1).error(), error::nesting_depth_exceeded);
 }
 
-// clang with AddressSanitizer gives decoding::value_decode and jsonpath::segment_apply more than 8 KiB of
-// stack for each level, so the item at the limit needs more than 8 MiB of stack there. The test runs in every
-// other build.
-#if !(defined(__clang__) && defined(__SANITIZE_ADDRESS__))
 // jsonpath::segment_apply recurses once for each level that a descendant segment enters.
 TEST_CASE("nesting depth limit: a descendant segment")
 {
@@ -107,7 +98,6 @@ TEST_CASE("nesting depth limit: a descendant segment")
     CHECK_EQ(cbor::query(binding, "$..[0]", *cbor::lazy::from(arrays_around(limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
-#endif
 
 // extended_diagnostic_notation::diagnostic_write counts one level for each array.
 TEST_CASE("nesting depth limit: diagnostic_notation")
