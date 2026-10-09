@@ -30,7 +30,7 @@ value at(std::string_view const path, value const &data)
 {
     std::string const doc = encoded(data);
     test_binding binding;
-    auto const r = cbor::at_path(binding, path, *cbor::decode(doc));
+    auto const r = cbor::at_path(binding, path, *cbor::lazy::from(doc));
     REQUIRE(r.has_value());
     return *r;
 }
@@ -39,7 +39,7 @@ error path_error(std::string_view const path, value const &data)
 {
     std::string const doc = encoded(data);
     test_binding binding;
-    auto const r = cbor::at_path(binding, path, *cbor::decode(doc));
+    auto const r = cbor::at_path(binding, path, *cbor::lazy::from(doc));
     REQUIRE_FALSE(r.has_value());
     return r.error();
 }
@@ -48,7 +48,7 @@ template <cbor::fixed_string Path>
 std::expected<value, cbor::error> compiled_at(std::string const &doc)
 {
     test_binding binding;
-    return cbor::at_path<Path>(binding, *cbor::decode(doc));
+    return cbor::at_path<Path>(binding, *cbor::lazy::from(doc));
 }
 
 value found(std::expected<value, cbor::error> const &r)
@@ -179,10 +179,10 @@ TEST_CASE("path: the grammar")
     test_binding binding;
     {
         test::nesting_depth_max_guard const depth{3};
-        CHECK_EQ(cbor::at_path(binding, "$[0][0][0][0]", *cbor::decode(deep)).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(cbor::at_path(binding, "$[0][0][0][0]", *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
     }
     test::nesting_depth_max_guard const depth{4};
-    CHECK(cbor::at_path(binding, "$[0][0][0][0]", *cbor::decode(deep)).has_value());
+    CHECK(cbor::at_path(binding, "$[0][0][0][0]", *cbor::lazy::from(deep)).has_value());
 }
 
 // The compile-time form reads the same grammar and, inside brackets, any literal of CBOR diagnostic notation
@@ -273,7 +273,7 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
     CHECK_EQ(compiled_at<"$[1.0]">(doc).error(), error::key_not_found);
     std::string runtime_text = "$[16]";
     test_binding binding;
-    CHECK(*cbor::at_path(binding, runtime_text, *cbor::decode(doc)) == V(14));
+    CHECK(*cbor::at_path(binding, runtime_text, *cbor::lazy::from(doc)) == V(14));
 }
 
 // With value sharing (tags 28 and 29) a few bytes can name many nodes. A nodelist may hold as many nodes as the
@@ -284,10 +284,10 @@ TEST_CASE("path: a nodelist is no longer than the message")
     for (char level = 0; level < 6; ++level)
         doc += "\xd8\x1c\x82\xd8\x1d"s + level + "\xd8\x1d"s + level;
     test_binding binding;
-    auto const four = cbor::at_path(binding, "$[2][*][*][*]", *cbor::decode(doc));
+    auto const four = cbor::at_path(binding, "$[2][*][*][*]", *cbor::lazy::from(doc));
     REQUIRE(four.has_value());
     CHECK(*four == A(0, 0, 0, 0, 0, 0, 0, 0));
-    CHECK_EQ(cbor::at_path(binding, "$[6][*][*][*][*][*][*][*]", *cbor::decode(doc)).error(),
+    CHECK_EQ(cbor::at_path(binding, "$[6][*][*][*][*][*][*][*]", *cbor::lazy::from(doc)).error(),
              error::nodelist_too_long);
 }
 
@@ -358,7 +358,7 @@ TEST_CASE("path: every form gives the first entry of a repeated key")
 {
     std::string const doc = "\xa2\x61\x61\x01\x61\x61\x02"s;
     test_binding binding;
-    CHECK(cbor::at_path(binding, "$.a", *cbor::decode(doc)).has_value());
+    CHECK(cbor::at_path(binding, "$.a", *cbor::lazy::from(doc)).has_value());
     CHECK(compiled_at<"$.a">(doc).has_value());
     CHECK_EQ((cbor::at_path<"$.a", int>(doc)), 1);
     auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x61x\x61\x61\x61y"s);
@@ -373,9 +373,9 @@ TEST_CASE("path: every form gives the first entry of a repeated key")
     std::string const deep = "\xa1\x61\x62\xa2\x61\x61\x01\x61\x61\x02"s;
     CHECK_EQ((cbor::at_path<"$.b.a", int>(deep)), 1);
     CHECK(compiled_at<"$.b.a">(deep).has_value());
-    CHECK(cbor::at_path(binding, "$.*", *cbor::decode(doc)).has_value());
-    CHECK(cbor::at_path(binding, "$..c", *cbor::decode(deep)).has_value());
-    CHECK(cbor::at_path(binding, "$[?@ == 1]", *cbor::decode(doc)).has_value());
+    CHECK(cbor::at_path(binding, "$.*", *cbor::lazy::from(doc)).has_value());
+    CHECK(cbor::at_path(binding, "$..c", *cbor::lazy::from(deep)).has_value());
+    CHECK(cbor::at_path(binding, "$[?@ == 1]", *cbor::lazy::from(doc)).has_value());
     std::string const arrays = "\xa2\x81\x01\x00\x81\x18\x01\x01"s;
     CHECK(compiled_at<"$[[1]]">(arrays).has_value());
 }
@@ -425,7 +425,7 @@ TEST_CASE("path: the descendant segment")
     std::string const deep = encoded(A(A(A(A(A(1))))));
     test_binding binding;
     test::nesting_depth_max_guard const depth{3};
-    CHECK_EQ(cbor::at_path(binding, "$..[0]", *cbor::decode(deep)).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(cbor::at_path(binding, "$..[0]", *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
 }
 
 // RFC 9535 2.3.5: a filter keeps the children for which the logical expression is true. A comparison of numbers
@@ -942,7 +942,7 @@ TEST_CASE("at_path: a compiled path with more segments than the nesting depth in
     CHECK_EQ(cbor::at_path<"$[0][0][0]", std::int64_t>(std::string_view(text)).error(), error::nesting_depth_exceeded);
     auto const owner = std::make_shared<std::string const>(text);
     CHECK_EQ(cbor::at_path<"$[0][0][0]", std::string_view>(owner, *owner).error(), error::nesting_depth_exceeded);
-    auto const l = cbor::decode(text);
+    auto const l = cbor::lazy::from(text);
     REQUIRE(l.has_value());
     test_binding binding;
     CHECK_EQ(cbor::at_path<"$[0][0][0]">(binding, *l).error(), error::nesting_depth_exceeded);

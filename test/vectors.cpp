@@ -236,7 +236,7 @@ std::string member_bytes(cbor::lazy const &object, std::string_view const key)
 std::vector<wg_vector> wg_vectors_of(std::string const &path)
 {
     std::string const file = file_read(path);
-    auto const top = cbor::decode(std::string_view(file));
+    auto const top = cbor::lazy::from(std::string_view(file));
     REQUIRE(top.has_value());
     bool const file_fail = member_bool(*top, "fail", false);
     auto const tests = top->at("tests");
@@ -590,7 +590,7 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
     test::nesting_depth_max_guard const depth{depth_limit};
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
-    auto const top = cbor::decode(std::string_view(file));
+    auto const top = cbor::lazy::from(std::string_view(file));
     REQUIRE(top.has_value());
     auto const tests = top->at("tests");
     REQUIRE(tests.has_value());

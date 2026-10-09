@@ -1638,7 +1638,7 @@ std::string ticket_bytes()
 // the caller would read freed memory, and the address sanitizer reports that read.
 TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 {
-    std::expected<cbor::oref<ticket>, cbor::error> const t = cbor::schema<ticket>::decode(ticket_bytes());
+    std::expected<cbor::owning_ref<ticket>, cbor::error> const t = cbor::schema<ticket>::decode(ticket_bytes());
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);

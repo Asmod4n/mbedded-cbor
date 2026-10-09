@@ -155,7 +155,7 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
                 if (!b)
                     return std::nullopt;
                 test_binding binding;
-                auto inner = cbor::lazy_decode(binding, *cbor::decode(b->b));
+                auto inner = cbor::lazy_decode(binding, *cbor::lazy::from(b->b));
                 if (!inner)
                     throw undecided{};
                 v = *inner;
@@ -297,7 +297,7 @@ inline void path_target(std::string_view const input)
     std::string_view const path_bytes = input.substr(1, split);
     std::string_view const document = input.substr(1 + split);
     test_binding binding;
-    auto const eager = cbor::lazy_decode(binding, *cbor::decode(document));
+    auto const eager = cbor::lazy_decode(binding, *cbor::lazy::from(document));
     if (!eager)
         return;
     std::vector<std::string> keys;

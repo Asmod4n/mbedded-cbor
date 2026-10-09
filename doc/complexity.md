@@ -39,7 +39,7 @@ A row marked "not checked" was not compared with the code.
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `inspect(string_view)` friend decl, :553-555 | not given here | not given here | Body in inspect.hpp. |
-| `item_end`, `decode`, `lazy_decode` friend decls, :545-559 | not given here | not given here | Bodies in other headers. |
+| `item_end`, `lazy_decode` friend decls, :545-559 | not given here | not given here | Bodies in other headers. |
 | `heads::unsigned_read<V>(span<char const, sizeof(V)>)` :45 | O(1); sizeof(V) <= 8 | O(1) | No allocation. Confirmed. |
 | `heads::initial_byte(major_type, uint64_t)` :55 | O(1) | O(1) | constexpr. Confirmed. |
 | `heads::preferred_argument_info(uint64_t)` :60 | O(1) | O(1) | Confirmed. |
@@ -188,9 +188,6 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy_entries::iterator::operator==` :163, :165 | O(1) | O(1) | |
 | `lazy_entries::begin()` :171 | O(bytes of the first key) | O(1) plus marks | |
 | `lazy_entries::end()` :178 | O(1) | O(1) | |
-| `decode(shared_ptr<string const> const&)` :186 | O(1) | O(1) | One make_shared. |
-| `decode(string_view)` :197 | O(n) | O(n) | Copies the input. |
-| `decode<Encoded>(Encoded&&)` :204 | O(1) | O(1) | Moves; two make_shared. |
 | `lazy::from(shared_ptr<void const>, string_view)` :209 | O(1) | O(1) | One top_level_item. |
 | `lazy::from(shared_ptr<string const>)` :218 | O(1) | O(1) | |
 | `lazy::from<Encoded>(Encoded&&)` :226 | O(1) | O(1) | Moves; two allocations. |
@@ -288,7 +285,6 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `encoder::fixed_width_head_encode<T>` :330 | O(1) | O(1) | |
 | `encoder::simple_value_encode` :340 | O(1) | O(1) | |
 | `encoder::fixed_width_unsigned_encode`, `signed`, `float` :348, :355, :363 | O(1) | O(1) | |
-| `encode_from` decl :372 | see :707 | see :707 | |
 | `discarding_writer::append`, `done` :377, :382 | O(1) | O(1) | |
 | `sharing<Binding>` aggregate :388 | none | three unordered_map; one node per entry | |
 | `walker::walker` :412 | O(1) | O(1) plus the encoder | |
@@ -301,7 +297,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `walker::simple` :660 | O(1) | O(1) | |
 | `walker` copy = delete :670 | none | none | |
 | `cycle_find<Binding>` :673 | O(r·d); r exponential in d for a DAG | O(d) vector + O(d) stack | Cold path only. |
-| `encode_from<Sharing, Binding, Writer>` :707 | off: O(r + n_out); on: O(i + n_out) expected | off: O(d); on: O(i) hash entries | |
+| `encoding::encode_from<Sharing, Binding, Writer>` (private) :707 | off: O(r + n_out); on: O(i + n_out) expected | off: O(d); on: O(i) hash entries | |
 | `encode<Sharing, Binding, Writer>` :745 | as encode_from | as encode_from plus target | |
 
 ## binding.hpp
@@ -462,7 +458,7 @@ Allocation on a success path:
 
 - `magnitude_plus_one`, `magnitude_minus_one`, `walker::bignum` (negative), `value_decode` (negative bignum).
 - `top_level_item::entry`, `mark`, `prefix::mark`.
-- `decode(string_view)`, `lazy::from`, `schema::path`, `schema::decode`, `databind::decode`, `container_resolve` (tag 24), `lazy_decode`.
+- `lazy::from`, `schema::path`, `schema::decode`, `databind::decode`, `container_resolve` (tag 24), `lazy_decode`.
 - jsonpath: every parser, `at_path(string_view path)`, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `encode_from` with sharing on, `walker` embeds, `cycle_find`, `string_sink`, `container_message`.
 - inspect.hpp: `canonical_append`, `container_parse`, `inspect`, the `*_of` functions.

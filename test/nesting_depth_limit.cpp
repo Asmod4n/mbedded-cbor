@@ -42,8 +42,8 @@ TEST_CASE("nesting depth limit: lazy_decode with a binding")
 {
     test::nesting_depth_max_guard const depth{limit};
     test_binding binding;
-    CHECK(cbor::lazy_decode(binding, *cbor::decode(arrays_around(limit, "\x00"sv))).has_value());
-    CHECK_EQ(cbor::lazy_decode(binding, *cbor::decode(arrays_around(limit + 1, "\x00"sv))).error(),
+    CHECK(cbor::lazy_decode(binding, *cbor::lazy::from(arrays_around(limit, "\x00"sv))).has_value());
+    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(arrays_around(limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
 #endif
@@ -88,7 +88,7 @@ TEST_CASE("nesting depth limit: a comparison in a filter")
                                 "\x61"
                                 "c\x01"s;
         test_binding binding;
-        return cbor::at_path(binding, "$[?@.a == @.b].c", *cbor::decode(doc));
+        return cbor::at_path(binding, "$[?@.a == @.b].c", *cbor::lazy::from(doc));
     };
     CHECK(found(limit).has_value());
     CHECK_EQ(found(limit + 1).error(), error::nesting_depth_exceeded);
@@ -103,8 +103,8 @@ TEST_CASE("nesting depth limit: a descendant segment")
 {
     test::nesting_depth_max_guard const depth{limit};
     test_binding binding;
-    CHECK(cbor::at_path(binding, "$..[0]", *cbor::decode(arrays_around(limit, "\x00"sv))).has_value());
-    CHECK_EQ(cbor::at_path(binding, "$..[0]", *cbor::decode(arrays_around(limit + 1, "\x00"sv))).error(),
+    CHECK(cbor::at_path(binding, "$..[0]", *cbor::lazy::from(arrays_around(limit, "\x00"sv))).has_value());
+    CHECK_EQ(cbor::at_path(binding, "$..[0]", *cbor::lazy::from(arrays_around(limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
 #endif

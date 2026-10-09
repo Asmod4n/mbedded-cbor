@@ -8,7 +8,7 @@ namespace fuzz
 inline void lazy_channels(std::string_view const input)
 {
     test_binding binding;
-    auto const eager = cbor::lazy_decode(binding, *cbor::decode(input));
+    auto const eager = cbor::lazy_decode(binding, *cbor::lazy::from(input));
     (void)cbor::item_end(input);
     auto const decoded = cbor::lazy::from(std::string{input});
     if (!decoded)
@@ -20,7 +20,7 @@ inline void lazy_channels(std::string_view const input)
     if (whole) {
         string_writer w;
         if (cbor::encode(binding, w, *whole)) {
-            auto const again = cbor::lazy_decode(binding, *cbor::decode(w.encoded));
+            auto const again = cbor::lazy_decode(binding, *cbor::lazy::from(w.encoded));
             require(again.has_value() && same_number(*whole, *again));
         }
     }

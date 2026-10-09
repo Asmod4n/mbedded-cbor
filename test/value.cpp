@@ -52,7 +52,7 @@ struct size_binding : test_binding {
 std::vector<std::uint64_t> sizes_of(std::string_view const bytes)
 {
     size_binding binding;
-    (void)cbor::lazy_decode(binding, *cbor::decode(bytes));
+    (void)cbor::lazy_decode(binding, *cbor::lazy::from(bytes));
     return binding.sizes;
 }
 
@@ -91,11 +91,11 @@ TEST_CASE("major 5: a text key goes to map_key_decode")
                                   "c\xa1\x61"
                                   "a\x03"sv;
     key_binding binding;
-    auto const keyed = cbor::lazy_decode(binding, *cbor::decode(wire));
+    auto const keyed = cbor::lazy_decode(binding, *cbor::lazy::from(wire));
     REQUIRE(keyed.has_value());
     CHECK(binding.keys == std::vector<std::string>{"a", "c", "a"});
     test_binding plain;
-    auto const usual = cbor::lazy_decode(plain, *cbor::decode(wire));
+    auto const usual = cbor::lazy_decode(plain, *cbor::lazy::from(wire));
     REQUIRE(usual.has_value());
     CHECK(*keyed == *usual);
 }
