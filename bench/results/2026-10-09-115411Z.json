@@ -1,0 +1,276 @@
+{
+ "context": {
+  "commit": "05c58bf (clean)",
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -Werror",
+  "march_resolved_and_compilers": "-march=                     \t\tsapphirerapids\nclang version 23.1.2\ng++-16 (SUSE Linux) 16.2.0",
+  "kernel": "6.18.44-fc-v80",
+  "scheduler": "EEVDF (Linux 6.18)",
+  "vm": "Firecracker, 4 vcpus",
+  "container": "podman, image mbedded-cbor-tw-gb, --network none, --cap-add SYS_NICE",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "threads": 1,
+  "rounds": 10,
+  "order": "shuf per round",
+  "min_time": "0.2s",
+  "pinned": false,
+  "user": "uid 1000 (setpriv from container root)",
+  "unit": "ns real time per operation",
+  "arms": "M2: a map of PAIRS text keys k1000.. with small integer values, the key searched is the last one. static = cbor::lazy::find(entries.begin(), std::default_sentinel, key); projection = std::ranges::find(entries, key, projection to e->first.get<std::string_view>()); aa = static built a second time. PAIRS 32 and 128.",
+  "note": "The bench code was a temporary file outside the tree and is deleted. Load 1-minute 3.25 at start.",
+  "stamp": "2026-10-09T11:54:11Z",
+  "bench_source": "#include <benchmark/benchmark.h>\n#include <cbor/cbor.hpp>\n#include <algorithm>\n#include <cstdlib>\n#include <string>\n\nstatic cbor::lazy map_of(int const pairs)\n{\n    std::string m;\n    m += static_cast<char>(0xb8);\n    m += static_cast<char>(pairs);\n    for (int i = 0; i < pairs; ++i) {\n        std::string const k = \"k\" + std::to_string(1000 + i);\n        m += static_cast<char>(0x60 + k.size());\n        m += k;\n        m += static_cast<char>(i % 24);\n    }\n    return *cbor::lazy::from(m);\n}\n\nstatic cbor::lazy const l = map_of(PAIRS);\nstatic std::string const wanted = \"k\" + std::to_string(1000 + PAIRS - 1);\n\nstatic void run(benchmark::State &state)\n{\n    auto const entries = *l.entries();\n    for (auto _ : state) {\n#if defined(ARM_STATIC)\n        auto const found = cbor::lazy::find(entries.begin(), std::default_sentinel, wanted);\n        if (!found || *found == std::default_sentinel) [[unlikely]]\n            std::abort();\n        auto at = *found;\n        benchmark::DoNotOptimize(at);\n#else\n        auto found = std::ranges::find(entries, std::string_view(wanted), [](auto const &e) {\n            if (!e) [[unlikely]]\n                return std::string_view{};\n            auto const k = e->first.template get<std::string_view>();\n            return k ? **k : std::string_view{};\n        });\n        if (found == entries.end()) [[unlikely]]\n            std::abort();\n        benchmark::DoNotOptimize(found);\n#endif\n        benchmark::ClobberMemory();\n    }\n}\nBENCHMARK(run);\nBENCHMARK_MAIN();\n"
+ },
+ "runs": {
+  "o": {
+   "priority_and_uid": "-10\n1000",
+   "loadavg_start": "3.38 7.25 7.32 1/118 117",
+   "loadavg_end": "2.12 6.38 7.02 1/121 282",
+   "failed": "",
+   "toolchain": "clang++-23.128.x.aa: clang version 23.1.2\nclang++-23.128.x.projection: clang version 23.1.2\nclang++-23.128.x.static: clang version 23.1.2\nclang++-23.32.x.aa: clang version 23.1.2\nclang++-23.32.x.projection: clang version 23.1.2\nclang++-23.32.x.static: clang version 23.1.2\ng++-16.128.x.aa: GCC: (SUSE Linux) 16.2.0\ng++-16.128.x.projection: GCC: (SUSE Linux) 16.2.0\ng++-16.128.x.static: GCC: (SUSE Linux) 16.2.0\ng++-16.32.x.aa: GCC: (SUSE Linux) 16.2.0\ng++-16.32.x.projection: GCC: (SUSE Linux) 16.2.0\ng++-16.32.x.static: GCC: (SUSE Linux) 16.2.0",
+   "elf_type": "clang++-23.128.x.aa Type: DYN\nclang++-23.128.x.projection Type: DYN\nclang++-23.128.x.static Type: DYN\nclang++-23.32.x.aa Type: DYN\nclang++-23.32.x.projection Type: DYN\nclang++-23.32.x.static Type: DYN\ng++-16.128.x.aa Type: DYN\ng++-16.128.x.projection Type: DYN\ng++-16.128.x.static Type: DYN\ng++-16.32.x.aa Type: DYN\ng++-16.32.x.projection Type: DYN\ng++-16.32.x.static Type: DYN",
+   "results": [
+    {
+     "binary": "clang++-23.128.x.aa",
+     "ns": [
+      1994.177683647102,
+      1538.3253855044964,
+      1836.5205233200156,
+      1294.5966639971869,
+      1485.0572760139517,
+      1677.463449968916,
+      1679.7847479498967,
+      1524.7106504261128,
+      1721.5858393042763,
+      1686.641677355572
+     ],
+     "median": 1678.6240989594062,
+     "spread": [
+      1294.5966639971869,
+      1994.177683647102
+     ]
+    },
+    {
+     "binary": "clang++-23.128.x.projection",
+     "ns": [
+      6377.645922454622,
+      6169.379132887126,
+      6080.914907960131,
+      6084.508843321569,
+      5497.586001761703,
+      6123.722718533762,
+      5230.266308349576,
+      6142.7432868641645,
+      6130.20409006621,
+      5799.962039535294
+     ],
+     "median": 6104.115780927666,
+     "spread": [
+      5230.266308349576,
+      6377.645922454622
+     ]
+    },
+    {
+     "binary": "clang++-23.128.x.static",
+     "ns": [
+      1618.5942665787845,
+      1723.3835898847792,
+      1616.787632389873,
+      1715.5744047594912,
+      1614.1726335602366,
+      1754.3548745654148,
+      1670.840598090507,
+      1710.500340183034,
+      1317.4086595751683,
+      1397.9227809619458
+     ],
+     "median": 1644.7174323346458,
+     "spread": [
+      1317.4086595751683,
+      1754.3548745654148
+     ]
+    },
+    {
+     "binary": "clang++-23.32.x.aa",
+     "ns": [
+      466.7753344839511,
+      495.4534928093964,
+      440.55632934475193,
+      404.4723804944319,
+      467.5375803401377,
+      464.1829211490442,
+      445.1658835135693,
+      441.6094225520175,
+      394.5248749323383,
+      460.14327234997853
+     ],
+     "median": 452.65457793177393,
+     "spread": [
+      394.5248749323383,
+      495.4534928093964
+     ]
+    },
+    {
+     "binary": "clang++-23.32.x.projection",
+     "ns": [
+      1212.614633611733,
+      1545.8484775698755,
+      1531.3002855286302,
+      1202.561878752977,
+      1222.7753900175628,
+      1547.5314971494117,
+      1582.7485545563015,
+      1394.2723753007401,
+      1533.039871063209,
+      1223.5601550545982
+     ],
+     "median": 1462.7863304146852,
+     "spread": [
+      1202.561878752977,
+      1582.7485545563015
+     ]
+    },
+    {
+     "binary": "clang++-23.32.x.static",
+     "ns": [
+      436.75759591495256,
+      473.9520141946068,
+      462.1411767230553,
+      356.5934772809869,
+      351.789173309548,
+      494.79756027996046,
+      458.45553078127585,
+      452.53691824978984,
+      457.09001296628844,
+      476.4042657089076
+     ],
+     "median": 457.7727718737822,
+     "spread": [
+      351.789173309548,
+      494.79756027996046
+     ]
+    },
+    {
+     "binary": "g++-16.128.x.aa",
+     "ns": [
+      1709.5355203370862,
+      1649.4971811138585,
+      1615.87603164578,
+      1720.2982147348273,
+      1622.9686658651265,
+      1491.4286659907248,
+      1576.7385898764992,
+      1775.4684859901693,
+      1406.2709895443154,
+      1671.7905323945965
+     ],
+     "median": 1636.2329234894924,
+     "spread": [
+      1406.2709895443154,
+      1775.4684859901693
+     ]
+    },
+    {
+     "binary": "g++-16.128.x.projection",
+     "ns": [
+      3270.247565697465,
+      2537.2472736975237,
+      3054.840562936714,
+      3345.341435127705,
+      2539.8062755984247,
+      2769.2634747040465,
+      2730.95564559514,
+      2364.718722979562,
+      3101.489149478869,
+      3090.5389675263036
+     ],
+     "median": 2912.05201882038,
+     "spread": [
+      2364.718722979562,
+      3345.341435127705
+     ]
+    },
+    {
+     "binary": "g++-16.128.x.static",
+     "ns": [
+      1531.0263781314825,
+      1647.1251155264492,
+      1730.526256758314,
+      1454.6015231632823,
+      1766.6965202538956,
+      1631.265613367978,
+      1680.3028553847705,
+      1816.847764955919,
+      1428.2334985664372,
+      1436.2903371020843
+     ],
+     "median": 1639.1953644472137,
+     "spread": [
+      1428.2334985664372,
+      1816.847764955919
+     ]
+    },
+    {
+     "binary": "g++-16.32.x.aa",
+     "ns": [
+      409.138812135564,
+      397.15438995329083,
+      315.8595713918919,
+      362.6240844576027,
+      404.5842067509122,
+      425.4712526502175,
+      416.1438850047978,
+      494.7853079760863,
+      423.6656206973977,
+      405.6539719450024
+     ],
+     "median": 407.3963920402832,
+     "spread": [
+      315.8595713918919,
+      494.7853079760863
+     ]
+    },
+    {
+     "binary": "g++-16.32.x.projection",
+     "ns": [
+      789.6677524746158,
+      628.4977861068321,
+      784.6314757557714,
+      752.3340248018848,
+      764.3775711411388,
+      816.7597717783456,
+      750.0978968852555,
+      756.9714514899541,
+      597.373896826802,
+      680.8235430546702
+     ],
+     "median": 754.6527381459194,
+     "spread": [
+      597.373896826802,
+      816.7597717783456
+     ]
+    },
+    {
+     "binary": "g++-16.32.x.static",
+     "ns": [
+      399.96421544854525,
+      400.1448593071591,
+      328.1777869361686,
+      318.812973842794,
+      393.89702420610996,
+      411.25738205716203,
+      405.0757876032057,
+      327.1063553265771,
+      424.3675355941839,
+      398.82192414031596
+     ],
+     "median": 399.39306979443063,
+     "spread": [
+      318.812973842794,
+      424.3675355941839
+     ]
+    }
+   ]
+  }
+ }
+}
