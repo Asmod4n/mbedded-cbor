@@ -1035,8 +1035,26 @@ class extended_diagnostic_notation
                     validity::check_tag_content(h->argument, encoded, content_at, marks, std::identity{}).error_or(error{});
                 e != error{}) [[unlikely]]
                 return std::unexpected(e);
-            if (h->argument == std::to_underlying(rfc8949::tag_number::shareable))
-                marks.push_back(content_at);
+            auto const c = heads::raw_head_read(encoded, content_at);
+            if (!c) [[unlikely]]
+                return std::unexpected(c.error());
+            if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
+                if (auto const index = validity::check_sharedref_index(c->argument, marks.size()); !index) [[unlikely]]
+                    return std::unexpected(index.error());
+            }
+            if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
+                if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
+                    auto const n = heads::raw_head_read(encoded, c->at);
+                    if (!n) [[unlikely]]
+                        return std::unexpected(n.error());
+                    auto const index = validity::check_sharedref_index(n->argument, marks.size());
+                    if (!index) [[unlikely]]
+                        return std::unexpected(index.error());
+                    marks.push_back(marks[*index]);
+                } else {
+                    marks.push_back(content_at);
+                }
+            }
             out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument) + "(";
             if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
                 return r;
