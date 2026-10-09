@@ -59,7 +59,7 @@ class validity
     };
 
 public:
-    static constexpr std::size_t nesting_depth_limit = 1024;
+    static constexpr std::size_t nesting_depth_limit = 512;
 
     static constexpr std::size_t nesting_depth_default = CBOR_NESTING_DEPTH_DEFAULT;
 
