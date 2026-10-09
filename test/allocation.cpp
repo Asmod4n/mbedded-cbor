@@ -129,19 +129,3 @@ TEST_CASE("path: a typed read through tag 29 allocates")
     REQUIRE(first.has_value());
     CHECK_EQ(*first, 7u);
 }
-
-// A lookup with a position index finds the remembered key without an allocation. Only insert_or_assign, the
-// remembering, allocates.
-TEST_CASE("path: a typed read with a position index allocates nothing")
-{
-    std::string const bytes = "\xa3\x61" "a\x01\x61" "b\x02\x61" "c\x03"s;
-    cbor::position_index<16> index;
-    auto const l = *cbor::lazy::from(std::string_view(bytes));
-    index.insert_or_assign("c", *l.find<16>("c"));
-    REQUIRE(cbor::at_path<"$.c", int>(bytes, index).has_value());
-    std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$.c", int>(bytes, index);
-    std::size_t const after = allocations;
-    CHECK_EQ(after, before);
-    CHECK_EQ(found, 3);
-}
