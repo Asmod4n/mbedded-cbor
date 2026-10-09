@@ -380,14 +380,14 @@ struct value_sharing::top_level_item {
 
 struct value_sharing::sharing_decoder : heads::decoder {
     top_level_item message;
-    std::size_t decoded_bytes = 0;
+    std::size_t decoded_bytes_left = limits.decoded_bytes;
 
-    std::expected<void, error> decoded_bytes_add(std::size_t const added)
+    CBOR_ALWAYS_INLINE std::expected<void, error> decoded_bytes_count(std::uint64_t const count, std::size_t const size)
     {
-        auto const sum = validity::check_decoded_bytes(decoded_bytes, added);
+        auto const sum = validity::check_decoded_bytes(decoded_bytes_left, count, size);
         if (!sum) [[unlikely]]
             return std::unexpected(sum.error());
-        decoded_bytes = *sum;
+        decoded_bytes_left = *sum;
         return {};
     }
 };

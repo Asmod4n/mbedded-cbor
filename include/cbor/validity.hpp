@@ -98,9 +98,24 @@ public:
 
     static std::expected<void, error> check_input_bytes(std::size_t size);
 
-    CBOR_ALWAYS_INLINE static std::expected<void, error> check_argument(major_type major, std::uint64_t argument);
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_argument(major_type const major, std::uint64_t const argument, std::size_t const string_length,
+                   std::size_t const container_elements)
+    {
+        if (major == major_type::byte_string || major == major_type::text_string)
+            return check_limit(argument, string_length, error::string_length_exceeded);
+        if (major == major_type::array || major == major_type::map)
+            return check_limit(argument, container_elements, error::container_elements_exceeded);
+        return {};
+    }
 
-    static std::expected<std::size_t, error> check_decoded_bytes(std::size_t decoded, std::size_t added);
+    CBOR_ALWAYS_INLINE static constexpr std::expected<std::size_t, error>
+    check_decoded_bytes(std::size_t const left, std::uint64_t const count, std::size_t const size)
+    {
+        if (count > size_limit / size || static_cast<std::size_t>(count) * size > left) [[unlikely]]
+            return std::unexpected(error::decoded_bytes_exceeded);
+        return left - static_cast<std::size_t>(count) * size;
+    }
 
     static constexpr std::expected<void, error> check_pending_items(std::uint64_t const pending,
                                                                     std::size_t const bytes_left)
@@ -434,6 +449,14 @@ public:
     {
         return value.load(std::memory_order_relaxed);
     }
+
+    constexpr std::size_t load() const noexcept
+    {
+        if consteval {
+            return Bound;
+        }
+        return value.load(std::memory_order_relaxed);
+    }
 };
 
 struct limit_values {
@@ -500,27 +523,6 @@ inline constinit resource_limits limits{};
 inline std::expected<void, error> validity::check_input_bytes(std::size_t const size)
 {
     return check_limit(size, limits.input_bytes, error::input_bytes_exceeded);
-}
-
-CBOR_ALWAYS_INLINE inline std::expected<void, error> validity::check_argument(major_type const major,
-                                                                              std::uint64_t const argument)
-{
-    if (major == major_type::byte_string || major == major_type::text_string)
-        return check_limit(argument, limits.string_length, error::string_length_exceeded);
-    if (major == major_type::array || major == major_type::map)
-        return check_limit(argument, limits.container_elements, error::container_elements_exceeded);
-    return {};
-}
-
-inline std::expected<std::size_t, error> validity::check_decoded_bytes(std::size_t const decoded,
-                                                                       std::size_t const added)
-{
-    auto const sum = checked_add(decoded, added);
-    if (!sum) [[unlikely]]
-        return std::unexpected(error::decoded_bytes_exceeded);
-    if (auto const r = check_limit(*sum, limits.decoded_bytes, error::decoded_bytes_exceeded); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    return *sum;
 }
 
 }

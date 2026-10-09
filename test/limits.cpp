@@ -180,6 +180,17 @@ TEST_CASE("limits: decoded_bytes counted by lazy_decode")
     }
 }
 
+// A count in the input reserves nothing, so it charges nothing beyond the bytes that remain: an array head that
+// claims 2^64 - 1 elements over two bytes charges two elements and ends in too_little_data.
+TEST_CASE("limits: decoded_bytes charges no more elements than the bytes that remain")
+{
+    test_binding binding;
+    std::string const claimed = "\x9b\xff\xff\xff\xff\xff\xff\xff\xff\x01\x02"s;
+    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(claimed)).error(), error::too_little_data);
+    test::limits_guard const guard{{.decoded_bytes = 2 * sizeof(test_binding::value)}};
+    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(claimed)).error(), error::too_little_data);
+}
+
 #ifdef __cpp_impl_reflection
 
 namespace

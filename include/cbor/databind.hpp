@@ -307,7 +307,7 @@ class generic
             if (!text) [[unlikely]]
                 return std::unexpected(text.error());
             if constexpr (std::same_as<U, std::string>)
-                if (auto const r = d.decoded_bytes_add(text->size()); !r) [[unlikely]]
+                if (auto const r = d.decoded_bytes_count(text->size(), sizeof(char)); !r) [[unlikely]]
                     return r;
             out = U(*text);
             return {};
@@ -328,7 +328,7 @@ class generic
                     return std::unexpected(error::incorrect_type);
                 std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
             } else {
-                if (auto const r = d.decoded_bytes_add(view.size() * sizeof(typename U::value_type)); !r) [[unlikely]]
+                if (auto const r = d.decoded_bytes_count(view.size(), sizeof(typename U::value_type)); !r) [[unlikely]]
                     return r;
                 out.resize(view.size());
                 std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
@@ -375,7 +375,7 @@ class generic
                 typename U::mapped_type value{};
                 if (auto const r = generic_read(d, value, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
-                if (auto const r = d.decoded_bytes_add(sizeof(typename U::value_type)); !r) [[unlikely]]
+                if (auto const r = d.decoded_bytes_count(1, sizeof(typename U::value_type)); !r) [[unlikely]]
                     return r;
                 if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); })
                     out.try_emplace(std::move(key), std::move(value));
@@ -398,7 +398,7 @@ class generic
                 out.reserve(static_cast<std::size_t>(
                     std::min<std::uint64_t>(h->argument, d.encoded.size() / sizeof(E))));
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                if (auto const r = d.decoded_bytes_add(sizeof(E)); !r) [[unlikely]]
+                if (auto const r = d.decoded_bytes_count(1, sizeof(E)); !r) [[unlikely]]
                     return r;
                 if constexpr (requires {
                                   { out.emplace_back() } -> std::same_as<E &>;
