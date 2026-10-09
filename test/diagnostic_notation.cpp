@@ -213,3 +213,51 @@ TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
     test::nesting_depth_max_guard const depth{5};
     CHECK(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).has_value());
 }
+
+// diagnostic_notation printed a tag 29 whose index names no shareable that came before it, and databind refused
+// the same bytes. A sharedref is now checked against the shareables seen so far, as lazy and databind check it.
+TEST_CASE("diagnostic_notation: a sharedref names a shareable that comes before it")
+{
+    for (std::string_view const hex : {"d81d05"sv, "81d81d00"sv, "82d81c01d81d05"sv, "82d81d00d81c01"sv})
+        CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex(hex)).error(), error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("82d81c01d81d1bffffffffffffffff")).error(),
+             error::sharedref_index_not_marked);
+    CHECK(cbor::diagnostic_notation(bytes_of_hex("82d81c01d81c01")).has_value());
+    CHECK_EQ(inspected("82d81c01d81d00"), "[28(1), 29(0)]");
+    CHECK_EQ(inspected("83d81c01d81cd81d00d81d01"), "[28(1), 28(29(0)), 29(1)]");
+    CHECK_EQ(inspected("83d81c01d81cd81d00c1d81d01"), "[28(1), 28(29(0)), 1(29(1))]");
+    CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("83d81c6161d81cd81d00c1d81d01")).error(),
+             error::inadmissible_type_for_tag_content);
+}
+
+// The content check of a tag followed every sharedref of a chain 28(29(k)) back to the first shareable, so a chain
+// of n items cost n^2 steps: 180 KB took seconds. A shareable whose content is a sharedref now marks the content
+// that the sharedref names, so each check takes one step. A test that is quadratic again makes the suite slow.
+TEST_CASE("diagnostic_notation: a chain of shareables that refer to each other is read in linear time")
+{
+    std::size_t const n = 5000;
+    std::string encoded = "\x9a"s;
+    for (int shift = 24; shift >= 0; shift -= 8)
+        encoded += static_cast<char>((n + 1) >> shift);
+    encoded += "\xd8\x1c\x00"s;
+    for (std::size_t k = 0; k < n; ++k) {
+        encoded += "\xd8\x1c\xd8\x1d\x1a"s;
+        for (int shift = 24; shift >= 0; shift -= 8)
+            encoded += static_cast<char>(k >> shift);
+    }
+    auto const r = cbor::diagnostic_notation(encoded);
+    REQUIRE(r.has_value());
+    CHECK(r->ends_with("28(29(4999_2))]"));
+}
+
+// The content check of a tag read the head of its content with the decoder of definite lengths, so every tag over
+// an indefinite-length item was an error. RFC 8949 section 3.2 lets an indefinite-length item stand wherever its
+// major type stands, so the check reads the head with the indefinite length.
+TEST_CASE("diagnostic_notation: a tag encloses an indefinite-length item")
+{
+    CHECK_EQ(inspected("c69fff"), "6([_ ])");
+    CHECK_EQ(inspected("c07f6161ff"), "0((_ \"a\"))");
+    CHECK_EQ(inspected("c25f4101ff"), "2((_ h'01'))");
+    CHECK_EQ(inspected("d81c9f01ff"), "28([_ 1])");
+    CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("c09fff")).error(), error::inadmissible_type_for_tag_content);
+}

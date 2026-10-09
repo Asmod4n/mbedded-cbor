@@ -606,17 +606,16 @@ std::expected<void, error> validity::check_tag_content(std::uint64_t const tag, 
 {
     std::size_t at = content_at;
     for (;;) {
-        heads::decoder d{std::string_view(std::span(encoded).subspan(at))};
-        auto const c = d.head_decode();
+        auto const c = heads::raw_head_read(encoded, at);
         if (!c) [[unlikely]]
             return std::unexpected(c.error());
         if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-            at = encoded.size() - d.encoded.size();
+            at = c->at;
             continue;
         }
         if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
             return check_tag_content(tag, c->major, c->info);
-        auto const n = d.head_decode();
+        auto const n = heads::raw_head_read(encoded, c->at);
         if (!n) [[unlikely]]
             return std::unexpected(n.error());
         if (error const e = check_tag_content(c->argument, n->major, n->info).error_or(error{}); e != error{})
