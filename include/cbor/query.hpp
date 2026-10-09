@@ -548,20 +548,29 @@ class jsonpath
         constexpr std::expected<parsed_expression, error> logical_and_parse(std::string_view const text, std::size_t const at,
                                                                             std::size_t const depth)
         {
-            auto left = basic_parse(text, at, depth);
+            auto const first = basic_parse(text, at, depth);
+            if (!first) [[unlikely]]
+                return first;
+            parsed_expression chain = *first;
+            std::optional<std::size_t> last;
             for (;;) {
-                if (!left) [[unlikely]]
-                    return left;
-                std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
+                std::size_t const next = extended_diagnostic_notation::blank_end(text, chain.at);
                 if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("&&")))
-                    return left;
+                    return chain;
                 auto const right = basic_parse(
                     text, extended_diagnostic_notation::blank_end(text, next + std::string_view("&&").size()),
                     depth);
                 if (!right) [[unlikely]]
                     return right;
-                left = parsed_expression{right->at, expression_add({expression::kind::logical_and, left->index, right->index,
-                                                                    comparison_op::equal, false, false})};
+                std::size_t const left = last ? expressions[*last].second : chain.index;
+                std::size_t const node = expression_add({expression::kind::logical_and, left, right->index,
+                                                         comparison_op::equal, false, false});
+                if (last)
+                    expressions[*last].second = node;
+                else
+                    chain.index = node;
+                chain.at = right->at;
+                last = node;
             }
         }
 
@@ -570,20 +579,29 @@ class jsonpath
         {
             if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            auto left = logical_and_parse(text, at, depth);
+            auto const first = logical_and_parse(text, at, depth);
+            if (!first) [[unlikely]]
+                return first;
+            parsed_expression chain = *first;
+            std::optional<std::size_t> last;
             for (;;) {
-                if (!left) [[unlikely]]
-                    return left;
-                std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
+                std::size_t const next = extended_diagnostic_notation::blank_end(text, chain.at);
                 if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("||")))
-                    return left;
+                    return chain;
                 auto const right = logical_and_parse(
                     text, extended_diagnostic_notation::blank_end(text, next + std::string_view("||").size()),
                     depth);
                 if (!right) [[unlikely]]
                     return right;
-                left = parsed_expression{right->at, expression_add({expression::kind::logical_or, left->index, right->index,
-                                                                    comparison_op::equal, false, false})};
+                std::size_t const left = last ? expressions[*last].second : chain.index;
+                std::size_t const node = expression_add({expression::kind::logical_or, left, right->index,
+                                                         comparison_op::equal, false, false});
+                if (last)
+                    expressions[*last].second = node;
+                else
+                    chain.index = node;
+                chain.at = right->at;
+                last = node;
             }
         }
     };
@@ -1245,15 +1263,16 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
 inline std::expected<bool, error> jsonpath::expression_test(query_view const &v, std::size_t const index, lazy const &current,
                                                      lazy const &root, std::size_t const depth_max)
 {
-    expression const &e = v.expressions[index];
-    switch (e.kind) {
-    case expression::kind::logical_or:
-    case expression::kind::logical_and: {
-        auto const left = expression_test(v, e.first, current, root, depth_max);
-        if (!left || *left == (e.kind == expression::kind::logical_or))
+    std::size_t at = index;
+    while (v.expressions[at].kind == expression::kind::logical_or || v.expressions[at].kind == expression::kind::logical_and) {
+        expression const &chain = v.expressions[at];
+        auto const left = expression_test(v, chain.first, current, root, depth_max);
+        if (!left || *left == (chain.kind == expression::kind::logical_or))
             return left;
-        return expression_test(v, e.second, current, root, depth_max);
+        at = chain.second;
     }
+    expression const &e = v.expressions[at];
+    switch (e.kind) {
     case expression::kind::logical_not: {
         auto const operand = expression_test(v, e.first, current, root, depth_max);
         if (!operand) [[unlikely]]
