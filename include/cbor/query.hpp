@@ -333,7 +333,8 @@ class jsonpath
                 std::vector<selector> chosen;
                 if (text[at] == '[' || std::ranges::starts_with(std::span(text).subspan(at), std::string_view("..["))) {
                     s.descendant = text[at] == '.';
-                    auto const b = bracketed_parse(text, at + (s.descendant ? 2 : 0), depth);
+                    auto const b =
+                        bracketed_parse(text, at + (s.descendant ? std::string_view("..").size() : 0), depth);
                     if (!b) [[unlikely]]
                         return std::unexpected(b.error());
                     chosen = b->second;
@@ -452,7 +453,7 @@ class jsonpath
                 if (call && (name == "match" || name == "search")) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 if (!literals) {
-                    constexpr std::array<std::string_view, 3> names{"false", "true", "null"};
+                    constexpr auto names = std::to_array<std::string_view>({"false", "true", "null"});
                     for (std::size_t i = 0; i < names.size(); ++i)
                         if (name == names[i]) {
                             keys.push_back(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + i));
@@ -484,13 +485,13 @@ class jsonpath
 
         static constexpr std::optional<std::pair<comparison_op, std::size_t>> comparison_op_read(std::string_view const text, std::size_t const at)
         {
-            constexpr std::array<std::pair<std::string_view, comparison_op>, 6> ops{
+            constexpr auto ops = std::to_array<std::pair<std::string_view, comparison_op>>(
                 {{"==", comparison_op::equal},
                  {"!=", comparison_op::not_equal},
                  {"<=", comparison_op::less_equal},
                  {">=", comparison_op::greater_equal},
                  {"<", comparison_op::less},
-                 {">", comparison_op::greater}}};
+                 {">", comparison_op::greater}});
             for (auto const &[token, op] : ops)
                 if (std::ranges::starts_with(std::span(text).subspan(at), token))
                     return std::pair{op, token.size()};
@@ -554,7 +555,9 @@ class jsonpath
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
                 if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("&&")))
                     return left;
-                auto const right = basic_parse(text, extended_diagnostic_notation::blank_end(text, next + 2), depth);
+                auto const right = basic_parse(
+                    text, extended_diagnostic_notation::blank_end(text, next + std::string_view("&&").size()),
+                    depth);
                 if (!right) [[unlikely]]
                     return right;
                 left = parsed_expression{right->at, expression_add({expression::kind::logical_and, left->index, right->index,
@@ -574,7 +577,9 @@ class jsonpath
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
                 if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("||")))
                     return left;
-                auto const right = logical_and_parse(text, extended_diagnostic_notation::blank_end(text, next + 2), depth);
+                auto const right = logical_and_parse(
+                    text, extended_diagnostic_notation::blank_end(text, next + std::string_view("||").size()),
+                    depth);
                 if (!right) [[unlikely]]
                     return right;
                 left = parsed_expression{right->at, expression_add({expression::kind::logical_or, left->index, right->index,

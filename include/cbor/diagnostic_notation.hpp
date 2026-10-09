@@ -97,7 +97,8 @@ class extended_diagnostic_notation
             return std::unexpected(error::invalid_path);
         std::size_t const size =
             std::size_t{1} << (info - static_cast<int>(rfc8949::additional_information::one_byte_argument));
-        if (size < 8 && argument >> (8 * size) != 0) [[unlikely]]
+        if (size < sizeof(std::uint64_t) &&
+            argument >> (std::numeric_limits<std::uint8_t>::digits * size) != 0) [[unlikely]]
             return std::unexpected(error::invalid_path);
         heads::head_append(out, major, static_cast<std::uint8_t>(info), argument);
         return {};
@@ -113,7 +114,7 @@ class extended_diagnostic_notation
         if (at >= text.size() || text[at] != '_')
             return indicated{at, no_indicator};
         if (at + 1 < text.size() && text[at + 1] == 'i')
-            return indicated{at + 2, immediate_indicator};
+            return indicated{at + std::string_view("_i").size(), immediate_indicator};
         if (at + 1 < text.size() && text[at + 1] >= '0' && text[at + 1] <= '3')
             return indicated{at + 2, std::to_underlying(rfc8949::additional_information::one_byte_argument) +
                                          (text[at + 1] - '0')};
@@ -363,7 +364,7 @@ class extended_diagnostic_notation
             bool const nan = word("NaN");
             if (sign == '+' || (nan && sign == '-')) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            at += nan ? 3 : 8;
+            at += nan ? std::string_view("NaN").size() : std::string_view("Infinity").size();
             auto const next = indicator_parse(text, at);
             if (!next) [[unlikely]]
                 return std::unexpected(next.error());
@@ -378,13 +379,13 @@ class extended_diagnostic_notation
         int base = 10;
         if (word("0x") || word("0X")) {
             base = 16;
-            at += 2;
+            at += std::string_view("0x").size();
         } else if (word("0o")) {
             base = 8;
-            at += 2;
+            at += std::string_view("0o").size();
         } else if (word("0b")) {
             base = 2;
-            at += 2;
+            at += std::string_view("0b").size();
         }
         std::uint64_t mantissa = 0;
         std::size_t digits = 0;
@@ -607,7 +608,7 @@ class extended_diagnostic_notation
         }
         if (rest.starts_with("<<")) {
             std::string content;
-            std::size_t next = blank_end(text, at + 2);
+            std::size_t next = blank_end(text, at + std::string_view("<<").size());
             bool separated = true;
             while (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view(">>"))) {
                 if (!separated || next >= text.size()) [[unlikely]]
@@ -621,16 +622,17 @@ class extended_diagnostic_notation
                 next = s->at;
                 separated = s->separated;
             }
-            return string_finish(text, next + 2, out, major_type::byte_string, content);
+            return string_finish(text, next + std::string_view(">>").size(), out, major_type::byte_string,
+                                 content);
         }
-        constexpr std::array<std::string_view, 4> names{"false", "true", "null", "undefined"};
+        constexpr auto names = std::to_array<std::string_view>({"false", "true", "null", "undefined"});
         for (std::size_t i = 0; i < names.size(); ++i)
             if (rest.starts_with(names[i])) {
                 out.push_back(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + i));
                 return at + names[i].size();
             }
         if (rest.starts_with("simple(")) {
-            std::size_t next = blank_end(text, at + 7);
+            std::size_t next = blank_end(text, at + std::string_view("simple(").size());
             std::size_t const first = next;
             unsigned value = 0;
             while (next < text.size() && digit(text[next]) && value < 1000)
@@ -638,7 +640,8 @@ class extended_diagnostic_notation
             if (next == first || (text[first] == '0' && next > first + 1)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             next = blank_end(text, next);
-            if (next >= text.size() || text[next] != ')' || value > 255 ||
+            if (next >= text.size() || text[next] != ')' ||
+                value > std::numeric_limits<std::uint8_t>::max() ||
                 !validity::check_simple_value(heads::preferred_argument_info(value), value)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             if (auto const r = head_append(out, major_type::simple_float, value, no_indicator); !r) [[unlikely]]
@@ -909,7 +912,8 @@ class extended_diagnostic_notation
                 return "NaN" + indicator;
             std::string bytes(std::size_t{2} << width, '\0');
             for (std::size_t i = 0; i < bytes.size(); ++i)
-                bytes[i] = static_cast<char>(argument >> (8 * (bytes.size() - 1 - i)));
+                bytes[i] = static_cast<char>(
+                    argument >> (std::numeric_limits<std::uint8_t>::digits * (bytes.size() - 1 - i)));
             return "float'" + hex_of(bytes) + "'";
         }
         std::size_t const preferred =

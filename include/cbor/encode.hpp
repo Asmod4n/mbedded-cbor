@@ -196,7 +196,10 @@ struct encoder {
     std::expected<void, std::errc> head_encode(major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
         std::size_t const bytes = heads::argument_size(info);
-        std::uint64_t const big = std::byteswap(argument << ((64 - 8 * bytes) & 63));
+        std::uint64_t const big =
+            std::byteswap(argument << ((std::numeric_limits<std::uint64_t>::digits -
+                                        std::numeric_limits<std::uint8_t>::digits * bytes) &
+                                       (std::numeric_limits<std::uint64_t>::digits - 1)));
         if constexpr (!direct) {
             if (block.size() - used < heads::initial_byte_size + sizeof(std::uint64_t)) [[unlikely]]
                 if (auto const r = flush(); !r) [[unlikely]]
@@ -207,9 +210,10 @@ struct encoder {
             static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(head)>,
                           "A head must hold the initial byte and the eight argument bytes.");
             std::get<0>(head) = heads::initial_byte(major, info);
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), std::span(head).template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big),
+                              std::span(head).template subspan<heads::initial_byte_size>().begin());
             std::ranges::copy(head, std::span(block).subspan(used).begin());
-            used += 1 + bytes;
+            used += heads::initial_byte_size + bytes;
             return {};
         } else {
             std::span<char> const out = block;
@@ -222,10 +226,11 @@ struct encoder {
                 near_end ? std::span(tail)
                          : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
             item.front() = heads::initial_byte(major, info);
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), item.template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big),
+                              item.template subspan<heads::initial_byte_size>().begin());
             if (near_end) [[unlikely]]
-                return item_write(tail, 1 + bytes);
-            used = at + 1 + bytes;
+                return item_write(tail, heads::initial_byte_size + bytes);
+            used = at + heads::initial_byte_size + bytes;
             return {};
         }
     }
@@ -303,7 +308,8 @@ struct encoder {
                 major_type::simple_float,
                 std::to_underlying(rfc8949::simple_float_information::half_precision_float));
             auto const v = std::byteswap(heads::float_encode_binary16(static_cast<float>(value)));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
+                              item.template subspan<heads::initial_byte_size>().begin());
             size = heads::initial_byte_size + sizeof v;
         } break;
         case rfc8949::simple_float_information::single_precision_float: {
@@ -311,7 +317,8 @@ struct encoder {
                 major_type::simple_float,
                 std::to_underlying(rfc8949::simple_float_information::single_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
+                              item.template subspan<heads::initial_byte_size>().begin());
             size = heads::initial_byte_size + sizeof v;
         } break;
         default: {
@@ -319,7 +326,8 @@ struct encoder {
                 major_type::simple_float,
                 std::to_underlying(rfc8949::simple_float_information::double_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint64_t>(value));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
+                              item.template subspan<heads::initial_byte_size>().begin());
             size = heads::initial_byte_size + sizeof v;
         } break;
         }
@@ -359,16 +367,18 @@ struct encoder {
     std::expected<void, std::errc> fixed_width_signed_encode(T value)
     {
         using U = std::make_unsigned_t<T>;
-        U const sign = static_cast<U>(value >> (8 * sizeof(T) - 1));
+        U const sign = static_cast<U>(value >> std::numeric_limits<T>::digits);
         return fixed_width_head_encode(static_cast<major_type>(sign & 1), static_cast<U>(static_cast<U>(value) ^ sign));
     }
 
     template <std::floating_point T>
-        requires(sizeof(T) == 4 || sizeof(T) == 8)
+        requires(sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t))
     std::expected<void, std::errc> fixed_width_float_encode(T value)
     {
-        return fixed_width_head_encode(major_type::simple_float,
-                                       std::bit_cast<std::conditional_t<sizeof(T) == 4, std::uint32_t, std::uint64_t>>(value));
+        return fixed_width_head_encode(
+            major_type::simple_float,
+            std::bit_cast<
+                std::conditional_t<sizeof(T) == sizeof(std::uint32_t), std::uint32_t, std::uint64_t>>(value));
     }
 };
 

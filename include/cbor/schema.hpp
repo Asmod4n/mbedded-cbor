@@ -229,8 +229,10 @@ class packed
     template <class E>
     static constexpr bool is_typed_array_float = requires {
         requires std::is_floating_point_v<E> && std::numeric_limits<E>::is_iec559;
-        requires(sizeof(E) == 2 && std::numeric_limits<E>::digits == 11) || (sizeof(E) == 4 && std::numeric_limits<E>::digits == 24) ||
-                    (sizeof(E) == 8 && std::numeric_limits<E>::digits == 53);
+        requires(sizeof(E) == 2 && std::numeric_limits<E>::digits == 11) ||
+                    (sizeof(E) == 4 && std::numeric_limits<E>::digits == 24) ||
+                    (sizeof(E) == sizeof(double) &&
+                     std::numeric_limits<E>::digits == std::numeric_limits<double>::digits);
     };
 
     template <class E>
@@ -685,7 +687,7 @@ class packed
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             uint128 magnitude = static_cast<uint128>(value);
             if constexpr (std::same_as<U, int128>) {
-                uint128 const sign = static_cast<uint128>(value >> 127);
+                uint128 const sign = static_cast<uint128>(value >> std::numeric_limits<int128>::digits);
                 field.front() = heads::initial_byte(major_type::tag,
                                                     std::to_underlying(rfc8949::tag_number::unsigned_bignum) +
                                                         static_cast<std::uint64_t>(sign & 1));
@@ -699,7 +701,7 @@ class packed
             std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
         } else if constexpr (std::signed_integral<U>) {
             using M = std::make_unsigned_t<U>;
-            M const sign = static_cast<M>(value >> (8 * sizeof(U) - 1));
+            M const sign = static_cast<M>(value >> std::numeric_limits<U>::digits);
             field.front() =
                 heads::initial_byte(static_cast<major_type>(sign & 1),
                                     std::to_underlying(rfc8949::additional_information::one_byte_argument) +
@@ -840,7 +842,8 @@ class packed
         using U = std::remove_cv_t<T>;
         auto const head = static_cast<unsigned char>(field.front());
         if constexpr (std::same_as<U, bool>) {
-            return (head | 1) == (std::to_underlying(major_type::simple_float) << 5 | std::to_underlying(simple_value::true_value));
+            return (head | 1) == static_cast<unsigned char>(heads::initial_byte(
+                                     major_type::simple_float, std::to_underlying(simple_value::true_value)));
         } else if constexpr (has_fixed_underlying_type<U>) {
             return fixed_head_valid<std::underlying_type_t<U>>(field);
         } else {
@@ -988,10 +991,16 @@ class packed
                                     std::to_underlying(rfc8949::additional_information::four_byte_argument)))
             [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        std::size_t const length = heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(prefix.size() + 1).template first<4>());
-        std::size_t const count = length / 4;
-        if (length % 4 != 0 ||
-            heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(4).template first<4>()) != shared_first_of<T>() + count) [[unlikely]]
+        std::size_t const length =
+            heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded)
+                                                    .subspan(prefix.size() + heads::initial_byte_size)
+                                                    .template first<sizeof(std::uint32_t)>());
+        std::size_t const count = length / sizeof(std::uint32_t);
+        if (length % sizeof(std::uint32_t) != 0 ||
+            heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded)
+                                                    .subspan(sizeof(std::uint32_t))
+                                                    .template first<sizeof(std::uint32_t)>()) !=
+                shared_first_of<T>() + count) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         if (length > encoded.size() - least) [[unlikely]]
             return std::unexpected(error::too_little_data);
@@ -1411,7 +1420,7 @@ class packed
         if (!class_tag_valid<T, T>(field)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         constexpr std::size_t fillers = shared_first_of<T>() - 1 - packing_table_of<T>().size();
-        decode_cursor c{encoded, *dir, 0, dir->at + 4 * dir->count + fillers, root};
+        decode_cursor c{encoded, *dir, 0, dir->at + sizeof(std::uint32_t) * dir->count + fillers, root};
         if (auto const r = c.value_read<T>(out, field, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (c.index != dir->count || c.at != root) [[unlikely]]
