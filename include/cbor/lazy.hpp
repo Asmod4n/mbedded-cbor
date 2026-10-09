@@ -41,12 +41,13 @@ inline lazy_elements::iterator::value_type lazy_elements::iterator::operator*() 
 inline lazy_elements::iterator &lazy_elements::iterator::operator++()
 {
     if (failure != error{}) [[unlikely]] {
-        left = 0;
+        --left;
         return *this;
     }
     heads::decoder d{std::string_view(std::span(top_level->encoded).subspan(offset))};
     if (auto const r = well_formedness::item_skip(d, *top_level); !r) [[unlikely]] {
         failure = r.error();
+        --left;
         return *this;
     }
     offset = top_level->encoded.size() - d.encoded.size();
@@ -76,12 +77,13 @@ inline lazy_entries::iterator::value_type lazy_entries::iterator::operator*() co
 inline lazy_entries::iterator &lazy_entries::iterator::operator++()
 {
     if (failure != error{}) [[unlikely]] {
-        left = 0;
+        --left;
         return *this;
     }
     heads::decoder d{std::string_view(std::span(top_level->encoded).subspan(value))};
     if (auto const r = well_formedness::item_skip(d, *top_level); !r) [[unlikely]] {
         failure = r.error();
+        --left;
         return *this;
     }
     key = top_level->encoded.size() - d.encoded.size();
@@ -124,7 +126,8 @@ std::expected<typename Entries::iterator, error> value_sharing::key_find(resolve
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     std::size_t const first = found.source->encoded.size() - found.d.encoded.size();
-    typename Entries::iterator it(std::move(found.source), first, found.h.argument);
+    typename Entries::iterator it(std::move(found.source), first,
+                                  std::min<std::uint64_t>(found.h.argument, found.d.encoded.size()));
     auto found_at = key_find<false>(std::move(it), std::default_sentinel, key);
     if (!found_at) [[unlikely]]
         return std::unexpected(found_at.error());
@@ -479,6 +482,10 @@ inline std::expected<lazy_elements, error> lazy::elements() const
     auto const &[source, h, d] = *found;
     if (h.major != major_type::array) [[unlikely]]
         return std::unexpected(error::not_indexable);
+    if (auto const r = validity::check_definite_length(h.major, h.info); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (auto const r = validity::check_pending_items(h.argument, d.encoded.size()); !r) [[unlikely]]
+        return std::unexpected(r.error());
     return lazy_elements(source, source->encoded.size() - d.encoded.size(), h.argument);
 }
 
@@ -490,6 +497,10 @@ inline std::expected<lazy_entries, error> lazy::entries() const
     auto const &[source, h, d] = *found;
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
+    if (auto const r = validity::check_definite_length(h.major, h.info); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (auto const r = validity::check_pending_items(h.argument, d.encoded.size()); !r) [[unlikely]]
+        return std::unexpected(r.error());
     return lazy_entries(source, source->encoded.size() - d.encoded.size(), h.argument);
 }
 
