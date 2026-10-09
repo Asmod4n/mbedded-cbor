@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <expected>
 #include <functional>
+#include <initializer_list>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -356,6 +357,158 @@ TEST_CASE("lazy: find in a truncated map gives the error")
     CHECK_EQ(l.find<16>("z").error(), error::too_little_data);
     CHECK_EQ(l.at<16>("z").error(), error::too_little_data);
     CHECK(value_at(at(l, "a")) == V(1));
+}
+
+namespace
+{
+
+cbor::position_index<16> index_of(cbor::lazy const &l, std::initializer_list<std::string_view> const keys)
+{
+    cbor::position_index<16> index;
+    for (std::string_view const key : keys) {
+        auto const found = l.find<16>(key);
+        REQUIRE(found.has_value());
+        REQUIRE(*found != std::default_sentinel);
+        index.insert_or_assign(key, *found);
+    }
+    return index;
+}
+
+} // namespace
+
+// A message of the same form has the remembered key at the remembered pair. The first key of the second message is a
+// shared reference to a mark that does not exist, so a search from the first pair fails on it. at with the index
+// skips that pair without a compare and gives the value: the remembered pair was used.
+TEST_CASE("lazy: at with a position index reads the remembered pair of a message of the same form")
+{
+    cbor::position_index<16> const index = index_of(lazy_of(encoded(M("a"s, 1, "b"s, 2, "c"s, 3))), {"c"});
+    cbor::lazy const same = lazy_of("\xa3\xd8\x1d\x05\x01\x61" "b\x14\x61" "c\x18\x1e"s);
+    CHECK_EQ(same.at<16>("c").error(), error::sharedref_index_not_marked);
+    auto const found = same.at("c", index);
+    REQUIRE(found.has_value());
+    CHECK(value_at(*found) == V(30));
+    auto const it = same.find("c", index);
+    REQUIRE(it.has_value());
+    REQUIRE(*it != std::default_sentinel);
+    CHECK(value_at((**it)->first) == V("c"s));
+    CHECK(std::next(*it) == std::default_sentinel);
+}
+
+// Integer keys are remembered as text keys are.
+TEST_CASE("lazy: a position index remembers integer keys")
+{
+    cbor::lazy const first = lazy_of("\xa3\x01\x61" "a\x21\x61" "b\x07\x61" "c"s);
+    cbor::position_index<16> index;
+    for (std::int64_t const key : {std::int64_t{-2}, std::int64_t{7}})
+        index.insert_or_assign(key, *first.find<16>(key));
+    cbor::lazy const same = lazy_of("\xa3\xd8\x1d\x05\x01\x21\x61" "y\x07\x61" "z"s);
+    CHECK(value_at(*same.at(std::int64_t{-2}, index)) == V("y"s));
+    CHECK(value_at(*same.at(std::int64_t{7}, index)) == V("z"s));
+    CHECK(value_at(*lazy_of(encoded(A(4, 5))).at(std::int64_t{1}, index)) == V(5));
+}
+
+// A changed message has another key at the remembered pair. The compare of that key fails, and the search from the
+// first pair finds the key. A remembered pair beyond the count of the map, or a key the index does not hold, also
+// goes to the search.
+TEST_CASE("lazy: at with a position index finds a moved key")
+{
+    cbor::position_index<16> const index =
+        index_of(lazy_of(encoded(M("a"s, 1, "b"s, 2, "c"s, 3, "d"s, 4))), {"a", "c"});
+    cbor::lazy const moved = lazy_of(encoded(M("c"s, 30, "a"s, 10, "b"s, 20, "d"s, 40)));
+    CHECK(value_at(*moved.at("c", index)) == V(30));
+    CHECK(value_at(*moved.at("a", index)) == V(10));
+    CHECK(value_at(*moved.at("d", index)) == V(40));
+    cbor::lazy const shorter = lazy_of(encoded(M("a"s, 1)));
+    CHECK(value_at(*shorter.at("a", index)) == V(1));
+    CHECK_EQ(shorter.at("c", index).error(), error::key_not_found);
+    CHECK_EQ(lazy_of(encoded(M())).at("a", index).error(), error::key_not_found);
+}
+
+// The remembered pair is reached by skipping whole items, so the bytes of a key inside a string are never compared
+// as a key. A message whose value holds the bytes of the key "c" gives no value for "c".
+TEST_CASE("lazy: a position index never reads a key out of a string")
+{
+    cbor::position_index<16> index = index_of(lazy_of(encoded(M("a"s, 1, "b"s, 2, "c"s, 3))), {"b", "c"});
+    index.core_deterministic = true;
+    cbor::lazy const hostile = lazy_of("\xa3\x61" "a\x63\x61" "c\x05\x61" "b\x62\x61" "c\x61" "z\x01"s);
+    CHECK_EQ(hostile.at("c", index).error(), error::key_not_found);
+    CHECK(value_at(*hostile.at("b", index)) == V("\x61" "c"s));
+    cbor::lazy const truncated = lazy_of("\xa3\x61" "a\x01\x61" "b\x02\x61"s);
+    CHECK_EQ(truncated.at("c", index).error(), error::too_little_data);
+    CHECK_EQ(truncated.at<16>("c").error(), error::too_little_data);
+}
+
+// In a map whose keys are sorted by RFC 8949 4.2.1, a key that lies between two remembered neighbours stands between
+// them, if it is present. The last pair of the message has a key that a search fails on, so the answer without an
+// error shows that only the pairs up to the upper neighbour were read. A key between neighbours that are further
+// apart is found between them. A key below the first or above the last remembered key goes to the search.
+TEST_CASE("lazy: a deterministic position index answers a missing key from its neighbours")
+{
+    cbor::lazy const first = lazy_of(encoded(M("a"s, 1, "b"s, 2, "d"s, 4, "e"s, 5)));
+    cbor::position_index<16> index = index_of(first, {"b", "d"});
+    cbor::lazy const same = lazy_of("\xa4\x61" "a\x01\x61" "b\x02\x61" "d\x04\xd8\x1d\x05\x06"s);
+    CHECK_EQ(same.at<16>("c").error(), error::sharedref_index_not_marked);
+    CHECK_EQ(same.at("c", index).error(), error::sharedref_index_not_marked);
+    index.core_deterministic = true;
+    CHECK_EQ(same.at("c", index).error(), error::key_not_found);
+    auto const end = same.find("c", index);
+    REQUIRE(end.has_value());
+    CHECK(*end == std::default_sentinel);
+    cbor::position_index<16> wide = index_of(lazy_of(encoded(M("a"s, 1, "b"s, 2, "c"s, 3, "d"s, 4, "e"s, 5))), {"a", "e"});
+    wide.core_deterministic = true;
+    cbor::lazy const middle = lazy_of(encoded(M("a"s, 10, "b"s, 20, "c"s, 30, "d"s, 40, "e"s, 50)));
+    CHECK(value_at(*middle.at("c", wide)) == V(30));
+    CHECK_EQ(middle.at("bb", wide).error(), error::key_not_found);
+    CHECK_EQ(middle.at("0", wide).error(), error::key_not_found);
+}
+
+// The neighbours are checked in the message. Where a neighbour is not at its remembered pair, the answer comes from
+// the search.
+TEST_CASE("lazy: a deterministic position index checks both neighbours")
+{
+    cbor::position_index<16> index = index_of(lazy_of(encoded(M("a"s, 1, "b"s, 2, "d"s, 4, "e"s, 5))), {"b", "d"});
+    index.core_deterministic = true;
+    cbor::lazy const shifted = lazy_of(encoded(M("b"s, 2, "a"s, 1, "c"s, 3, "d"s, 4, "e"s, 5)));
+    CHECK(value_at(*shifted.at("c", index)) == V(3));
+    cbor::lazy const other = lazy_of(encoded(M("a"s, 1, "b"s, 2, "x"s, 3, "e"s, 5)));
+    CHECK_EQ(other.at("c", index).error(), error::key_not_found);
+    cbor::lazy const tagged = lazy_of("\xa4\x61" "a\x01\x61" "b\x02\xd8\x1c\x61" "c\x03\x61" "d\x04"s);
+    CHECK(value_at(*tagged.at("c", index)) == V(3));
+}
+
+// The index holds copies of the keys and the counts of pairs, and no view and no owner of a message. The message and
+// its owner end before the index is used again.
+TEST_CASE("lazy: a position index holds nothing of the message")
+{
+    auto owner = std::make_shared<std::string const>(encoded(M("a"s, 1, "b"s, 2)));
+    cbor::position_index<16> index;
+    {
+        cbor::lazy const l = *cbor::lazy::from(owner);
+        index.insert_or_assign("b", *l.find<16>("b"));
+    }
+    CHECK_EQ(owner.use_count(), 1);
+    owner.reset();
+    CHECK(value_at(*lazy_of(encoded(M("a"s, 3, "b"s, 4))).at("b", index)) == V(4));
+}
+
+// at_path takes the same index for each key of the path. A missing key between two neighbours gives key_not_found.
+TEST_CASE("path: at_path with a position index")
+{
+    cbor::position_index<16> index = index_of(lazy_of(encoded(M("a"s, 1, "b"s, 2, "d"s, 4, "e"s, 5))), {"b", "d"});
+    std::string const same = encoded(M("a"s, 10, "b"s, 20, "d"s, 40, "e"s, 50));
+    CHECK_EQ(cbor::at_path<"$.d", int>(same, index), 40);
+    CHECK_EQ(cbor::at_path<"$.e", int>(same, index), 50);
+    CHECK_EQ(cbor::at_path<"$.c", int>(same, index).error(), error::key_not_found);
+    std::string const sharedref = "\xa4\x61" "a\x01\x61" "b\x02\x61" "d\x04\xd8\x1d\x05\x06"s;
+    CHECK_EQ(cbor::at_path<"$.c", int>(sharedref, index).error(), error::sharedref_index_not_marked);
+    index.core_deterministic = true;
+    CHECK_EQ(cbor::at_path<"$.c", int>(sharedref, index).error(), error::key_not_found);
+    std::string const moved = encoded(M("d"s, 4, "b"s, 2));
+    CHECK_EQ(cbor::at_path<"$.d", int>(moved, index), 4);
+    auto const owner = std::make_shared<std::string const>(encoded(M("a"s, 1, "b"s, "x"s)));
+    auto const text = cbor::at_path<"$.b", std::string_view>(owner, *owner, index);
+    REQUIRE(text.has_value());
+    CHECK_EQ(**text, "x");
 }
 
 // decode reads nothing ahead, so a step finds a truncated element. The step gives the error once and
@@ -831,7 +984,7 @@ namespace
 {
 
 template <std::size_t DepthMax>
-std::array<bool, 11> lazy_compiles()
+std::array<bool, 15> lazy_compiles()
 {
     return {
         requires(std::string_view const s) { cbor::decode<DepthMax>(s); },
@@ -841,6 +994,10 @@ std::array<bool, 11> lazy_compiles()
         requires(cbor::lazy const &l) { l.template at<DepthMax>(std::int64_t{0}); },
         requires(cbor::lazy const &l) { l.template find<DepthMax>(std::string_view{}); },
         requires(cbor::lazy const &l) { l.template find<DepthMax>(std::int64_t{0}); },
+        requires(cbor::lazy const &l, cbor::position_index<DepthMax> const &h) { l.find(std::string_view{}, h); },
+        requires(cbor::lazy const &l, cbor::position_index<DepthMax> const &h) { l.find(std::int64_t{0}, h); },
+        requires(cbor::lazy const &l, cbor::position_index<DepthMax> const &h) { l.at(std::string_view{}, h); },
+        requires(cbor::lazy const &l, cbor::position_index<DepthMax> const &h) { l.at(std::int64_t{0}, h); },
         requires(cbor::lazy const &l) { l.template elements<DepthMax>(); },
         requires(cbor::lazy const &l) { l.template entries<DepthMax>(); },
         requires(cbor::lazy const &l) { l.template decode<DepthMax>(); },

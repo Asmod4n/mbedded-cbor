@@ -56,6 +56,12 @@ std::expected<T, error> at_path(std::string_view encoded);
 
 template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default>
     requires(singular_query<Path, DepthMax>::value &&
+             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+std::expected<T, error> at_path(std::string_view encoded, position_index<DepthMax> const &hint);
+
+template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default>
+    requires(singular_query<Path, DepthMax>::value &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view encoded);
@@ -63,6 +69,18 @@ std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, s
 template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default, class Encoded>
     requires std::same_as<std::remove_const_t<Encoded>, std::string>
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
+
+template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default>
+    requires(singular_query<Path, DepthMax>::value &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view encoded,
+                                            position_index<DepthMax> const &hint);
+
+template <fixed_string Path, class T, std::size_t DepthMax = validity::nesting_depth_default, class Encoded>
+    requires std::same_as<std::remove_const_t<Encoded>, std::string>
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded &&encoded,
+                                            position_index<DepthMax> const &hint) = delete;
 
 class jsonpath
 {
@@ -622,7 +640,8 @@ class jsonpath
 
     template <std::size_t DepthMax, class T>
     static std::optional<std::expected<T, error>> query_walk(query_view const &v, parsed_query const &top,
-                                                             std::string_view const encoded)
+                                                             std::string_view const encoded,
+                                                             position_index<DepthMax> const *const hint)
     {
         heads::decoder d{encoded};
         heads::head h{};
@@ -682,6 +701,26 @@ class jsonpath
             if (each.kind == selector::kind::key && !named.head_decode()) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             bool found = false;
+            if (hint != nullptr) {
+                std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> bytes;
+                std::array<std::string_view, 2> encoded_key;
+                if (each.kind == selector::kind::key) {
+                    encoded_key = {key.substr(0, key.size() - named.encoded.size()), named.encoded};
+                } else {
+                    std::size_t const size = heads::head_write(
+                        bytes, 0, each.index < 0 ? major_type::negative_integer : major_type::unsigned_integer,
+                        each.index < 0 ? static_cast<std::uint64_t>(-1 - each.index) : static_cast<std::uint64_t>(each.index));
+                    encoded_key = {std::string_view(bytes.data(), size), std::string_view{}};
+                }
+                if (auto const r = value_sharing::key_find<DepthMax>(d, none, h.argument, encoded_key, *hint)) {
+                    if (r->second == 0)
+                        return std::unexpected(error::key_not_found);
+                    d = r->first;
+                    if (auto const s = well_formedness::item_skip<DepthMax>(d, none, 1); !s) [[unlikely]]
+                        return std::unexpected(s.error());
+                    found = true;
+                }
+            }
             for (std::uint64_t i = 0; i < h.argument && !found; ++i) {
                 heads::decoder probe = d;
                 for (;;) {
@@ -867,7 +906,7 @@ class jsonpath
     }
 
     template <fixed_string Path, std::size_t DepthMax, class T>
-    static std::expected<T, error> query_walk(std::string_view const encoded)
+    static std::expected<T, error> query_walk(std::string_view const encoded, position_index<DepthMax> const *const hint)
     {
         constexpr auto q = [] {
             std::array const text = Path.value;
@@ -887,7 +926,7 @@ class jsonpath
         }();
         query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys)};
         std::string_view const content = heads::self_described_cbor_content(encoded);
-        auto const walked = query_walk<DepthMax, T>(v, top, content);
+        auto const walked = query_walk<DepthMax, T>(v, top, content, hint);
         if (walked) [[likely]]
             return *walked;
         return query_walk<DepthMax, T>(
@@ -899,9 +938,10 @@ class jsonpath
 
     template <fixed_string Path, std::size_t DepthMax, class T>
     static std::expected<owning_ref<T>, error> query_walk(std::shared_ptr<void const> owner,
-                                                          std::string_view const encoded)
+                                                          std::string_view const encoded,
+                                                          position_index<DepthMax> const *const hint)
     {
-        auto const r = query_walk<Path, DepthMax, T>(encoded);
+        auto const r = query_walk<Path, DepthMax, T>(encoded, hint);
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
         return owning_ref<T>(std::move(owner), *r);
@@ -922,6 +962,19 @@ class jsonpath
                   std::is_same_v<T, typed_array>))
     friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner,
                                                        std::string_view encoded);
+
+    template <fixed_string Path, class T, std::size_t DepthMax>
+        requires(singular_query<Path, DepthMax>::value &&
+                 ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+                  std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+    friend std::expected<T, error> at_path(std::string_view encoded, position_index<DepthMax> const &hint);
+
+    template <fixed_string Path, class T, std::size_t DepthMax>
+        requires(singular_query<Path, DepthMax>::value &&
+                 (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                  std::is_same_v<T, typed_array>))
+    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view encoded,
+                                                       position_index<DepthMax> const &hint);
 
     template <fixed_string, std::size_t>
     friend class verify_path;
@@ -1478,7 +1531,16 @@ template <fixed_string Path, class T, std::size_t DepthMax>
               std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
 std::expected<T, error> at_path(std::string_view const encoded)
 {
-    return jsonpath::query_walk<Path, DepthMax, T>(encoded);
+    return jsonpath::query_walk<Path, DepthMax, T>(encoded, nullptr);
+}
+
+template <fixed_string Path, class T, std::size_t DepthMax>
+    requires(singular_query<Path, DepthMax>::value &&
+             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+std::expected<T, error> at_path(std::string_view const encoded, position_index<DepthMax> const &hint)
+{
+    return jsonpath::query_walk<Path, DepthMax, T>(encoded, &hint);
 }
 
 template <fixed_string Path, class T, std::size_t DepthMax>
@@ -1488,7 +1550,18 @@ template <fixed_string Path, class T, std::size_t DepthMax>
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view const encoded)
 {
     validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
-    return jsonpath::query_walk<Path, DepthMax, T>(std::move(owner), encoded);
+    return jsonpath::query_walk<Path, DepthMax, T>(std::move(owner), encoded, nullptr);
+}
+
+template <fixed_string Path, class T, std::size_t DepthMax>
+    requires(singular_query<Path, DepthMax>::value &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view const encoded,
+                                            position_index<DepthMax> const &hint)
+{
+    validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
+    return jsonpath::query_walk<Path, DepthMax, T>(std::move(owner), encoded, &hint);
 }
 
 }
