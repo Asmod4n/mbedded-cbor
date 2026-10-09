@@ -38,7 +38,7 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
     std::ifstream in(JSONPATH_CTS "/cts.cbor", std::ios::binary);
     REQUIRE(in.good());
     std::string const suite{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    auto const root = cbor::decode(suite);
+    auto const root = cbor::lazy::from(suite);
     REQUIRE(root.has_value());
     test_binding binding;
     auto const all = cbor::lazy_decode(binding, *root);
@@ -58,7 +58,7 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         CAPTURE(name);
         CAPTURE(selector);
         if (c.size() == 2 || function_without_support(selector)) {
-            auto const document = c.size() == 2 ? cbor::decode(std::string_view("\xf6")) : root->at(static_cast<std::int64_t>(i))->at(std::int64_t{2});
+            auto const document = c.size() == 2 ? cbor::lazy::from(std::string_view("\xf6")) : root->at(static_cast<std::int64_t>(i))->at(std::int64_t{2});
             REQUIRE(document.has_value());
             auto const r = cbor::at_path(binding, selector, *document);
             bool const invalid = !r && r.error() == error::invalid_path;

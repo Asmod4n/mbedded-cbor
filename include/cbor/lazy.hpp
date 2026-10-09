@@ -90,26 +90,6 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
     return *this;
 }
 
-inline std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded)
-{
-    validity::throw_logic_error_if_null(encoded, "cbor::decode: the encoded data item is null");
-    validity::throw_logic_error_if_empty(encoded,
-                                         "cbor::decode: the owner of the encoded data item is empty");
-    std::string_view const content = heads::self_described_cbor_content(*encoded);
-    return lazy{std::make_shared<value_sharing::top_level_item>(encoded, content, std::vector<lazy>{}, 0), 0};
-}
-
-inline std::expected<lazy, error> decode(std::string_view const encoded)
-{
-    return decode(std::make_shared<std::string const>(encoded));
-}
-
-template <std::same_as<std::string> Encoded>
-inline std::expected<lazy, error> decode(Encoded &&encoded)
-{
-    return decode(std::make_shared<std::string const>(std::move(encoded)));
-}
-
 inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner, std::string_view const encoded)
 {
     validity::throw_logic_error_if_empty(owner,

@@ -28,7 +28,7 @@ namespace shared_test
 handle decoded_ref(std::string_view wire)
 {
     ref_binding binding;
-    auto v = cbor::lazy_decode(binding, *cbor::decode(wire));
+    auto v = cbor::lazy_decode(binding, *cbor::lazy::from(wire));
     REQUIRE(v.has_value());
     return *v;
 }
@@ -36,7 +36,7 @@ handle decoded_ref(std::string_view wire)
 error ref_decode_error(std::string_view wire)
 {
     ref_binding binding;
-    auto const v = cbor::lazy_decode(binding, *cbor::decode(wire));
+    auto const v = cbor::lazy_decode(binding, *cbor::lazy::from(wire));
     REQUIRE_FALSE(v.has_value());
     return v.error();
 }
@@ -162,7 +162,7 @@ TEST_CASE("tag 28/29: a cycle that a failed decode leaves behind is freed with t
 {
     std::vector<std::weak_ptr<node>> const made = [] {
         ref_binding binding;
-        CHECK_FALSE(cbor::lazy_decode(binding, *cbor::decode("\xd8\x1c\xa5\x61\x61\xd8\x1d\x00"sv)).has_value());
+        CHECK_FALSE(cbor::lazy_decode(binding, *cbor::lazy::from("\xd8\x1c\xa5\x61\x61\xd8\x1d\x00"sv)).has_value());
         return binding.made;
     }();
     REQUIRE_FALSE(made.empty());
@@ -455,7 +455,7 @@ TEST_CASE("registered tag: distinct objects with equal content do not share")
 TEST_CASE("registered tag: a reference inside the content names the object")
 {
     ref_binding binding;
-    auto const r = cbor::lazy_decode(binding, *cbor::decode("\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv));
+    auto const r = cbor::lazy_decode(binding, *cbor::lazy::from("\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv));
     REQUIRE(r.has_value());
     CHECK(same(element(std::get<object>((*r)->kind).content, 0), *r));
     CHECK_EQ(binding.after_decode_calls, 1);
@@ -468,7 +468,7 @@ TEST_CASE("registered tag: after_decode sets the place of the mark")
 {
     ref_binding binding;
     binding.replacement = u(99);
-    auto const r = cbor::lazy_decode(binding, *cbor::decode("\x82\xd8\x1c\xd9\x13\x88\x81\x01\xd8\x1d\x00"sv));
+    auto const r = cbor::lazy_decode(binding, *cbor::lazy::from("\x82\xd8\x1c\xd9\x13\x88\x81\x01\xd8\x1d\x00"sv));
     REQUIRE(r.has_value());
     CHECK(same(element(*r, 0), binding.replacement));
     CHECK(same(element(*r, 1), binding.replacement));
@@ -479,7 +479,7 @@ TEST_CASE("registered tag: two objects that name each other")
 {
     ref_binding binding;
     // 28 5000([28 5000([29 0])])
-    auto const r = cbor::lazy_decode(binding, *cbor::decode("\xd8\x1c\xd9\x13\x88\x81\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv));
+    auto const r = cbor::lazy_decode(binding, *cbor::lazy::from("\xd8\x1c\xd9\x13\x88\x81\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv));
     REQUIRE(r.has_value());
     auto const peer = element(std::get<object>((*r)->kind).content, 0);
     CHECK(same(element(std::get<object>(peer->kind).content, 0), *r));
@@ -490,7 +490,7 @@ TEST_CASE("registered tag: two objects that name each other")
 TEST_CASE("registered tag: no hook for a tag without registration")
 {
     ref_binding binding;
-    REQUIRE(cbor::lazy_decode(binding, *cbor::decode("\xc1\x01"sv)).has_value());
+    REQUIRE(cbor::lazy_decode(binding, *cbor::lazy::from("\xc1\x01"sv)).has_value());
     CHECK_EQ(binding.after_decode_calls, 0);
 }
 
@@ -500,7 +500,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
     auto const a = arr({u(1), u(2)});
     std::string const doc = encoded_shared(arr({a, a}));
     ref_binding binding;
-    auto const r = cbor::lazy_decode(binding, *cbor::decode(doc));
+    auto const r = cbor::lazy_decode(binding, *cbor::lazy::from(doc));
     REQUIRE(r.has_value());
     CHECK(same(element(*r, 0), element(*r, 1)));
 }
@@ -510,7 +510,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 TEST_CASE("lazy: a reference to a mark before the target")
 {
     std::string const doc = "\xa2\x65outer\xd8\x1c\x82\x01\x02\x63ref\xd8\x1d\x00"s;
-    auto const ref = (*cbor::decode(doc)).at("ref");
+    auto const ref = (*cbor::lazy::from(doc)).at("ref");
     REQUIRE(ref.has_value());
     ref_binding binding;
     auto const r = cbor::lazy_decode(binding, *ref);
@@ -528,7 +528,7 @@ TEST_CASE("lazy: a cyclic array")
 {
     std::string const doc = "\xd8\x1c\x81\xd8\x1d\x00"s;
     ref_binding binding;
-    auto const r = cbor::lazy_decode(binding, *cbor::decode(doc));
+    auto const r = cbor::lazy_decode(binding, *cbor::lazy::from(doc));
     REQUIRE(r.has_value());
     CHECK(same(*r, element(*r, 0)));
     std::get<std::vector<handle>>((*r)->kind).clear();
@@ -542,14 +542,14 @@ TEST_CASE("path: a wildcard over a shared array")
     std::string const doc = encoded_shared(
         obj({{s("primary"), obj({{s("users"), users}})}, {s("backup"), obj({{s("users"), users}})}}));
     ref_binding binding;
-    auto const r = cbor::at_path(binding, "$.backup.users[*].name", *cbor::decode(doc));
+    auto const r = cbor::at_path(binding, "$.backup.users[*].name", *cbor::lazy::from(doc));
     REQUIRE(r.has_value());
     CHECK_EQ(std::get<std::string>(element(*r, 0)->kind), "alice");
     CHECK_EQ(std::get<std::string>(element(*r, 1)->kind), "bob");
     auto const shared_leaf = arr({u(1), u(2), u(3)});
     std::string const leaf = encoded_shared(obj({{s("a"), shared_leaf}, {s("b"), shared_leaf}}));
     for (std::string_view const p : {"$.a[*]"sv, "$.b[*]"sv}) {
-        auto const v = cbor::at_path(binding, p, *cbor::decode(leaf));
+        auto const v = cbor::at_path(binding, p, *cbor::lazy::from(leaf));
         REQUIRE(v.has_value());
         CHECK_EQ(std::get<std::uint64_t>(element(*v, 2)->kind), 3);
     }
@@ -581,7 +581,7 @@ TEST_CASE("lazy: a value shared by two map values keeps its identity")
     auto const v = arr({u(1), u(2), u(3)});
     std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}));
     ref_binding binding;
-    auto const r = cbor::lazy_decode(binding, *cbor::decode(doc));
+    auto const r = cbor::lazy_decode(binding, *cbor::lazy::from(doc));
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -630,7 +630,7 @@ TEST_CASE("lazy: a registered object keeps its identity")
     auto const l = std::make_shared<node>(node{object{5003, arr({u(99)})}});
     std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}));
     ref_binding binding;
-    auto const r = cbor::lazy_decode(binding, *cbor::decode(doc));
+    auto const r = cbor::lazy_decode(binding, *cbor::lazy::from(doc));
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -645,7 +645,7 @@ TEST_CASE("path: two wildcards over a shared array")
     std::string const doc =
         encoded_shared(obj({{s("p"), obj({{s("teams"), teams}})}, {s("b"), obj({{s("teams"), teams}})}}));
     ref_binding binding;
-    auto const r = cbor::at_path(binding, "$.b.teams[*].members[*].n", *cbor::decode(doc));
+    auto const r = cbor::at_path(binding, "$.b.teams[*].members[*].n", *cbor::lazy::from(doc));
     REQUIRE(r.has_value());
     CHECK_EQ(std::get<std::vector<handle>>((*r)->kind).size(), 3);
     CHECK_EQ(std::get<std::string>(element(*r, 0)->kind), "a");
@@ -660,7 +660,7 @@ TEST_CASE("lazy: a reference decodes to the plain value after a read of its mark
     auto const shared = arr({u(10), u(20), u(30)});
     std::string const doc = encoded_shared(
         obj({{s("path_a"), obj({{s("ref"), shared}})}, {s("path_b"), obj({{s("ref"), shared}})}}));
-    auto const root = *cbor::decode(doc);
+    auto const root = *cbor::lazy::from(doc);
     REQUIRE(root.at("path_a").and_then([](cbor::lazy const &a) { return a.at("ref"); }).has_value());
     auto const ref = root.at("path_b").and_then([](cbor::lazy const &b) { return b.at("ref"); });
     REQUIRE(ref.has_value());
@@ -728,13 +728,13 @@ TEST_CASE("tag 29: a mark before the start of a lazy is built at the depth of it
             std::string const doc = "\x82\xd8\x1c"s + repeat("\x81"sv, h) + '\x00' + repeat("\x81"sv, r) + "\xd8\x1d\x00"s;
             std::string const target = repeat("\x81"sv, h) + '\x00';
             test_binding whole_binding;
-            auto const whole = cbor::lazy_decode(whole_binding, *cbor::decode(doc));
+            auto const whole = cbor::lazy_decode(whole_binding, *cbor::lazy::from(doc));
             test_binding path_binding;
-            auto const found = cbor::at_path(path_binding, "$[1]", *cbor::decode(doc));
+            auto const found = cbor::at_path(path_binding, "$[1]", *cbor::lazy::from(doc));
             CHECK_EQ(found.has_value(), whole.has_value());
             if (!found)
                 continue;
-            auto const second = cbor::decode(doc)->at(1);
+            auto const second = cbor::lazy::from(doc)->at(1);
             REQUIRE(second.has_value());
             test_binding lazy_binding;
             auto const lazy = cbor::lazy_decode(lazy_binding, *second);
@@ -742,7 +742,7 @@ TEST_CASE("tag 29: a mark before the start of a lazy is built at the depth of it
             test_binding expected_binding;
             auto const expected = [&] {
                 test::nesting_depth_max_guard const wide{32};
-                return cbor::lazy_decode(expected_binding, *cbor::decode(repeat("\x81"sv, r) + target));
+                return cbor::lazy_decode(expected_binding, *cbor::lazy::from(repeat("\x81"sv, r) + target));
             }();
             REQUIRE(expected.has_value());
             CHECK_EQ(*found, *expected);
@@ -756,7 +756,7 @@ TEST_CASE("tag 29: a mark before the start of a lazy is built at the depth of it
 TEST_CASE("tag 29: a self-referencing array before the start of a lazy")
 {
     std::string const doc = "\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1d\x00"s;
-    auto const second = cbor::decode(doc)->at(1);
+    auto const second = cbor::lazy::from(doc)->at(1);
     REQUIRE(second.has_value());
     ref_binding binding;
     auto const v = cbor::lazy_decode(binding, *second);
@@ -781,7 +781,7 @@ TEST_CASE("tag 29: a chain of marks before the start of a lazy keeps the stack b
         for (std::size_t i = 1; i < n; ++i)
             doc += "\xd8\x1c\x81\xd8\x1d"s + unsigned_head(0, i - 1);
         doc += "\xd8\x1d"s + unsigned_head(0, n - 1);
-        auto const last = cbor::decode(doc)->at(static_cast<std::int64_t>(n));
+        auto const last = cbor::lazy::from(doc)->at(static_cast<std::int64_t>(n));
         REQUIRE(last.has_value());
         nesting_binding binding;
         auto v = cbor::lazy_decode(binding, *last);
@@ -792,6 +792,6 @@ TEST_CASE("tag 29: a chain of marks before the start of a lazy keeps the stack b
             v = element(*v, 0);
         CHECK_EQ(std::get<std::uint64_t>(element(*v, 0)->kind), 0);
         test_binding path_binding;
-        CHECK(cbor::at_path(path_binding, "$[" + std::to_string(n) + "]", *cbor::decode(doc)).has_value());
+        CHECK(cbor::at_path(path_binding, "$[" + std::to_string(n) + "]", *cbor::lazy::from(doc)).has_value());
     }
 }

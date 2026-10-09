@@ -535,7 +535,7 @@ static void setup()
 {
 #if defined(ARM_S) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
     bench::binding b;
-    auto t = cbor::lazy_decode(b, *cbor::decode(std::string_view(doc)));
+    auto t = cbor::lazy_decode(b, *cbor::lazy::from(std::string_view(doc)));
     if (!t)
         std::abort();
     tree = std::move(*t);

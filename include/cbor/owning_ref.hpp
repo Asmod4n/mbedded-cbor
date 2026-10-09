@@ -70,7 +70,4 @@ public:
     }
 };
 
-template <class T>
-using oref = owning_ref<T>;
-
 }

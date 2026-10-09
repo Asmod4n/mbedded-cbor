@@ -444,7 +444,7 @@ inline std::string encoded([[maybe_unused]] value const &v)
 inline std::expected<value, error> decoded(std::string_view wire)
 {
     test_binding binding;
-    return cbor::lazy_decode(binding, *cbor::decode(wire));
+    return cbor::lazy_decode(binding, *cbor::lazy::from(wire));
 }
 
 inline error decode_error(std::string_view wire)

@@ -119,6 +119,11 @@ class encoding
             return target.allocate(hint);
     }
 
+    template <sharedrefs Sharing, class Binding, class Writer>
+    static std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer,
+                                                         typename Binding::value const &value, std::size_t depth,
+                                                         bool embedded, std::size_t depth_max);
+
     template <class Writer>
     friend struct encoder;
 
@@ -369,9 +374,6 @@ struct encoder {
 
 enum class pass { plain, count, write };
 
-template <sharedrefs Sharing, class Binding, class Writer>
-std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
-                                                        std::size_t depth, bool embedded, std::size_t depth_max);
 
 struct discarding_writer {
     std::expected<void, std::errc> append(std::string_view)
@@ -404,9 +406,7 @@ class walker
     std::size_t depth_max;
     error failure{};
 
-    template <sharedrefs, class H, class W>
-    friend std::expected<std::size_t, error> encode_from(H &binding, W &writer, typename H::value const &value,
-                                                                   std::size_t depth, bool embedded, std::size_t depth_max);
+    friend class encoding;
 
     walker(Binding &h, Writer &w, sharing<Binding> *s, std::size_t const d, bool const e, std::size_t const m)
         : binding(h), out{w}, shared(s), depth(d), embedded(e), depth_max(m)
@@ -461,7 +461,7 @@ class walker
             if (!outer && binding.embed_of(item)) {
                 if constexpr (Pass != pass::count) {
                     encoding::string_sink inner;
-                    auto const r = encode_from<Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
+                    auto const r = encoding::encode_from<Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
                         binding, inner, item, depth, true, depth_max);
                     if (!r) [[unlikely]] {
                         if (failure == decltype(failure){})
@@ -705,7 +705,7 @@ bool cycle_find(Binding &binding, typename Binding::value const &item,
 }
 
 template <sharedrefs Sharing, class Binding, class Writer>
-std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
+std::expected<std::size_t, error> encoding::encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
                                                         std::size_t const depth, bool const embedded,
                                                         std::size_t const depth_max)
 {
@@ -746,7 +746,7 @@ template <sharedrefs Sharing, class Binding, class Writer>
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value)
 {
     decltype(auto) message = encoding::message_of(target, 0);
-    auto const size = encode_from<Sharing>(binding, message, value, 0, false, validity::nesting_depth_max_read());
+    auto const size = encoding::encode_from<Sharing>(binding, message, value, 0, false, validity::nesting_depth_max_read());
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
     if (auto const r = message.done(*size); !r) [[unlikely]]

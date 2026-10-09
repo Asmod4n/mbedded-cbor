@@ -30,7 +30,7 @@ namespace
 
 cbor::lazy lazy_of(std::string const &document)
 {
-    auto const l = cbor::decode(document);
+    auto const l = cbor::lazy::from(document);
     REQUIRE(l.has_value());
     return *l;
 }
@@ -902,11 +902,11 @@ TEST_CASE("lazy: from and decode refuse a null or empty std::shared_ptr<std::str
 {
     std::shared_ptr<std::string const> const null_bytes;
     CHECK_THROWS_AS((void)cbor::lazy::from(null_bytes), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::decode(null_bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::lazy::from(null_bytes), std::logic_error);
     std::string const bytes = "\x00"s;
     std::shared_ptr<std::string const> const holds_nothing(std::shared_ptr<std::string const>{}, &bytes);
     CHECK_THROWS_AS((void)cbor::lazy::from(holds_nothing), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::decode(holds_nothing), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::lazy::from(holds_nothing), std::logic_error);
 }
 
 // cbor::lazy is an aggregate, so cbor::lazy{} holds no top-level item, and so does the lazy inside a cache
@@ -950,7 +950,7 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     std::string const message = encoded(M("k"s, text));
     auto buffer = std::make_unique<std::string>(message);
     char const *const data = buffer->data();
-    auto const moved = cbor::decode(std::move(*buffer));
+    auto const moved = cbor::lazy::from(std::move(*buffer));
     REQUIRE(moved.has_value());
     CHECK_EQ(static_cast<void const *>(moved->top_level->encoded.data()), static_cast<void const *>(data));
     buffer->assign(message.size(), '\0');
@@ -958,7 +958,7 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     CHECK_EQ(text_of(*moved->at("k")), text);
 
     std::string lvalue = message;
-    auto const copied = cbor::decode(lvalue);
+    auto const copied = cbor::lazy::from(lvalue);
     REQUIRE(copied.has_value());
     CHECK_NE(static_cast<void const *>(copied->top_level->encoded.data()), static_cast<void const *>(lvalue.data()));
     CHECK_EQ(lvalue, message);
@@ -978,10 +978,10 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     auto const from_lvalue = cbor::lazy::from(message);
     CHECK_NE(static_cast<void const *>(from_lvalue->top_level->encoded.data()), static_cast<void const *>(message.data()));
 
-    CHECK_EQ(text_of(*cbor::decode("\x63" "abc")), "abc");
+    CHECK_EQ(text_of(*cbor::lazy::from("\x63" "abc")), "abc");
     char const *const pointer = "\x62" "ab";
     CHECK_EQ(text_of(*cbor::lazy::from(pointer)), "ab");
-    CHECK_EQ(text_of(*cbor::decode("\x61" "a"sv)), "a");
+    CHECK_EQ(text_of(*cbor::lazy::from("\x61" "a"sv)), "a");
 }
 
 // RFC 8949 5.6.1 says when two keys are equal. Each pair is written from the text of 5.6.1. Two keys that

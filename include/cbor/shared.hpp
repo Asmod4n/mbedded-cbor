@@ -73,8 +73,6 @@ class value_sharing
 
     friend struct lazy_entries;
 
-    friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
-
     friend class decoding;
 
     friend class jsonpath;
