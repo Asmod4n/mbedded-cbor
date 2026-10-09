@@ -1,0 +1,6384 @@
+{
+ "context": {
+  "stamp": "2026-10-09-172401Z",
+  "what": "smallest ulimit -s (KiB) at which one process runs the case and passes, by bisection between 4 and 8192 KiB, 5 repetitions per point; base = the same case at nesting depth 0 (generic_read: 1, an empty struct); bytes per level = (median deep - median base) * 1024 / levels. The case includes building the input and the destructor of the result in the test binding, as test/nesting_depth_limit.cpp does.",
+  "driver": "one doctest file that includes test/nesting_depth_limit.cpp and test/schema.cpp and adds one case per function with LEVELS from the environment; deleted after the run",
+  "commit": "16ad3b1 (worktree of standard-library-api, clean)",
+  "nesting_depth_limit": 512,
+  "image": "mbedded-cbor-tw (openSUSE Tumbleweed 20260930)",
+  "compilers": "g++-16 (SUSE Linux) 16.2.0; clang version 23.1.2",
+  "cxx_library": "libstdc++6 16.2.0 (all but clang-libcxx); libc++1 23.1.2 (clang-libcxx)",
+  "c_library": "glibc 2.44 (libc.so.6)",
+  "needed": {
+   "gcc-asan": "[libasan.so.8] [libstdc++.so.6] [libm.so.6] [libubsan.so.1] [libgcc_s.so.1] [libc.so.6]",
+   "gcc-rel": "[libstdc++.so.6] [libm.so.6] [libgcc_s.so.1] [libc.so.6]",
+   "clang-asan": "[libstdc++.so.6] [libm.so.6] [libresolv.so.2] [libgcc_s.so.1] [libc.so.6]",
+   "clang-rel": "[libstdc++.so.6] [libm.so.6] [libgcc_s.so.1] [libc.so.6]",
+   "clang-libcxx": "[libc++.so.1] [libc++abi.so.1] [libm.so.6] [libgcc_s.so.1] [libc.so.6]",
+   "gcc-debug": "[libstdc++.so.6] [libm.so.6] [libgcc_s.so.1] [libc.so.6]",
+   "clang-debug": "[libstdc++.so.6] [libm.so.6] [libgcc_s.so.1] [libc.so.6]"
+  },
+  "flags": {
+   "gcc-asan": "-std=c++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O0 -g -fsanitize=address,undefined",
+   "gcc-rel": "-std=c++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O3 -DNDEBUG",
+   "clang-asan": "-std=c++23 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O0 -g -fsanitize=address,undefined",
+   "clang-rel": "-std=c++23 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O3 -DNDEBUG",
+   "clang-libcxx": "-std=c++23 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O3 -DNDEBUG -stdlib=libc++",
+   "gcc-debug": "-std=c++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -g",
+   "clang-debug": "-std=c++23 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -g"
+  },
+  "flags_common": "every build also has -fstack-usage; asan = -O0 -g -fsanitize=address,undefined; rel = -O3 -DNDEBUG; debug = -g; gcc has -std=c++26 -freflection, clang -std=c++23 (no -freflection)",
+  "asan_options": "none set (defaults of each runtime)",
+  "march_resolved": "not passed (no -march)",
+  "kernel": "6.18.44-fc-v80",
+  "scheduler": "EEVDF (Linux 6.18)",
+  "vm": "Firecracker, 4 vcpus",
+  "container": "podman 4.9.3, --network none, --cap-add SYS_NICE",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags_sha256": "39a8dd34f3afdd3862e81b993fb5c5915e50fcc574062958b655b40b631b8663",
+  "user": "uid 1000 (setpriv from container root)",
+  "priority": "nice -10 by renice before setpriv; the in-run record failed (output directory not writable by uid 1000); the same command confirmed uid=1000 nice=-10 in a separate run",
+  "threads": "each process single-threaded; three builds bisected at a time, the last alone",
+  "pinned": false,
+  "loadavg_start": "0.97 2.36 2.44 1/105 3260",
+  "loadavg_end": "2.94 2.78 2.59 2/125 14641",
+  "podman_ps_start": "empty"
+ },
+ "summary": [
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "base_KiB_median": 40,
+   "base_KiB_min_max": [
+    34,
+    40
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 3122,
+   "deep_KiB_min_max": [
+    3121,
+    3123
+   ],
+   "bytes_per_level": 6164,
+   "bytes_per_level_range": [
+    6162,
+    6178
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "std::expected<typename Binding::value, cbor::error> cbor::decoding::value_decoder<Binding>::value_decode(std::size_t, std::optional<long unsigned int>, std::size_t) [with Binding = test::test_binding]",
+     "bytes": 6208,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "base_KiB_median": 36,
+   "base_KiB_min_max": [
+    35,
+    40
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1693,
+   "deep_KiB_min_max": [
+    1692,
+    1696
+   ],
+   "bytes_per_level": 3314,
+   "bytes_per_level_range": [
+    3304,
+    3322
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<std::pair<cbor::item*, long unsigned int>, cbor::error> cbor::value_sharing::item_decode(top_level_item&, std::size_t, std::size_t, std::size_t)",
+     "bytes": 3344,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "base_KiB_median": 40,
+   "base_KiB_min_max": [
+    35,
+    40
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 1665,
+   "deep_KiB_min_max": [
+    1664,
+    1668
+   ],
+   "bytes_per_level": 3263,
+   "bytes_per_level_range": [
+    3261,
+    3279
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = {anonymous}::nest]",
+     "bytes": 1040,
+     "kind": "static"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = std::vector<{anonymous}::nest>]",
+     "bytes": 1040,
+     "kind": "static"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_value_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = std::vector<{anonymous}::nest>]",
+     "bytes": 992,
+     "kind": "static"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_value_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = {anonymous}::nest]",
+     "bytes": 224,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "base_KiB_median": 37,
+   "base_KiB_min_max": [
+    35,
+    38
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1041,
+   "deep_KiB_min_max": [
+    1040,
+    1044
+   ],
+   "bytes_per_level": 2008,
+   "bytes_per_level_range": [
+    2004,
+    2018
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "std::expected<void, cbor::error> cbor::packed::decode_cursor::value_read(T&, std::span<const char, fixed_size<U, Root>()>, std::size_t, std::size_t) [with Root = {anonymous}::node; T = std::vector<{anonymous}::node>]",
+     "bytes": 1632,
+     "kind": "static"
+    },
+    {
+     "function": "std::expected<void, cbor::error> cbor::packed::decode_cursor::value_read(T&, std::span<const char, fixed_size<U, Root>()>, std::size_t, std::size_t) [with Root = {anonymous}::node; T = {anonymous}::node]",
+     "bytes": 416,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "base_KiB_median": 39,
+   "base_KiB_min_max": [
+    36,
+    40
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 2423,
+   "deep_KiB_min_max": [
+    2418,
+    2423
+   ],
+   "bytes_per_level": 4777,
+   "bytes_per_level_range": [
+    4765,
+    4783
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::validity::keys_equivalent(First&, std::size_t, Second&, std::size_t, std::size_t, std::size_t) [with First = cbor::value_sharing::top_level_item; Second = const std::basic_string_view<char>]",
+     "bytes": 4832,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::validity::keys_equivalent(First&, std::size_t, Second&, std::size_t, std::size_t, std::size_t) [with First = cbor::value_sharing::top_level_item; Second = cbor::value_sharing::top_level_item]",
+     "bytes": 4832,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::validity::keys_equivalent(First&, std::size_t, Second&, std::size_t, std::size_t, std::size_t) [with First = const std::basic_string_view<char>; Second = const std::basic_string_view<char>]",
+     "bytes": 4832,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, const std::basic_string_view<char> >(cbor::value_sharing::top_level_item&, std::size_t, const std::basic_string_view<char>&, std::size_t, std::size_t, std::size_t)::<lambda(From&, std::size_t, std::size_t, In&, std::string_view, st",
+     "bytes": 720,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, cbor::value_sharing::top_level_item>(cbor::value_sharing::top_level_item&, std::size_t, cbor::value_sharing::top_level_item&, std::size_t, std::size_t, std::size_t)::<lambda(From&, std::size_t, std::size_t, In&, std::string_view, s",
+     "bytes": 720,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::validity::keys_equivalent<const std::basic_string_view<char>, const std::basic_string_view<char> >(const std::basic_string_view<char>&, std::size_t, const std::basic_string_view<char>&, std::size_t, std::size_t, std::size_t)::<lambda(From&, std::size_t, std::size_t, In&, std::string_view, std:",
+     "bytes": 720,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "base_KiB_median": 39,
+   "base_KiB_min_max": [
+    35,
+    40
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1754,
+   "deep_KiB_min_max": [
+    1752,
+    1756
+   ],
+   "bytes_per_level": 3430,
+   "bytes_per_level_range": [
+    3424,
+    3442
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::jsonpath::value_equal(const cbor::lazy&, const cbor::lazy&, std::size_t, std::size_t)",
+     "bytes": 3456,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::jsonpath::value_equal(const cbor::lazy&, const cbor::lazy&, std::size_t, std::size_t)::<lambda(const cbor::heads::head&)>",
+     "bytes": 48,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::jsonpath::value_equal(const cbor::lazy&, const cbor::lazy&, std::size_t, std::size_t)::<lambda(const cbor::heads::head&)>",
+     "bytes": 32,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "base_KiB_median": 38,
+   "base_KiB_min_max": [
+    35,
+    40
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 3118,
+   "deep_KiB_min_max": [
+    3118,
+    3120
+   ],
+   "bytes_per_level": 6160,
+   "bytes_per_level_range": [
+    6156,
+    6170
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<void, cbor::error> cbor::jsonpath::segment_apply(const query_view&, const segment&, const cbor::lazy&, const cbor::lazy&, std::vector<cbor::lazy>&, std::size_t, std::size_t)",
+     "bytes": 816,
+     "kind": "dynamic,bounded"
+    }
+   ]
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "base_KiB_median": 37,
+   "base_KiB_min_max": [
+    35,
+    40
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1688,
+   "deep_KiB_min_max": [
+    1688,
+    1692
+   ],
+   "bytes_per_level": 3302,
+   "bytes_per_level_range": [
+    3296,
+    3314
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<void, cbor::error> cbor::extended_diagnostic_notation::diagnostic_write(std::string&, cbor::heads::decoder&, std::string_view, std::vector<long unsigned int>&, std::size_t, std::size_t)",
+     "bytes": 3344,
+     "kind": "dynamic,bounded"
+    }
+   ]
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "base_KiB_median": 36,
+   "base_KiB_min_max": [
+    35,
+    38
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 669,
+   "deep_KiB_min_max": [
+    668,
+    672
+   ],
+   "bytes_per_level": 1266,
+   "bytes_per_level_range": [
+    1260,
+    1274
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::bignum(bool, std::string_view) [with Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 320,
+     "kind": "static"
+    },
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::simple(uint8_t) [with Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 256,
+     "kind": "static"
+    },
+    {
+     "function": "void test::test_binding::map_for_each(const value&, const F&) [with F = cbor::walker<test::test_binding, test::string_writer, cbor::pass::plain>::describe<std::integral_constant<bool, false> >(const test::test_binding::value&, const std::integral_constant<bool, false>&)::<lambda(const value&, const ",
+     "bytes": 224,
+     "kind": "static"
+    },
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::describe(const typename Binding::value&, const Identity&) [with Identity = std::integral_constant<bool, false>; Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 192,
+     "kind": "static"
+    },
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::child(const typename Binding::value&, const Identity&) [with Identity = std::integral_constant<bool, false>; Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 160,
+     "kind": "static"
+    },
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::key(const typename Binding::value&) [with Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 128,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 228,
+   "deep_KiB_min_max": [
+    224,
+    228
+   ],
+   "bytes_per_level": 424,
+   "bytes_per_level_range": [
+    416,
+    432
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "std::expected<typename Binding::value, cbor::error> cbor::decoding::value_decoder<Binding>::value_decode(std::size_t, std::optional<long unsigned int>, std::size_t) [with Binding = test::test_binding]",
+     "bytes": 432,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    14,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 108,
+   "deep_KiB_min_max": [
+    108,
+    108
+   ],
+   "bytes_per_level": 184,
+   "bytes_per_level_range": [
+    184,
+    188
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<std::pair<cbor::item*, long unsigned int>, cbor::error> cbor::value_sharing::item_decode(top_level_item&, std::size_t, std::size_t, std::size_t)",
+     "bytes": 192,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "base_KiB_median": 12,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 192,
+   "deep_KiB_min_max": [
+    190,
+    192
+   ],
+   "bytes_per_level": 361,
+   "bytes_per_level_range": [
+    349,
+    361
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_value_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = std::vector<{anonymous}::nest>]",
+     "bytes": 176,
+     "kind": "static"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = {anonymous}::nest]",
+     "bytes": 96,
+     "kind": "static"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = {anonymous}::nest]",
+     "bytes": 16,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "base_KiB_median": 13,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 156,
+   "deep_KiB_min_max": [
+    152,
+    156
+   ],
+   "bytes_per_level": 286,
+   "bytes_per_level_range": [
+    272,
+    288
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "std::expected<void, cbor::error> cbor::packed::decode_cursor::value_read(T&, std::span<const char, fixed_size<U, Root>()>, std::size_t, std::size_t) [with Root = {anonymous}::node; T = std::vector<{anonymous}::node>]",
+     "bytes": 288,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 180,
+   "deep_KiB_min_max": [
+    176,
+    180
+   ],
+   "bytes_per_level": 329,
+   "bytes_per_level_range": [
+    321,
+    337
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::validity::keys_equivalent(First&, std::size_t, Second&, std::size_t, std::size_t, std::size_t) [with First = const std::basic_string_view<char>; Second = const std::basic_string_view<char>]",
+     "bytes": 352,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::validity::keys_equivalent(First&, std::size_t, Second&, std::size_t, std::size_t, std::size_t) [with First = cbor::value_sharing::top_level_item; Second = cbor::value_sharing::top_level_item]",
+     "bytes": 336,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::validity::keys_equivalent(First&, std::size_t, Second&, std::size_t, std::size_t, std::size_t) [with First = cbor::value_sharing::top_level_item; Second = const std::basic_string_view<char>]",
+     "bytes": 304,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::validity::keys_equivalent<const std::basic_string_view<char>, const std::basic_string_view<char> >(const std::basic_string_view<char>&, std::size_t, const std::basic_string_view<char>&, std::size_t, std::size_t, std::size_t)::<lambda(From&, std::size_t, std::size_t, In&, std::string_view, std:",
+     "bytes": 144,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, cbor::value_sharing::top_level_item>(cbor::value_sharing::top_level_item&, std::size_t, cbor::value_sharing::top_level_item&, std::size_t, std::size_t, std::size_t)::<lambda(From&, std::size_t, std::size_t, In&, std::string_view, s",
+     "bytes": 128,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    15,
+    18
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 307,
+   "deep_KiB_min_max": [
+    305,
+    309
+   ],
+   "bytes_per_level": 582,
+   "bytes_per_level_range": [
+    574,
+    588
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::jsonpath::value_equal(const cbor::lazy&, const cbor::lazy&, std::size_t, std::size_t)",
+     "bytes": 592,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    15,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 228,
+   "deep_KiB_min_max": [
+    225,
+    228
+   ],
+   "bytes_per_level": 424,
+   "bytes_per_level_range": [
+    418,
+    426
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<void, cbor::error> cbor::jsonpath::segment_apply(const query_view&, const segment&, const cbor::lazy&, const cbor::lazy&, std::vector<cbor::lazy>&, std::size_t, std::size_t)",
+     "bytes": 224,
+     "kind": "dynamic,bounded"
+    }
+   ]
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "base_KiB_median": 15,
+   "base_KiB_min_max": [
+    11,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 188,
+   "deep_KiB_min_max": [
+    185,
+    188
+   ],
+   "bytes_per_level": 346,
+   "bytes_per_level_range": [
+    338,
+    354
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<void, cbor::error> cbor::extended_diagnostic_notation::diagnostic_write(std::string&, cbor::heads::decoder&, std::string_view, std::vector<long unsigned int>&, std::size_t, std::size_t)",
+     "bytes": 352,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::extended_diagnostic_notation::diagnostic_write(std::string&, cbor::heads::decoder&, std::string_view, std::vector<long unsigned int>&, std::size_t, std::size_t)",
+     "bytes": 336,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::extended_diagnostic_notation::diagnostic_write(std::string&, cbor::heads::decoder&, std::string_view, std::vector<long unsigned int>&, std::size_t, std::size_t)",
+     "bytes": 320,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "base_KiB_median": 26,
+   "base_KiB_min_max": [
+    25,
+    28
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 108,
+   "deep_KiB_min_max": [
+    106,
+    108
+   ],
+   "bytes_per_level": 164,
+   "bytes_per_level_range": [
+    156,
+    166
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::describe(const typename Binding::value&, const Identity&) [with Identity = std::integral_constant<bool, false>; Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 160,
+     "kind": "static"
+    },
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::head(cbor::major_type, uint64_t) [with Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 48,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "base_KiB_median": 20,
+   "base_KiB_min_max": [
+    19,
+    22
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 4031,
+   "deep_KiB_min_max": [
+    4028,
+    4032
+   ],
+   "bytes_per_level": 8022,
+   "bytes_per_level_range": [
+    8012,
+    8026
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/decode.hpp:47:cbor::decoding::value_decoder<test::test_binding>::value_decode(unsigned long, std::optional<unsigned long>, unsigned long)",
+     "bytes": 4344,
+     "kind": "dynamic"
+    }
+   ]
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "base_KiB_median": 21,
+   "base_KiB_min_max": [
+    20,
+    24
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 2092,
+   "deep_KiB_min_max": [
+    2090,
+    2095
+   ],
+   "bytes_per_level": 4142,
+   "bytes_per_level_range": [
+    4132,
+    4150
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/lazy.hpp:497:cbor::value_sharing::item_decode(cbor::value_sharing::top_level_item&, unsigned long, unsigned long, unsigned long)",
+     "bytes": 2616,
+     "kind": "dynamic"
+    }
+   ]
+  },
+  {
+   "build": "clang-asan",
+   "function": "generic_read",
+   "status": "not compiled: no reflection in this build",
+   "frames_fstack_usage": []
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_read",
+   "status": "not compiled: no reflection in this build",
+   "frames_fstack_usage": []
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "base_KiB_median": 20,
+   "base_KiB_min_max": [
+    20,
+    24
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 2404,
+   "deep_KiB_min_max": [
+    2402,
+    2407
+   ],
+   "bytes_per_level": 4777,
+   "bytes_per_level_range": [
+    4765,
+    4783
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::expected<bool, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::basic_string_view<char, std::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::basic_string_view<char, std::char_traits<char> ",
+     "bytes": 3064,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::expected<bool, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, cbor::value_sharing::top_level_item>(cbor::value_sharing::top_level_item&, unsigned long, cbor::value_sharing::top_level_item&, unsigned long, unsigned long, unsigned",
+     "bytes": 3064,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::expected<bool, cbor::error> cbor::validity::keys_equivalent<std::basic_string_view<char, std::char_traits<char> > const, std::basic_string_view<char, std::char_traits<char> > const>(std::basic_string_view<char, std::char_traits<char> > const&, unsigned long, std:",
+     "bytes": 3064,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::basic_string_view<char, std::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::basic_string_view<char, std::char_trai",
+     "bytes": 664,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<std::basic_string_view<char, std::char_traits<char> > const, std::basic_string_view<char, std::char_traits<char> > const>(std::basic_string_view<char, std::char_traits<char> > const&, unsigned l",
+     "bytes": 664,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::basic_string_view<char, std::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::basic_string_view<char, std::char_trai",
+     "bytes": 664,
+     "kind": "dynamic"
+    }
+   ]
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "base_KiB_median": 31,
+   "base_KiB_min_max": [
+    29,
+    32
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1552,
+   "deep_KiB_min_max": [
+    1551,
+    1552
+   ],
+   "bytes_per_level": 3042,
+   "bytes_per_level_range": [
+    3038,
+    3046
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/query.hpp:1016:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)",
+     "bytes": 1848,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/include/cbor/query.hpp:1038:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)::{lambda(cbor::heads::head const&)#3}::operator()(cbor::heads::head const&) const",
+     "bytes": 136,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/query.hpp:1035:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)::{lambda(cbor::heads::head const&)#2}::operator()(cbor::heads::head const&) const",
+     "bytes": 72,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/query.hpp:1032:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)::{lambda(cbor::heads::head const&)#1}::operator()(cbor::heads::head const&) const",
+     "bytes": 56,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "base_KiB_median": 24,
+   "base_KiB_min_max": [
+    21,
+    26
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 4020,
+   "deep_KiB_min_max": [
+    4018,
+    4024
+   ],
+   "bytes_per_level": 7992,
+   "bytes_per_level_range": [
+    7984,
+    8006
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/query.hpp:1390:cbor::jsonpath::segment_apply(cbor::jsonpath::query_view const&, cbor::jsonpath::segment const&, cbor::lazy const&, cbor::lazy const&, std::vector<cbor::lazy, std::allocator<cbor::lazy> >&, unsigned long, unsigned long)",
+     "bytes": 792,
+     "kind": "dynamic"
+    }
+   ]
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "base_KiB_median": 20,
+   "base_KiB_min_max": [
+    19,
+    22
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1746,
+   "deep_KiB_min_max": [
+    1740,
+    1748
+   ],
+   "bytes_per_level": 3452,
+   "bytes_per_level_range": [
+    3436,
+    3458
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/diagnostic_notation.hpp:954:cbor::extended_diagnostic_notation::diagnostic_write(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, cbor::heads::decoder&, std::basic_string_view<char, std::char_traits<char> >, std::vector<unsigned long, std::allocator<",
+     "bytes": 2232,
+     "kind": "dynamic"
+    }
+   ]
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "base_KiB_median": 22,
+   "base_KiB_min_max": [
+    17,
+    24
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 705,
+   "deep_KiB_min_max": [
+    704,
+    706
+   ],
+   "bytes_per_level": 1366,
+   "bytes_per_level_range": [
+    1360,
+    1378
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/encode.hpp:518:void cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::describe<std::integral_constant<bool, false> >(test::value const&, std::integral_constant<bool, false> const&)",
+     "bytes": 536,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:626:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::bignum(bool, std::basic_string_view<char, std::char_traits<char> >)",
+     "bytes": 472,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/test/binding.hpp:395:void test::test_binding::map_for_each<cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::describe<std::integral_constant<bool, false> >(test::value const&, std::integral_constant<bool, false> const&)::{lambda(test::value const&, test::value const&)#1}>(tes",
+     "bytes": 344,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:450:void cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::child<std::integral_constant<bool, false> >(test::value const&, std::integral_constant<bool, false> const&)",
+     "bytes": 216,
+     "kind": "dynamic"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:411:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::walker(test::test_binding&, test::string_writer&, cbor::sharing<test::test_binding>*, unsigned long, bool, unsigned long)",
+     "bytes": 184,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:416:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::keep(std::expected<void, std::errc>)",
+     "bytes": 184,
+     "kind": "dynamic"
+    }
+   ]
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "base_KiB_median": 15,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 156,
+   "deep_KiB_min_max": [
+    153,
+    156
+   ],
+   "bytes_per_level": 282,
+   "bytes_per_level_range": [
+    274,
+    288
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/decode.hpp:47:cbor::decoding::value_decoder<test::test_binding>::value_decode(unsigned long, std::optional<unsigned long>, unsigned long)",
+     "bytes": 280,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "base_KiB_median": 14,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 100,
+   "deep_KiB_min_max": [
+    96,
+    100
+   ],
+   "bytes_per_level": 172,
+   "bytes_per_level_range": [
+    160,
+    176
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/lazy.hpp:497:cbor::value_sharing::item_decode(cbor::value_sharing::top_level_item&, unsigned long, unsigned long, unsigned long)",
+     "bytes": 168,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-rel",
+   "function": "generic_read",
+   "status": "not compiled: no reflection in this build",
+   "frames_fstack_usage": []
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_read",
+   "status": "not compiled: no reflection in this build",
+   "frames_fstack_usage": []
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "base_KiB_median": 13,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 153,
+   "deep_KiB_min_max": [
+    153,
+    156
+   ],
+   "bytes_per_level": 281,
+   "bytes_per_level_range": [
+    275,
+    289
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::expected<bool, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, cbor::value_sharing::top_level_item>(cbor::value_sharing::top_level_item&, unsigned long, cbor::value_sharing::top_level_item&, unsigned long, unsigned long, unsigned",
+     "bytes": 280,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::expected<bool, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::basic_string_view<char, std::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::basic_string_view<char, std::char_traits<char> ",
+     "bytes": 280,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::expected<bool, cbor::error> cbor::validity::keys_equivalent<std::basic_string_view<char, std::char_traits<char> > const, std::basic_string_view<char, std::char_traits<char> > const>(std::basic_string_view<char, std::char_traits<char> > const&, unsigned long, std:",
+     "bytes": 280,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<std::basic_string_view<char, std::char_traits<char> > const, std::basic_string_view<char, std::char_traits<char> > const>(std::basic_string_view<char, std::char_traits<char> > const&, unsigned l",
+     "bytes": 136,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::basic_string_view<char, std::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::basic_string_view<char, std::char_trai",
+     "bytes": 136,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::basic_string_view<char, std::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::basic_string_view<char, std::char_trai",
+     "bytes": 120,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    13,
+    18
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 300,
+   "deep_KiB_min_max": [
+    299,
+    304
+   ],
+   "bytes_per_level": 568,
+   "bytes_per_level_range": [
+    562,
+    582
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/query.hpp:1016:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)",
+     "bytes": 568,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "base_KiB_median": 13,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 156,
+   "deep_KiB_min_max": [
+    152,
+    156
+   ],
+   "bytes_per_level": 286,
+   "bytes_per_level_range": [
+    272,
+    288
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/query.hpp:1390:cbor::jsonpath::segment_apply(cbor::jsonpath::query_view const&, cbor::jsonpath::segment const&, cbor::lazy const&, cbor::lazy const&, std::vector<cbor::lazy, std::allocator<cbor::lazy> >&, unsigned long, unsigned long)",
+     "bytes": 184,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    15,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 155,
+   "deep_KiB_min_max": [
+    153,
+    156
+   ],
+   "bytes_per_level": 278,
+   "bytes_per_level_range": [
+    274,
+    282
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/diagnostic_notation.hpp:954:cbor::extended_diagnostic_notation::diagnostic_write(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, cbor::heads::decoder&, std::basic_string_view<char, std::char_traits<char> >, std::vector<unsigned long, std::allocator<",
+     "bytes": 280,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "base_KiB_median": 28,
+   "base_KiB_min_max": [
+    26,
+    28
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 58,
+   "deep_KiB_min_max": [
+    58,
+    60
+   ],
+   "bytes_per_level": 60,
+   "bytes_per_level_range": [
+    60,
+    68
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/encode.hpp:626:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::bignum(bool, std::basic_string_view<char, std::char_traits<char> >)",
+     "bytes": 72,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:518:void cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::describe<std::integral_constant<bool, false> >(test::value const&, std::integral_constant<bool, false> const&)",
+     "bytes": 56,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:428:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::head(cbor::major_type, unsigned long)",
+     "bytes": 40,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "base_KiB_median": 15,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 171,
+   "deep_KiB_min_max": [
+    168,
+    172
+   ],
+   "bytes_per_level": 312,
+   "bytes_per_level_range": [
+    304,
+    320
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/decode.hpp:47:cbor::decoding::value_decoder<test::test_binding>::value_decode(unsigned long, std::__1::optional<unsigned long>, unsigned long)",
+     "bytes": 312,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "base_KiB_median": 14,
+   "base_KiB_min_max": [
+    11,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 98,
+   "deep_KiB_min_max": [
+    96,
+    100
+   ],
+   "bytes_per_level": 168,
+   "bytes_per_level_range": [
+    160,
+    178
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/lazy.hpp:497:cbor::value_sharing::item_decode(cbor::value_sharing::top_level_item&, unsigned long, unsigned long, unsigned long)",
+     "bytes": 168,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "generic_read",
+   "status": "not compiled: no reflection in this build",
+   "frames_fstack_usage": []
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_read",
+   "status": "not compiled: no reflection in this build",
+   "frames_fstack_usage": []
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "base_KiB_median": 15,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 156,
+   "deep_KiB_min_max": [
+    152,
+    156
+   ],
+   "bytes_per_level": 283,
+   "bytes_per_level_range": [
+    273,
+    289
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::__1::expected<bool, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, cbor::value_sharing::top_level_item>(cbor::value_sharing::top_level_item&, unsigned long, cbor::value_sharing::top_level_item&, unsigned long, unsigned long, uns",
+     "bytes": 280,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::__1::expected<bool, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::__1::basic_string_view<char, std::__1::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::__1::basic_string_view<char, std",
+     "bytes": 280,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::__1::expected<bool, cbor::error> cbor::validity::keys_equivalent<std::__1::basic_string_view<char, std::__1::char_traits<char> > const, std::__1::basic_string_view<char, std::__1::char_traits<char> > const>(std::__1::basic_string_view<char, std::__1::char_traits<",
+     "bytes": 280,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::__1::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::__1::basic_string_view<char, std::__1::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::__1::basic_string_view<",
+     "bytes": 136,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::__1::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<std::__1::basic_string_view<char, std::__1::char_traits<char> > const, std::__1::basic_string_view<char, std::__1::char_traits<char> > const>(std::__1::basic_string_view<char, std::__1::cha",
+     "bytes": 136,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::__1::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, cbor::value_sharing::top_level_item>(cbor::value_sharing::top_level_item&, unsigned long, cbor::value_sharing::top_level_item&, unsigned long, unsigned ",
+     "bytes": 120,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 292,
+   "deep_KiB_min_max": [
+    288,
+    296
+   ],
+   "bytes_per_level": 552,
+   "bytes_per_level_range": [
+    544,
+    568
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/query.hpp:1016:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)",
+     "bytes": 552,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "base_KiB_median": 13,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 171,
+   "deep_KiB_min_max": [
+    169,
+    172
+   ],
+   "bytes_per_level": 316,
+   "bytes_per_level_range": [
+    306,
+    320
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/query.hpp:1390:cbor::jsonpath::segment_apply(cbor::jsonpath::query_view const&, cbor::jsonpath::segment const&, cbor::lazy const&, cbor::lazy const&, std::__1::vector<cbor::lazy, std::__1::allocator<cbor::lazy> >&, unsigned long, unsigned long)",
+     "bytes": 200,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    12,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 138,
+   "deep_KiB_min_max": [
+    136,
+    140
+   ],
+   "bytes_per_level": 244,
+   "bytes_per_level_range": [
+    240,
+    256
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/diagnostic_notation.hpp:954:cbor::extended_diagnostic_notation::diagnostic_write(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >&, cbor::heads::decoder&, std::__1::basic_string_view<char, std::__1::char_traits<char> >, std::__1::vector<unsigned ",
+     "bytes": 248,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "base_KiB_median": 32,
+   "base_KiB_min_max": [
+    28,
+    32
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 65,
+   "deep_KiB_min_max": [
+    62,
+    67
+   ],
+   "bytes_per_level": 66,
+   "bytes_per_level_range": [
+    60,
+    78
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/encode.hpp:626:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::bignum(bool, std::__1::basic_string_view<char, std::__1::char_traits<char> >)",
+     "bytes": 72,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:518:void cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::describe<std::__1::integral_constant<bool, false> >(test::value const&, std::__1::integral_constant<bool, false> const&)",
+     "bytes": 72,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "base_KiB_median": 28,
+   "base_KiB_min_max": [
+    27,
+    28
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1320,
+   "deep_KiB_min_max": [
+    1315,
+    1320
+   ],
+   "bytes_per_level": 2584,
+   "bytes_per_level_range": [
+    2574,
+    2586
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "std::expected<typename Binding::value, cbor::error> cbor::decoding::value_decoder<Binding>::value_decode(std::size_t, std::optional<long unsigned int>, std::size_t) [with Binding = test::test_binding]",
+     "bytes": 2608,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "base_KiB_median": 26,
+   "base_KiB_min_max": [
+    24,
+    29
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 740,
+   "deep_KiB_min_max": [
+    739,
+    744
+   ],
+   "bytes_per_level": 1428,
+   "bytes_per_level_range": [
+    1420,
+    1440
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<std::pair<cbor::item*, long unsigned int>, cbor::error> cbor::value_sharing::item_decode(top_level_item&, std::size_t, std::size_t, std::size_t)",
+     "bytes": 1456,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "base_KiB_median": 28,
+   "base_KiB_min_max": [
+    26,
+    30
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 688,
+   "deep_KiB_min_max": [
+    687,
+    690
+   ],
+   "bytes_per_level": 1325,
+   "bytes_per_level_range": [
+    1319,
+    1333
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = std::vector<{anonymous}::nest>]",
+     "bytes": 464,
+     "kind": "static"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = {anonymous}::nest]",
+     "bytes": 464,
+     "kind": "static"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_value_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = std::vector<{anonymous}::nest>]",
+     "bytes": 352,
+     "kind": "static"
+    },
+    {
+     "function": "static std::expected<void, cbor::error> cbor::generic::generic_value_read(cbor::value_sharing::sharing_decoder&, U&, std::size_t, std::size_t) [with U = {anonymous}::nest]",
+     "bytes": 80,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "base_KiB_median": 28,
+   "base_KiB_min_max": [
+    24,
+    32
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 468,
+   "deep_KiB_min_max": [
+    467,
+    471
+   ],
+   "bytes_per_level": 880,
+   "bytes_per_level_range": [
+    870,
+    894
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "std::expected<void, cbor::error> cbor::packed::decode_cursor::value_read(T&, std::span<const char, fixed_size<U, Root>()>, std::size_t, std::size_t) [with Root = {anonymous}::node; T = std::vector<{anonymous}::node>]",
+     "bytes": 784,
+     "kind": "static"
+    },
+    {
+     "function": "std::expected<void, cbor::error> cbor::packed::decode_cursor::value_read(T&, std::span<const char, fixed_size<U, Root>()>, std::size_t, std::size_t) [with Root = {anonymous}::node; T = {anonymous}::node]",
+     "bytes": 128,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "base_KiB_median": 28,
+   "base_KiB_min_max": [
+    27,
+    28
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 932,
+   "deep_KiB_min_max": [
+    929,
+    936
+   ],
+   "bytes_per_level": 1812,
+   "bytes_per_level_range": [
+    1806,
+    1822
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::validity::keys_equivalent(First&, std::size_t, Second&, std::size_t, std::size_t, std::size_t) [with First = const std::basic_string_view<char>; Second = const std::basic_string_view<char>]",
+     "bytes": 1856,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::validity::keys_equivalent(First&, std::size_t, Second&, std::size_t, std::size_t, std::size_t) [with First = cbor::value_sharing::top_level_item; Second = const std::basic_string_view<char>]",
+     "bytes": 1856,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::validity::keys_equivalent(First&, std::size_t, Second&, std::size_t, std::size_t, std::size_t) [with First = cbor::value_sharing::top_level_item; Second = cbor::value_sharing::top_level_item]",
+     "bytes": 1856,
+     "kind": "dynamic,bounded"
+    },
+    {
+     "function": "cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, const std::basic_string_view<char> >(cbor::value_sharing::top_level_item&, std::size_t, const std::basic_string_view<char>&, std::size_t, std::size_t, std::size_t)::<lambda(From&, std::size_t, std::size_t, In&, std::string_view, st",
+     "bytes": 352,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, const std::basic_string_view<char> >(cbor::value_sharing::top_level_item&, std::size_t, const std::basic_string_view<char>&, std::size_t, std::size_t, std::size_t)::<lambda(From&, std::size_t, std::size_t, In&, std::string_view, st",
+     "bytes": 352,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, cbor::value_sharing::top_level_item>(cbor::value_sharing::top_level_item&, std::size_t, cbor::value_sharing::top_level_item&, std::size_t, std::size_t, std::size_t)::<lambda(From&, std::size_t, std::size_t, In&, std::string_view, s",
+     "bytes": 352,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "base_KiB_median": 28,
+   "base_KiB_min_max": [
+    27,
+    32
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 624,
+   "deep_KiB_min_max": [
+    624,
+    628
+   ],
+   "bytes_per_level": 1192,
+   "bytes_per_level_range": [
+    1184,
+    1202
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<bool, cbor::error> cbor::jsonpath::value_equal(const cbor::lazy&, const cbor::lazy&, std::size_t, std::size_t)",
+     "bytes": 1216,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::jsonpath::value_equal(const cbor::lazy&, const cbor::lazy&, std::size_t, std::size_t)::<lambda(const cbor::heads::head&)>",
+     "bytes": 32,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::jsonpath::value_equal(const cbor::lazy&, const cbor::lazy&, std::size_t, std::size_t)::<lambda(const cbor::heads::head&)>",
+     "bytes": 16,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "base_KiB_median": 28,
+   "base_KiB_min_max": [
+    26,
+    32
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1316,
+   "deep_KiB_min_max": [
+    1312,
+    1320
+   ],
+   "bytes_per_level": 2576,
+   "bytes_per_level_range": [
+    2560,
+    2588
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<void, cbor::error> cbor::jsonpath::segment_apply(const query_view&, const segment&, const cbor::lazy&, const cbor::lazy&, std::vector<cbor::lazy>&, std::size_t, std::size_t)",
+     "bytes": 400,
+     "kind": "dynamic,bounded"
+    }
+   ]
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "base_KiB_median": 27,
+   "base_KiB_min_max": [
+    25,
+    28
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 716,
+   "deep_KiB_min_max": [
+    715,
+    720
+   ],
+   "bytes_per_level": 1378,
+   "bytes_per_level_range": [
+    1374,
+    1390
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "static std::expected<void, cbor::error> cbor::extended_diagnostic_notation::diagnostic_write(std::string&, cbor::heads::decoder&, std::string_view, std::vector<long unsigned int>&, std::size_t, std::size_t)",
+     "bytes": 1408,
+     "kind": "dynamic,bounded"
+    }
+   ]
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "base_KiB_median": 32,
+   "base_KiB_min_max": [
+    29,
+    32
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 299,
+   "deep_KiB_min_max": [
+    298,
+    300
+   ],
+   "bytes_per_level": 534,
+   "bytes_per_level_range": [
+    532,
+    542
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::bignum(bool, std::string_view) [with Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 128,
+     "kind": "static"
+    },
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::describe(const typename Binding::value&, const Identity&) [with Identity = std::integral_constant<bool, false>; Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 96,
+     "kind": "static"
+    },
+    {
+     "function": "void test::test_binding::map_for_each(const value&, const F&) [with F = cbor::walker<test::test_binding, test::string_writer, cbor::pass::plain>::describe<std::integral_constant<bool, false> >(const test::test_binding::value&, const std::integral_constant<bool, false>&)::<lambda(const value&, const ",
+     "bytes": 96,
+     "kind": "static"
+    },
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::simple(uint8_t) [with Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 96,
+     "kind": "static"
+    },
+    {
+     "function": "void cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::child(const typename Binding::value&, const Identity&) [with Identity = std::integral_constant<bool, false>; Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 64,
+     "kind": "static"
+    },
+    {
+     "function": "cbor::walker< <template-parameter-1-1>, <template-parameter-1-2>, <anonymous> >::walker(Binding&, Writer&, cbor::sharing<Binding>*, std::size_t, bool, std::size_t) [with Binding = test::test_binding; Writer = test::string_writer; cbor::pass Pass = cbor::pass::plain]",
+     "bytes": 64,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    13,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1612,
+   "deep_KiB_min_max": [
+    1607,
+    1612
+   ],
+   "bytes_per_level": 3192,
+   "bytes_per_level_range": [
+    3182,
+    3198
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/decode.hpp:47:cbor::decoding::value_decoder<test::test_binding>::value_decode(unsigned long, std::optional<unsigned long>, unsigned long)",
+     "bytes": 3176,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "base_KiB_median": 15,
+   "base_KiB_min_max": [
+    13,
+    16
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 855,
+   "deep_KiB_min_max": [
+    852,
+    860
+   ],
+   "bytes_per_level": 1680,
+   "bytes_per_level_range": [
+    1672,
+    1694
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/lazy.hpp:497:cbor::value_sharing::item_decode(cbor::value_sharing::top_level_item&, unsigned long, unsigned long, unsigned long)",
+     "bytes": 1672,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-debug",
+   "function": "generic_read",
+   "status": "not compiled: no reflection in this build",
+   "frames_fstack_usage": []
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_read",
+   "status": "not compiled: no reflection in this build",
+   "frames_fstack_usage": []
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "base_KiB_median": 18,
+   "base_KiB_min_max": [
+    16,
+    20
+   ],
+   "deep_nesting_depth": 511,
+   "deep_KiB_median": 1027,
+   "deep_KiB_min_max": [
+    1026,
+    1030
+   ],
+   "bytes_per_level": 2022,
+   "bytes_per_level_range": [
+    2016,
+    2032
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::expected<bool, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::basic_string_view<char, std::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::basic_string_view<char, std::char_traits<char> ",
+     "bytes": 2024,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::expected<bool, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, cbor::value_sharing::top_level_item>(cbor::value_sharing::top_level_item&, unsigned long, cbor::value_sharing::top_level_item&, unsigned long, unsigned long, unsigned",
+     "bytes": 2024,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:459:std::expected<bool, cbor::error> cbor::validity::keys_equivalent<std::basic_string_view<char, std::char_traits<char> > const, std::basic_string_view<char, std::char_traits<char> > const>(std::basic_string_view<char, std::char_traits<char> > const&, unsigned long, std:",
+     "bytes": 2024,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<std::basic_string_view<char, std::char_traits<char> > const, std::basic_string_view<char, std::char_traits<char> > const>(std::basic_string_view<char, std::char_traits<char> > const&, unsigned l",
+     "bytes": 280,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, std::basic_string_view<char, std::char_traits<char> > const>(cbor::value_sharing::top_level_item&, unsigned long, std::basic_string_view<char, std::char_trai",
+     "bytes": 280,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/shared.hpp:542:std::expected<unsigned long, cbor::error> cbor::validity::keys_equivalent<cbor::value_sharing::top_level_item, cbor::value_sharing::top_level_item>(cbor::value_sharing::top_level_item&, unsigned long, cbor::value_sharing::top_level_item&, unsigned long, unsigned long,",
+     "bytes": 280,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "base_KiB_median": 20,
+   "base_KiB_min_max": [
+    19,
+    22
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 755,
+   "deep_KiB_min_max": [
+    752,
+    756
+   ],
+   "bytes_per_level": 1470,
+   "bytes_per_level_range": [
+    1460,
+    1474
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/query.hpp:1016:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)",
+     "bytes": 1464,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/query.hpp:1038:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)::{lambda(cbor::heads::head const&)#3}::operator()(cbor::heads::head const&) const",
+     "bytes": 40,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/query.hpp:1035:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)::{lambda(cbor::heads::head const&)#2}::operator()(cbor::heads::head const&) const",
+     "bytes": 8,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/query.hpp:1032:cbor::jsonpath::value_equal(cbor::lazy const&, cbor::lazy const&, unsigned long, unsigned long)::{lambda(cbor::heads::head const&)#1}::operator()(cbor::heads::head const&) const",
+     "bytes": 8,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "base_KiB_median": 20,
+   "base_KiB_min_max": [
+    16,
+    20
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 1605,
+   "deep_KiB_min_max": [
+    1601,
+    1608
+   ],
+   "bytes_per_level": 3170,
+   "bytes_per_level_range": [
+    3162,
+    3184
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/query.hpp:1390:cbor::jsonpath::segment_apply(cbor::jsonpath::query_view const&, cbor::jsonpath::segment const&, cbor::lazy const&, cbor::lazy const&, std::vector<cbor::lazy, std::allocator<cbor::lazy> >&, unsigned long, unsigned long)",
+     "bytes": 424,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "base_KiB_median": 16,
+   "base_KiB_min_max": [
+    12,
+    18
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 822,
+   "deep_KiB_min_max": [
+    819,
+    824
+   ],
+   "bytes_per_level": 1612,
+   "bytes_per_level_range": [
+    1602,
+    1624
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/diagnostic_notation.hpp:954:cbor::extended_diagnostic_notation::diagnostic_write(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, cbor::heads::decoder&, std::basic_string_view<char, std::char_traits<char> >, std::vector<unsigned long, std::allocator<",
+     "bytes": 1608,
+     "kind": "static"
+    }
+   ]
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "base_KiB_median": 30,
+   "base_KiB_min_max": [
+    28,
+    32
+   ],
+   "deep_nesting_depth": 512,
+   "deep_KiB_median": 357,
+   "deep_KiB_min_max": [
+    356,
+    360
+   ],
+   "bytes_per_level": 654,
+   "bytes_per_level_range": [
+    648,
+    664
+   ],
+   "frames_fstack_usage": [
+    {
+     "function": "/wt/include/cbor/encode.hpp:626:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::bignum(bool, std::basic_string_view<char, std::char_traits<char> >)",
+     "bytes": 280,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:518:void cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::describe<std::integral_constant<bool, false> >(test::value const&, std::integral_constant<bool, false> const&)",
+     "bytes": 200,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/test/binding.hpp:395:void test::test_binding::map_for_each<cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::describe<std::integral_constant<bool, false> >(test::value const&, std::integral_constant<bool, false> const&)::{lambda(test::value const&, test::value const&)#1}>(tes",
+     "bytes": 120,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:659:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::simple(unsigned char)",
+     "bytes": 72,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:411:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::walker(test::test_binding&, test::string_writer&, cbor::sharing<test::test_binding>*, unsigned long, bool, unsigned long)",
+     "bytes": 72,
+     "kind": "static"
+    },
+    {
+     "function": "/wt/include/cbor/encode.hpp:428:cbor::walker<test::test_binding, test::string_writer, (cbor::pass)0>::head(cbor::major_type, unsigned long)",
+     "bytes": 56,
+     "kind": "static"
+    }
+   ]
+  }
+ ],
+ "results": [
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 34
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 3123
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 3121
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 3121
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 3122
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 3123
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 35
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1692
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1693
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1696
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1696
+  },
+  {
+   "build": "gcc-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1692
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 38
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 39
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 39
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 2420
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 2418
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 2423
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 2423
+  },
+  {
+   "build": "gcc-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 2423
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 39
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 35
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1752
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1756
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1754
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1752
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1756
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 35
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 37
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 38
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 38
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 3120
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 3118
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 3119
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 3118
+  },
+  {
+   "build": "gcc-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 3118
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 37
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 35
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1688
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1688
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1692
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1688
+  },
+  {
+   "build": "gcc-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1692
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 38
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 35
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 38
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 670
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 669
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 669
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 672
+  },
+  {
+   "build": "gcc-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 668
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 1,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 2,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 3,
+   "ulimit_s_KiB": 35
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 4,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 5,
+   "ulimit_s_KiB": 40
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 1665
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 1664
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 1668
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 1667
+  },
+  {
+   "build": "gcc-asan",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 1665
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 36
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 35
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 38
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 37
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 38
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1040
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1041
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1044
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1044
+  },
+  {
+   "build": "gcc-asan",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1041
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 14
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 228
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 228
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 224
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 228
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 228
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 14
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 108
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 108
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 108
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 108
+  },
+  {
+   "build": "gcc-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 108
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 14
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 180
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 177
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 180
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 180
+  },
+  {
+   "build": "gcc-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 176
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 18
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 17
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 308
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 305
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 307
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 309
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 307
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 228
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 227
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 228
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 228
+  },
+  {
+   "build": "gcc-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 225
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 11
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 188
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 188
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 188
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 185
+  },
+  {
+   "build": "gcc-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 188
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 26
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 26
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 27
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 25
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 107
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 108
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 108
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 108
+  },
+  {
+   "build": "gcc-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 106
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 1,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 4,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 5,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 190
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 192
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 192
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 192
+  },
+  {
+   "build": "gcc-rel",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 191
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 152
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "gcc-rel",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 155
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 21
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 19
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 22
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 4031
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 4028
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 4029
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 4032
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 4031
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 21
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 21
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 24
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 24
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 2092
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 2092
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 2092
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 2095
+  },
+  {
+   "build": "clang-asan",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 2090
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 24
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 2404
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 2402
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 2402
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 2404
+  },
+  {
+   "build": "clang-asan",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 2407
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 31
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 30
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 29
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1552
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1551
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1552
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1552
+  },
+  {
+   "build": "clang-asan",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1552
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 21
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 24
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 26
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 24
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 22
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 4018
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 4024
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 4020
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 4018
+  },
+  {
+   "build": "clang-asan",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 4020
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 19
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 19
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 22
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1748
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1748
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1740
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1745
+  },
+  {
+   "build": "clang-asan",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1746
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 22
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 24
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 17
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 23
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 17
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 704
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 705
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 706
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 705
+  },
+  {
+   "build": "clang-asan",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 705
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 153
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 14
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 100
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 100
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 96
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 100
+  },
+  {
+   "build": "clang-rel",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 100
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 153
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 153
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 155
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 153
+  },
+  {
+   "build": "clang-rel",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 18
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 304
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 300
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 303
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 300
+  },
+  {
+   "build": "clang-rel",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 299
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 152
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 154
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 153
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 155
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 153
+  },
+  {
+   "build": "clang-rel",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 27
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 26
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 58
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 58
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 60
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 58
+  },
+  {
+   "build": "clang-rel",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 60
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 14
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 172
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 172
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 168
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 171
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 169
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 14
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 11
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 11
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 97
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 100
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 100
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 96
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 98
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 152
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 156
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 152
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 291
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 292
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 288
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 292
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 296
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 172
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 172
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 171
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 171
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 169
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 136
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 138
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 140
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 138
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 140
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 29
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 65
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 62
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 67
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 65
+  },
+  {
+   "build": "clang-libcxx",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 64
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 27
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1320
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1320
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1315
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1320
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1318
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 24
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 26
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 29
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 25
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 740
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 740
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 743
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 739
+  },
+  {
+   "build": "gcc-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 744
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 27
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 932
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 932
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 936
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 932
+  },
+  {
+   "build": "gcc-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 929
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 27
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 628
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 624
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 628
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 624
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 624
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 26
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 27
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1316
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1320
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1314
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1312
+  },
+  {
+   "build": "gcc-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1316
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 25
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 27
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 26
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 720
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 720
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 716
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 715
+  },
+  {
+   "build": "gcc-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 716
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 31
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 29
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 299
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 300
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 298
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 300
+  },
+  {
+   "build": "gcc-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 299
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 1,
+   "ulimit_s_KiB": 30
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 2,
+   "ulimit_s_KiB": 26
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 3,
+   "ulimit_s_KiB": 29
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 4,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 0,
+   "nesting_depth": 1,
+   "repetition": 5,
+   "ulimit_s_KiB": 27
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 687
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 688
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 688
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 688
+  },
+  {
+   "build": "gcc-debug",
+   "function": "generic_read",
+   "levels": 255,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 690
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 24
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 27
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 468
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 471
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 470
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 467
+  },
+  {
+   "build": "gcc-debug",
+   "function": "value_read",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 467
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1612
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1607
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1612
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1612
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1608
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 14
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 13
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 856
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 855
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 852
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 855
+  },
+  {
+   "build": "clang-debug",
+   "function": "item_decode",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 860
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 18
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 1,
+   "ulimit_s_KiB": 1026
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 2,
+   "ulimit_s_KiB": 1030
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 3,
+   "ulimit_s_KiB": 1027
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 4,
+   "ulimit_s_KiB": 1026
+  },
+  {
+   "build": "clang-debug",
+   "function": "keys_equivalent",
+   "levels": 511,
+   "nesting_depth": 511,
+   "repetition": 5,
+   "ulimit_s_KiB": 1027
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 21
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 19
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 22
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 752
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 756
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 755
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 755
+  },
+  {
+   "build": "clang-debug",
+   "function": "value_equal",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 756
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 20
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 1602
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 1601
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 1608
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 1605
+  },
+  {
+   "build": "clang-debug",
+   "function": "segment_apply",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 1606
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 12
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 18
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 15
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 16
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 824
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 824
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 819
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 820
+  },
+  {
+   "build": "clang-debug",
+   "function": "diagnostic_write",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 822
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 1,
+   "ulimit_s_KiB": 30
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 2,
+   "ulimit_s_KiB": 28
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 3,
+   "ulimit_s_KiB": 30
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 4,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 0,
+   "nesting_depth": 0,
+   "repetition": 5,
+   "ulimit_s_KiB": 32
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 1,
+   "ulimit_s_KiB": 357
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 2,
+   "ulimit_s_KiB": 360
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 3,
+   "ulimit_s_KiB": 356
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 4,
+   "ulimit_s_KiB": 357
+  },
+  {
+   "build": "clang-debug",
+   "function": "walker",
+   "levels": 512,
+   "nesting_depth": 512,
+   "repetition": 5,
+   "ulimit_s_KiB": 357
+  }
+ ]
+}
