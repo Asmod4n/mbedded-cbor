@@ -56,8 +56,12 @@ class value_sharing
 
     static std::expected<resolved, error> container_resolve(std::shared_ptr<top_level_item> source, std::size_t offset);
 
-    template <std::size_t DepthMax, class Match>
-    static std::expected<lazy, error> key_find(resolved const &found, Match const &match);
+    template <std::size_t DepthMax, class Key>
+        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+    static std::expected<typename lazy_entries<DepthMax>::iterator, error> key_find(resolved found, Key key);
+
+    template <std::size_t DepthMax>
+    static std::expected<lazy, error> value_of(std::expected<typename lazy_entries<DepthMax>::iterator, error> found);
 
     friend class validity;
 
@@ -105,6 +109,14 @@ struct lazy {
     template <std::size_t DepthMax = validity::nesting_depth_default>
         requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
     std::expected<lazy, error> at(std::int64_t index) const;
+
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    std::expected<typename lazy_entries<DepthMax>::iterator, error> find(std::string_view key) const;
+
+    template <std::size_t DepthMax = validity::nesting_depth_default>
+        requires(validity::check_nesting_depth(DepthMax, validity::nesting_depth_limit).has_value())
+    std::expected<typename lazy_entries<DepthMax>::iterator, error> find(std::int64_t key) const;
 
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
