@@ -369,6 +369,14 @@ public:
         return static_cast<std::size_t>(argument);
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_sharedref_chain_ends(std::size_t const references_followed, std::size_t const marked)
+    {
+        if (references_followed > marked) [[unlikely]]
+            return std::unexpected(error::sharedref_not_complete);
+        return {};
+    }
+
     template <std::integral I>
     CBOR_ALWAYS_INLINE static constexpr std::expected<std::uint64_t, error>
     check_index(I const index, std::uint64_t const length)

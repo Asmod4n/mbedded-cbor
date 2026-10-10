@@ -143,6 +143,17 @@ TEST_CASE("tag 29: a reference to a mark that is not complete")
     CHECK_EQ(ref_decode_error("\xd8\x1c\xc6\xd8\x1d\x00"sv), error::sharedref_not_complete);
 }
 
+// Found by the fuzzer: a mark whose content is a chain of marks and a reference back to the first mark has no
+// end. The check of the content of tag 0 followed the chain without a stop.
+TEST_CASE("tag 29: a chain of marks that refers to its own start ends with an error")
+{
+    CHECK_EQ(decode_error("\xc0\xd8\x1c\xd8\x1c\xd8\x1d\x00"sv), error::sharedref_not_complete);
+    CHECK_EQ(ref_decode_error("\xc0\xd8\x1c\xd8\x1c\xd8\x1d\x00"sv), error::sharedref_not_complete);
+    CHECK_EQ(decode_error("\xc0\xd8\x1c\xd8\x1d\x00"sv), error::sharedref_not_complete);
+    CHECK_EQ(decode_error("\xd8\x24\xd8\x1c\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv), error::sharedref_not_complete);
+    CHECK_EQ(ref_decode_error("\xd8\x24\xd8\x1c\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv), error::sharedref_not_complete);
+}
+
 // value-sharing: a cyclic data structure needs a reference to a value before it is completely decoded. A binding
 // that does not answer cyclic_data_structures holds values, not references, so a cycle would come back as a cut
 // copy; the decoder refuses it instead. Sharing without a cycle stays: the binding gets a copy.
