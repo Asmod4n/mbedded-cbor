@@ -3,6 +3,7 @@
 # usage: test/run.sh fast|full|<build>...
 #   fast: gcc-release clang-asan
 #   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx
+#   tsan is run by name and not in fast or full.
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
 # The builds run one after the other, and each uses every processor.
@@ -20,6 +21,7 @@ full) set -- gcc-asan gcc-release clang-asan clang-release clang-libcxx ;;
 esac
 
 asan="-Og -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+tsan="-Og -fsanitize=thread -fno-omit-frame-pointer"
 pch_clang="-Xclang -fno-pch-timestamp"
 
 one() {
@@ -30,6 +32,7 @@ one() {
 	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" ;;
 	clang-release) cxx=clang++-23 type=Release flags=$pch_clang ;;
 	clang-libcxx) cxx=clang++-23 type=Release flags="-stdlib=libc++ $pch_clang" ;;
+	tsan) cxx=clang++-23 type=Debug flags="$tsan $pch_clang" ;;
 	*) echo "unknown build $n" >&2; return 2 ;;
 	esac
 	mkdir -p "$root/$branch/$n" "$cache"
