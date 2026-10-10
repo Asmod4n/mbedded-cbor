@@ -102,29 +102,51 @@ TEST_CASE("an item owns no memory")
     CHECK(std::is_trivially_copyable_v<std::span<std::byte const>>);
 }
 
-cbor::item const *address_of(std::expected<std::reference_wrapper<cbor::item const>, cbor::error> const &r)
+std::shared_ptr<cbor::item const> item_of(std::expected<std::shared_ptr<cbor::item const>, cbor::error> const &r)
 {
     REQUIRE(r.has_value());
-    return &r->get();
+    return *r;
 }
 
-// The top-level item is the cache: each node becomes an item once, so a
-// second decode gives the same address and builds nothing new.
-TEST_CASE("decode: a node decoded twice is the same item")
+// Each decode returns items that the caller owns, and no lazy keeps a
+// cache that a second call or a second thread would write. Two decodes
+// of one node give two items with the same content.
+TEST_CASE("decode: a node decoded twice gives two items that the caller owns")
 {
     auto const top_level = cbor::lazy::from(std::string("\x82\x01\x62hi"sv));
     REQUIRE(top_level.has_value());
-    cbor::item const *const first = address_of(top_level->decode());
-    CHECK_EQ(address_of(top_level->decode()), first);
+    auto const first = top_level->decode();
+    auto const second = top_level->decode();
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+    CHECK_NE(first->get(), second->get());
+    CHECK_EQ((*first)->argument, (*second)->argument);
+    CHECK_EQ(std::get<std::span<std::byte const>>((*first)->content).data(),
+             std::get<std::span<std::byte const>>((*second)->content).data());
 }
 
-// A child reached through its own lazy is the node that its parent
-// already holds, so both paths give one address.
-TEST_CASE("decode: a child decoded through its lazy is the item its parent holds")
+// The fault: decode on the lazy inside a temporary expected returned a
+// reference into the top-level item that the temporary freed at the end
+// of the statement. The result now owns its items and the top-level
+// item, so it stays valid after the lazy is gone.
+TEST_CASE("decode: the item outlives the lazy that decoded it")
+{
+    std::string const s("\x83\x01\x02\x03"sv);
+    auto const r = cbor::lazy::from(s)->decode();
+    REQUIRE(r.has_value());
+    CHECK_EQ((*r)->major_type, cbor::major_type::array);
+    CHECK_EQ((*r)->argument, 3u);
+    auto const elements = std::get<std::span<std::byte const>>((*r)->content);
+    REQUIRE_EQ(elements.size(), 3u);
+    CHECK_EQ(elements[2], std::byte{0x03});
+}
+
+// A child reached through two paths decodes to the same content.
+TEST_CASE("decode: a child decoded through two paths has one content")
 {
     auto const top_level = cbor::lazy::from(std::string("\xa1\x61k\x82\x01\x02"sv));
     REQUIRE(top_level.has_value());
-    cbor::item const *const map = address_of(top_level->decode());
+    auto const map = item_of(top_level->decode());
     CHECK_EQ(map->argument, 1u);
     auto const entries = top_level->entries();
     REQUIRE(entries.has_value());
@@ -132,7 +154,11 @@ TEST_CASE("decode: a child decoded through its lazy is the item its parent holds
     REQUIRE(entry.has_value());
     auto const value = top_level->at("k");
     REQUIRE(value.has_value());
-    CHECK_EQ(address_of(value->decode()), address_of(entry->second.decode()));
+    auto const by_key = item_of(value->decode());
+    auto const by_entry = item_of(entry->second.decode());
+    CHECK_EQ(by_key->argument, by_entry->argument);
+    CHECK_EQ(std::get<std::span<std::byte const>>(by_key->content).data(),
+             std::get<std::span<std::byte const>>(by_entry->content).data());
 }
 
 // RFC 8949 3.1: an array is its count and its encoded elements. The item
@@ -143,7 +169,7 @@ TEST_CASE("decode: an array is its count and a view on the bytes of its elements
     std::string const bytes = "\x82\x01\x62hi"s;
     auto const top_level = cbor::lazy::from(std::make_shared<std::string const>(bytes));
     REQUIRE(top_level.has_value());
-    cbor::item const *const array = address_of(top_level->decode());
+    auto const array = item_of(top_level->decode());
     CHECK_EQ(array->argument, 2u);
     auto const elements = std::get<std::span<std::byte const>>(array->content);
     REQUIRE_EQ(elements.size(), 4u);
@@ -215,36 +241,37 @@ TEST_CASE("decode: a map of 65535 integer keys is read with a repeated key")
     CHECK(twice->decode().has_value());
 }
 
-template <class Lazy>
-concept decodable = requires(Lazy &&l) { std::forward<Lazy>(l).decode(); };
-
-// A reference to an item lives only as long as the top-level item that
-// holds it, so decode on a temporary lazy does not compile.
-TEST_CASE("decode: a temporary lazy gives no item")
+// The result owns what it shows, so decode on a temporary lazy is safe
+// and compiles.
+TEST_CASE("decode: a temporary lazy gives an item")
 {
-    CHECK_FALSE(decodable<cbor::lazy>);
-    CHECK_FALSE(decodable<cbor::lazy const>);
-    CHECK(decodable<cbor::lazy const &>);
+    auto const r = std::move(*cbor::lazy::from(std::string("\x01"sv))).decode();
+    REQUIRE(r.has_value());
+    CHECK_EQ((*r)->major_type, cbor::major_type::unsigned_integer);
+    CHECK_EQ((*r)->argument, 1u);
 }
 
-// The order does not matter: a child decoded first is taken by its
-// parent later, not built a second time.
-TEST_CASE("decode: a child decoded before its parent is the item its parent takes")
+// The order does not matter: a child decoded first and decoded again
+// after its parent has one content.
+TEST_CASE("decode: a child decoded before its parent has the same content after it")
 {
     auto const top_level = cbor::lazy::from(std::string("\x82\x01\x82\x02\x03"sv));
     REQUIRE(top_level.has_value());
     auto const child = top_level->at(1);
     REQUIRE(child.has_value());
-    cbor::item const *const inner = address_of(child->decode());
+    auto const inner = item_of(child->decode());
     REQUIRE(top_level->decode().has_value());
     auto const again = top_level->at(1);
     REQUIRE(again.has_value());
-    CHECK_EQ(address_of(again->decode()), inner);
+    auto const later = item_of(again->decode());
+    CHECK_EQ(later->argument, inner->argument);
+    CHECK_EQ(std::get<std::span<std::byte const>>(later->content).data(),
+             std::get<std::span<std::byte const>>(inner->content).data());
 }
 
 // RFC 8949 3.4 and the value sharing tags 28 and 29: a reference is the
-// value it names. The item of 29(0) is the item of the shared value, so a
-// reader sees one object and never a copy.
+// value it names. The item of 29(0) has the content of the shared value,
+// a view on the same bytes and never a copy.
 TEST_CASE("decode: a shared reference is the item of the shared value")
 {
     auto const top_level = cbor::lazy::from(std::string("\x82\xd8\x1c\x62hi\xd8\x1d\x00"sv));
@@ -252,32 +279,35 @@ TEST_CASE("decode: a shared reference is the item of the shared value")
     REQUIRE(top_level->decode().has_value());
     auto const shared = top_level->at(0);
     REQUIRE(shared.has_value());
-    cbor::item const *const value = address_of(shared->decode());
+    auto const value = item_of(shared->decode());
     CHECK_EQ(std::get<std::string_view>(value->content), "hi");
     auto const reference = top_level->at(1);
     REQUIRE(reference.has_value());
-    CHECK_EQ(address_of(reference->decode()), value);
+    auto const named = item_of(reference->decode());
+    CHECK_EQ(std::get<std::string_view>(named->content).data(), std::get<std::string_view>(value->content).data());
 }
 
 // A cycle comes from the wire: 28([29(0)]) is an array that holds
-// itself. The array is filled in place, so its element is its own
-// address and the decode ends.
-TEST_CASE("decode: a cyclic array holds its own address")
+// itself. The element decodes to that array, and the decode ends.
+TEST_CASE("decode: a cyclic array is its own element")
 {
     auto const top_level = cbor::lazy::from(std::string("\xd8\x1c\x81\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
-    cbor::item const *const array = address_of(top_level->decode());
+    auto const array = item_of(top_level->decode());
     auto const elements = top_level->elements();
     REQUIRE(elements.has_value());
     auto const element = *elements->begin();
     REQUIRE(element.has_value());
-    CHECK_EQ(address_of(element->decode()), array);
+    auto const named = item_of(element->decode());
+    CHECK_EQ(named->major_type, cbor::major_type::array);
+    CHECK_EQ(std::get<std::span<std::byte const>>(named->content).data(),
+             std::get<std::span<std::byte const>>(array->content).data());
 }
 
 // A reference to a value that comes later on the wire is refused, as in
-// every other reader of the shared values. The elements of an array are
-// read on access. The decode of the array has recorded the mark that
-// lies after the reference, so the reference is not complete, as in lazy.
+// every other reader of the shared values. A reference counts only the
+// marks that come before it on the wire, so the mark after it is not
+// marked, as in at_path.
 TEST_CASE("decode: a forward shared reference is refused")
 {
     auto const top_level = cbor::lazy::from(std::string("\x82\xd8\x1d\x00\xd8\x1c\x00"sv));
@@ -287,7 +317,7 @@ TEST_CASE("decode: a forward shared reference is refused")
     REQUIRE(element.has_value());
     auto const r = element->decode();
     REQUIRE_FALSE(r.has_value());
-    CHECK_EQ(r.error(), cbor::error::sharedref_not_complete);
+    CHECK_EQ(r.error(), cbor::error::sharedref_index_not_marked);
 }
 
 // The nesting depth is checked where the decode recurses: 100(100(100(0))) holds an
@@ -322,7 +352,7 @@ TEST_CASE("decode: a float16 keeps additional information 25")
 {
     auto const top_level = cbor::lazy::from(std::string("\xf9\x3e\x00"sv));
     REQUIRE(top_level.has_value());
-    cbor::item const *const f = address_of(top_level->decode());
+    auto const f = item_of(top_level->decode());
     CHECK_EQ(f->major_type, cbor::major_type::simple_float);
     CHECK_EQ(f->additional_information, 25);
     CHECK_EQ(f->argument, 0x3e00);

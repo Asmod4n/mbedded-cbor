@@ -150,13 +150,17 @@ class decoding
                         shared[index] = *content;
                         return content;
                     }
-                    std::size_t const index = before->top_level.mark(d);
+                    std::vector<lazy> const &all = before->top_level.sharedrefs_read();
+                    auto const known = std::ranges::lower_bound(all, before->top_level.encoded.size() - d.encoded.size(),
+                                                                {}, &lazy::offset);
+                    std::size_t const index = static_cast<std::size_t>(std::ranges::distance(all.begin(), known));
                     if (index >= shared.size()) {
                         shared.resize(index + 1);
                         before->evaluating.resize(index + 1);
                     }
                     if (shared[index]) {
-                        if (auto const r = well_formedness::item_skip(d, before->top_level); !r) [[unlikely]]
+                        well_formedness::no_marks none;
+                        if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
                             return std::unexpected(r.error());
                         return *shared[index];
                     }
@@ -194,16 +198,28 @@ class decoding
                     return binding.unsigned_bignum_decode(magnitude);
                 }
                 if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
+                    std::size_t const reference_at = before ? before->top_level.encoded.size() - d.encoded.size() : 0;
                     auto const r = d.head_decode();
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
                     if (error const c = validity::check_tag_content(h->argument, r->major, r->info).error_or(error{});
                         c != error{}) [[unlikely]]
                         return std::unexpected(c);
-                    auto const checked = validity::check_sharedref_index(r->argument, shared.size());
+                    auto const marked = [&]() -> std::size_t {
+                        if (!before)
+                            return shared.size();
+                        std::vector<lazy> const &all = before->top_level.sharedrefs_read();
+                        return static_cast<std::size_t>(std::ranges::distance(
+                            all.begin(), std::ranges::upper_bound(all, reference_at, {}, &lazy::offset)));
+                    }();
+                    auto const checked = validity::check_sharedref_index(r->argument, marked);
                     if (!checked) [[unlikely]]
                         return std::unexpected(checked.error());
                     std::size_t const index = *checked;
+                    if (before && index >= shared.size()) {
+                        shared.resize(index + 1);
+                        before->evaluating.resize(index + 1);
+                    }
                     if (!shared[index] && before && !before->evaluating[index] &&
                         before->top_level.sharedrefs[index].offset < before->top_level.encoded.size() - d.encoded.size()) {
                         if (before->mark_depths.empty()) {
@@ -234,9 +250,9 @@ class decoding
                         return std::unexpected(error::sharedref_not_complete);
                     return *shared[index];
                 }
-                if (error const e = validity::check_tag_content(h->argument, before->top_level.encoded,
-                                                                before->top_level.encoded.size() - d.encoded.size(),
-                                                                before->top_level.sharedrefs, &lazy::offset)
+                if (error const e = validity::check_tag_content(
+                                    h->argument, before->top_level.encoded, before->top_level.encoded.size() - d.encoded.size(),
+                                    [this]() -> auto const & { return before->top_level.sharedrefs_read(); }, &lazy::offset)
                                         .error_or(error{});
                     e != error{}) [[unlikely]]
                     return std::unexpected(e);

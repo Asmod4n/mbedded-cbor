@@ -214,7 +214,7 @@ class generic
             if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
                 break;
             d.encoded = look.encoded;
-            auto const target = d.message.sharedref_decode(d, item_at);
+            auto const target = value_sharing::top_level_item::sharedref_decode(d, d.message.encoded.size() - d.encoded.size(), item_at, d.message.sharedrefs);
             if (!target) [[unlikely]]
                 return std::unexpected(target.error());
             std::string_view const rest = d.encoded;
@@ -454,7 +454,7 @@ class generic
             bool const indirect = k && k->major == major_type::tag &&
                                   k->argument == std::to_underlying(rfc8949::tag_number::sharedref);
             if (indirect) {
-                auto const target = d.message.sharedref_decode(d, key_at);
+                auto const target = value_sharing::top_level_item::sharedref_decode(d, d.message.encoded.size() - d.encoded.size(), key_at, d.message.sharedrefs);
                 if (!target) [[unlikely]]
                     return std::unexpected(target.error());
                 referenced = heads::decoder{std::string_view(std::span(d.message.encoded).subspan(target->offset))};

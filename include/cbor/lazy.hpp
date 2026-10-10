@@ -52,7 +52,8 @@ inline lazy_elements::iterator &lazy_elements::iterator::operator++()
         return *this;
     }
     heads::decoder d{std::string_view(std::span(top_level->encoded).subspan(offset))};
-    if (auto const r = well_formedness::item_skip(d, *top_level); !r) [[unlikely]] {
+    well_formedness::no_marks none;
+    if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]] {
         failure = r.error();
         --left;
         return *this;
@@ -67,7 +68,8 @@ inline void lazy_entries::iterator::value_find()
     if (left == 0)
         return;
     heads::decoder d{std::string_view(std::span(top_level->encoded).subspan(key))};
-    if (auto const r = well_formedness::item_skip(d, *top_level); !r) [[unlikely]] {
+    well_formedness::no_marks none;
+    if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]] {
         failure = r.error();
         return;
     }
@@ -95,7 +97,8 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
         return *this;
     }
     heads::decoder d{std::string_view(std::span(top_level->encoded).subspan(value))};
-    if (auto const r = well_formedness::item_skip(d, *top_level); !r) [[unlikely]] {
+    well_formedness::no_marks none;
+    if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]] {
         failure = r.error();
         --left;
         return *this;
@@ -370,8 +373,9 @@ inline std::expected<lazy, error> lazy::at(std::size_t const index) const
     auto const position = validity::check_index(index, h.argument);
     if (!position) [[unlikely]]
         return std::unexpected(position.error());
+    well_formedness::no_marks none;
     for (std::uint64_t i = 0; i < *position; ++i)
-        if (auto const r = well_formedness::item_skip(d, *source); !r) [[unlikely]]
+        if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
             return std::unexpected(r.error());
     std::size_t const element = source->encoded.size() - d.encoded.size();
     return lazy{source, element};
@@ -521,11 +525,12 @@ inline std::expected<lazy_entries, error> lazy::entries() const
 }
 
 inline std::expected<std::pair<item *, std::size_t>, error>
-value_sharing::item_decode(top_level_item &top_level, std::size_t const at, std::size_t const depth,
+value_sharing::item_decode(decoded_items &decoded, std::size_t const at, std::size_t const depth,
                            std::size_t const depth_max)
 {
     if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
         return std::unexpected(r.error());
+    top_level_item &top_level = *decoded.top_level;
     auto const h = heads::raw_head_read(top_level.encoded, at);
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
@@ -533,25 +538,24 @@ value_sharing::item_decode(top_level_item &top_level, std::size_t const at, std:
         [[unlikely]]
         return std::unexpected(r);
     if (h->major == major_type::tag && h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-        top_level.mark(heads::decoder{std::string_view(std::span(top_level.encoded).subspan(h->at))});
-        return item_decode(top_level, h->at, depth + 1, depth_max);
+        return item_decode(decoded, h->at, depth + 1, depth_max);
     }
     if (h->major == major_type::tag && h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
         heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
-        auto const found = top_level.sharedref_decode(d, at);
+        auto const found = top_level_item::sharedref_decode(d, at, at, top_level.sharedrefs_read());
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
-        auto const target = item_resolve(top_level, found->offset);
+        auto const target = item_resolve(decoded, found->offset);
         if (!target) [[unlikely]]
             return std::unexpected(target.error());
         if (std::holds_alternative<lazy>((*target)->content)) {
-            auto const built = item_decode(top_level, found->offset, depth, depth_max);
+            auto const built = item_decode(decoded, found->offset, depth, depth_max);
             if (!built) [[unlikely]]
                 return std::unexpected(built.error());
         }
         return std::pair{*target, top_level.encoded.size() - d.encoded.size()};
     }
-    auto const e = top_level.entry(at);
+    auto const e = decoded.entry(at);
     if (!e) [[unlikely]]
         return std::unexpected(e.error());
     item *const node = *e;
@@ -559,7 +563,8 @@ value_sharing::item_decode(top_level_item &top_level, std::size_t const at, std:
         if (h->major == major_type::array || h->major == major_type::map)
             return std::pair{node, h->at + std::get<std::span<std::byte const>>(node->content).size()};
         heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(at))};
-        if (auto const r = well_formedness::item_skip(d, top_level); !r) [[unlikely]]
+        well_formedness::no_marks none;
+        if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
             return std::unexpected(r.error());
         return std::pair{node, top_level.encoded.size() - d.encoded.size()};
     }
@@ -583,7 +588,8 @@ value_sharing::item_decode(top_level_item &top_level, std::size_t const at, std:
     case major_type::array:
     case major_type::map: {
         heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(at))};
-        if (auto const r = well_formedness::item_skip(d, top_level); !r) [[unlikely]]
+        well_formedness::no_marks none;
+        if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
             return std::unexpected(r.error());
         std::size_t const end = top_level.encoded.size() - d.encoded.size();
         node->content = std::as_bytes(std::span(top_level.encoded).subspan(h->at, end - h->at));
@@ -591,13 +597,14 @@ value_sharing::item_decode(top_level_item &top_level, std::size_t const at, std:
     }
     case major_type::tag: {
         node->content = static_cast<item const *>(nullptr);
-        auto const content = item_decode(top_level, h->at, depth + 1, depth_max);
+        auto const content = item_decode(decoded, h->at, depth + 1, depth_max);
         if (!content) [[unlikely]] {
             node->content = lazy{{}, at};
             return std::unexpected(content.error());
         }
-        if (error const c = validity::check_tag_content(h->argument, top_level.encoded, h->at,
-                                                        top_level.sharedrefs, &lazy::offset)
+        if (error const c = validity::check_tag_content(
+                                h->argument, top_level.encoded, h->at,
+                                [&top_level]() -> auto const & { return top_level.sharedrefs_read(); }, &lazy::offset)
                                 .error_or(error{});
             c != error{}) [[unlikely]] {
             node->content = lazy{{}, at};
@@ -633,25 +640,23 @@ value_sharing::item_decode(top_level_item &top_level, std::size_t const at, std:
     std::unreachable();
 }
 
-template <class Self>
-    requires(std::is_lvalue_reference_v<Self>)
-std::expected<std::reference_wrapper<item const>, error> lazy::decode(this Self &&self)
+inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
 {
-    validity::throw_logic_error_if_null(self.top_level,
-                                        "cbor::lazy::decode: the lazy holds no top-level item");
-    auto const built = value_sharing::item_decode(*self.top_level, self.offset, 0, limits.nesting_depth);
+    validity::throw_logic_error_if_null(top_level, "cbor::lazy::decode: the lazy holds no top-level item");
+    auto decoded = std::make_shared<value_sharing::decoded_items>(top_level);
+    auto const built = value_sharing::item_decode(*decoded, offset, 0, limits.nesting_depth);
     if (!built) [[unlikely]]
         return std::unexpected(built.error());
-    return std::cref(*built->first);
+    return std::shared_ptr<item const>(std::move(decoded), built->first);
 }
 
 template <class Binding>
 std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
 {
     validity::throw_logic_error_if_null(l.top_level, "cbor::lazy_decode: the lazy holds no top-level item");
-    decoding::prefix before{*l.top_level, std::vector<bool>(l.top_level->sharedrefs.size()), {}};
+    decoding::prefix before{*l.top_level, {}, {}};
     decoding::value_decoder<Binding> v{
-        {std::string_view(std::span(l.top_level->encoded).subspan(l.offset))}, binding, decoding::marks<Binding>(l.top_level->sharedrefs.size()), &before};
+        {std::string_view(std::span(l.top_level->encoded).subspan(l.offset))}, binding, {}, &before};
     return v.value_decode(0, std::nullopt, limits.nesting_depth);
 }
 

@@ -1043,7 +1043,7 @@ class extended_diagnostic_notation
         case major_type::tag: {
             std::size_t const content_at = encoded.size() - d.encoded.size();
             if (error const e =
-                    validity::check_tag_content(h->argument, encoded, content_at, marks, std::identity{}).error_or(error{});
+                    validity::check_tag_content(h->argument, encoded, content_at, [&marks]() -> auto const & { return marks; }, std::identity{}).error_or(error{});
                 e != error{}) [[unlikely]]
                 return std::unexpected(e);
             auto const c = heads::raw_head_read(encoded, content_at);

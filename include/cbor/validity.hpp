@@ -224,9 +224,9 @@ public:
                                                                std::uint64_t count, std::size_t depth,
                                                                std::size_t depth_max);
 
-    template <class Marks, class Projection>
+    template <std::invocable MarksRead, class Projection>
     static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
-                                                        std::size_t content_at, Marks const &marks,
+                                                        std::size_t content_at, MarksRead marks_read,
                                                         Projection offset_of);
 
     static constexpr error writer_error(std::errc const e) noexcept

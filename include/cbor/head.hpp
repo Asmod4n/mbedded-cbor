@@ -620,9 +620,9 @@ class heads
 #endif
 };
 
-template <class Marks, class Projection>
+template <std::invocable MarksRead, class Projection>
 std::expected<void, error> validity::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
-                                                       std::size_t const content_at, Marks const &marks,
+                                                       std::size_t const content_at, MarksRead const marks_read,
                                                        Projection const offset_of)
 {
     std::size_t at = content_at;
@@ -642,7 +642,10 @@ std::expected<void, error> validity::check_tag_content(std::uint64_t const tag, 
         if (error const e = check_tag_content(c->argument, n->major, n->info).error_or(error{}); e != error{})
             [[unlikely]]
             return std::unexpected(e);
-        auto const index = check_sharedref_index(n->argument, std::ranges::size(marks));
+        auto const &marks = std::invoke(marks_read);
+        auto const index = check_sharedref_index(
+            n->argument, static_cast<std::size_t>(std::ranges::distance(
+                             std::ranges::begin(marks), std::ranges::upper_bound(marks, at, {}, offset_of))));
         if (!index) [[unlikely]]
             return std::unexpected(index.error());
         std::size_t const marked = std::invoke(offset_of, marks[*index]);
