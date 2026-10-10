@@ -460,6 +460,8 @@ inline std::expected<lazy, error> lazy::at(std::size_t const index) const
                             if (auto const r = well_formedness::items_skip(d, *position); !r) [[unlikely]]
                                 return std::unexpected(r.error());
                             std::size_t const element = source->encoded.size() - d.encoded.size();
+                            if (auto const target = heads::decoder<Checked>(d).head_decode(); !target) [[unlikely]]
+                                return std::unexpected(target.error());
                             return lazy{source, element};
                         });
 }

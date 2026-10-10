@@ -41,8 +41,7 @@ TEST_CASE("doc runtime: lazy::from in every form")
     CHECK_EQ(d->top_level->encoded.data(), held->data());
     auto const cut = cbor::lazy::from("\x82\x01"s);
     REQUIRE(cut.has_value());
-    REQUIRE(cut->at(1).has_value());
-    CHECK_EQ(cut->at(1)->get<std::int64_t>().error(), error::too_little_data);
+    CHECK_EQ(cut->at(1).error(), error::too_little_data);
     CHECK_EQ(cbor::lazy::from("\x01\x02"s)->get<std::int64_t>(), 1);
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::lazy::from(o, std::string(*o)); }; }(held)));
 }
