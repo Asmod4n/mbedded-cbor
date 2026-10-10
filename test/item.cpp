@@ -4,6 +4,7 @@
 #include "limits_guard.hpp"
 
 #include <bit>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -318,6 +319,38 @@ TEST_CASE("decode: a forward shared reference is refused")
     auto const r = element->decode();
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), cbor::error::sharedref_index_not_marked);
+}
+
+// Fault 21: in [28(0), 28(29(0)), 28(29(1)), ...] each element refers to the
+// one before it. The decode of the last element walked the chain once for
+// each step and recursed once for each step at the same depth, so a long chain
+// took time in the square of its length and overflowed the stack. The decode
+// follows the chain in one loop and gives the integer at its start.
+TEST_CASE("decode: a long chain of shared references resolves without recursion")
+{
+    constexpr std::uint16_t chain_length = 50000;
+    constexpr char array_head_uint16 = '\x99';
+    constexpr char uint16_head = '\x19';
+    constexpr std::string_view shareable = "\xd8\x1c";
+    constexpr std::string_view sharedref = "\xd8\x1d";
+    auto const uint16_of = [](std::uint16_t const n) {
+        return std::string{static_cast<char>(n >> CHAR_BIT),
+                           static_cast<char>(n & std::numeric_limits<unsigned char>::max())};
+    };
+    std::string document = array_head_uint16 + uint16_of(chain_length);
+    document += shareable;
+    document += '\x00';
+    for (std::uint16_t i = 1; i < chain_length; ++i) {
+        document += shareable;
+        document += sharedref;
+        document += uint16_head + uint16_of(static_cast<std::uint16_t>(i - 1));
+    }
+    auto const top_level = cbor::lazy::from(std::move(document));
+    REQUIRE(top_level.has_value());
+    auto const last = top_level->at(chain_length - 1);
+    REQUIRE(last.has_value());
+    auto const decoded = item_of(last->decode());
+    CHECK_EQ(decoded->major_type, cbor::major_type::unsigned_integer);
 }
 
 // The nesting depth is checked where the decode recurses: 100(100(100(0))) holds an

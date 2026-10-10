@@ -60,6 +60,8 @@ inline lazy_elements::iterator &lazy_elements::iterator::operator++()
     }
     offset = top_level->encoded.size() - d.encoded.size();
     --left;
+    if (left != 0 && d.encoded.empty()) [[unlikely]]
+        failure = error::too_little_data;
     return *this;
 }
 
@@ -71,6 +73,10 @@ inline void lazy_entries::iterator::value_find()
     well_formedness::no_marks none;
     if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]] {
         failure = r.error();
+        return;
+    }
+    if (d.encoded.empty()) [[unlikely]] {
+        failure = error::too_little_data;
         return;
     }
     value = top_level->encoded.size() - d.encoded.size();
@@ -519,7 +525,10 @@ inline std::expected<lazy_entries, error> lazy::entries() const
         return std::unexpected(error::not_indexable);
     if (auto const r = validity::check_definite_length(h.major, h.info); !r) [[unlikely]]
         return std::unexpected(r.error());
-    if (auto const r = validity::check_pending_items(h.argument, d.encoded.size()); !r) [[unlikely]]
+    auto const items = validity::checked_mul(h.argument, rfc8949::data_items_per_pair);
+    if (!items) [[unlikely]]
+        return std::unexpected(error::too_little_data);
+    if (auto const r = validity::check_pending_items(*items, d.encoded.size()); !r) [[unlikely]]
         return std::unexpected(r.error());
     return lazy_entries(source, source->encoded.size() - d.encoded.size(), h.argument);
 }
@@ -545,11 +554,14 @@ value_sharing::item_decode(decoded_items &decoded, std::size_t const at, std::si
         auto const found = top_level_item::sharedref_decode(d, at, at, top_level.sharedrefs_read());
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
-        auto const target = item_resolve(decoded, found->offset);
+        auto const content = shared_resolve(top_level, found->offset);
+        if (!content) [[unlikely]]
+            return std::unexpected(content.error());
+        auto const target = decoded.entry(*content);
         if (!target) [[unlikely]]
             return std::unexpected(target.error());
         if (std::holds_alternative<lazy>((*target)->content)) {
-            auto const built = item_decode(decoded, found->offset, depth, depth_max);
+            auto const built = item_decode(decoded, *content, depth + 1, depth_max);
             if (!built) [[unlikely]]
                 return std::unexpected(built.error());
         }

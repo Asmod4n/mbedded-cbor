@@ -1286,7 +1286,7 @@ TEST_CASE("lazy: count of a map that is cut off")
 TEST_CASE("lazy: a cut-off array or map yields exactly size() values")
 {
     CHECK_EQ(lazy_of("\x82\x01"s).elements().error(), error::too_little_data);
-    auto const one = *lazy_of("\xa1\x61\x61"s).entries();
+    auto const one = *lazy_of("\xa1\x61\x61\x61"s).entries();
     CHECK_EQ(std::ranges::distance(one.begin(), one.end()), 1);
     auto const e = *lazy_of("\x83\x01\x19\x00"s).elements();
     std::uint64_t n = 0, with_value = 0;
@@ -1380,4 +1380,36 @@ TEST_CASE("lazy: const calls on one lazy and on its copies run in many threads")
         }
         CHECK(std::ranges::all_of(right, std::identity{}));
     }
+}
+
+// Fault 2 for an array: in 82 82 01 02 the first element is the whole rest
+// of the input, and the second element is missing. The walk gives the first
+// element and then too_little_data, not a value past the end.
+TEST_CASE("lazy: an element past the end of the input is too_little_data")
+{
+    auto const e = lazy_of("\x82\x82\x01\x02"s).elements();
+    REQUIRE(e.has_value());
+    std::vector<std::expected<cbor::lazy, error>> steps;
+    for (auto const step : *e)
+        steps.push_back(step);
+    REQUIRE(steps.size() == 2);
+    CHECK(steps.at(0).has_value());
+    CHECK_EQ(steps.at(1).error(), error::too_little_data);
+}
+
+// A map of n pairs holds 2n data items, and each takes one byte at least.
+// a1 61 holds one byte for two data items, so entries() refuses it as
+// elements() refuses 81. In a1 61 61 the key fills the input, and the walk
+// gives too_little_data for the value, not a value past the end.
+TEST_CASE("lazy: a map counts two data items for each pair")
+{
+    CHECK_EQ(lazy_of("\xa1\x61"s).entries().error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\x81"s).elements().error(), error::too_little_data);
+    auto const m = lazy_of("\xa1\x61\x61"s).entries();
+    REQUIRE(m.has_value());
+    std::vector<std::expected<std::pair<cbor::lazy, cbor::lazy>, error>> steps;
+    for (auto const step : *m)
+        steps.push_back(step);
+    REQUIRE(steps.size() == 1);
+    CHECK_EQ(steps.at(0).error(), error::too_little_data);
 }
