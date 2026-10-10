@@ -322,7 +322,7 @@ TEST_CASE("doc path: the errors")
     CHECK_THROWS_AS((void)cbor::at_path(b, "$", cbor::lazy{}), std::logic_error);
 }
 
-// The section "Limits" shows each limit as a path meets it, also in an item that the path only skips.
+// The section "Limits" shows each limit as a path meets it, and that an item the path only skips does not count.
 TEST_CASE("doc path: the limits")
 {
     test_binding b;
@@ -336,6 +336,10 @@ TEST_CASE("doc path: the limits")
     {
         test::limits_guard const g{{.string_length = 2}};
         CHECK_EQ(cbor::at_path<"$.n", int>(bytes).error(), error::string_length_exceeded);
+        std::string const skipped = encoded(M("a"s, "xyz"s, "n"s, 1));
+        CHECK_EQ(cbor::at_path<"$.n", int>(skipped), 1);
+        CHECK_EQ(cbor::at_path<"$.a", std::string_view>(std::make_shared<std::string const>(skipped), skipped).error(),
+                 error::string_length_exceeded);
     }
     {
         test::limits_guard const g{{.container_elements = 1}};
