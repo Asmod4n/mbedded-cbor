@@ -33,7 +33,7 @@ clone them and give the include directory:
     bash bench/run.sh
 
 The script builds every arm as its own binary with g++-16 and clang++,
-`-O2 -march=native`. It runs each binary as 10 processes, one after the
+`-O2 -march=native -fPIE -pie`. It runs each binary as 10 processes, one after the
 other, and takes the median over the processes. It writes one file to
 `bench/results/<UTC time>.json` with every repetition and the context of
 the run, and deletes the build.

@@ -12,15 +12,15 @@ inline void encode_from_input(std::string_view const input)
     test::value const v = value_from(in, r, 0);
     test_binding binding;
     string_writer w;
-    auto const written = cbor::encode<16>(binding, w, v);
+    auto const written = cbor::encode(binding, w, v);
     if (!written) {
         require(r.reserved_simple || r.zero_negative);
         return;
     }
     require(!r.reserved_simple && !r.zero_negative);
-    auto const back = cbor::lazy_decode<16>(binding, *cbor::decode<16>(w.encoded));
+    auto const back = cbor::lazy_decode(binding, *cbor::lazy::from(w.encoded));
     require(back.has_value() && same_number(v, *back));
-    auto const end = cbor::item_end<16>(w.encoded);
+    auto const end = cbor::item_size(w.encoded);
     require(end.has_value() && *end == w.encoded.size());
 }
 

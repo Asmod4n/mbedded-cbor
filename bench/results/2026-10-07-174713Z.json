@@ -1,0 +1,535 @@
+{
+ "time": "2026-10-07-174713Z",
+ "commit": "4af2eddab7b3adafe78b05ef4c464c49d7b63457-dirty",
+ "purpose": "Schema read of every float of floats.cbor (60000 binary64), g++-16 only (the schema needs reflection): main against views-only-item before the fix (6704ce1, built twice for A/A) and after it (4af2edd, std::expected in the schema path); prototypes on the same values: RFC 8746 tag 86 and 82 typed arrays summed per value, a CBOR array of 0xfb heads checked first (masked OR over 576-byte blocks, or strided) then summed at fixed offsets; FlatBuffers and Cap n Proto. typed.* arms: 480000 bytes to 60000 doubles into a buffer made once, g++-16 and clang++, little endian ranges::copy or per-element loop, big endian per-element byteswap; LE_COPY built twice for A/A. ns per message, cpu real_time.",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG",
+ "resolved_march": "-march=                     \t\tsapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.0",
+  "clang version 23.1.2"
+ ],
+ "packages": [
+  "glibc-2.44-2.1.x86_64",
+  "libstdc++6-16.2.0+git9497-3.1.x86_64",
+  "libflatbuffers25_2_10-25.2.10-2.5.x86_64",
+  "libcapnp-1_5_0-1.5.0-1.3.x86_64",
+  "libbenchmark1-1.9.5-2.3.x86_64",
+  "gcc16-c++-16.2.0+git9497-3.1.x86_64",
+  "clang23-23.1.2-1.1.x86_64"
+ ],
+ "ldd_gxx": "linux-vdso.so.1 (0x00007fa285244000)\n\tlibcapnp.so.1.5.0 => /lib64/libcapnp.so.1.5.0 (0x00007fa285185000)\n\tlibkj.so.1.5.0 => /lib64/libkj.so.1.5.0 (0x00007fa2850ff000)\n\tlibflatbuffers.so.25.2.10 => /lib64/libflatbuffers.so.25.2.10 (0x00007fa285073000)\n\tlibbenchmark.so.1 => /lib64/libbenchmark.so.1 (0x00007fa28500e000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fa284d6b000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007fa284c47000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007fa284c19000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007fa284a05000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fa285246000)",
+ "ldd_clang": "linux-vdso.so.1 (0x00007fafbd3b0000)\n\tlibbenchmark.so.1 => /lib64/libbenchmark.so.1 (0x00007fafbd33a000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fafbd097000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007fafbcf73000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007fafbcf43000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007fafbcd2f000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fafbd3b2000)",
+ "kernel": "6.18.44-fc-v77",
+ "scheduler": "sched_ext state / autogroup: cat: /sys/kernel/sched_ext/state: No such file or directory / 1",
+ "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-tw-compare",
+ "arm_sources": {
+  "main": "include/ of 97f0f46 (origin/main)",
+  "before": "include/ of 6704ce1",
+  "after": "include/ of 4af2edd",
+  "compare": "bench/compare.cpp of the commit with this file",
+  "typed": "#include <benchmark/benchmark.h>\n#include <algorithm>\n#include <bit>\n#include <cstdint>\n#include <cstring>\n#include <span>\n#include <vector>\n\nstatic constexpr std::size_t n = 60000;\nstatic std::vector<char> in(8 * n);\nstatic std::vector<double> out(n);\n\n[[gnu::noinline]] static void arm(std::span<char const> const b, std::span<double> const o)\n{\n#if defined(ARM_LE_COPY)\n    std::ranges::copy(std::as_bytes(b), std::as_writable_bytes(o).begin());\n#elif defined(ARM_LE_LOOP)\n    for (std::size_t i = 0; i < o.size(); ++i) {\n        std::uint64_t v;\n        std::memcpy(&v, b.subspan(8 * i, 8).data(), 8);\n        o[i] = std::bit_cast<double>(v);\n    }\n#elif defined(ARM_LE_LOOP_BYTES)\n    for (std::size_t i = 0; i < o.size(); ++i) {\n        std::uint64_t v;\n        std::memcpy(&v, b.subspan(8 * i, 8).data(), 8);\n        std::memcpy(&o[i], &v, 8);\n    }\n#elif defined(ARM_BE_LOOP)\n    for (std::size_t i = 0; i < o.size(); ++i) {\n        std::uint64_t v;\n        std::memcpy(&v, b.subspan(8 * i, 8).data(), 8);\n        o[i] = std::bit_cast<double>(std::byteswap(v));\n    }\n#elif defined(ARM_BE_LOOP_BYTES)\n    for (std::size_t i = 0; i < o.size(); ++i) {\n        std::uint64_t v;\n        std::memcpy(&v, b.subspan(8 * i, 8).data(), 8);\n        v = std::byteswap(v);\n        std::memcpy(&o[i], &v, 8);\n    }\n#elif defined(ARM_BE_REVERSE)\n    for (std::size_t i = 0; i < o.size(); ++i) {\n        auto const from = b.subspan(8 * i).first<8>();\n        auto const to = std::as_writable_bytes(o.subspan(i, 1));\n        std::ranges::reverse_copy(from, reinterpret_cast<char *>(to.data()));\n    }\n#else\n#error no arm\n#endif\n}\n\nstatic void run(benchmark::State &state)\n{\n    for (auto _ : state) {\n        if (in.size() != 8 * out.size()) [[unlikely]] std::abort();\n        arm(in, out);\n        benchmark::DoNotOptimize(out.data());\n        benchmark::ClobberMemory();\n    }\n}\n\nint main(int argc, char **argv)\n{\n    for (std::size_t i = 0; i < in.size(); ++i) in[i] = char(i * 131 + 7);\n    benchmark::RegisterBenchmark(\"op\", run);\n    benchmark::Initialize(&argc, argv);\n    benchmark::RunSpecifiedBenchmarks();\n    benchmark::Shutdown();\n}\n"
+ },
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4
+ },
+ "benchmark_context": {
+  "host_name": "vm",
+  "num_cpus": 4,
+  "mhz_per_cpu": 2100,
+  "cpu_scaling_enabled": false,
+  "library_build_type": "release",
+  "library_version": "v1.9.5"
+ },
+ "user": 1000,
+ "nice": 0,
+ "priority_raised": false,
+ "priority_note": "uid 1000 cannot lower its nice value; processes of uid 1000 in the container: 1   0 bash;     506   0 ps",
+ "threads": 1,
+ "pinned": false,
+ "processes": 10,
+ "min_time": "0.2s",
+ "run": {
+  "wall_s": 76.75708937644958,
+  "steal_ms": 40.0,
+  "steal_percent_of_cpu_time": 0.012995873810065305,
+  "per_round": [
+   {
+    "wall_s": 7.691483736038208,
+    "steal_ms": 0.0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "wall_s": 7.982879161834717,
+    "steal_ms": 10.0,
+    "steal_percent_of_cpu_time": 0.03109452736318408
+   },
+   {
+    "wall_s": 7.692383766174316,
+    "steal_ms": 0.0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "wall_s": 7.698135137557983,
+    "steal_ms": 0.0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "wall_s": 7.837402582168579,
+    "steal_ms": 0.0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "wall_s": 7.520152807235718,
+    "steal_ms": 10.0,
+    "steal_percent_of_cpu_time": 0.03316749585406302
+   },
+   {
+    "wall_s": 7.786199569702148,
+    "steal_ms": 0.0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "wall_s": 7.592453479766846,
+    "steal_ms": 10.0,
+    "steal_percent_of_cpu_time": 0.03274394237066143
+   },
+   {
+    "wall_s": 7.548957109451294,
+    "steal_ms": 0.0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "wall_s": 7.407042026519775,
+    "steal_ms": 10.0,
+    "steal_percent_of_cpu_time": 0.03363605785401951
+   }
+  ]
+ },
+ "failed_build": [],
+ "build_errors": {},
+ "failed_run": [],
+ "arms": {
+  "sc.after.CP_READ": {
+   "repetitions_ns": [
+    39498.28693341935,
+    38372.25643155573,
+    38467.826686699984,
+    38522.95706027841,
+    40196.97695984576,
+    36182.59405797032,
+    38777.26090544578,
+    41015.22662107199,
+    39224.13357452658,
+    39437.00140054426
+   ],
+   "median_ns": 39000.697239986184,
+   "spread": 0.13356235750701062,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.after.FB_READ": {
+   "repetitions_ns": [
+    37331.1708784843,
+    40226.415617801715,
+    37829.26138092967,
+    37792.39607470191,
+    38320.56860069672,
+    37595.10928002012,
+    38036.75030835441,
+    37930.74150112799,
+    37695.83124749208,
+    36585.36901904085
+   ],
+   "median_ns": 37810.82872781579,
+   "spread": 0.09952193175544788,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.after.MB_READ": {
+   "repetitions_ns": [
+    47360.98438811022,
+    45800.37885317313,
+    45924.095839664165,
+    50236.056973495244,
+    47110.9143198753,
+    48580.20690273611,
+    47350.44427299124,
+    48070.33760083797,
+    46586.02880921321,
+    47253.599360062064
+   ],
+   "median_ns": 47302.021816526656,
+   "spread": 0.09684806613809926,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.after.MB_READ_FIXED": {
+   "repetitions_ns": [
+    56646.71761869957,
+    55402.788833497696,
+    53072.655080727716,
+    57264.899112854335,
+    55716.177279846495,
+    55774.053835530816,
+    55881.115290276844,
+    54628.94025772995,
+    55591.92921055046,
+    56314.65118619922
+   ],
+   "median_ns": 55745.11555768865,
+   "spread": 0.07899065961086515,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.after.MB_READ_FIXED_STRIDED": {
+   "repetitions_ns": [
+    56848.90381895241,
+    58716.879182934514,
+    57744.4361390428,
+    57617.05233147968,
+    56923.0200879115,
+    60629.17848412763,
+    61232.93120236812,
+    56089.098841724684,
+    56788.41344606934,
+    60813.10130579821
+   ],
+   "median_ns": 57680.74423526124,
+   "spread": 0.0917082368386517,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.after.MB_READ_TA82": {
+   "repetitions_ns": [
+    37811.42037598177,
+    38003.9070146631,
+    38559.49233046424,
+    37757.9161255352,
+    37465.75046654923,
+    39168.09706857191,
+    38101.731065222746,
+    37745.49311182991,
+    37371.38966171763,
+    38571.904167234075
+   ],
+   "median_ns": 37907.66369532244,
+   "spread": 0.048077083114058894,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.after.MB_READ_TA86": {
+   "repetitions_ns": [
+    37967.24571120743,
+    37536.86832549913,
+    37570.66256965322,
+    37779.92337783706,
+    37989.55929684496,
+    38972.99916083589,
+    37886.36786150299,
+    38339.24536164801,
+    37431.00149375818,
+    37717.76360952205
+   ],
+   "median_ns": 37833.14561967003,
+   "spread": 0.041195736302563235,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.before.MB_READ": {
+   "repetitions_ns": [
+    911219.0688528409,
+    927601.6059602806,
+    918305.9902283073,
+    892038.2325576978,
+    912364.1568622688,
+    923185.9701991283,
+    930955.3866667859,
+    964566.4733100237,
+    942392.3131313554,
+    920651.4422441957
+   ],
+   "median_ns": 921918.706221662,
+   "spread": 0.08130620202720373,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.before.MB_READ_AA": {
+   "repetitions_ns": [
+    921851.3675495948,
+    912734.3776222991,
+    891647.5377049448,
+    967077.860465462,
+    932318.1428571601,
+    919029.7482993726,
+    947860.7241378305,
+    921156.3639577235,
+    924058.2956807464,
+    911327.0098362695
+   ],
+   "median_ns": 921503.8657536592,
+   "spread": 0.08459656935146254,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.main.MB_READ": {
+   "repetitions_ns": [
+    919490.9213114383,
+    924380.8098364723,
+    958499.8609273118,
+    944102.7417220321,
+    932781.7826083613,
+    921980.5894038274,
+    913459.9702965806,
+    962506.9532369531,
+    911740.6052632459,
+    938094.0166662793
+   ],
+   "median_ns": 928581.2962224168,
+   "spread": 0.055680692162492385,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "ty.clang++.BE_LOOP": {
+   "repetitions_ns": [
+    14174.954533868611,
+    14603.344898816624,
+    14040.066636443582,
+    14204.394593731657,
+    14216.342943455053,
+    13851.11775551866,
+    13991.096831350384,
+    13781.322790421096,
+    14005.86396496548,
+    14464.401449568226
+   ],
+   "median_ns": 14107.510585156097,
+   "spread": 0.059647547691640046,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  },
+  "ty.clang++.BE_LOOP_BYTES": {
+   "repetitions_ns": [
+    14402.711527609788,
+    14350.481683400485,
+    14688.940626698508,
+    14623.261112953853,
+    14871.545538754117,
+    14735.101396994329,
+    14156.083641458019,
+    14329.557763012623,
+    15415.577626191689,
+    15894.44522950738
+   ],
+   "median_ns": 14656.10086982618,
+   "spread": 0.12279961266676431,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  },
+  "ty.clang++.LE_COPY": {
+   "repetitions_ns": [
+    10974.21271055827,
+    11072.681858012873,
+    11059.96954234907,
+    11073.704539148684,
+    11375.062935810132,
+    11076.865699448193,
+    11212.252049822946,
+    11107.315867457266,
+    11761.185709746293,
+    10930.68426412333
+   ],
+   "median_ns": 11075.285119298438,
+   "spread": 0.07597890722622291,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  },
+  "ty.clang++.LE_COPY_AA": {
+   "repetitions_ns": [
+    11187.90535126023,
+    11086.67945850981,
+    11057.028342012254,
+    10890.075683440578,
+    10708.267285152862,
+    10969.017669920211,
+    11834.085401976252,
+    11051.547047423941,
+    11184.123960105479,
+    11226.84039810925
+   ],
+   "median_ns": 11071.853900261032,
+   "spread": 0.10513541424057937,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  },
+  "ty.clang++.LE_LOOP": {
+   "repetitions_ns": [
+    14324.84806232376,
+    14976.378334327404,
+    14320.54937611799,
+    15959.494852365706,
+    14099.831758421295,
+    14225.998015371353,
+    14187.233390301159,
+    14511.180111983547,
+    14032.661452733882,
+    14834.347475374345
+   ],
+   "median_ns": 14322.698719220874,
+   "spread": 0.1373106168150613,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  },
+  "ty.g++-16.BE_LOOP": {
+   "repetitions_ns": [
+    20210.920900012752,
+    28396.415999986857,
+    20494.748957940028,
+    19492.38032716952,
+    18766.96799616128,
+    19644.465404021626,
+    19510.896581886776,
+    19963.990903182923,
+    19768.86982677989,
+    20021.890299994993
+   ],
+   "median_ns": 19866.430364981406,
+   "spread": 0.5131062197044962,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  },
+  "ty.g++-16.BE_LOOP_BYTES": {
+   "repetitions_ns": [
+    20186.233499998707,
+    19516.297083882575,
+    19302.93360244658,
+    20973.208400005205,
+    21300.249648668752,
+    19282.77327409805,
+    21887.70549998935,
+    20480.929036165893,
+    19571.972098432096,
+    20244.294799999807
+   ],
+   "median_ns": 20215.264149999257,
+   "spread": 0.13509116084409012,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  },
+  "ty.g++-16.LE_COPY": {
+   "repetitions_ns": [
+    11379.505027803692,
+    12638.862725677443,
+    11324.838931702381,
+    11423.457967276927,
+    11133.758604893568,
+    11412.59873063094,
+    10976.945339284923,
+    11156.265272668743,
+    11214.152676749394,
+    11019.178230653908
+   ],
+   "median_ns": 11269.495804225888,
+   "spread": 0.1514007162306581,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  },
+  "ty.g++-16.LE_COPY_AA": {
+   "repetitions_ns": [
+    11078.369460078718,
+    10873.06380412906,
+    11060.379164206162,
+    10930.585486458873,
+    10920.87184320829,
+    11090.069895895358,
+    11136.697935099255,
+    11004.079742921198,
+    11053.131246518195,
+    11179.980584475517
+   ],
+   "median_ns": 11056.755205362178,
+   "spread": 0.02822725828481798,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  },
+  "ty.g++-16.LE_LOOP": {
+   "repetitions_ns": [
+    18474.464423806152,
+    17668.1112557254,
+    15625.073357209574,
+    15562.73280498738,
+    15460.939415937237,
+    19046.04474042177,
+    15709.376881903798,
+    16779.228957767842,
+    15376.187419118436,
+    16347.893313298026
+   ],
+   "median_ns": 16028.635097600913,
+   "spread": 0.23867147435653058,
+   "check": null,
+   "check_source": null,
+   "bytes": {}
+  }
+ }
+}

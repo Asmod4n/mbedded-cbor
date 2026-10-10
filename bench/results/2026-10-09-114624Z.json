@@ -1,0 +1,275 @@
+{
+ "context": {
+  "commit": "9d7b24c-dirty (step 8 tree, typed_array_view) against 9d7b24c",
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -Werror",
+  "march_resolved_and_compilers": "-march=                     \t\tsapphirerapids\nclang version 23.1.2\ng++-16 (SUSE Linux) 16.2.0",
+  "kernel": "6.18.44-fc-v80",
+  "scheduler": "EEVDF (Linux 6.18)",
+  "vm": "Firecracker, 4 vcpus",
+  "container": "podman, image mbedded-cbor-tw-compare, --network none, --cap-add SYS_NICE",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "threads": 1,
+  "rounds": 10,
+  "order": "shuf per round",
+  "min_time": "0.2s",
+  "pinned": false,
+  "user": "uid 1000 (setpriv from container root)",
+  "unit": "ns real time per operation",
+  "arms": "compare.cpp DS_FLOATS: MB_READ_VIEW (operator[] over 60000 doubles), MB_FIELD_VIEW (operator[] 30000), MB_FRONT, MB_BACK; old = 9d7b24c (operator[] and front/back give std::expected), new = working tree (operator[] and front/back give E and throw std::logic_error), aa = new built a second time; clang++ 23 does not compile compare.cpp (no -freflection; capnp::word construct_at), cells are build errors",
+  "note": "M3. objdump of mb_read_view: old and new identical apart from addresses (240 lines each). The run of every arm is bimodal (29.4 us or 37.7 us for MB_READ_VIEW) in all three arms; load 1-minute 2.1 at start after earlier builds.",
+  "stamp": "2026-10-09T11:46:26Z"
+ },
+ "runs": {
+  "cmp": {
+   "priority_and_uid": "-10\n1000",
+   "loadavg_start": "2.42 6.23 9.17 1/116 209",
+   "loadavg_end": "1.61 5.42 8.74 1/114 364",
+   "failed": "build failed /o/bin/clang++.floats.MB_READ_VIEW.old\nbuild failed /o/bin/clang++.floats.MB_FIELD_VIEW.old\nbuild failed /o/bin/clang++.floats.MB_BACK.old\nbuild failed /o/bin/clang++.floats.MB_FRONT.old\nbuild failed /o/bin/clang++.floats.MB_READ_VIEW.new\nbuild failed /o/bin/clang++.floats.MB_FIELD_VIEW.new\nbuild failed /o/bin/clang++.floats.MB_FRONT.new\nbuild failed /o/bin/clang++.floats.MB_BACK.new\nbuild failed /o/bin/clang++.floats.MB_READ_VIEW.aa\nbuild failed /o/bin/clang++.floats.MB_FIELD_VIEW.aa\nbuild failed /o/bin/clang++.floats.MB_FRONT.aa\nbuild failed /o/bin/clang++.floats.MB_BACK.aa",
+   "toolchain": "g++-16.floats.MB_BACK.aa: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_BACK.new: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_BACK.old: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_FIELD_VIEW.aa: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_FIELD_VIEW.new: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_FIELD_VIEW.old: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_FRONT.aa: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_FRONT.new: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_FRONT.old: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_READ_VIEW.aa: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_READ_VIEW.new: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6 \ng++-16.floats.MB_READ_VIEW.old: GCC: (SUSE Linux) 16.2.0 | \tlibstdc++.so.6 \tlibc.so.6",
+   "elf_type": "g++-16.floats.MB_BACK.aa Type: DYN\ng++-16.floats.MB_BACK.new Type: DYN\ng++-16.floats.MB_BACK.old Type: DYN\ng++-16.floats.MB_FIELD_VIEW.aa Type: DYN\ng++-16.floats.MB_FIELD_VIEW.new Type: DYN\ng++-16.floats.MB_FIELD_VIEW.old Type: DYN\ng++-16.floats.MB_FRONT.aa Type: DYN\ng++-16.floats.MB_FRONT.new Type: DYN\ng++-16.floats.MB_FRONT.old Type: DYN\ng++-16.floats.MB_READ_VIEW.aa Type: DYN\ng++-16.floats.MB_READ_VIEW.new Type: DYN\ng++-16.floats.MB_READ_VIEW.old Type: DYN",
+   "results": [
+    {
+     "binary": "g++-16.floats.MB_BACK.aa",
+     "ns": [
+      16.680004110122205,
+      16.34574866627187,
+      17.266863928582808,
+      15.543961304070224,
+      16.74207033586242,
+      17.01558452129292,
+      13.67827681573489,
+      16.770156784965575,
+      17.2941486472089,
+      16.73161947466094
+     ],
+     "median": 16.736844905261677,
+     "spread": [
+      13.67827681573489,
+      17.2941486472089
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_BACK.new",
+     "ns": [
+      13.716408447442936,
+      17.441550037095404,
+      15.977459649052493,
+      16.823790860999157,
+      17.55799601020006,
+      16.90246576273178,
+      13.208567929601259,
+      15.13655025838013,
+      13.517185995208575,
+      16.487095714905188
+     ],
+     "median": 16.23227768197884,
+     "spread": [
+      13.208567929601259,
+      17.55799601020006
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_BACK.old",
+     "ns": [
+      16.580627131249148,
+      17.256058301505494,
+      17.05383910434726,
+      17.908978858738173,
+      16.955309908436178,
+      16.94518739341786,
+      17.106510267607188,
+      18.51741009604975,
+      16.295004638014486,
+      14.70319354617091
+     ],
+     "median": 17.00457450639172,
+     "spread": [
+      14.70319354617091,
+      18.51741009604975
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_FIELD_VIEW.aa",
+     "ns": [
+      13.908061263293897,
+      14.141707512052099,
+      13.235282941343973,
+      16.1005505041252,
+      18.577716332893708,
+      17.105224225501985,
+      16.363699111266502,
+      15.079692968826764,
+      16.933801558836944,
+      15.707227543426498
+     ],
+     "median": 15.903889023775848,
+     "spread": [
+      13.235282941343973,
+      18.577716332893708
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_FIELD_VIEW.new",
+     "ns": [
+      16.920904040178655,
+      13.784912087798888,
+      15.520512029330877,
+      17.01479748296805,
+      12.977494871073699,
+      13.005413083826442,
+      16.704760254052722,
+      17.97233350761732,
+      16.55560246485422,
+      16.62730125134092
+     ],
+     "median": 16.59145185809757,
+     "spread": [
+      12.977494871073699,
+      17.97233350761732
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_FIELD_VIEW.old",
+     "ns": [
+      16.10726301056592,
+      18.106185821060976,
+      16.61265117885421,
+      17.68267814676567,
+      15.050873997073904,
+      17.666713310292902,
+      16.63827377666433,
+      16.61636594615122,
+      16.81134307630874,
+      12.737842190375224
+     ],
+     "median": 16.627319861407777,
+     "spread": [
+      12.737842190375224,
+      18.106185821060976
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_FRONT.aa",
+     "ns": [
+      13.245248803298402,
+      17.01937674362469,
+      17.623016632378224,
+      15.2395421163474,
+      17.019590472286374,
+      12.958788304402944,
+      15.614964102990507,
+      17.342370714311535,
+      15.305229539055567,
+      13.662611122679689
+     ],
+     "median": 15.460096821023036,
+     "spread": [
+      12.958788304402944,
+      17.623016632378224
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_FRONT.new",
+     "ns": [
+      16.54414887340122,
+      13.458239980341226,
+      16.73375547611844,
+      17.825943069812304,
+      15.058280496830797,
+      13.277230306247965,
+      14.939767316579374,
+      16.709196608913093,
+      14.71510720049976,
+      16.299853931095463
+     ],
+     "median": 15.67906721396313,
+     "spread": [
+      13.277230306247965,
+      17.825943069812304
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_FRONT.old",
+     "ns": [
+      15.197138478825375,
+      16.88011662583086,
+      16.70901284012549,
+      16.471102445255983,
+      16.63635595302367,
+      14.390230913873278,
+      16.268605044882722,
+      16.18868353111898,
+      16.81757511165102,
+      17.114595162099466
+     ],
+     "median": 16.553729199139827,
+     "spread": [
+      14.390230913873278,
+      17.114595162099466
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_READ_VIEW.aa",
+     "ns": [
+      33460.14173829373,
+      36272.472521735326,
+      38993.49453875462,
+      37773.288255721855,
+      33821.28976079166,
+      34266.63484517444,
+      36402.46249838522,
+      35506.951614995676,
+      37783.911345614724,
+      29370.29144832565
+     ],
+     "median": 35889.7120683655,
+     "spread": [
+      29370.29144832565,
+      38993.49453875462
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_READ_VIEW.new",
+     "ns": [
+      29429.499110962155,
+      37636.18850859788,
+      32592.34419211142,
+      37717.521081503946,
+      37857.97336564318,
+      33023.601682271,
+      37683.636546995855,
+      38309.13306347278,
+      37780.75456146258,
+      29378.35059297041
+     ],
+     "median": 37659.91252779687,
+     "spread": [
+      29378.35059297041,
+      38309.13306347278
+     ]
+    },
+    {
+     "binary": "g++-16.floats.MB_READ_VIEW.old",
+     "ns": [
+      37653.66877357375,
+      30189.3419862769,
+      38484.69599546449,
+      29681.420521428987,
+      30170.672397294646,
+      35348.344099545655,
+      29962.113088457532,
+      29377.297362805595,
+      36888.46273134013,
+      33403.5861903936
+     ],
+     "median": 31796.46408833525,
+     "spread": [
+      29377.297362805595,
+      38484.69599546449
+     ]
+    }
+   ]
+  }
+ }
+}

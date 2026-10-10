@@ -1,0 +1,2025 @@
+{
+ "time": "2026-10-07-164343Z",
+ "commit": "a4c135e08716bcafc510d249419ded8881fdc67e",
+ "purpose": "mbedded-cbor against other libraries, each operation paired with the same operation",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG",
+ "resolved_march": "-march=                     \t\tsapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.0",
+  "clang version 23.1.2"
+ ],
+ "packages": [
+  "glibc-2.44-2.1.x86_64",
+  "libstdc++6-16.2.0+git9497-3.1.x86_64",
+  "libcbor0_14-0.14.0-1.3.x86_64",
+  "libflatbuffers25_2_10-25.2.10-2.5.x86_64",
+  "libcapnp-1_5_0-1.5.0-1.3.x86_64",
+  "libbenchmark1-1.9.5-2.3.x86_64",
+  "gcc16-c++-16.2.0+git9497-3.1.x86_64",
+  "clang23-23.1.2-1.1.x86_64"
+ ],
+ "ldd_gxx": "linux-vdso.so.1 (0x00007f29450ed000)\n\tlibcbor.so.0.14 => /lib64/libcbor.so.0.14 (0x00007f29450cb000)\n\tlibflatbuffers.so.25.2.10 => /lib64/libflatbuffers.so.25.2.10 (0x00007f294503f000)\n\tlibbenchmark.so.1 => /lib64/libbenchmark.so.1 (0x00007f2944fdc000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f2944d37000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007f2944c13000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007f2944be5000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007f29449d1000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f29450ef000)",
+ "ldd_clang": "linux-vdso.so.1 (0x00007fc6da9f1000)\n\tlibcbor.so.0.14 => /lib64/libcbor.so.0.14 (0x00007fc6da9c3000)\n\tlibflatbuffers.so.25.2.10 => /lib64/libflatbuffers.so.25.2.10 (0x00007fc6da937000)\n\tlibbenchmark.so.1 => /lib64/libbenchmark.so.1 (0x00007fc6da8d4000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fc6da62f000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007fc6da50b000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007fc6da4dd000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007fc6da2c9000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fc6da9f3000)",
+ "kernel": "6.18.44-fc-v77",
+ "scheduler": "sched_ext state / autogroup: cat: /sys/kernel/sched_ext/state: No such file or directory / 1",
+ "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-tw-compare",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4
+ },
+ "benchmark_context": {
+  "host_name": "vm",
+  "num_cpus": 4,
+  "mhz_per_cpu": 2100,
+  "cpu_scaling_enabled": false,
+  "library_build_type": "release",
+  "library_version": "v1.9.5"
+ },
+ "user": 1000,
+ "nice": 0,
+ "priority_raised": false,
+ "priority_note": "uid 1000 cannot lower its nice value; processes of uid 1000 in the container: 1   0 bash;    2381   0 ps",
+ "threads": 1,
+ "pinned": false,
+ "processes": 10,
+ "min_time": "0.2s",
+ "run": {
+  "wall_s": 335.38109254837036,
+  "steal_ms": 240.0,
+  "steal_percent_of_cpu_time": 0.017816313804673814,
+  "per_round": [
+   {
+    "wall_s": 33.89578938484192,
+    "steal_ms": 20.0,
+    "steal_percent_of_cpu_time": 0.014690759512266784
+   },
+   {
+    "wall_s": 33.788575649261475,
+    "steal_ms": 20.0,
+    "steal_percent_of_cpu_time": 0.014730794726375488
+   },
+   {
+    "wall_s": 32.67702054977417,
+    "steal_ms": 10.0,
+    "steal_percent_of_cpu_time": 0.007631257631257631
+   },
+   {
+    "wall_s": 33.35879921913147,
+    "steal_ms": 20.0,
+    "steal_percent_of_cpu_time": 0.014932059130954158
+   },
+   {
+    "wall_s": 33.86498713493347,
+    "steal_ms": 60.0,
+    "steal_percent_of_cpu_time": 0.04411764705882353
+   },
+   {
+    "wall_s": 34.00277090072632,
+    "steal_ms": 20.0,
+    "steal_percent_of_cpu_time": 0.014668133480014669
+   },
+   {
+    "wall_s": 33.37858462333679,
+    "steal_ms": 30.0,
+    "steal_percent_of_cpu_time": 0.022369696517783907
+   },
+   {
+    "wall_s": 34.199785232543945,
+    "steal_ms": 10.0,
+    "steal_percent_of_cpu_time": 0.007266385699752943
+   },
+   {
+    "wall_s": 32.74834609031677,
+    "steal_ms": 20.0,
+    "steal_percent_of_cpu_time": 0.015190642564180465
+   },
+   {
+    "wall_s": 33.46643376350403,
+    "steal_ms": 30.0,
+    "steal_percent_of_cpu_time": 0.022313127556712532
+   }
+  ]
+ },
+ "failed_build": [
+  "sc.clang++.CP_DECODE.carsales",
+  "sc.clang++.CP_DECODE.floats",
+  "sc.clang++.CP_DECODE.records",
+  "sc.clang++.CP_FIELD.carsales",
+  "sc.clang++.CP_FIELD.floats",
+  "sc.clang++.CP_FIELD.records",
+  "sc.clang++.CP_READ.carsales",
+  "sc.clang++.CP_READ.floats",
+  "sc.clang++.CP_READ.records",
+  "sc.clang++.FB_DECODE.carsales",
+  "sc.clang++.FB_DECODE.floats",
+  "sc.clang++.FB_DECODE.records",
+  "sc.clang++.FB_FIELD.carsales",
+  "sc.clang++.FB_FIELD.floats",
+  "sc.clang++.FB_FIELD.records",
+  "sc.clang++.FB_FIELD_V.carsales",
+  "sc.clang++.FB_FIELD_V.floats",
+  "sc.clang++.FB_FIELD_V.records",
+  "sc.clang++.FB_READ.carsales",
+  "sc.clang++.FB_READ.floats",
+  "sc.clang++.FB_READ.records",
+  "sc.clang++.FB_READ_V.carsales",
+  "sc.clang++.FB_READ_V.floats",
+  "sc.clang++.FB_READ_V.records",
+  "sc.clang++.MB_DECODE.carsales",
+  "sc.clang++.MB_DECODE.floats",
+  "sc.clang++.MB_DECODE.records",
+  "sc.clang++.MB_FIELD.carsales",
+  "sc.clang++.MB_FIELD.floats",
+  "sc.clang++.MB_FIELD.records",
+  "sc.clang++.MB_READ.carsales",
+  "sc.clang++.MB_READ.floats",
+  "sc.clang++.MB_READ.records",
+  "sc.clang++.MB_READ_AA.carsales"
+ ],
+ "build_errors": {
+  "sc.clang++.CP_DECODE.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.CP_DECODE.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.CP_DECODE.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.CP_FIELD.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.CP_FIELD.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.CP_FIELD.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.CP_READ.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.CP_READ.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.CP_READ.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_DECODE.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_DECODE.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_DECODE.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_FIELD.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_FIELD.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_FIELD.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_FIELD_V.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_FIELD_V.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_FIELD_V.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_READ.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_READ.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_READ.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_READ_V.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_READ_V.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.FB_READ_V.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_DECODE.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_DECODE.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_DECODE.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_FIELD.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_FIELD.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_FIELD.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_READ.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_READ.floats": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_READ.records": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'",
+  "sc.clang++.MB_READ_AA.carsales": "In file included from /src/bench/compare.cpp:1:\nIn file included from /usr/include/benchmark/benchmark.h:169:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/algorithm:62:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_algobase.h:66:\nIn file included from /usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_iterator.h:78:\n/usr/bin/../lib64/gcc/x86_64-suse-linux/16/../../../../include/c++/16/bits/stl_construct.h:129:4: error: no matching function for call to 'construct_at'"
+ },
+ "failed_run": [],
+ "arms": {
+  "rt.clang++.FB_PATH.floats": {
+   "repetitions_ns": [
+    5.4190480166370465,
+    5.675965518114426,
+    5.574299831423327,
+    5.607721342054276,
+    5.632056237152091,
+    5.918754098352418,
+    5.74121978261811,
+    6.1384204777933515,
+    5.58709537979077,
+    5.31507284237597
+   ],
+   "median_ns": 5.619888789603184,
+   "spread": 0.15490806237931531,
+   "check": "13864225899743805440",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_PATH.records": {
+   "repetitions_ns": [
+    36.99503875507145,
+    40.699353138739156,
+    37.59249741554478,
+    37.93644370477126,
+    38.12131316786115,
+    38.316469723682694,
+    37.72142572072835,
+    37.309783800902764,
+    38.85903345174345,
+    36.711809736596216
+   ],
+   "median_ns": 37.8289347127498,
+   "spread": 0.1086174566373379,
+   "check": "640",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_PATH.twitter": {
+   "repetitions_ns": [
+    129.0713716964767,
+    129.48426137102115,
+    131.38746185615338,
+    139.8142768209189,
+    128.79467759733294,
+    131.09472298492514,
+    133.61266301322107,
+    129.5909486900892,
+    132.83745565936982,
+    128.7218646827862
+   ],
+   "median_ns": 130.34283583750715,
+   "spread": 0.08617348859471652,
+   "check": "1227",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_PATH_V.floats": {
+   "repetitions_ns": [
+    151810.34131737825,
+    166628.95886454004,
+    150128.61743886542,
+    156370.1019284845,
+    151116.10991953447,
+    154349.2613698568,
+    195291.28919663822,
+    152068.18507963538,
+    156693.33407082633,
+    154715.71815719485
+   ],
+   "median_ns": 154532.48976352584,
+   "spread": 0.3008265347954977,
+   "check": "13864225899743805440",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_PATH_V.records": {
+   "repetitions_ns": [
+    316776.8503563624,
+    322136.4008763233,
+    324559.65954775264,
+    316190.4300342093,
+    327496.4362187134,
+    316985.4351249979,
+    336434.9803469676,
+    328172.3683605849,
+    332365.5327750739,
+    318000.7003403746
+   ],
+   "median_ns": 323348.03021203796,
+   "spread": 0.06402644858849138,
+   "check": "640",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_PATH_V.twitter": {
+   "repetitions_ns": [
+    192868.77197778318,
+    213206.00836808156,
+    201063.76500007173,
+    192744.3185183194,
+    196455.01272982944,
+    207422.1192098369,
+    194289.15952205603,
+    191883.00823032414,
+    215524.10700041946,
+    193269.39115427347
+   ],
+   "median_ns": 195372.08612594273,
+   "spread": 0.12320579601148451,
+   "check": "1227",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_READ.floats": {
+   "repetitions_ns": [
+    231538.93316808093,
+    234969.73603224885,
+    243367.545379012,
+    242449.27053964543,
+    245834.56758927883,
+    233634.33333334545,
+    229975.11409934735,
+    235745.12678413166,
+    233089.9407408105,
+    227763.4361425392
+   ],
+   "median_ns": 234302.03468279715,
+   "spread": 0.07934167025575745,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_READ.records": {
+   "repetitions_ns": [
+    268526.2173037967,
+    274933.2275796628,
+    273074.81818189484,
+    268665.48780493735,
+    274987.6573357335,
+    274020.2391957687,
+    270997.27909270476,
+    265006.032258458,
+    266784.67455620394,
+    273910.1519230539
+   ],
+   "median_ns": 272036.0486372998,
+   "spread": 0.0376656523333041,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_READ.twitter": {
+   "repetitions_ns": [
+    178730.90879481102,
+    173615.8657759214,
+    173181.45143994322,
+    174706.68437711868,
+    172630.18769639378,
+    180192.43850609066,
+    177686.53152596,
+    244762.7105261683,
+    171364.83489095292,
+    177126.05121629732
+   ],
+   "median_ns": 175916.36779670801,
+   "spread": 0.4283135199933039,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_READ_V.floats": {
+   "repetitions_ns": [
+    394857.69680134626,
+    394712.68558914145,
+    387061.67441901064,
+    389547.75679507584,
+    400091.34045997023,
+    408062.8669525763,
+    390790.69680087647,
+    422641.7419995414,
+    400760.29558012885,
+    401576.69462023245
+   ],
+   "median_ns": 397474.5186306583,
+   "spread": 0.09192350969373897,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_READ_V.records": {
+   "repetitions_ns": [
+    598383.0000005754,
+    597222.3978020778,
+    588876.1794873668,
+    600179.5259741704,
+    608864.6783911516,
+    596678.1156318206,
+    594704.8450416108,
+    581220.7002095295,
+    605763.1236442183,
+    596346.5350315962
+   ],
+   "median_ns": 596950.2567169492,
+   "spread": 0.047561929868733976,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.FB_READ_V.twitter": {
+   "repetitions_ns": [
+    394153.1147775956,
+    377705.84785614006,
+    370472.5116915175,
+    379124.73209536343,
+    377304.7527030596,
+    381148.21636642853,
+    381263.4520914005,
+    393123.5983930904,
+    377565.60102744604,
+    380025.37959153816
+   ],
+   "median_ns": 379575.0558434508,
+   "spread": 0.06392000037453882,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.LC_DECODE.floats": {
+   "repetitions_ns": [
+    2954752.9062530957,
+    3110936.5000034776,
+    2943649.884213971,
+    3102175.1648380477,
+    3051478.494508846,
+    3005591.31250111,
+    2966034.302081274,
+    2990026.054347887,
+    2952667.553191977,
+    2934564.597937199
+   ],
+   "median_ns": 2978030.1782145808,
+   "spread": 0.06010155720894894,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.LC_DECODE.records": {
+   "repetitions_ns": [
+    3871502.4027801016,
+    3810645.770272458,
+    4133623.292308095,
+    3908561.239435406,
+    4165458.939996824,
+    4205700.701755919,
+    4034890.352934727,
+    3947925.8493198883,
+    4006819.2361104595,
+    3774756.7972977823
+   ],
+   "median_ns": 3977372.542715174,
+   "spread": 0.11416468069323948,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.LC_DECODE.twitter": {
+   "repetitions_ns": [
+    3421491.174998437,
+    3553313.780491031,
+    3522297.9499963,
+    3418771.518518941,
+    3482896.6097559645,
+    3546151.320986408,
+    3889384.968253638,
+    3454097.2345680925,
+    3358778.0487778215,
+    3492747.8051952664
+   ],
+   "median_ns": 3487822.2074756157,
+   "spread": 0.15797617817256238,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.LC_READ.floats": {
+   "repetitions_ns": [
+    646875.574626501,
+    644469.6256149373,
+    641837.0821920607,
+    714356.7377053108,
+    668019.1117320443,
+    648633.2378749856,
+    794533.1436620647,
+    677624.9136693149,
+    649118.1782408789,
+    634868.876146156
+   ],
+   "median_ns": 648875.7080579322,
+   "spread": 0.25149172296036704,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.LC_READ.records": {
+   "repetitions_ns": [
+    408843.68704484333,
+    403555.02877698175,
+    404419.6002908837,
+    414444.8992807653,
+    402062.552785748,
+    415562.8258928345,
+    403466.3433476804,
+    408521.1407837368,
+    406981.22109860653,
+    402762.09302332124
+   ],
+   "median_ns": 405700.41069474514,
+   "spread": 0.03357754412478342,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.LC_READ.twitter": {
+   "repetitions_ns": [
+    295483.9648238941,
+    302268.5428993084,
+    285101.36196347926,
+    278896.29318864626,
+    284636.9761669539,
+    282712.53266339685,
+    288150.24092734215,
+    285778.01798225276,
+    319186.4914400609,
+    306809.3849763077
+   ],
+   "median_ns": 286964.1294547975,
+   "spread": 0.144463010930598,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.MB_DECODE.floats": {
+   "repetitions_ns": [
+    1345008.7135676206,
+    1386317.542712743,
+    1377579.0980393959,
+    1364042.3529416106,
+    1394928.309646783,
+    1349983.9405927325,
+    1334605.151161541,
+    1421842.1319807195,
+    1391177.0909089684,
+    1334008.3802804784
+   ],
+   "median_ns": 1370810.7254905032,
+   "spread": 0.06584197895501509,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.MB_DECODE.records": {
+   "repetitions_ns": [
+    1385742.299021331,
+    1504448.8333330066,
+    1392401.4745750206,
+    1794818.1138219698,
+    1362003.7978717906,
+    1333324.7407390277,
+    1401348.9603960149,
+    1406384.653465817,
+    1381180.757281752,
+    1339319.2870827562
+   ],
+   "median_ns": 1389071.8867981758,
+   "spread": 0.34612226037832916,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.MB_DECODE.twitter": {
+   "repetitions_ns": [
+    1030230.1158801847,
+    976803.5019613522,
+    981474.4388490875,
+    1122618.1423222267,
+    1054933.9166655873,
+    1028268.0777392939,
+    999800.6749126354,
+    1014657.6992480862,
+    1004000.3698105586,
+    1044298.9377426594
+   ],
+   "median_ns": 1021462.88849369,
+   "spread": 0.14927735216764582,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.MB_PATH.floats": {
+   "repetitions_ns": [
+    144161.16142355924,
+    147367.01274571233,
+    146099.70545080546,
+    145976.5271600433,
+    150624.72304435854,
+    165519.64294170743,
+    153548.1553930222,
+    179268.89661286684,
+    147513.22942794286,
+    146578.02645213535
+   ],
+   "median_ns": 147440.1210868276,
+   "spread": 0.24353116222584892,
+   "check": "13864225899743805440",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.MB_PATH.records": {
+   "repetitions_ns": [
+    91216.25916236469,
+    94978.20545149475,
+    91067.97527651709,
+    91285.58950817292,
+    90258.25650192746,
+    91905.0338481941,
+    91744.01843924733,
+    97408.94839933475,
+    93239.32618570323,
+    92461.29040742919
+   ],
+   "median_ns": 91824.52614372072,
+   "spread": 0.07922479532113047,
+   "check": "640",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.MB_PATH.twitter": {
+   "repetitions_ns": [
+    66710.63959881925,
+    64483.05798782331,
+    64267.05190315596,
+    65309.8711470761,
+    65429.45379923355,
+    64126.91385595532,
+    64582.5010409335,
+    65498.48160292811,
+    68479.73516296447,
+    65967.0162149635
+   ],
+   "median_ns": 65369.66247315482,
+   "spread": 0.06787822842662683,
+   "check": "1227",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.READ.floats": {
+   "repetitions_ns": [
+    342237.96485628426,
+    300371.9319655572,
+    305972.61205916357,
+    304772.3125695831,
+    304100.4893161621,
+    301704.9567564312,
+    306979.71927976387,
+    295494.40421042644,
+    309133.1394825952,
+    308687.19541530876
+   ],
+   "median_ns": 305372.46231437335,
+   "spread": 0.15818763394440105,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.READ.records": {
+   "repetitions_ns": [
+    232001.61499597435,
+    229649.9615068442,
+    248558.38547005583,
+    236318.12941169934,
+    237919.98600817923,
+    251039.09721031354,
+    236503.13135599927,
+    272307.88536155474,
+    227419.02846307814,
+    253728.90414490935
+   ],
+   "median_ns": 237211.55868208926,
+   "spread": 0.1973839093493639,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.READ.twitter": {
+   "repetitions_ns": [
+    162009.38833226278,
+    174387.8398344004,
+    161521.09523807807,
+    159910.70028646724,
+    160664.7626926324,
+    170279.42108378856,
+    199437.3103239016,
+    166101.79442537337,
+    162285.80309988125,
+    175354.64988152366
+   ],
+   "median_ns": 164193.7987626273,
+   "spread": 0.24717926922104394,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.clang++.READ_AA.twitter": {
+   "repetitions_ns": [
+    165160.31200475816,
+    160097.55884057822,
+    197191.4742792134,
+    175565.75922675515,
+    167823.76322277362,
+    163386.91184901795,
+    163105.45063148503,
+    166942.92110744386,
+    181990.3210861566,
+    217929.25843613155
+   ],
+   "median_ns": 167383.34216510874,
+   "spread": 0.36122786639826865,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_PATH.floats": {
+   "repetitions_ns": [
+    5.841904068560107,
+    6.415244315441395,
+    6.374637509172182,
+    6.132199946719825,
+    6.072727242743662,
+    6.251953298451035,
+    7.1614938258581695,
+    6.273928132240779,
+    6.203868664568348,
+    6.105685190232114
+   ],
+   "median_ns": 6.227910981509691,
+   "spread": 0.22588350335977192,
+   "check": "13864225899743805440",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_PATH.records": {
+   "repetitions_ns": [
+    31.380845048429233,
+    32.72706829585312,
+    32.747549682385525,
+    31.214576145532348,
+    32.815832791904676,
+    33.70878684199212,
+    32.77403353643596,
+    31.019598546900657,
+    31.861522801541522,
+    30.94329311554354
+   ],
+   "median_ns": 32.29429554869732,
+   "spread": 0.08937296092313485,
+   "check": "640",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_PATH.twitter": {
+   "repetitions_ns": [
+    67.91225018784243,
+    67.98495176412007,
+    68.23582855466344,
+    70.02469529397865,
+    67.3047896123827,
+    70.42300703061076,
+    69.40649111885956,
+    70.41405045587368,
+    70.01462709223512,
+    68.32173746520236
+   ],
+   "median_ns": 68.86411429203096,
+   "spread": 0.04632979965001427,
+   "check": "1227",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_PATH_V.floats": {
+   "repetitions_ns": [
+    181714.49644930536,
+    202853.05000015796,
+    172966.023041624,
+    182301.0978925513,
+    190593.6863375717,
+    179095.630739959,
+    183648.8727043929,
+    186612.3665274081,
+    190377.87637560387,
+    177864.05608674974
+   ],
+   "median_ns": 182974.9852984721,
+   "spread": 0.17279131723657493,
+   "check": "13864225899743805440",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_PATH_V.records": {
+   "repetitions_ns": [
+    269212.7297549839,
+    270299.0028902992,
+    276112.8302897669,
+    277796.201000001,
+    264031.5196632411,
+    269633.0832535158,
+    308217.42941186007,
+    262131.40999088154,
+    307899.11494241876,
+    261550.80386170233
+   ],
+   "median_ns": 269966.0430719075,
+   "spread": 0.17842279534660954,
+   "check": "640",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_PATH_V.twitter": {
+   "repetitions_ns": [
+    159702.5184944504,
+    157460.08829714142,
+    162715.85439226133,
+    163305.14584580137,
+    160907.60253442478,
+    157029.91685919286,
+    163122.5854772623,
+    164058.9856216458,
+    162670.6468468965,
+    161407.41839096555
+   ],
+   "median_ns": 162039.03261893103,
+   "spread": 0.04476260895403672,
+   "check": "1227",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_READ.floats": {
+   "repetitions_ns": [
+    189657.03654084768,
+    169502.37917976538,
+    174090.17118312136,
+    162266.18687874937,
+    198900.85444087078,
+    170549.81957562847,
+    170159.40159895428,
+    169520.51628177415,
+    165916.95997608313,
+    163202.8254659547
+   ],
+   "median_ns": 169839.95894036422,
+   "spread": 0.22576895573133804,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_READ.records": {
+   "repetitions_ns": [
+    296852.29063511814,
+    298280.345987223,
+    304151.67367235664,
+    299845.3785790922,
+    298680.3052857856,
+    293785.06482467655,
+    308450.5016112691,
+    383402.8973330229,
+    298982.2447627512,
+    301944.3954547734
+   ],
+   "median_ns": 299413.81167092174,
+   "spread": 0.3050455698346273,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_READ.twitter": {
+   "repetitions_ns": [
+    204348.56442166318,
+    211033.36204368446,
+    198900.19487190462,
+    198951.65210958436,
+    207377.5295009169,
+    208568.02496220084,
+    210188.67573371882,
+    209990.17492706154,
+    212802.32002928908,
+    205581.02069446395
+   ],
+   "median_ns": 207972.77723155887,
+   "spread": 0.06989498007449257,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_READ_V.floats": {
+   "repetitions_ns": [
+    345765.4314216119,
+    341267.347255298,
+    349410.18105514854,
+    534896.0116729436,
+    346628.6959998494,
+    339536.6403941216,
+    339415.4430048456,
+    348972.0750002334,
+    345223.3111927793,
+    342512.7975003761
+   ],
+   "median_ns": 345494.37130719563,
+   "spread": 0.5759330422255045,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_READ_V.records": {
+   "repetitions_ns": [
+    660026.8891346214,
+    628499.5292793331,
+    633882.1175058278,
+    620757.4769237848,
+    611493.2345133284,
+    635811.2393734199,
+    610704.0697163251,
+    666597.2653066086,
+    642080.0047737586,
+    645109.22606437
+   ],
+   "median_ns": 634846.6784396239,
+   "spread": 0.09152255300385681,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.FB_READ_V.twitter": {
+   "repetitions_ns": [
+    383962.6808176378,
+    409692.6107384255,
+    388622.17728532606,
+    403176.7253883355,
+    385003.8829632804,
+    495704.28496542,
+    381465.0768176219,
+    411120.31214657373,
+    383165.2394362375,
+    389419.6006097157
+   ],
+   "median_ns": 389020.88894752087,
+   "spread": 0.29947488011442736,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.LC_DECODE.floats": {
+   "repetitions_ns": [
+    2972312.1354123806,
+    2904762.5937532,
+    3248219.4545454234,
+    3075837.260869617,
+    3206552.2625032375,
+    2867598.4105288275,
+    2888649.1304349517,
+    2951027.505260802,
+    2920393.3736225935,
+    3198979.1111098183
+   ],
+   "median_ns": 2961669.8203365915,
+   "spread": 0.13273164143873406,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.LC_DECODE.records": {
+   "repetitions_ns": [
+    3848368.5810796167,
+    3948119.808222282,
+    3922987.3823521356,
+    4044335.0714277974,
+    3761550.4929561494,
+    4039181.7121182997,
+    3865399.777781578,
+    4018227.000004067,
+    3924899.400005545,
+    3860878.3559276946
+   ],
+   "median_ns": 3923943.3911788403,
+   "spread": 0.07517766383867186,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.LC_DECODE.twitter": {
+   "repetitions_ns": [
+    3363290.629631929,
+    3506442.843374031,
+    3528683.703701029,
+    3786449.5375004024,
+    4188056.3333355286,
+    3394229.0857144794,
+    3368449.3493955773,
+    3400206.6190461325,
+    3437188.5789440917,
+    3870002.561398634
+   ],
+   "median_ns": 3471815.7111590616,
+   "spread": 0.24522582034305485,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.LC_READ.floats": {
+   "repetitions_ns": [
+    666186.2615005736,
+    658729.6761232472,
+    659988.5644026955,
+    659763.608392031,
+    683322.375887045,
+    671418.8615392348,
+    666797.978773425,
+    656848.3365382551,
+    653127.158139521,
+    651209.980676885
+   ],
+   "median_ns": 659876.0863973633,
+   "spread": 0.04931189042400974,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.LC_READ.records": {
+   "repetitions_ns": [
+    454016.0240381761,
+    447676.3935964418,
+    445662.9575851652,
+    453981.9376997168,
+    443091.2082671129,
+    466851.79106795904,
+    462704.42834347876,
+    444349.3961968026,
+    453729.04065013386,
+    456094.1401275454
+   ],
+   "median_ns": 453855.4891749253,
+   "spread": 0.05362458644524115,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.LC_READ.twitter": {
+   "repetitions_ns": [
+    334826.60669946077,
+    331133.58363420796,
+    333167.9430299449,
+    329409.71126751037,
+    332331.09603820246,
+    344033.04785855446,
+    337677.1704409535,
+    330817.4898450237,
+    326121.2387704196,
+    341774.8701453384
+   ],
+   "median_ns": 332749.51953407365,
+   "spread": 0.054923773611519566,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.MB_DECODE.floats": {
+   "repetitions_ns": [
+    1216071.1145375571,
+    1224000.5555557015,
+    1271677.4162677277,
+    1272733.4380534694,
+    1246834.9773741683,
+    1335260.2434797913,
+    1247104.000000501,
+    1233505.451327157,
+    1228888.4241067017,
+    1223749.019705174
+   ],
+   "median_ns": 1240170.2143506627,
+   "spread": 0.09801164382360894,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.MB_DECODE.records": {
+   "repetitions_ns": [
+    1285328.6036039896,
+    1337073.9692315208,
+    1278108.2443440661,
+    1314784.1421810896,
+    1276589.1415526131,
+    1283926.834862082,
+    1287821.451923649,
+    1282775.0989010264,
+    1268380.4029846904,
+    1341077.7630325912
+   ],
+   "median_ns": 1284627.7192330358,
+   "spread": 0.057315108209518906,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.MB_DECODE.twitter": {
+   "repetitions_ns": [
+    943818.0343631225,
+    989009.9931737756,
+    966499.15719071,
+    944023.8243237709,
+    904229.822579568,
+    985543.5120007314,
+    929303.6734013463,
+    1000034.7375894984,
+    935732.722602041,
+    1061470.987804761
+   ],
+   "median_ns": 955261.4907572404,
+   "spread": 0.17389513296146175,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.MB_PATH.floats": {
+   "repetitions_ns": [
+    151698.07407397055,
+    145502.07904134833,
+    145749.08405163884,
+    146035.99514309748,
+    146485.4116135985,
+    155291.77866652998,
+    156639.11500243825,
+    146824.04343328517,
+    151091.28839136002,
+    151187.3830600425
+   ],
+   "median_ns": 148957.66591232258,
+   "spread": 0.07654210877581358,
+   "check": "13864225899743805440",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.MB_PATH.records": {
+   "repetitions_ns": [
+    61708.57537096973,
+    61936.33388310129,
+    68551.14811490303,
+    62600.05020920498,
+    60850.32657492702,
+    60365.90747685114,
+    62187.98783566193,
+    67627.5019955502,
+    60270.50980383661,
+    63946.27114034826
+   ],
+   "median_ns": 62062.160859381605,
+   "spread": 0.1373912106935471,
+   "check": "640",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.MB_PATH.twitter": {
+   "repetitions_ns": [
+    51071.29941288608,
+    48904.96314244778,
+    48177.02533169415,
+    50441.69153694858,
+    48315.349645549744,
+    49273.720000042966,
+    49219.32144710837,
+    50881.38598996682,
+    48818.06308111711,
+    49976.77752171514
+   ],
+   "median_ns": 49246.52072357567,
+   "spread": 0.06007581541751761,
+   "check": "1227",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.READ.floats": {
+   "repetitions_ns": [
+    305153.45740963885,
+    305581.4846550249,
+    291020.7436709151,
+    281520.7720000217,
+    456557.1162390533,
+    277729.60817519657,
+    288228.09930492187,
+    283361.81402455916,
+    279773.60023721785,
+    285149.0680682132
+   ],
+   "median_ns": 286688.5836865675,
+   "spread": 0.6438906864803888,
+   "check": "16424838086676681961",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.READ.records": {
+   "repetitions_ns": [
+    284308.5987326141,
+    277646.87500014284,
+    270878.34965036256,
+    282286.37762225984,
+    264532.09781599155,
+    273309.8331726283,
+    276020.4572864061,
+    285012.93841674505,
+    275144.4541944857,
+    272381.9339335533
+   ],
+   "median_ns": 275582.4557404459,
+   "spread": 0.07742289412077308,
+   "check": "9492683289386141349",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.READ.twitter": {
+   "repetitions_ns": [
+    202774.2964364913,
+    199199.31383404546,
+    213887.40663279672,
+    194784.70056085204,
+    220363.24059582886,
+    197499.2226121358,
+    201086.7580644581,
+    207055.68055569124,
+    201662.26569336109,
+    198812.82986346347
+   ],
+   "median_ns": 201374.5118789096,
+   "spread": 0.13131698722398322,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "rt.g++-16.READ_AA.twitter": {
+   "repetitions_ns": [
+    223755.0118782868,
+    209819.07600348402,
+    200418.83979877055,
+    211171.15000015474,
+    211689.01239991732,
+    201771.3918252517,
+    225854.0804717402,
+    209295.73143341465,
+    202663.31254529188,
+    222225.80371743074
+   ],
+   "median_ns": 210495.11300181938,
+   "spread": 0.12691042767490202,
+   "check": "11743431291459513190",
+   "check_source": null,
+   "bytes": {}
+  },
+  "sc.g++-16.CP_DECODE.carsales": {
+   "repetitions_ns": [
+    179207.3208765398,
+    180590.5804375607,
+    183884.63883359847,
+    177763.28668493652,
+    192308.269975005,
+    184112.30283511698,
+    182701.9160788292,
+    191471.0434781959,
+    192167.10564303634,
+    177740.7206808736
+   ],
+   "median_ns": 183293.27745621384,
+   "spread": 0.08195954893356627,
+   "check": "33191310.687370282",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.CP_DECODE.floats": {
+   "repetitions_ns": [
+    45109.80425040235,
+    44693.565911039856,
+    44865.84629260535,
+    46750.16724391377,
+    45977.34663295972,
+    44936.00146605802,
+    44079.18743174639,
+    45730.236776711135,
+    46839.03786943067,
+    48219.18762121059
+   ],
+   "median_ns": 45420.02051355674,
+   "spread": 0.09392188083944863,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.CP_DECODE.records": {
+   "repetitions_ns": [
+    332115.26946136524,
+    326766.7782803604,
+    327377.141069161,
+    324709.4084503593,
+    339867.6745814936,
+    325472.2745564241,
+    324243.1995135643,
+    319543.6326766262,
+    319969.9606811871,
+    348368.13946093904
+   ],
+   "median_ns": 326119.52641839226,
+   "spread": 0.09020522969857714,
+   "check": "15874369319.428572",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.CP_FIELD.carsales": {
+   "repetitions_ns": [
+    210.04682131758312,
+    204.88802595081648,
+    210.9114999800569,
+    216.2521374951792,
+    205.01815404262715,
+    207.7820488581243,
+    205.951823575798,
+    205.91170222557295,
+    214.70262922836775,
+    208.68400562560777
+   ],
+   "median_ns": 208.23302724186604,
+   "spread": 0.05546498626079144,
+   "check": "7008",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.CP_FIELD.floats": {
+   "repetitions_ns": [
+    148.2506807060378,
+    137.8246040476647,
+    139.80695567057913,
+    143.70282002998482,
+    140.12183819355195,
+    144.4970797225249,
+    151.16053791081941,
+    136.78933966760616,
+    141.29481212013326,
+    141.34095377432223
+   ],
+   "median_ns": 141.31788294722776,
+   "spread": 0.10506080574798315,
+   "check": "-189",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.CP_FIELD.records": {
+   "repetitions_ns": [
+    223.37748517357034,
+    241.7743221541285,
+    240.5841399375663,
+    222.68854982894692,
+    222.18726160047385,
+    241.16029649092494,
+    248.93691397547235,
+    235.88387161430043,
+    224.29240105955157,
+    232.51516953154925
+   ],
+   "median_ns": 234.19952057292483,
+   "spread": 0.12039237615295151,
+   "check": "640",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.CP_READ.carsales": {
+   "repetitions_ns": [
+    153871.30883912844,
+    150912.02215020315,
+    152874.66953703674,
+    144640.81935486358,
+    157701.33526916197,
+    148076.97328245427,
+    145449.2949454051,
+    178623.30908120066,
+    160997.74455014212,
+    153548.1215687061
+   ],
+   "median_ns": 153211.3955528714,
+   "spread": 0.23494397970025327,
+   "check": "33191310.687370282",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.CP_READ.floats": {
+   "repetitions_ns": [
+    38441.18280622865,
+    38121.94184118529,
+    38027.33613331643,
+    38472.97106916124,
+    38989.92919867081,
+    41854.49700846445,
+    38221.04460158609,
+    37674.728336887136,
+    38033.09986239096,
+    38004.33614124497
+   ],
+   "median_ns": 38171.49322138569,
+   "spread": 0.11094356498610569,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.CP_READ.records": {
+   "repetitions_ns": [
+    304545.5826179819,
+    317955.1270206574,
+    313575.56843273056,
+    311125.6722165935,
+    307301.08333374886,
+    297498.4795258706,
+    292775.6572028467,
+    298246.90786749736,
+    298126.8524200237,
+    305613.45948793466
+   ],
+   "median_ns": 305079.52105295827,
+   "spread": 0.0860026071100759,
+   "check": "15874369319.428572",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.FB_DECODE.carsales": {
+   "repetitions_ns": [
+    189739.15738823373,
+    192052.2407405816,
+    192462.95763903417,
+    197927.89695236692,
+    192745.9254660641,
+    194543.05502072145,
+    202673.73299975588,
+    209928.0339998586,
+    192658.94448327043,
+    194992.1673583538
+   ],
+   "median_ns": 193644.49024339276,
+   "spread": 0.10640332174721068,
+   "check": "33191310.687370282",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.FB_DECODE.floats": {
+   "repetitions_ns": [
+    25426.07467383877,
+    25468.863704411237,
+    27149.850426514524,
+    25680.41759361625,
+    24886.653127475118,
+    27071.3674321575,
+    25925.235201132513,
+    26369.47255843818,
+    26993.926112729558,
+    24663.98738283382
+   ],
+   "median_ns": 25802.82639737438,
+   "spread": 0.1007891791823925,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.FB_DECODE.records": {
+   "repetitions_ns": [
+    381230.5481170653,
+    372792.74832642404,
+    444396.45422535634,
+    397898.4778256143,
+    375117.59612676356,
+    367690.41767056694,
+    385427.9220609546,
+    427762.81666723057,
+    373743.6396764487,
+    401641.6507304628
+   ],
+   "median_ns": 383329.23508901,
+   "spread": 0.20861581610080027,
+   "check": "15874369319.428572",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.FB_FIELD.carsales": {
+   "repetitions_ns": [
+    2.5061038846876316,
+    2.525122098483795,
+    2.608444264772961,
+    2.5116801532124606,
+    2.518939942172912,
+    2.4980025307182725,
+    2.528617810949699,
+    2.7942452878292268,
+    2.6468071326492772,
+    2.449696415311424
+   ],
+   "median_ns": 2.5220310203283534,
+   "spread": 0.14064962105682044,
+   "check": "7008",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.FB_FIELD.floats": {
+   "repetitions_ns": [
+    0.9678996000227315,
+    1.0080531259258694,
+    1.058904796770847,
+    0.9673030709403806,
+    0.9864521822105518,
+    0.9851175179369267,
+    1.011496462054598,
+    0.9804740391627637,
+    1.0115482900431554,
+    1.036246114552893
+   ],
+   "median_ns": 0.9972526540682105,
+   "spread": 0.0946980616337898,
+   "check": "-189",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.FB_FIELD.records": {
+   "repetitions_ns": [
+    12.061781685876232,
+    10.879028938776356,
+    10.993922592278743,
+    11.29603714492564,
+    11.187275881278355,
+    11.028774932540271,
+    12.183050527627087,
+    10.787266504323643,
+    10.695430225713038,
+    10.821707502904252
+   ],
+   "median_ns": 11.011348762409508,
+   "spread": 0.139089337270196,
+   "check": "640",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.FB_FIELD_V.carsales": {
+   "repetitions_ns": [
+    55838.71230119653,
+    57926.63733120444,
+    56268.081697407106,
+    57953.89195685181,
+    57903.27322859449,
+    54780.477663915335,
+    57305.14324388801,
+    53803.36107810487,
+    56763.48789887889,
+    57887.095737668125
+   ],
+   "median_ns": 57034.31557138345,
+   "spread": 0.07714259472975549,
+   "check": "7008",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.FB_FIELD_V.floats": {
+   "repetitions_ns": [
+    5.2273655467820435,
+    6.029655462032092,
+    5.146764412931882,
+    5.359852453500755,
+    5.274959760506546,
+    5.141756929652656,
+    5.26746391821396,
+    5.100070534355836,
+    4.869906905430927,
+    5.038545792734553
+   ],
+   "median_ns": 5.187064979856963,
+   "spread": 0.23814593977306053,
+   "check": "-189",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.FB_FIELD_V.records": {
+   "repetitions_ns": [
+    58399.00210175196,
+    61352.71155440354,
+    55642.44342149023,
+    57962.652863064235,
+    55168.50581286768,
+    57110.222984930384,
+    56837.277309210906,
+    55698.49384143867,
+    54284.134002663886,
+    57422.784579459876
+   ],
+   "median_ns": 56973.75014707065,
+   "spread": 0.13021442971518682,
+   "check": "640",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.FB_READ.carsales": {
+   "repetitions_ns": [
+    22638.833872958356,
+    23319.415723882266,
+    23587.288278865508,
+    28011.61535787759,
+    23162.21233718514,
+    23838.526980032235,
+    24096.250399375927,
+    23749.442591003368,
+    22847.360052356446,
+    25356.49058656391
+   ],
+   "median_ns": 23668.365434934436,
+   "spread": 0.2373258938631515,
+   "check": "33191310.687370282",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.FB_READ.floats": {
+   "repetitions_ns": [
+    37334.33800562398,
+    37740.29690661956,
+    38050.139039661866,
+    40905.0869769431,
+    38209.27782360461,
+    37908.37457787109,
+    37806.72450511857,
+    37900.182865843555,
+    37500.298974622674,
+    37484.308959016686
+   ],
+   "median_ns": 37853.45368548106,
+   "spread": 0.09564248790968866,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.FB_READ.records": {
+   "repetitions_ns": [
+    102952.59036605753,
+    110271.17760178217,
+    105317.56963946826,
+    105186.60510279117,
+    108784.98811881301,
+    107738.72077403631,
+    110146.03202563417,
+    106434.77803117996,
+    104932.09623266543,
+    110715.77148284098
+   ],
+   "median_ns": 107086.74940260814,
+   "spread": 0.07540539863232909,
+   "check": "15874369319.428572",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.FB_READ_V.carsales": {
+   "repetitions_ns": [
+    81988.25322526884,
+    87113.60651461812,
+    82715.73640297321,
+    80852.3045304322,
+    90692.29129730455,
+    82266.94531485876,
+    80987.95289537685,
+    86078.56213551374,
+    81830.90677201853,
+    82025.96264546242
+   ],
+   "median_ns": 82146.45398016059,
+   "spread": 0.12170323188708432,
+   "check": "33191310.687370282",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.FB_READ_V.floats": {
+   "repetitions_ns": [
+    38049.549993127504,
+    38362.68202705371,
+    37497.25645824956,
+    37690.16812961462,
+    37313.63183087226,
+    38535.4823642446,
+    38053.60747033978,
+    37729.17507415661,
+    37832.38739223524,
+    38315.777980872124
+   ],
+   "median_ns": 37940.968692681374,
+   "spread": 0.032745419660849207,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.FB_READ_V.records": {
+   "repetitions_ns": [
+    163386.78715099924,
+    172006.40260534894,
+    164051.90351948363,
+    166863.25636453473,
+    159129.28734307637,
+    162340.37580725658,
+    163983.04715358588,
+    157168.86949048142,
+    160528.04628582505,
+    164099.64863198716
+   ],
+   "median_ns": 163684.91715229256,
+   "spread": 0.09440503811580903,
+   "check": "15874369319.428572",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.MB_DECODE.carsales": {
+   "repetitions_ns": [
+    62142.51746378138,
+    64215.25639836148,
+    63013.01904973933,
+    67362.34296304134,
+    61802.77456530308,
+    62039.91249103919,
+    61156.31921033129,
+    67170.49900711933,
+    69203.38231254158,
+    61291.637298444526
+   ],
+   "median_ns": 62577.768256760355,
+   "spread": 0.13158187422193457,
+   "check": "33191310.687370282",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.MB_DECODE.floats": {
+   "repetitions_ns": [
+    88725.10707125485,
+    78823.67976421832,
+    77435.50825364595,
+    78423.44660736374,
+    86822.68103966469,
+    84979.7794618449,
+    77072.1594992426,
+    78018.8496552502,
+    77471.40792020298,
+    77665.48824032543
+   ],
+   "median_ns": 78221.14813130698,
+   "spread": 0.1511952908511247,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.MB_DECODE.records": {
+   "repetitions_ns": [
+    125849.61202663866,
+    133048.35159400394,
+    128146.9932219489,
+    131441.52272722387,
+    131033.59858830707,
+    126494.53318079382,
+    137578.76945800235,
+    124855.52894850579,
+    131077.78996722348,
+    125736.06372320408
+   ],
+   "median_ns": 129590.29590512798,
+   "spread": 0.1019037011548285,
+   "check": "15874369319.428572",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.MB_FIELD.carsales": {
+   "repetitions_ns": [
+    21.53102720003517,
+    19.808288555169945,
+    19.883703964827102,
+    22.11024714555758,
+    18.705786695880878,
+    18.725138397529527,
+    19.69992322035059,
+    18.597595071634522,
+    18.873978917069806,
+    18.527379033535105
+   ],
+   "median_ns": 19.2869510687102,
+   "spread": 0.19338235081915123,
+   "check": "7008",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.MB_FIELD.floats": {
+   "repetitions_ns": [
+    36.420457240597585,
+    35.99336106638684,
+    36.4981769160547,
+    36.967682728325386,
+    38.10984653083299,
+    35.568001667835226,
+    39.33978309341738,
+    36.93282065182255,
+    36.1247852485386,
+    36.62077400971332
+   ],
+   "median_ns": 36.55947546288401,
+   "spread": 0.10604423213894099,
+   "check": "-189",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.MB_FIELD.records": {
+   "repetitions_ns": [
+    28.344077467218153,
+    30.99055784704913,
+    29.26947329891288,
+    29.178873060921795,
+    28.852079829332883,
+    28.679634531911287,
+    28.373000800279282,
+    31.35746116051542,
+    28.431804133842384,
+    30.697117209693857
+   ],
+   "median_ns": 29.01547644512734,
+   "spread": 0.10631440366272105,
+   "check": "640",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.MB_READ.carsales": {
+   "repetitions_ns": [
+    60134.034661067875,
+    54386.24513172005,
+    53342.22758080069,
+    54573.664030833694,
+    54840.86849799726,
+    54134.91172478385,
+    52907.92170518654,
+    53715.81015844599,
+    55138.90301387508,
+    54241.68703630038
+   ],
+   "median_ns": 54313.966084010215,
+   "spread": 0.13657903623859347,
+   "check": "33191310.687370282",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  },
+  "sc.g++-16.MB_READ.floats": {
+   "repetitions_ns": [
+    919846.8491809225,
+    918861.9374999449,
+    947490.6408455918,
+    948249.6904768465,
+    920358.4569535307,
+    933239.0718941347,
+    970483.7525767045,
+    919544.7425746552,
+    917713.3733328446,
+    913226.8642374494
+   ],
+   "median_ns": 920102.6530672265,
+   "spread": 0.06269733248272868,
+   "check": "3361922545318.1553",
+   "check_source": "3361922545318.1553",
+   "bytes": {
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040"
+   }
+  },
+  "sc.g++-16.MB_READ.records": {
+   "repetitions_ns": [
+    179003.49649469423,
+    178388.00701988876,
+    178027.95416922017,
+    189119.14675774993,
+    182466.54396327044,
+    191589.48879240826,
+    179522.72236841865,
+    182275.1101583153,
+    189170.0878908035,
+    189026.72657877335
+   ],
+   "median_ns": 182370.8270607929,
+   "spread": 0.07617643356333526,
+   "check": "15874369319.428572",
+   "check_source": "15874369319.428572",
+   "bytes": {
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640"
+   }
+  },
+  "sc.g++-16.MB_READ_AA.carsales": {
+   "repetitions_ns": [
+    53642.48016035901,
+    53094.34397703892,
+    52804.79108685112,
+    53988.25057510264,
+    54312.085725963196,
+    62003.36417487885,
+    54762.24786486224,
+    56184.60224623969,
+    55115.941388236424,
+    55059.78032667483
+   ],
+   "median_ns": 54537.16679541272,
+   "spread": 0.17419959247444616,
+   "check": "33191310.687370282",
+   "check_source": "33191310.687370282",
+   "bytes": {
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056"
+   }
+  }
+ }
+}

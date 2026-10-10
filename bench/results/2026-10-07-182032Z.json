@@ -1,0 +1,1534 @@
+{
+ "time": "2026-10-07-182032Z",
+ "commits": "before d6811c6, after 94d5bc6-dirty",
+ "purpose": "Task 1: cbor::result (a struct derived from std::expected) against std::expected<T, cbor::error>. before = include/ and bench/ of d6811c6 with the MB_PATH_ALL arm added to runtime.cpp; after = include/ and bench/ of 94d5bc6 plus the MB_PATH_ALL arm and the compare.cpp fix (uncommitted at run time). aa2 = after built a second time (A/A). rt = runtime.cpp (READ lazy walk with lazy_decode, MB_PATH one node by lazy::at, MB_PATH_ALL at_path $..*, MB_DECODE lazy_decode into a tree); cw = cwt.cpp databind; cmp = compare.cpp schema (MB_DECODE, MB_FIELD one path, MB_READ every field). ns per message, real_time.",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG",
+ "resolved_march": "-march=                     \t\tsapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.0",
+  "clang version 23.1.2"
+ ],
+ "packages": [
+  "glibc-2.44-2.1.x86_64",
+  "libstdc++6-16.2.0+git9497-3.1.x86_64",
+  "gcc16-c++-16.2.0+git9497-3.1.x86_64",
+  "clang-23-1.1.x86_64",
+  "libbenchmark1-1.9.5-2.3.x86_64",
+  "libflatbuffers25_2_10-25.2.10-2.5.x86_64",
+  "libcapnp-1_5_0-1.5.0-1.3.x86_64"
+ ],
+ "ldd_sample": "linux-vdso.so.1 (0x00007f44e8840000)\n\tlibcapnp.so.1.5.0 => /lib64/libcapnp.so.1.5.0 (0x00007f44e8781000)\n\tlibkj.so.1.5.0 => /lib64/libkj.so.1.5.0 (0x00007f44e86fb000)\n\tlibflatbuffers.so.25.2.10 => /lib64/libflatbuffers.so.25.2.10 (0x00007f44e866f000)\n\tlibbenchmark.so.1 => /lib64/libbenchmark.so.1 (0x00007f44e860a000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f44e8367000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007f44e8243000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007f44e8215000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007f44e8001000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f44e8842000)",
+ "kernel": "6.18.44-fc-v77",
+ "scheduler": "cat: /sys/kernel/sched_ext/state: No such file or directory\n1",
+ "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-tw-compare, user 1000",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4
+ },
+ "user": "uid 1000 in the container",
+ "uid": 1000,
+ "priority_raised": false,
+ "priority_note": "renice: failed to set priority for 1 (process ID): Permission denied\n1",
+ "processes_in_container": "  UID     PID  NI COMMAND\n 1000       1   0 bash\n 1000      11   0 ps\n",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; 3 of 4 cpus stay to the rest of the machine; other processes were not moved",
+ "loadavg_start": "1.20 1.80 1.39 1/120 9",
+ "loadavg_end": "1.07 1.41 1.31 1/117 643",
+ "run": {
+  "rounds": [
+   {
+    "round": 1,
+    "wall_s": 21.580662488937378,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.011556685542586386
+   },
+   {
+    "round": 2,
+    "wall_s": 21.1908061504364,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.011755025273304338
+   },
+   {
+    "round": 3,
+    "wall_s": 21.560675144195557,
+    "steal_ticks": 0,
+    "steal_percent_of_cpu_time": 0.0
+   },
+   {
+    "round": 4,
+    "wall_s": 21.30992102622986,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.01166044776119403
+   },
+   {
+    "round": 5,
+    "wall_s": 21.396422386169434,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.011646866992778943
+   },
+   {
+    "round": 6,
+    "wall_s": 21.040777444839478,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.011838522552385463
+   },
+   {
+    "round": 7,
+    "wall_s": 21.0904757976532,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.011818933932159319
+   },
+   {
+    "round": 8,
+    "wall_s": 20.713756322860718,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.012017786323759164
+   },
+   {
+    "round": 9,
+    "wall_s": 20.643598318099976,
+    "steal_ticks": 1,
+    "steal_percent_of_cpu_time": 0.012051096649795132
+   },
+   {
+    "round": 10,
+    "wall_s": 20.670218467712402,
+    "steal_ticks": 4,
+    "steal_percent_of_cpu_time": 0.04804804804804805
+   }
+  ],
+  "steal_ticks": 12,
+  "steal_percent_of_cpu_time_mean": 0.014239341307601083,
+  "steal_percent_of_cpu_time_max": 0.04804804804804805
+ },
+ "failed_run": [],
+ "arms": {
+  "cmp.MB_DECODE.cars.g++-16.after": {
+   "repetitions_ns": [
+    61739.88598470008,
+    61065.6625570541,
+    65289.29637811167,
+    62982.50841831986,
+    61148.30100034565,
+    62052.3804954311,
+    61847.382043461395,
+    62522.88994536519,
+    63421.62370114074,
+    60775.52317596935
+   ],
+   "median_ns": 61949.88126944625,
+   "spread": 0.074269590227519,
+   "check": "33191310.687370282",
+   "context": {
+    "check_source": "33191310.687370282",
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_DECODE.cars.g++-16.before": {
+   "repetitions_ns": [
+    62977.101102434564,
+    62753.59511346165,
+    64529.00397962342,
+    60383.3684323342,
+    65198.0417808162,
+    67544.79901601293,
+    61171.97301553311,
+    66978.977189099,
+    71575.0363313204,
+    62389.33589685322
+   ],
+   "median_ns": 63753.05254102899,
+   "spread": 0.18534355054285556,
+   "check": "33191310.687370282",
+   "context": {
+    "check_source": "33191310.687370282",
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_DECODE.floats.g++-16.after": {
+   "repetitions_ns": [
+    81957.52887538174,
+    78815.63912684048,
+    81114.05615490691,
+    80638.74714245925,
+    77487.87794726178,
+    84184.38362461206,
+    78833.39419942186,
+    79749.92259962573,
+    76568.58792955836,
+    77434.6416103593
+   ],
+   "median_ns": 79291.65839952379,
+   "spread": 0.09946370830372486,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_DECODE.floats.g++-16.before": {
+   "repetitions_ns": [
+    81455.2919492971,
+    80285.09717867675,
+    79107.13635074774,
+    77718.35804578556,
+    78571.16311126451,
+    81732.10522024443,
+    77763.9859890499,
+    79923.11460675613,
+    80939.70953881337,
+    79890.16938019669
+   ],
+   "median_ns": 79906.64199347641,
+   "spread": 0.05164477576963589,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_DECODE.records.g++-16.after": {
+   "repetitions_ns": [
+    120708.78781236483,
+    126818.48601566687,
+    124416.36075095375,
+    121136.81842937584,
+    136793.2692476127,
+    123012.58018868674,
+    126665.43755740658,
+    128534.04557882727,
+    123272.22949924416,
+    126082.85026740523
+   ],
+   "median_ns": 125249.6055091795,
+   "spread": 0.13325029375864772,
+   "check": "15874369319.428572",
+   "context": {
+    "check_source": "15874369319.428572",
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_DECODE.records.g++-16.before": {
+   "repetitions_ns": [
+    124614.90959661643,
+    124439.73540315032,
+    173416.0473934035,
+    124844.75672035076,
+    138527.03633646359,
+    120488.47172290411,
+    123225.7816140902,
+    125753.23355704152,
+    128959.78115236567,
+    118704.9983036443
+   ],
+   "median_ns": 124729.8331584836,
+   "spread": 0.46089928706969663,
+   "check": "15874369319.428572",
+   "context": {
+    "check_source": "15874369319.428572",
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_FIELD.cars.g++-16.after": {
+   "repetitions_ns": [
+    22.204026698242405,
+    23.03414973266029,
+    19.19777618891426,
+    21.367147849585734,
+    24.935419911911634,
+    19.702291520212487,
+    20.395205900013025,
+    18.492934862432556,
+    19.08375789282992,
+    18.707681468036448
+   ],
+   "median_ns": 20.048748710112754,
+   "spread": 0.3483754794684675,
+   "check": "7008",
+   "context": {
+    "check_source": "33191310.687370282",
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_FIELD.cars.g++-16.before": {
+   "repetitions_ns": [
+    18.618836108194326,
+    18.424434153915787,
+    20.62421330001598,
+    19.262416035072263,
+    19.009183555919815,
+    18.84767770208856,
+    23.15840791046426,
+    19.321952907465107,
+    19.251960748264363,
+    18.399467899834
+   ],
+   "median_ns": 19.13057215209209,
+   "spread": 0.25864552369327987,
+   "check": "7008",
+   "context": {
+    "check_source": "33191310.687370282",
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_FIELD.floats.g++-16.after": {
+   "repetitions_ns": [
+    14.86690771836172,
+    14.569143505399728,
+    14.480515432658326,
+    14.250165936223638,
+    14.22847227907614,
+    16.265394466947512,
+    14.57874914606578,
+    14.618167679624094,
+    14.363452295235415,
+    14.6165763206566
+   ],
+   "median_ns": 14.573946325732754,
+   "spread": 0.14315817945309517,
+   "check": "-189",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_FIELD.floats.g++-16.before": {
+   "repetitions_ns": [
+    17.096598807957594,
+    14.56802669625982,
+    14.831621945052703,
+    14.593035388674682,
+    15.172265361797812,
+    15.518575988884336,
+    14.816549856671243,
+    14.886372330939448,
+    14.042218815746091,
+    14.47219742894663
+   ],
+   "median_ns": 14.824085900861974,
+   "spread": 0.2175140575922736,
+   "check": "-189",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_FIELD.records.g++-16.after": {
+   "repetitions_ns": [
+    29.586505030708167,
+    29.19123415104666,
+    30.619992521006523,
+    29.32472137018076,
+    28.59530946004778,
+    31.487593448531495,
+    29.65515978065002,
+    28.44934342703589,
+    28.70970647296239,
+    28.996989796873464
+   ],
+   "median_ns": 29.257977760613713,
+   "spread": 0.10679508401618532,
+   "check": "640",
+   "context": {
+    "check_source": "15874369319.428572",
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_FIELD.records.g++-16.before": {
+   "repetitions_ns": [
+    28.61397298795366,
+    29.803417551872396,
+    29.235567804188104,
+    29.81646234061337,
+    28.801860249921972,
+    30.735644602589893,
+    28.211842276807463,
+    30.54601117034848,
+    29.8237644786963,
+    28.11600851041628
+   ],
+   "median_ns": 29.51949267803025,
+   "spread": 0.09317240358648715,
+   "check": "640",
+   "context": {
+    "check_source": "15874369319.428572",
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ.cars.g++-16.after": {
+   "repetitions_ns": [
+    52043.66691743948,
+    54961.68044455132,
+    52040.8322059698,
+    52860.290018083535,
+    53858.3332058828,
+    52122.366563823096,
+    51374.86655280261,
+    52074.755868518754,
+    53882.64507316152,
+    52906.027989818
+   ],
+   "median_ns": 52491.328290953315,
+   "spread": 0.06981651014241019,
+   "check": "33191310.687370282",
+   "context": {
+    "check_source": "33191310.687370282",
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ.cars.g++-16.before": {
+   "repetitions_ns": [
+    51208.960194356296,
+    53298.30970365476,
+    54784.037278110955,
+    52306.39469191891,
+    52133.691362682475,
+    56519.82033897408,
+    54204.419522534634,
+    51183.7868180924,
+    54006.190772131464,
+    53982.391865845486
+   ],
+   "median_ns": 53640.350784750124,
+   "spread": 0.10425241766198323,
+   "check": "33191310.687370282",
+   "context": {
+    "check_source": "33191310.687370282",
+    "bytes_mb": "198805",
+    "bytes_fb": "134312",
+    "bytes_cp": "152056",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ.floats.g++-16.aa2": {
+   "repetitions_ns": [
+    48350.94926040765,
+    50948.00546448109,
+    49559.92514146913,
+    46218.209510199405,
+    45859.58059033417,
+    50954.43859016782,
+    46157.41199522448,
+    45205.93469668425,
+    46682.87366241247,
+    45523.84168171301
+   ],
+   "median_ns": 46450.54158630594,
+   "spread": 0.1271625934084537,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ.floats.g++-16.after": {
+   "repetitions_ns": [
+    48194.848517101374,
+    47936.98930480777,
+    46507.00308507174,
+    48867.25285387749,
+    50917.72008802199,
+    48234.99983617367,
+    46499.189373081805,
+    46652.717121192174,
+    46672.06359832661,
+    46429.33437397889
+   ],
+   "median_ns": 47304.52645156719,
+   "spread": 0.09667133450352883,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ.floats.g++-16.before": {
+   "repetitions_ns": [
+    46503.72560202063,
+    46326.58066132031,
+    47646.764480672085,
+    54838.437969944294,
+    48217.378650551946,
+    46330.62709360852,
+    47644.67710888234,
+    45946.6798910295,
+    48148.810930072905,
+    48488.47224820079
+   ],
+   "median_ns": 47645.72079477721,
+   "spread": 0.19352340800256163,
+   "check": "3361922545318.1553",
+   "context": {
+    "check_source": "3361922545318.1553",
+    "bytes_mb": "540062",
+    "bytes_fb": "480024",
+    "bytes_cp": "480040",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ.records.g++-16.after": {
+   "repetitions_ns": [
+    167352.04313953585,
+    175047.77711921738,
+    165633.96021568493,
+    176181.79975120167,
+    173287.30018189765,
+    167772.64348937542,
+    171548.59574475267,
+    170683.7613793486,
+    168530.59041259214,
+    171538.06607928697
+   ],
+   "median_ns": 171110.91372931778,
+   "spread": 0.06368162375506548,
+   "check": "15874369319.428572",
+   "context": {
+    "check_source": "15874369319.428572",
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cmp.MB_READ.records.g++-16.before": {
+   "repetitions_ns": [
+    184517.17547168586,
+    167718.9576587831,
+    174478.7984164368,
+    169228.3356122213,
+    172385.59199436015,
+    165736.61400362875,
+    174843.23672970294,
+    169137.35846721445,
+    167864.3649144053,
+    202206.3959451094
+   ],
+   "median_ns": 170806.96380329074,
+   "spread": 0.22004662132582342,
+   "check": "15874369319.428572",
+   "context": {
+    "check_source": "15874369319.428572",
+    "bytes_mb": "479588",
+    "bytes_fb": "405576",
+    "bytes_cp": "465640",
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cw.ENC.cwt.g++-16.after": {
+   "repetitions_ns": [
+    21.975534373658554,
+    23.00098134876727,
+    22.727190529028668,
+    29.598686003043227,
+    22.09473133028385,
+    22.67439165183214,
+    21.94969280678044,
+    21.930131725416544,
+    22.15460424213371,
+    22.970255455558366
+   ],
+   "median_ns": 22.414497946982927,
+   "spread": 0.34968117718777747,
+   "check": null,
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cw.ENC.cwt.g++-16.before": {
+   "repetitions_ns": [
+    27.647125828768033,
+    23.505783685535597,
+    24.00876972364272,
+    21.970848947549783,
+    22.458298655361176,
+    25.979696848184883,
+    22.251436317028695,
+    22.594110506831903,
+    23.57704195382685,
+    22.27997217856968
+   ],
+   "median_ns": 23.04994709618375,
+   "spread": 0.2583549181358,
+   "check": null,
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cw.READ.cwt.g++-16.after": {
+   "repetitions_ns": [
+    223.6123278469567,
+    196.65387010577183,
+    214.24332490830778,
+    200.94463787408654,
+    214.42997909268107,
+    199.4223707258279,
+    199.95944728538646,
+    205.78143443916588,
+    197.6828495914829,
+    215.2453732674923
+   ],
+   "median_ns": 203.3630361566262,
+   "spread": 0.13708582356749477,
+   "check": null,
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "cw.READ.cwt.g++-16.before": {
+   "repetitions_ns": [
+    200.1707554981315,
+    216.15775272487318,
+    199.85175821621874,
+    199.1649998551472,
+    243.11521200002062,
+    215.14867881744698,
+    202.46645485161017,
+    226.5018370027381,
+    227.88688935555356,
+    204.4247690574507
+   ],
+   "median_ns": 209.78672393744884,
+   "spread": 0.22067236802067858,
+   "check": null,
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_DECODE.records.clang++.after": {
+   "repetitions_ns": [
+    1361085.4126218592,
+    1423582.2000000554,
+    1362446.682692236,
+    1365314.5463416788,
+    1443296.5759167366,
+    1409562.5990097292,
+    1370174.3285710542,
+    1340671.4048780885,
+    1473833.894736967,
+    1337513.070421865
+   ],
+   "median_ns": 1367744.4374563666,
+   "spread": 0.10192111563598028,
+   "check": "9492683289386141349",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_DECODE.records.clang++.before": {
+   "repetitions_ns": [
+    1405813.3774507917,
+    1342012.1874994286,
+    1382561.6521738695,
+    1346626.72641478,
+    1414288.5923915757,
+    1386926.108374063,
+    1370517.2272723601,
+    1350171.682539228,
+    1369362.5665017427,
+    1448046.9901962029
+   ],
+   "median_ns": 1376539.439723115,
+   "spread": 0.07901180308529754,
+   "check": "9492683289386141349",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_DECODE.records.g++-16.after": {
+   "repetitions_ns": [
+    1306541.1759256492,
+    1244508.7614214849,
+    1288681.9303483986,
+    1273722.4843056642,
+    1299960.322222028,
+    1299752.2180093345,
+    1270766.726457162,
+    1270903.8778275624,
+    1439556.1550805664,
+    1290705.222797814
+   ],
+   "median_ns": 1289693.5765731065,
+   "spread": 0.15672641262589204,
+   "check": "9492683289386141349",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_DECODE.records.g++-16.before": {
+   "repetitions_ns": [
+    1306125.0141508677,
+    1292719.1441862264,
+    1281431.617511067,
+    1283574.4223306815,
+    1333223.925233261,
+    1393017.7488158068,
+    1287645.4999995818,
+    1271610.1968913516,
+    1291824.3990609031,
+    1257087.5964129423
+   ],
+   "median_ns": 1289734.9495302425,
+   "spread": 0.1081310107511495,
+   "check": "9492683289386141349",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_DECODE.twitter.clang++.after": {
+   "repetitions_ns": [
+    1012321.99227774,
+    1022834.8132292819,
+    1023032.5212766748,
+    1078825.432055863,
+    989211.8910500124,
+    1028718.5019612534,
+    1031351.4173554527,
+    1028631.7662839132,
+    1041759.4308945092,
+    994891.7189778155
+   ],
+   "median_ns": 1025832.143780294,
+   "spread": 0.09059084491061786,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_DECODE.twitter.clang++.before": {
+   "repetitions_ns": [
+    1043679.3800735227,
+    1040575.4710421953,
+    1016133.2445253402,
+    988986.2059930585,
+    1075602.2720313265,
+    1083065.4898783632,
+    1029694.0508475804,
+    1035714.440860249,
+    1121266.7344396065,
+    1022841.0437958456
+   ],
+   "median_ns": 1038144.9559512222,
+   "spread": 0.13375366374672826,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_DECODE.twitter.g++-16.after": {
+   "repetitions_ns": [
+    918087.1328903036,
+    912039.2823919295,
+    943059.0408164542,
+    924013.0600005615,
+    963596.5389830836,
+    1031340.1883561162,
+    940281.6838488728,
+    952698.708771462,
+    978523.3769233715,
+    1026248.7007298826
+   ],
+   "median_ns": 947878.8747939582,
+   "spread": 0.13080676267726776,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_DECODE.twitter.g++-16.before": {
+   "repetitions_ns": [
+    933744.064057503,
+    966601.5544222369,
+    925353.2433624171,
+    952570.8098590899,
+    934258.2430554734,
+    912131.3719997489,
+    945021.4448166467,
+    1184875.7258066612,
+    988086.3960390746,
+    942284.1016950802
+   ],
+   "median_ns": 943652.7732558635,
+   "spread": 0.29901871833324845,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH.records.clang++.after": {
+   "repetitions_ns": [
+    93517.06481795642,
+    95659.0191799147,
+    91261.16502299406,
+    94887.90466798625,
+    92191.61016390586,
+    91078.3956507707,
+    91666.06068516427,
+    93190.92741936697,
+    92253.3244299542,
+    91455.61789720845
+   ],
+   "median_ns": 92222.46729693003,
+   "spread": 0.05029319517998365,
+   "check": "640",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH.records.clang++.before": {
+   "repetitions_ns": [
+    91592.88268156587,
+    90710.16042778123,
+    90944.26649251516,
+    91306.69892468605,
+    92818.08347135119,
+    94951.37899697991,
+    91705.24697016434,
+    91188.81911036464,
+    93657.57506617847,
+    93338.0867436105
+   ],
+   "median_ns": 91649.0648258651,
+   "spread": 0.046755716770838784,
+   "check": "640",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH.records.g++-16.after": {
+   "repetitions_ns": [
+    61402.303446780505,
+    61804.75813048105,
+    61911.31967593972,
+    65460.46996650847,
+    62711.000924207576,
+    60906.800301594514,
+    62493.1586297164,
+    63332.32229926191,
+    62894.42525228366,
+    62095.75522326105
+   ],
+   "median_ns": 62294.456926488725,
+   "spread": 0.07476455243692626,
+   "check": "640",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH.records.g++-16.before": {
+   "repetitions_ns": [
+    62837.6014925488,
+    62676.7172333649,
+    61109.16674056685,
+    64074.33988575317,
+    60056.21507762032,
+    62288.113386179844,
+    61517.038080921695,
+    63098.652004557414,
+    62186.804945036965,
+    62749.09054505027
+   ],
+   "median_ns": 62482.415309772376,
+   "spread": 0.06690606131171584,
+   "check": "640",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH.twitter.clang++.after": {
+   "repetitions_ns": [
+    64057.79139535045,
+    67989.88927892272,
+    65636.85312061441,
+    63936.633686374546,
+    66168.96005639498,
+    64652.36025732777,
+    63955.445458676,
+    64731.068647768865,
+    64485.79277222457,
+    67017.11512105107
+   ],
+   "median_ns": 64691.714452548316,
+   "spread": 0.06339488582446218,
+   "check": "1227",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH.twitter.clang++.before": {
+   "repetitions_ns": [
+    65135.529775543764,
+    63773.974799533564,
+    64912.39543988764,
+    63927.279244439895,
+    64352.62395932343,
+    64262.398111893715,
+    65405.284488729165,
+    64414.9951971912,
+    64803.5937787896,
+    64870.898137496406
+   ],
+   "median_ns": 64609.294487990395,
+   "spread": 0.02557955175796156,
+   "check": "1227",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH.twitter.g++-16.after": {
+   "repetitions_ns": [
+    48654.15575036398,
+    56442.71141628244,
+    49598.12627720777,
+    55343.0471595175,
+    47373.641292436034,
+    50048.196081821014,
+    49277.66425926039,
+    47924.886799147316,
+    48431.573660316804,
+    49579.07010417022
+   ],
+   "median_ns": 49428.36718171531,
+   "spread": 0.1914370497269422,
+   "check": "1227",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH.twitter.g++-16.before": {
+   "repetitions_ns": [
+    51316.92910869738,
+    49382.18349580801,
+    49100.7581227523,
+    49231.19759386415,
+    49233.39541849877,
+    49230.981290327356,
+    48877.100841817766,
+    50823.6457894702,
+    47564.66711911013,
+    48884.70809401026
+   ],
+   "median_ns": 49231.08944209575,
+   "spread": 0.0788875906603308,
+   "check": "1227",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH_ALL.records.clang++.after": {
+   "repetitions_ns": [
+    4161177.230767302,
+    4054188.249998493,
+    4090055.985506152,
+    4032419.5147049706,
+    4598051.144927487,
+    4098495.2040802524,
+    4167708.672412118,
+    4190174.8358207024,
+    4100221.1029408765,
+    4053823.4428562904
+   ],
+   "median_ns": 4099358.1535105645,
+   "spread": 0.14027102789276635,
+   "check": "538622505086372802",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH_ALL.records.clang++.before": {
+   "repetitions_ns": [
+    4140793.4153854656,
+    4210565.417910158,
+    4490783.927536356,
+    4325250.179105221,
+    4036422.333333648,
+    4215453.909089526,
+    4129938.2318838057,
+    4123642.865670942,
+    4267141.441175682,
+    4127329.5362316277
+   ],
+   "median_ns": 4175679.4166478114,
+   "spread": 0.11256542469565001,
+   "check": "538622505086372802",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH_ALL.records.g++-16.after": {
+   "repetitions_ns": [
+    3287157.499998598,
+    4073390.012048417,
+    3221511.547619251,
+    3236276.929414196,
+    3300068.3181812335,
+    3236123.195123826,
+    3328309.6172846947,
+    3270361.3373503536,
+    3350236.071428623,
+    3490764.565789935
+   ],
+   "median_ns": 3293612.9090899155,
+   "spread": 0.2644343972812133,
+   "check": "538622505086372802",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH_ALL.records.g++-16.before": {
+   "repetitions_ns": [
+    3271313.3709656238,
+    3236687.1839085747,
+    3308299.554216417,
+    3402083.717647282,
+    3184345.5454530944,
+    3425916.76190382,
+    3353290.8928572442,
+    3297784.6781616155,
+    3340270.301205566,
+    3636534.265061495
+   ],
+   "median_ns": 3324284.9277109914,
+   "spread": 0.14200365919900793,
+   "check": "538622505086372802",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH_ALL.twitter.clang++.after": {
+   "repetitions_ns": [
+    3624748.112500242,
+    3560881.199999244,
+    3476822.062501128,
+    3382990.3698629034,
+    3382130.8192771715,
+    3367529.1973682567,
+    3394373.4512177333,
+    3652976.9036142933,
+    3352828.714285005,
+    3349217.4533330402
+   ],
+   "median_ns": 3388681.910540318,
+   "spread": 0.09069564891313964,
+   "check": "397743604955695573",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH_ALL.twitter.clang++.before": {
+   "repetitions_ns": [
+    3350119.2142872633,
+    3397116.2439013096,
+    3894578.454547269,
+    3691200.123456176,
+    3645456.395063629,
+    3374936.3703694227,
+    3446492.0845045564,
+    3482610.3625022145,
+    3353316.073169414,
+    3574009.851850007
+   ],
+   "median_ns": 3464551.2235033857,
+   "spread": 0.1625193628746251,
+   "check": "397743604955695573",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH_ALL.twitter.g++-16.after": {
+   "repetitions_ns": [
+    2936354.586206536,
+    3281078.956522675,
+    3028094.500000697,
+    2977084.368419463,
+    2887783.4895837395,
+    3011073.0813962515,
+    2949264.885415914,
+    2985506.5979377613,
+    2934966.4333343147,
+    3119902.458332528
+   ],
+   "median_ns": 2981295.483178612,
+   "spread": 0.1361928511460626,
+   "check": "397743604955695573",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.MB_PATH_ALL.twitter.g++-16.before": {
+   "repetitions_ns": [
+    3236246.7708324515,
+    3006175.5425530216,
+    3069786.5066667874,
+    3527998.797100762,
+    3088807.119566987,
+    2889428.257731197,
+    2837270.85566967,
+    2930903.425531722,
+    2950910.022223575,
+    2842765.197916227
+   ],
+   "median_ns": 2978542.7823882983,
+   "spread": 0.24344800922013565,
+   "check": "397743604955695573",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.records.clang++.after": {
+   "repetitions_ns": [
+    316250.22630833025,
+    232755.50846025403,
+    232639.0866274955,
+    232874.8333333833,
+    231971.33866900712,
+    232619.23887984487,
+    241758.89735445144,
+    227778.9784945531,
+    274977.64747558977,
+    229090.84128274137
+   ],
+   "median_ns": 232697.29754387477,
+   "spread": 0.38840830878470545,
+   "check": "9492683289386141349",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.records.clang++.before": {
+   "repetitions_ns": [
+    236073.17255904313,
+    246204.2001953879,
+    238430.6057046078,
+    231551.65679018403,
+    234611.57948718325,
+    236497.5307496741,
+    231718.76522496558,
+    235196.9188256101,
+    238878.84308744624,
+    257621.44840525198
+   ],
+   "median_ns": 236285.35165435862,
+   "spread": 0.11258736809078673,
+   "check": "9492683289386141349",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.records.g++-16.after": {
+   "repetitions_ns": [
+    271880.99999982654,
+    269820.03044730134,
+    265297.4330783461,
+    290257.6210373117,
+    280021.2701524193,
+    271585.86489056185,
+    284281.87542084715,
+    270944.0618357052,
+    268333.66890573653,
+    269916.6945764317
+   ],
+   "median_ns": 271264.9633631335,
+   "spread": 0.09408378991588107,
+   "check": "9492683289386141349",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.records.g++-16.before": {
+   "repetitions_ns": [
+    281417.7558634476,
+    269451.00097937323,
+    275278.12644783413,
+    282215.86964992265,
+    265106.21559198265,
+    270375.19979402336,
+    274067.37416266435,
+    316430.12968736177,
+    311261.7934211932,
+    281557.9671497786
+   ],
+   "median_ns": 278347.9411556409,
+   "spread": 0.1935975510071415,
+   "check": "9492683289386141349",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.twitter.clang++.aa2": {
+   "repetitions_ns": [
+    167358.0196077719,
+    170761.01011304258,
+    159743.7770880478,
+    164162.9073083879,
+    158142.67942031607,
+    157628.16072433686,
+    160259.45785877714,
+    168310.14801655646,
+    164006.2107814151,
+    163667.9975443932
+   ],
+   "median_ns": 163837.10416290414,
+   "spread": 0.0833153754275715,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.twitter.clang++.after": {
+   "repetitions_ns": [
+    162429.227663883,
+    159371.46849480097,
+    171651.59926699125,
+    162375.95823672763,
+    165871.9235781917,
+    162704.13194026548,
+    163226.00660263197,
+    166406.80528425158,
+    196176.88145694803,
+    166014.85508980698
+   ],
+   "median_ns": 164548.96509041183,
+   "spread": 0.23094104176713248,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.twitter.clang++.before": {
+   "repetitions_ns": [
+    170972.66489676322,
+    168302.4259542949,
+    167665.50399999967,
+    159609.05714278592,
+    160010.96338673995,
+    170388.82437895788,
+    162279.3824378857,
+    161044.0437283671,
+    169205.74554391962,
+    167253.05197872355
+   ],
+   "median_ns": 167459.2779893616,
+   "spread": 0.07119650950516832,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.twitter.g++-16.aa2": {
+   "repetitions_ns": [
+    204323.63504707787,
+    204816.81000001117,
+    201913.42150529084,
+    215840.094594444,
+    196182.45663092422,
+    214343.9266347107,
+    201378.05210563066,
+    210768.1939999111,
+    195540.77762238635,
+    203229.47799991196
+   ],
+   "median_ns": 203776.55652349492,
+   "spread": 0.10381117032917886,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.twitter.g++-16.after": {
+   "repetitions_ns": [
+    265922.58046618174,
+    205975.801785639,
+    211246.40823444945,
+    214593.88429118713,
+    203605.34899987213,
+    231634.9820000596,
+    230337.867747497,
+    197447.69694817287,
+    198850.485380172,
+    204600.1769999748
+   ],
+   "median_ns": 208611.10501004424,
+   "spread": 0.3468001125178104,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  },
+  "rt.READ.twitter.g++-16.before": {
+   "repetitions_ns": [
+    237002.95412845523,
+    200516.0320656684,
+    207313.3882259669,
+    202187.16163797048,
+    220124.02263200254,
+    201731.98999987106,
+    218910.6289999927,
+    202090.92425345132,
+    200434.8600000867,
+    202454.64000004175
+   ],
+   "median_ns": 202320.9008190061,
+   "spread": 0.1824437831241168,
+   "check": "11743431291459513190",
+   "context": {
+    "check_source": null,
+    "bytes_mb": null,
+    "bytes_fb": null,
+    "bytes_cp": null,
+    "library_build_type": "release",
+    "cpu_scaling_enabled": false
+   }
+  }
+ }
+}
