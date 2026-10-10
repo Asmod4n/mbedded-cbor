@@ -731,6 +731,45 @@ TEST_CASE("path: a moved owning_ref keeps no view")
     CHECK_EQ(**source, "xyz"sv);
 }
 
+namespace
+{
+
+template <class R>
+concept owning_ref_compares = requires(R const &r) { r == r; };
+
+template <class R>
+concept rvalue_dereferences = requires(R &&r) { *std::move(r); };
+
+template <class R>
+concept rvalue_reaches_member = requires(R &&r) { std::move(r).operator->(); };
+
+template <class R>
+concept lvalue_reaches_member = requires(R const &r) { r.operator->(); };
+
+} // namespace
+
+// std::optional compares its value with == and reaches its members with ->. An owning_ref does the same, so a caller
+// compares a view without *. The lvalue rule of * and -> stays: a view from a temporary does not compile.
+TEST_CASE("path: owning_ref compares and reaches its value as std::optional does")
+{
+    auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x63xyz\x61\x62\x63xyz"s);
+    auto const a = *cbor::at_path<"$.a", std::string_view>(owner, *owner);
+    auto const b = *cbor::at_path<"$.b", std::string_view>(owner, *owner);
+    CHECK(a == "xyz"sv);
+    CHECK("xyz"sv == a);
+    CHECK(a != "xy"sv);
+    CHECK(a == "xyz");
+    CHECK(a == b);
+    CHECK_FALSE(a != b);
+    CHECK_EQ(a->size(), 3uz);
+    std::optional<std::string_view> const o = "xyz"sv;
+    CHECK_EQ(a == "xyz"sv, o == "xyz"sv);
+    CHECK_FALSE(owning_ref_compares<cbor::owning_ref<cbor::typed_array>>);
+    CHECK_FALSE(rvalue_dereferences<cbor::owning_ref<std::string_view>>);
+    CHECK_FALSE(rvalue_reaches_member<cbor::owning_ref<std::string_view>>);
+    CHECK(lvalue_reaches_member<cbor::owning_ref<std::string_view>>);
+}
+
 // RFC 8949 3: a data item has at least its initial byte, and an argument or a string has as many bytes as its head
 // says. A message that ends before is too little data, at the target and in a sibling that the walk skips.
 TEST_CASE("path: a typed read of a message that ends too early")
