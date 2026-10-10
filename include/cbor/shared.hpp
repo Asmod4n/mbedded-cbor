@@ -45,26 +45,39 @@ class value_sharing
 
     struct decoded_items;
 
+    template <bool Checked>
     struct sharing_decoder;
 
+    template <bool Checked>
     struct resolved;
 
-    static std::expected<std::size_t, error> shared_resolve(top_level_item &top_level, std::size_t at);
+    template <bool Checked>
+    static std::expected<std::size_t, error> shared_resolve(top_level_item &top_level, std::size_t at,
+                                                            validity::limit_checks<Checked> checks);
 
-    static std::expected<item *, error> item_resolve(decoded_items &decoded, std::size_t at);
+    template <bool Checked>
+    static std::expected<item *, error> item_resolve(decoded_items &decoded, std::size_t at,
+                                                     validity::limit_checks<Checked> checks);
 
-    static std::expected<std::pair<item *, std::size_t>, error> item_decode(decoded_items &decoded, std::size_t at,
-                                                                           std::size_t depth, std::size_t depth_max);
+    template <bool Checked>
+    static std::expected<std::pair<item *, std::size_t>, error>
+    item_decode(decoded_items &decoded, std::size_t at, std::size_t depth, std::size_t depth_max,
+                validity::limit_checks<Checked> checks);
 
-    static std::expected<resolved, error> container_resolve(std::shared_ptr<top_level_item> source, std::size_t offset);
+    template <bool Checked>
+    static std::expected<resolved<Checked>, error> container_resolve(std::shared_ptr<top_level_item> source,
+                                                                     std::size_t offset,
+                                                                     validity::limit_checks<Checked> checks);
 
-    template <class Key, class Entries = lazy_entries>
+    template <class Key, class Entries = lazy_entries, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<typename Entries::iterator, error> key_find(resolved found, Key key);
+    static std::expected<typename Entries::iterator, error> key_find(resolved<Checked> found, Key key,
+                                                                     limit_values loaded);
 
-    template <bool Sorted, class Iterator, class Last, class Key>
+    template <bool Sorted, class Iterator, class Last, class Key, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<std::pair<Iterator, bool>, error> key_find(Iterator first, Last last, Key key);
+    static std::expected<std::pair<Iterator, bool>, error> key_find(Iterator first, Last last, Key key,
+                                                                    validity::limit_checks<Checked> checks);
 
     template <class Iterator>
     static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
@@ -120,8 +133,9 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         }
 
     private:
-        iterator(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const l)
-            : top_level(std::move(t)), offset(o), left(l)
+        iterator(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const l,
+                 limit_values const v)
+            : top_level(std::move(t)), offset(o), left(l), loaded(v)
         {
         }
 
@@ -129,13 +143,14 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         std::size_t offset{};
         std::uint64_t left{};
         error failure{};
+        limit_values loaded{};
 
         friend struct lazy_elements;
     };
 
     iterator begin() const
     {
-        return iterator{top_level, offset, count};
+        return iterator{top_level, offset, count, loaded};
     }
 
     std::default_sentinel_t end() const
@@ -151,14 +166,16 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     void front() const = delete;
 
 private:
-    lazy_elements(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const c)
-        : top_level(std::move(t)), offset(o), count(c)
+    lazy_elements(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o,
+                  std::uint64_t const c, limit_values const v)
+        : top_level(std::move(t)), offset(o), count(c), loaded(v)
     {
     }
 
     std::shared_ptr<value_sharing::top_level_item> top_level;
     std::size_t offset;
     std::uint64_t count;
+    limit_values loaded;
 
     friend struct lazy;
 };
@@ -190,8 +207,9 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         }
 
     private:
-        iterator(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const k, std::uint64_t const l)
-            : top_level(std::move(t)), key(k), value(k), left(l)
+        iterator(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const k, std::uint64_t const l,
+                 limit_values const v)
+            : top_level(std::move(t)), key(k), value(k), left(l), loaded(v)
         {
             value_find();
         }
@@ -203,6 +221,7 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         std::size_t value{};
         std::uint64_t left{};
         error failure{};
+        limit_values loaded{};
 
         friend struct lazy_entries;
 
@@ -213,7 +232,7 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
 
     iterator begin() const
     {
-        return iterator{top_level, offset, count};
+        return iterator{top_level, offset, count, loaded};
     }
 
     std::default_sentinel_t end() const
@@ -229,14 +248,16 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     void front() const = delete;
 
 private:
-    lazy_entries(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const c)
-        : top_level(std::move(t)), offset(o), count(c)
+    lazy_entries(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const c,
+                 limit_values const v)
+        : top_level(std::move(t)), offset(o), count(c), loaded(v)
     {
     }
 
     std::shared_ptr<value_sharing::top_level_item> top_level;
     std::size_t offset;
     std::uint64_t count;
+    limit_values loaded;
 
     friend struct lazy;
 };
@@ -310,6 +331,26 @@ struct lazy {
     std::expected<lazy_entries, error> entries() const;
 
     std::expected<std::shared_ptr<item const>, error> decode() const;
+
+private:
+    static std::expected<lazy, error> from(std::shared_ptr<void const> owner, std::string_view encoded,
+                                           limit_values loaded);
+
+    std::expected<lazy_entries::iterator, error> find(std::string_view key, limit_values loaded) const;
+
+    std::expected<lazy_entries::iterator, error> find(std::int64_t key, limit_values loaded) const;
+
+    template <class T>
+    auto get(limit_values loaded) const;
+
+    std::expected<lazy_elements, error> elements(limit_values loaded) const;
+
+    std::expected<lazy_entries, error> entries(limit_values loaded) const;
+
+    template <class F>
+    decltype(auto) limits_apply(limit_values loaded, F &&f) const;
+
+    friend class jsonpath;
 };
 
 }
@@ -335,7 +376,7 @@ struct value_sharing::top_level_item {
     std::vector<lazy> const &sharedrefs_read()
     {
         std::call_once(sharedrefs_built, [this] {
-            heads::decoder all{encoded};
+            heads::decoder<false> all{encoded, validity::limit_checks<false>{}};
             std::uint64_t pending = 1;
             while (pending != 0) {
                 --pending;
@@ -370,7 +411,8 @@ struct value_sharing::top_level_item {
         return sharedrefs;
     }
 
-    std::size_t mark(heads::decoder const &at)
+    template <bool Checked>
+    std::size_t mark(heads::decoder<Checked> const &at)
     {
         std::size_t const offset = encoded.size() - at.encoded.size();
         if (offset > high_water_mark) {
@@ -382,8 +424,10 @@ struct value_sharing::top_level_item {
         return static_cast<std::size_t>(std::ranges::distance(sharedrefs.begin(), known));
     }
 
-    static std::expected<lazy, error> sharedref_decode(heads::decoder &d, std::size_t const reference_at,
-                                                       std::size_t const item_at, std::vector<lazy> const &marks)
+    template <bool Checked>
+    static std::expected<lazy, error>
+    sharedref_decode(heads::decoder<Checked> &d, std::size_t const reference_at, std::size_t const item_at,
+                     std::vector<lazy> const &marks)
     {
         auto const n = d.head_decode();
         if (!n) [[unlikely]]
@@ -410,14 +454,15 @@ struct value_sharing::decoded_items {
     std::deque<item> items{};
     std::vector<std::pair<std::size_t, item *>> item_offsets{};
 
-    std::expected<item *, error> entry(std::size_t const offset)
+    template <bool Checked>
+    std::expected<item *, error> entry(std::size_t const offset, validity::limit_checks<Checked> const checks)
     {
         auto const known = item_offsets.empty() || item_offsets.back().first < offset
                                ? item_offsets.end()
                                : std::ranges::lower_bound(item_offsets, offset, {}, &std::pair<std::size_t, item *>::first);
         if (known != item_offsets.end() && known->first == offset)
             return known->second;
-        auto const h = heads::raw_head_read(top_level->encoded, offset);
+        auto const h = heads::raw_head_read(top_level->encoded, offset, checks);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         item &placeholder = items.emplace_back(item{h->major, h->info, h->argument, lazy{{}, offset}});
@@ -426,21 +471,25 @@ struct value_sharing::decoded_items {
     }
 };
 
-struct value_sharing::sharing_decoder : heads::decoder {
+template <bool Checked>
+struct value_sharing::sharing_decoder : heads::decoder<Checked> {
     top_level_item message;
 };
 
+template <bool Checked>
 struct value_sharing::resolved {
     std::shared_ptr<top_level_item> source;
     heads::head h;
-    heads::decoder d;
+    heads::decoder<Checked> d;
 };
 
-inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &top_level, std::size_t at)
+template <bool Checked>
+std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &top_level, std::size_t at,
+                                                                validity::limit_checks<Checked> const checks)
 {
     std::size_t item_at = at;
     for (;;) {
-        auto const h = heads::raw_head_read(top_level.encoded, at);
+        auto const h = heads::raw_head_read(top_level.encoded, at, checks);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         if (h->major != major_type::tag)
@@ -452,7 +501,7 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level
         }
         if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
             return at;
-        heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
+        heads::decoder<Checked> d{std::string_view(std::span(top_level.encoded).subspan(h->at)), checks};
         auto const found = top_level_item::sharedref_decode(d, at, item_at, top_level.sharedrefs_read());
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
@@ -461,29 +510,33 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level
     }
 }
 
-inline std::expected<item *, error> value_sharing::item_resolve(decoded_items &decoded, std::size_t const at)
+template <bool Checked>
+std::expected<item *, error> value_sharing::item_resolve(decoded_items &decoded, std::size_t const at,
+                                                         validity::limit_checks<Checked> const checks)
 {
-    auto const node = shared_resolve(*decoded.top_level, at);
+    auto const node = shared_resolve(*decoded.top_level, at, checks);
     if (!node) [[unlikely]]
         return std::unexpected(node.error());
-    return decoded.entry(*node);
+    return decoded.entry(*node, checks);
 }
 
-inline std::expected<value_sharing::resolved, error> value_sharing::container_resolve(std::shared_ptr<top_level_item> source,
-                                                                                      std::size_t offset)
+template <bool Checked>
+std::expected<value_sharing::resolved<Checked>, error>
+value_sharing::container_resolve(std::shared_ptr<top_level_item> source, std::size_t offset,
+                                 validity::limit_checks<Checked> const checks)
 {
     validity::throw_logic_error_if_null(source, "cbor::lazy: the lazy holds no top-level item");
     for (;;) {
-        auto const at = shared_resolve(*source, offset);
+        auto const at = shared_resolve(*source, offset, checks);
         if (!at) [[unlikely]]
             return std::unexpected(at.error());
-        heads::decoder d{std::string_view(std::span(source->encoded).subspan(*at))};
+        heads::decoder<Checked> d{std::string_view(std::span(source->encoded).subspan(*at)), checks};
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         if (h->major != major_type::tag ||
             h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
-            return resolved{source, *h, d};
+            return resolved<Checked>{source, *h, d};
         auto const r = d.head_decode();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
@@ -503,10 +556,11 @@ inline std::expected<value_sharing::resolved, error> value_sharing::container_re
 namespace cbor
 {
 
-template <class First, class Second>
+template <class First, class Second, bool Checked>
 std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t const first_at, Second &second,
                                                      std::size_t const second_at, std::size_t const depth,
-                                                     std::size_t const depth_max)
+                                                     std::size_t const depth_max,
+                                                     limit_checks<Checked> const checks)
 {
     if (auto const r = check_nesting_depth(depth, depth_max); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -516,14 +570,14 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
         else
             return message.encoded;
     };
-    auto const resolve = []<class Message>(Message &message,
-                                           std::size_t const at) -> std::expected<std::size_t, error> {
+    auto const resolve = [checks]<class Message>(Message &message,
+                                                 std::size_t const at) -> std::expected<std::size_t, error> {
         if constexpr (std::same_as<Message, std::string_view const>)
             return at;
         else
-            return value_sharing::shared_resolve(message, at);
+            return value_sharing::shared_resolve(message, at, checks);
     };
-    auto const skip = [](heads::decoder &d) {
+    auto const skip = [](heads::decoder<Checked> &d) {
         well_formedness::no_marks none;
         return well_formedness::item_skip(d, none);
     };
@@ -535,10 +589,10 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
     auto const y = resolve(second, second_at);
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
-    auto const h = heads::raw_head_read(a, *x);
+    auto const h = heads::raw_head_read(a, *x, checks);
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    auto const k = heads::raw_head_read(b, *y);
+    auto const k = heads::raw_head_read(b, *y, checks);
     if (!k) [[unlikely]]
         return std::unexpected(k.error());
     if (error const c = check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
@@ -553,11 +607,11 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
         return h->argument == k->argument;
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder d{std::string_view(std::span(a).subspan(h->at))};
+        heads::decoder<Checked> d{std::string_view(std::span(a).subspan(h->at)), checks};
         auto const s = d.byte_string_decode(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
-        heads::decoder e{std::string_view(std::span(b).subspan(k->at))};
+        heads::decoder<Checked> e{std::string_view(std::span(b).subspan(k->at)), checks};
         auto const t = e.byte_string_decode(k->argument);
         if (!t) [[unlikely]]
             return std::unexpected(t.error());
@@ -566,11 +620,11 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
     case major_type::array: {
         if (h->argument != k->argument)
             return false;
-        heads::decoder d{std::string_view(std::span(a).subspan(h->at))};
-        heads::decoder e{std::string_view(std::span(b).subspan(k->at))};
+        heads::decoder<Checked> d{std::string_view(std::span(a).subspan(h->at)), checks};
+        heads::decoder<Checked> e{std::string_view(std::span(b).subspan(k->at)), checks};
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             auto const equal = keys_equivalent(first, a.size() - d.encoded.size(), second,
-                                                         b.size() - e.encoded.size(), depth + 1, depth_max);
+                                               b.size() - e.encoded.size(), depth + 1, depth_max, checks);
             if (!equal || !*equal)
                 return equal;
             if (auto const r = skip(d); !r) [[unlikely]]
@@ -589,7 +643,7 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
                                                              std::size_t const in_at)
             -> std::expected<std::uint64_t, error> {
             std::uint64_t count = 0;
-            heads::decoder e{std::string_view(std::span(in_encoded).subspan(in_at))};
+            heads::decoder<Checked> e{std::string_view(std::span(in_encoded).subspan(in_at)), checks};
             for (std::uint64_t j = 0; j < h->argument; ++j) {
                 std::size_t const other = in_encoded.size() - e.encoded.size();
                 if (auto const r = skip(e); !r) [[unlikely]]
@@ -597,19 +651,20 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
                 std::size_t const other_value = in_encoded.size() - e.encoded.size();
                 if (auto const r = skip(e); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                auto const key_same = keys_equivalent(from, key, in, other, depth + 1, depth_max);
+                auto const key_same = keys_equivalent(from, key, in, other, depth + 1, depth_max, checks);
                 if (!key_same) [[unlikely]]
                     return std::unexpected(key_same.error());
                 if (!*key_same)
                     continue;
-                auto const value_same = keys_equivalent(from, value, in, other_value, depth + 1, depth_max);
+                auto const value_same =
+                    keys_equivalent(from, value, in, other_value, depth + 1, depth_max, checks);
                 if (!value_same) [[unlikely]]
                     return std::unexpected(value_same.error());
                 count += *value_same;
             }
             return count;
         };
-        heads::decoder d{std::string_view(std::span(a).subspan(h->at))};
+        heads::decoder<Checked> d{std::string_view(std::span(a).subspan(h->at)), checks};
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             std::size_t const key = a.size() - d.encoded.size();
             if (auto const r = skip(d); !r) [[unlikely]]
@@ -631,7 +686,7 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
     case major_type::tag:
         if (h->argument != k->argument)
             return false;
-        return keys_equivalent(first, h->at, second, k->at, depth + 1, depth_max);
+        return keys_equivalent(first, h->at, second, k->at, depth + 1, depth_max, checks);
     case major_type::simple_float:
         break;
     }
@@ -654,10 +709,11 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
     return p.value == q.value;
 }
 
-template <class Message>
-std::expected<void, error> validity::check_sorted_keys_unique(Message &message, std::size_t const first_key,
-                                                              std::uint64_t const count, std::size_t const depth,
-                                                              std::size_t const depth_max)
+template <class Message, bool Checked>
+std::expected<void, error>
+validity::check_sorted_keys_unique(Message &message, std::size_t const first_key, std::uint64_t const count,
+                                   std::size_t const depth, std::size_t const depth_max,
+                                   limit_checks<Checked> const checks)
 {
     std::string_view encoded;
     if constexpr (std::same_as<Message, std::string_view const>)
@@ -665,12 +721,12 @@ std::expected<void, error> validity::check_sorted_keys_unique(Message &message, 
     else
         encoded = message.encoded;
     well_formedness::no_marks marks;
-    heads::decoder walk{std::string_view(std::span(encoded).subspan(first_key))};
+    heads::decoder<Checked> walk{std::string_view(std::span(encoded).subspan(first_key)), checks};
     std::size_t previous = 0;
     for (std::uint64_t i = 0; i < count; ++i) {
         std::size_t const key = encoded.size() - walk.encoded.size();
         if (i != 0) {
-            auto const equal = keys_equivalent(message, previous, message, key, depth, depth_max);
+            auto const equal = keys_equivalent(message, previous, message, key, depth, depth_max, checks);
             if (!equal) [[unlikely]]
                 return std::unexpected(equal.error());
             if (error const c = check_key_unique(*equal).error_or(error{}); c != error{}) [[unlikely]]

@@ -63,7 +63,8 @@ TEST_CASE("nesting depth limit: check_sorted_keys_unique")
         std::string const map =
             "\xa2"s + arrays_around(n, "\x00"sv) + "\x00"s + arrays_around(n, "\x01"sv) + "\x00"s;
         std::string_view const encoded = map;
-        return cbor::validity::check_sorted_keys_unique(encoded, 1, 2, 1, limit);
+        return cbor::validity::check_sorted_keys_unique(encoded, 1, 2, 1, limit,
+                                                        cbor::validity::limit_checks<false>{});
     };
     CHECK(checked(limit - 1).has_value());
     CHECK_EQ(checked(limit).error(), error::nesting_depth_exceeded);
