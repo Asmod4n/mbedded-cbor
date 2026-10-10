@@ -46,7 +46,7 @@ TEST_CASE("doc basics: a wrong use throws std::logic_error")
 // The section "The error values" gives one example for the errors that a lazy gives most often.
 TEST_CASE("doc basics: the error values")
 {
-    CHECK_EQ(cbor::lazy::from("\x82\x01"s)->at(1)->get<int>().error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::from("\x82\x01"s)->at(1).error(), error::too_little_data);
     CHECK_EQ(cbor::lazy::from("\x9f\x01\xff"s)->at(0).error(), error::indefinite_length);
     CHECK_EQ(cbor::lazy::from("\xa1\x61" "a\x01"s)->at("b").error(), error::key_not_found);
     CHECK_EQ(cbor::lazy::from("\x01"s)->at(0).error(), error::not_indexable);

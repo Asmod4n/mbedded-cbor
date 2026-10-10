@@ -1506,3 +1506,15 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 resolves in one step")
         ones += e.and_then([](cbor::lazy const &x) { return x.get<std::int64_t>(); }).value_or(0) == 1;
     CHECK_EQ(ones, n);
 }
+
+// A step into an element that is not in the input gave a lazy with no
+// error, and the error came only from the next read. A caller that
+// checked only the step went on with a value that does not exist. The
+// step now reads the head of its target and gives too_little_data.
+TEST_CASE("lazy: a step to an element past the end of the input fails at once")
+{
+    CHECK_EQ(cbor::lazy::from(std::string("\x82\x01", 2))->at(std::size_t{1}).error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::from(std::string("\xa1\x61k", 3))->at("k").error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::from(std::string("\xa1\x01", 2))->at(cbor::key{1}).error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::from(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1}).error(), error::too_little_data);
+}
