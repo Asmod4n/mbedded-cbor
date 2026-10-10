@@ -21,6 +21,7 @@ the code and the tests, branch limits-at-no-cost.
 | A lazy belongs to one thread. | Decided | The marks grow with no lock. Thread safety is the job of the application. |
 | cbor::transfer hands a lazy to another thread. | Decided | Only a lazy that nothing else shares. Names are provisional. |
 | A debug build throws std::logic_error on a foreign thread. | Decided | A release build does not check. cbor::is_thread_bound_v and is_sendable_v state it in the type. |
+| owning_ref has == with T and with owning_ref, and -> to the members of T. * and -> refuse an rvalue. | Decided | The owner, 2026-10-10: as std::optional does. The rvalue rule stays. |
 | lazy::decode through expected<lazy>::operator-> on a temporary gives a dangling reference. | Open | No overload sees the temporary. |
 | A view outlives its owner in two forms with std::expected. | Open | Not closed. typed_array_view and schema::accessor keep their view after a move. |
 | at_path(owner, encoded) does not check that the owner holds the bytes. | Open | An overload on std::shared_ptr<std::string const> would close it. The owner decides. |
