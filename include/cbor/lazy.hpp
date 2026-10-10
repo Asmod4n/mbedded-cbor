@@ -534,6 +534,13 @@ auto lazy::get(limit_values const loaded) const
                 T const magnitude = static_cast<T>(argument);
                 return static_cast<T>(negative ? ~magnitude : magnitude);
             } else if constexpr (std::is_same_v<T, double>) {
+                if (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) {
+                    bool const negative = h.major == major_type::negative_integer;
+                    if (error const c = validity::check_number_range<double>(negative, h.argument).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::unexpected(c);
+                    return negative ? -1.0 - static_cast<double>(h.argument) : static_cast<double>(h.argument);
+                }
                 if (h.major != major_type::simple_float) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
                 switch (static_cast<rfc8949::simple_float_information>(h.info)) {
