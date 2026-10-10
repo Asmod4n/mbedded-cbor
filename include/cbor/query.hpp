@@ -701,9 +701,8 @@ class jsonpath
                 auto const position = validity::check_index(each.index, h.argument);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
-                for (std::uint64_t i = 0; i < *position; ++i)
-                    if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]]
-                        return std::unexpected(r.error());
+                if (auto const r = well_formedness::items_skip(d, *position); !r) [[unlikely]]
+                    return std::unexpected(r.error());
                 continue;
             }
             if (each.kind == selector::kind::index && h.major == major_type::tag &&
@@ -771,10 +770,10 @@ class jsonpath
                             (k->major == major_type::negative_integer && each.index < 0 &&
                              k->argument == static_cast<std::uint64_t>(-1 - each.index));
                 }
-                if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]]
+                if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (!found)
-                    if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]]
+                    if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                         return std::unexpected(r.error());
             }
             if (!found) [[unlikely]]
@@ -1117,9 +1116,8 @@ inline std::expected<lazy, error> jsonpath::index_select(lazy const &node, std::
             auto const position = validity::check_index(index, h.argument);
             if (!position) [[unlikely]]
                 return std::unexpected(position.error());
-            for (std::uint64_t i = 0; i < *position; ++i)
-                if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]]
-                    return std::unexpected(r.error());
+            if (auto const r = well_formedness::items_skip(d, *position); !r) [[unlikely]]
+                return std::unexpected(r.error());
             std::size_t const element = source->encoded.size() - d.encoded.size();
             return lazy{source, element};
         });
@@ -1144,7 +1142,7 @@ inline std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::stri
                 return std::unexpected(error::not_indexable);
             for (std::uint64_t i = 0; i < h.argument; ++i) {
                 std::size_t const start = source->encoded.size() - d.encoded.size();
-                if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]]
+                if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 auto const match =
                     validity::keys_equivalent(*source, start, key, 0, 0, loaded.nesting_depth, checks);
@@ -1152,7 +1150,7 @@ inline std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::stri
                     return std::unexpected(match.error());
                 if (*match)
                     return lazy{source, source->encoded.size() - d.encoded.size()};
-                if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]]
+                if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
             }
             return std::unexpected(error::key_not_found);
