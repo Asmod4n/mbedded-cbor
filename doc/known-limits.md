@@ -22,8 +22,18 @@ the code and the tests, branch limits-at-no-cost.
 | cbor::transfer hands a lazy to another thread. | Decided | Only a lazy that nothing else shares. Names are provisional. |
 | A debug build throws std::logic_error on a foreign thread. | Decided | A release build does not check. cbor::is_thread_bound_v and is_sendable_v state it in the type. |
 | lazy::decode through expected<lazy>::operator-> on a temporary gives a dangling reference. | Open | No overload sees the temporary. |
+| schema::path(encoded)->at_path<"$.list">() on a temporary gives an accessor that reads freed bytes. | Open | The accessor of a list holds no owner. operator-> of a temporary std::expected gives an lvalue, so the lvalue check of at_path does not see it. gcc-asan found it in test/doc_path.cpp. |
 | A view outlives its owner in two forms with std::expected. | Open | Not closed. typed_array_view and schema::accessor keep their view after a move. |
-| at_path(owner, encoded) trusts the owner. | Open | An overload on std::shared_ptr<std::string const> would close it. The owner decides. |
+| at_path(owner, encoded) does not check that the owner holds the bytes. | Open | An overload on std::shared_ptr<std::string const> would close it. The owner decides. |
+
+## Paths
+
+| Limit | Status | Cause and where it is decided |
+|---|---|---|
+| A path takes an EDN literal in brackets and in a filter, at compile time and at run time. 12 cases that the JSONPath Compliance Test Suite calls invalid are valid EDN and are accepted. | Decided | One parser in query.hpp. test/cts.cpp lists the 12 cases. |
+| A typed read with a key that is not a text reads through a lazy, and the form over bytes then allocates. | Open | The walk over bytes compares text keys only. test/allocation.cpp records it. |
+| The bytes form and lazy::from do not read the bytes after the target. A truncated or trailing part is not found. | Open | A path reads heads up to the target only. doc/path.md section 10. |
+| No int/float conversion in a typed read. $[-1] on a map is the key -1. A tag other than 2, 3, 24, 28, 29, 55799 and the RFC 8746 tags stops the walk. A skipped item counts against the limits. The nesting depth of a binding result counts from the node. match() and search() are refused. | Open | The owner decides. doc/path.md describes each. |
 
 ## Floats
 
@@ -69,7 +79,6 @@ the code and the tests, branch limits-at-no-cost.
 | Keys 2(h'01') and 1 are distinct by RFC 8949 5.6.1, but decode turns both into 1. | Open | Not tested for databind with std::map. |
 | validity::check_sorted_keys_unique has no caller. | Open | Written before the profile used it. |
 | Simple values 24 to 31 are refused. | Decided | validity::check_simple_value. |
-| Tag 55799 inside tag 24 is not skipped. | Open | Cost not measured. |
 | Tag 24: the place of the top-level item of the embedded item is not decided. | Open | |
 
 ## Cost
