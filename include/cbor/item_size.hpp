@@ -91,6 +91,16 @@ class well_formedness
         return {};
     }
 
+    template <bool Checked>
+    static std::expected<void, error> item_skip(heads::decoder<Checked> &d)
+    {
+        heads::decoder<false> unlimited{d.encoded, validity::limit_checks<false>{}};
+        no_marks none;
+        auto const r = item_skip(unlimited, none);
+        d.encoded = unlimited.encoded;
+        return r;
+    }
+
     template <bool Checked, class Marks>
         requires requires(Marks &m, heads::decoder<Checked> const &at, std::size_t depth) {
             m.mark(at, depth);

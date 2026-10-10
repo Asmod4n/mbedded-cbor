@@ -489,8 +489,8 @@ limits once at each call.
 | Limit | Default | What a path does |
 |---|---|---|
 | `nesting_depth` | 128, bound 512 | See below. |
-| `string_length` | `SIZE_MAX` | Every string head that the walk reads is checked, also in a pair it only skips. |
-| `container_elements` | `SIZE_MAX` | Every array and map head that the walk reads is checked, also on the way. |
+| `string_length` | `SIZE_MAX` | Every string that the walk reads is checked: a key it compares and the target. A string that it only skips does not count. |
+| `container_elements` | `SIZE_MAX` | Every array and map that the walk reads is checked: the containers on the way and the target. A container that it only skips does not count. |
 | `input_bytes` | `SIZE_MAX` | The typed forms over bytes and `lazy::from` check the size of the bytes they get. A read from a lazy that exists does not check it again. |
 
 The default of `nesting_depth` is the macro `CBOR_NESTING_DEPTH_DEFAULT`,
@@ -510,11 +510,17 @@ nesting depth of segments, or it does not compile.
 
 ```cpp
 cbor::limits = {.string_length = 2};
-cbor::at_path<"$.n", int>(/* {"long": "xyz", "n": 1} */);   // string_length_exceeded
+cbor::at_path<"$.n", int>(/* {"long": "xyz", "n": 1} */);   // string_length_exceeded, the key "long" is read
+cbor::at_path<"$.n", int>(/* {"a": "xyz", "n": 1} */);      // 1, "xyz" is only skipped
+cbor::at_path<"$.a", std::string_view>(/* same */);         // string_length_exceeded
 ```
 
-So a limit protects a path also from a large item next to the target. A
-skipped item counts against the limits.
+The limits count only what a path or a lazy reads or decodes. An item that
+it only skips does not count, and this holds for the iterators of
+`elements()` and `entries()` too. A skip stays safe: it reads heads only, it
+jumps over the content of a string, and it stops with `too_little_data` when
+the item claims more than the bytes that are left. `item_size`, `decode`
+and `lazy_decode` read every head, so every head counts there.
 
 ## 12. Cost
 
