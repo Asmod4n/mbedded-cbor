@@ -121,6 +121,38 @@ TEST_CASE("doc path: schema at_path")
     CHECK_EQ(*root->at_path<"$.make">(), "kia"sv);
 }
 
+struct [[=cbor::tag(1702)]] doc_log {
+    std::vector<std::uint16_t> readings;
+};
+
+// The section "A path over a schema message" states which results the static form refuses, that the accessor reads
+// a path relative to its node with @ and only as an lvalue, that path(std::string_view) copies the bytes, and that a
+// typed array gives one element.
+TEST_CASE("doc path: schema at_path in detail")
+{
+    auto const bytes = *cbor::schema<doc_car>::encode(doc_car{"kia", {120, 1600}, {{90, 1200}, {75, 1000}}});
+    CHECK_FALSE(([]<class S>(S const &) { return requires(std::string_view v) { S::template at_path<"$.make">(v); }; }(cbor::schema<doc_car>{})));
+    CHECK_FALSE(([]<class S>(S const &) { return requires(std::string_view v) { S::template at_path<"$.spares">(v); }; }(cbor::schema<doc_car>{})));
+    auto const owner = std::make_shared<std::string const>(bytes);
+    auto root = *cbor::schema<doc_car>::path(owner, *owner);
+    auto const motor = root.at_path<"$.motor">();
+    REQUIRE(motor.has_value());
+    CHECK_EQ(*motor->at_path<"@.cc">(), 1600u);
+    CHECK_FALSE(([]<class R>(R &r) { return requires { std::move(r).template at_path<"$.make">(); }; }(root)));
+    std::string temp = bytes;
+    auto const copied = cbor::schema<doc_car>::path(std::string_view(temp));
+    temp.assign(temp.size(), '\0');
+    REQUIRE(copied.has_value());
+    CHECK_EQ(*copied->at_path<"$.make">(), "kia"sv);
+    auto const log = *cbor::schema<doc_log>::encode(doc_log{{7, 8, 9}});
+    CHECK_EQ(cbor::schema<doc_log>::at_path<"$.readings[1]">(log), 8u);
+    CHECK_EQ(cbor::schema<doc_log>::at_path<"$.readings[]">(log, 2uz), 9u);
+    CHECK_EQ(cbor::schema<doc_log>::at_path<"$.readings[]">(log, 3uz).error(), error::index_out_of_bounds);
+    auto const readings = cbor::schema<doc_log>::path(log)->at_path<"$.readings">();
+    REQUIRE(readings.has_value());
+    CHECK_EQ(*readings->at_path<"@[1]">(), 8u);
+}
+
 #endif
 
 // The section "Which types a typed read gives" shows the allowed types, the conversions that are refused and
@@ -135,6 +167,12 @@ TEST_CASE("doc path: the types of a typed read")
     CHECK_EQ(cbor::at_path<"$", std::uint64_t>("\xc2\x42\x01\x00"s), 256u);
     CHECK_EQ(cbor::at_path<"$", std::nullptr_t>(encoded(V(simple{22}))), nullptr);
     CHECK_EQ(cbor::at_path<"$", cbor::simple_value>("\xf8\x63"s), cbor::simple_value{99});
+    CHECK_EQ(cbor::at_path<"$", cbor::simple_value>("\xf5"s), cbor::simple_value{21});
+    CHECK_EQ(cbor::at_path<"$", cbor::simple_value>("\xf6"s), cbor::simple_value{22});
+    CHECK_EQ(cbor::at_path<"$", char>(encoded(V(65))), 'A');
+    CHECK_EQ(cbor::at_path<"$", int>("\xc3\x41\x01"s), -2);
+    CHECK_EQ(cbor::at_path<"$", int>("\xc1\x05"s).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$", std::string_view>(*cbor::lazy::from("\xd8\x20\x61x"s)).error(), error::incorrect_type);
     CHECK_FALSE((doc_typed_path_compiles<"$", float>));
     CHECK_FALSE((doc_typed_path_compiles<"$", std::string>));
     CHECK_FALSE((doc_typed_path_compiles<"$", std::string_view>));
@@ -304,4 +342,183 @@ TEST_CASE("doc path: a lazy in another thread")
                  cbor::transfer(*cbor::lazy::from(encoded(A(1, 2)))))
         .join();
     CHECK_EQ(read, 2);
+}
+
+
+// The section "Forms" says that a binding is taken as an lvalue and that a path that is not valid leaves no form to
+// call, and section 1 says which wrong uses throw.
+TEST_CASE("doc path: the forms in detail")
+{
+    test_binding b;
+    CHECK_FALSE(([]<class B>(B &&) { return requires(cbor::lazy const &l) { cbor::at_path(B{}, "$", l); }; }(test_binding{})));
+    CHECK_FALSE(([]<class B>(B &bb) { return requires(cbor::lazy const &l) { cbor::query<"$.a[">(bb, l); }; }(b)));
+    CHECK_FALSE(([]<class B>(B &bb) { return requires(cbor::lazy const &l) { cbor::at_path<"$.a[">(bb, l); }; }(b)));
+    CHECK_FALSE((doc_typed_path_compiles<"$.a[", int>));
+    CHECK_THROWS_AS((void)cbor::query(b, "$", cbor::lazy{}), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::query<"$">(b, cbor::lazy{}), std::logic_error);
+    CHECK_THROWS_AS(((void)cbor::at_path<"$", std::string_view>(std::shared_ptr<void const>{}, "\x61x"sv)), std::logic_error);
+}
+
+// The section "Path syntax" gives the shorthands, the range of an index, the EDN literal that stands where RFC 9535
+// has none, and the singular operand of a comparison.
+TEST_CASE("doc path: the syntax in detail")
+{
+    test_binding b;
+    auto const sh = *cbor::lazy::from(encoded(M("a"s, M("b"s, 1), "c"s, A(2))));
+    CHECK(*cbor::query(b, "$.*", sh) == A(M("b"s, 1), A(2)));
+    CHECK(*cbor::query(b, "$..*", sh) == A(M("b"s, 1), A(2), 1, 2));
+    CHECK(*cbor::query(b, "$..[0]", sh) == A(2));
+    CHECK_EQ(cbor::query(b, "$[?@.* == 1]", sh).error(), error::invalid_path);
+    auto const array = *cbor::lazy::from(encoded(A(1)));
+    CHECK_EQ(cbor::at_path(b, "$[9007199254740992]", array).error(), error::invalid_path);
+    CHECK_EQ(cbor::at_path(b, "$[01]", array).error(), error::invalid_path);
+    CHECK_EQ(cbor::at_path(b, "$[99999999999999999]", array).error(), error::not_indexable);
+    CHECK(*cbor::at_path(b, "$[99999999999999999]", *cbor::lazy::from("\xa1\x1b\x01\x63\x45\x78\x5d\x89\xff\xff\x01"s)) == V(1));
+    CHECK_EQ(cbor::at_path(b, "$[-0]", array).error(), error::not_indexable);
+    CHECK(*cbor::at_path(b, "$[-0]", *cbor::lazy::from(encoded(M(0, "a"s)))) == V("a"s));
+    CHECK(*cbor::query(b, "$[0:3:0]", array) == A());
+    CHECK(*cbor::query(b, "$[0:1]", *cbor::lazy::from(encoded(M("a"s, 1)))) == A());
+    CHECK(*cbor::query(b, "$[?@ == 1.]", array) == A(1));
+}
+
+// The section "Comparisons" states how == and < treat each kind of value, and an empty side.
+TEST_CASE("doc path: comparisons")
+{
+    test_binding b;
+    auto const eqs = *cbor::lazy::from(encoded(A(A(1, 2), A(2, 1), M("a"s, 1), bytes{"\x01"}, tagged{1000, V(1)}, 1, 1.0, "x"s,
+                                                 tagged{2, bytes{"\x01"}})));
+    CHECK(*cbor::query(b, "$[?@ == [1, 2]]", eqs) == A(A(1, 2)));
+    CHECK(*cbor::query(b, "$[?@ == {\"a\": 1}]", eqs) == A(M("a"s, 1)));
+    CHECK(*cbor::query(b, "$[?@ == h'01']", eqs) == A(bytes{"\x01"}));
+    CHECK(*cbor::query(b, "$[?@ == 1000(1)]", eqs) == A(tagged{1000, V(1)}));
+    CHECK(*cbor::query(b, "$[?@ == 1]", eqs) == A(1, 1.0));
+    CHECK(*cbor::query(b, "$[?@ < 2]", eqs) == A(1, 1.0));
+    CHECK(*cbor::query(b, "$[?@ < [3]]", eqs) == A());
+    CHECK(*cbor::query(b, "$[?@ >= 'x']", eqs) == A("x"s));
+    auto const one = *cbor::lazy::from(encoded(A(1)));
+    CHECK(*cbor::query(b, "$[?@.x == @.y]", one) == A(1));
+    CHECK(*cbor::query(b, "$[?@.x <= @.y]", one) == A(1));
+    CHECK(*cbor::query(b, "$[?@.x < @.y]", one) == A());
+}
+
+// The section "Functions" states that length counts the bytes of a text that are not UTF-8 continuation bytes, and
+// that length of a byte string is Nothing, which equals only Nothing.
+TEST_CASE("doc path: length in detail")
+{
+    test_binding b;
+    auto const l = *cbor::lazy::from(encoded(A(bytes{"\x01\x02"}, "ab"s, "\xc3\xbc"s)));
+    CHECK(*cbor::query(b, "$[?length(@) == 2]", l) == A("ab"s));
+    CHECK(*cbor::query(b, "$[?length(@) == 1]", l) == A("\xc3\xbc"s));
+    CHECK(*cbor::query(b, "$[?length(@) == length(@.x)]", l) == A(bytes{"\x01\x02"}));
+}
+
+// The section "Keys that are not text" states how keys compare, and which pair a duplicate key gives.
+TEST_CASE("doc path: keys compare by value")
+{
+    test_binding b;
+    std::string const keyed = "\xa4\x01\x61x\x21\x61y\x41\x01\x61z\x82\x01\x02\x61w"s;
+    auto const l = *cbor::lazy::from(keyed);
+    CHECK(*cbor::at_path<"$[b64'AQ']">(b, l) == V("z"s));
+    CHECK(*cbor::at_path<"$[h'01']">(b, *cbor::lazy::from("\xa1\x58\x01\x01\x61q"s)) == V("q"s));
+    CHECK(*cbor::at_path<"$[1]">(b, *cbor::lazy::from("\xa1\x18\x01\x61q"s)) == V("q"s));
+    CHECK_EQ(cbor::at_path<"$[1.0]">(b, l).error(), error::key_not_found);
+    CHECK_EQ(cbor::at_path(b, "$[1.0]", l).error(), error::key_not_found);
+    std::string const odd = encoded(M(1.5, 1, simple{21}, 2, tagged{1000, "x"s}, 3, M("a"s, 1), 4));
+    auto const o = *cbor::lazy::from(odd);
+    CHECK(*cbor::at_path<"$[1.5]">(b, o) == V(1));
+    CHECK(*cbor::at_path<"$[true]">(b, o) == V(2));
+    CHECK(*cbor::at_path<"$[1000(\"x\")]">(b, o) == V(3));
+    CHECK(*cbor::at_path<"$[{\"a\": 1}]">(b, o) == V(4));
+    CHECK(*cbor::at_path(b, "$[{\"a\": 1}]", o) == V(4));
+    std::string const dup = "\xa2\x61\x61\x01\x61\x61\x02"s;
+    auto const d = *cbor::lazy::from(dup);
+    CHECK_EQ(cbor::at_path<"$.a", int>(dup), 1);
+    CHECK(*cbor::at_path<"$.a">(b, d) == V(1));
+    CHECK(*cbor::at_path(b, "$.a", d) == V(1));
+    CHECK(*cbor::query(b, "$.*", d) == A(1, 2));
+    CHECK(*cbor::query(b, "$..*", d) == A(1, 2));
+    CHECK(*cbor::query(b, "$[?@ > 0]", d) == A(1, 2));
+}
+
+// The section "Tags on the way" states that a key behind tag 28 or 55799 is matched, that tag 55799 inside tag 24
+// is passed, and the errors of a tag whose content is wrong.
+TEST_CASE("doc path: tags in detail")
+{
+    test_binding b;
+    CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd8\x1c\x61k\x01"s), 1);
+    CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\xd9\xf7\x61k\x01"s), 1);
+    CHECK(*cbor::at_path<"$.k">(b, *cbor::lazy::from("\xa1\xd8\x1c\x61k\x01"s)) == V(1));
+    std::string const inside = "\xa1\x61\x61\xd8\x18\x46\xd9\xd9\xf7\x82\x01\x02"s;
+    CHECK_EQ(cbor::at_path<"$.a[1]", int>(inside), 2);
+    CHECK(*cbor::at_path(b, "$.a[1]", *cbor::lazy::from(inside)) == V(2));
+    CHECK_EQ(cbor::at_path<"$.a", int>("\xa1\x61\x61\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::at_path(b, "$", *cbor::lazy::from("\xd8\x1c\x81\xd8\x1d\x00"s)).error(), error::sharedref_not_complete);
+    std::string const many = "\x82\xd8\x1c\x88\x00\x00\x00\x00\x00\x00\x00\x00\xd8\x1d\x00"s;
+    CHECK_EQ(cbor::query(b, "$[*][*]", *cbor::lazy::from(many)).error(), error::nodelist_too_long);
+}
+
+// The section "What the bytes form checks" states that a read stops at the target, so bytes after it are not read.
+TEST_CASE("doc path: bytes after the target are not read")
+{
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01"s), 1);
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01\xff"s), 1);
+    CHECK_EQ(cbor::at_path<"$", int>("\x01\x02"s), 1);
+    CHECK(cbor::lazy::from("\x82\x01"s).has_value());
+    CHECK(cbor::lazy::from("\x01\x02"s).has_value());
+    CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\x01"s).error(), error::too_little_data);
+}
+
+// The section "Limits" states the defaults, the nesting of a path itself, that input_bytes is not checked again on
+// a lazy that exists, and that cbor::limits is one object for every thread.
+TEST_CASE("doc path: limits in detail")
+{
+    static_assert(cbor::limit_values{}.string_length == SIZE_MAX);
+    static_assert(cbor::limit_values{}.container_elements == SIZE_MAX);
+    static_assert(cbor::limit_values{}.input_bytes == SIZE_MAX);
+    static_assert(cbor::limit_values{}.nesting_depth == CBOR_NESTING_DEPTH_DEFAULT);
+    test_binding b;
+    auto const one = *cbor::lazy::from(encoded(A(1)));
+    auto const big = *cbor::lazy::from(encoded(M("pad"s, "0123456789"s, "a"s, A(1, 2))));
+    auto const a = *big.at("a");
+    {
+        test::limits_guard const g{{.nesting_depth = 2}};
+        CHECK_EQ(cbor::query(b, "$[?@ == [[[1]]]]", one).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(cbor::query(b, "$[?@[?@[?@]]]", one).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(cbor::query(b, "$[?(((@)))]", one).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(cbor::query(b, "$[?length(value(value(@))) == 1]", one).error(), error::nesting_depth_exceeded);
+    }
+    {
+        test::limits_guard const g{{.input_bytes = 4}};
+        CHECK_EQ(cbor::at_path<"$[1]", int>(a), 2);
+        CHECK(*cbor::query(b, "$[*]", a) == A(1, 2));
+    }
+    {
+        test::limits_guard const g{{.string_length = 2}};
+        std::size_t seen = 0;
+        std::jthread([&seen] { seen = cbor::limits.string_length; }).join();
+        CHECK_EQ(seen, 2u);
+    }
+}
+
+// The section "Threads" states that the first thread that reads the marks of a lazy owns it, and that only a debug
+// build checks it.
+TEST_CASE("doc path: the owner thread of a lazy")
+{
+    auto const shared = *cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
+    test_binding b;
+    CHECK(*cbor::at_path(b, "$[1]", shared) == V(1));
+    bool threw = false;
+    std::jthread([&threw, &shared] {
+        test_binding t;
+        try {
+            (void)cbor::at_path(t, "$[1]", shared);
+        } catch (std::logic_error const &) {
+            threw = true;
+        }
+    }).join();
+#ifdef NDEBUG
+    CHECK_FALSE(threw);
+#else
+    CHECK(threw);
+#endif
 }

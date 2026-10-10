@@ -1112,3 +1112,15 @@ TEST_CASE("at_path: a path from a held lazy")
     REQUIRE(word.has_value());
     CHECK_EQ(**word, "ok");
 }
+
+// A tag literal in a filter is parsed at run time as at compile time. g++-16 -O3 made the recursion over a tag in
+// canonical_append loop until memory ran out, so this test runs a tag, two tags and a tag inside an array.
+TEST_CASE("path: a tag literal in a run-time filter")
+{
+    test_binding binding;
+    auto const doc = *cbor::lazy::from(encoded(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
+    CHECK(*cbor::query(binding, "$[?@ == 1000(1)]", doc) == A(tagged{1000, V(1)}));
+    CHECK(*cbor::query(binding, "$[?@ == 1001(1000(3))]", doc) == A(tagged{1001, V(tagged{1000, V(3)})}));
+    CHECK(*cbor::query(binding, "$[?@ == [1(2)]]", doc) == A(A(tagged{1, V(2)})));
+    CHECK(*cbor::query<"$[?@ == 1000(1)]">(binding, doc) == A(tagged{1000, V(1)}));
+}
