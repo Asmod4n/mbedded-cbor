@@ -156,6 +156,18 @@ TEST_CASE("doc path: schema at_path in detail")
     CHECK_THROWS_AS((void)cbor::schema<doc_car>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
 }
 
+// A list accessor taken from a temporary root accessor read freed bytes,
+// because only the root held the owner of the bytes. Every accessor now
+// holds the owner, so the list outlives the temporary it came from.
+TEST_CASE("doc path: a list accessor keeps the bytes alive")
+{
+    auto const log = *cbor::schema<doc_log>::encode(doc_log{{7, 8, 9}});
+    auto const readings = cbor::schema<doc_log>::path(log)->at_path<"$.readings">();
+    REQUIRE(readings.has_value());
+    CHECK_EQ(readings->size(), 3u);
+    CHECK_EQ(*readings->at_path<"@[2]">(), 9u);
+}
+
 #endif
 
 // The section "Which types a typed read gives" shows the allowed types, the conversions that are refused and
