@@ -105,7 +105,7 @@ struct [[=cbor::tag(1701)]] doc_car {
 
 } // namespace
 
-// The section "A path over a schema message" shows schema<T>::at_path, the slot for a run-time index and the
+// The section "A path over a schema message" shows schema<T>::at_path, the argument for a run-time index and the
 // accessor that gives a text as a view.
 TEST_CASE("doc path: schema at_path")
 {
@@ -178,8 +178,8 @@ TEST_CASE("doc path: the functions")
     CHECK_FALSE(cbor::is_valid_path_v<"$[?match(@.t, 'a.c')]">);
 }
 
-// The section "Keys that are not text" shows integer keys, a negative integer key, and EDN literals at compile
-// time, and that the run-time path refuses an EDN literal.
+// The section "Keys that are not text" shows integer keys, a negative integer key and EDN literals as keys, in a
+// compile-time path and in a run-time path alike, and a typed read through a key that is not text.
 TEST_CASE("doc path: keys that are not text")
 {
     std::string const keyed = "\xa4\x01\x61x\x21\x61y\x41\x01\x61z\x82\x01\x02\x61w"s;
@@ -190,11 +190,28 @@ TEST_CASE("doc path: keys that are not text")
     CHECK(*cbor::at_path<"$[h'01']">(b, l) == V("z"s));
     CHECK(*cbor::at_path<"$[[1, 2]]">(b, l) == V("w"s));
     CHECK(*cbor::at_path(b, "$[1]", l) == V("x"s));
-    CHECK_EQ(cbor::at_path(b, "$[h'01']", l).error(), error::invalid_path);
+    CHECK(*cbor::at_path(b, "$[h'01']", l) == V("z"s));
+    CHECK(*cbor::at_path(b, "$[[1, 2]]", l) == V("w"s));
     CHECK(*cbor::query<"$[?@ == h'01']">(b, *cbor::lazy::from(encoded(A(bytes{"\x01"}, 1)))) == A(bytes{"\x01"}));
-    CHECK_EQ(cbor::query(b, "$[?@ == h'01']", l).error(), error::invalid_path);
+    CHECK(*cbor::query(b, "$[?@ == h'01']", *cbor::lazy::from(encoded(A(bytes{"\x01"}, 1)))) == A(bytes{"\x01"}));
     CHECK(doc_binding_path_compiles<"$[h'01']">);
-    CHECK_FALSE((doc_typed_path_compiles<"$[h'01']", int>));
+    CHECK((doc_typed_path_compiles<"$[h'01']", int>));
+    auto const z = cbor::at_path<"$[h'01']", std::string_view>(l);
+    REQUIRE(z.has_value());
+    CHECK_EQ(**z, "z"sv);
+    std::string const counted = "\xa1\x41\x01\x07"s;
+    CHECK_EQ(cbor::at_path<"$[h'01']", int>(std::string_view(counted)), 7);
+    CHECK_EQ(cbor::at_path<"$[h'01']", int>(*cbor::lazy::from(counted)), 7);
+    CHECK_EQ(cbor::at_path<"$[h'02']", int>(std::string_view(counted)).error(), error::key_not_found);
+}
+
+// The typed forms that take a lazy refuse a lazy that holds no item, as the binding forms do.
+TEST_CASE("doc path: a typed read of an empty lazy throws")
+{
+    CHECK_THROWS_AS(((void)cbor::at_path<"$.a", int>(cbor::lazy{})), std::logic_error);
+    CHECK_THROWS_AS(((void)cbor::at_path<"$.a", std::string_view>(cbor::lazy{})), std::logic_error);
+    test_binding b;
+    CHECK_THROWS_AS((void)cbor::at_path<"$.a">(b, cbor::lazy{}), std::logic_error);
 }
 
 // The section "Tags on the way" shows that tags 24, 28, 29 and 55799 are passed, and that any other tag stops
@@ -227,7 +244,7 @@ TEST_CASE("doc path: a singular query")
     static_assert(cbor::is_singular_query_v<"$.a[0]['b']">);
     static_assert(!cbor::is_singular_query_v<"$.a[*]">);
     static_assert(!cbor::is_singular_query_v<"$..a">);
-    static_assert(!cbor::is_singular_query_v<"$[h'01']">);
+    static_assert(cbor::is_singular_query_v<"$[h'01']">);
     static_assert(cbor::is_valid_path_v<"$..a">);
     static_assert(!cbor::is_valid_path_v<"$.a[">);
     CHECK_FALSE((doc_typed_path_compiles<"$.a[*]", int>));

@@ -176,8 +176,8 @@ TEST_CASE("path: a wildcard over records with large fields")
 }
 
 // RFC 9535 2.2 to 2.5: blanks before a segment and inside brackets, names in single or double quotes with their
-// escapes, an index without leading zeros in the range of I-JSON. At run time a bracket holds the selectors of
-// RFC 9535 and nothing else; every other form is invalid_path. A query has at most as many segments as the nesting depth.
+// escapes, an index without leading zeros in the range of I-JSON. Inside brackets an EDN literal is a key, at
+// run time as at compile time, so an EDN literal on an array is not_indexable; every other form is invalid_path. A query has at most as many segments as the nesting depth.
 TEST_CASE("path: the grammar")
 {
     value const doc = M("a"s, M("b c"s, A(1, 2, 3)), "ü'\""s, 4);
@@ -188,10 +188,12 @@ TEST_CASE("path: the grammar")
     CHECK(at("$.\u00fc_1", M("\u00fc_1"s, 5)) == V(5));
     for (std::string_view const bad :
          {"a"sv, ""sv, "$.1a"sv, "$["sv, "$[*"sv, "$['open"sv, "$['k'"sv, "$[x]"sv, "$[1"sv, "$#"sv, "$[01]"sv,
-          "$[-0]"sv, "$[1.5]"sv, "$[h'01']"sv, "$[true]"sv, "$.a "sv, "$.."sv, "$[1,]"sv, "$['\\x']"sv,
+          "$.a "sv, "$.."sv, "$[1,]"sv, "$['\\x']"sv,
           "$['\\ud800']"sv, "$['\x01']"sv, "$[9007199254740992]"sv, "$[*]]"sv, "$."sv})
         CHECK_EQ(path_error(bad, A(1)), error::invalid_path);
     CHECK_EQ(path_error("$[9007199254740991]", A(1)), error::index_out_of_bounds);
+    for (std::string_view const key : {"$[-0]"sv, "$[1.5]"sv, "$[h'01']"sv, "$[true]"sv})
+        CHECK_EQ(path_error(key, A(1)), error::not_indexable);
     std::string const deep = encoded(A(A(A(A(1)))));
     test_binding binding;
     {
@@ -489,9 +491,10 @@ TEST_CASE("path: the filter selector")
     CHECK(at("$[?@.a == -1e0 || @.a == 1.0e+0]", doc) == A(M("a"s, 1)));
     CHECK(at("$.*[?@ == 'x']", doc) == A("x"s));
     for (std::string_view const bad : {"$[?@.a]]"sv, "$[?1]"sv, "$[?@.a == @.*]"sv, "$[?!@.a == 1]"sv, "$[?@.a = 1]"sv,
-                                       "$[?@.a == 01]"sv, "$[?@.a == 1.]"sv, "$[?@.a == True]"sv, "$[?(@.a]"sv,
-                                       "$[?@.a == [1]]"sv, "$[?@.a == h'01']"sv, "$[?@.a == \"\\'\"]"sv})
+                                       "$[?@.a == 01]"sv, "$[?@.a == True]"sv, "$[?(@.a]"sv})
         CHECK_EQ(path_error(bad, doc), error::invalid_path);
+    for (std::string_view const edn : {"$[?@.a == 1.]"sv, "$[?@.a == [1]]"sv, "$[?@.a == h'01']"sv, "$[?@.a == \"\\'\"]"sv})
+        CHECK(path_read(edn, doc).has_value());
 }
 
 // RFC 9535 2.4.4 to 2.4.8: length counts Unicode scalar values, elements or members and gives Nothing for other
@@ -964,8 +967,8 @@ TEST_CASE("path: a typed read that is not safe does not compile")
 
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a[*]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$..a", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[1.5]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[h'01']", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[1.5]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[h'01']", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[0,1]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[0:1]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[?@.a]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
