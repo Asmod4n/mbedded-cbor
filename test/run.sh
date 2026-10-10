@@ -19,7 +19,7 @@ fast) set -- gcc-release clang-asan ;;
 full) set -- gcc-asan gcc-release clang-asan clang-release clang-libcxx ;;
 esac
 
-asan="-O1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+asan="-Og -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
 pch_clang="-Xclang -fno-pch-timestamp"
 
 one() {
