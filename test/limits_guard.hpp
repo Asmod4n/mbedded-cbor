@@ -11,8 +11,8 @@ struct limits_guard {
     cbor::limit_values before;
 
     explicit limits_guard(cbor::limit_values const v)
-        : before{cbor::limits.nesting_depth, cbor::limits.decoded_bytes, cbor::limits.string_length,
-                 cbor::limits.container_elements, cbor::limits.input_bytes}
+        : before{cbor::limits.nesting_depth, cbor::limits.string_length, cbor::limits.container_elements,
+                 cbor::limits.input_bytes}
     {
         cbor::limits = v;
     }

@@ -43,16 +43,6 @@ class decoding
         Binding &binding;
         marks<Binding> shared;
         prefix *before;
-        std::size_t decoded_bytes_left = limits.decoded_bytes;
-
-        CBOR_ALWAYS_INLINE std::expected<void, error> decoded_bytes_count(std::uint64_t const count, std::size_t const size)
-        {
-            auto const sum = validity::check_decoded_bytes(decoded_bytes_left, count, size);
-            if (!sum) [[unlikely]]
-                return std::unexpected(sum.error());
-            decoded_bytes_left = *sum;
-            return {};
-        }
 
         std::expected<typename Binding::value, error> value_decode(std::size_t const depth, std::optional<std::size_t> const mark,
                                                                    std::size_t const depth_max)
@@ -71,22 +61,16 @@ class decoding
                 auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
-                if (auto const r = decoded_bytes_count(s->size(), sizeof(char)); !r) [[unlikely]]
-                    return std::unexpected(r.error());
                 return binding.byte_string_decode(*s);
             }
             case major_type::text_string: {
                 auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
-                if (auto const r = decoded_bytes_count(s->size(), sizeof(char)); !r) [[unlikely]]
-                    return std::unexpected(r.error());
                 return binding.text_string_decode(*s);
             }
             case major_type::array: {
                 std::uint64_t const elements = std::min<std::uint64_t>(h->argument, d.encoded.size());
-                if (auto const r = decoded_bytes_count(elements, sizeof(typename Binding::value)); !r) [[unlikely]]
-                    return std::unexpected(r.error());
                 auto array = binding.array_decode(elements);
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
@@ -101,9 +85,6 @@ class decoding
             }
             case major_type::map: {
                 std::uint64_t const entries = std::min<std::uint64_t>(h->argument, d.encoded.size() / (rfc8949::data_items_per_pair * heads::initial_byte_size));
-                if (auto const r = decoded_bytes_count(entries, rfc8949::data_items_per_pair * sizeof(typename Binding::value)); !r)
-                    [[unlikely]]
-                    return std::unexpected(r.error());
                 auto map = binding.map_decode(entries);
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
@@ -117,8 +98,6 @@ class decoding
                             if (!t) [[unlikely]]
                                 return std::unexpected(t.error());
                             d = probe;
-                            if (auto const r = decoded_bytes_count(t->size(), sizeof(char)); !r) [[unlikely]]
-                                return std::unexpected(r.error());
                             auto key = binding.map_key_decode(*t);
                             auto value = value_decode(depth + 1, std::nullopt, depth_max);
                             if (!value) [[unlikely]]
@@ -186,8 +165,6 @@ class decoding
                     if (!bytes) [[unlikely]]
                         return std::unexpected(bytes.error());
                     std::string_view const magnitude = heads::magnitude_without_leading_zeros(*bytes);
-                    if (auto const counted = decoded_bytes_count(magnitude.size(), sizeof(char)); !counted) [[unlikely]]
-                        return std::unexpected(counted.error());
                     if (magnitude.size() <= sizeof(std::uint64_t)) {
                         if (negative)
                             return binding.negative_integer_decode(heads::magnitude_value(magnitude));

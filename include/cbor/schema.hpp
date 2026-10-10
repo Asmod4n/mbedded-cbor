@@ -137,6 +137,15 @@ class packed
         });
     }
 
+    template <class E, class Container>
+    static constexpr E element_make(Container const &container)
+    {
+        if constexpr (requires { container.get_allocator(); })
+            return std::make_obj_using_allocator<E>(container.get_allocator());
+        else
+            return E{};
+    }
+
     template <class U>
     static consteval std::span<std::meta::info const> data_members()
     {
@@ -1252,16 +1261,6 @@ class packed
         std::size_t index;
         std::size_t at;
         std::size_t end;
-        std::size_t decoded_bytes_left = limits.decoded_bytes;
-
-        CBOR_ALWAYS_INLINE std::expected<void, error> decoded_bytes_count(std::uint64_t const count, std::size_t const size)
-        {
-            auto const sum = validity::check_decoded_bytes(decoded_bytes_left, count, size);
-            if (!sum) [[unlikely]]
-                return std::unexpected(sum.error());
-            decoded_bytes_left = *sum;
-            return {};
-        }
 
         template <class Root, major_type Major, class E = void>
         CBOR_ALWAYS_INLINE std::expected<reference, error> reference_take(std::span<char const, dynamic_type_sizes> const field,
@@ -1351,14 +1350,16 @@ class packed
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 std::string_view const part{std::span(encoded).subspan(r->data, r->length)};
-                if constexpr (!std::ranges::view<U>)
-                    if (auto const c = decoded_bytes_count(r->length, sizeof(std::ranges::range_value_t<U>)); !c) [[unlikely]]
-                        return c;
                 if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>) {
                     auto const raw = std::as_bytes(std::span(part));
-                    out = U(raw.begin(), raw.end());
-                } else {
+                    if constexpr (std::ranges::view<U>)
+                        out = U(raw.begin(), raw.end());
+                    else
+                        out.assign(raw.begin(), raw.end());
+                } else if constexpr (std::ranges::view<U>) {
                     out = U(part.begin(), part.end());
+                } else {
+                    out.assign(part.begin(), part.end());
                 }
                 return {};
             } else if constexpr (is_map<U>) {
@@ -1370,13 +1371,11 @@ class packed
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
-                if (auto const c = decoded_bytes_count(r->length, sizeof(typename U::value_type)); !c) [[unlikely]]
-                    return c;
                 out.clear();
                 for (std::size_t i = 0; i < r->length; ++i) {
                     auto const entry = std::span<char const>(encoded).subspan(r->data + i * pair).template first<pair>();
-                    K key{};
-                    V value{};
+                    K key = element_make<K>(out);
+                    V value = element_make<V>(out);
                     if (auto const e = value_read<Root>(key, entry.template first<fixed_size<K, Root>()>(), depth + 1, depth_max);
                         !e) [[unlikely]]
                         return e;
@@ -1393,9 +1392,6 @@ class packed
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
-                if constexpr (!std::ranges::view<U>)
-                    if (auto const c = decoded_bytes_count(r->length, sizeof(E)); !c) [[unlikely]]
-                        return c;
                 auto const from = std::span<char const>(encoded).subspan(r->data, r->length * sizeof(E));
                 if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U> &&
                               requires { out.resize(std::size_t{}); }) {
@@ -1415,12 +1411,10 @@ class packed
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
-                if (auto const c = decoded_bytes_count(r->length, sizeof(E)); !c) [[unlikely]]
-                    return c;
                 out.clear();
                 out.reserve(r->length);
                 for (std::size_t i = 0; i < r->length; ++i) {
-                    E element{};
+                    E element = element_make<E>(out);
                     auto const entry =
                         std::span<char const>(encoded).subspan(r->data + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>();
                     if (auto const e = value_read<Root>(element, entry, depth + 1, depth_max); !e) [[unlikely]]
@@ -2080,17 +2074,27 @@ public:
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
+        return decode(std::move(owner), encoded, T{});
+    }
+
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded,
+                                                      T target)
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::schema::decode: the owner of the encoded data item is empty");
-        T value{};
-        if (auto const r = packed::root_read<T>(value, encoded, limits.nesting_depth); !r) [[unlikely]]
+        if (auto const r = packed::root_read<T>(target, encoded, limits.nesting_depth); !r) [[unlikely]]
             return std::unexpected(r.error());
-        return owning_ref<T>(std::move(owner), std::move(value));
+        return owning_ref<T>(std::move(owner), std::move(target));
     }
 
     template <class Encoded>
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
+
+    template <class Encoded>
+        requires std::same_as<std::remove_const_t<Encoded>, std::string>
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded, T target) = delete;
 
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())

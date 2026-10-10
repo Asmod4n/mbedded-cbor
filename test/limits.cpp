@@ -1,8 +1,11 @@
 #include "binding.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory_resource>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -46,7 +49,6 @@ std::string map_of(std::size_t const n)
 TEST_CASE("limits: the defaults")
 {
     CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, 128u);
-    CHECK_EQ(std::size_t{cbor::limits.decoded_bytes}, std::numeric_limits<std::size_t>::max());
     CHECK_EQ(std::size_t{cbor::limits.string_length}, std::numeric_limits<std::size_t>::max());
     CHECK_EQ(std::size_t{cbor::limits.container_elements}, std::numeric_limits<std::size_t>::max());
     CHECK_EQ(std::size_t{cbor::limits.input_bytes}, std::numeric_limits<std::size_t>::max());
@@ -66,10 +68,8 @@ TEST_CASE("limits: operator= above the bound throws std::logic_error")
         CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, cbor::validity::nesting_depth_limit);
     }
     {
-        test::limits_guard const all{{.nesting_depth = 1, .decoded_bytes = 2, .string_length = 3,
-                                      .container_elements = 4, .input_bytes = 5}};
+        test::limits_guard const all{{.nesting_depth = 1, .string_length = 3, .container_elements = 4, .input_bytes = 5}};
         CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, 1u);
-        CHECK_EQ(std::size_t{cbor::limits.decoded_bytes}, 2u);
         CHECK_EQ(std::size_t{cbor::limits.string_length}, 3u);
         CHECK_EQ(std::size_t{cbor::limits.container_elements}, 4u);
         CHECK_EQ(std::size_t{cbor::limits.input_bytes}, 5u);
@@ -159,38 +159,6 @@ TEST_CASE("limits: input_bytes on entry")
     }
 }
 
-// The decoder of a binding counts the bytes of each string and one value for each element as it builds them.
-TEST_CASE("limits: decoded_bytes counted by lazy_decode")
-{
-    test_binding binding;
-    for (std::size_t const limit : {2uz, 3uz, 4uz}) {
-        test::limits_guard const guard{{.decoded_bytes = limit}};
-        auto const decoded = cbor::lazy_decode(binding, *cbor::lazy::from("\x63\x61\x62\x63"s));
-        CHECK_EQ(decoded.has_value(), limit >= 3);
-        if (limit < 3)
-            CHECK_EQ(decoded.error(), error::decoded_bytes_exceeded);
-    }
-    constexpr std::size_t element = sizeof(test_binding::value);
-    for (std::size_t const limit : {2 * element - 1, 2 * element, 2 * element + 1}) {
-        test::limits_guard const guard{{.decoded_bytes = limit}};
-        auto const decoded = cbor::lazy_decode(binding, *cbor::lazy::from("\x82\x00\x00"s));
-        CHECK_EQ(decoded.has_value(), limit >= 2 * element);
-        if (limit < 2 * element)
-            CHECK_EQ(decoded.error(), error::decoded_bytes_exceeded);
-    }
-}
-
-// A count in the input reserves nothing, so it charges nothing beyond the bytes that remain: an array head that
-// claims 2^64 - 1 elements over two bytes charges two elements and ends in too_little_data.
-TEST_CASE("limits: decoded_bytes charges no more elements than the bytes that remain")
-{
-    test_binding binding;
-    std::string const claimed = "\x9b\xff\xff\xff\xff\xff\xff\xff\xff\x01\x02"s;
-    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(claimed)).error(), error::too_little_data);
-    test::limits_guard const guard{{.decoded_bytes = 2 * sizeof(test_binding::value)}};
-    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(claimed)).error(), error::too_little_data);
-}
-
 #ifdef __cpp_impl_reflection
 
 namespace
@@ -205,41 +173,29 @@ struct [[=cbor::tag(1591)]] names {
     std::vector<std::string> list;
 };
 
-} // namespace
+struct [[=cbor::tag(1592)]] pmr_names {
+    std::pmr::string text;
+    std::pmr::vector<std::pmr::string> list;
+};
 
-// databind counts the characters of a std::string and one element for each element of a container.
-TEST_CASE("limits: decoded_bytes counted by databind")
+// Each string is longer than any short string buffer, so each one allocates from the resource.
+std::string const long_text(40, 'x');
+
+std::string long_texts_encoded(std::size_t const n)
 {
-    constexpr std::size_t numbers = 2 * sizeof(int);
-    for (std::size_t const limit : {numbers - 1, numbers, numbers + 1}) {
-        test::limits_guard const guard{{.decoded_bytes = limit}};
-        auto const decoded = cbor::databind<std::vector<int>>::decode("\x82\x01\x02"s);
-        CHECK_EQ(decoded.has_value(), limit >= numbers);
-        if (limit < numbers)
-            CHECK_EQ(decoded.error(), error::decoded_bytes_exceeded);
-    }
-    for (std::size_t const limit : {2uz, 3uz, 4uz}) {
-        test::limits_guard const guard{{.decoded_bytes = limit}};
-        auto const decoded = cbor::databind<std::string>::decode("\x63\x61\x62\x63"s);
-        CHECK_EQ(decoded.has_value(), limit >= 3);
-        if (limit < 3)
-            CHECK_EQ(decoded.error(), error::decoded_bytes_exceeded);
-    }
+    std::string encoded(1, static_cast<char>(0x80 + n));
+    for (std::size_t i = 0; i < n; ++i)
+        encoded += "\x78\x28"s + long_text;
+    return encoded;
 }
 
-// schema counts the characters of the text and the elements of the list as it allocates them.
-TEST_CASE("limits: decoded_bytes counted by schema decode, and the string and container limits of schema")
+} // namespace
+
+// schema checks the string and container limits on each head it reads, and the size of the input on entry.
+TEST_CASE("limits: the string and container limits of schema")
 {
     auto const encoded = cbor::schema<note>::encode(note{"abc", {1, 2}});
     REQUIRE(encoded.has_value());
-    constexpr std::size_t total = 3 + 2 * sizeof(std::int32_t);
-    for (std::size_t const limit : {total - 1, total, total + 1}) {
-        test::limits_guard const guard{{.decoded_bytes = limit}};
-        auto const decoded = cbor::schema<note>::decode(*encoded);
-        CHECK_EQ(decoded.has_value(), limit >= total);
-        if (limit < total)
-            CHECK_EQ(decoded.error(), error::decoded_bytes_exceeded);
-    }
     // The list of std::int32_t is a typed array (RFC 8746), a tag over a byte string of 8 bytes.
     constexpr std::size_t typed_array_bytes = 2 * sizeof(std::int32_t);
     for (std::size_t const limit : {typed_array_bytes - 1, typed_array_bytes, typed_array_bytes + 1}) {
@@ -261,6 +217,59 @@ TEST_CASE("limits: decoded_bytes counted by schema decode, and the string and co
     {
         test::limits_guard const guard{{.input_bytes = encoded->size() - 1}};
         CHECK_EQ(cbor::schema<note>::decode(*encoded).error(), error::input_bytes_exceeded);
+    }
+}
+
+// The memory of a decode is bounded by the caller with the standard: the target holds a std::pmr allocator over a
+// resource with a budget, every element is made with the allocator of its container, and the refusal of the
+// resource reaches the caller of databind as not_enough_memory. A monotonic_buffer_resource over a fixed buffer with
+// null_memory_resource upstream refuses every byte beyond the buffer.
+TEST_CASE("databind: a std::pmr target decodes with its allocator, and the refusal of its resource is not_enough_memory")
+{
+    using texts = std::pmr::vector<std::pmr::string>;
+    std::string const encoded = long_texts_encoded(3);
+    {
+        std::array<std::byte, 4096> buffer{};
+        std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
+        auto const decoded = cbor::databind<texts>::decode(std::make_shared<std::string const>(encoded), encoded,
+                                                           texts(&budget));
+        REQUIRE(decoded.has_value());
+        CHECK_EQ((**decoded).size(), 3u);
+        CHECK_EQ((**decoded).get_allocator().resource(), &budget);
+        for (std::pmr::string const &text : (**decoded)) {
+            CHECK_EQ(text, long_text);
+            CHECK_EQ(text.get_allocator().resource(), &budget);
+        }
+    }
+    // The buffer holds the vector of three strings but not the characters of all three.
+    for (std::size_t const size : {0uz, 3 * sizeof(std::pmr::string), 3 * sizeof(std::pmr::string) + long_text.size()}) {
+        CAPTURE(size);
+        std::array<std::byte, 4096> buffer{};
+        std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
+        auto const decoded = cbor::databind<texts>::decode(std::make_shared<std::string const>(encoded), encoded,
+                                                           texts(&budget));
+        REQUIRE_FALSE(decoded.has_value());
+        CHECK_EQ(decoded.error(), error::not_enough_memory);
+    }
+}
+
+// The schema reads into the members of the target that the caller made, so each member keeps its allocator.
+TEST_CASE("schema: a target with std::pmr members decodes with their allocators")
+{
+    auto const encoded = cbor::schema<pmr_names>::encode(pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
+    REQUIRE(encoded.has_value());
+    std::array<std::byte, 4096> buffer{};
+    std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
+    auto const owner = std::make_shared<std::string const>(*encoded);
+    auto const decoded = cbor::schema<pmr_names>::decode(owner, *owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
+    REQUIRE(decoded.has_value());
+    CHECK_EQ((**decoded).text, long_text);
+    CHECK_EQ((**decoded).text.get_allocator().resource(), &budget);
+    CHECK_EQ((**decoded).list.size(), 2u);
+    CHECK_EQ((**decoded).list.get_allocator().resource(), &budget);
+    for (std::pmr::string const &text : (**decoded).list) {
+        CHECK_EQ(text, long_text);
+        CHECK_EQ(text.get_allocator().resource(), &budget);
     }
 }
 
