@@ -15,7 +15,9 @@
 #include <ranges>
 #include <span>
 #include <string>
+#include <stdexcept>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -370,12 +372,21 @@ struct value_sharing::top_level_item {
     std::string_view encoded;
     std::vector<lazy> sharedrefs;
     std::size_t high_water_mark;
+#ifndef NDEBUG
+    std::thread::id owner_thread = std::this_thread::get_id();
+#endif
     std::string_view sharedrefs_unread;
     std::uint64_t sharedrefs_pending = 1;
     bool sharedrefs_started = false;
 
     std::vector<lazy> const &sharedrefs_read(std::size_t const up_to = std::numeric_limits<std::size_t>::max())
     {
+#ifndef NDEBUG
+        if (owner_thread == std::thread::id{})
+            owner_thread = std::this_thread::get_id();
+        if (owner_thread != std::this_thread::get_id()) [[unlikely]]
+            throw std::logic_error("a lazy is used in a thread that does not own it; move it with cbor::transfer");
+#endif
         if (!sharedrefs_started) {
             sharedrefs_unread = encoded;
             sharedrefs_started = true;
@@ -746,6 +757,43 @@ validity::check_sorted_keys_unique(Message &message, std::size_t const first_key
             return r;
     }
     return {};
+}
+
+template <class T>
+inline constexpr bool is_thread_bound_v =
+    std::same_as<T, lazy> || std::same_as<T, lazy_elements> || std::same_as<T, lazy_entries> ||
+    std::same_as<T, lazy_elements::iterator> || std::same_as<T, lazy_entries::iterator>;
+
+template <class T>
+inline constexpr bool is_thread_bound_v<owning_ref<T>> = true;
+
+template <class T>
+struct sendable {
+    T value;
+};
+
+template <class T>
+inline constexpr bool is_sendable_v = !is_thread_bound_v<T>;
+
+template <class T>
+inline constexpr bool is_sendable_v<sendable<T>> = true;
+
+inline sendable<lazy> transfer(lazy &&value)
+{
+    if (value.top_level.use_count() != 1) [[unlikely]]
+        throw std::logic_error("cbor::transfer needs the only handle on the item in this thread");
+#ifndef NDEBUG
+    value.top_level->owner_thread = std::thread::id{};
+#endif
+    return {std::move(value)};
+}
+
+template <class F, class... Arguments>
+std::jthread thread_start(F f, Arguments... arguments)
+{
+    static_assert((is_sendable_v<Arguments> && ...),
+                  "a lazy holds the marks of tag 28 and belongs to one thread; pass it through cbor::transfer");
+    return std::jthread(std::move(f), std::move(arguments)...);
 }
 
 } // namespace cbor

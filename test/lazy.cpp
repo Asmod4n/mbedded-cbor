@@ -1408,3 +1408,51 @@ TEST_CASE("lazy: a map counts two data items for each pair")
     REQUIRE(steps.size() == 1);
     CHECK_EQ(steps.at(0).error(), error::too_little_data);
 }
+
+// The owner decided on 2026-10-10 that the types say which value belongs to
+// one thread. A lazy and everything that shares its marks of tag 28 is
+// thread bound; cbor::transfer hands a lazy that nothing else shares to
+// another thread, and a debug build refuses a use from a thread that does
+// not own it. The check sits where a read changes the shared marks, the
+// resolution of a tag 29, so a read that changes nothing is not refused.
+static_assert(cbor::is_thread_bound_v<cbor::lazy>);
+static_assert(cbor::is_thread_bound_v<cbor::lazy_entries::iterator>);
+static_assert(cbor::is_thread_bound_v<cbor::owning_ref<std::string_view>>);
+static_assert(!cbor::is_sendable_v<cbor::lazy>);
+static_assert(cbor::is_sendable_v<cbor::sendable<cbor::lazy>>);
+static_assert(cbor::is_sendable_v<std::string>);
+
+TEST_CASE("lazy: transfer hands a lazy to another thread")
+{
+    std::string const s("\x82\xd8\x1c\x01\xd8\x1d\x00", 7);
+    cbor::lazy l = *cbor::lazy::from(s);
+    {
+        cbor::lazy const copy = l;
+        CHECK_THROWS_AS(std::ignore = cbor::transfer(std::move(l)), std::logic_error);
+    }
+    std::int64_t read = 0;
+    cbor::thread_start(
+        [&read](cbor::sendable<cbor::lazy> v) {
+            read = *v.value.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::int64_t>(); });
+        },
+        cbor::transfer(std::move(l)))
+        .join();
+    CHECK_EQ(read, 1);
+}
+
+#ifndef NDEBUG
+TEST_CASE("lazy: a debug build refuses a lazy in a thread that does not own it")
+{
+    std::string const s("\x82\xd8\x1c\x01\xd8\x1d\x00", 7);
+    cbor::lazy const l = *cbor::lazy::from(s);
+    bool refused = false;
+    std::jthread([&] {
+        try {
+            std::ignore = l.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::int64_t>(); });
+        } catch (std::logic_error const &) {
+            refused = true;
+        }
+    }).join();
+    CHECK(refused);
+}
+#endif
