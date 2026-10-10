@@ -205,6 +205,8 @@ class decoding
                     if (error const c = validity::check_tag_content(h->argument, r->major, r->info).error_or(error{});
                         c != error{}) [[unlikely]]
                         return std::unexpected(c);
+                    if (r->argument < shared.size() && shared[static_cast<std::size_t>(r->argument)])
+                        return *shared[static_cast<std::size_t>(r->argument)];
                     auto const marked = [&]() -> std::size_t {
                         if (!before)
                             return shared.size();
