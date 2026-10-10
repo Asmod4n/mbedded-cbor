@@ -55,7 +55,7 @@ inline lazy_elements::iterator &lazy_elements::iterator::operator++()
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) -> iterator & {
             heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(offset)),
                                       checks};
-            if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]] {
+            if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
                 failure = r.error();
                 --left;
                 return *this;
@@ -75,7 +75,7 @@ inline void lazy_entries::iterator::value_find()
     validity::limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
             heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(key)), checks};
-            if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]] {
+            if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
                 failure = r.error();
                 return;
             }
@@ -110,7 +110,7 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
     validity::limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
             heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(value)), checks};
-            if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]] {
+            if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
                 failure = r.error();
                 --left;
                 return;
@@ -457,9 +457,8 @@ inline std::expected<lazy, error> lazy::at(std::size_t const index) const
                             auto const position = validity::check_index(index, h.argument);
                             if (!position) [[unlikely]]
                                 return std::unexpected(position.error());
-                            for (std::uint64_t i = 0; i < *position; ++i)
-                                if (auto const r = well_formedness::item_skip(d); !r) [[unlikely]]
-                                    return std::unexpected(r.error());
+                            if (auto const r = well_formedness::items_skip(d, *position); !r) [[unlikely]]
+                                return std::unexpected(r.error());
                             std::size_t const element = source->encoded.size() - d.encoded.size();
                             return lazy{source, element};
                         });
