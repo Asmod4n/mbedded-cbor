@@ -70,6 +70,14 @@ class value_sharing
                                                                      std::size_t offset,
                                                                      validity::limit_checks<Checked> checks);
 
+    template <bool Checked>
+    static std::expected<resolved<Checked>, error> tag_content_resolve(std::shared_ptr<top_level_item> source,
+                                                                       std::size_t offset,
+                                                                       validity::limit_checks<Checked> checks);
+
+    template <bool Checked>
+    static std::expected<std::string_view, error> typed_array_bytes_read(resolved<Checked> const &found);
+
     template <class Key, class Entries = lazy_entries, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
     static std::expected<typename Entries::iterator, error> key_find(resolved<Checked> found, Key key,
@@ -500,6 +508,7 @@ struct value_sharing::resolved {
     std::shared_ptr<top_level_item> source;
     heads::head h;
     heads::decoder<Checked> d;
+    std::size_t item_at;
 };
 
 template <bool Checked>
@@ -574,7 +583,7 @@ value_sharing::container_resolve(std::shared_ptr<top_level_item> source, std::si
             return std::unexpected(h.error());
         if (h->major != major_type::tag ||
             h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
-            return resolved<Checked>{source, *h, d};
+            return resolved<Checked>{source, *h, d, *at};
         auto const r = d.head_decode();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
@@ -587,6 +596,50 @@ value_sharing::container_resolve(std::shared_ptr<top_level_item> source, std::si
         source = std::make_shared<top_level_item>(source->owner, *embedded, std::vector<lazy>{}, 0);
         offset = 0;
     }
+}
+
+template <bool Checked>
+std::expected<value_sharing::resolved<Checked>, error>
+value_sharing::tag_content_resolve(std::shared_ptr<top_level_item> source, std::size_t offset,
+                                   validity::limit_checks<Checked> const checks)
+{
+    for (;;) {
+        auto found = container_resolve(std::move(source), offset, checks);
+        if (!found) [[unlikely]]
+            return found;
+        if (found->h.major != major_type::tag || !heads::is_tag_passed(found->h.argument)) [[likely]]
+            return found;
+        source = std::move(found->source);
+        offset = source->encoded.size() - found->d.encoded.size();
+    }
+}
+
+template <bool Checked>
+std::expected<std::string_view, error> value_sharing::typed_array_bytes_read(resolved<Checked> const &found)
+{
+    if (found.h.major != major_type::tag) [[unlikely]]
+        return std::unexpected(error::incorrect_type);
+    if (error const r = validity::typed_array_check(found.h.argument, 0).error_or(error{}); r != error{})
+        [[unlikely]]
+        return std::unexpected(r);
+    auto const content =
+        shared_resolve(*found.source, found.source->encoded.size() - found.d.encoded.size(), found.d.checks);
+    if (!content) [[unlikely]]
+        return std::unexpected(content.error());
+    heads::decoder<Checked> d{std::string_view(std::span(found.source->encoded).subspan(*content)), found.d.checks};
+    auto const r = d.head_decode();
+    if (!r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (error const c = validity::check_tag_content(found.h.argument, r->major, r->info).error_or(error{});
+        c != error{}) [[unlikely]]
+        return std::unexpected(c);
+    auto const bytes = d.byte_string_decode(r->argument);
+    if (!bytes) [[unlikely]]
+        return std::unexpected(bytes.error());
+    if (error const c = validity::typed_array_check(found.h.argument, bytes->size()).error_or(error{});
+        c != error{}) [[unlikely]]
+        return std::unexpected(c);
+    return *bytes;
 }
 
 }

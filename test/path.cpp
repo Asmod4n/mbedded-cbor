@@ -1140,6 +1140,96 @@ TEST_CASE("path: tag 55799 inside the item is skipped")
     CHECK_EQ(cbor::lazy::from(leaf)->at("a")->get<int>(), 7);
 }
 
+// RFC 8949 6.1: a generic decoder passes a tag it does not know and gives its content. The owner decided on
+// 2026-10-10 that a path does the same: it passes every tag other than 2, 3, 24, 29 and the tags of RFC 8746. Each
+// form is checked: the typed read over bytes, the typed read from a lazy, the lazy walk that tag 29 starts, a binding
+// and query. A path that ends at the tag gives the whole tagged item to a binding, because a binding knows tags.
+TEST_CASE("path: a tag that the path does not know is passed to its content")
+{
+    std::string const doc = "\xa2\x61""v\xd9\x03\xe8\x82\x01\x02\x61""m\xd9\x03\xe9\xa1\x61""k\x07"s;
+    std::string const shared = "\x82\xd8\x1c\xd9\x03\xe8\x82\x01\x02\xd8\x1d\x00"s;
+    auto const l = *cbor::lazy::from(doc);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(doc), 2);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(l), 2);
+    CHECK_EQ(cbor::at_path<"$.m.k", int>(doc), 7);
+    CHECK_EQ(cbor::at_path<"$.m.k", int>(l), 7);
+    CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared), 2);
+    CHECK_EQ(cbor::at_path<"$[1][1]", int>(*cbor::lazy::from(shared)), 2);
+    CHECK_EQ(cbor::at_path<"$", int>("\xd9\x03\xe8\x05"s), 5);
+    CHECK_EQ(cbor::at_path<"$", int>(*cbor::lazy::from("\xd9\x03\xe8\x05"s)), 5);
+    CHECK_EQ(cbor::lazy::from("\xd9\x03\xe8\x05"s)->get<int>(), 5);
+    CHECK_EQ(cbor::at_path<"$", std::int64_t>("\xc1\x1a\x5f\x5e\x10\x00"s), 1600000000);
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\xc2\x41\x01"s).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\x03\xe8\x61""k\x07"s).error(), error::key_not_found);
+    test_binding binding;
+    CHECK(found(cbor::at_path(binding, "$.v[1]", l)) == V(2));
+    CHECK(found(cbor::at_path(binding, "$.m.k", l)) == V(7));
+    CHECK(found(cbor::query(binding, "$.v[*]", l)) == A(1, 2));
+    CHECK(found(cbor::query(binding, "$..k", l)) == A(7));
+    CHECK(found(cbor::query(binding, "$.v[?@ > 1]", l)) == A(2));
+    CHECK(found(cbor::at_path(binding, "$.v", l)) == V(tagged{1000, A(1, 2)}));
+}
+
+// RFC 8746 2: a typed array holds its elements in a byte string, and the tag gives the type, the sign and the
+// byte order of each element. The owner decided on 2026-10-10 that $.v[i] reads one element and that $.v[*]
+// gives all elements. Each tag class is checked against the values that its bytes encode: unsigned and signed
+// integers in both byte orders, the clamped uint8, and floats of 16, 32 and 64 bits.
+TEST_CASE("path: an index reads one element of a typed array")
+{
+    auto const in = [](std::string const &tagged_array) { return "\xa1\x61""v"s + tagged_array; };
+    std::string const uint16_le = in("\xd8\x45\x44\x07\x00\x08\x01"s);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(uint16_le), 7);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(uint16_le), 0x108);
+    CHECK_EQ(cbor::at_path<"$.v[-1]", int>(uint16_le), 0x108);
+    CHECK_EQ(cbor::at_path<"$.v[2]", int>(uint16_le).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$.v[-3]", int>(uint16_le).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$.v[0][0]", int>(uint16_le).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$.v.a", int>(uint16_le).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$.v[0]", std::uint8_t>(uint16_le), std::uint8_t{7});
+    CHECK_EQ(cbor::at_path<"$.v[1]", std::uint8_t>(uint16_le).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$.v[1]", double>(uint16_le), 264.0);
+    CHECK_EQ(cbor::at_path<"$.v[1]", bool>(uint16_le).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(in("\xd8\x41\x44\x07\x00\x01\x08"s)), 0x108);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x48\x42\xff\x05"s)), -1);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(in("\xd8\x48\x42\xff\x05"s)), 5);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x44\x41\xff"s)), 255);
+    CHECK_EQ(cbor::at_path<"$.v[0]", std::int64_t>(in("\xd8\x4b\x48\x80\x00\x00\x00\x00\x00\x00\x00"s)),
+             std::numeric_limits<std::int64_t>::min());
+    CHECK_EQ(cbor::at_path<"$.v[0]", std::int64_t>(in("\xd8\x4f\x48\xfe\xff\xff\xff\xff\xff\xff\xff"s)), -2);
+    CHECK_EQ(cbor::at_path<"$.v[0]", std::uint64_t>(in("\xd8\x43\x48\xff\xff\xff\xff\xff\xff\xff\xff"s)),
+             std::numeric_limits<std::uint64_t>::max());
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x43\x48\xff\xff\xff\xff\xff\xff\xff\xff"s)).error(),
+             error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$.v[1]", double>(in("\xd8\x50\x44\x00\x00\x3c\x00"s)), 1.0);
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x51\x44\x3f\xc0\x00\x00"s)), 1.5);
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x56\x48\x9a\x99\x99\x99\x99\x99\xf1\x3f"s)), 1.1);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x51\x44\x3f\xc0\x00\x00"s)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x53\x50"s + std::string(16, '\0'))).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\x43\x07\x00\x08"s)).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\xd8\x1c\x42\x07\x00"s)), 7);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd9\x03\xe8\xd8\x45\x42\x07\x00"s)), 7);
+    auto const l = *cbor::lazy::from(uint16_le);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(l), 0x108);
+    std::string const shared = "\x82\xd8\x1c\xd8\x45\x44\x07\x00\x08\x01\xd8\x1d\x00"s;
+    CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared), 0x108);
+    CHECK_EQ(cbor::at_path<"$[1][-2]", double>(*cbor::lazy::from(shared)), 7.0);
+    CHECK_EQ(cbor::at_path<"$[1][2]", int>(shared).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$[1][0][0]", int>(shared).error(), error::not_indexable);
+    test_binding binding;
+    CHECK(found(cbor::at_path(binding, "$.v[1]", l)) == V(0x108));
+    CHECK(found(cbor::at_path(binding, "$[1][0]", *cbor::lazy::from(shared))) == V(7));
+    CHECK(found(cbor::query(binding, "$.v[*]", l)) == A(7, 0x108));
+    CHECK(found(cbor::query(binding, "$.v[1:]", l)) == A(0x108));
+    CHECK(found(cbor::query(binding, "$.v[?@ > 7]", l)) == A(0x108));
+    CHECK(found(cbor::query(binding, "$..*", l)) == A(found(cbor::at_path(binding, "$.v", l)), 7, 0x108));
+    CHECK(found(cbor::query<"$.v[*]">(binding, l)) == A(7, 0x108));
+    auto const floats = *cbor::lazy::from(in("\xd8\x50\x44\x00\x00\x3c\x00"s));
+    CHECK(found(cbor::query(binding, "$.v[*]", floats)) == A(0.0, 1.0));
+    CHECK_EQ(cbor::query(binding, "$.v[*]", *cbor::lazy::from(in("\xd8\x53\x50"s + std::string(16, '\0')))).error(),
+             error::incorrect_type);
+    CHECK(found(cbor::query(binding, "$.v[*]", *cbor::lazy::from(in("\xd8\x45\x40"s)))) == A());
+}
+
 // A held lazy is a start point: at_path reads a path relative to it, from
 // its bytes, and falls back to the lazy walk when a tag 29 needs the marks
 // of the whole top-level item.
