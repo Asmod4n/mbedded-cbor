@@ -335,6 +335,11 @@ struct value_sharing::top_level_item {
     std::vector<lazy> const &sharedrefs_read()
     {
         std::call_once(sharedrefs_built, [this] {
+            heads::decoder whole{encoded};
+            if (well_formedness::item_skip(whole, *this)) [[likely]]
+                return;
+            sharedrefs.clear();
+            high_water_mark = 0;
             heads::decoder all{encoded};
             std::uint64_t pending = 1;
             while (pending != 0) {
