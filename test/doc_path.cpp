@@ -187,8 +187,8 @@ TEST_CASE("doc path: the types of a typed read")
     CHECK_EQ(cbor::at_path<"$", cbor::simple_value>("\xf6"s), cbor::simple_value{22});
     CHECK_EQ(cbor::at_path<"$", char>(encoded(V(65))), 'A');
     CHECK_EQ(cbor::at_path<"$", int>("\xc3\x41\x01"s), -2);
-    CHECK_EQ(cbor::at_path<"$", int>("\xc1\x05"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$", std::string_view>(*cbor::lazy::from("\xd8\x20\x61x"s)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$", int>("\xc1\x05"s), 5);
+    CHECK(*cbor::at_path<"$", std::string_view>(*cbor::lazy::from("\xd8\x20\x61x"s)) == "x"sv);
     CHECK_FALSE((doc_typed_path_compiles<"$", float>));
     CHECK_FALSE((doc_typed_path_compiles<"$", std::string>));
     CHECK_FALSE((doc_typed_path_compiles<"$", std::string_view>));
@@ -268,25 +268,30 @@ TEST_CASE("doc path: a typed read of an empty lazy throws")
     CHECK_THROWS_AS((void)cbor::at_path<"$.a">(b, cbor::lazy{}), std::logic_error);
 }
 
-// The section "Tags on the way" shows that tags 24, 28, 29 and 55799 are passed, and that any other tag stops
-// the walk.
+// The section "Tags on the way" shows that tags 24, 28, 29 and 55799 are passed, and that a tag the path does
+// not know is passed to its content (RFC 8949 6.1), while a binding at the tag gets the whole tagged item.
 TEST_CASE("doc path: tags on the way")
 {
     CHECK_EQ(cbor::at_path<"$.a[1]", int>("\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s), 2);
     CHECK_EQ(cbor::at_path<"$[1].k", int>("\x82\xd8\x1c\xa1\x61k\x07\xd8\x1d\x00"s), 7);
     CHECK_EQ(cbor::at_path<"$.a", int>("\xd9\xd9\xf7\xa1\x61\x61\x05"s), 5);
     std::string const other = encoded(M("v"s, tagged{1000, A(1, 2)}));
-    CHECK_EQ(cbor::at_path<"$.v[1]", int>(other).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(other), 2);
     test_binding b;
-    CHECK(*cbor::query(b, "$.v[*]", *cbor::lazy::from(other)) == A());
+    CHECK(*cbor::query(b, "$.v[*]", *cbor::lazy::from(other)) == A(1, 2));
     CHECK(*cbor::at_path(b, "$.v", *cbor::lazy::from(other)) == V(tagged{1000, A(1, 2)}));
 }
 
-// The section "Typed arrays" shows that a typed array is one value: a path ends at it and does not enter it.
-TEST_CASE("doc path: a typed array is one value")
+// The section "Typed arrays" shows that an index reads one element, that a wildcard gives every element, and
+// that a path that ends at the tag reads the whole array.
+TEST_CASE("doc path: a typed array")
 {
     std::string const bytes = "\xa1\x61v\xd8\x45\x44\x07\x00\x08\x00"s;
-    CHECK_EQ(cbor::at_path<"$.v[1]", int>(bytes).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(bytes), 8);
+    CHECK_EQ(cbor::at_path<"$.v[1]", double>(bytes), 8.0);
+    CHECK_EQ(cbor::at_path<"$.v[2]", int>(bytes).error(), error::index_out_of_bounds);
+    test_binding b;
+    CHECK(*cbor::query(b, "$.v[*]", *cbor::lazy::from(bytes)) == A(7, 8));
     auto const view = cbor::at_path<"$.v", cbor::typed_array>(*cbor::lazy::from(bytes));
     REQUIRE(view.has_value());
     CHECK_EQ((*view)->bytes.size(), 4u);

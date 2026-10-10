@@ -197,8 +197,9 @@ cbor::at_path<"$", std::int64_t>(/* 1.0 */);           // incorrect_type
 cbor::at_path<"$", int>(/* 1(5) */);           // incorrect_type
 ```
 
-A value behind a tag that the table does not name, such as tag 0, 1 or 32,
-is `incorrect_type`. Any other T does not compile, for example `float`,
+A typed read passes a tag that the path does not know (section 6), so
+`at_path<"$", int>` reads 5 from `1(5)` and `at_path<"$", std::string_view>`
+reads the text of `32("x")`. Any other T does not compile, for example `float`,
 `std::string` or a view without an owner. For any other result, use a
 binding.
 
@@ -352,23 +353,27 @@ pair. A wildcard, a descendant segment and a filter take all pairs.
 | 29, shared reference | reads the value that the reference names |
 | 55799, self-described CBOR | passes it, at the top, inside the item and inside tag 24 |
 | 2 and 3, bignum | a typed read into an integer type reads the magnitude |
-| an RFC 8746 typed array tag | a typed read into `cbor::typed_array` reads it |
-| any other tag | a path does not go into it |
+| an RFC 8746 typed array tag | an index reads one element; a typed read into `cbor::typed_array` reads the whole array |
+| any other tag | passes it; the value is the content (RFC 8949 6.1) |
 
 ```cpp
 cbor::at_path<"$.a[1]", int>(/* {"a": 24(<<[1, 2]>>)} */);          // 2
 cbor::at_path<"$[1].k", int>(/* [28({"k": 7}), 29(0)] */);          // 7
 cbor::at_path<"$.a", int>(/* 55799({"a": 5}) */);                   // 5
 cbor::at_path<"$.a[1]", int>(/* {"a": 24(<<55799([1, 2])>>)} */);   // 2
-cbor::at_path<"$.v[1]", int>(/* {"v": 1000([1, 2])} */);            // not_indexable
-cbor::query(binding, "$.v[*]", /* same */);                         // []
+cbor::at_path<"$.v[1]", int>(/* {"v": 1000([1, 2])} */);            // 2
+cbor::query(binding, "$.v[*]", /* same */);                         // [1, 2]
 cbor::at_path(binding, "$.v", /* same */);                          // 1000([1, 2])
+cbor::at_path<"$", int>(/* 1(5) */);                                // 5
 ```
 
-A singular path through a tag with another number is `not_indexable`, and a
-wildcard selects nothing from it. A path that ends at the tag gives the
-whole tagged item to a binding. A map key behind tag 28 or tag 55799 is
-matched as the key without the tag.
+A path passes a tag that it does not know, as a generic decoder does (RFC
+8949 6.1): a step and a typed read see the content. A path that ends at the
+tag gives the whole tagged item to a binding, because a binding gets the tag
+number. Tags 2 and 3 are not passed: a typed read into an integer reads the
+bignum, and an index on a bignum is `not_indexable`. A map key behind tag 28
+or tag 55799 is matched as the key without the tag. A key behind any other
+tag is a different key: `$.k` does not find `1000("k")`.
 
 Tag 29 can point back to a tag 28 anywhere before it. When a typed read
 meets tag 29, it reads the item again through a lazy to find the marks.
@@ -377,17 +382,28 @@ This costs an allocation. A tag 29 that points forward is
 
 ### Typed arrays
 
-A typed array (RFC 8746) is one value: a tag over a byte string. A path
-ends at it and does not go into it.
+A typed array (RFC 8746) is a tag over a byte string. The tag gives the
+type, the sign and the byte order of the elements. An index reads one
+element as an integer or a float, and a wildcard, a slice or a filter gives
+every element. A path that ends at the tag reads the whole array.
 
 ```cpp
 // {"v": 69(h'07000800')}, uint16 little endian [7, 8]
-cbor::at_path<"$.v[1]", int>(bytes);                       // not_indexable
+cbor::at_path<"$.v[1]", int>(bytes);                       // 8
+cbor::at_path<"$.v[-1]", double>(bytes);                   // 8.0
+cbor::at_path<"$.v[2]", int>(bytes);                       // index_out_of_bounds
+cbor::at_path<"$.v[1][0]", int>(bytes);                    // not_indexable
+cbor::query(binding, "$.v[*]", lazy);                      // [7, 8]
 cbor::at_path<"$.v", cbor::typed_array>(lazy);             // tag 69, 4 bytes
 ```
 
-Read the elements from `typed_array::bytes`, or with a schema message and
-`schema<T>::at_path`, which reads one element (section 1).
+An element of an integer array is an integer, and an element of a float
+array is a float of the same width. An element of a 128-bit float array
+(tags 83 and 87) is `incorrect_type`, because no C++ type here holds it.
+The typed read over bytes allocates nothing. A binding, `query` and the
+lazy walk read an element as a small CBOR item that the library writes, and
+this allocates once for each step. The element of a clamped uint8 array
+(tag 68) is an unsigned integer.
 
 ## 7. Singular queries
 
@@ -436,7 +452,7 @@ a compile-time path.
 | `invalid_path` | The path text is not valid. A run-time `at_path` with a path that is not singular. `match` or `search`. A comparison with a side that is not singular. An index of 16 digits or less outside ±(2^53 - 1). |
 | `key_not_found` | A name or a key is not in the map. |
 | `index_out_of_bounds` | The index is outside the array, also a run-time index of `schema<T>::at_path`. |
-| `not_indexable` | A name, an index or a key meets a value that is not a map or an array, for example a text, a number, a typed array or a tag that the path does not pass. A name or a key meets an array. |
+| `not_indexable` | A name, an index or a key meets a value that is not a map or an array, for example a text, a number, a bignum or an element of a typed array. A name or a key meets an array or a typed array. |
 | `incorrect_type` | A typed read finds another kind of item than T takes. |
 | `number_out_of_range` | The integer does not fit T. |
 | `nesting_depth_exceeded` | Section 11. |
