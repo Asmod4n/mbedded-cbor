@@ -1431,7 +1431,7 @@ TEST_CASE("lazy: transfer hands a lazy to another thread")
         CHECK_THROWS_AS(std::ignore = cbor::transfer(std::move(l)), std::logic_error);
     }
     std::int64_t read = 0;
-    cbor::thread_start(
+    std::jthread(
         [&read](cbor::sendable<cbor::lazy> v) {
             read = *v.value.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::int64_t>(); });
         },

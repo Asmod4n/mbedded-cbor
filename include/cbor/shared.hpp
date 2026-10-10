@@ -788,12 +788,4 @@ inline sendable<lazy> transfer(lazy &&value)
     return {std::move(value)};
 }
 
-template <class F, class... Arguments>
-std::jthread thread_start(F f, Arguments... arguments)
-{
-    static_assert((is_sendable_v<Arguments> && ...),
-                  "a lazy holds the marks of tag 28 and belongs to one thread; pass it through cbor::transfer");
-    return std::jthread(std::move(f), std::move(arguments)...);
-}
-
 } // namespace cbor
