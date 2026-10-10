@@ -77,6 +77,13 @@ if (name)
     use(**name);   // owning_ref<std::string_view>: * gives the view
 ```
 
+An `owning_ref` compares and reaches its value as `std::optional` does:
+`*name == "ann"` and `name->size()` read the view, `name == "ann"`
+compares it, and two `owning_ref` compare their values. `*` and `->` refuse
+a temporary `owning_ref`, so a view cannot outlive its owner in one
+expression. `==` takes a temporary, because it gives a `bool`.
+`owning_ref<cbor::typed_array>` has no `==`, as `cbor::typed_array` has none.
+
 `T` is one of `std::string_view`, `std::span<std::byte const>` and
 `cbor::typed_array`. The owner is a `std::shared_ptr<void const>`. A view
 type without an owner does not compile. A temporary `std::string` or a
