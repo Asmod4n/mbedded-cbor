@@ -77,15 +77,14 @@ TEST_CASE("simple_value_encode: one byte for each simple value")
     CHECK_EQ(encoded([](auto &e) { return e.simple_value_encode(simple_value::undefined); }), "\xf7"sv);
 }
 
-// RFC 8949 3.3: simple values 24 to 31 are not written in one byte; 24 to 31 after 0xf8 are reserved as well.
-// A value outside the enumerators is refused instead of written.
-TEST_CASE("simple_value_encode: a value from 24 up is refused")
+// RFC 8949 3.3: simple values 24 to 31 have no well-formed encoding. A value from 32 up follows 0xf8.
+TEST_CASE("simple_value_encode: a value from 24 to 31 is refused")
 {
     string_writer w;
     cbor::encoder<string_writer> e{w};
     CHECK_EQ(e.simple_value_encode(static_cast<cbor::simple_value>(24)).error(), std::errc::invalid_argument);
     CHECK_EQ(e.simple_value_encode(static_cast<cbor::simple_value>(31)).error(), std::errc::invalid_argument);
-    CHECK(e.simple_value_encode(cbor::simple_value::undefined).has_value());
+    CHECK(e.simple_value_encode(static_cast<cbor::simple_value>(32)).has_value());
     REQUIRE(e.flush().has_value());
-    CHECK_EQ(w.encoded, "\xf7"sv);
+    CHECK_EQ(w.encoded, "\xf8\x20"sv);
 }

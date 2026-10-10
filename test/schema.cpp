@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -223,37 +224,37 @@ std::string schema_bytes(auto const &value)
 template <class T, cbor::fixed_string Path, class... Index>
 auto at_path(std::string_view const bytes, Index const... indexes)
 {
-    using X = std::remove_cvref_t<decltype(*std::declval<typename cbor::schema<T>::template accessor<> const &>().template at<Path>(indexes...))>;
+    using X = std::remove_cvref_t<decltype(*std::declval<typename cbor::schema<T>::template accessor<> const &>().template at_path<Path>(indexes...))>;
     using Y = std::conditional_t<std::same_as<X, std::string_view>, std::string,
                                  std::conditional_t<std::same_as<X, std::optional<std::string_view>>, std::optional<std::string>, X>>;
     auto const root = cbor::schema<T>::path(bytes);
     if (!root)
-        return cbor::result<Y>(std::unexpect, root.error());
-    auto const x = root->template at<Path>(indexes...);
+        return std::expected<Y, cbor::error>(std::unexpect, root.error());
+    auto const x = root->template at_path<Path>(indexes...);
     if (!x)
-        return cbor::result<Y>(std::unexpect, x.error());
+        return std::expected<Y, cbor::error>(std::unexpect, x.error());
     if constexpr (std::same_as<X, std::optional<std::string_view>>)
-        return x->has_value() ? cbor::result<Y>(Y(std::in_place, **x)) : cbor::result<Y>(Y{});
+        return x->has_value() ? std::expected<Y, cbor::error>(Y(std::in_place, **x)) : std::expected<Y, cbor::error>(Y{});
     else
-        return cbor::result<Y>(Y(*x));
+        return std::expected<Y, cbor::error>(Y(*x));
 }
 
 // The owner form: the caller keeps the owner alive, so a text stays a view into the message.
 template <class T, cbor::fixed_string Path, class... Index>
 auto at_path(std::shared_ptr<void const> const &owner, std::string_view const bytes, Index const... indexes)
-    -> decltype(std::declval<typename cbor::schema<T>::template accessor<> const &>().template at<Path>(indexes...))
+    -> decltype(std::declval<typename cbor::schema<T>::template accessor<> const &>().template at_path<Path>(indexes...))
 {
     auto const root = cbor::schema<T>::path(owner, bytes);
     if (!root)
         return std::unexpected(root.error());
-    return root->template at<Path>(indexes...);
+    return root->template at_path<Path>(indexes...);
 }
 
 // The schema encoding is one CBOR item, tag 113 over the table and the two parts. Every byte is well-formed, so
 // the generic decoder finds its end at the end of the message.
 void check_one_item(std::string const &bytes)
 {
-    auto const end = cbor::item_end<16>(bytes);
+    auto const end = cbor::item_size(bytes);
     REQUIRE(end.has_value());
     CHECK_EQ(*end, bytes.size());
 }
@@ -280,7 +281,8 @@ TEST_CASE("encode: a struct with a number, a bool and a string")
 }
 
 // A negative int16 is major type 1 with -1 - n in two bytes (RFC 8949 3.1). A float stays binary32 (fa). The list
-// of uint16 is shared item 16 and keeps the width of its elements. The empty optional is shared item 17, an empty
+// of uint16 is shared item 16, a typed array of RFC 8746: tag 69 (uint16, little endian) = d8 45 over a byte string
+// of four bytes. The empty optional is shared item 17, an empty
 // array. Item 17 is 6(-1) = c6 3a 00 00 00 00, because 2.2 maps a negative N to index 16 - 2N - 1. The items start
 // at 46 (2e) and 57 (39). The rump starts with the class tag 1508 = d9 05 e4.
 TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
@@ -289,7 +291,7 @@ TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x84\x61t\x61\x66\x61v\x61o"
                     "\x5a\x00\x00\x00\x08\x00\x00\x00\x2e\x00\x00\x00\x39"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-                    "\x9a\x00\x00\x00\x02\x19\x00\x07\x19\x00\x08"
+                    "\xd8\x45\x5a\x00\x00\x00\x04\x07\x00\x08\x00"
                     "\x9a\x00\x00\x00\x00"
                     "\xd9\x05\xe4\xd8\x80\x9a\x00\x00\x00\x04\x39\x00\x04\xfa\x3f\xc0\x00\x00"
                     "\xc6\x1a\x00\x00\x00\x00\xc6\x3a\x00\x00\x00\x00"s);
@@ -442,6 +444,495 @@ TEST_CASE("at_path: a fixed byte array is read inline")
 namespace
 {
 
+struct [[=cbor::tag(1530)]] numbers {
+    std::vector<std::uint16_t> u16;
+    std::vector<std::uint32_t> u32;
+    std::vector<std::uint64_t> u64;
+    std::vector<std::int8_t> s8;
+    std::vector<std::int16_t> s16;
+    std::vector<std::int32_t> s32;
+    std::vector<std::int64_t> s64;
+#if defined(__STDCPP_FLOAT16_T__)
+    std::vector<std::float16_t> f16;
+#endif
+    std::vector<float> f32;
+    std::vector<double> f64;
+};
+
+numbers const sample_numbers{{0x0102},
+                             {0x01020304},
+                             {0x0102030405060708},
+                             {-2},
+                             {-2},
+                             {-2},
+                             {-2},
+#if defined(__STDCPP_FLOAT16_T__)
+                             {1.0f16},
+#endif
+                             {1.0f},
+                             {1.0}};
+
+struct [[=cbor::tag(1531)]] doubles {
+    std::vector<double> v;
+};
+
+} // namespace
+
+// The schema writes a list of a fixed-width number as a typed array of RFC 8746 in little endian. The tag numbers
+// come from RFC 8746 figure 6: uint16le 69, uint32le 70, uint64le 71, sint8 72, sint16le 77, sint32le 78,
+// sint64le 79, float16le 84, float32le 85, float64le 86. The byte string holds the elements with the lowest byte
+// first. The test exists because the tag tells every other reader the type of the elements.
+TEST_CASE("encode: a list of a fixed-width number is a typed array of RFC 8746")
+{
+    std::string const bytes = schema_bytes(sample_numbers);
+    check_one_item(bytes);
+    CHECK_NE(bytes.find("\xd8\x45\x5a\x00\x00\x00\x02\x02\x01"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x46\x5a\x00\x00\x00\x04\x04\x03\x02\x01"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x47\x5a\x00\x00\x00\x08\x08\x07\x06\x05\x04\x03\x02\x01"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x48\x5a\x00\x00\x00\x01\xfe"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x4d\x5a\x00\x00\x00\x02\xfe\xff"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x4e\x5a\x00\x00\x00\x04\xfe\xff\xff\xff"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x4f\x5a\x00\x00\x00\x08\xfe\xff\xff\xff\xff\xff\xff\xff"sv), std::string::npos);
+#if defined(__STDCPP_FLOAT16_T__)
+    CHECK_NE(bytes.find("\xd8\x54\x5a\x00\x00\x00\x02\x00\x3c"sv), std::string::npos);
+#endif
+    CHECK_NE(bytes.find("\xd8\x55\x5a\x00\x00\x00\x04\x00\x00\x80\x3f"sv), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x56\x5a\x00\x00\x00\x08\x00\x00\x00\x00\x00\x00\xf0\x3f"sv), std::string::npos);
+}
+
+// decode and path read every element type back from its typed array. The floats are compared by their bits.
+TEST_CASE("decode and at_path: every typed array gives its elements back")
+{
+    std::string const bytes = schema_bytes(sample_numbers);
+    auto const back = cbor::schema<numbers>::decode(bytes);
+    REQUIRE(back.has_value());
+    numbers const &n = **back;
+    CHECK_EQ(n.u16, sample_numbers.u16);
+    CHECK_EQ(n.u32, sample_numbers.u32);
+    CHECK_EQ(n.u64, sample_numbers.u64);
+    CHECK_EQ(n.s8, sample_numbers.s8);
+    CHECK_EQ(n.s16, sample_numbers.s16);
+    CHECK_EQ(n.s32, sample_numbers.s32);
+    CHECK_EQ(n.s64, sample_numbers.s64);
+#if defined(__STDCPP_FLOAT16_T__)
+    REQUIRE_EQ(n.f16.size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint16_t>(n.f16[0]), 0x3c00u);
+    CHECK_EQ(std::bit_cast<std::uint16_t>(*at_path<numbers, "$.f16[0]">(bytes)), 0x3c00u);
+#endif
+    REQUIRE_EQ(n.f32.size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint32_t>(n.f32[0]), 0x3f800000u);
+    REQUIRE_EQ(n.f64.size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(n.f64[0]), 0x3ff0000000000000u);
+    CHECK_EQ(at_path<numbers, "$.u16[0]">(bytes), 0x0102u);
+    CHECK_EQ(at_path<numbers, "$.u32[]">(bytes, 0uz), 0x01020304u);
+    CHECK_EQ(at_path<numbers, "$.u64[0]">(bytes), 0x0102030405060708u);
+    CHECK_EQ(at_path<numbers, "$.s8[0]">(bytes), std::int8_t{-2});
+    CHECK_EQ(at_path<numbers, "$.s16[0]">(bytes), std::int16_t{-2});
+    CHECK_EQ(at_path<numbers, "$.s32[0]">(bytes), -2);
+    CHECK_EQ(at_path<numbers, "$.s64[]">(bytes, 0uz), std::int64_t{-2});
+    CHECK_EQ(std::bit_cast<std::uint32_t>(*at_path<numbers, "$.f32[0]">(bytes)), 0x3f800000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*at_path<numbers, "$.f64[0]">(bytes)), 0x3ff0000000000000u);
+    CHECK_EQ(at_path<numbers, "$.f64[1]">(bytes).error(), error::index_out_of_bounds);
+    auto const root = cbor::schema<numbers>::path(bytes);
+    REQUIRE(root.has_value());
+    auto const list = root->at_path<"$.u32">();
+    REQUIRE(list.has_value());
+    CHECK_EQ(list->size(), 1u);
+    CHECK_EQ(list->at_path<"@[0]">(), 0x01020304u);
+    CHECK_EQ(list->at_path<"@[]">(1uz).error(), error::index_out_of_bounds);
+}
+
+// A list of doubles that does not carry tag 86, or whose byte string is not a multiple of eight bytes, is refused
+// as an error value by decode and by path. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746).
+TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length is refused")
+{
+    std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
+    std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
+    REQUIRE_NE(at, std::string::npos);
+    REQUIRE(cbor::schema<doubles>::decode(bytes).has_value());
+    for (char const tag : {'\x52', '\x55'}) {
+        std::string wrong = bytes;
+        wrong[at + 1] = tag;
+        CHECK_EQ(cbor::schema<doubles>::decode(wrong).error(), error::incorrect_type);
+        CHECK_EQ(at_path<doubles, "$.v[0]">(wrong).error(), error::incorrect_type);
+    }
+    std::string odd = bytes;
+    odd[at + 6] = '\x0f';
+    CHECK_EQ(cbor::schema<doubles>::decode(odd).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(at_path<doubles, "$.v[0]">(odd).error(), error::inadmissible_type_for_tag_content);
+    std::string longer = bytes;
+    longer[at + 6] = '\x18';
+    CHECK_EQ(cbor::schema<doubles>::decode(longer).error(), error::too_little_data);
+    CHECK_EQ(at_path<doubles, "$.v[0]">(longer).error(), error::too_little_data);
+}
+
+// schema::at reads one number from the message with no accessor and no owner, because the number is returned by
+// value. It makes every check that path and accessor::at make: the table of keys, the undefined values after the
+// directory, the tag of the root, the tag and the length of the typed array, and the index. The expected bits of 1.0
+// and 2.0 are 3ff0000000000000 and 4000000000000000 in binary64 (IEEE 754).
+TEST_CASE("schema::at: one number of a typed array, with every check of path")
+{
+    std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
+    using S = cbor::schema<doubles>;
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[0]">(bytes)), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[]">(bytes, 1uz)), 0x4000000000000000u);
+    CHECK_EQ(S::at_path<"$.v[2]">(bytes).error(), error::index_out_of_bounds);
+    CHECK_EQ(S::at_path<"$.v[]">(bytes, std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+    CHECK_EQ(S::at_path<"$.v[0]">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
+    std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
+    REQUIRE_NE(at, std::string::npos);
+    std::string wrong = bytes;
+    wrong[at + 1] = '\x52';
+    CHECK_EQ(S::at_path<"$.v[0]">(wrong).error(), error::incorrect_type);
+    std::string odd = bytes;
+    odd[at + 6] = '\x0f';
+    CHECK_EQ(S::at_path<"$.v[0]">(odd).error(), error::inadmissible_type_for_tag_content);
+    std::string longer = bytes;
+    longer[at + 6] = '\x18';
+    CHECK_EQ(S::at_path<"$.v[0]">(longer).error(), error::too_little_data);
+    std::size_t const filler = bytes.find('\xf7');
+    REQUIRE_NE(filler, std::string::npos);
+    for (std::size_t j = filler; j < bytes.size() && bytes[j] == '\xf7'; ++j) {
+        std::string defined = bytes;
+        defined[j] = '\xf6';
+        CHECK_EQ(S::at_path<"$.v[0]">(defined).error(), error::incorrect_type);
+        CHECK_EQ(at_path<doubles, "$.v[0]">(defined).error(), error::incorrect_type);
+    }
+    std::string root = bytes;
+    root[root.size() - S::fixed_size() + 2] = '\xfc';
+    CHECK_EQ(S::at_path<"$.v[0]">(root).error(), error::incorrect_type);
+    CHECK_EQ(at_path<doubles, "$.v[0]">(root).error(), error::incorrect_type);
+}
+
+// schema::at gives only a value that holds no reference into the message, because no owner keeps the message alive.
+// A path to a text, a list or a struct has no form of schema::at, and a wrong use does not compile.
+TEST_CASE("schema::at: a path to a text or a list does not compile")
+{
+    auto const at_compiles = []<class T, cbor::fixed_string Path>() { return requires { cbor::schema<T>::template at_path<Path>(std::string_view{}); }; };
+    CHECK(at_compiles.template operator()<doubles, "$.v[0]">());
+    CHECK_FALSE(at_compiles.template operator()<doubles, "$.v">());
+    CHECK_FALSE(at_compiles.template operator()<login, "$.name">());
+    CHECK(at_compiles.template operator()<login, "$.id">());
+    CHECK_FALSE(at_compiles.template operator()<people, "$.people[0]">());
+    CHECK_FALSE(at_compiles.template operator()<people, "$.people[0].n">());
+}
+
+namespace
+{
+
+template <cbor::fixed_string Path>
+auto view_of(std::string const &bytes)
+{
+    auto const root = cbor::schema<numbers>::path(bytes);
+    REQUIRE(root.has_value());
+    return root->view<Path>();
+}
+
+template <class E>
+std::uint64_t bits_of(E const value)
+{
+    if constexpr (std::is_floating_point_v<E>)
+        return std::bit_cast<std::conditional_t<sizeof(E) == 2, std::uint16_t, std::conditional_t<sizeof(E) == 4, std::uint32_t, std::uint64_t>>>(value);
+    else
+        return static_cast<std::uint64_t>(value);
+}
+
+} // namespace
+
+// view checks the tag and the length of a typed array once and then reads an element with one bounds check. The test
+// reads every element type of RFC 8746 that the schema writes. The expected bits come from RFC 8746 figure 6 and IEEE
+// 754: 1.0 is 3c00 in binary16, 3f800000 in binary32 and 3ff0000000000000 in binary64; -2 is all ones but the lowest
+// bit in two's complement. at(i) with an index equal to the size is index_out_of_bounds, an error value and no read,
+// as std::vector::at gives std::out_of_range; operator[] with that index is a wrong use and throws std::logic_error.
+TEST_CASE("view: every typed array gives its elements back, and an index past the end is an error value")
+{
+    std::string const bytes = schema_bytes(sample_numbers);
+    auto check = [&]<cbor::fixed_string Path>(std::uint64_t const expected) {
+        auto const v = view_of<Path>(bytes);
+        REQUIRE(v.has_value());
+        REQUIRE_EQ(v->size(), 1u);
+        auto const x = v->at(0);
+        REQUIRE(x.has_value());
+        CHECK_EQ(bits_of(*x), expected);
+        CHECK_EQ(bits_of((*v)[0]), expected);
+        CHECK_EQ(v->at(1).error(), error::index_out_of_bounds);
+        CHECK_EQ(v->at(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+        CHECK_THROWS_AS((void)(*v)[1], std::logic_error);
+        CHECK_THROWS_AS((void)(*v)[std::numeric_limits<std::size_t>::max()], std::logic_error);
+    };
+    check.operator()<"$.u16">(0x0102);
+    check.operator()<"$.u32">(0x01020304);
+    check.operator()<"$.u64">(0x0102030405060708);
+    check.operator()<"$.s8">(static_cast<std::uint64_t>(std::int64_t{-2}));
+    check.operator()<"$.s16">(static_cast<std::uint64_t>(std::int64_t{-2}));
+    check.operator()<"$.s32">(static_cast<std::uint64_t>(std::int64_t{-2}));
+    check.operator()<"$.s64">(static_cast<std::uint64_t>(std::int64_t{-2}));
+#if defined(__STDCPP_FLOAT16_T__)
+    check.operator()<"$.f16">(0x3c00);
+#endif
+    check.operator()<"$.f32">(0x3f800000);
+    check.operator()<"$.f64">(0x3ff0000000000000);
+}
+
+// A view of an empty typed array has size 0, and index 0 is already out of bounds.
+TEST_CASE("view: an empty typed array has no element")
+{
+    auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{}));
+    REQUIRE(root.has_value());
+    auto const v = root->view<"$.v">();
+    REQUIRE(v.has_value());
+    CHECK_EQ(v->size(), 0u);
+    CHECK_EQ(v->at(0).error(), error::index_out_of_bounds);
+    CHECK_THROWS_AS((void)(*v)[0], std::logic_error);
+}
+
+// view makes no view when the tag is not the one of the element type or the length is not a multiple of the element
+// size. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746). The errors are the same as at_path gives.
+TEST_CASE("view: a typed array with a wrong tag or a wrong length gives no view")
+{
+    std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
+    std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
+    REQUIRE_NE(at, std::string::npos);
+    auto refused = [](std::string const &wrong) {
+        auto const root = cbor::schema<doubles>::path(wrong);
+        REQUIRE(root.has_value());
+        auto const v = root->view<"$.v">();
+        REQUIRE_FALSE(v.has_value());
+        return v.error();
+    };
+    for (char const tag : {'\x52', '\x55'}) {
+        std::string wrong = bytes;
+        wrong[at + 1] = tag;
+        CHECK_EQ(refused(wrong), error::incorrect_type);
+    }
+    std::string odd = bytes;
+    odd[at + 6] = '\x0f';
+    CHECK_EQ(refused(odd), error::inadmissible_type_for_tag_content);
+    std::string longer = bytes;
+    longer[at + 6] = '\x18';
+    CHECK_EQ(refused(longer), error::too_little_data);
+}
+
+// The view holds the owner of the bytes. The test reads it after the accessor and the string it came from are gone,
+// so that the sanitizer sees a read of freed memory if the view did not keep the bytes alive.
+TEST_CASE("view: the view keeps the bytes alive after the accessor is gone")
+{
+    std::optional<cbor::typed_array_view<double>> kept;
+    {
+        auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{{1.0, 2.0}}));
+        REQUIRE(root.has_value());
+        auto v = root->view<"$.v">();
+        REQUIRE(v.has_value());
+        kept.emplace(std::move(*v));
+    }
+    REQUIRE_EQ(kept->size(), 2u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>((*kept)[1]), 0x4000000000000000u);
+}
+
+namespace
+{
+
+numbers const three_numbers{{1, 2, 0xfffe},
+                            {1, 2, 0xfffffffe},
+                            {1, 2, 0xfffffffffffffffe},
+                            {-1, 2, -3},
+                            {-1, 2, -3},
+                            {-1, 2, -3},
+                            {-1, 2, -3},
+#if defined(__STDCPP_FLOAT16_T__)
+                            {-1.0f16, 2.0f16, -4.0f16},
+#endif
+                            {-1.0f, 2.0f, -4.0f},
+                            {-1.0, 2.0, -4.0}};
+
+template <class E>
+std::vector<std::uint64_t> bits_of_all(std::vector<E> const &values)
+{
+    std::vector<std::uint64_t> out;
+    for (E const x : values)
+        out.push_back(bits_of(x));
+    return out;
+}
+
+} // namespace
+
+// The iterator of a view yields each element by value. It is a random access iterator by the concepts of the
+// standard library, so that std::ranges algorithms and range-for take the view as they take a std::span. The view is
+// a sized random access range. It is not a borrowed range: its iterators read bytes that the view keeps alive.
+TEST_CASE("view: the iterator and the view model the standard concepts")
+{
+    using V = cbor::typed_array_view<double>;
+    using I = V::iterator;
+    static_assert(std::random_access_iterator<I>);
+    static_assert(std::sized_sentinel_for<I, I>);
+    static_assert(std::same_as<std::iter_value_t<I>, double>);
+    static_assert(std::same_as<std::iter_reference_t<I>, double>);
+    static_assert(std::ranges::random_access_range<V const>);
+    static_assert(std::ranges::sized_range<V const>);
+    static_assert(std::ranges::common_range<V const>);
+    static_assert(std::random_access_iterator<std::ranges::iterator_t<std::ranges::reverse_view<std::ranges::ref_view<V const>>>>);
+    static_assert(std::same_as<decltype(std::declval<V const &>().rbegin()), std::reverse_iterator<I>>);
+    static_assert(std::same_as<decltype(std::declval<V const &>().cbegin()), I>);
+    static_assert(std::same_as<decltype(std::declval<V const &>()[0]), double>);
+    static_assert(std::same_as<decltype(std::declval<V const &>().at(0)), std::expected<double, cbor::error>>);
+    static_assert(std::same_as<decltype(std::declval<V const &>().front()), double>);
+    static_assert(!std::ranges::borrowed_range<V>);
+    static_assert(!std::ranges::contiguous_range<V>);
+    static_assert(!std::output_iterator<I, double>);
+}
+
+// Each element type of RFC 8746 that the schema writes is read three ways: range-for, the iterator with index and
+// arithmetic, and std::ranges algorithms. The expected bits are those of the values that were encoded. The order of
+// the values makes the maximum the middle element and the minimum the last one for the signed types.
+TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every element type")
+{
+    std::string const bytes = schema_bytes(three_numbers);
+    auto check = [&]<cbor::fixed_string Path, class E>(std::vector<E> const &source) {
+        auto const v = view_of<Path>(bytes);
+        REQUIRE(v.has_value());
+        cbor::typed_array_view<E> const &view = *v;
+        REQUIRE_EQ(view.size(), 3u);
+        CHECK_FALSE(view.empty());
+        std::vector<E> seen;
+        for (E const x : view)
+            seen.push_back(x);
+        CHECK_EQ(bits_of_all(seen), bits_of_all(source));
+        auto const b = view.begin();
+        CHECK_EQ(view.end() - b, 3);
+        CHECK_EQ(b - view.end(), -3);
+        CHECK_EQ(bits_of(b[2]), bits_of(source[2]));
+        CHECK_EQ(bits_of(*(b + 1)), bits_of(source[1]));
+        CHECK_EQ(bits_of(*(1 + b)), bits_of(source[1]));
+        CHECK_EQ(bits_of(*(view.end() - 1)), bits_of(source[2]));
+        auto i = b;
+        CHECK_EQ(bits_of(*i++), bits_of(source[0]));
+        CHECK_EQ(bits_of(*i), bits_of(source[1]));
+        CHECK_EQ(bits_of(*--i), bits_of(source[0]));
+        i += 2;
+        CHECK_EQ(bits_of(*i), bits_of(source[2]));
+        i -= 1;
+        CHECK_EQ(bits_of(*i--), bits_of(source[1]));
+        CHECK(i == b);
+        CHECK(b < view.end());
+        CHECK(view.end() > b);
+        CHECK(b <= b);
+        CHECK_EQ(bits_of(std::ranges::fold_left(view, E{}, std::plus<>{})),
+                 bits_of(std::ranges::fold_left(source, E{}, std::plus<>{})));
+        CHECK_EQ(bits_of(std::ranges::max(view)), bits_of(std::ranges::max(source)));
+        CHECK_EQ(std::ranges::find(view, source[1]) - view.begin(), 1);
+        CHECK(std::ranges::find(view, E{0}) == view.end());
+        CHECK_EQ(std::ranges::distance(view), 3);
+    };
+    check.operator()<"$.u16">(three_numbers.u16);
+    check.operator()<"$.u32">(three_numbers.u32);
+    check.operator()<"$.u64">(three_numbers.u64);
+    check.operator()<"$.s8">(three_numbers.s8);
+    check.operator()<"$.s16">(three_numbers.s16);
+    check.operator()<"$.s32">(three_numbers.s32);
+    check.operator()<"$.s64">(three_numbers.s64);
+#if defined(__STDCPP_FLOAT16_T__)
+    check.operator()<"$.f16">(three_numbers.f16);
+#endif
+    check.operator()<"$.f32">(three_numbers.f32);
+    check.operator()<"$.f64">(three_numbers.f64);
+}
+
+// front and back read the first and the last element with one load each, and rbegin and rend walk the view
+// backwards, as std::span does. first(n) and last(n) give a sub-view of n elements. n equal to the size gives the
+// whole view; n one past it is index_out_of_bounds as an error value, where std::span would have undefined behaviour.
+TEST_CASE("view: front, back, first and last")
+{
+    auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+    REQUIRE(root.has_value());
+    auto const v = root->view<"$.v">();
+    REQUIRE(v.has_value());
+    CHECK_EQ(std::bit_cast<std::uint64_t>(v->front()), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(v->back()), 0x4010000000000000u);
+    std::vector<std::uint64_t> backwards;
+    for (auto i = v->rbegin(); i != v->rend(); ++i)
+        backwards.push_back(std::bit_cast<std::uint64_t>(*i));
+    CHECK(backwards == std::vector<std::uint64_t>{0x4010000000000000u, 0x4000000000000000u, 0x3ff0000000000000u});
+    CHECK(v->crbegin() == v->rbegin());
+    CHECK(v->cbegin() == v->begin());
+    CHECK(v->cend() == v->end());
+    auto const head = v->first(2);
+    REQUIRE(head.has_value());
+    REQUIRE_EQ(head->size(), 2u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(head->back()), 0x4000000000000000u);
+    CHECK_EQ(head->at(2).error(), error::index_out_of_bounds);
+    auto const tail = v->last(2);
+    REQUIRE(tail.has_value());
+    REQUIRE_EQ(tail->size(), 2u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(tail->front()), 0x4000000000000000u);
+    CHECK_EQ(v->first(3)->size(), 3u);
+    CHECK_EQ(v->last(3)->size(), 3u);
+    CHECK_EQ(v->first(0)->size(), 0u);
+    CHECK_EQ(v->last(0)->size(), 0u);
+    CHECK_EQ(v->first(4).error(), error::index_out_of_bounds);
+    CHECK_EQ(v->last(4).error(), error::index_out_of_bounds);
+    CHECK_EQ(v->first(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+    CHECK_EQ(v->last(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+}
+
+// An empty view has no front and no back: each is a wrong use and throws std::logic_error, as the precondition of
+// std::span::front is. There is no element to iterate. first(0) and last(0)
+// are empty views, and first(1) is out of bounds.
+TEST_CASE("view: an empty view has no front, no back and no element")
+{
+    auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{}));
+    REQUIRE(root.has_value());
+    auto const v = root->view<"$.v">();
+    REQUIRE(v.has_value());
+    CHECK(v->empty());
+    CHECK_THROWS_AS((void)v->front(), std::logic_error);
+    CHECK_THROWS_AS((void)v->back(), std::logic_error);
+    CHECK(v->rbegin() == v->rend());
+    CHECK(v->begin() == v->end());
+    CHECK_EQ(std::ranges::fold_left(*v, 0.0, std::plus<>{}), 0.0);
+    CHECK(v->first(0)->empty());
+    CHECK(v->last(0)->empty());
+    CHECK_EQ(v->first(1).error(), error::index_out_of_bounds);
+    CHECK_EQ(v->last(1).error(), error::index_out_of_bounds);
+}
+
+// A sub-view holds the owner as the view does. The test drops the string, the accessor and the parent view, then
+// reads the sub-views, so that the sanitizer sees a read of freed memory if a sub-view borrowed from its parent.
+// The sub-view of an rvalue view takes the owner over, and the test reads it after the same drops. A view made from
+// an rvalue accessor takes the owner over too.
+TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is gone")
+{
+    std::optional<cbor::typed_array_view<double>> copied;
+    std::optional<cbor::typed_array_view<double>> moved;
+    std::optional<cbor::typed_array_view<double>> taken;
+    {
+        auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+        REQUIRE(root.has_value());
+        auto v = root->view<"$.v">();
+        REQUIRE(v.has_value());
+        auto c = v->last(2);
+        REQUIRE(c.has_value());
+        copied.emplace(std::move(*c));
+        auto m = std::move(*v).first(1);
+        REQUIRE(m.has_value());
+        moved.emplace(std::move(*m));
+        auto r = cbor::schema<doubles>::path(schema_bytes(doubles{{8.0}}));
+        REQUIRE(r.has_value());
+        auto t = std::move(*r).view<"$.v">();
+        REQUIRE(t.has_value());
+        taken.emplace(std::move(*t));
+    }
+    REQUIRE_EQ(copied->size(), 2u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(copied->back()), 0x4010000000000000u);
+    CHECK_EQ(std::ranges::fold_left(*copied, 0.0, std::plus<>{}), 6.0);
+    REQUIRE_EQ(moved->size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(moved->front()), 0x3ff0000000000000u);
+    REQUIRE_EQ(taken->size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(taken->front()), 0x4020000000000000u);
+}
+
+namespace
+{
+
 struct [[=cbor::tag(1514)]] garage {
     std::vector<tire> tires;
     std::vector<std::string> names;
@@ -480,11 +971,27 @@ TEST_CASE("at_path: a list of structs, strings and lists, by index")
     CHECK_EQ(at_path<garage, "$.rows[1][0]">(bytes).error(), error::index_out_of_bounds);
 }
 
+// RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. The key
+// 9 of the sample is written over with 7, the other key, and decode keeps the first entry with no error.
+TEST_CASE("schema: decode keeps the first entry of a repeated key")
+{
+    std::string bytes = schema_bytes(sample_garage);
+    std::string const nine = "\x19\x00\x09"s;
+    auto const at = bytes.find(nine);
+    REQUIRE(at != std::string::npos);
+    REQUIRE(bytes.find(nine, at + 1) == std::string::npos);
+    bytes.replace(at, nine.size(), "\x19\x00\x07"s);
+    auto const read = cbor::schema<garage>::decode(bytes);
+    REQUIRE(read.has_value());
+    CHECK_EQ((*read)->owners, (std::map<std::uint16_t, std::string>{{7, "seven"}}));
+    CHECK(cbor::schema<garage>::decode(schema_bytes(sample_garage)).has_value());
+}
+
 template <class T, cbor::fixed_string Path>
-concept path_reads = requires(typename cbor::schema<T>::template accessor<> const &a) { a.template at<Path>(); };
+concept path_reads = requires(typename cbor::schema<T>::template accessor<> const &a) { a.template at_path<Path>(); };
 
 template <class T, cbor::fixed_string Path, class I>
-concept path_reads_at = requires(typename cbor::schema<T>::template accessor<> const &a, I const i) { a.template at<Path>(i); };
+concept path_reads_at = requires(typename cbor::schema<T>::template accessor<> const &a, I const i) { a.template at_path<Path>(i); };
 
 // A path that ends at a leaf gives the value. A path that ends at a struct, a list, a fixed array or a map gives an
 // accessor. A name that is not a member, an index into a text or a map, an index past a fixed array, and a count of
@@ -516,10 +1023,10 @@ TEST_CASE("path: a path compiles where it names a part of the type")
     CHECK_FALSE(path_reads<garage, "tires">);
     CHECK(path_reads<garage, "@.tires">);
     using A = cbor::schema<garage>::accessor<>;
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.names[0]">()), cbor::result<std::string_view>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.tires[]">(0uz)), cbor::result<cbor::schema<garage>::accessor<tire>>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.tires">()),
-                       cbor::result<cbor::schema<garage>::accessor<std::vector<tire>>>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.names[0]">()), std::expected<std::string_view, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), std::expected<cbor::schema<garage>::accessor<tire>, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires">()),
+                       std::expected<cbor::schema<garage>::accessor<std::vector<tire>>, cbor::error>>);
 }
 
 // An accessor of a list gives its size and its elements; an accessor of a struct gives its fields. A leaf through
@@ -530,27 +1037,27 @@ TEST_CASE("path: an accessor reads relative to the part it names")
     auto const opened = cbor::schema<garage>::path(bytes);
     REQUIRE(opened.has_value());
     auto const &root = *opened;
-    auto const tires = root.at<"$.tires">();
+    auto const tires = root.at_path<"$.tires">();
     REQUIRE(tires.has_value());
     CHECK_EQ(tires->size(), 3u);
-    auto const second = tires->at<"@[]">(1uz);
+    auto const second = tires->at_path<"@[]">(1uz);
     REQUIRE(second.has_value());
-    CHECK_EQ(second->at<"@.diameter">(), 18u);
-    CHECK_EQ(second->at<"@.airPressure">(), root.at<"$.tires[].airPressure">(1uz));
-    CHECK_EQ(tires->at<"@[]">(3uz).error(), error::index_out_of_bounds);
-    auto const rows = root.at<"$.rows">();
+    CHECK_EQ(second->at_path<"@.diameter">(), 18u);
+    CHECK_EQ(second->at_path<"@.airPressure">(), root.at_path<"$.tires[].airPressure">(1uz));
+    CHECK_EQ(tires->at_path<"@[]">(3uz).error(), error::index_out_of_bounds);
+    auto const rows = root.at_path<"$.rows">();
     REQUIRE(rows.has_value());
     CHECK_EQ(rows->size(), 3u);
-    auto const first = rows->at<"@[0]">();
+    auto const first = rows->at_path<"@[0]">();
     REQUIRE(first.has_value());
     CHECK_EQ(first->size(), 2u);
-    CHECK_EQ(first->at<"@[1]">(), 2u);
-    auto const owners = root.at<"$.owners">();
+    CHECK_EQ(first->at_path<"@[1]">(), 2u);
+    auto const owners = root.at_path<"$.owners">();
     REQUIRE(owners.has_value());
     CHECK_EQ(owners->size(), 2u);
-    auto const names = root.at<"$.names">();
+    auto const names = root.at_path<"$.names">();
     REQUIRE(names.has_value());
-    CHECK_EQ(names->at<"@[]">(1uz), "bc"sv);
+    CHECK_EQ(names->at_path<"@[]">(1uz), "bc"sv);
 }
 
 #endif
@@ -706,7 +1213,7 @@ TEST_CASE("schema: an annotation gives the key of a member")
 // A struct that holds a list of itself is read by recursion, and the bytes decide how deep. Without a limit, a
 // chain of 100000 nodes in 2.2 MB overflowed a stack of 8 MiB. Each reference that is followed counts one
 // level, as each nested item counts one in the other decoders.
-TEST_CASE("decode: a struct that holds itself stops at DepthMax")
+TEST_CASE("decode: a struct that holds itself stops at the nesting depth in force")
 {
     REQUIRE_EQ(cbor::schema<node>::fixed_size(), 16u);
 
@@ -718,14 +1225,29 @@ TEST_CASE("decode: a struct that holds itself stops at DepthMax")
     REQUIRE_FALSE(over.has_value());
     CHECK_EQ(over.error(), error::nesting_depth_exceeded);
 
-    auto const small = cbor::schema<node>::decode<3>(node_chain(3));
-    REQUIRE(small.has_value());
-    CHECK_EQ(depth_of(**small), 3u);
-    CHECK_EQ(cbor::schema<node>::decode<3>(node_chain(4)).error(), error::nesting_depth_exceeded);
+    {
+        test::limits_guard const depth{{.nesting_depth = 3}};
+        auto const small = cbor::schema<node>::decode(node_chain(3));
+        REQUIRE(small.has_value());
+        CHECK_EQ(depth_of(**small), 3u);
+        CHECK_EQ(cbor::schema<node>::decode(node_chain(4)).error(), error::nesting_depth_exceeded);
+    }
 
     auto const deep = cbor::schema<node>::decode(node_chain(100000));
     REQUIRE_FALSE(deep.has_value());
     CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
+}
+
+// schema::value_read reads a chain as deep as validity::nesting_depth_limit allows, so the stack of the
+// thread holds the deepest chain that the library accepts.
+TEST_CASE("nesting depth limit: schema")
+{
+    test::limits_guard const depth{{.nesting_depth = cbor::validity::nesting_depth_limit}};
+    auto const deepest = cbor::schema<node>::decode(node_chain(cbor::validity::nesting_depth_limit));
+    REQUIRE(deepest.has_value());
+    CHECK_EQ(depth_of(**deepest), cbor::validity::nesting_depth_limit);
+    CHECK_EQ(cbor::schema<node>::decode(node_chain(cbor::validity::nesting_depth_limit + 1)).error(),
+             error::nesting_depth_exceeded);
 }
 
 #endif
@@ -758,7 +1280,7 @@ TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
     std::array<char, 8> small{};
     auto const too_small = cbor::schema<garage>::encode(sample_garage, std::span(small));
     REQUIRE_FALSE(too_small.has_value());
-    CHECK_EQ(too_small.error(), std::errc::no_buffer_space);
+    CHECK_EQ(too_small.error(), cbor::error::no_buffer_space);
 
     struct counting {
         std::string sent;
@@ -860,7 +1382,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
     std::string const bytes = *cbor::schema<passkey_login>::encode(full);
-    CHECK_EQ(at_path<passkey_login, "$.note">(bytes), std::optional<std::string>{"hello"});
+    CHECK_EQ(at_path<passkey_login, "$.note">(bytes).value(), std::optional<std::string>{"hello"});
     auto const decoded_back = *cbor::schema<passkey_login>::decode(bytes);
     passkey_login const &back = *decoded_back;
     REQUIRE(back.user.has_value());
@@ -873,7 +1395,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
     REQUIRE(absent.has_value());
     CHECK_FALSE(absent->has_value());
     for (std::string_view message : {std::string_view(bytes), std::string_view(none)}) {
-        auto const end = cbor::item_end<64>(message);
+        auto const end = cbor::item_size(message);
         REQUIRE(end.has_value());
         CHECK_EQ(*end, message.size());
     }
@@ -1010,8 +1532,6 @@ C chain_of(std::uint8_t const v)
 // index 21 to 6(-3) = c6 3a 00 00 00 02 and index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4
 // entries. A record of index 8 or more is one byte longer, so its size depends on the root. The class tag of chainK
 // is 1600 + K, 3 bytes in front of each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
-// A generic reader counts the class tag, the reference and the value array as three levels of nesting, so 20 nested
-// records need more than a DepthMax of 64.
 TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
 {
     CHECK_EQ(cbor::schema<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
@@ -1022,8 +1542,7 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
 
     chain0 const value = chain_of<chain0>(0);
     std::string const bytes = *cbor::schema<chain0>::encode(value);
-    CHECK_EQ(cbor::item_end<64>(bytes).error(), error::nesting_depth_exceeded);
-    CHECK_EQ(cbor::item_end<128>(bytes), bytes.size());
+    CHECK_EQ(cbor::item_size(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x19"s);
     CHECK_EQ(bytes.substr(bytes.size() - 25),
              "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x03"s);
@@ -1052,7 +1571,7 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
 {
     chain3 const value = chain_of<chain3>(3);
     std::string const bytes = *cbor::schema<chain3>::encode(value);
-    CHECK_EQ(cbor::item_end<64>(bytes), bytes.size());
+    CHECK_EQ(cbor::item_size(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x16"s);
     CHECK_EQ(bytes.substr(bytes.size() - 25),
              "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x1a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"s);
@@ -1139,7 +1658,7 @@ std::string ticket_bytes()
 // the caller would read freed memory, and the address sanitizer reports that read.
 TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 {
-    cbor::result<cbor::oref<ticket>> const t = cbor::schema<ticket>::decode(ticket_bytes());
+    std::expected<cbor::owning_ref<ticket>, cbor::error> const t = cbor::schema<ticket>::decode(ticket_bytes());
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);
@@ -1170,8 +1689,8 @@ TEST_CASE("path: the copying form outlives the message of the caller")
     auto const opened = cbor::schema<ticket>::path(ticket_bytes());
     REQUIRE(opened.has_value());
     auto const &root = *opened;
-    CHECK_EQ(root.at<"$.holder">(), sample_ticket.holder);
-    CHECK_EQ(root.at<"$.seats[]">(1uz), sample_ticket.seats.at(1));
+    CHECK_EQ(root.at_path<"$.holder">(), sample_ticket.holder);
+    CHECK_EQ(root.at_path<"$.seats[]">(1uz), sample_ticket.seats.at(1));
 }
 
 // The owner form keeps the owner in the root accessor. The caller releases its own pointer to the owner before it
@@ -1183,8 +1702,8 @@ TEST_CASE("path: the root keeps the owner after the caller releases it")
     auto const opened = cbor::schema<ticket>::path(std::move(owner), bytes);
     REQUIRE(opened.has_value());
     auto const &root = *opened;
-    auto const holder = root.at<"$.holder">();
-    auto const seat = root.at<"$.seats[1]">();
+    auto const holder = root.at_path<"$.holder">();
+    auto const seat = root.at_path<"$.seats[1]">();
     REQUIRE(holder.has_value());
     REQUIRE(seat.has_value());
     CHECK_EQ(*holder, sample_ticket.holder);
@@ -1310,38 +1829,38 @@ std::size_t probe_lot_read(std::string_view const message)
     };
     auto const all = [&] {
         std::vector<std::optional<double>> v;
-        v.push_back(number(lot.at<"$.flag">()));
-        v.push_back(number(lot.at<"$.i16">()));
-        v.push_back(number(lot.at<"$.u64">()));
-        v.push_back(number(lot.at<"$.f64">()));
-        v.push_back(number(lot.at<"$.f32">()));
-        v.push_back(number(lot.at<"$.i128">()));
-        v.push_back(text(lot.at<"$.code">()));
-        v.push_back(text(lot.at<"$.text">()));
+        v.push_back(number(lot.at_path<"$.flag">()));
+        v.push_back(number(lot.at_path<"$.i16">()));
+        v.push_back(number(lot.at_path<"$.u64">()));
+        v.push_back(number(lot.at_path<"$.f64">()));
+        v.push_back(number(lot.at_path<"$.f32">()));
+        v.push_back(number(lot.at_path<"$.i128">()));
+        v.push_back(text(lot.at_path<"$.code">()));
+        v.push_back(text(lot.at_path<"$.text">()));
         for (std::size_t i = 0; i < 3; ++i) {
-            v.push_back(number(lot.at<"$.tires[].diameter">(i)));
-            v.push_back(number(lot.at<"$.tires[].airPressure">(i)));
-            v.push_back(number(lot.at<"$.pair[]">(i)));
+            v.push_back(number(lot.at_path<"$.tires[].diameter">(i)));
+            v.push_back(number(lot.at_path<"$.tires[].airPressure">(i)));
+            v.push_back(number(lot.at_path<"$.pair[]">(i)));
         }
-        v.push_back(number(lot.at<"$.maybe">()));
-        v.push_back(number(lot.at<"$.motor.horsepower">()));
-        v.push_back(number(lot.at<"$.motor.cc">()));
+        v.push_back(number(lot.at_path<"$.maybe">()));
+        v.push_back(number(lot.at_path<"$.motor.horsepower">()));
+        v.push_back(number(lot.at_path<"$.motor.cc">()));
         return v;
     };
     std::vector<std::optional<double>> const forward = all();
     std::vector<std::optional<double>> backward;
     for (std::size_t i = 3; i-- > 0;) {
-        backward.push_back(number(lot.at<"$.tires[].airPressure">(i)));
-        backward.push_back(number(lot.at<"$.tires[].diameter">(i)));
+        backward.push_back(number(lot.at_path<"$.tires[].airPressure">(i)));
+        backward.push_back(number(lot.at_path<"$.tires[].diameter">(i)));
     }
     CHECK_EQ(backward[0], forward[8 + 3 * 2 + 1]);
     CHECK_EQ(backward[1], forward[8 + 3 * 2]);
     CHECK_EQ(backward[4], forward[8 + 1]);
     CHECK_EQ(backward[5], forward[8]);
     for (std::size_t i = 0; i < 3; ++i) {
-        auto const tire = lot.at<"$.tires[]">(i);
-        std::optional<double> const diameter = tire ? number(tire->at<"@.diameter">()) : std::nullopt;
-        std::optional<double> const pressure = tire ? number(tire->at<"@.airPressure">()) : std::nullopt;
+        auto const tire = lot.at_path<"$.tires[]">(i);
+        std::optional<double> const diameter = tire ? number(tire->at_path<"@.diameter">()) : std::nullopt;
+        std::optional<double> const pressure = tire ? number(tire->at_path<"@.airPressure">()) : std::nullopt;
         CHECK_EQ(diameter, forward[8 + 3 * i]);
         CHECK_EQ(pressure, forward[8 + 3 * i + 1]);
     }
@@ -1352,10 +1871,10 @@ std::size_t probe_lot_read(std::string_view const message)
 constexpr std::size_t probe_lot_paths = 8 + 3 * 2 + 3;
 
 template <class A, cbor::fixed_string Path>
-concept temporary_reads = requires(A &&a) { std::move(a).template at<Path>(); };
+concept temporary_reads = requires(A &&a) { std::move(a).template at_path<Path>(); };
 
 template <class A>
-concept chain_reads = requires(A const &a) { (*a.template at<"$.tires[]">(0uz)).template at<"@.diameter">(); };
+concept chain_reads = requires(A const &a) { (*a.template at_path<"$.tires[]">(0uz)).template at_path<"@.diameter">(); };
 
 template <class R>
 concept dereferenced_as_rvalue = requires(R &&r) { *std::move(r); } || requires(R &&r) { std::move(r).operator->(); };
@@ -1372,7 +1891,7 @@ TEST_CASE("attack: the sample message reads every path")
     CHECK((*at_path<probe, "$.i128">(bytes) == cbor::int128{-5}));
     CHECK_EQ(at_path<probe, "$.f64">(bytes), 2.5);
     CHECK_EQ(at_path<probe, "$.pair[]">(bytes, 1uz), 8u);
-    CHECK_EQ(at_path<probe, "$.maybe">(bytes), std::optional<std::int32_t>{-9});
+    CHECK_EQ(at_path<probe, "$.maybe">(bytes).value(), std::optional<std::int32_t>{-9});
 }
 
 // A text is a view into the bytes that the root holds. An accessor is read through an lvalue only, so each accessor
@@ -1382,15 +1901,39 @@ TEST_CASE("attack: no text result outlives its bytes")
 {
     std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
     using A = cbor::schema<probe>::accessor<>;
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.text">()), cbor::result<std::string_view>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at<"@.code">()), cbor::result<std::string_view>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.text">()), std::expected<std::string_view, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.code">()), std::expected<std::string_view, cbor::error>>);
     CHECK(path_reads<probe, "$.text">);
     CHECK_FALSE(temporary_reads<A, "$.text">);
     CHECK_FALSE(temporary_reads<cbor::schema<probe>::accessor<tire>, "@.diameter">);
     CHECK_FALSE(chain_reads<A>);
     CHECK_FALSE(dereferenced_as_rvalue<cbor::owning_ref<probe>>);
-    CHECK_THROWS_AS(cbor::schema<probe>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
-    CHECK_THROWS_AS(cbor::schema<probe>::decode(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::schema<probe>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::schema<probe>::decode(std::shared_ptr<void const>{}, bytes), std::logic_error);
+}
+
+// An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
+// owner does not compile, because the owner does not hold it. The test exists because each of these let a view
+// outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
+TEST_CASE("attack: path and decode check that the owner holds an object")
+{
+    auto const bytes = std::make_shared<std::string const>(*cbor::schema<probe>::encode(sample_probe));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::path(o, std::string(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::schema<probe>::path(o, std::move(s)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::decode(o, std::string(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::schema<probe>::decode(o, std::move(s)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::path(o, *o); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::decode(o, *o); }; }(bytes)));
+    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
+    CHECK_THROWS_AS((void)cbor::schema<probe>::path(holds_nothing, *bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::schema<probe>::decode(holds_nothing, *bytes), std::logic_error);
+    std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
+    auto const root = cbor::schema<probe>::path(holds_bytes, *bytes);
+    REQUIRE(root.has_value());
+    CHECK_EQ(root->at_path<"$.i16">(), -300);
+    auto const decoded = cbor::schema<probe>::decode(holds_bytes, *bytes);
+    REQUIRE(decoded.has_value());
+    CHECK_EQ((*decoded)->i16, -300);
 }
 
 // Each prefix of the message is a cut message. The test exists because a reader that trusted an offset from the
@@ -1520,9 +2063,9 @@ TEST_CASE("attack: a forged class tag of a record in a list is incorrect_type")
     CHECK_EQ(at_path<probe, "$.tires[1].diameter">(forged).error(), error::incorrect_type);
     auto lot = *cbor::schema<probe>::path(forged);
     for (int pass = 0; pass < 2; ++pass) {
-        CHECK_EQ(lot.at<"$.tires[].diameter">(0uz), 17u);
-        CHECK_EQ(lot.at<"$.tires[].diameter">(1uz).error(), error::incorrect_type);
-        CHECK_EQ(lot.at<"$.tires[].airPressure">(1uz).error(), error::incorrect_type);
+        CHECK_EQ(lot.at_path<"$.tires[].diameter">(0uz), 17u);
+        CHECK_EQ(lot.at_path<"$.tires[].diameter">(1uz).error(), error::incorrect_type);
+        CHECK_EQ(lot.at_path<"$.tires[].airPressure">(1uz).error(), error::incorrect_type);
     }
 }
 
@@ -1571,7 +2114,7 @@ parking_lot sample_lot()
     return l;
 }
 
-std::string text_of(cbor::result<std::string_view> const &r)
+std::string text_of(std::expected<std::string_view, cbor::error> const &r)
 {
     return r ? std::string(*r) : "(error)"s;
 }
@@ -1582,46 +2125,46 @@ void lot_car_matches(cbor::schema<parking_lot>::accessor<> const &lot, parking_l
 {
     CAPTURE(i);
     lot_car const &c = back.cars.at(i);
-    CHECK_EQ(text_of(lot.at<"$.cars[].make">(i)), c.make);
-    CHECK_EQ(text_of(lot.at<"$.cars[].model">(i)), c.model);
-    CHECK_EQ(lot.at<"$.cars[].seats">(i), c.seats);
-    CHECK_EQ(lot.at<"$.cars[].engine.cc">(i), c.engine.cc);
-    CHECK_EQ(lot.at<"$.cars[].engine.horsepower">(i), c.engine.horsepower);
-    auto const note = *lot.at<"$.cars[].note">(i);
+    CHECK_EQ(text_of(lot.at_path<"$.cars[].make">(i)), c.make);
+    CHECK_EQ(text_of(lot.at_path<"$.cars[].model">(i)), c.model);
+    CHECK_EQ(lot.at_path<"$.cars[].seats">(i), c.seats);
+    CHECK_EQ(lot.at_path<"$.cars[].engine.cc">(i), c.engine.cc);
+    CHECK_EQ(lot.at_path<"$.cars[].engine.horsepower">(i), c.engine.horsepower);
+    auto const note = *lot.at_path<"$.cars[].note">(i);
     CHECK_EQ(note.has_value(), c.note.has_value());
     if (note && c.note)
         CHECK_EQ(*note, *c.note);
-    auto const opened = lot.at<"$.cars[]">(i);
+    auto const opened = lot.at_path<"$.cars[]">(i);
     REQUIRE(opened.has_value());
     auto const &car = *opened;
-    CHECK_EQ(text_of(car.at<"@.make">()), c.make);
-    CHECK_EQ(car.at<"@.engine.cc">(), c.engine.cc);
-    CHECK_EQ(car.at<"@.wheels">()->size(), c.wheels.size());
-    CHECK_EQ(text_of(lot.at<"$.cars[].code">(i)), std::string_view(c.code, 2));
+    CHECK_EQ(text_of(car.at_path<"@.make">()), c.make);
+    CHECK_EQ(car.at_path<"@.engine.cc">(), c.engine.cc);
+    CHECK_EQ(car.at_path<"@.wheels">()->size(), c.wheels.size());
+    CHECK_EQ(text_of(lot.at_path<"$.cars[].code">(i)), std::string_view(c.code, 2));
     for (std::size_t k = c.wheels.size() + 1; k-- > 0;) {
         CAPTURE(k);
         if (k == c.wheels.size()) {
-            CHECK_EQ(lot.at<"$.cars[].wheels[].diameter">(i, k).error(), error::index_out_of_bounds);
+            CHECK_EQ(lot.at_path<"$.cars[].wheels[].diameter">(i, k).error(), error::index_out_of_bounds);
             continue;
         }
-        CHECK_EQ(lot.at<"$.cars[].wheels[].diameter">(i, k), c.wheels[k].diameter);
-        CHECK_EQ(lot.at<"$.cars[].wheels[].airPressure">(i, k), c.wheels[k].airPressure);
-        CHECK_EQ(lot.at<"$.cars[].wheels[].snowTires">(i, k), c.wheels[k].snowTires);
-        auto const wheel = car.at<"@.wheels[]">(k);
+        CHECK_EQ(lot.at_path<"$.cars[].wheels[].diameter">(i, k), c.wheels[k].diameter);
+        CHECK_EQ(lot.at_path<"$.cars[].wheels[].airPressure">(i, k), c.wheels[k].airPressure);
+        CHECK_EQ(lot.at_path<"$.cars[].wheels[].snowTires">(i, k), c.wheels[k].snowTires);
+        auto const wheel = car.at_path<"@.wheels[]">(k);
         REQUIRE(wheel.has_value());
-        CHECK_EQ(wheel->at<"@.airPressure">(), c.wheels[k].airPressure);
-        CHECK_EQ(car.at<"@.wheels[].diameter">(k), c.wheels[k].diameter);
+        CHECK_EQ(wheel->at_path<"@.airPressure">(), c.wheels[k].airPressure);
+        CHECK_EQ(car.at_path<"@.wheels[].diameter">(k), c.wheels[k].diameter);
     }
 }
 
 template <class D, cbor::fixed_string Path>
-concept lot_reads = requires(D &d) { d.template at<Path>(0uz); };
+concept lot_reads = requires(D &d) { d.template at_path<Path>(0uz); };
 
 template <class D, cbor::fixed_string Path>
-concept temporary_lot_reads = requires(D &&d) { std::move(d).template at<Path>(0uz); };
+concept temporary_lot_reads = requires(D &&d) { std::move(d).template at_path<Path>(0uz); };
 
 template <class D>
-concept temporary_car_reads = requires(D const &d) { (*d.template at<"$.cars[]">(0uz)).template at<"@.make">(); };
+concept temporary_car_reads = requires(D const &d) { (*d.template at_path<"$.cars[]">(0uz)).template at_path<"@.make">(); };
 
 } // namespace
 
@@ -1642,12 +2185,12 @@ TEST_CASE("path: an accessor gives the values of decode in every order")
     std::ranges::shuffle(order, std::mt19937(5));
     for (std::size_t const i : order)
         lot_car_matches(lot, back, i);
-    CHECK_EQ(lot.at<"$.cars[].seats">(back.cars.size()).error(), error::index_out_of_bounds);
-    CHECK_EQ(text_of(lot.at<"$.notes[]">(2uz)), "third"sv);
-    CHECK_EQ(text_of(lot.at<"$.notes[]">(0uz)), "first"sv);
-    CHECK_EQ(lot.at<"$.rows[][]">(2uz, 0uz), 3u);
-    CHECK_EQ(lot.at<"$.rows[][]">(0uz, 1uz), 2u);
-    CHECK_EQ(lot.at<"$.rows[][]">(1uz, 0uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(lot.at_path<"$.cars[].seats">(back.cars.size()).error(), error::index_out_of_bounds);
+    CHECK_EQ(text_of(lot.at_path<"$.notes[]">(2uz)), "third"sv);
+    CHECK_EQ(text_of(lot.at_path<"$.notes[]">(0uz)), "first"sv);
+    CHECK_EQ(lot.at_path<"$.rows[][]">(2uz, 0uz), 3u);
+    CHECK_EQ(lot.at_path<"$.rows[][]">(0uz, 1uz), 2u);
+    CHECK_EQ(lot.at_path<"$.rows[][]">(1uz, 0uz).error(), error::index_out_of_bounds);
     CHECK_EQ(at_path<parking_lot, "$.cars[].wheels[].diameter">(bytes, 3uz, 0uz), back.cars[3].wheels[0].diameter);
     CHECK_EQ(at_path<parking_lot, "$.cars[].model">(bytes, 3uz), "mmm"s);
 }
@@ -1663,7 +2206,7 @@ TEST_CASE("path: an accessor is not read through a temporary")
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[].seats">);
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[]">);
     CHECK_FALSE(temporary_car_reads<D>);
-    CHECK_THROWS_AS(cbor::schema<parking_lot>::path(std::shared_ptr<void const>{}, ""sv), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::schema<parking_lot>::path(std::shared_ptr<void const>{}, ""sv), std::logic_error);
 }
 
 // The copying form keeps its copy: a text and a car accessor stay valid after the caller frees the message, while the
@@ -1672,12 +2215,12 @@ TEST_CASE("path: the copying form keeps its copy after the caller frees the mess
 {
     auto bytes = std::make_unique<std::string>(schema_bytes(sample_lot()));
     auto lot = *cbor::schema<parking_lot>::path(*bytes);
-    auto const make = *lot.at<"$.cars[].make">(3uz);
-    auto const car = *lot.at<"$.cars[]">(4uz);
+    auto const make = *lot.at_path<"$.cars[].make">(3uz);
+    auto const car = *lot.at_path<"$.cars[]">(4uz);
     bytes.reset();
     CHECK_EQ(make, "make3"sv);
-    CHECK_EQ(car.at<"@.make">(), "make4"sv);
-    CHECK_EQ(car.at<"$.cars[].make">(4uz), "make4"sv);
+    CHECK_EQ(car.at_path<"@.make">(), "make4"sv);
+    CHECK_EQ(car.at_path<"$.cars[].make">(4uz), "make4"sv);
 }
 
 // Each prefix and each forged byte of a message of several cars is read through a new root and an accessor of each
@@ -1695,20 +2238,20 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
             return n;
         auto &lot = *opened;
         for (std::size_t i = 6; i-- > 0;) {
-            auto const make = lot.at<"$.cars[].make">(i);
-            auto const seats = lot.at<"$.cars[].seats">(i);
-            auto const pressure = lot.at<"$.cars[].wheels[].airPressure">(i, 1uz);
-            n += std::size_t{make.has_value()} + std::size_t{seats.has_value()} + std::size_t{lot.at<"$.cars[].note">(i).has_value()} + std::size_t{pressure.has_value()};
-            auto const car = lot.at<"$.cars[]">(i);
+            auto const make = lot.at_path<"$.cars[].make">(i);
+            auto const seats = lot.at_path<"$.cars[].seats">(i);
+            auto const pressure = lot.at_path<"$.cars[].wheels[].airPressure">(i, 1uz);
+            n += std::size_t{make.has_value()} + std::size_t{seats.has_value()} + std::size_t{lot.at_path<"$.cars[].note">(i).has_value()} + std::size_t{pressure.has_value()};
+            auto const car = lot.at_path<"$.cars[]">(i);
             if (!car)
                 continue;
-            differ += std::size_t{other(car->at<"@.make">(), make)} + std::size_t{other(car->at<"@.seats">(), seats)};
-            auto const wheel = car->at<"@.wheels[]">(1uz);
+            differ += std::size_t{other(car->at_path<"@.make">(), make)} + std::size_t{other(car->at_path<"@.seats">(), seats)};
+            auto const wheel = car->at_path<"@.wheels[]">(1uz);
             if (wheel)
-                differ += other(wheel->at<"@.airPressure">(), pressure);
+                differ += other(wheel->at_path<"@.airPressure">(), pressure);
         }
-        n += lot.at<"$.notes[]">(1uz).has_value();
-        n += lot.at<"$.rows[][]">(2uz, 0uz).has_value();
+        n += lot.at_path<"$.notes[]">(1uz).has_value();
+        n += lot.at_path<"$.rows[][]">(2uz, 0uz).has_value();
         return n;
     };
     CHECK_EQ(read(bytes), 5u * 3 + 2 + 2);
@@ -1739,7 +2282,7 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     char const *data = buffer->data();
     auto const moved = cbor::schema<login>::path(std::move(*buffer));
     REQUIRE(moved.has_value());
-    auto const moved_name = moved->at<"$.name">();
+    auto const moved_name = moved->at_path<"$.name">();
     REQUIRE(moved_name.has_value());
     CHECK(range(*moved_name, data, message.size()));
     buffer->assign(message.size(), '\0');
@@ -1749,7 +2292,7 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     std::string lvalue = message;
     auto const copied = cbor::schema<login>::path(lvalue);
     REQUIRE(copied.has_value());
-    auto const copied_name = copied->at<"$.name">();
+    auto const copied_name = copied->at_path<"$.name">();
     REQUIRE(copied_name.has_value());
     CHECK_FALSE(range(*copied_name, lvalue.data(), lvalue.size()));
     CHECK_EQ(lvalue, message);

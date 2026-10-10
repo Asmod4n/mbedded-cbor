@@ -10,10 +10,9 @@ using cbor::error;
 namespace
 {
 
-// A nodelist of the suite matches the result of at_path in one of three forms: a query that is not singular gives
-// its nodelist as an array; a singular query gives the value of its one node; a singular query that selects
-// nothing gives the error of the missing node.
-bool nodelist_matches(cbor::result<value> const &r, value const &nodelist)
+// A nodelist of the suite matches the result of cbor::query, which gives every nodelist as an array, also the
+// nodelist of a singular query. The other two forms stay for a reader that gives the value of the one node.
+bool nodelist_matches(std::expected<value, cbor::error> const &r, value const &nodelist)
 {
     array const &nodes = *get_if<array>(nodelist);
     if (!r)
@@ -30,7 +29,7 @@ bool function_without_support(std::string_view const selector)
 } // namespace
 
 // The JSONPath Compliance Test Suite checks RFC 9535 case by case. Each document is the CBOR form of the JSON
-// document of the suite, so the run time form of at_path, which reads RFC 9535 and no extension, must answer as a
+// document of the suite, so the run time form of cbor::query, which reads RFC 9535 and no extension, must answer as a
 // JSONPath implementation does. The owner decided that the library has no regular expressions, so a selector with
 // match() or search() must be refused; those cases are counted apart.
 TEST_CASE("path: the JSONPath Compliance Test Suite")
@@ -38,10 +37,10 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
     std::ifstream in(JSONPATH_CTS "/cts.cbor", std::ios::binary);
     REQUIRE(in.good());
     std::string const suite{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    auto const root = cbor::decode<64>(suite);
+    auto const root = cbor::lazy::from(suite);
     REQUIRE(root.has_value());
     test_binding binding;
-    auto const all = cbor::lazy_decode<64>(binding, *root);
+    auto const all = cbor::lazy_decode(binding, *root);
     REQUIRE(all.has_value());
     array const *const suite_cases = get_if<array>(*all);
     REQUIRE(suite_cases != nullptr);
@@ -58,18 +57,18 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         CAPTURE(name);
         CAPTURE(selector);
         if (c.size() == 2 || function_without_support(selector)) {
-            auto const document = c.size() == 2 ? cbor::decode<64>(std::string_view("\xf6")) : root->at<64>(static_cast<std::int64_t>(i))->at<64>(std::int64_t{2});
+            auto const document = c.size() == 2 ? cbor::lazy::from(std::string_view("\xf6")) : root->at(i)->at(2);
             REQUIRE(document.has_value());
-            auto const r = cbor::at_path<64>(binding, selector, *document);
+            auto const r = cbor::query(binding, selector, *document);
             bool const invalid = !r && r.error() == error::invalid_path;
             CHECK(invalid);
             refused += c.size() == 2 ? 0uz : 1uz;
             passed += invalid ? 1uz : 0uz;
             continue;
         }
-        auto const document = root->at<64>(static_cast<std::int64_t>(i))->at<64>(std::int64_t{2});
+        auto const document = root->at(i)->at(2);
         REQUIRE(document.has_value());
-        auto const r = cbor::at_path<64>(binding, selector, *document);
+        auto const r = cbor::query(binding, selector, *document);
         CAPTURE((r.has_value() ? error{} : r.error()));
         bool matched = false;
         array const *const results = get_if<array>(c.at(3));

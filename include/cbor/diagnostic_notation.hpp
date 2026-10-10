@@ -8,23 +8,26 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
+#include "rfc4648.hpp"
 
 namespace cbor
 {
 
-class diagnostic_notation
+class extended_diagnostic_notation
 {
     struct parsed {
         std::size_t at;
@@ -43,6 +46,15 @@ class diagnostic_notation
 
     static constexpr int no_indicator = -1;
     static constexpr int immediate_indicator = -2;
+
+    static constexpr int binary = 2;
+    static constexpr int octal = 8;
+    static constexpr int decimal = 10;
+    static constexpr int hexadecimal = 16;
+
+    static constexpr std::uint32_t high_surrogate_first = 0xd800;
+    static constexpr std::uint32_t low_surrogate_first = 0xdc00;
+    static constexpr std::uint32_t low_surrogate_last = 0xdfff;
 
     static constexpr bool blank(char const c)
     {
@@ -66,9 +78,9 @@ class diagnostic_notation
         if (c >= '0' && c <= '9')
             return c - '0';
         if (c >= 'a' && c <= 'f')
-            return c - 'a' + 10;
+            return c - 'a' + std::integral_constant<int, rfc4648::base16_alphabet.find('A')>::value;
         if (c >= 'A' && c <= 'F')
-            return c - 'A' + 10;
+            return c - 'A' + std::integral_constant<int, rfc4648::base16_alphabet.find('A')>::value;
         return -1;
     }
 
@@ -77,21 +89,27 @@ class diagnostic_notation
     {
         int info;
         if (indicator == no_indicator)
-            info = argument < 24 ? 0 : heads::preferred_argument_info(argument);
+            info = argument < static_cast<std::uint64_t>(rfc8949::additional_information::one_byte_argument)
+                       ? 0
+                       : heads::preferred_argument_info(argument);
         else if (indicator == immediate_indicator)
             info = 0;
         else
             info = indicator;
         if (info == 0) {
-            if (argument >= 24) [[unlikely]]
+            if (argument >= static_cast<std::uint64_t>(rfc8949::additional_information::one_byte_argument))
+                [[unlikely]]
                 return std::unexpected(error::invalid_path);
             heads::head_append(out, major, static_cast<std::uint8_t>(argument), argument);
             return {};
         }
-        if (info < 24 || info > 27) [[unlikely]]
+        if (info < static_cast<int>(rfc8949::additional_information::one_byte_argument) ||
+            info > static_cast<int>(rfc8949::additional_information::eight_byte_argument)) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        std::size_t const size = std::size_t{1} << (info - 24);
-        if (size < 8 && argument >> (8 * size) != 0) [[unlikely]]
+        std::size_t const size =
+            std::size_t{1} << (info - static_cast<int>(rfc8949::additional_information::one_byte_argument));
+        if (size < sizeof(std::uint64_t) &&
+            argument >> (std::numeric_limits<std::uint8_t>::digits * size) != 0) [[unlikely]]
             return std::unexpected(error::invalid_path);
         heads::head_append(out, major, static_cast<std::uint8_t>(info), argument);
         return {};
@@ -107,12 +125,13 @@ class diagnostic_notation
         if (at >= text.size() || text[at] != '_')
             return indicated{at, no_indicator};
         if (at + 1 < text.size() && text[at + 1] == 'i')
-            return indicated{at + 2, immediate_indicator};
+            return indicated{at + std::string_view("_i").size(), immediate_indicator};
         if (at + 1 < text.size() && text[at + 1] >= '0' && text[at + 1] <= '3')
-            return indicated{at + 2, 24 + (text[at + 1] - '0')};
+            return indicated{at + 2, std::to_underlying(rfc8949::additional_information::one_byte_argument) +
+                                         (text[at + 1] - '0')};
         if (at + 1 < text.size() && digit(text[at + 1])) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        return indicated{at + 1, std::to_underlying(heads::additional_information::indefinite_length)};
+        return indicated{at + 1, std::to_underlying(rfc8949::additional_information::indefinite_length)};
     }
 
     static constexpr void utf8_append(std::string &out, std::uint32_t const c)
@@ -148,7 +167,7 @@ class diagnostic_notation
             int const v = hex_digit_value(c);
             if (v < 0) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            value = value << 4 | static_cast<std::uint32_t>(v);
+            value = value << rfc4648::base16_group_bits | static_cast<std::uint32_t>(v);
         }
         return code_unit{at + 4, value};
     }
@@ -204,10 +223,10 @@ class diagnostic_notation
                         int const v = hex_digit_value(h);
                         if (v < 0) [[unlikely]]
                             return std::unexpected(error::invalid_path);
-                        c1 = c1 << 4 | static_cast<std::uint32_t>(v);
+                        c1 = c1 << rfc4648::base16_group_bits | static_cast<std::uint32_t>(v);
                     }
                     at = close + 1;
-                    if (c1 > 0x10ffff || (c1 >= 0xd800 && c1 < 0xe000)) [[unlikely]]
+                    if (c1 > 0x10ffff || (c1 >= high_surrogate_first && c1 <= low_surrogate_last)) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     utf8_append(out, c1);
                     break;
@@ -217,17 +236,17 @@ class diagnostic_notation
                     return std::unexpected(next.error());
                 at = next->at;
                 c1 = next->value;
-                if (c1 >= 0xdc00 && c1 < 0xe000) [[unlikely]]
+                if (c1 >= low_surrogate_first && c1 <= low_surrogate_last) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                if (c1 >= 0xd800 && c1 < 0xdc00) {
+                if (c1 >= high_surrogate_first && c1 < low_surrogate_first) {
                     if (at + 2 > text.size() || text[at] != '\\' || text[at + 1] != 'u') [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     auto const low = hex4_parse(text, at + 2);
-                    if (!low || low->value < 0xdc00 || low->value >= 0xe000) [[unlikely]]
+                    if (!low || low->value < low_surrogate_first || low->value > low_surrogate_last) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     std::uint32_t const c2 = low->value;
                     at = low->at;
-                    c1 = 0x10000 + ((c1 - 0xd800) << 10) + (c2 - 0xdc00);
+                    c1 = 0x10000 + ((c1 - high_surrogate_first) << 10) + (c2 - low_surrogate_first);
                 }
                 utf8_append(out, c1);
                 break;
@@ -256,7 +275,7 @@ class diagnostic_notation
             if (high < 0) {
                 high = v;
             } else {
-                out.push_back(static_cast<char>(high << 4 | v));
+                out.push_back(static_cast<char>(high << rfc4648::base16_group_bits | v));
                 high = -1;
             }
         }
@@ -283,13 +302,13 @@ class diagnostic_notation
             if (c >= 'A' && c <= 'Z')
                 v = c - 'A';
             else if (c >= 'a' && c <= 'z')
-                v = c - 'a' + 26;
+                v = c - 'a' + std::integral_constant<int, rfc4648::base64_alphabet.find('a')>::value;
             else if (digit(c))
-                v = c - '0' + 52;
+                v = c - '0' + std::integral_constant<int, rfc4648::base64_alphabet.find('0')>::value;
             else if (c == '+' || c == '-')
-                v = 62;
+                v = std::integral_constant<int, rfc4648::base64_alphabet.find('+')>::value;
             else if (c == '/' || c == '_')
-                v = 63;
+                v = std::integral_constant<int, rfc4648::base64_alphabet.find('/')>::value;
             else if (c == '=') {
                 ++padding;
                 continue;
@@ -297,16 +316,16 @@ class diagnostic_notation
                 return std::unexpected(error::invalid_path);
             if (padding != 0) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            bits = bits << 6 | static_cast<std::uint32_t>(v);
-            if (++count == 4) {
-                out.push_back(static_cast<char>(bits >> 16));
-                out.push_back(static_cast<char>(bits >> 8));
+            bits = bits << rfc4648::base64_group_bits | static_cast<std::uint32_t>(v);
+            if (++count == rfc4648::base64_input_group_bits / rfc4648::base64_group_bits) {
+                out.push_back(static_cast<char>(bits >> (rfc4648::base64_input_group_bits - std::numeric_limits<std::uint8_t>::digits)));
+                out.push_back(static_cast<char>(bits >> std::numeric_limits<std::uint8_t>::digits));
                 out.push_back(static_cast<char>(bits));
                 bits = 0;
                 count = 0;
             }
         }
-        if (count == 1 || (padding != 0 && count + padding != 4)) [[unlikely]]
+        if (count == 1 || (padding != 0 && count + padding != rfc4648::base64_input_group_bits / rfc4648::base64_group_bits)) [[unlikely]]
             return std::unexpected(error::invalid_path);
         if (count == 2)
             out.push_back(static_cast<char>(bits >> 4));
@@ -321,25 +340,26 @@ class diagnostic_notation
     {
         bool const nan = value != value;
         bool const infinite = !nan && (value > std::numeric_limits<double>::max() || value < -std::numeric_limits<double>::max());
-        heads::simple_float_information const preferred = heads::preferred_float_info(value);
+        rfc8949::simple_float_information const preferred = heads::preferred_float_info(value);
         int info;
         if (indicator == no_indicator)
             info = std::to_underlying(preferred);
-        else if (indicator >= std::to_underlying(heads::simple_float_information::half_precision_float) &&
-                 indicator <= std::to_underlying(heads::simple_float_information::double_precision_float))
+        else if (indicator >= std::to_underlying(rfc8949::simple_float_information::half_precision_float) &&
+                 indicator <= std::to_underlying(rfc8949::simple_float_information::double_precision_float))
             info = indicator;
         else [[unlikely]]
             return std::unexpected(error::invalid_path);
         bool const exact =
             nan || infinite || info >= std::to_underlying(preferred) ||
-            (info == std::to_underlying(heads::simple_float_information::single_precision_float) &&
+            (info == std::to_underlying(rfc8949::simple_float_information::single_precision_float) &&
              static_cast<double>(static_cast<float>(value)) == value);
         if (!exact) [[unlikely]]
             return std::unexpected(error::invalid_path);
         constexpr std::array<std::uint64_t, 3> quiet_nan{0x7e00, 0x7fc00000, 0x7ff8000000000000};
         std::uint64_t const argument =
-            nan ? quiet_nan[static_cast<std::size_t>(info - std::to_underlying(heads::simple_float_information::half_precision_float))]
-                : heads::float_encode(static_cast<heads::simple_float_information>(info), value);
+            nan ? quiet_nan[static_cast<std::size_t>(
+                      info - std::to_underlying(rfc8949::simple_float_information::half_precision_float))]
+                : heads::float_encode(static_cast<rfc8949::simple_float_information>(info), value);
         return head_append(out, major_type::simple_float, argument, info);
     }
 
@@ -355,7 +375,7 @@ class diagnostic_notation
             bool const nan = word("NaN");
             if (sign == '+' || (nan && sign == '-')) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            at += nan ? 3 : 8;
+            at += nan ? std::string_view("NaN").size() : std::string_view("Infinity").size();
             auto const next = indicator_parse(text, at);
             if (!next) [[unlikely]]
                 return std::unexpected(next.error());
@@ -367,16 +387,16 @@ class diagnostic_notation
                 return std::unexpected(r.error());
             return next->at;
         }
-        int base = 10;
+        int base = decimal;
         if (word("0x") || word("0X")) {
-            base = 16;
-            at += 2;
+            base = hexadecimal;
+            at += std::string_view("0x").size();
         } else if (word("0o")) {
-            base = 8;
-            at += 2;
+            base = octal;
+            at += std::string_view("0o").size();
         } else if (word("0b")) {
-            base = 2;
-            at += 2;
+            base = binary;
+            at += std::string_view("0b").size();
         }
         std::uint64_t mantissa = 0;
         std::size_t digits = 0;
@@ -387,7 +407,7 @@ class diagnostic_notation
         std::size_t const first = at;
         for (; at < text.size(); ++at) {
             char const c = text[at];
-            if (c == '.' && !fraction && (base == 10 || base == 16)) {
+            if (c == '.' && !fraction && (base == decimal || base == hexadecimal)) {
                 fraction = true;
                 real = true;
                 continue;
@@ -396,21 +416,25 @@ class diagnostic_notation
             if (v < 0 || v >= base)
                 break;
             ++digits;
-            if (mantissa > (std::numeric_limits<std::uint64_t>::max() - static_cast<std::uint64_t>(v)) / static_cast<std::uint64_t>(base)) {
+            auto const next = validity::checked_mul(mantissa, static_cast<std::uint64_t>(base))
+                                  .and_then([v](std::uint64_t const m) {
+                                      return validity::checked_add(m, static_cast<std::uint64_t>(v));
+                                  });
+            if (!next) {
                 overflow = true;
                 continue;
             }
-            mantissa = mantissa * static_cast<std::uint64_t>(base) + static_cast<std::uint64_t>(v);
+            mantissa = *next;
             if (fraction)
                 --exponent;
         }
         if (digits == 0) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        if (base == 10 && text[first] == '0' && first + 1 < at && digit(text[first + 1])) [[unlikely]]
+        if (base == decimal && text[first] == '0' && first + 1 < at && digit(text[first + 1])) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        bool const exponent_part = at < text.size() && ((base == 10 && (text[at] == 'e' || text[at] == 'E')) ||
-                                                        (base == 16 && (text[at] == 'p' || text[at] == 'P')));
-        if (base == 16 && real && !exponent_part) [[unlikely]]
+        bool const exponent_part = at < text.size() && ((base == decimal && (text[at] == 'e' || text[at] == 'E')) ||
+                                                        (base == hexadecimal && (text[at] == 'p' || text[at] == 'P')));
+        if (base == hexadecimal && real && !exponent_part) [[unlikely]]
             return std::unexpected(error::invalid_path);
         if (exponent_part) {
             real = true;
@@ -421,15 +445,15 @@ class diagnostic_notation
             int e = 0;
             std::size_t const e_first = at;
             while (at < text.size() && digit(text[at]) && e < 100000)
-                e = e * 10 + (text[at++] - '0');
+                e = e * decimal + (text[at++] - '0');
             if (at == e_first || (at < text.size() && digit(text[at]))) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            if (base == 16)
-                exponent = 4 * exponent + (exponent_negative ? -e : e);
+            if (base == hexadecimal)
+                exponent = rfc4648::base16_group_bits * exponent + (exponent_negative ? -e : e);
             else
                 exponent += exponent_negative ? -e : e;
-        } else if (base == 16) {
-            exponent *= 4;
+        } else if (base == hexadecimal) {
+            exponent *= rfc4648::base16_group_bits;
         }
         auto const next = indicator_parse(text, at);
         if (!next) [[unlikely]]
@@ -450,7 +474,7 @@ class diagnostic_notation
         double value;
         if (mantissa == 0) {
             value = 0.0;
-        } else if (base == 16) {
+        } else if (base == hexadecimal) {
             if (mantissa > exact_max) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             value = static_cast<double>(mantissa);
@@ -461,12 +485,12 @@ class diagnostic_notation
         } else {
             constexpr std::array<double, 23> powers{1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
                                                     1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
-            while (exponent > 22 && mantissa <= exact_max / 10) {
-                mantissa *= 10;
+            while (exponent > 22 && mantissa <= exact_max / decimal) {
+                mantissa *= decimal;
                 --exponent;
             }
-            while (exponent < 0 && mantissa % 10 == 0) {
-                mantissa /= 10;
+            while (exponent < 0 && mantissa % decimal == 0) {
+                mantissa /= decimal;
                 ++exponent;
             }
             if (mantissa > exact_max || exponent > 22 || exponent < -22) [[unlikely]]
@@ -529,10 +553,12 @@ class diagnostic_notation
         if (at >= text.size()) [[unlikely]]
             return std::unexpected(error::invalid_path);
         major_type const major = map ? major_type::map : major_type::array;
-        if (indicator == std::to_underlying(heads::additional_information::indefinite_length)) {
+        if (indicator == std::to_underlying(rfc8949::additional_information::indefinite_length)) {
             out.push_back(heads::initial_byte(major, static_cast<std::uint64_t>(indicator)));
             out += items;
-            out.push_back('\xff');
+            out.push_back(
+                heads::initial_byte(major_type::simple_float,
+                                    std::to_underlying(rfc8949::simple_float_information::break_stop_code)));
         } else {
             if (auto const r = head_append(out, major, count, indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -549,11 +575,13 @@ class diagnostic_notation
         if (!next) [[unlikely]]
             return std::unexpected(next.error());
         int const indicator = next->indicator;
-        if (indicator == std::to_underlying(heads::additional_information::indefinite_length)) {
+        if (indicator == std::to_underlying(rfc8949::additional_information::indefinite_length)) {
             if (!content.empty()) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             out.push_back(heads::initial_byte(major, static_cast<std::uint64_t>(indicator)));
-            out.push_back('\xff');
+            out.push_back(
+                heads::initial_byte(major_type::simple_float,
+                                    std::to_underlying(rfc8949::simple_float_information::break_stop_code)));
             return next->at;
         }
         if (auto const r = head_append(out, major, content.size(), indicator); !r) [[unlikely]]
@@ -591,7 +619,7 @@ class diagnostic_notation
         }
         if (rest.starts_with("<<")) {
             std::string content;
-            std::size_t next = blank_end(text, at + 2);
+            std::size_t next = blank_end(text, at + std::string_view("<<").size());
             bool separated = true;
             while (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view(">>"))) {
                 if (!separated || next >= text.size()) [[unlikely]]
@@ -605,25 +633,27 @@ class diagnostic_notation
                 next = s->at;
                 separated = s->separated;
             }
-            return string_finish(text, next + 2, out, major_type::byte_string, content);
+            return string_finish(text, next + std::string_view(">>").size(), out, major_type::byte_string,
+                                 content);
         }
-        constexpr std::array<std::string_view, 4> names{"false", "true", "null", "undefined"};
+        constexpr auto names = std::to_array<std::string_view>({"false", "true", "null", "undefined"});
         for (std::size_t i = 0; i < names.size(); ++i)
             if (rest.starts_with(names[i])) {
                 out.push_back(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + i));
                 return at + names[i].size();
             }
         if (rest.starts_with("simple(")) {
-            std::size_t next = blank_end(text, at + 7);
+            std::size_t next = blank_end(text, at + std::string_view("simple(").size());
             std::size_t const first = next;
             unsigned value = 0;
             while (next < text.size() && digit(text[next]) && value < 1000)
-                value = value * 10 + static_cast<unsigned>(text[next++] - '0');
+                value = value * decimal + static_cast<unsigned>(text[next++] - '0');
             if (next == first || (text[first] == '0' && next > first + 1)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             next = blank_end(text, next);
-            if (next >= text.size() || text[next] != ')' || value > 255 ||
-                (value >= 24 && value < heads::simple_value_one_byte_min)) [[unlikely]]
+            if (next >= text.size() || text[next] != ')' ||
+                value > std::numeric_limits<std::uint8_t>::max() ||
+                !validity::check_simple_value(heads::preferred_argument_info(value), value)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             if (auto const r = head_append(out, major_type::simple_float, value, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -638,14 +668,17 @@ class diagnostic_notation
         auto const tag_open = indicator_parse(text, digits_end);
         int const indicator = tag_open ? tag_open->indicator : no_indicator;
         if (digits_end != at && tag_open && tag_open->at < text.size() && text[tag_open->at] == '(' &&
-            indicator != std::to_underlying(heads::additional_information::indefinite_length)) {
+            indicator != std::to_underlying(rfc8949::additional_information::indefinite_length)) {
             if (text[at] == '0' && digits_end > at + 1) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             std::uint64_t number = 0;
             for (char const d : std::span(text).subspan(at, digits_end - at)) {
-                if (number > (std::numeric_limits<std::uint64_t>::max() - static_cast<std::uint64_t>(d - '0')) / 10) [[unlikely]]
+                auto const next = validity::checked_mul(number, std::uint64_t{decimal}).and_then([d](std::uint64_t const m) {
+                    return validity::checked_add(m, static_cast<std::uint64_t>(d - '0'));
+                });
+                if (!next) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                number = number * 10 + static_cast<std::uint64_t>(d - '0');
+                number = *next;
             }
             if (auto const r = head_append(out, major_type::tag, number, indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -669,13 +702,12 @@ class diagnostic_notation
         auto const h = heads::raw_head_read(encoded, at);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        bool const indefinite = h->info == std::to_underlying(heads::additional_information::indefinite_length);
+        bool const indefinite =
+            h->info == std::to_underlying(rfc8949::additional_information::indefinite_length);
         std::size_t next = h->at;
         switch (h->major) {
         case major_type::unsigned_integer:
         case major_type::negative_integer:
-            if (indefinite) [[unlikely]]
-                return std::unexpected(error::syntax_error);
             if (auto const r = head_append(out, h->major, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
@@ -694,8 +726,11 @@ class diagnostic_notation
                     auto const chunk = heads::raw_head_read(encoded, next);
                     if (!chunk) [[unlikely]]
                         return std::unexpected(chunk.error());
-                    if (chunk->major != h->major || chunk->info == std::to_underlying(heads::additional_information::indefinite_length) ||
-                        encoded.size() - chunk->at < chunk->argument) [[unlikely]]
+                    if (error const c =
+                            validity::check_chunk(h->major, chunk->major, chunk->info).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::unexpected(c);
+                    if (encoded.size() - chunk->at < chunk->argument) [[unlikely]]
                         return std::unexpected(error::syntax_error);
                     content += std::string_view(std::span(encoded).subspan(chunk->at, static_cast<std::size_t>(chunk->argument)));
                     next = chunk->at + static_cast<std::size_t>(chunk->argument);
@@ -729,8 +764,12 @@ class diagnostic_notation
                 ++next;
             if (map) {
                 std::ranges::sort(items);
-                if (std::ranges::adjacent_find(items, {}, &std::pair<std::string, std::string>::first) != items.end()) [[unlikely]]
-                    return std::unexpected(error::duplicate_key);
+                if (error const c =
+                        validity::check_key_unique(
+                            !validity::keys_unique(items, &std::pair<std::string, std::string>::first))
+                            .error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
             }
             if (auto const r = head_append(out, h->major, items.size(), no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -739,19 +778,20 @@ class diagnostic_notation
             return next;
         }
         case major_type::tag:
-            if (indefinite) [[unlikely]]
-                return std::unexpected(error::syntax_error);
             if (auto const r = head_append(out, major_type::tag, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return canonical_append(out, {encoded, next}, {n.depth + 1, n.depth_max});
         default:
             break;
         }
-        constexpr std::uint8_t half = std::to_underlying(heads::simple_float_information::half_precision_float);
-        constexpr std::uint8_t twice = std::to_underlying(heads::simple_float_information::double_precision_float);
+        constexpr std::uint8_t half =
+            std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+        constexpr std::uint8_t twice =
+            std::to_underlying(rfc8949::simple_float_information::double_precision_float);
         if (h->info < half) {
-            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+                r != error{}) [[unlikely]]
+                return std::unexpected(r);
             if (auto const r = head_append(out, major_type::simple_float, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
@@ -760,8 +800,11 @@ class diagnostic_notation
             return std::unexpected(error::syntax_error);
         heads::float_key const key = heads::float_key_of(h->info, h->argument);
         if (key.nan) {
-            if (auto const r = head_append(out, major_type::simple_float, key.widened | std::uint64_t{0x7ff} << 52, twice); !r)
-                [[unlikely]]
+            if (auto const r = head_append(out, major_type::simple_float,
+                                           key.widened | std::uint64_t{heads::double_precision.exponent_max}
+                                                             << heads::double_precision.significand_bits,
+                                           twice);
+                !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
         }
@@ -772,11 +815,13 @@ class diagnostic_notation
 
     static std::string encoding_indicator(std::uint8_t const info, std::uint64_t const argument)
     {
-        if (info < std::to_underlying(heads::additional_information::one_byte_argument))
+        if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument))
             return {};
         if (info == heads::preferred_argument_info(argument))
             return {};
-        return {'_', static_cast<char>('0' + info - std::to_underlying(heads::additional_information::one_byte_argument))};
+        return {'_',
+                static_cast<char>('0' + info -
+                                  std::to_underlying(rfc8949::additional_information::one_byte_argument))};
     }
 
     static std::string decimal_of(std::uint64_t const n)
@@ -790,10 +835,10 @@ class diagnostic_notation
     {
         constexpr std::string_view digits = "0123456789abcdef";
         std::string out;
-        out.reserve(2 * bytes.size());
+        out.reserve(std::numeric_limits<std::uint8_t>::digits / rfc4648::base16_group_bits * bytes.size());
         for (char const c : bytes) {
-            out.push_back(digits[static_cast<std::uint8_t>(c) >> 4]);
-            out.push_back(digits[static_cast<std::uint8_t>(c) & 0xf]);
+            out.push_back(digits[static_cast<std::uint8_t>(c) >> rfc4648::base16_group_bits]);
+            out.push_back(digits[static_cast<std::uint8_t>(c) & ((1 << rfc4648::base16_group_bits) - 1)]);
         }
         return out;
     }
@@ -828,8 +873,8 @@ class diagnostic_notation
             default:
                 if (static_cast<std::uint8_t>(c) < 0x20) {
                     out += "\\u00";
-                    out.push_back(digits[static_cast<std::uint8_t>(c) >> 4]);
-                    out.push_back(digits[static_cast<std::uint8_t>(c) & 0xf]);
+                    out.push_back(digits[static_cast<std::uint8_t>(c) >> rfc4648::base16_group_bits]);
+                    out.push_back(digits[static_cast<std::uint8_t>(c) & ((1 << rfc4648::base16_group_bits) - 1)]);
                 } else {
                     out.push_back(c);
                 }
@@ -868,20 +913,23 @@ class diagnostic_notation
     static std::string float_of(std::uint8_t const info, std::uint64_t const argument)
     {
         constexpr std::array<std::uint64_t, 3> quiet_nan{0x7e00, 0x7fc00000, 0x7ff8000000000000};
-        std::size_t const width = info - std::to_underlying(heads::simple_float_information::half_precision_float);
+        std::size_t const width =
+            info - std::to_underlying(rfc8949::simple_float_information::half_precision_float);
         double const value = heads::float_decode(info, argument);
         std::string const indicator =
             width == 0 ? std::string{} : std::string{'_', static_cast<char>('1' + width)};
         if (std::isnan(value)) {
             if (argument == quiet_nan[width])
                 return "NaN" + indicator;
-            std::string bytes(std::size_t{2} << width, '\0');
+            std::string bytes(sizeof(std::uint16_t) << width, '\0');
             for (std::size_t i = 0; i < bytes.size(); ++i)
-                bytes[i] = static_cast<char>(argument >> (8 * (bytes.size() - 1 - i)));
+                bytes[i] = static_cast<char>(
+                    argument >> (std::numeric_limits<std::uint8_t>::digits * (bytes.size() - 1 - i)));
             return "float'" + hex_of(bytes) + "'";
         }
-        std::size_t const preferred = std::to_underlying(heads::preferred_float_info(value)) -
-                                      std::to_underlying(heads::simple_float_information::half_precision_float);
+        std::size_t const preferred =
+            std::to_underlying(heads::preferred_float_info(value)) -
+            std::to_underlying(rfc8949::simple_float_information::half_precision_float);
         return number_of(value) + (width == preferred ? std::string{} : indicator);
     }
 
@@ -896,34 +944,39 @@ class diagnostic_notation
         if (d.encoded.empty()) [[unlikely]]
             return std::unexpected(error::too_little_data);
         auto const initial = static_cast<std::uint8_t>(d.encoded.front());
-        auto const major = static_cast<major_type>(initial >> 5);
-        std::uint8_t const info = initial & 0x1f;
-        if (info != std::to_underlying(heads::additional_information::indefinite_length))
+        auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
+        std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
+        if (error const r = validity::check_additional_information(major, info).error_or(error{});
+            r != error{}) [[unlikely]]
+            return std::unexpected(r);
+        if (info != std::to_underlying(rfc8949::additional_information::indefinite_length))
             return d.head_decode().transform([](heads::head const h) { return diagnostic_head{h.major, h.info, h.argument}; });
-        if (major == major_type::unsigned_integer || major == major_type::negative_integer || major == major_type::tag)
-            [[unlikely]]
-            return std::unexpected(error::syntax_error);
         d.encoded.remove_prefix(1);
         return diagnostic_head{major, info, 0};
     }
 
     static bool break_found(heads::decoder &d)
     {
-        if (d.encoded.empty() || static_cast<std::uint8_t>(d.encoded.front()) != 0xff)
+        if (d.encoded.empty() ||
+            d.encoded.front() !=
+                heads::initial_byte(major_type::simple_float,
+                                    std::to_underlying(rfc8949::simple_float_information::break_stop_code)))
             return false;
         d.encoded.remove_prefix(1);
         return true;
     }
 
-    template <std::size_t DepthMax>
-    static std::expected<void, error> diagnostic_write(std::string &out, heads::decoder &d, std::size_t const depth)
+    static std::expected<void, error> diagnostic_write(std::string &out, heads::decoder &d, std::string_view const encoded,
+                                                       std::vector<std::size_t> &marks, std::size_t const depth,
+                                                       std::size_t const depth_max)
     {
-        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         auto const h = diagnostic_head_decode(d);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        bool const indefinite = h->info == std::to_underlying(heads::additional_information::indefinite_length);
+        bool const indefinite =
+            h->info == std::to_underlying(rfc8949::additional_information::indefinite_length);
         switch (h->major) {
         case major_type::unsigned_integer:
             out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument);
@@ -952,11 +1005,15 @@ class diagnostic_notation
             for (bool first = true; !break_found(d); first = false) {
                 if (!first)
                     out += ", ";
-                if (d.encoded.empty() || static_cast<major_type>(static_cast<std::uint8_t>(d.encoded.front()) >> 5) != h->major ||
-                    (static_cast<std::uint8_t>(d.encoded.front()) & 0x1f) == std::to_underlying(heads::additional_information::indefinite_length))
-                    [[unlikely]]
-                    return std::unexpected(d.encoded.empty() ? error::too_little_data : error::syntax_error);
-                if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                if (d.encoded.empty()) [[unlikely]]
+                    return std::unexpected(error::too_little_data);
+                auto const initial = static_cast<std::uint8_t>(d.encoded.front());
+                if (error const c =
+                        validity::check_chunk(h->major, static_cast<major_type>(initial >> rfc8949::additional_information_bits), initial & ((1 << rfc8949::additional_information_bits) - 1))
+                            .error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
+                if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
             }
             out += ")";
@@ -972,11 +1029,11 @@ class diagnostic_notation
             for (std::uint64_t i = 0; indefinite ? !break_found(d) : i < h->argument; ++i) {
                 if (i != 0)
                     out += ", ";
-                if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
                 if (map) {
                     out += ": ";
-                    if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+                    if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
                         return r;
                 }
             }
@@ -984,8 +1041,33 @@ class diagnostic_notation
             return {};
         }
         case major_type::tag: {
+            std::size_t const content_at = encoded.size() - d.encoded.size();
+            if (error const e =
+                    validity::check_tag_content(h->argument, encoded, content_at, [&marks]() -> auto const & { return marks; }, std::identity{}).error_or(error{});
+                e != error{}) [[unlikely]]
+                return std::unexpected(e);
+            auto const c = heads::raw_head_read(encoded, content_at);
+            if (!c) [[unlikely]]
+                return std::unexpected(c.error());
+            if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
+                if (auto const index = validity::check_sharedref_index(c->argument, marks.size()); !index) [[unlikely]]
+                    return std::unexpected(index.error());
+            }
+            if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
+                if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
+                    auto const n = heads::raw_head_read(encoded, c->at);
+                    if (!n) [[unlikely]]
+                        return std::unexpected(n.error());
+                    auto const index = validity::check_sharedref_index(n->argument, marks.size());
+                    if (!index) [[unlikely]]
+                        return std::unexpected(index.error());
+                    marks.push_back(marks[*index]);
+                } else {
+                    marks.push_back(content_at);
+                }
+            }
             out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument) + "(";
-            if (auto const r = diagnostic_write<DepthMax>(out, d, depth + 1); !r) [[unlikely]]
+            if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
                 return r;
             out += ")";
             return {};
@@ -1006,17 +1088,18 @@ class diagnostic_notation
         case std::to_underlying(simple_value::undefined):
             out += "undefined";
             return {};
-        case std::to_underlying(heads::simple_float_information::simple_value_follows):
-            if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
-                return std::unexpected(r.error());
+        case std::to_underlying(rfc8949::simple_float_information::simple_value_follows):
+            if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+                r != error{}) [[unlikely]]
+                return std::unexpected(r);
             out += "simple(" + decimal_of(h->argument) + ")";
             return {};
-        case std::to_underlying(heads::simple_float_information::half_precision_float):
-        case std::to_underlying(heads::simple_float_information::single_precision_float):
-        case std::to_underlying(heads::simple_float_information::double_precision_float):
+        case std::to_underlying(rfc8949::simple_float_information::half_precision_float):
+        case std::to_underlying(rfc8949::simple_float_information::single_precision_float):
+        case std::to_underlying(rfc8949::simple_float_information::double_precision_float):
             out += float_of(h->info, h->argument);
             return {};
-        [[unlikely]] case std::to_underlying(heads::additional_information::indefinite_length):
+        [[unlikely]] case std::to_underlying(rfc8949::additional_information::indefinite_length):
             return std::unexpected(error::syntax_error);
         default:
             out += "simple(" + decimal_of(h->argument) + ")";
@@ -1026,16 +1109,17 @@ class diagnostic_notation
 
     friend class jsonpath;
 
-    template <std::size_t DepthMax>
-    friend result<std::string, error> inspect(std::string_view encoded);
+    friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 };
 
-template <std::size_t DepthMax>
-result<std::string, error> inspect(std::string_view const encoded)
+inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
 {
+    if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
+        return std::unexpected(r.error());
     heads::decoder d{encoded};
     std::string out;
-    if (auto const r = diagnostic_notation::diagnostic_write<DepthMax>(out, d, 0); !r) [[unlikely]]
+    std::vector<std::size_t> marks;
+    if (auto const r = extended_diagnostic_notation::diagnostic_write(out, d, encoded, marks, 0, limits.nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (!d.encoded.empty()) [[unlikely]]
         return std::unexpected(error::syntax_error);

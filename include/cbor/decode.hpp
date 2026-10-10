@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <limits>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -13,7 +12,7 @@
 #include <vector>
 
 #include "binding.hpp"
-#include "item_end.hpp"
+#include "item_size.hpp"
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
@@ -30,6 +29,12 @@ class decoding
     struct prefix {
         value_sharing::top_level_item &top_level;
         std::vector<bool> evaluating;
+        std::vector<std::size_t> mark_depths;
+
+        void mark(heads::decoder const &, std::size_t const depth)
+        {
+            mark_depths.push_back(depth);
+        }
     };
 
     template <class Binding>
@@ -38,11 +43,21 @@ class decoding
         Binding &binding;
         marks<Binding> shared;
         prefix *before;
+        std::size_t decoded_bytes_left = limits.decoded_bytes;
 
-        template <std::size_t DepthMax>
-        std::expected<typename Binding::value, error> value_decode(std::size_t const depth, std::optional<std::size_t> const mark)
+        CBOR_ALWAYS_INLINE std::expected<void, error> decoded_bytes_count(std::uint64_t const count, std::size_t const size)
         {
-            if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]]
+            auto const sum = validity::check_decoded_bytes(decoded_bytes_left, count, size);
+            if (!sum) [[unlikely]]
+                return std::unexpected(sum.error());
+            decoded_bytes_left = *sum;
+            return {};
+        }
+
+        std::expected<typename Binding::value, error> value_decode(std::size_t const depth, std::optional<std::size_t> const mark,
+                                                                   std::size_t const depth_max)
+        {
+            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
@@ -56,21 +71,28 @@ class decoding
                 auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
+                if (auto const r = decoded_bytes_count(s->size(), sizeof(char)); !r) [[unlikely]]
+                    return std::unexpected(r.error());
                 return binding.byte_string_decode(*s);
             }
             case major_type::text_string: {
                 auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
+                if (auto const r = decoded_bytes_count(s->size(), sizeof(char)); !r) [[unlikely]]
+                    return std::unexpected(r.error());
                 return binding.text_string_decode(*s);
             }
             case major_type::array: {
-                auto array = binding.array_decode(std::min<std::uint64_t>(h->argument, d.encoded.size()));
+                std::uint64_t const elements = std::min<std::uint64_t>(h->argument, d.encoded.size());
+                if (auto const r = decoded_bytes_count(elements, sizeof(typename Binding::value)); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                auto array = binding.array_decode(elements);
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
                         shared[*mark] = array;
                 for (std::uint64_t i = 0; i < h->argument; ++i) {
-                    auto element = value_decode<DepthMax>(depth + 1, std::nullopt);
+                    auto element = value_decode(depth + 1, std::nullopt, depth_max);
                     if (!element) [[unlikely]]
                         return element;
                     array = binding.array_append(std::move(array), std::move(*element));
@@ -78,7 +100,11 @@ class decoding
                 return array;
             }
             case major_type::map: {
-                auto map = binding.map_decode(std::min<std::uint64_t>(h->argument, d.encoded.size() / 2));
+                std::uint64_t const entries = std::min<std::uint64_t>(h->argument, d.encoded.size() / (rfc8949::data_items_per_pair * heads::initial_byte_size));
+                if (auto const r = decoded_bytes_count(entries, rfc8949::data_items_per_pair * sizeof(typename Binding::value)); !r)
+                    [[unlikely]]
+                    return std::unexpected(r.error());
+                auto map = binding.map_decode(entries);
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
                         shared[*mark] = map;
@@ -91,18 +117,20 @@ class decoding
                             if (!t) [[unlikely]]
                                 return std::unexpected(t.error());
                             d = probe;
+                            if (auto const r = decoded_bytes_count(t->size(), sizeof(char)); !r) [[unlikely]]
+                                return std::unexpected(r.error());
                             auto key = binding.map_key_decode(*t);
-                            auto value = value_decode<DepthMax>(depth + 1, std::nullopt);
+                            auto value = value_decode(depth + 1, std::nullopt, depth_max);
                             if (!value) [[unlikely]]
                                 return value;
                             map = binding.map_insert(std::move(map), std::move(key), std::move(*value));
                             continue;
                         }
                     }
-                    auto key = value_decode<DepthMax>(depth + 1, std::nullopt);
+                    auto key = value_decode(depth + 1, std::nullopt, depth_max);
                     if (!key) [[unlikely]]
                         return key;
-                    auto value = value_decode<DepthMax>(depth + 1, std::nullopt);
+                    auto value = value_decode(depth + 1, std::nullopt, depth_max);
                     if (!value) [[unlikely]]
                         return value;
                     map = binding.map_insert(std::move(map), std::move(*key), std::move(*value));
@@ -110,48 +138,56 @@ class decoding
                 return map;
             }
             case major_type::tag: {
-                if (auto const r = validity::check_nesting_depth(depth + 1, DepthMax); !r) [[unlikely]]
+                if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (h->argument == std::to_underlying(heads::tag_number::shareable)) {
+                if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
                     if (!before) {
                         std::size_t const index = shared.size();
                         shared.emplace_back();
-                        auto content = value_decode<DepthMax>(depth + 1, index);
+                        auto content = value_decode(depth + 1, index, depth_max);
                         if (!content) [[unlikely]]
                             return content;
                         shared[index] = *content;
                         return content;
                     }
-                    std::size_t const index = before->top_level.mark(d);
+                    std::vector<lazy> const &all = before->top_level.sharedrefs_read();
+                    auto const known = std::ranges::lower_bound(all, before->top_level.encoded.size() - d.encoded.size(),
+                                                                {}, &lazy::offset);
+                    std::size_t const index = static_cast<std::size_t>(std::ranges::distance(all.begin(), known));
                     if (index >= shared.size()) {
                         shared.resize(index + 1);
                         before->evaluating.resize(index + 1);
                     }
                     if (shared[index]) {
-                        if (auto const r = well_formedness::item_skip<DepthMax>(d, before->top_level, depth + 1); !r) [[unlikely]]
+                        well_formedness::no_marks none;
+                        if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
                             return std::unexpected(r.error());
                         return *shared[index];
                     }
                     before->evaluating[index] = true;
-                    auto content = value_decode<DepthMax>(depth + 1, index);
+                    auto content = value_decode(depth + 1, index, depth_max);
                     before->evaluating[index] = false;
                     if (!content) [[unlikely]]
                         return content;
                     shared[index] = *content;
                     return content;
                 }
-                if (h->argument == std::to_underlying(heads::tag_number::unsigned_bignum) ||
-                    h->argument == std::to_underlying(heads::tag_number::negative_bignum)) {
-                    bool const negative = h->argument == std::to_underlying(heads::tag_number::negative_bignum);
+                if (h->argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
+                    h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)) {
+                    bool const negative =
+                        h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
                     auto const r = d.head_decode();
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (r->major != major_type::byte_string) [[unlikely]]
-                        return std::unexpected(error::inadmissible_type_for_tag_content);
+                    if (error const c = validity::check_tag_content(h->argument, r->major, r->info).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::unexpected(c);
                     auto const bytes = d.byte_string_decode(r->argument);
                     if (!bytes) [[unlikely]]
                         return std::unexpected(bytes.error());
                     std::string_view const magnitude = heads::magnitude_without_leading_zeros(*bytes);
+                    if (auto const counted = decoded_bytes_count(magnitude.size(), sizeof(char)); !counted) [[unlikely]]
+                        return std::unexpected(counted.error());
                     if (magnitude.size() <= sizeof(std::uint64_t)) {
                         if (negative)
                             return binding.negative_integer_decode(heads::magnitude_value(magnitude));
@@ -161,59 +197,94 @@ class decoding
                         return binding.negative_bignum_decode(std::string_view(heads::magnitude_plus_one(magnitude)));
                     return binding.unsigned_bignum_decode(magnitude);
                 }
-                if (h->argument == std::to_underlying(heads::tag_number::sharedref)) {
+                if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
+                    std::size_t const reference_at = before ? before->top_level.encoded.size() - d.encoded.size() : 0;
                     auto const r = d.head_decode();
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (r->major != major_type::unsigned_integer) [[unlikely]]
-                        return std::unexpected(error::inadmissible_type_for_tag_content);
-                    if (r->argument > std::numeric_limits<std::size_t>::max()) [[unlikely]]
-                        return std::unexpected(error::sharedref_index_out_of_range);
-                    std::size_t const index = static_cast<std::size_t>(r->argument);
-                    if (index >= shared.size()) [[unlikely]]
-                        return std::unexpected(error::sharedref_index_not_marked);
+                    if (error const c = validity::check_tag_content(h->argument, r->major, r->info).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::unexpected(c);
+                    if (r->argument < shared.size() && shared[static_cast<std::size_t>(r->argument)])
+                        return *shared[static_cast<std::size_t>(r->argument)];
+                    auto const marked = [&]() -> std::size_t {
+                        if (!before)
+                            return shared.size();
+                        std::vector<lazy> const &all = before->top_level.sharedrefs_read();
+                        return static_cast<std::size_t>(std::ranges::distance(
+                            all.begin(), std::ranges::upper_bound(all, reference_at, {}, &lazy::offset)));
+                    }();
+                    auto const checked = validity::check_sharedref_index(r->argument, marked);
+                    if (!checked) [[unlikely]]
+                        return std::unexpected(checked.error());
+                    std::size_t const index = *checked;
+                    if (before && index >= shared.size()) {
+                        shared.resize(index + 1);
+                        before->evaluating.resize(index + 1);
+                    }
                     if (!shared[index] && before && !before->evaluating[index] &&
                         before->top_level.sharedrefs[index].offset < before->top_level.encoded.size() - d.encoded.size()) {
+                        if (before->mark_depths.empty()) {
+                            heads::decoder all{before->top_level.encoded};
+                            if (auto const s = well_formedness::item_skip(all, *before, 0, depth_max); !s) [[unlikely]]
+                                return std::unexpected(s.error());
+                        }
+                        if (auto const c = validity::check_sharedref_index(index, before->mark_depths.size()); !c)
+                            [[unlikely]]
+                            return std::unexpected(c.error());
                         std::string_view const rest = d.encoded;
-                        d.encoded = std::string_view(std::span(before->top_level.encoded).subspan(before->top_level.sharedrefs[index].offset));
-                        before->evaluating[index] = true;
-                        auto content = value_decode<DepthMax>(depth + 1, index);
-                        before->evaluating[index] = false;
+                        for (std::size_t i = 0; i <= index; ++i) {
+                            if (shared[i] || before->evaluating[i])
+                                continue;
+                            d.encoded = std::string_view(std::span(before->top_level.encoded).subspan(before->top_level.sharedrefs[i].offset));
+                            before->evaluating[i] = true;
+                            auto content = value_decode(before->mark_depths[i] + 1, i, depth_max);
+                            before->evaluating[i] = false;
+                            if (!content) [[unlikely]] {
+                                d.encoded = rest;
+                                return content;
+                            }
+                            shared[i] = *content;
+                        }
                         d.encoded = rest;
-                        if (!content) [[unlikely]]
-                            return content;
-                        shared[index] = *content;
                     }
                     if (!shared[index]) [[unlikely]]
                         return std::unexpected(error::sharedref_not_complete);
                     return *shared[index];
                 }
+                if (error const e = validity::check_tag_content(
+                                    h->argument, before->top_level.encoded, before->top_level.encoded.size() - d.encoded.size(),
+                                    [this]() -> auto const & { return before->top_level.sharedrefs_read(); }, &lazy::offset)
+                                        .error_or(error{});
+                    e != error{}) [[unlikely]]
+                    return std::unexpected(e);
                 if constexpr (requires { binding.tag_begin(h->argument); }) {
                     std::optional<typename Binding::value> object = binding.tag_begin(h->argument);
                     if (object) {
                         if constexpr (requires { binding.cyclic_data_structures(); })
                             if (mark && binding.cyclic_data_structures())
                                 shared[*mark] = *object;
-                        auto content = value_decode<DepthMax>(depth + 1, std::nullopt);
+                        auto content = value_decode(depth + 1, std::nullopt, depth_max);
                         if (!content) [[unlikely]]
                             return content;
                         return binding.after_decode(binding.registered_decode(std::move(*object), std::move(*content)));
                     }
                 }
-                auto content = value_decode<DepthMax>(depth + 1, std::nullopt);
+                auto content = value_decode(depth + 1, std::nullopt, depth_max);
                 if (!content) [[unlikely]]
                     return content;
                 return binding.tag_decode(h->argument, std::move(*content));
             }
             default:
-                switch (static_cast<heads::simple_float_information>(h->info)) {
-                case heads::simple_float_information::simple_value_follows:
-                    if (auto const r = validity::check_simple_value(h->info, h->argument); !r) [[unlikely]]
-                        return std::unexpected(r.error());
+                switch (static_cast<rfc8949::simple_float_information>(h->info)) {
+                case rfc8949::simple_float_information::simple_value_follows:
+                    if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+                        r != error{}) [[unlikely]]
+                        return std::unexpected(r);
                     return binding.simple_value_decode(static_cast<std::uint8_t>(h->argument));
-                case heads::simple_float_information::half_precision_float:
-                case heads::simple_float_information::single_precision_float:
-                case heads::simple_float_information::double_precision_float:
+                case rfc8949::simple_float_information::half_precision_float:
+                case rfc8949::simple_float_information::single_precision_float:
+                case rfc8949::simple_float_information::double_precision_float:
                     return binding.float_decode(heads::float_decode(h->info, h->argument));
                 default:
                     return binding.simple_value_decode(h->info);
@@ -222,7 +293,7 @@ class decoding
         }
     };
 
-    template <std::size_t DepthMax, class Binding>
+    template <class Binding>
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 };
 

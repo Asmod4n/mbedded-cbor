@@ -16,6 +16,23 @@ def run(*cmd):
     return (r.stdout + r.stderr).strip()
 
 
+def read(path):
+    return open(path).read().strip() if os.path.exists(path) else ""
+
+
+def elf_type_count(path, script_compiler):
+    count = collections.Counter()
+    for line in read(path).splitlines():
+        name, kind = line.split(" ", 1)
+        compiler = name.split(".")[1] if name.startswith("rt.") else script_compiler
+        count[kind + " " + compiler] += 1
+    return dict(sorted(count.items()))
+
+
+def pie(flags):
+    return "-fPIE -pie" if {"-fPIE", "-pie"} <= set(flags.split()) else "default of the compiler"
+
+
 def cpu():
     model, flags_line = "", ""
     with open("/proc/cpuinfo") as f:
@@ -54,6 +71,8 @@ print(json.dumps({
     "time": stamp,
     "commit": commit + ("-dirty" if dirty else ""),
     "flags": flags,
+    "pie": pie(flags),
+    "elf_type_count": elf_type_count(os.path.join(build, "out", "elf_type"), os.path.basename(gxx)),
     "processes": int(processes),
     "min_time": min_time,
     "compilers": {"gxx": run(gxx, "--version").splitlines()[0], "clangxx": run(clangxx, "--version").splitlines()[0]},

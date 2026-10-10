@@ -52,7 +52,7 @@ struct size_binding : test_binding {
 std::vector<std::uint64_t> sizes_of(std::string_view const bytes)
 {
     size_binding binding;
-    (void)cbor::lazy_decode<16>(binding, *cbor::decode<16>(bytes));
+    (void)cbor::lazy_decode(binding, *cbor::lazy::from(bytes));
     return binding.sizes;
 }
 
@@ -91,11 +91,11 @@ TEST_CASE("major 5: a text key goes to map_key_decode")
                                   "c\xa1\x61"
                                   "a\x03"sv;
     key_binding binding;
-    auto const keyed = cbor::lazy_decode<16>(binding, *cbor::decode<16>(wire));
+    auto const keyed = cbor::lazy_decode(binding, *cbor::lazy::from(wire));
     REQUIRE(keyed.has_value());
     CHECK(binding.keys == std::vector<std::string>{"a", "c", "a"});
     test_binding plain;
-    auto const usual = cbor::lazy_decode<16>(plain, *cbor::decode<16>(wire));
+    auto const usual = cbor::lazy_decode(plain, *cbor::lazy::from(wire));
     REQUIRE(usual.has_value());
     CHECK(*keyed == *usual);
 }
@@ -116,6 +116,7 @@ TEST_CASE("major 5: empty, string, integer, nested keys")
 // The limit is 16 here; the limit itself must pass and one level more must fail.
 TEST_CASE("depth: nested arrays and maps past the limit")
 {
+    test::limits_guard const depth{{.nesting_depth = 16}};
     CHECK(decoded(std::string(16, '\x81') + '\x00').has_value());
     CHECK_EQ(decode_error(std::string(17, '\x81') + '\x00'), error::nesting_depth_exceeded);
     CHECK(decoded(repeat("\xa1\x61"
@@ -169,14 +170,15 @@ TEST_CASE("major 6: a tag reaches the binding with its content")
 // the encode part. The core counts the depth on encode as on decode.
 TEST_CASE("depth: encode past the limit")
 {
+    test::limits_guard const depth{{.nesting_depth = 16}};
     value deep = V(0);
     for (int i = 0; i < 16; ++i)
         deep = A(deep);
     test_binding binding;
     string_writer w;
-    CHECK(cbor::encode<16>(binding, w, deep).has_value());
+    CHECK(cbor::encode(binding, w, deep).has_value());
     string_writer w2;
-    auto const r = cbor::encode<16>(binding, w2, A(deep));
+    auto const r = cbor::encode(binding, w2, A(deep));
     REQUIRE_FALSE(r.has_value());
     CHECK((r.error() == cbor::error{error::nesting_depth_exceeded}));
 }
@@ -188,7 +190,7 @@ TEST_CASE("encode: a reserved simple value is an error")
     for (std::uint8_t v = 24; v < 32; ++v) {
         test_binding binding;
         string_writer w;
-        auto const r = cbor::encode<16>(binding, w, V(simple{v}));
+        auto const r = cbor::encode(binding, w, V(simple{v}));
         REQUIRE_FALSE(r.has_value());
         CHECK((r.error() == cbor::error{error::reserved_simple_value}));
     }
@@ -200,7 +202,9 @@ namespace
 {
 
 // A language with text and nothing else, as bash or zsh: it answers only kind_of and text_of.
-struct text_binding : cbor::binding<std::string> {
+struct text_binding {
+    using value = std::string;
+
     cbor::kind kind_of(std::string const &v)
     {
         return v == "array" ? cbor::kind::array : cbor::kind::text_string;
@@ -220,11 +224,11 @@ TEST_CASE("encode: a kind the binding cannot describe is unsupported_value")
 {
     text_binding binding;
     string_writer w;
-    CHECK(cbor::encode<16>(binding, w, std::string("a")).has_value());
+    CHECK(cbor::encode(binding, w, std::string("a")).has_value());
     CHECK_EQ(w.encoded, "\x61"
                       "a"sv);
     string_writer w2;
-    auto const r = cbor::encode<16>(binding, w2, std::string("array"));
+    auto const r = cbor::encode(binding, w2, std::string("array"));
     REQUIRE_FALSE(r.has_value());
     CHECK((r.error() == cbor::error{error::unsupported_value}));
 }
@@ -238,10 +242,10 @@ TEST_CASE("encode: a span of exact size holds the top-level item, one byte less 
                            A(1, simple{std::to_underlying(cbor::simple_value::null)}), A(1, value{std::uint64_t{4294967296}})}) {
         std::string const expected = encoded(v);
         std::vector<char> exact(expected.size());
-        CHECK(cbor::encode<16>(binding, std::span<char>(exact), v).has_value());
+        CHECK(cbor::encode(binding, std::span<char>(exact), v).has_value());
         CHECK_EQ(std::string_view(exact.data(), exact.size()), expected);
         std::vector<char> short_by_one(expected.size() - 1);
-        CHECK_EQ(cbor::encode<16>(binding, std::span<char>(short_by_one), v).error(),
+        CHECK_EQ(cbor::encode(binding, std::span<char>(short_by_one), v).error(),
                  cbor::error{cbor::error::no_buffer_space});
     }
 }

@@ -1,6 +1,7 @@
 #include "binding.hpp"
 
 #include <charconv>
+#include <cstddef>
 #include <fstream>
 #include <memory>
 #include <iterator>
@@ -28,7 +29,7 @@ std::string bytes_of_hex(std::string_view const hex)
 
 std::string inspected(std::string_view const hex)
 {
-    auto const r = cbor::inspect(bytes_of_hex(hex));
+    auto const r = cbor::diagnostic_notation(bytes_of_hex(hex));
     REQUIRE(r.has_value());
     return *r;
 }
@@ -38,7 +39,7 @@ std::string inspected(std::string_view const hex)
 // RFC 8949 Appendix A gives the diagnostic notation of each example. The text is the table of the RFC, except where
 // the draft of EDN asks for another form: an encoding indicator on a float that is not in its preferred
 // serialization (Table 2 of the draft). A bignum shows as its tag, and a text string shows its UTF-8 unescaped.
-TEST_CASE("inspect: the examples of RFC 8949 Appendix A")
+TEST_CASE("diagnostic_notation: the examples of RFC 8949 Appendix A")
 {
     std::pair<std::string_view, std::string_view> const examples[] = {
         {"00", "0"},
@@ -134,7 +135,7 @@ TEST_CASE("inspect: the examples of RFC 8949 Appendix A")
 // The test vectors carry the diagnostic notation where the JSON value cannot say it. Each one is checked against
 // the output, except the floats that are not in their preferred serialization, which the draft writes with an
 // encoding indicator.
-TEST_CASE("inspect: the diagnostic field of the test vectors")
+TEST_CASE("diagnostic_notation: the diagnostic field of the test vectors")
 {
     std::ifstream in(TEST_VECTORS "/appendix_a.json");
     REQUIRE(in.good());
@@ -168,7 +169,7 @@ TEST_CASE("inspect: the diagnostic field of the test vectors")
 // draft-ietf-cbor-edn-literals-28 4.1 Table 7 and 4.2 (the table writes "A"_1 beside 79000161, whose content is
 // the letter a): a head that is not the preferred one carries _0 to _3,
 // an empty indefinite-length string is ''_ or ""_ (4.3), and 3.7 notes a NaN with a payload as float''.
-TEST_CASE("inspect: encoding indicators of the EDN draft")
+TEST_CASE("diagnostic_notation: encoding indicators of the EDN draft")
 {
     CHECK_EQ(inspected("190001"), "1_1");
     CHECK_EQ(inspected("1801"), "1_0");
@@ -192,19 +193,71 @@ TEST_CASE("inspect: encoding indicators of the EDN draft")
 }
 
 // An item that is not well-formed has no diagnostic notation: the error comes back.
-TEST_CASE("inspect: an item that is not well-formed is an error")
+TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
 {
-    CHECK_EQ(cbor::inspect(""sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::inspect("\xff"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\xf8\x18"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\xf8\x10"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x1c"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x1f"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x62\x61"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::inspect("\x5f\x61\x61\xff"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x5f\x5f\xff\xff"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect("\x9f\x01"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::inspect("\x00\x00"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::inspect<4>("\x81\x81\x81\x81\x81\x00"sv).error(), error::nesting_depth_exceeded);
-    CHECK(cbor::inspect<5>("\x81\x81\x81\x81\x81\x00"sv).has_value());
+    CHECK_EQ(cbor::diagnostic_notation(""sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\xff"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\xf8\x18"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\xf8\x10"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x1c"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x1f"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x62\x61"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\x5f\x61\x61\xff"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x5f\x5f\xff\xff"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x9f\x01"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\x00\x00"sv).error(), error::syntax_error);
+    {
+        test::limits_guard const depth{{.nesting_depth = 4}};
+        CHECK_EQ(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).error(), error::nesting_depth_exceeded);
+    }
+    test::limits_guard const depth{{.nesting_depth = 5}};
+    CHECK(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).has_value());
+}
+
+// diagnostic_notation printed a tag 29 whose index names no shareable that came before it, and databind refused
+// the same bytes. A sharedref is now checked against the shareables seen so far, as lazy and databind check it.
+TEST_CASE("diagnostic_notation: a sharedref names a shareable that comes before it")
+{
+    for (std::string_view const hex : {"d81d05"sv, "81d81d00"sv, "82d81c01d81d05"sv, "82d81d00d81c01"sv})
+        CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex(hex)).error(), error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("82d81c01d81d1bffffffffffffffff")).error(),
+             error::sharedref_index_not_marked);
+    CHECK(cbor::diagnostic_notation(bytes_of_hex("82d81c01d81c01")).has_value());
+    CHECK_EQ(inspected("82d81c01d81d00"), "[28(1), 29(0)]");
+    CHECK_EQ(inspected("83d81c01d81cd81d00d81d01"), "[28(1), 28(29(0)), 29(1)]");
+    CHECK_EQ(inspected("83d81c01d81cd81d00c1d81d01"), "[28(1), 28(29(0)), 1(29(1))]");
+    CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("83d81c6161d81cd81d00c1d81d01")).error(),
+             error::inadmissible_type_for_tag_content);
+}
+
+// The content check of a tag followed every sharedref of a chain 28(29(k)) back to the first shareable, so a chain
+// of n items cost n^2 steps: 180 KB took seconds. A shareable whose content is a sharedref now marks the content
+// that the sharedref names, so each check takes one step. A test that is quadratic again makes the suite slow.
+TEST_CASE("diagnostic_notation: a chain of shareables that refer to each other is read in linear time")
+{
+    std::size_t const n = 5000;
+    std::string encoded = "\x9a"s;
+    for (int shift = 24; shift >= 0; shift -= 8)
+        encoded += static_cast<char>((n + 1) >> shift);
+    encoded += "\xd8\x1c\x00"s;
+    for (std::size_t k = 0; k < n; ++k) {
+        encoded += "\xd8\x1c\xd8\x1d\x1a"s;
+        for (int shift = 24; shift >= 0; shift -= 8)
+            encoded += static_cast<char>(k >> shift);
+    }
+    auto const r = cbor::diagnostic_notation(encoded);
+    REQUIRE(r.has_value());
+    CHECK(r->ends_with("28(29(4999_2))]"));
+}
+
+// The content check of a tag read the head of its content with the decoder of definite lengths, so every tag over
+// an indefinite-length item was an error. RFC 8949 section 3.2 lets an indefinite-length item stand wherever its
+// major type stands, so the check reads the head with the indefinite length.
+TEST_CASE("diagnostic_notation: a tag encloses an indefinite-length item")
+{
+    CHECK_EQ(inspected("c69fff"), "6([_ ])");
+    CHECK_EQ(inspected("c07f6161ff"), "0((_ \"a\"))");
+    CHECK_EQ(inspected("c25f4101ff"), "2((_ h'01'))");
+    CHECK_EQ(inspected("d81c9f01ff"), "28([_ 1])");
+    CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("c09fff")).error(), error::inadmissible_type_for_tag_content);
 }

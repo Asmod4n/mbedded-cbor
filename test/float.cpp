@@ -52,6 +52,37 @@ TEST_CASE("major 7: ±Inf and NaN")
     CHECK(std::isnan(float_of("\xf9\x7e\x00"sv)));
 }
 
+// RFC 8949 4.1: zero-padding the significand of a shorter NaN at the right gives the same NaN in a longer
+// form, and 2.2 calls two NaNs equal when their zero-extended significands are equal. A decoded binary16 or
+// binary32 NaN keeps its sign and its payload in the double, also a signaling NaN, whose quiet bit a
+// conversion of the processor would set. The cbor-wg test vectors decode f97d1f to the NaN of
+// fb7ff47c0000000000. decode and lazy give the same bits.
+TEST_CASE("major 7: a NaN keeps its sign and payload when it is decoded")
+{
+    struct {
+        std::string_view wire;
+        std::uint64_t bits;
+    } const cases[] = {
+        {"\xf9\x7d\x1f"sv, 0x7ff47c0000000000},
+        {"\xf9\x7c\x01"sv, 0x7ff0040000000000},
+        {"\xf9\xfd\x01"sv, 0xfff4040000000000},
+        {"\xf9\x7e\x00"sv, 0x7ff8000000000000},
+        {"\xfa\x7f\x80\x00\x01"sv, 0x7ff0000020000000},
+        {"\xfa\x7f\xa3\xf5\x53"sv, 0x7ff47eaa60000000},
+        {"\xfa\xff\xc0\x00\x00"sv, 0xfff8000000000000},
+        {"\xfb\x7f\xf4\x7c\x00\x00\x00\x00\x00"sv, 0x7ff47c0000000000},
+    };
+    for (auto const &c : cases) {
+        CAPTURE(c.bits);
+        CHECK_EQ(bits_of(float_of(c.wire)), c.bits);
+        auto const top = cbor::lazy::from(c.wire);
+        REQUIRE(top.has_value());
+        auto const d = top->get<double>();
+        REQUIRE(d.has_value());
+        CHECK_EQ(bits_of(*d), c.bits);
+    }
+}
+
 // Ported from test.rb: 'major 7: ±zero and sample floats roundtrip'.
 TEST_CASE("major 7: ±zero and sample floats")
 {

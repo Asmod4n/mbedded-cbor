@@ -1,12 +1,20 @@
 #include "binding.hpp"
 
+#include <algorithm>
 #include <array>
+#include <bit>
 #include <cstdint>
+#include <deque>
+#include <functional>
+#include <limits>
+#include <list>
 #include <map>
 #include <memory>
-#include <stdexcept>
+#include <new>
 #include <optional>
+#include <set>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -25,7 +33,7 @@ namespace
 template <class T>
 void round_trip(std::string const &bytes, T const &expected)
 {
-    auto const back = cbor::databind<T>::decode(bytes);
+    auto const back = cbor::databind<T>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK(**back == expected);
     auto const again = cbor::databind<T>::encode(expected);
@@ -120,6 +128,25 @@ TEST_CASE("databind: an unknown key is skipped, a missing key is an error")
     CHECK_EQ(cbor::databind<std::uint64_t>::decode("\x00\x00"s).error(), error::syntax_error);
 }
 
+// RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. A
+// struct member and a std::map take the first entry of a repeated key, with no error. A struct took the last
+// one before this test existed.
+TEST_CASE("databind: a repeated key gives the first entry")
+{
+    auto const twice = cbor::databind<pair_ab>::decode("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x80"s);
+    REQUIRE(twice.has_value());
+    CHECK_EQ((*twice)->a, 1u);
+    auto const map =
+        cbor::databind<std::map<std::string, std::string>>::decode("\xa2\x61\x61\x61\x41\x61\x61\x61\x42"s);
+    REQUIRE(map.has_value());
+    CHECK_EQ((*map)->at("a"), "A");
+    CHECK(cbor::databind<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\x80\x61x\x01\x61x\x02"s).has_value());
+    auto const widths = cbor::databind<std::map<std::uint64_t, std::uint64_t>>::decode("\xa2\x01\x00\x18\x01\x05"s);
+    REQUIRE(widths.has_value());
+    CHECK_EQ((*widths)->size(), 1u);
+    CHECK_EQ((*widths)->at(1), 0u);
+}
+
 // RFC 8428 6, the CBOR form of the example in 5.1.2: the integer labels come from the keys of the struct.
 TEST_CASE("databind: a SenML pack with integer labels")
 {
@@ -134,12 +161,12 @@ TEST_CASE("databind: a SenML pack with integer labels")
     round_trip(*bytes, pack);
 }
 
-// RFC 8392 A.3 carries a COSE_Sign1 under tag 18 with a kid in the unprotected header. decode(bytes) copies the
-// message once and the views point into that copy; decode(owner, bytes) copies nothing and keeps the owner.
+// RFC 8392 A.3 carries a COSE_Sign1 under tag 18 with a kid in the unprotected header. A moved string becomes the
+// owner; decode(owner, bytes) copies nothing and keeps the owner.
 TEST_CASE("databind: a COSE_Sign1 under tag 18 reads as views into the message")
 {
     std::string const message = "\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s;
-    auto const sign1 = cbor::databind<cose_sign1>::decode(message);
+    auto const sign1 = cbor::databind<cose_sign1>::decode(std::string(message));
     REQUIRE(sign1.has_value());
     auto const &[protected_header, unprotected, payload, signature] = (*sign1)->content;
     CHECK_EQ(protected_header.size(), 3u);
@@ -156,13 +183,30 @@ TEST_CASE("databind: a COSE_Sign1 under tag 18 reads as views into the message")
     CHECK_EQ(*cbor::databind<cose_sign1>::encode(**sign1), message);
 }
 
+// An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
+// owner does not compile, because the owner does not hold it. The test exists because each of these let a view
+// outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
+TEST_CASE("databind: decode checks that the owner holds an object")
+{
+    auto const bytes = std::make_shared<std::string const>("\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s);
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::databind<cose_sign1>::decode(o, std::string(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::databind<cose_sign1>::decode(o, std::move(s)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::databind<cose_sign1>::decode(o, *o); }; }(bytes)));
+    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
+    CHECK_THROWS_AS((void)cbor::databind<cose_sign1>::decode(holds_nothing, *bytes), std::logic_error);
+    std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
+    auto const held = cbor::databind<cose_sign1>::decode(holds_bytes, *bytes);
+    REQUIRE(held.has_value());
+    CHECK_EQ(reinterpret_cast<char const *>(std::get<2>((*held)->content).data()), bytes->data() + 12);
+}
+
 // CTAP 2.1 6.2.2: a nested struct under an integer key, text keys inside it, and an absent optional user.
 TEST_CASE("databind: a CTAP2 getAssertion response")
 {
     std::string const message =
         "\xa3\x01\xa2\x62\x69\x64\x42\x0a\x0b\x64\x74\x79\x70\x65\x6a\x70\x75\x62\x6c\x69\x63\x2d\x6b\x65\x79"
         "\x02\x41\x25\x03\x41\x30"s;
-    auto const r = cbor::databind<get_assertion_response>::decode(message);
+    auto const r = cbor::databind<get_assertion_response>::decode(std::string(message));
     REQUIRE(r.has_value());
     CHECK_EQ((*r)->credential_id.type, "public-key"sv);
     CHECK_EQ((*r)->credential_id.id.size(), 2u);
@@ -177,7 +221,7 @@ TEST_CASE("databind: a CTAP2 getAssertion response")
     REQUIRE(exact.has_value());
     CHECK_EQ(std::string_view(tight.data(), *exact), message);
     std::array<char, 8> small{};
-    CHECK_EQ(cbor::databind<get_assertion_response>::encode(**r, std::span(small)).error(), std::errc::no_buffer_space);
+    CHECK_EQ(cbor::databind<get_assertion_response>::encode(**r, std::span(small)).error(), cbor::error::no_buffer_space);
     std::string text = "x";
     CHECK_EQ(*cbor::databind<get_assertion_response>::encode(**r, text), message.size());
     CHECK_EQ(text, "x" + message);
@@ -226,7 +270,7 @@ struct annotated {
 TEST_CASE("databind: an annotation gives the key of a member")
 {
     std::string const bytes = "\xa2\x69x-user-id\x07\x63" "EOF\xf5"s;
-    auto const back = cbor::databind<annotated>::decode(bytes);
+    auto const back = cbor::databind<annotated>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->m0, 7u);
     CHECK((*back)->m1);
@@ -359,10 +403,13 @@ TEST_CASE("databind: a shared reference reads as the item it names")
     CHECK(**skipped == pair_ab{2, {2}});
 }
 
+template <class Encoded>
+concept decodable = requires(Encoded &&e) { cbor::databind<std::string_view>::decode(std::forward<Encoded>(e)); };
+
 // The value category of the bytes says what decode does. A moved std::string becomes the owner and is not copied:
-// the view points into the buffer that was moved. An lvalue, a const rvalue and a literal are copied once, so the
-// result does not depend on the buffer that the caller reuses or destroys.
-TEST_CASE("databind: decode moves an rvalue string and copies everything else")
+// the view points into the buffer that was moved. Every other form would need a copy or would leave views into bytes
+// that nothing keeps alive, so it does not compile; the caller passes an owner with the bytes instead.
+TEST_CASE("databind: decode takes a moved string as the owner and refuses every other form")
 {
     std::string const text(40, 'x');
     std::string const message = "\x78\x28"s + text;
@@ -375,30 +422,156 @@ TEST_CASE("databind: decode moves an rvalue string and copies everything else")
     buffer.reset();
     CHECK_EQ(**moved, text);
 
-    std::string lvalue = message;
-    auto const copied = cbor::databind<std::string_view>::decode(lvalue);
-    REQUIRE(copied.has_value());
-    CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(lvalue.data() + 2));
-    CHECK_EQ(lvalue, message);
-    lvalue.assign(message.size(), '\0');
-    CHECK_EQ(**copied, text);
+    CHECK(decodable<std::string>);
+    CHECK_FALSE(decodable<std::string &>);
+    CHECK_FALSE(decodable<std::string const &>);
+    CHECK_FALSE(decodable<std::string const>);
+    CHECK_FALSE(decodable<char const *>);
+    CHECK_FALSE(decodable<char const (&)[3]>);
+    CHECK_FALSE(decodable<std::string_view>);
 
-    std::string const constant = message;
-    auto const from_const = cbor::databind<std::string_view>::decode(std::move(constant));
-    REQUIRE(from_const.has_value());
-    CHECK_NE(static_cast<void const *>((*from_const)->data()), static_cast<void const *>(constant.data() + 2));
-    CHECK_EQ(constant, message);
+    auto const owner = std::make_shared<std::string const>(message);
+    auto const held = cbor::databind<std::string_view>::decode(owner, *owner);
+    REQUIRE(held.has_value());
+    CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(owner->data() + 2));
+}
 
-    auto const literal = cbor::databind<std::string_view>::decode("\x63" "abc");
-    REQUIRE(literal.has_value());
-    CHECK_EQ(**literal, "abc"sv);
-    char const *const pointer = "\x62" "ab";
-    auto const from_pointer = cbor::databind<std::string_view>::decode(pointer);
-    REQUIRE(from_pointer.has_value());
-    CHECK_EQ(**from_pointer, "ab"sv);
-    auto const view = cbor::databind<std::string_view>::decode("\x61" "a"sv);
-    REQUIRE(view.has_value());
-    CHECK_EQ(**view, "a"sv);
+struct float_member {
+    float f;
+};
+
+// A double that a float cannot hold exactly gives number_out_of_range, as an integer that does not fit does.
+// Before the fix 1e300 and DBL_MAX read as inf and 0.1 lost its precision, all with no error.
+TEST_CASE("databind: a double that a float cannot hold is number_out_of_range")
+{
+    auto const huge = cbor::databind<float>::decode("\xfb\x7e\x37\xe4\x3c\x88\x00\x75\x9c"s);
+    REQUIRE_FALSE(huge.has_value());
+    CHECK_EQ(huge.error(), error::number_out_of_range);
+    auto const max = cbor::databind<float_member>::decode("\xa1\x61"
+                                                          "f\xfb\x7f\xef\xff\xff\xff\xff\xff\xff"s);
+    REQUIRE_FALSE(max.has_value());
+    CHECK_EQ(max.error(), error::number_out_of_range);
+    auto const tenth = cbor::databind<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s);
+    REQUIRE_FALSE(tenth.has_value());
+    CHECK_EQ(tenth.error(), error::number_out_of_range);
+    auto const payload = cbor::databind<float>::decode("\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s);
+    REQUIRE_FALSE(payload.has_value());
+    CHECK_EQ(payload.error(), error::number_out_of_range);
+
+    auto const exact = cbor::databind<float_member>::decode("\xa1\x61"
+                                                            "f\xfb\x3f\xf8\x00\x00\x00\x00\x00\x00"s);
+    REQUIRE(exact.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>((*exact)->f), 0x3fc00000u);
+    auto const infinite = cbor::databind<float>::decode("\xfb\xff\xf0\x00\x00\x00\x00\x00\x00"s);
+    REQUIRE(infinite.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>(**infinite), 0xff800000u);
+    auto const nan = cbor::databind<float>::decode("\xfb\xff\xf0\x00\x00\x20\x00\x00\x00"s);
+    REQUIRE(nan.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>(**nan), 0xff800001u);
+    auto const half = cbor::databind<float>::decode("\xf9\x7c\x01"s);
+    REQUIRE(half.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>(**half), 0x7f802000u);
+}
+
+struct standard_containers {
+    std::list<int> l;
+    std::deque<int> q;
+    std::vector<bool> b;
+    std::set<int> s;
+    std::multiset<int> m;
+    std::multimap<int, int> mm;
+    bool operator==(standard_containers const &) const = default;
+};
+
+// decode reads every standard container that encode writes. Before the fix std::list, std::deque, std::set
+// and std::vector<bool> encoded but did not compile in decode: the branch tested push_back and called reserve
+// and emplace_back, and a std::set fell through to the struct reader.
+TEST_CASE("databind: every standard container that encode writes decodes")
+{
+    round_trip("\x82\xf5\xf4"s, std::vector<bool>{true, false});
+    round_trip("\x82\x01\x02"s, std::set<int>{1, 2});
+    round_trip("\x83\x01\x02\x03"s, std::list<int>{1, 2, 3});
+    round_trip("\x82\x01\x02"s, std::deque<int>{1, 2});
+    round_trip("\xa6\x61l\x82\x01\x02\x61q\x81\x03\x61"
+               "b\x81\xf5\x61s\x82\x04\x05\x61m\x82\x06\x06\x62mm\xa2\x01\x02\x01\x03"s,
+               standard_containers{{1, 2}, {3}, {true}, {4, 5}, {6, 6}, {{1, 2}, {1, 3}}});
+}
+
+template <class T>
+struct bounded_allocator {
+    using value_type = T;
+    static constexpr std::size_t limit = std::size_t{1} << 21;
+    bounded_allocator() = default;
+    template <class U>
+    constexpr bounded_allocator(bounded_allocator<U> const &) noexcept
+    {
+    }
+    T *allocate(std::size_t const n)
+    {
+        if (n > limit / sizeof(T))
+            throw std::bad_alloc();
+        return std::allocator<T>{}.allocate(n);
+    }
+    void deallocate(T *const p, std::size_t const n) noexcept
+    {
+        std::allocator<T>{}.deallocate(p, n);
+    }
+    bool operator==(bounded_allocator const &) const = default;
+};
+
+struct large_elements {
+    std::vector<std::array<std::uint64_t, 512>, bounded_allocator<std::array<std::uint64_t, 512>>> v;
+};
+
+// An array head of 2^20 elements before 1 MiB of input made decode reserve 2^20 elements of 4096 bytes, 4
+// GiB, and std::bad_alloc escaped decode. The reserve is now at most what the remaining bytes hold, so the
+// allocator that refuses more than 2 MiB is not reached, and the read ends at the first element that is no
+// array. A std::bad_alloc that does happen inside decode comes back as not_enough_memory.
+TEST_CASE("databind: decode reserves no more than the remaining bytes and returns std::bad_alloc as an error")
+{
+    std::string message = "\xa1\x61v\x9a\x00\x10\x00\x00"s;
+    message += std::string(std::size_t{1} << 20, '\xf6');
+    auto const r = cbor::databind<large_elements>::decode(std::move(message));
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::incorrect_type);
+
+    std::string many = "\xa1\x61v\x9a\x00\x00\x02\x01"s;
+    std::string const element = "\x99\x02\x00"s + std::string(512, '\x00');
+    for (int i = 0; i < 0x201; ++i)
+        many += element;
+    auto const full = cbor::databind<large_elements>::decode(std::move(many));
+    REQUIRE_FALSE(full.has_value());
+    CHECK_EQ(full.error(), error::not_enough_memory);
+}
+
+// An array head of 2^20 elements before 4 MiB of input made decode reserve min(2^20, 4 MiB / 4096) = 1024
+// elements of 4096 bytes before the first element was read. The allocator refuses more than 512 such
+// elements, so the decode ended with not_enough_memory. Memory now grows only with the elements that were
+// read, and the first element, a null, ends the read with incorrect_type.
+TEST_CASE("databind: decode allocates nothing for the count of an array head")
+{
+    std::string message = "\xa1\x61v\x9a\x00\x10\x00\x00"s;
+    message += std::string(std::size_t{1} << 22, '\xf6');
+    auto const r = cbor::databind<large_elements>::decode(std::move(message));
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::incorrect_type);
+}
+
+struct one_int {
+    int a;
+};
+
+// A key is read with the same well-formedness checks as a value: f8 10 is simple value 16 in two bytes, which
+// RFC 8949 3.3 forbids. Before the fix the key reader accepted it.
+TEST_CASE("databind: a map key that is not well-formed is a syntax error")
+{
+    auto const r = cbor::databind<one_int>::decode("\xa2\xf8\x10\x00\x61"
+                                                   "a\x05"s);
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::syntax_error);
+    auto const alone = cbor::databind<cbor::simple_value>::decode("\xf8\x10"s);
+    REQUIRE_FALSE(alone.has_value());
+    CHECK_EQ(alone.error(), error::syntax_error);
 }
 
 #endif

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cbor/cbor.hpp>
+#include "limits_guard.hpp"
 #include <doctest/doctest.h>
 
 #include <algorithm>
@@ -19,7 +20,7 @@ template <>
 struct doctest::StringMaker<cbor::error> {
     static doctest::String convert(cbor::error const e)
     {
-        return std::string(cbor::message(e)).c_str();
+        return cbor::make_error_code(e).message().c_str();
     }
 };
 
@@ -236,7 +237,9 @@ T const *get_if(value const &v)
 }
 
 // The binding of a test: a dynamic language in C++. Every member function builds one kind of value.
-struct test_binding : cbor::binding<test::value> {
+struct test_binding {
+    using value = test::value;
+
     value unsigned_integer_decode(std::uint64_t const a)
     {
         return {a};
@@ -436,21 +439,19 @@ inline std::string encoded([[maybe_unused]] value const &v)
 {
     [[maybe_unused]] test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<16>(binding, w, v).has_value());
+    REQUIRE(cbor::encode(binding, w, v).has_value());
     return w.encoded;
 }
 
-template <std::size_t DepthMax = 16>
 inline std::expected<value, error> decoded(std::string_view wire)
 {
     test_binding binding;
-    return cbor::lazy_decode<DepthMax>(binding, *cbor::decode<DepthMax>(wire));
+    return cbor::lazy_decode(binding, *cbor::lazy::from(wire));
 }
 
-template <std::size_t DepthMax = 16>
 inline error decode_error(std::string_view wire)
 {
-    auto const v = decoded<DepthMax>(wire);
+    auto const v = decoded(wire);
     REQUIRE_FALSE(v.has_value());
     return v.error();
 }
@@ -510,6 +511,23 @@ inline std::string repeat(std::string_view part, std::size_t n)
     for (std::size_t i = 0; i < n; ++i)
         s += part;
     return s;
+}
+
+// The index selector of RFC 9535 through the public interface of lazy: an index counts from the end when it
+// is negative, and on a map it names the integer key, as at_path reads it.
+inline std::expected<cbor::lazy, cbor::error> index_select(cbor::lazy const &l, std::int64_t const index)
+{
+    if (auto const e = l.elements(); !e && e.error() == cbor::error::not_indexable)
+        return l.at(cbor::key{index});
+    if (index >= 0)
+        return l.at(static_cast<std::size_t>(index));
+    auto const size = l.size();
+    if (!size)
+        return std::unexpected(size.error());
+    std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(index);
+    if (back > *size)
+        return std::unexpected(cbor::error::index_out_of_bounds);
+    return l.at(static_cast<std::size_t>(*size - back));
 }
 
 } // namespace test

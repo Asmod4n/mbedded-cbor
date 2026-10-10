@@ -219,7 +219,9 @@ T const *get_if(value const &v)
     return p ? *p : nullptr;
 }
 
-struct binding : cbor::binding<bench::value> {
+struct binding {
+    using value = bench::value;
+
     value unsigned_integer_decode(std::uint64_t const a)
     {
         return {a};

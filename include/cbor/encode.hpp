@@ -30,7 +30,7 @@ namespace cbor
 
 enum class sharedrefs { off, on };
 
-template <std::size_t DepthMax, sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
+template <sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value);
 
 class encoding
@@ -119,13 +119,18 @@ class encoding
             return target.allocate(hint);
     }
 
+    template <sharedrefs Sharing, class Binding, class Writer>
+    static std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer,
+                                                         typename Binding::value const &value, std::size_t depth,
+                                                         bool embedded, std::size_t depth_max);
+
     template <class Writer>
     friend struct encoder;
 
-    template <std::size_t, class, class, pass>
+    template <class, class, pass>
     friend class walker;
 
-    template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
+    template <sharedrefs Sharing, class Binding, class Writer>
     friend std::expected<void, error> encode(Binding &binding, Writer &&target,
                                                        typename Binding::value const &value);
 
@@ -168,7 +173,9 @@ struct encoder {
         }
     }
 
-    std::expected<void, std::errc> item_write(std::array<char, 9> const &item, std::size_t const size)
+    std::expected<void, std::errc>
+    item_write(std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> const &item,
+               std::size_t const size)
     {
         if (block.size() - used < item.size()) [[unlikely]] {
             if constexpr (direct) {
@@ -189,34 +196,41 @@ struct encoder {
     std::expected<void, std::errc> head_encode(major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
         std::size_t const bytes = heads::argument_size(info);
-        std::uint64_t const big = std::byteswap(argument << ((64 - 8 * bytes) & 63));
+        std::uint64_t const big =
+            std::byteswap(argument << ((std::numeric_limits<std::uint64_t>::digits -
+                                        std::numeric_limits<std::uint8_t>::digits * bytes) &
+                                       (std::numeric_limits<std::uint64_t>::digits - 1)));
         if constexpr (!direct) {
-            if (block.size() - used < 9) [[unlikely]]
+            if (block.size() - used < heads::initial_byte_size + sizeof(std::uint64_t)) [[unlikely]]
                 if (auto const r = flush(); !r) [[unlikely]]
                     return r;
-            std::array<char, 9> head;
+            std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> head;
             static_assert(std::tuple_size_v<decltype(block)> >= std::tuple_size_v<decltype(head)>,
                           "The block must hold one whole head.");
             static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(head)>,
                           "A head must hold the initial byte and the eight argument bytes.");
             std::get<0>(head) = heads::initial_byte(major, info);
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), std::span(head).template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big),
+                              std::span(head).template subspan<heads::initial_byte_size>().begin());
             std::ranges::copy(head, std::span(block).subspan(used).begin());
-            used += 1 + bytes;
+            used += heads::initial_byte_size + bytes;
             return {};
         } else {
             std::span<char> const out = block;
             std::size_t const at = used;
-            std::array<char, 9> tail;
+            std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
             static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(tail)>,
                           "A head must hold the initial byte and the eight argument bytes.");
             bool const near_end = out.size() - at < tail.size();
-            std::span<char, 9> const item = near_end ? std::span(tail) : out.subspan(at).template first<9>();
+            std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const item =
+                near_end ? std::span(tail)
+                         : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
             item.front() = heads::initial_byte(major, info);
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big), item.template subspan<1>().begin());
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big),
+                              item.template subspan<heads::initial_byte_size>().begin());
             if (near_end) [[unlikely]]
-                return item_write(tail, 1 + bytes);
-            used = at + 1 + bytes;
+                return item_write(tail, heads::initial_byte_size + bytes);
+            used = at + heads::initial_byte_size + bytes;
             return {};
         }
     }
@@ -270,7 +284,7 @@ struct encoder {
 
     std::expected<void, std::errc> float_encode(double const value)
     {
-        std::array<char, 9> tail;
+        std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
         if constexpr (!direct)
             static_assert(std::tuple_size_v<decltype(block)> >= std::tuple_size_v<decltype(tail)>,
                           "The block must hold one whole float.");
@@ -283,30 +297,38 @@ struct encoder {
                     return r;
         std::span<char> const out = block;
         std::size_t const at = used;
-        std::span<char, 9> const item =
-            direct && near_end ? std::span(tail) : out.subspan(at).template first<9>();
+        std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const item =
+            direct && near_end
+                ? std::span(tail)
+                : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
         std::size_t size;
         switch (heads::preferred_float_info(value)) {
-        case heads::simple_float_information::half_precision_float: {
-            item.front() = heads::initial_byte(major_type::simple_float,
-                                               std::to_underlying(heads::simple_float_information::half_precision_float));
+        case rfc8949::simple_float_information::half_precision_float: {
+            item.front() = heads::initial_byte(
+                major_type::simple_float,
+                std::to_underlying(rfc8949::simple_float_information::half_precision_float));
             auto const v = std::byteswap(heads::float_encode_binary16(static_cast<float>(value)));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
-            size = 3;
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
+                              item.template subspan<heads::initial_byte_size>().begin());
+            size = heads::initial_byte_size + sizeof v;
         } break;
-        case heads::simple_float_information::single_precision_float: {
-            item.front() = heads::initial_byte(major_type::simple_float,
-                                               std::to_underlying(heads::simple_float_information::single_precision_float));
+        case rfc8949::simple_float_information::single_precision_float: {
+            item.front() = heads::initial_byte(
+                major_type::simple_float,
+                std::to_underlying(rfc8949::simple_float_information::single_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
-            size = 5;
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
+                              item.template subspan<heads::initial_byte_size>().begin());
+            size = heads::initial_byte_size + sizeof v;
         } break;
         default: {
-            item.front() = heads::initial_byte(major_type::simple_float,
-                                               std::to_underlying(heads::simple_float_information::double_precision_float));
+            item.front() = heads::initial_byte(
+                major_type::simple_float,
+                std::to_underlying(rfc8949::simple_float_information::double_precision_float));
             auto const v = std::byteswap(std::bit_cast<std::uint64_t>(value));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v), item.template subspan<1>().begin());
-            size = 9;
+            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
+                              item.template subspan<heads::initial_byte_size>().begin());
+            size = heads::initial_byte_size + sizeof v;
         } break;
         }
         if constexpr (direct)
@@ -321,16 +343,17 @@ struct encoder {
     std::expected<void, std::errc> fixed_width_head_encode(major_type const major, T const argument)
     {
         return head_encode(major,
-                           std::to_underlying(heads::additional_information::one_byte_argument) + std::countr_zero(sizeof(T)),
+                           std::to_underlying(rfc8949::additional_information::one_byte_argument) +
+                               std::countr_zero(sizeof(T)),
                            argument);
     }
 
     std::expected<void, std::errc> simple_value_encode(simple_value const value)
     {
-        if (std::to_underlying(value) >= std::to_underlying(heads::simple_float_information::simple_value_follows))
-            [[unlikely]]
+        std::uint8_t const info = heads::preferred_argument_info(std::to_underlying(value));
+        if (!validity::check_simple_value(info, std::to_underlying(value))) [[unlikely]]
             return std::unexpected(std::errc::invalid_argument);
-        return head_encode(major_type::simple_float, std::to_underlying(value), std::to_underlying(value));
+        return head_encode(major_type::simple_float, info, std::to_underlying(value));
     }
 
     template <std::unsigned_integral T>
@@ -344,24 +367,23 @@ struct encoder {
     std::expected<void, std::errc> fixed_width_signed_encode(T value)
     {
         using U = std::make_unsigned_t<T>;
-        U const sign = static_cast<U>(value >> (8 * sizeof(T) - 1));
+        U const sign = static_cast<U>(value >> std::numeric_limits<T>::digits);
         return fixed_width_head_encode(static_cast<major_type>(sign & 1), static_cast<U>(static_cast<U>(value) ^ sign));
     }
 
     template <std::floating_point T>
-        requires(sizeof(T) == 4 || sizeof(T) == 8)
+        requires(sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t))
     std::expected<void, std::errc> fixed_width_float_encode(T value)
     {
-        return fixed_width_head_encode(major_type::simple_float,
-                                       std::bit_cast<std::conditional_t<sizeof(T) == 4, std::uint32_t, std::uint64_t>>(value));
+        return fixed_width_head_encode(
+            major_type::simple_float,
+            std::bit_cast<
+                std::conditional_t<sizeof(T) == sizeof(std::uint32_t), std::uint32_t, std::uint64_t>>(value));
     }
 };
 
 enum class pass { plain, count, write };
 
-template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
-std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
-                                                        std::size_t depth, bool embedded);
 
 struct discarding_writer {
     std::expected<void, std::errc> append(std::string_view)
@@ -383,7 +405,7 @@ struct sharing {
     std::unordered_map<typename Binding::identity, typename Binding::value> replaced;
 };
 
-template <std::size_t DepthMax, class Binding, class Writer, pass Pass>
+template <class Binding, class Writer, pass Pass>
 class walker
 {
     Binding &binding;
@@ -391,14 +413,13 @@ class walker
     sharing<Binding> *shared;
     std::size_t depth;
     bool embedded;
+    std::size_t depth_max;
     error failure{};
 
-    template <std::size_t, sharedrefs, class H, class W>
-    friend std::expected<std::size_t, error> encode_from(H &binding, W &writer, typename H::value const &value,
-                                                                   std::size_t depth, bool embedded);
+    friend class encoding;
 
-    walker(Binding &h, Writer &w, sharing<Binding> *s, std::size_t const d, bool const e)
-        : binding(h), out{w}, shared(s), depth(d), embedded(e)
+    walker(Binding &h, Writer &w, sharing<Binding> *s, std::size_t const d, bool const e, std::size_t const m)
+        : binding(h), out{w}, shared(s), depth(d), embedded(e), depth_max(m)
     {
     }
 
@@ -440,7 +461,7 @@ class walker
     {
         if (failure != decltype(failure){}) [[unlikely]]
             return;
-        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]] {
+        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]] {
             keep_error(r.error());
             return;
         }
@@ -450,14 +471,14 @@ class walker
             if (!outer && binding.embed_of(item)) {
                 if constexpr (Pass != pass::count) {
                     encoding::string_sink inner;
-                    auto const r = encode_from<DepthMax, Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
-                        binding, inner, item, depth, true);
+                    auto const r = encoding::encode_from<Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
+                        binding, inner, item, depth, true, depth_max);
                     if (!r) [[unlikely]] {
                         if (failure == decltype(failure){})
                             failure = r.error();
                         return;
                     }
-                    head(major_type::tag, std::to_underlying(heads::tag_number::encoded_cbor_data_item));
+                    head(major_type::tag, std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item));
                     keep(out.byte_string_encode(inner.encoded));
                 }
                 return;
@@ -472,12 +493,12 @@ class walker
                 auto const number = shared->numbers.find(*identity);
                 if (number != shared->numbers.end()) {
                     if (number->second < shared->next) {
-                        head(major_type::tag, std::to_underlying(heads::tag_number::sharedref));
+                        head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
                         head(major_type::unsigned_integer, number->second);
                         return;
                     }
                     number->second = shared->next++;
-                    head(major_type::tag, std::to_underlying(heads::tag_number::shareable));
+                    head(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable));
                 }
             }
         }
@@ -581,12 +602,12 @@ class walker
             break;
         case kind::typed_array:
             if constexpr (requires { binding.typed_array_of(item); }) {
-                if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]] {
+                if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]] {
                     keep_error(r.error());
                     return;
                 }
                 cbor::typed_array const a = binding.typed_array_of(item);
-                if (auto const r = heads::typed_array_check(a.tag, a.bytes.size()); !r) [[unlikely]] {
+                if (auto const r = validity::typed_array_check(a.tag, a.bytes.size()); !r) [[unlikely]] {
                     keep_error(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
                     return;
                 }
@@ -620,11 +641,11 @@ class walker
                 head(major_type::unsigned_integer, heads::magnitude_value(m));
                 return;
             }
-            if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]] {
+            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]] {
                 keep_error(r.error());
                 return;
             }
-            head(major_type::tag, std::to_underlying(heads::tag_number::unsigned_bignum));
+            head(major_type::tag, std::to_underlying(rfc8949::tag_number::unsigned_bignum));
             keep(out.byte_string_encode(m));
             return;
         }
@@ -637,18 +658,17 @@ class walker
             head(major_type::negative_integer, heads::magnitude_value(n));
             return;
         }
-        if (auto const r = validity::check_nesting_depth(depth, DepthMax); !r) [[unlikely]] {
+        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]] {
             keep_error(r.error());
             return;
         }
-        head(major_type::tag, std::to_underlying(heads::tag_number::negative_bignum));
+        head(major_type::tag, std::to_underlying(rfc8949::tag_number::negative_bignum));
         keep(out.byte_string_encode(n));
     }
 
     void simple(std::uint8_t const v)
     {
-        if (v >= std::to_underlying(heads::simple_float_information::simple_value_follows) &&
-            v < heads::simple_value_one_byte_min) [[unlikely]] {
+        if (!validity::check_simple_value(heads::preferred_argument_info(v), v)) [[unlikely]] {
             keep_error(error::reserved_simple_value);
             return;
         }
@@ -660,14 +680,14 @@ public:
     walker &operator=(walker const &) = delete;
 };
 
-template <std::size_t DepthMax, class Binding>
+template <class Binding>
 bool cycle_find(Binding &binding, typename Binding::value const &item,
-                std::vector<typename Binding::identity> &path)
+                std::vector<typename Binding::identity> &path, std::size_t const depth_max)
 {
     auto const identity = binding.value_identity(item);
     if (identity && std::ranges::find(path, *identity) != path.end())
         return true;
-    if (path.size() > DepthMax)
+    if (!validity::check_nesting_depth(path.size(), depth_max)) [[unlikely]]
         return false;
     if (identity)
         path.push_back(*identity);
@@ -676,14 +696,14 @@ bool cycle_find(Binding &binding, typename Binding::value const &item,
     case kind::array:
         if constexpr (requires { binding.array_size(item); })
             for (std::uint64_t i = 0; !found && i < binding.array_size(item); ++i)
-                found = cycle_find<DepthMax>(binding, binding.array_at(item, i), path);
+                found = cycle_find(binding, binding.array_at(item, i), path, depth_max);
         break;
     case kind::map:
         if constexpr (requires { binding.map_size(item); })
             binding.map_for_each(item,
                                  [&](typename Binding::value const &k, typename Binding::value const &v) {
-                                     found = found || cycle_find<DepthMax>(binding, k, path) ||
-                                             cycle_find<DepthMax>(binding, v, path);
+                                     found = found || cycle_find(binding, k, path, depth_max) ||
+                                             cycle_find(binding, v, path, depth_max);
                                  });
         break;
     default:
@@ -694,19 +714,20 @@ bool cycle_find(Binding &binding, typename Binding::value const &item,
     return found;
 }
 
-template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
-std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
-                                                        std::size_t const depth, bool const embedded)
+template <sharedrefs Sharing, class Binding, class Writer>
+std::expected<std::size_t, error> encoding::encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
+                                                        std::size_t const depth, bool const embedded,
+                                                        std::size_t const depth_max)
 {
     if constexpr (Sharing == sharedrefs::off) {
-        walker<DepthMax, Binding, Writer, pass::plain> walk{binding, writer, nullptr, depth, embedded};
+        walker<Binding, Writer, pass::plain> walk{binding, writer, nullptr, depth, embedded, depth_max};
         walk.value(value);
         walk.keep(walk.out.flush());
         if (walk.failure != decltype(walk.failure){}) [[unlikely]] {
             if constexpr (requires { binding.value_identity(value); }) {
                 std::vector<typename Binding::identity> path;
                 if (walk.failure == error{error::nesting_depth_exceeded} &&
-                    cycle_find<DepthMax>(binding, value, path))
+                    cycle_find(binding, value, path, depth_max))
                     return std::unexpected(error{error::cyclic_data_structure});
             }
             return std::unexpected(walk.failure);
@@ -715,14 +736,14 @@ std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer, 
     } else {
         sharing<Binding> shared;
         discarding_writer nothing;
-        walker<DepthMax, Binding, discarding_writer, pass::count> count{binding, nothing, &shared, depth, embedded};
+        walker<Binding, discarding_writer, pass::count> count{binding, nothing, &shared, depth, embedded, depth_max};
         count.value(value);
         if (count.failure != decltype(count.failure){}) [[unlikely]]
             return std::unexpected(count.failure);
         for (auto const &[identity, times] : shared.seen)
             if (times > 1)
                 shared.numbers.emplace(identity, std::numeric_limits<std::uint64_t>::max());
-        walker<DepthMax, Binding, Writer, pass::write> write{binding, writer, &shared, depth, embedded};
+        walker<Binding, Writer, pass::write> write{binding, writer, &shared, depth, embedded, depth_max};
         write.value(value);
         write.keep(write.out.flush());
         if (write.failure != decltype(write.failure){}) [[unlikely]]
@@ -731,11 +752,11 @@ std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer, 
     }
 }
 
-template <std::size_t DepthMax, sharedrefs Sharing, class Binding, class Writer>
+template <sharedrefs Sharing, class Binding, class Writer>
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value)
 {
     decltype(auto) message = encoding::message_of(target, 0);
-    auto const size = encode_from<DepthMax, Sharing>(binding, message, value, 0, false);
+    auto const size = encoding::encode_from<Sharing>(binding, message, value, 0, false, limits.nesting_depth);
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
     if (auto const r = message.done(*size); !r) [[unlikely]]

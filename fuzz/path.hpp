@@ -2,11 +2,19 @@
 
 #include "common.hpp"
 
+#include <bit>
 #include <charconv>
+#include <cstddef>
 #include <cstdint>
+#include <expected>
+#include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <utility>
+#include <variant>
 #include <vector>
 
 namespace fuzz
@@ -147,7 +155,7 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
                 if (!b)
                     return std::nullopt;
                 test_binding binding;
-                auto inner = cbor::lazy_decode<16>(binding, *cbor::decode<16>(b->b));
+                auto inner = cbor::lazy_decode(binding, *cbor::lazy::from(b->b));
                 if (!inner)
                     throw undecided{};
                 v = *inner;
@@ -198,11 +206,91 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
     return test::value{test::array(nodes.begin(), nodes.end())};
 }
 
+// The typed read gives views, and lazy gives views that hold an owner. Both are compared by their bytes, and a float by
+// its bits.
+template <class T>
+auto comparable(T const &v)
+{
+    if constexpr (std::is_same_v<T, std::string_view>)
+        return std::string(v);
+    else if constexpr (std::is_same_v<T, std::span<std::byte const>>)
+        return std::vector<std::byte>(v.begin(), v.end());
+    else if constexpr (std::is_same_v<T, cbor::typed_array>)
+        return std::pair{v.tag, std::vector<std::byte>(v.bytes.begin(), v.bytes.end())};
+    else if constexpr (std::is_same_v<T, double>)
+        return std::bit_cast<std::uint64_t>(v);
+    else
+        return v;
+}
+
+using step = std::variant<std::string_view, std::int64_t>;
+
+// The typed read of a path against the lazy chain over the same steps: both give the same value or the same error, on
+// every input, also where the input is not well-formed.
+template <cbor::fixed_string Path, class T>
+void typed_read_check(std::string const &document, std::vector<step> const &steps)
+{
+    auto const owner = std::make_shared<std::string const>(document);
+    auto const typed = [&owner] {
+        if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                      std::is_same_v<T, cbor::typed_array>)
+            return cbor::at_path<Path, T>(owner, *owner);
+        else
+            return cbor::at_path<Path, T>(std::string_view(*owner));
+    }();
+    auto const root = cbor::lazy::from(std::string(document));
+    require(root.has_value());
+    std::expected<cbor::lazy, cbor::error> node = *root;
+    for (step const &s : steps)
+        node = node.and_then([&s](cbor::lazy const &l) {
+            return std::holds_alternative<std::int64_t>(s) ? test::index_select(l, std::get<std::int64_t>(s))
+                                                           : l.at(std::get<std::string_view>(s));
+        });
+    auto const chained = node.and_then([](cbor::lazy const &l) { return l.get<T>(); });
+    require(typed.has_value() == chained.has_value());
+    if (!typed) {
+        require(typed.error() == chained.error());
+        return;
+    }
+    if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                  std::is_same_v<T, cbor::typed_array>)
+        require(comparable(**typed) == comparable(**chained));
+    else
+        require(comparable(*typed) == comparable(*chained));
+}
+
+template <cbor::fixed_string Path>
+void typed_reads_check(std::string const &document, std::vector<step> const &steps)
+{
+    typed_read_check<Path, std::int64_t>(document, steps);
+    typed_read_check<Path, std::uint64_t>(document, steps);
+    typed_read_check<Path, std::int8_t>(document, steps);
+    typed_read_check<Path, double>(document, steps);
+    typed_read_check<Path, bool>(document, steps);
+    typed_read_check<Path, std::nullptr_t>(document, steps);
+    typed_read_check<Path, std::string_view>(document, steps);
+    typed_read_check<Path, std::span<std::byte const>>(document, steps);
+    typed_read_check<Path, cbor::typed_array>(document, steps);
+}
+
 inline void path_target(std::string_view const input)
 {
+    std::string const whole(input);
+    typed_reads_check<"$">(whole, {});
+    typed_reads_check<"$[0]">(whole, {std::int64_t{0}});
+    typed_reads_check<"$[1]">(whole, {std::int64_t{1}});
+    typed_reads_check<"$[-1]">(whole, {std::int64_t{-1}});
+    typed_reads_check<"$.a">(whole, {"a"});
+    typed_reads_check<"$.a[0]">(whole, {"a", std::int64_t{0}});
+    typed_reads_check<"$[0].a">(whole, {std::int64_t{0}, "a"});
+    typed_reads_check<"$.a.b">(whole, {"a", "b"});
+    typed_reads_check<"$[1][0]">(whole, {std::int64_t{1}, std::int64_t{0}});
+    typed_reads_check<"$['a'][-1]['b']">(whole, {"a", std::int64_t{-1}, "b"});
+
     if (auto const any = cbor::lazy::from(std::string(1, '\0'))) {
         test_binding any_binding;
-        (void)cbor::at_path<16>(any_binding, input, *any);
+        (void)cbor::at_path(any_binding, input, *any);
+        (void)cbor::query(any_binding, input, *any);
     }
 
     if (input.empty())
@@ -211,7 +299,7 @@ inline void path_target(std::string_view const input)
     std::string_view const path_bytes = input.substr(1, split);
     std::string_view const document = input.substr(1 + split);
     test_binding binding;
-    auto const eager = cbor::lazy_decode<16>(binding, *cbor::decode<16>(document));
+    auto const eager = cbor::lazy_decode(binding, *cbor::lazy::from(document));
     if (!eager)
         return;
     std::vector<std::string> keys;
@@ -220,7 +308,9 @@ inline void path_target(std::string_view const input)
     query const q = query_from(pin, keys);
     auto const root = cbor::lazy::from(std::string{document});
     require(root.has_value());
-    auto const found = cbor::at_path<16>(binding, q.text, *root);
+    auto found = cbor::at_path(binding, q.text, *root);
+    if (!found && found.error() == cbor::error::invalid_path)
+        found = cbor::query(binding, q.text, *root);
     if (!q.valid)
         return;
     std::optional<test::value> expected;

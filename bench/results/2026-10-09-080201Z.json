@@ -1,0 +1,2515 @@
+{
+ "context": {
+  "commit": "bdd11fa (clean)",
+  "base": "e7636d9",
+  "aa": "bdd11fa include built twice, two binaries",
+  "flags": "-std=c++23 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -Werror",
+  "kernel": "6.18.44-fc-v80",
+  "vm": "Firecracker, 4 vcpus",
+  "container": "podman, --network none, --cap-add SYS_NICE",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags_sha256": "39a8dd34f3afdd3862e81b993fb5c5915e50fcc574062958b655b40b631b8663",
+  "scheduler": "EEVDF (Linux 6.18)",
+  "threads": 1,
+  "rounds": 10,
+  "order": "shuf per round",
+  "min_time": "0.2s",
+  "pinned": false,
+  "user": "uid 1000 (setpriv from container root)",
+  "unit": "ns real time per operation",
+  "arms": "READ, MB_PATH = lazy path, MB_AT_PATH = at_path; docs twitter, floats, records; runtime.cpp of each tree, docs of HEAD"
+ },
+ "images": {
+  "tw-gb": {
+   "image": "mbedded-cbor-tw-gb",
+   "os": "openSUSE Tumbleweed, libstdc++, glibc",
+   "priority": "1000\n-10",
+   "loadavg_start": "2.64 2.31 1.65 1/117 549",
+   "loadavg_end": "1.07 1.42 1.44 2/115 1111",
+   "elf_type": "clang++-23.floats.MB_AT_PATH.aa Type: DYN\nclang++-23.floats.MB_AT_PATH.base Type: DYN\nclang++-23.floats.MB_AT_PATH.head Type: DYN\nclang++-23.floats.MB_PATH.aa Type: DYN\nclang++-23.floats.MB_PATH.base Type: DYN\nclang++-23.floats.MB_PATH.head Type: DYN\nclang++-23.floats.READ.aa Type: DYN\nclang++-23.floats.READ.base Type: DYN\nclang++-23.floats.READ.head Type: DYN\nclang++-23.records.MB_AT_PATH.aa Type: DYN\nclang++-23.records.MB_AT_PATH.base Type: DYN\nclang++-23.records.MB_AT_PATH.head Type: DYN\nclang++-23.records.MB_PATH.aa Type: DYN\nclang++-23.records.MB_PATH.base Type: DYN\nclang++-23.records.MB_PATH.head Type: DYN\nclang++-23.records.READ.aa Type: DYN\nclang++-23.records.READ.base Type: DYN\nclang++-23.records.READ.head Type: DYN\nclang++-23.twitter.MB_AT_PATH.aa Type: DYN\nclang++-23.twitter.MB_AT_PATH.base Type: DYN\nclang++-23.twitter.MB_AT_PATH.head Type: DYN\nclang++-23.twitter.MB_PATH.aa Type: DYN\nclang++-23.twitter.MB_PATH.base Type: DYN\nclang++-23.twitter.MB_PATH.head Type: DYN\nclang++-23.twitter.READ.aa Type: DYN\nclang++-23.twitter.READ.base Type: DYN\nclang++-23.twitter.READ.head Type: DYN\ng++-16.floats.MB_AT_PATH.aa Type: DYN\ng++-16.floats.MB_AT_PATH.base Type: DYN\ng++-16.floats.MB_AT_PATH.head Type: DYN\ng++-16.floats.MB_PATH.aa Type: DYN\ng++-16.floats.MB_PATH.base Type: DYN\ng++-16.floats.MB_PATH.head Type: DYN\ng++-16.floats.READ.aa Type: DYN\ng++-16.floats.READ.base Type: DYN\ng++-16.floats.READ.head Type: DYN\ng++-16.records.MB_AT_PATH.aa Type: DYN\ng++-16.records.MB_AT_PATH.base Type: DYN\ng++-16.records.MB_AT_PATH.head Type: DYN\ng++-16.records.MB_PATH.aa Type: DYN\ng++-16.records.MB_PATH.base Type: DYN\ng++-16.records.MB_PATH.head Type: DYN\ng++-16.records.READ.aa Type: DYN\ng++-16.records.READ.base Type: DYN\ng++-16.records.READ.head Type: DYN\ng++-16.twitter.MB_AT_PATH.aa Type: DYN\ng++-16.twitter.MB_AT_PATH.base Type: DYN\ng++-16.twitter.MB_AT_PATH.head Type: DYN\ng++-16.twitter.MB_PATH.aa Type: DYN\ng++-16.twitter.MB_PATH.base Type: DYN\ng++-16.twitter.MB_PATH.head Type: DYN\ng++-16.twitter.READ.aa Type: DYN\ng++-16.twitter.READ.base Type: DYN\ng++-16.twitter.READ.head Type: DYN",
+   "rounds": "1 310 1696323 313 1710815\n2 313 1710815 315 1725171\n3 315 1725171 317 1739493\n4 317 1739493 321 1753733\n5 321 1753733 325 1767969\n6 325 1767969 328 1782030\n7 328 1782030 329 1796272\n8 329 1796272 331 1810575\n9 331 1810575 338 1824824\n10 338 1824824 344 1839243",
+   "failed": [],
+   "err": "-09T07:54:47+00:00\nRunning /out/bin/clang++-23.records.MB_AT_PATH.aa\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.07, 1.42, 1.44\ncheck: 640\ncopies: 1656\ndocument: /head/bench/docs/records.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.\n2026-10-09T07:54:47+00:00\nRunning /out/bin/g++-16.records.MB_AT_PATH.aa\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.07, 1.42, 1.44\ncheck: 640\ncopies: 1656\ndocument: /head/bench/docs/records.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.\n2026-10-09T07:54:48+00:00\nRunning /out/bin/clang++-23.twitter.MB_AT_PATH.head\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.07, 1.42, 1.44\ncheck: 1227\ncopies: 1354\ndocument: /head/bench/docs/twitter.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.\n2026-10-09T07:54:49+00:00\nRunning /out/bin/g++-16.records.MB_PATH.head\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.07, 1.42, 1.44\ncheck: 640\ncopies: 1656\ndocument: /head/bench/docs/records.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.\n2026-10-09T07:54:49+00:00\nRunning /out/bin/g++-16.floats.MB_AT_PATH.head\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.07, 1.42, 1.44\ncheck: 13864225899743805440\ncopies: 1626\ndocument: /head/bench/docs/floats.cbor\n***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.\n",
+   "bench_ctx": {
+    "date": "2026-10-09T07:50:22+00:00",
+    "host_name": "a9a6f1119ad5",
+    "executable": "/out/bin/clang++-23.twitter.MB_PATH.head",
+    "num_cpus": 4,
+    "mhz_per_cpu": 2100,
+    "cpu_scaling_enabled": false,
+    "aslr_enabled": true,
+    "caches": [
+     {
+      "type": "Data",
+      "level": 1,
+      "size": 49152,
+      "num_sharing": 1
+     },
+     {
+      "type": "Instruction",
+      "level": 1,
+      "size": 32768,
+      "num_sharing": 1
+     },
+     {
+      "type": "Unified",
+      "level": 2,
+      "size": 2097152,
+      "num_sharing": 1
+     },
+     {
+      "type": "Unified",
+      "level": 3,
+      "size": 272629760,
+      "num_sharing": 4
+     }
+    ],
+    "load_avg": [
+     1.396,
+     1.98145,
+     1.58984
+    ],
+    "library_version": "v1.9.5",
+    "library_build_type": "release",
+    "json_schema_version": 1,
+    "check": "1227",
+    "copies": "1354",
+    "document": "/head/bench/docs/twitter.cbor"
+   }
+  },
+  "sid-gb": {
+   "image": "mbedded-cbor-sid-gb",
+   "os": "Debian sid, libstdc++ 16, glibc 2.43",
+   "priority": "1000\n-10",
+   "loadavg_start": "2.76 1.87 1.60 1/115 549",
+   "loadavg_end": "1.00 1.26 1.40 1/119 1111",
+   "elf_type": "clang++-23.floats.MB_AT_PATH.aa Type: DYN\nclang++-23.floats.MB_AT_PATH.base Type: DYN\nclang++-23.floats.MB_AT_PATH.head Type: DYN\nclang++-23.floats.MB_PATH.aa Type: DYN\nclang++-23.floats.MB_PATH.base Type: DYN\nclang++-23.floats.MB_PATH.head Type: DYN\nclang++-23.floats.READ.aa Type: DYN\nclang++-23.floats.READ.base Type: DYN\nclang++-23.floats.READ.head Type: DYN\nclang++-23.records.MB_AT_PATH.aa Type: DYN\nclang++-23.records.MB_AT_PATH.base Type: DYN\nclang++-23.records.MB_AT_PATH.head Type: DYN\nclang++-23.records.MB_PATH.aa Type: DYN\nclang++-23.records.MB_PATH.base Type: DYN\nclang++-23.records.MB_PATH.head Type: DYN\nclang++-23.records.READ.aa Type: DYN\nclang++-23.records.READ.base Type: DYN\nclang++-23.records.READ.head Type: DYN\nclang++-23.twitter.MB_AT_PATH.aa Type: DYN\nclang++-23.twitter.MB_AT_PATH.base Type: DYN\nclang++-23.twitter.MB_AT_PATH.head Type: DYN\nclang++-23.twitter.MB_PATH.aa Type: DYN\nclang++-23.twitter.MB_PATH.base Type: DYN\nclang++-23.twitter.MB_PATH.head Type: DYN\nclang++-23.twitter.READ.aa Type: DYN\nclang++-23.twitter.READ.base Type: DYN\nclang++-23.twitter.READ.head Type: DYN\ng++-16.floats.MB_AT_PATH.aa Type: DYN\ng++-16.floats.MB_AT_PATH.base Type: DYN\ng++-16.floats.MB_AT_PATH.head Type: DYN\ng++-16.floats.MB_PATH.aa Type: DYN\ng++-16.floats.MB_PATH.base Type: DYN\ng++-16.floats.MB_PATH.head Type: DYN\ng++-16.floats.READ.aa Type: DYN\ng++-16.floats.READ.base Type: DYN\ng++-16.floats.READ.head Type: DYN\ng++-16.records.MB_AT_PATH.aa Type: DYN\ng++-16.records.MB_AT_PATH.base Type: DYN\ng++-16.records.MB_AT_PATH.head Type: DYN\ng++-16.records.MB_PATH.aa Type: DYN\ng++-16.records.MB_PATH.base Type: DYN\ng++-16.records.MB_PATH.head Type: DYN\ng++-16.records.READ.aa Type: DYN\ng++-16.records.READ.base Type: DYN\ng++-16.records.READ.head Type: DYN\ng++-16.twitter.MB_AT_PATH.aa Type: DYN\ng++-16.twitter.MB_AT_PATH.base Type: DYN\ng++-16.twitter.MB_AT_PATH.head Type: DYN\ng++-16.twitter.MB_PATH.aa Type: DYN\ng++-16.twitter.MB_PATH.base Type: DYN\ng++-16.twitter.MB_PATH.head Type: DYN\ng++-16.twitter.READ.aa Type: DYN\ng++-16.twitter.READ.base Type: DYN\ng++-16.twitter.READ.head Type: DYN",
+   "rounds": "1 357 1864732 361 1879260\n2 361 1879260 367 1893692\n3 367 1893692 370 1908053\n4 370 1908054 378 1922466\n5 378 1922467 380 1936789\n6 380 1936789 382 1951172\n7 382 1951172 384 1965610\n8 384 1965610 388 1980061\n9 388 1980061 392 1994404\n10 392 1994404 395 2008782",
+   "failed": [],
+   "err": "Library was built as DEBUG. Timings may be affected.\n2026-10-09T08:01:50+00:00\nRunning /out/bin/g++-16.records.MB_AT_PATH.aa\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.00, 1.26, 1.40\ncheck: 640\ncopies: 1656\ndocument: /head/bench/docs/records.cbor\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-10-09T08:01:51+00:00\nRunning /out/bin/g++-16.records.READ.aa\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.00, 1.26, 1.40\ncheck: 9492683289386141349\ncopies: 1656\ndocument: /head/bench/docs/records.cbor\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-10-09T08:01:51+00:00\nRunning /out/bin/g++-16.floats.MB_AT_PATH.aa\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.00, 1.26, 1.40\ncheck: 13864225899743805440\ncopies: 1626\ndocument: /head/bench/docs/floats.cbor\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-10-09T08:01:52+00:00\nRunning /out/bin/clang++-23.twitter.MB_PATH.base\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.00, 1.26, 1.40\ncheck: 1227\ncopies: 1354\ndocument: /head/bench/docs/twitter.cbor\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-10-09T08:01:53+00:00\nRunning /out/bin/g++-16.twitter.READ.head\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.00, 1.26, 1.40\ncheck: 11743431291459513190\ncopies: 1354\ndocument: /head/bench/docs/twitter.cbor\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n",
+   "bench_ctx": {
+    "date": "2026-10-09T07:57:30+00:00",
+    "host_name": "729a13aa00d9",
+    "executable": "/out/bin/clang++-23.twitter.MB_PATH.head",
+    "num_cpus": 4,
+    "mhz_per_cpu": 2100,
+    "cpu_scaling_enabled": false,
+    "caches": [
+     {
+      "type": "Data",
+      "level": 1,
+      "size": 49152,
+      "num_sharing": 1
+     },
+     {
+      "type": "Instruction",
+      "level": 1,
+      "size": 32768,
+      "num_sharing": 1
+     },
+     {
+      "type": "Unified",
+      "level": 2,
+      "size": 2097152,
+      "num_sharing": 1
+     },
+     {
+      "type": "Unified",
+      "level": 3,
+      "size": 272629760,
+      "num_sharing": 4
+     }
+    ],
+    "load_avg": [
+     1.3584,
+     1.63184,
+     1.53564
+    ],
+    "library_version": "1.9.1",
+    "library_build_type": "debug",
+    "json_schema_version": 1,
+    "check": "1227",
+    "copies": "1354",
+    "document": "/head/bench/docs/twitter.cbor"
+   }
+  }
+ },
+ "results": [
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.floats.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    131126.37712647088,
+    123245.66576799558,
+    139628.3750621804,
+    138406.3040273394,
+    138881.09393658926,
+    145679.0317229994,
+    139094.8155341938,
+    138518.10714289462,
+    119897.37433125191,
+    163583.3301414154
+   ],
+   "median": 138699.60053974192,
+   "spread": [
+    119897.37433125191,
+    163583.3301414154
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.floats.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    147960.2784604576,
+    139477.93106896963,
+    139312.05009418036,
+    144643.4789547703,
+    147308.49591856264,
+    158557.6330117238,
+    132914.34554982634,
+    148102.2232911539,
+    155348.4577031492,
+    133247.81353402702
+   ],
+   "median": 145975.98743666647,
+   "spread": [
+    132914.34554982634,
+    158557.6330117238
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.floats.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    122335.94504011971,
+    142211.592443089,
+    132045.32647718428,
+    136465.9024164746,
+    139163.50196839587,
+    149139.2378017722,
+    139663.482294603,
+    125420.6821288406,
+    125824.61182754228,
+    128116.6049853868
+   ],
+   "median": 134255.61444682942,
+   "spread": [
+    122335.94504011971,
+    149139.2378017722
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.floats.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    150476.22047978616,
+    141280.51145417267,
+    148496.49655899048,
+    151074.4046486461,
+    134109.78476480866,
+    135803.3261648501,
+    144680.94502057155,
+    128338.16801441312,
+    144415.6678809974,
+    132920.41817285246
+   ],
+   "median": 142848.08966758504,
+   "spread": [
+    128338.16801441312,
+    151074.4046486461
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.floats.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    138943.65018246367,
+    156076.27740236794,
+    158447.86460141288,
+    150948.23690345653,
+    154155.90454786748,
+    135989.25070275512,
+    155655.68142847042,
+    146394.61998878076,
+    156925.87305111092,
+    160143.43196302268
+   ],
+   "median": 154905.79298816895,
+   "spread": [
+    135989.25070275512,
+    160143.43196302268
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.floats.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    145200.13395637553,
+    129882.67699339408,
+    147840.21036106933,
+    126090.24898880265,
+    127838.12078381785,
+    135405.38351829888,
+    145190.5851279615,
+    145730.9328789581,
+    130769.01071271335,
+    130440.0599821345
+   ],
+   "median": 133087.1971155061,
+   "spread": [
+    126090.24898880265,
+    147840.21036106933
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.floats.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    312617.759423553,
+    316913.02869827393,
+    376951.16558071563,
+    383052.5250361282,
+    308179.5325574921,
+    375954.688679191,
+    326889.8941034365,
+    367681.7716312028,
+    354335.71983885096,
+    388773.3559780748
+   ],
+   "median": 361008.7457350269,
+   "spread": [
+    308179.5325574921,
+    388773.3559780748
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.floats.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    327353.3238585551,
+    340236.1591729332,
+    365976.8735780811,
+    285846.95223521633,
+    365527.7662494427,
+    283048.26421031303,
+    299799.79371810786,
+    347854.8473285905,
+    369255.7526182676,
+    318787.89070275094
+   ],
+   "median": 333794.7415157441,
+   "spread": [
+    283048.26421031303,
+    369255.7526182676
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.floats.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    372430.5295657547,
+    380505.2412343688,
+    298219.1664890368,
+    383540.4626673456,
+    375659.3999992677,
+    330804.03506792046,
+    370870.3035951964,
+    317853.0260969981,
+    355905.19204643817,
+    377547.7943927108
+   ],
+   "median": 371650.4165804755,
+   "spread": [
+    298219.1664890368,
+    383540.4626673456
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.records.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    84765.41190682919,
+    105029.84505464214,
+    100650.5614741058,
+    103029.63108203975,
+    109602.60386946361,
+    100363.11114927668,
+    107331.50877223616,
+    97871.07359586714,
+    97496.06791886808,
+    87817.53373141192
+   ],
+   "median": 100506.83631169124,
+   "spread": [
+    84765.41190682919,
+    109602.60386946361
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.records.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    89744.12371129997,
+    110440.31660372089,
+    107179.73572513422,
+    100047.70643260947,
+    98885.73337763263,
+    106949.97535914925,
+    95791.6612686921,
+    112676.606954913,
+    113050.6264437554,
+    110133.85851702205
+   ],
+   "median": 107064.85554214174,
+   "spread": [
+    89744.12371129997,
+    113050.6264437554
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.records.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    110930.46386481663,
+    104975.61365323185,
+    109510.99337222902,
+    100839.76995992745,
+    110135.6286386487,
+    96885.11790855623,
+    96788.41445114833,
+    89374.26593573752,
+    104913.8654822767,
+    89359.09669658102
+   ],
+   "median": 102876.81772110207,
+   "spread": [
+    89359.09669658102,
+    110930.46386481663
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.records.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    110075.94937693901,
+    109111.32677163578,
+    106364.72301896747,
+    85583.17913638704,
+    107685.12743972233,
+    102795.20255935629,
+    100793.30956591493,
+    111813.45725638368,
+    100551.75526228968,
+    106802.20409716161
+   ],
+   "median": 106583.46355806454,
+   "spread": [
+    85583.17913638704,
+    111813.45725638368
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.records.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    96968.81925664628,
+    93210.43912034608,
+    105300.02861443505,
+    88449.32796265291,
+    105678.69042411899,
+    94485.88021235257,
+    104021.78723399907,
+    92553.54042290122,
+    102995.12219388426,
+    102876.51435942715
+   ],
+   "median": 99922.66680803671,
+   "spread": [
+    88449.32796265291,
+    105678.69042411899
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.records.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    109877.36017095874,
+    102268.3567270261,
+    92929.68067819532,
+    101181.51209662414,
+    111229.08202537653,
+    94488.12504628145,
+    102629.03719921649,
+    104265.75514021718,
+    113162.29785562392,
+    112786.42300018997
+   ],
+   "median": 103447.39616971684,
+   "spread": [
+    92929.68067819532,
+    113162.29785562392
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.records.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    246286.6498512522,
+    261491.45918399902,
+    231583.38226299686,
+    209860.37412867876,
+    245140.2418298413,
+    264985.7721064594,
+    219545.4324927507,
+    252638.27495451257,
+    263981.33041855687,
+    251899.14538985133
+   ],
+   "median": 249092.89762055175,
+   "spread": [
+    209860.37412867876,
+    264985.7721064594
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.records.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    255922.28701937193,
+    252521.770432167,
+    245540.41639075518,
+    242390.47207211604,
+    242876.70839700993,
+    252478.56051726462,
+    244664.75333886372,
+    236672.62658717594,
+    196789.07340681273,
+    248196.54093198315
+   ],
+   "median": 245102.58486480947,
+   "spread": [
+    196789.07340681273,
+    255922.28701937193
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.records.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    215388.58985187943,
+    249223.29439651952,
+    251262.5522254426,
+    261889.98066251236,
+    240186.1000893977,
+    214097.97537373056,
+    275741.4452738053,
+    218364.10835641218,
+    200045.07205210964,
+    253372.37077413825
+   ],
+   "median": 244704.6972429586,
+   "spread": [
+    200045.07205210964,
+    275741.4452738053
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.twitter.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    71904.84719730678,
+    84130.72960639042,
+    79729.88233627965,
+    79057.36458923953,
+    80640.57701291499,
+    76304.84004686827,
+    74472.91981532864,
+    77019.73365536594,
+    72963.55568141931,
+    71997.32778779823
+   ],
+   "median": 76662.2868511171,
+   "spread": [
+    71904.84719730678,
+    84130.72960639042
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.twitter.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    83551.26352732767,
+    82807.84037818573,
+    83348.6881174272,
+    74291.31331725154,
+    84196.06464332504,
+    80484.54073079105,
+    76390.58141489675,
+    72226.85933125232,
+    72166.26611057919,
+    71606.32150182484
+   ],
+   "median": 78437.5610728439,
+   "spread": [
+    71606.32150182484,
+    84196.06464332504
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.twitter.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    70710.38562642843,
+    78423.90916923307,
+    79140.11428574828,
+    79069.83838376198,
+    78666.51156173609,
+    77584.74567281546,
+    70491.08318887938,
+    73009.4661342777,
+    79548.3547479117,
+    79196.15113356445
+   ],
+   "median": 78545.21036548459,
+   "spread": [
+    70491.08318887938,
+    79548.3547479117
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.twitter.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    79751.23627617626,
+    80746.69748847882,
+    75178.71936205491,
+    79435.5532394855,
+    71368.59027240502,
+    72013.86785519545,
+    80009.08868699583,
+    79090.00084442302,
+    77933.06257164139,
+    81144.34165234858
+   ],
+   "median": 79262.77704195425,
+   "spread": [
+    71368.59027240502,
+    81144.34165234858
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.twitter.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    71588.0277778753,
+    73031.92752134812,
+    71427.20725125108,
+    83814.7257344593,
+    86823.8455705598,
+    76423.32652516903,
+    82480.80070117506,
+    83105.39344271315,
+    79012.74681242359,
+    83604.29246930363
+   ],
+   "median": 80746.77375679932,
+   "spread": [
+    71427.20725125108,
+    86823.8455705598
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.twitter.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    79474.94435024372,
+    70179.3211717719,
+    70512.6021613533,
+    73662.36891683412,
+    80440.97075678503,
+    72397.07377664438,
+    70206.18162096861,
+    69977.79047868025,
+    79818.49055568091,
+    82367.46605375544
+   ],
+   "median": 73029.72134673924,
+   "spread": [
+    69977.79047868025,
+    82367.46605375544
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.twitter.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    204097.70702000687,
+    196658.9277193028,
+    202431.25892238537,
+    204091.55731517257,
+    215020.50590827406,
+    203044.72314346142,
+    219116.93282455066,
+    194537.3525350092,
+    202918.24792102262,
+    198814.7921882223
+   ],
+   "median": 202981.48553224202,
+   "spread": [
+    194537.3525350092,
+    219116.93282455066
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.twitter.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    197350.50597287423,
+    203960.74858781812,
+    209842.96759252177,
+    167422.17426136122,
+    216872.2259993956,
+    175261.48703668526,
+    202714.21100005682,
+    184620.59160556406,
+    204455.5055474168,
+    172605.03710936347
+   ],
+   "median": 200032.35848646553,
+   "spread": [
+    167422.17426136122,
+    216872.2259993956
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "clang++-23.twitter.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    199762.8585784132,
+    204946.59154959518,
+    203502.14978234083,
+    203362.15303835052,
+    222058.15254229662,
+    188353.90441208947,
+    213238.45669863984,
+    205890.1941391913,
+    208568.742792289,
+    212268.31897969058
+   ],
+   "median": 205418.39284439324,
+   "spread": [
+    188353.90441208947,
+    222058.15254229662
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.floats.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    151119.84386426146,
+    146062.33491551914,
+    136945.4800798153,
+    136487.88525513822,
+    139775.28755803403,
+    141439.87898077694,
+    131840.35637544392,
+    124627.90000000723,
+    147507.04843748963,
+    149443.80440623712
+   ],
+   "median": 140607.58326940547,
+   "spread": [
+    124627.90000000723,
+    151119.84386426146
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.floats.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    136102.85087678413,
+    138743.01219484035,
+    137526.3603109566,
+    150405.72013308882,
+    145132.92980583032,
+    129985.8802499314,
+    149048.5776287314,
+    127766.62931855542,
+    156105.2559864266,
+    127015.09310813436
+   ],
+   "median": 138134.68625289848,
+   "spread": [
+    127015.09310813436,
+    156105.2559864266
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.floats.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    153853.6851551193,
+    127151.51053859126,
+    151803.95264622368,
+    130854.71163641113,
+    146208.47912531972,
+    140632.86342151975,
+    149577.64976228998,
+    144641.90507359442,
+    151563.3799890332,
+    150103.535902931
+   ],
+   "median": 147893.06444380485,
+   "spread": [
+    127151.51053859126,
+    153853.6851551193
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.floats.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    130878.30536742468,
+    139914.12694785523,
+    143361.63053663235,
+    134956.1374356712,
+    146367.58193292358,
+    148119.88928714965,
+    152786.91969336802,
+    144463.14344055112,
+    136844.89278230065,
+    126805.42019096181
+   ],
+   "median": 141637.8787422438,
+   "spread": [
+    126805.42019096181,
+    152786.91969336802
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.floats.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    124510.69199808597,
+    127204.57074557398,
+    141445.62761519707,
+    148350.34314235084,
+    130316.2285842709,
+    128607.65653931354,
+    147168.51179396702,
+    129625.04395598997,
+    127308.66110342919,
+    146417.486586003
+   ],
+   "median": 129970.63627013043,
+   "spread": [
+    124510.69199808597,
+    148350.34314235084
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.floats.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    134095.3209303567,
+    128332.49639648736,
+    128466.83388560911,
+    129490.93582632736,
+    130787.86351339199,
+    158344.71230567957,
+    136714.3871112342,
+    139556.6482511231,
+    142364.06408892464,
+    155034.79270937317
+   ],
+   "median": 135404.85402079544,
+   "spread": [
+    128332.49639648736,
+    158344.71230567957
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.floats.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    305195.8956516303,
+    317885.47319313063,
+    323032.041427633,
+    299372.50429190026,
+    268090.74928728555,
+    318314.0285712268,
+    263322.2223315315,
+    263266.84068413125,
+    264081.07253382605,
+    268144.65438719897
+   ],
+   "median": 283758.57933954964,
+   "spread": [
+    263266.84068413125,
+    323032.041427633
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.floats.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    318670.52522882476,
+    317435.6838487911,
+    327637.8861994737,
+    321832.892473384,
+    349053.58748476923,
+    291003.7673938098,
+    301595.09388719953,
+    317051.78523512074,
+    318205.2013274357,
+    312530.0494380252
+   ],
+   "median": 317820.44258811336,
+   "spread": [
+    291003.7673938098,
+    349053.58748476923
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.floats.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    315483.84875875746,
+    316153.0207610446,
+    317630.8612061189,
+    273124.75467983034,
+    347060.00632802065,
+    304588.5156084232,
+    276156.7081139599,
+    285549.3652877535,
+    330903.9646518237,
+    318543.1708718604
+   ],
+   "median": 315818.434759901,
+   "spread": [
+    273124.75467983034,
+    347060.00632802065
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.records.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    68288.6915747496,
+    68715.21828451313,
+    73960.7594273355,
+    67304.18466801025,
+    65928.64972558815,
+    66500.57473951636,
+    69235.96562573512,
+    69817.79455074227,
+    66470.27823566442,
+    63074.26079142911
+   ],
+   "median": 67796.43812137992,
+   "spread": [
+    63074.26079142911,
+    73960.7594273355
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.records.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    66086.0350145064,
+    63499.993219533215,
+    63805.12063649834,
+    64258.14126982202,
+    69506.05507669282,
+    69384.67565519022,
+    62893.69757647092,
+    68376.33486350645,
+    61762.17158247292,
+    70940.95938478099
+   ],
+   "median": 65172.08814216421,
+   "spread": [
+    61762.17158247292,
+    70940.95938478099
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.records.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    61689.293737148575,
+    68475.45904507853,
+    59524.204653249595,
+    67815.32054930902,
+    66890.06991324511,
+    57175.88829583076,
+    61278.00405374573,
+    63696.48161937683,
+    69688.55324676912,
+    68301.22019062703
+   ],
+   "median": 65293.275766310966,
+   "spread": [
+    57175.88829583076,
+    69688.55324676912
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.records.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    68790.58545983535,
+    61469.90238082619,
+    74889.900246391,
+    69063.4850689824,
+    59331.18416366509,
+    68897.20075757093,
+    68115.13884785445,
+    61259.156841271164,
+    68224.09886369355,
+    63612.94921702526
+   ],
+   "median": 68169.618855774,
+   "spread": [
+    59331.18416366509,
+    74889.900246391
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.records.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    67149.51101622319,
+    66285.85849953236,
+    68799.23957829273,
+    65701.02091657108,
+    57695.64296451155,
+    67796.16916857226,
+    70160.4259531098,
+    66833.98403608425,
+    67963.90990769205,
+    65906.15130969047
+   ],
+   "median": 66991.74752615372,
+   "spread": [
+    57695.64296451155,
+    70160.4259531098
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.records.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    69362.84177233106,
+    67303.88346053047,
+    67467.93245511725,
+    66578.1561604906,
+    66707.75995247069,
+    62018.88590886043,
+    69266.74070498282,
+    60335.823984635856,
+    66502.74175587783,
+    74843.73546349772
+   ],
+   "median": 67005.82170650057,
+   "spread": [
+    60335.823984635856,
+    74843.73546349772
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.records.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    274326.3976145512,
+    222701.32300490182,
+    324301.0887199812,
+    256274.18958782766,
+    228457.98669966846,
+    239071.45584257037,
+    240116.06988005585,
+    255464.0778848457,
+    250888.00782035396,
+    278321.32482833124
+   ],
+   "median": 253176.0428525998,
+   "spread": [
+    222701.32300490182,
+    324301.0887199812
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.records.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    212527.82796531514,
+    231583.08713655476,
+    287434.1306536433,
+    231459.93095279246,
+    274531.2799192398,
+    257579.1586277072,
+    221692.71786560747,
+    242280.23822772838,
+    269325.05750498205,
+    220621.03571488327
+   ],
+   "median": 236931.66268214158,
+   "spread": [
+    212527.82796531514,
+    287434.1306536433
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.records.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    259433.5049056922,
+    289774.53479494166,
+    270809.12354108033,
+    284019.33946833306,
+    239583.21262761508,
+    270270.7791706334,
+    278448.5609752265,
+    283606.63168520696,
+    291350.3602665258,
+    273243.05647588003
+   ],
+   "median": 275845.8087255533,
+   "spread": [
+    239583.21262761508,
+    291350.3602665258
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.twitter.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    67988.15105808138,
+    75018.59010152642,
+    69041.60526314781,
+    73846.82743682354,
+    74149.26558583087,
+    73342.64729513509,
+    81108.54509328063,
+    63822.95187774395,
+    76468.61097012677,
+    76881.72471657017
+   ],
+   "median": 73998.04651132721,
+   "spread": [
+    63822.95187774395,
+    81108.54509328063
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.twitter.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    66507.32631334833,
+    69296.85135149915,
+    63035.55036968826,
+    63495.90141492434,
+    62505.25608360624,
+    68309.83403526955,
+    64390.11748508203,
+    69758.53836335099,
+    61389.18607791098,
+    63994.889317344314
+   ],
+   "median": 64192.50340121317,
+   "spread": [
+    61389.18607791098,
+    69758.53836335099
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.twitter.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    66976.96266592144,
+    68287.83744518987,
+    72856.82301339645,
+    73636.74773042517,
+    63004.91780496637,
+    66329.93653170785,
+    68068.66599785232,
+    73263.06113291871,
+    71805.21880254123,
+    78175.16786303399
+   ],
+   "median": 70046.52812386554,
+   "spread": [
+    63004.91780496637,
+    78175.16786303399
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.twitter.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    73786.19337302244,
+    67441.11892414637,
+    74712.20753193788,
+    78047.79333682034,
+    69319.47544377325,
+    73279.43394321532,
+    65019.06100365753,
+    68724.31051182807,
+    69601.3015385688,
+    71593.81294758707
+   ],
+   "median": 70597.55724307793,
+   "spread": [
+    65019.06100365753,
+    78047.79333682034
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.twitter.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    65781.4059340046,
+    60046.90348228329,
+    64152.19524468222,
+    60431.51465655226,
+    65197.60474313965,
+    65046.65242091603,
+    67068.13363131841,
+    65035.1758112374,
+    68223.17381804831,
+    65765.89085213956
+   ],
+   "median": 65122.12858202784,
+   "spread": [
+    60046.90348228329,
+    68223.17381804831
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.twitter.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    65409.31465196738,
+    70555.26631485145,
+    77602.65618328906,
+    68165.62340733748,
+    71881.52278112722,
+    62665.033505171006,
+    75470.4524657921,
+    60929.72664213143,
+    64482.230698794294,
+    66514.30230881662
+   ],
+   "median": 67339.96285807705,
+   "spread": [
+    60929.72664213143,
+    77602.65618328906
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.twitter.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    223212.21239666152,
+    254495.37762218752,
+    210057.46805196977,
+    209920.34275090034,
+    238906.750647191,
+    232985.01629480792,
+    235620.43115965064,
+    236012.2997787287,
+    219898.06516504975,
+    237459.5356534424
+   ],
+   "median": 234302.72372722928,
+   "spread": [
+    209920.34275090034,
+    254495.37762218752
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.twitter.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    248652.6010785597,
+    245726.15794118762,
+    247693.76134294175,
+    247289.5876004342,
+    255271.57802383197,
+    262736.38829280104,
+    244182.27159414042,
+    247781.20744611713,
+    232773.16109637477,
+    242927.06584722217
+   ],
+   "median": 247491.674471688,
+   "spread": [
+    232773.16109637477,
+    262736.38829280104
+   ]
+  },
+  {
+   "image": "tw-gb",
+   "binary": "g++-16.twitter.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    227984.53488407133,
+    251726.63051132765,
+    233098.1565216422,
+    242119.6813280155,
+    241351.33333317548,
+    242042.4197956667,
+    247577.07213484898,
+    249395.9026689832,
+    214511.76517569486,
+    258534.08372123065
+   ],
+   "median": 242081.0505618411,
+   "spread": [
+    214511.76517569486,
+    258534.08372123065
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.floats.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    149164.15408469707,
+    133778.0846031779,
+    142779.80314561084,
+    121864.39742389187,
+    143126.7720259723,
+    138868.05413363173,
+    145467.94697726137,
+    139205.3266932722,
+    123983.80635181107,
+    139410.4715129113
+   ],
+   "median": 139307.89910309174,
+   "spread": [
+    121864.39742389187,
+    149164.15408469707
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.floats.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    161098.33094416079,
+    158883.15031202324,
+    141732.12426028584,
+    145485.36118939807,
+    164560.26198858654,
+    160494.5459645235,
+    149642.59999987663,
+    136895.34307313294,
+    158455.6861556245,
+    158448.7529681446
+   ],
+   "median": 158452.21956188456,
+   "spread": [
+    136895.34307313294,
+    164560.26198858654
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.floats.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    143329.59178849493,
+    141261.9534545186,
+    123894.9670761742,
+    139991.30413134504,
+    128094.65245905852,
+    144301.3899079715,
+    128942.26410620706,
+    122889.29865636167,
+    144237.73150971698,
+    136074.15031123412
+   ],
+   "median": 138032.7272212896,
+   "spread": [
+    122889.29865636167,
+    144301.3899079715
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.floats.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    136305.41812012004,
+    133012.1689685863,
+    139247.15377475054,
+    137995.25991007529,
+    145002.21097050176,
+    169068.54152992193,
+    142520.12646621861,
+    147723.65388672223,
+    145349.18069160188,
+    130962.81020864486
+   ],
+   "median": 140883.64012048458,
+   "spread": [
+    130962.81020864486,
+    169068.54152992193
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.floats.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    156305.01012383198,
+    157089.9269989521,
+    159387.69943817676,
+    156139.90214919855,
+    145516.2610028043,
+    157914.3732959148,
+    147148.8980312625,
+    163126.51637475172,
+    157922.48751472498,
+    151231.31663971502
+   ],
+   "median": 156697.46856139204,
+   "spread": [
+    145516.2610028043,
+    163126.51637475172
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.floats.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    128232.99808901502,
+    127470.87545449176,
+    118352.90180448742,
+    137482.02137654522,
+    144472.0304754607,
+    131247.45191794398,
+    147191.71643148092,
+    145273.1120138644,
+    143889.6162027406,
+    124903.61101415711
+   ],
+   "median": 134364.7366472446,
+   "spread": [
+    118352.90180448742,
+    147191.71643148092
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.floats.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    381145.37894737715,
+    360005.4534757494,
+    380741.7997209763,
+    373857.59233834024,
+    301459.09347835265,
+    376323.3837976337,
+    300772.542116256,
+    342503.304037432,
+    354046.1130249494,
+    324726.7124011747
+   ],
+   "median": 357025.7832503494,
+   "spread": [
+    300772.542116256,
+    381145.37894737715
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.floats.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    363667.367815247,
+    359340.2916146245,
+    351854.44319543196,
+    323619.6801861577,
+    327603.5853384601,
+    364792.0733586747,
+    359719.81681312,
+    304657.32812519243,
+    331951.1270720439,
+    305336.895228671
+   ],
+   "median": 341902.78513373795,
+   "spread": [
+    304657.32812519243,
+    364792.0733586747
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.floats.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    309687.343469131,
+    395664.8175861076,
+    355764.0784596627,
+    376984.8264348308,
+    372807.6675533304,
+    296846.54535420093,
+    308314.53148391005,
+    373160.1430463222,
+    312226.6573353784,
+    375024.9043126174
+   ],
+   "median": 364285.8730064966,
+   "spread": [
+    296846.54535420093,
+    395664.8175861076
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.records.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    108114.71513473085,
+    93440.39532568965,
+    108615.77440688461,
+    99796.78459900543,
+    86769.57170212938,
+    85324.3047776467,
+    92555.48509671248,
+    100851.4744955742,
+    107340.7766030084,
+    108687.61160555785
+   ],
+   "median": 100324.12954728982,
+   "spread": [
+    85324.3047776467,
+    108687.61160555785
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.records.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    98900.17875066822,
+    105879.45967437119,
+    102538.49409972616,
+    102141.46591711335,
+    115662.77390222171,
+    98126.87812832877,
+    105652.27298057458,
+    100936.10450327798,
+    96509.55547564049,
+    110221.59348012206
+   ],
+   "median": 102339.98000841975,
+   "spread": [
+    96509.55547564049,
+    115662.77390222171
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.records.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    89713.23270190772,
+    97986.86406412126,
+    90862.7613342534,
+    104924.02216364408,
+    98240.56641174368,
+    106861.03700826256,
+    108711.34274647351,
+    105848.13295246844,
+    104439.22164180984,
+    94734.07380563128
+   ],
+   "median": 101339.89402677676,
+   "spread": [
+    89713.23270190772,
+    108711.34274647351
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.records.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    103490.25009273142,
+    110274.87189591215,
+    105648.21802213241,
+    92828.80619642787,
+    103800.04951930419,
+    99176.61689864198,
+    93487.90603803628,
+    141896.56928056304,
+    108585.28725869478,
+    106484.69869333298
+   ],
+   "median": 104724.1337707183,
+   "spread": [
+    92828.80619642787,
+    141896.56928056304
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.records.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    112735.07982364042,
+    101217.42300807808,
+    105604.5077740048,
+    105131.02635488709,
+    110527.62006315062,
+    101135.84934504937,
+    111948.49052768259,
+    100939.54629312108,
+    103020.3435993573,
+    109616.2252216025
+   ],
+   "median": 105367.76706444594,
+   "spread": [
+    100939.54629312108,
+    112735.07982364042
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.records.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    106420.86009780264,
+    101569.02952966647,
+    112091.34598471799,
+    103340.17409054762,
+    100410.89339500348,
+    90726.2333010819,
+    98255.09748525979,
+    86519.11732038444,
+    96109.66117147586,
+    101862.66438911294
+   ],
+   "median": 100989.96146233498,
+   "spread": [
+    86519.11732038444,
+    112091.34598471799
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.records.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    209902.29107942845,
+    252056.42883349964,
+    246067.4553284798,
+    259975.53814413925,
+    263514.7819551675,
+    259483.5737854287,
+    236134.0960664463,
+    211374.8987137913,
+    242618.97314274893,
+    256599.56260316464
+   ],
+   "median": 249061.9420809897,
+   "spread": [
+    209902.29107942845,
+    263514.7819551675
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.records.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    196367.04905408053,
+    210114.31267794882,
+    269716.36915876734,
+    252162.7200721751,
+    250359.83931757958,
+    260131.8918103142,
+    250397.707124149,
+    287623.21292771905,
+    249481.13218408838,
+    229036.91361521772
+   ],
+   "median": 250378.7732208643,
+   "spread": [
+    196367.04905408053,
+    287623.21292771905
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.records.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    289046.68711040803,
+    224820.408840184,
+    264194.6451936031,
+    254229.75446838644,
+    249473.7286749317,
+    254755.79323319424,
+    228398.84098917767,
+    259450.94299913762,
+    264733.7238574303,
+    265057.6049498134
+   ],
+   "median": 257103.36811616592,
+   "spread": [
+    224820.408840184,
+    289046.68711040803
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.twitter.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    79451.40034170683,
+    71978.60604468631,
+    79179.01866516932,
+    69315.39407810228,
+    78936.29881138404,
+    71675.77020383123,
+    74952.92245845369,
+    74912.50319780958,
+    79891.89858615318,
+    70098.21345546558
+   ],
+   "median": 74932.71282813163,
+   "spread": [
+    69315.39407810228,
+    79891.89858615318
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.twitter.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    75141.12490139036,
+    77570.58218161063,
+    73246.49118327972,
+    83540.54504358329,
+    83577.17579421712,
+    81817.58607642846,
+    81374.44072673074,
+    82821.40708752276,
+    83615.16616864609,
+    84711.81693887404
+   ],
+   "median": 82319.4965819756,
+   "spread": [
+    73246.49118327972,
+    84711.81693887404
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.twitter.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    68505.98403809514,
+    74527.63290113953,
+    77437.49654413518,
+    75096.59171271336,
+    77971.71987698475,
+    73258.47188136927,
+    79305.14953532453,
+    71168.83627863777,
+    78574.20558662324,
+    67623.87355056233
+   ],
+   "median": 74812.11230692644,
+   "spread": [
+    67623.87355056233,
+    79305.14953532453
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.twitter.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    80956.19290650253,
+    72340.69373354025,
+    72055.2621933166,
+    74524.42849665877,
+    68043.25970652813,
+    81855.4582338038,
+    80047.38209208357,
+    71150.70873530758,
+    80997.9139073354,
+    80183.60082295402
+   ],
+   "median": 77285.90529437117,
+   "spread": [
+    68043.25970652813,
+    81855.4582338038
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.twitter.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    85384.8261262789,
+    76772.74697450637,
+    86073.94671126956,
+    83652.83785391561,
+    84035.54640407105,
+    83732.08815660849,
+    75935.83020853908,
+    84764.37801948412,
+    80838.45093327302,
+    81401.56140856078
+   ],
+   "median": 83692.46300526205,
+   "spread": [
+    75935.83020853908,
+    86073.94671126956
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.twitter.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    80877.79586479561,
+    74548.64818766882,
+    71511.69238303325,
+    80994.68189615289,
+    79385.95935646014,
+    76575.89146635022,
+    68781.3479143653,
+    76093.94066637041,
+    78913.84788226365,
+    81350.20937568
+   ],
+   "median": 77744.86967430694,
+   "spread": [
+    68781.3479143653,
+    81350.20937568
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.twitter.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    201663.58940410597,
+    240241.82300036045,
+    197259.03556217873,
+    168383.15510914248,
+    179314.52457924964,
+    176478.15162655848,
+    201170.40290907343,
+    189056.78843526205,
+    197700.93338014025,
+    175179.53045997315
+   ],
+   "median": 193157.91199872037,
+   "spread": [
+    168383.15510914248,
+    240241.82300036045
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.twitter.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    201187.43754551775,
+    167916.9252221944,
+    201285.52092645297,
+    179687.2290505331,
+    193230.02086350258,
+    165885.38977992034,
+    200502.1963144657,
+    199513.96089794263,
+    194159.40611646947,
+    169172.96238274602
+   ],
+   "median": 193694.71348998602,
+   "spread": [
+    165885.38977992034,
+    201285.52092645297
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "clang++-23.twitter.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    210242.60809839185,
+    197446.43280363682,
+    199171.11030432518,
+    207860.58494978654,
+    186952.2292061389,
+    202200.87735159032,
+    210212.8373984184,
+    201481.542669611,
+    199952.48174645158,
+    173843.70768229
+   ],
+   "median": 200717.0122080313,
+   "spread": [
+    173843.70768229,
+    210242.60809839185
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.floats.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    145209.32334737288,
+    139233.88317283653,
+    147337.72596853858,
+    150275.5864065587,
+    127918.23027528319,
+    148071.18664713472,
+    153146.05363781337,
+    144847.01665790376,
+    147272.48915259534,
+    147154.6907857635
+   ],
+   "median": 147213.58996917942,
+   "spread": [
+    127918.23027528319,
+    153146.05363781337
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.floats.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    150986.1031366802,
+    128825.09350890314,
+    146945.246178064,
+    150067.65531924955,
+    151728.44350769813,
+    148439.01032602094,
+    150355.23742554092,
+    148208.87798275205,
+    147631.07510064705,
+    152390.18768790795
+   ],
+   "median": 149253.33282263525,
+   "spread": [
+    128825.09350890314,
+    152390.18768790795
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.floats.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    145708.18340224287,
+    133159.48907460456,
+    136984.40979375667,
+    158442.9729439277,
+    123379.82639258435,
+    142413.92909278715,
+    130687.97651213317,
+    147421.2918152458,
+    137396.1422379291,
+    147127.1812467353
+   ],
+   "median": 139905.03566535813,
+   "spread": [
+    123379.82639258435,
+    158442.9729439277
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.floats.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    143261.41937145902,
+    131111.1443347439,
+    132453.85630927104,
+    144735.87943266818,
+    145154.50408579843,
+    155093.98152037233,
+    141866.03684991342,
+    136792.54329559728,
+    156518.32678915936,
+    142100.6952768634
+   ],
+   "median": 142681.05732416123,
+   "spread": [
+    131111.1443347439,
+    156518.32678915936
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.floats.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    127251.25448525295,
+    129538.05421405922,
+    144907.7284409838,
+    145536.6124033855,
+    146777.20791519337,
+    129200.4479850921,
+    139165.90925839252,
+    148617.7262338899,
+    136743.43240424094,
+    135008.07695800302
+   ],
+   "median": 137954.67083131673,
+   "spread": [
+    127251.25448525295,
+    148617.7262338899
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.floats.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    145061.92395262705,
+    152772.64297698034,
+    141893.77914741644,
+    142877.59989782193,
+    142484.56831979187,
+    145970.61318358305,
+    131093.2586439463,
+    147266.60988164306,
+    132103.75178017543,
+    132945.88852139382
+   ],
+   "median": 142681.0841088069,
+   "spread": [
+    131093.2586439463,
+    152772.64297698034
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.floats.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    310814.852608332,
+    319931.3495929161,
+    344246.33040633844,
+    321947.0309634268,
+    302717.6491227209,
+    305602.14612866426,
+    315061.69785785076,
+    319871.1839083454,
+    309088.52585354797,
+    313168.86792461993
+   ],
+   "median": 314115.2828912353,
+   "spread": [
+    302717.6491227209,
+    344246.33040633844
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.floats.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    306583.06032021326,
+    316258.51868590794,
+    339841.67334828497,
+    312538.51290645107,
+    319497.49824184517,
+    317621.55215382954,
+    301449.8959234122,
+    305509.7894742319,
+    292578.80112935335,
+    264923.0453687517
+   ],
+   "median": 309560.78661333217,
+   "spread": [
+    264923.0453687517,
+    339841.67334828497
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.floats.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    322348.9168643474,
+    312725.0756399849,
+    306794.08158774895,
+    312515.4966296526,
+    279785.0407525056,
+    312980.60071500874,
+    258437.67040423537,
+    334041.9396993835,
+    262511.9123318069,
+    310496.03741473495
+   ],
+   "median": 311505.76702219376,
+   "spread": [
+    258437.67040423537,
+    334041.9396993835
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.records.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    69586.48118277865,
+    64986.67425607035,
+    69712.43945658822,
+    61042.32251521487,
+    68388.08504253648,
+    74019.51847385628,
+    68415.63956791373,
+    69323.05088151085,
+    60192.318938401106,
+    68559.46249687065
+   ],
+   "median": 68487.55103239219,
+   "spread": [
+    60192.318938401106,
+    74019.51847385628
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.records.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    67164.49674560291,
+    68223.35973994053,
+    64553.22395716142,
+    61627.88623539428,
+    69261.63537293655,
+    68049.12764419687,
+    68468.84290626583,
+    62233.75925547954,
+    67035.8614441856,
+    60742.174028254674
+   ],
+   "median": 67100.17909489427,
+   "spread": [
+    60742.174028254674,
+    69261.63537293655
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.records.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    66675.65247545922,
+    66178.25857577441,
+    67844.68166417406,
+    64381.01374649158,
+    70988.52219636091,
+    73098.3497225452,
+    67154.27494458933,
+    60124.40809644188,
+    66235.42106656212,
+    68359.910650348
+   ],
+   "median": 66914.96371002428,
+   "spread": [
+    60124.40809644188,
+    73098.3497225452
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.records.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    59194.89654419234,
+    69458.89638319064,
+    68946.18257359693,
+    65154.75029997458,
+    67166.67768614033,
+    67560.28664568998,
+    66214.55856667714,
+    66521.97388587354,
+    59795.61047799661,
+    66357.05602926423
+   ],
+   "median": 66439.51495756888,
+   "spread": [
+    59194.89654419234,
+    69458.89638319064
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.records.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    64291.710797984684,
+    61768.81103832167,
+    67453.8442374789,
+    65828.65883115065,
+    66582.08655222609,
+    69199.33357411061,
+    69463.57066520225,
+    65904.13663321755,
+    68087.61318277227,
+    60270.83445937287
+   ],
+   "median": 66243.11159272182,
+   "spread": [
+    60270.83445937287,
+    69463.57066520225
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.records.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    67525.91983725279,
+    76156.31662214089,
+    59982.55319580592,
+    67723.93682449113,
+    66000.59821437957,
+    66134.89441720485,
+    67946.47255390325,
+    63094.501094156425,
+    64810.43151838897,
+    67546.01941028981
+   ],
+   "median": 66830.40712722883,
+   "spread": [
+    59982.55319580592,
+    76156.31662214089
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.records.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    217245.17940444223,
+    267946.27686374745,
+    269523.9629622313,
+    265832.736892148,
+    267686.2564843616,
+    240831.93711647842,
+    241965.021447833,
+    275739.31181719154,
+    277676.81837183255,
+    258098.3825280287
+   ],
+   "median": 266759.49668825476,
+   "spread": [
+    217245.17940444223,
+    277676.81837183255
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.records.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    252925.9169134685,
+    282285.9214278168,
+    247729.84778627858,
+    272017.51203575725,
+    276043.345132496,
+    270706.2860123844,
+    252341.41339664624,
+    273224.503454871,
+    216672.21040042935,
+    232882.6759677335
+   ],
+   "median": 261816.10146292645,
+   "spread": [
+    216672.21040042935,
+    282285.9214278168
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.records.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    225068.10316292694,
+    262830.34313725214,
+    266332.3859513072,
+    270755.6959064027,
+    228990.53530587992,
+    273403.6234441233,
+    278366.1721470032,
+    250547.26192817578,
+    263683.6783022893,
+    272245.254598378
+   ],
+   "median": 265008.03212679824,
+   "spread": [
+    225068.10316292694,
+    278366.1721470032
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.twitter.MB_AT_PATH.aa",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    69753.40345686872,
+    64278.415983755716,
+    72428.97798668659,
+    71895.90466879816,
+    67514.7480297119,
+    66964.14841523317,
+    68849.22508034248,
+    75476.83839673792,
+    62047.38699254441,
+    65812.88530864987
+   ],
+   "median": 68181.9865550272,
+   "spread": [
+    62047.38699254441,
+    75476.83839673792
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.twitter.MB_AT_PATH.base",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    60986.88140421522,
+    71336.36694538311,
+    66370.26308639126,
+    63147.268975786545,
+    63074.089885049034,
+    59303.8965095274,
+    64670.180619923165,
+    63106.631305634095,
+    65949.13640611489,
+    65486.01994787184
+   ],
+   "median": 63908.724797854855,
+   "spread": [
+    59303.8965095274,
+    71336.36694538311
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.twitter.MB_AT_PATH.head",
+   "benchmark": "MB_AT_PATH",
+   "ns": [
+    72111.175115193,
+    81277.18777424046,
+    66867.99859624989,
+    68908.88533403366,
+    67206.8343772814,
+    62294.300110859316,
+    73327.35375799403,
+    68047.51658332685,
+    69544.90967739551,
+    74098.6305930947
+   ],
+   "median": 69226.89750571459,
+   "spread": [
+    62294.300110859316,
+    81277.18777424046
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.twitter.MB_PATH.aa",
+   "benchmark": "MB_PATH",
+   "ns": [
+    69353.88013209472,
+    76541.80776505586,
+    74994.64465116373,
+    68473.81187363355,
+    69969.53028769235,
+    73637.4489747156,
+    67154.62830406817,
+    75216.76843764471,
+    66723.10760243885,
+    74254.58361375683
+   ],
+   "median": 71803.48963120398,
+   "spread": [
+    66723.10760243885,
+    76541.80776505586
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.twitter.MB_PATH.base",
+   "benchmark": "MB_PATH",
+   "ns": [
+    63466.998874768185,
+    67491.29070056042,
+    62445.6497717454,
+    63663.93533798145,
+    64255.4543199321,
+    62252.650459883494,
+    58473.6747934778,
+    61516.538837991175,
+    63644.79995531305,
+    59581.45796549888
+   ],
+   "median": 62956.32432325679,
+   "spread": [
+    58473.6747934778,
+    67491.29070056042
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.twitter.MB_PATH.head",
+   "benchmark": "MB_PATH",
+   "ns": [
+    71204.79752625889,
+    68224.01485766417,
+    60000.7608028765,
+    74041.84837355505,
+    73662.37234301202,
+    64763.25866004854,
+    74689.4160495427,
+    70950.33529544705,
+    79748.94492292858,
+    71988.03769140205
+   ],
+   "median": 71596.41760883047,
+   "spread": [
+    60000.7608028765,
+    79748.94492292858
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.twitter.READ.aa",
+   "benchmark": "READ",
+   "ns": [
+    198181.2525103344,
+    254856.1376552146,
+    245892.05855869575,
+    241272.99645445912,
+    240748.38196326708,
+    237194.1144031893,
+    210801.1771160191,
+    246380.6721601876,
+    250759.88043411507,
+    249750.32152382887
+   ],
+   "median": 243582.52750657743,
+   "spread": [
+    198181.2525103344,
+    254856.1376552146
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.twitter.READ.base",
+   "benchmark": "READ",
+   "ns": [
+    247109.51392911325,
+    245068.00910510746,
+    214041.32124758355,
+    256764.22918561863,
+    256692.2787877464,
+    246254.7520287228,
+    211345.91249053096,
+    207559.93649569046,
+    204172.7292289741,
+    247848.9483699878
+   ],
+   "median": 245661.38056691515,
+   "spread": [
+    204172.7292289741,
+    256764.22918561863
+   ]
+  },
+  {
+   "image": "sid-gb",
+   "binary": "g++-16.twitter.READ.head",
+   "benchmark": "READ",
+   "ns": [
+    206241.6939998002,
+    204247.1003036592,
+    202939.67221791812,
+    235087.16652402055,
+    233590.27583257735,
+    247967.48681106028,
+    210838.77397291342,
+    206601.6191551456,
+    244997.23544969293,
+    203513.59267583446
+   ],
+   "median": 208720.1965640295,
+   "spread": [
+    202939.67221791812,
+    247967.48681106028
+   ]
+  }
+ ]
+}
