@@ -1968,6 +1968,9 @@ public:
 
         friend class packed;
 
+        template <class>
+        friend class accessor;
+
     public:
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(((Path.view().starts_with('@') && packed::path_valid<U, Path, 1>()) ||
@@ -1975,69 +1978,76 @@ public:
                      sizeof...(Index) == packed::index_slots<Path>() && std::is_lvalue_reference_v<Self>)
         CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
-            std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
-            constexpr std::string_view path = Path.view();
-            if constexpr (path.starts_with('$') && std::same_as<U, T>) {
-                return validity::limits_apply(
-                    limits.load(),
-                    [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-                        return packed::path_walk<T, T, Path, 1>(self.encoded, self.field, self.dir, i,
-                                                                checks);
-                    });
-            } else if constexpr (path.starts_with('$')) {
-                constexpr std::size_t root = packed::fixed_size<T, T>();
-                return validity::limits_apply(
-                    limits.load(),
-                    [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-                        return packed::path_walk<T, T, Path, 1>(self.encoded,
-                                                                std::span<char const>(self.encoded)
-                                                                    .subspan(self.encoded.size() - root)
-                                                                    .template first<root>(),
-                                                                self.dir, i, checks);
-                    });
-            } else if constexpr (packed::is_typed_array<U> && path.size() > 1) {
-                using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
-                constexpr std::size_t close = packed::index_end(path, 1);
-                std::size_t at;
-                if constexpr (close == 2)
-                    at = std::get<0>(i);
-                else
-                    at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
-                if (error const c = validity::check_index(at, self.items.length).error_or(error{});
-                    c != error{}) [[unlikely]]
-                    return std::expected<E, error>(std::unexpect, c);
-                return std::expected<E, error>(packed::typed_array_element_read<E>(
-                    std::span<char const>(self.encoded).subspan(self.items.data + at * sizeof(E)).template first<sizeof(E)>()));
-            } else if constexpr (packed::is_list<U> && path.size() > 1) {
-                using E = std::ranges::range_value_t<U>;
-                constexpr std::size_t close = packed::index_end(path, 1);
-                using X = typename decltype(packed::path_result<T, E, Path, close + 1>())::type;
-                std::size_t at;
-                if constexpr (close == 2)
-                    at = std::get<0>(i);
-                else
-                    at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
-                if (error const c = validity::check_index(at, self.items.length).error_or(error{});
-                    c != error{}) [[unlikely]]
-                    return std::expected<X, error>(std::unexpect, c);
-                return validity::limits_apply(
-                    limits.load(),
-                    [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-                        return packed::path_walk<T, E, Path, close + 1>(
-                            self.encoded,
-                            std::span<char const>(self.encoded)
-                                .subspan(self.items.data + at * packed::fixed_size<E, T>())
-                                .template first<packed::fixed_size<E, T>()>(),
-                            self.dir, i, checks);
-                    });
-            } else {
-                return validity::limits_apply(
-                    limits.load(),
-                    [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-                        return packed::path_walk<T, U, Path, 1>(self.encoded, self.field, self.dir, i,
-                                                                checks);
-                    });
-            }
+            auto result = [&] {
+                std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
+                constexpr std::string_view path = Path.view();
+                if constexpr (path.starts_with('$') && std::same_as<U, T>) {
+                    return validity::limits_apply(
+                        limits.load(),
+                        [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
+                            return packed::path_walk<T, T, Path, 1>(self.encoded, self.field, self.dir, i,
+                                                                    checks);
+                        });
+                } else if constexpr (path.starts_with('$')) {
+                    constexpr std::size_t root = packed::fixed_size<T, T>();
+                    return validity::limits_apply(
+                        limits.load(),
+                        [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
+                            return packed::path_walk<T, T, Path, 1>(self.encoded,
+                                                                    std::span<char const>(self.encoded)
+                                                                        .subspan(self.encoded.size() - root)
+                                                                        .template first<root>(),
+                                                                    self.dir, i, checks);
+                        });
+                } else if constexpr (packed::is_typed_array<U> && path.size() > 1) {
+                    using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+                    constexpr std::size_t close = packed::index_end(path, 1);
+                    std::size_t at;
+                    if constexpr (close == 2)
+                        at = std::get<0>(i);
+                    else
+                        at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
+                    if (error const c = validity::check_index(at, self.items.length).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::expected<E, error>(std::unexpect, c);
+                    return std::expected<E, error>(packed::typed_array_element_read<E>(
+                        std::span<char const>(self.encoded).subspan(self.items.data + at * sizeof(E)).template first<sizeof(E)>()));
+                } else if constexpr (packed::is_list<U> && path.size() > 1) {
+                    using E = std::ranges::range_value_t<U>;
+                    constexpr std::size_t close = packed::index_end(path, 1);
+                    using X = typename decltype(packed::path_result<T, E, Path, close + 1>())::type;
+                    std::size_t at;
+                    if constexpr (close == 2)
+                        at = std::get<0>(i);
+                    else
+                        at = packed::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
+                    if (error const c = validity::check_index(at, self.items.length).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::expected<X, error>(std::unexpect, c);
+                    return validity::limits_apply(
+                        limits.load(),
+                        [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
+                            return packed::path_walk<T, E, Path, close + 1>(
+                                self.encoded,
+                                std::span<char const>(self.encoded)
+                                    .subspan(self.items.data + at * packed::fixed_size<E, T>())
+                                    .template first<packed::fixed_size<E, T>()>(),
+                                self.dir, i, checks);
+                        });
+                } else {
+                    return validity::limits_apply(
+                        limits.load(),
+                        [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
+                            return packed::path_walk<T, U, Path, 1>(self.encoded, self.field, self.dir, i,
+                                                                    checks);
+                        });
+                }
+            
+            }();
+            if constexpr (requires { result->owner; })
+                if (result)
+                    result->owner = self.owner;
+            return result;
         }
 
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>

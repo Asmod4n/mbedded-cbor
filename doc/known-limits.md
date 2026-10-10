@@ -22,7 +22,6 @@ the code and the tests, branch limits-at-no-cost.
 | cbor::transfer hands a lazy to another thread. | Decided | Only a lazy that nothing else shares. Names are provisional. |
 | A debug build throws std::logic_error on a foreign thread. | Decided | A release build does not check. cbor::is_thread_bound_v and is_sendable_v state it in the type. |
 | lazy::decode through expected<lazy>::operator-> on a temporary gives a dangling reference. | Open | No overload sees the temporary. |
-| schema::path(encoded)->at_path<"$.list">() on a temporary gives an accessor that reads freed bytes. | Open | The accessor of a list holds no owner. operator-> of a temporary std::expected gives an lvalue, so the lvalue check of at_path does not see it. gcc-asan found it in test/doc_path.cpp. |
 | A view outlives its owner in two forms with std::expected. | Open | Not closed. typed_array_view and schema::accessor keep their view after a move. |
 | at_path(owner, encoded) does not check that the owner holds the bytes. | Open | An overload on std::shared_ptr<std::string const> would close it. The owner decides. |
 
