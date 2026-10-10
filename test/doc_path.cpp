@@ -148,9 +148,12 @@ TEST_CASE("doc path: schema at_path in detail")
     CHECK_EQ(cbor::schema<doc_log>::at_path<"$.readings[1]">(log), 8u);
     CHECK_EQ(cbor::schema<doc_log>::at_path<"$.readings[]">(log, 2uz), 9u);
     CHECK_EQ(cbor::schema<doc_log>::at_path<"$.readings[]">(log, 3uz).error(), error::index_out_of_bounds);
-    auto const readings = cbor::schema<doc_log>::path(log)->at_path<"$.readings">();
+    auto const held = cbor::schema<doc_log>::path(log);
+    REQUIRE(held.has_value());
+    auto const readings = held->at_path<"$.readings">();
     REQUIRE(readings.has_value());
     CHECK_EQ(*readings->at_path<"@[1]">(), 8u);
+    CHECK_THROWS_AS((void)cbor::schema<doc_car>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
 }
 
 #endif
