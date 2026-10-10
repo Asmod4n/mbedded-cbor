@@ -447,6 +447,10 @@ a compile-time path.
 
 ## 9. Errors
 
+Every error is a `cbor::error` in a `std::expected`. `doc/basics.md`
+states the error values, `std::error_code` and the wrong uses that throw.
+This table states when a path gives each error.
+
 | Error | When |
 |---|---|
 | `invalid_path` | The path text is not valid. A run-time `at_path` with a path that is not singular. `match` or `search`. A comparison with a side that is not singular. An index of 16 digits or less outside ±(2^53 - 1). |
@@ -497,10 +501,8 @@ cbor::at_path<"$[1]", int>(/* 82 01 */);                                // too_l
 
 ## 11. Limits
 
-The limits are in `cbor::limits`. This is one object for the whole process:
-an assignment changes the limits for every thread and every later call, and
-the caller sets the old values back when it is done. A path reads the
-limits once at each call.
+`doc/basics.md` states `cbor::limits`, the defaults, the bounds and the
+macros. A path reads the limits once at each call.
 
 | Limit | Default | What a path does |
 |---|---|---|
@@ -509,8 +511,6 @@ limits once at each call.
 | `container_elements` | `SIZE_MAX` | Every array and map that the walk reads is checked: the containers on the way and the target. A container that it only skips does not count. |
 | `input_bytes` | `SIZE_MAX` | The typed forms over bytes and `lazy::from` check the size of the bytes they get. A read from a lazy that exists does not check it again. |
 
-The default of `nesting_depth` is the macro `CBOR_NESTING_DEPTH_DEFAULT`,
-and a program can define it before it includes the library.
 `nesting_depth_exceeded` comes when:
 
 - the path has more segments than the depth;
@@ -568,19 +568,9 @@ costs more to compare (doc/complexity.md).
 
 ## 13. Threads
 
-A `cbor::lazy` belongs to one thread, and every `owning_ref` belongs to one
-thread too. `cbor::is_thread_bound_v<T>` says it in the type. The first
-thread that reads the marks of tag 28 through a lazy owns its top-level
-item. In a debug build, a use in another thread then throws
-`std::logic_error`. A release build does not check this.
-
-`cbor::transfer` hands a lazy that nothing else shares to another thread:
-
-```cpp
-std::jthread([](cbor::sendable<cbor::lazy> const &v) {
-    cbor::at_path<"$[1]", std::int64_t>(v.value);
-}, cbor::transfer(std::move(l)));
-```
+`doc/basics.md` states the threads: a `cbor::lazy` and every
+`owning_ref` belong to one thread, and `cbor::transfer` hands a lazy to
+another thread. A path from a lazy follows these rules.
 
 `at_path<Path, T>(encoded)` with bytes has no shared state. Many threads can
 read the same bytes at the same time.
