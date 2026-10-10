@@ -32,7 +32,8 @@ the code and the tests, branch limits-at-no-cost.
 | A path takes an EDN literal in brackets and in a filter, at compile time and at run time. 12 cases that the JSONPath Compliance Test Suite calls invalid are valid EDN and are accepted. | Decided | One parser in query.hpp. test/cts.cpp lists the 12 cases. |
 | A typed read with a key that is not a text reads through a lazy, and the form over bytes then allocates. | Open | The walk over bytes compares text keys only. test/allocation.cpp records it. |
 | The bytes form and lazy::from do not read the bytes after the target. A truncated or trailing part is not found. | Open | A path reads heads up to the target only. doc/path.md section 10. |
-| No int/float conversion in a typed read. $[-1] on a map is the key -1. A tag other than 2, 3, 24, 28, 29, 55799 and the RFC 8746 tags stops the walk. A skipped item counts against the limits. The nesting depth of a binding result counts from the node. match() and search() are refused. | Open | The owner decides. doc/path.md describes each. |
+| A typed read of double takes an integer from -2^53 to 2^53. Outside this range it is number_out_of_range. A bignum (tag 2 or 3) is incorrect_type for a double. No other conversion exists. | Decided | The owner, 2026-10-10. validity::check_number_range<double>. |
+| $[-1] on a map is the key -1. A tag other than 2, 3, 24, 28, 29, 55799 and the RFC 8746 tags stops the walk. A skipped item counts against the limits. The nesting depth of a binding result counts from the node. match() and search() are refused. | Open | The owner decides. doc/path.md describes each. |
 
 ## Floats
 

@@ -169,7 +169,7 @@ variable while an accessor from it lives (doc/known-limits.md). `schema<T>::path
 | T | CBOR item | Other items |
 |---|---|---|
 | a signed or unsigned integer type, also `char` | major type 0 or 1, tag 2 or 3 with a magnitude up to 64 bits | `incorrect_type`; out of range: `number_out_of_range` |
-| `double` | a half, single or double float | `incorrect_type` |
+| `double` | a half, single or double float; an integer from -2^53 to 2^53 | `incorrect_type`; an integer outside: `number_out_of_range` |
 | `bool` | `true`, `false` | `incorrect_type` |
 | `std::nullptr_t` | `null` | `incorrect_type` |
 | `cbor::simple_value` | any simple value, also `false`, `true` and `null` | `incorrect_type` |
@@ -177,14 +177,16 @@ variable while an accessor from it lives (doc/known-limits.md). `schema<T>::path
 | `std::span<std::byte const>` | a byte string | `incorrect_type` |
 | `cbor::typed_array` | a tag of RFC 8746 over a byte string | `incorrect_type` |
 
-A typed read does not convert. An integer is not a `double`, and a float is
-not an integer:
+A typed read converts in one case only: a `double` takes an integer when
+the double holds it exactly, that is from -2^53 to 2^53. `lazy::get<double>`
+does the same. A float is not an integer:
 
 ```cpp
-cbor::at_path<"$", std::uint8_t>(/* 256 */);   // number_out_of_range
-cbor::at_path<"$", unsigned>(/* -1 */);        // number_out_of_range
-cbor::at_path<"$", double>(/* 1 */);           // incorrect_type
-cbor::at_path<"$", std::int64_t>(/* 1.0 */);   // incorrect_type
+cbor::at_path<"$", std::uint8_t>(/* 256 */);           // number_out_of_range
+cbor::at_path<"$", unsigned>(/* -1 */);                // number_out_of_range
+cbor::at_path<"$", double>(/* 1 */);                   // 1.0
+cbor::at_path<"$", double>(/* 9007199254740993 */);    // number_out_of_range
+cbor::at_path<"$", std::int64_t>(/* 1.0 */);           // incorrect_type
 cbor::at_path<"$", int>(/* 1(5) */);           // incorrect_type
 ```
 

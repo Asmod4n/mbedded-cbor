@@ -667,13 +667,17 @@ TEST_CASE("lazy: get refuses an integer it cannot hold")
     CHECK_EQ(get<std::uint64_t>("\xf9\x3c\x00"s).error(), error::incorrect_type);
 }
 
-// Floats of the three widths of Appendix A. An integer is not a float: CBOR keeps the two apart.
+// Floats of the three widths of Appendix A. An integer is a double where the double holds it exactly, up to 2^53 in
+// magnitude (IEEE 754 binary64 has 53 bits of significand). The owner decided this on 2026-10-10.
 TEST_CASE("lazy: get reads a float")
 {
     CHECK_EQ(*get<double>("\xf9\x3c\x00"s), 1.0);
     CHECK_EQ(*get<double>("\xfa\x47\xc3\x50\x00"s), 100000.0);
     CHECK_EQ(*get<double>("\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"s), 1.1);
-    CHECK_EQ(get<double>("\x01"s).error(), error::incorrect_type);
+    CHECK_EQ(*get<double>("\x01"s), 1.0);
+    CHECK_EQ(*get<double>("\x3b\x00\x1f\xff\xff\xff\xff\xff\xff"s), -0x1p53);
+    CHECK_EQ(get<double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s).error(), error::number_out_of_range);
+    CHECK_EQ(get<double>("\xf5"s).error(), error::incorrect_type);
 }
 
 // The simple values false, true and null of Table 4.

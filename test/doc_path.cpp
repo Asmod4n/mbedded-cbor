@@ -177,7 +177,8 @@ TEST_CASE("doc path: the types of a typed read")
     CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encoded(V(255))), std::uint8_t{255});
     CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encoded(V(256))).error(), error::number_out_of_range);
     CHECK_EQ(cbor::at_path<"$", unsigned>(encoded(V(-1))).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::at_path<"$", double>(encoded(V(1))).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$", double>(encoded(V(1))), 1.0);
+    CHECK_EQ(cbor::at_path<"$", double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s).error(), error::number_out_of_range);
     CHECK_EQ(cbor::at_path<"$", std::int64_t>(encoded(V(1.0))).error(), error::incorrect_type);
     CHECK_EQ(cbor::at_path<"$", std::uint64_t>("\xc2\x42\x01\x00"s), 256u);
     CHECK_EQ(cbor::at_path<"$", std::nullptr_t>(encoded(V(simple{22}))), nullptr);

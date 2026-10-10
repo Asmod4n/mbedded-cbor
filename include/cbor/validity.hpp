@@ -424,6 +424,17 @@ public:
         return {};
     }
 
+    template <class T, class M>
+        requires(std::is_same_v<T, double> && std::numeric_limits<M>::is_integer && !std::numeric_limits<M>::is_signed)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_number_range(bool const negative,
+                                                                                      M const magnitude)
+    {
+        constexpr std::uint64_t exact_max = std::uint64_t{1} << std::numeric_limits<double>::digits;
+        if (magnitude > (negative ? exact_max - 1 : exact_max)) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
+        return {};
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_magnitude_size(std::size_t const size, std::size_t const width)
     {
