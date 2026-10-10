@@ -75,7 +75,12 @@ class generic
     static constexpr bool is_byte_container = requires {
         typename U::value_type;
         requires is_byte<typename U::value_type>;
-        requires std::same_as<U, std::vector<typename U::value_type>> || is_std_array<U>;
+        requires std::same_as<U, std::vector<typename U::value_type, typename U::allocator_type>> || is_std_array<U>;
+    };
+
+    template <class U>
+    static constexpr bool is_basic_string = requires {
+        requires std::same_as<U, std::basic_string<char, std::char_traits<char>, typename U::allocator_type>>;
     };
 
     template <class U, class V>
@@ -118,7 +123,7 @@ class generic
             return h.major == major_type::unsigned_integer;
         else if constexpr (std::is_integral_v<U> || std::is_enum_v<U>)
             return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer;
-        else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>)
+        else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>)
             return h.major == major_type::text_string;
         else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>)
             return h.major == major_type::byte_string;
@@ -297,7 +302,7 @@ class generic
             if (!heads::is_null(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return {};
-        } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>) {
+        } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>) {
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -306,10 +311,10 @@ class generic
             auto const text = d.byte_string_decode(h->argument);
             if (!text) [[unlikely]]
                 return std::unexpected(text.error());
-            if constexpr (std::same_as<U, std::string>)
-                if (auto const r = d.decoded_bytes_count(text->size(), sizeof(char)); !r) [[unlikely]]
-                    return r;
-            out = U(*text);
+            if constexpr (is_basic_string<U>)
+                out.assign(*text);
+            else
+                out = *text;
             return {};
         } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
             auto const h = d.head_decode();
@@ -328,8 +333,6 @@ class generic
                     return std::unexpected(error::incorrect_type);
                 std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
             } else {
-                if (auto const r = d.decoded_bytes_count(view.size(), sizeof(typename U::value_type)); !r) [[unlikely]]
-                    return r;
                 out.resize(view.size());
                 std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
             }
@@ -369,13 +372,11 @@ class generic
                 return std::unexpected(error::incorrect_type);
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                typename U::key_type key{};
+                auto key = packed::element_make<typename U::key_type>(out);
                 if (auto const r = generic_read(d, key, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
-                typename U::mapped_type value{};
+                auto value = packed::element_make<typename U::mapped_type>(out);
                 if (auto const r = generic_read(d, value, depth + 1, depth_max); !r) [[unlikely]]
-                    return r;
-                if (auto const r = d.decoded_bytes_count(1, sizeof(typename U::value_type)); !r) [[unlikely]]
                     return r;
                 if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); })
                     out.try_emplace(std::move(key), std::move(value));
@@ -395,8 +396,6 @@ class generic
                 return std::unexpected(error::incorrect_type);
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                if (auto const r = d.decoded_bytes_count(1, sizeof(E)); !r) [[unlikely]]
-                    return r;
                 if constexpr (requires {
                                   { out.emplace_back() } -> std::same_as<E &>;
                               }) {
@@ -404,7 +403,7 @@ class generic
                         [[unlikely]]
                         return r;
                 } else {
-                    E element{};
+                    E element = packed::element_make<E>(out);
                     if (auto const r = generic_read(d, element, depth + 1, depth_max); !r) [[unlikely]]
                         return r;
                     out.insert(out.end(), std::move(element));
@@ -566,7 +565,7 @@ class generic
         } else if constexpr (std::is_floating_point_v<U>) {
             static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::databind reads and writes float and double only.");
             return float_size(static_cast<double>(value));
-        } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view> ||
+        } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view> ||
                              std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
             return validity::checked_add(heads::head_size(value.size()), value.size());
         } else if constexpr (packed::is_optional<U>) {
@@ -702,7 +701,7 @@ class generic
             double const d = static_cast<double>(value);
             rfc8949::simple_float_information const info = heads::preferred_float_info(d);
             return at + heads::head_write(out, at, major_type::simple_float, std::to_underlying(info), heads::float_encode(info, d));
-        } else if constexpr (std::same_as<U, std::string> || std::same_as<U, std::string_view>) {
+        } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>) {
             at += heads::head_write(out, at, major_type::text_string, value.size());
             return bytes_write(out, at, value);
         } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
@@ -792,12 +791,18 @@ public:
 
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
+        return decode(std::move(owner), encoded, T{});
+    }
+
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded,
+                                                      T target)
+    {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::databind::decode: the owner of the encoded data item is empty");
 #if defined(__cpp_exceptions)
         try {
 #endif
-            auto value = read(encoded, limits.nesting_depth);
+            auto value = read(encoded, limits.nesting_depth, std::move(target));
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
             return owning_ref<T>(std::move(owner), std::move(*value));
@@ -811,6 +816,10 @@ public:
     template <class Encoded>
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
+
+    template <class Encoded>
+        requires std::same_as<std::remove_const_t<Encoded>, std::string>
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded, T target) = delete;
 
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
@@ -877,12 +886,11 @@ public:
     }
 
 private:
-    static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max)
+    static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max, T out)
     {
         if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
             return std::unexpected(r.error());
         value_sharing::sharing_decoder d{{encoded}, {{}, encoded, {}, 0}};
-        T out{};
         if (auto const r = generic::generic_read(d, out, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (!d.encoded.empty()) [[unlikely]]
