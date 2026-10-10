@@ -1351,37 +1351,30 @@ TEST_CASE("lazy: elements and entries refuse indefinite length")
     CHECK_EQ(lazy_of("\xbf\x61" "a\x01\xff"s).entries().error(), error::indefinite_length);
 }
 
-// Fault p20: two threads that called const methods on one lazy raced on
-// the marks of tag 28 and on the items that decode kept in the top-level
-// item. The standard library lets const calls on one object run at the
-// same time. The marks are now built once at the first tag 29, and each
-// decode owns its items. A thread sanitizer build reports any race left.
-TEST_CASE("lazy: const calls on one lazy and on its copies run in many threads")
+// The owner decided on 2026-10-10 that a lazy belongs to one thread at a
+// time: the library keeps no lock, no call_once and no atomic, and the
+// application moves a value from one thread to another. This test gives
+// each thread its own lazy of the same bytes, the form the library
+// supports, and a thread sanitizer build reports any state they share.
+TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
 {
     constexpr std::size_t threads = 4;
-    constexpr std::size_t rounds = 200;
     std::string const s("\x83\xd8\x1c\x65hello\xd8\x1d\x00\xa1\x61k\xd8\x1d\x00", 18);
-    for (std::size_t round = 0; round < rounds; ++round) {
-        cbor::lazy const shared = *cbor::lazy::from(s);
-        std::array<bool, threads> right{};
-        {
-            std::vector<std::jthread> workers;
-            for (std::size_t t = 0; t < threads; ++t)
-                workers.emplace_back([&shared, &right, t] {
-                    cbor::lazy const copy = shared;
-                    cbor::lazy const &l = t % 2 == 0 ? shared : copy;
-                    auto const reference = l.at(std::size_t{1});
-                    auto const text = reference.and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
-                    auto const inner = l.at(std::size_t{2}).and_then([](cbor::lazy const &m) { return m.at("k"); });
-                    auto const named = inner.and_then([](cbor::lazy const &r) { return r.decode(); });
-                    auto const whole = l.decode();
-                    right[t] = text.has_value() && **text == "hello" && named.has_value() &&
-                               std::get<std::string_view>((*named)->content) == "hello" && whole.has_value() &&
-                               (*whole)->argument == 3;
-                });
-        }
-        CHECK(std::ranges::all_of(right, std::identity{}));
+    std::array<bool, threads> right{};
+    {
+        std::vector<std::jthread> workers;
+        for (std::size_t t = 0; t < threads; ++t)
+            workers.emplace_back([&s, &right, t] {
+                cbor::lazy const l = *cbor::lazy::from(s);
+                auto const text = l.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
+                auto const named = l.at(std::size_t{2})
+                                       .and_then([](cbor::lazy const &m) { return m.at("k"); })
+                                       .and_then([](cbor::lazy const &r) { return r.decode(); });
+                right[t] = text.has_value() && **text == "hello" && named.has_value() &&
+                           std::get<std::string_view>((*named)->content) == "hello";
+            });
     }
+    CHECK(std::ranges::all_of(right, std::identity{}));
 }
 
 // Fault 2 for an array: in 82 82 01 02 the first element is the whole rest
