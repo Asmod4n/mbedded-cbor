@@ -375,6 +375,7 @@ struct value_sharing::top_level_item {
 #ifndef NDEBUG
     std::thread::id owner_thread = std::this_thread::get_id();
 #endif
+    std::vector<std::size_t> sharedrefs_resolved;
     std::string_view sharedrefs_unread;
     std::uint64_t sharedrefs_pending = 1;
     bool sharedrefs_started = false;
@@ -506,23 +507,42 @@ std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &
                                                                 validity::limit_checks<Checked> const checks)
 {
     std::size_t item_at = at;
+    std::size_t first = std::numeric_limits<std::size_t>::max();
     for (;;) {
         auto const h = heads::raw_head_read(top_level.encoded, at, checks);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        if (h->major != major_type::tag)
+        if (h->major != major_type::tag) {
+            if (first < top_level.sharedrefs_resolved.size())
+                top_level.sharedrefs_resolved[first] = at;
             return at;
+        }
         if (h->argument == std::to_underlying(rfc8949::tag_number::shareable) ||
             h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor)) {
             at = h->at;
             continue;
         }
-        if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
+        if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref)) {
+            if (first < top_level.sharedrefs_resolved.size())
+                top_level.sharedrefs_resolved[first] = at;
             return at;
+        }
         heads::decoder<Checked> d{std::string_view(std::span(top_level.encoded).subspan(h->at)), checks};
-        auto const found = top_level_item::sharedref_decode(d, at, item_at, top_level.sharedrefs_read(at));
+        std::vector<lazy> const &marks = top_level.sharedrefs_read(at);
+        auto const found = top_level_item::sharedref_decode(d, at, item_at, marks);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
+        auto const index = static_cast<std::size_t>(std::ranges::distance(
+            marks.begin(), std::ranges::lower_bound(marks, found->offset, {}, &lazy::offset)));
+        if (top_level.sharedrefs_resolved.size() < marks.size())
+            top_level.sharedrefs_resolved.resize(marks.size(), std::numeric_limits<std::size_t>::max());
+        if (top_level.sharedrefs_resolved[index] != std::numeric_limits<std::size_t>::max()) {
+            if (first < top_level.sharedrefs_resolved.size())
+                top_level.sharedrefs_resolved[first] = top_level.sharedrefs_resolved[index];
+            return top_level.sharedrefs_resolved[index];
+        }
+        if (first == std::numeric_limits<std::size_t>::max())
+            first = index;
         at = found->offset;
         item_at = at;
     }
