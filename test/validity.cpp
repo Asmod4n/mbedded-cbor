@@ -522,17 +522,18 @@ TEST_CASE("validity: check_magnitude_size for every size up to one past the widt
 
 // The check of a tag content follows each tag 29 back to its mark. A reader that knows every mark of the
 // message, as lazy does, can name a mark at or after the reference, and the walk would not end. This test
-// exists so that such a reference ends the walk with sharedref_not_complete.
+// exists so that such a reference ends the walk: a mark at the reference is not complete, and a mark after
+// it is not marked yet, as for a reader that reads the marks in order.
 TEST_CASE("validity: check_tag_content refuses a tag 29 that names a mark at or after it")
 {
     std::vector<std::size_t> const self{1};
-    CHECK_EQ(validity::check_tag_content(1, "\xc1\xd8\x1d\x00"sv, 1, self, std::identity{}).error(),
+    CHECK_EQ(validity::check_tag_content(1, "\xc1\xd8\x1d\x00"sv, 1, [&self]() -> auto const & { return self; }, std::identity{}).error(),
              error::sharedref_not_complete);
     std::vector<std::size_t> const forward{4};
-    CHECK_EQ(validity::check_tag_content(1, "\xc1\xd8\x1d\x00\x05"sv, 1, forward, std::identity{}).error(),
-             error::sharedref_not_complete);
+    CHECK_EQ(validity::check_tag_content(1, "\xc1\xd8\x1d\x00\x05"sv, 1, [&forward]() -> auto const & { return forward; }, std::identity{}).error(),
+             error::sharedref_index_not_marked);
     std::vector<std::size_t> const before{0};
-    CHECK(validity::check_tag_content(1, "\x05\xc1\xd8\x1d\x00"sv, 2, before, std::identity{}).has_value());
+    CHECK(validity::check_tag_content(1, "\x05\xc1\xd8\x1d\x00"sv, 2, [&before]() -> auto const & { return before; }, std::identity{}).has_value());
 }
 
 // RFC 8949 5.6 lets a map repeat a key outside a deterministic profile. Two maps are equal only when each pair

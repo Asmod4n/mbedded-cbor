@@ -59,23 +59,21 @@ TEST_CASE("path: a key is compared without an allocation")
     CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
 }
 
-// A top-level item with a shared value (tag 28) needs a table of the shared values to decode a reference to one, so the
-// count of allocations is fixed here: the key [1, 29(0)] refers to the shared value "x".
-TEST_CASE("path: a top-level item with shared values allocates only the table of shared values")
+// A top-level item with a shared value (tag 28) reads its marks once, at the first tag 29, and keeps them for
+// every later read from any thread. The key [1, 29(0)] refers to the shared value "x". The first read builds the
+// marks, so a second read allocates nothing.
+TEST_CASE("path: a second read of a top-level item with shared values allocates nothing")
 {
     std::string const bytes = "\x82\xd8\x1c\x61x\xa2\x82\x01\xd8\x1d\x00\x01\xa1\x61k\xd8\x1d\x00\x02"s;
     auto const root = *cbor::lazy::from(std::string(bytes));
     auto const map = *root.at(1);
     test_binding binding;
     REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(binding, map).has_value());
-    // The top-level item marks one shared value. The decoder keeps one flag and one entry for each mark, in two arrays,
-    // and an array that holds at least one element is one allocation.
-    constexpr std::size_t marks_allocations = 2;
     std::size_t const before = allocations;
     auto const found = cbor::at_path<"$[[1, \"x\"]]">(binding, map);
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
-    CHECK_EQ(after - before, marks_allocations);
+    CHECK_EQ(after, before);
     CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
 }
 

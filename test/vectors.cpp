@@ -127,7 +127,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             CHECK_EQ(decoded_item.error(), error::indefinite_length);
             continue;
         }
-        cbor::item const &it = decoded_item->get();
+        cbor::item const &it = **decoded_item;
         std::uint8_t const info = initial & 0x1f;
         std::size_t const argument_bytes = info < 24 ? 0 : std::size_t{1} << (info - 24);
         std::uint64_t argument = info < 24 ? info : 0;
@@ -358,7 +358,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
     auto const decoded_item = l.decode();
     if (!decoded_item)
         return std::unexpected(decoded_item.error());
-    cbor::item const &it = decoded_item->get();
+    cbor::item const &it = **decoded_item;
     switch (it.major_type) {
     case cbor::major_type::unsigned_integer:
         return value{it.argument};

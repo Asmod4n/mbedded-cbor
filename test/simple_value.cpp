@@ -118,7 +118,7 @@ TEST_CASE("simple value: lazy::decode gives every simple value 0 to 255 as its c
         REQUIRE(top_level.has_value());
         auto const r = top_level->decode();
         REQUIRE(r.has_value());
-        cbor::item const &it = r->get();
+        cbor::item const &it = **r;
         CHECK_EQ(it.major_type, cbor::major_type::simple_float);
         CHECK_EQ(it.additional_information, v < 24 ? v : 24);
         CHECK_EQ(it.argument, v);

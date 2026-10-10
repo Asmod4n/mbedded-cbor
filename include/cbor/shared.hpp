@@ -10,7 +10,9 @@
 #include <expected>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
+#include <mutex>
 #include <ranges>
 #include <span>
 #include <string>
@@ -41,15 +43,17 @@ class value_sharing
 {
     struct top_level_item;
 
+    struct decoded_items;
+
     struct sharing_decoder;
 
     struct resolved;
 
     static std::expected<std::size_t, error> shared_resolve(top_level_item &top_level, std::size_t at);
 
-    static std::expected<item *, error> item_resolve(top_level_item &top_level, std::size_t at);
+    static std::expected<item *, error> item_resolve(decoded_items &decoded, std::size_t at);
 
-    static std::expected<std::pair<item *, std::size_t>, error> item_decode(top_level_item &top_level, std::size_t at,
+    static std::expected<std::pair<item *, std::size_t>, error> item_decode(decoded_items &decoded, std::size_t at,
                                                                            std::size_t depth, std::size_t depth_max);
 
     static std::expected<resolved, error> container_resolve(std::shared_ptr<top_level_item> source, std::size_t offset);
@@ -305,9 +309,7 @@ struct lazy {
 
     std::expected<lazy_entries, error> entries() const;
 
-    template <class Self>
-        requires(std::is_lvalue_reference_v<Self>)
-    std::expected<std::reference_wrapper<item const>, error> decode(this Self &&self);
+    std::expected<std::shared_ptr<item const>, error> decode() const;
 };
 
 }
@@ -328,22 +330,44 @@ struct value_sharing::top_level_item {
     std::string_view encoded;
     std::vector<lazy> sharedrefs;
     std::size_t high_water_mark;
-    std::deque<item> items{};
-    std::vector<std::pair<std::size_t, item *>> item_offsets{};
+    std::once_flag sharedrefs_built{};
 
-    std::expected<item *, error> entry(std::size_t const offset)
+    std::vector<lazy> const &sharedrefs_read()
     {
-        auto const known = item_offsets.empty() || item_offsets.back().first < offset
-                               ? item_offsets.end()
-                               : std::ranges::lower_bound(item_offsets, offset, {}, &std::pair<std::size_t, item *>::first);
-        if (known != item_offsets.end() && known->first == offset)
-            return known->second;
-        auto const h = heads::raw_head_read(encoded, offset);
-        if (!h) [[unlikely]]
-            return std::unexpected(h.error());
-        item &placeholder = items.emplace_back(item{h->major, h->info, h->argument, lazy{{}, offset}});
-        item_offsets.insert(known, {offset, &placeholder});
-        return &placeholder;
+        std::call_once(sharedrefs_built, [this] {
+            heads::decoder all{encoded};
+            std::uint64_t pending = 1;
+            while (pending != 0) {
+                --pending;
+                auto const h = all.head_decode();
+                if (!h || !validity::check_definite_length(h->major, h->info)) [[unlikely]]
+                    return;
+                std::uint64_t added = 0;
+                switch (h->major) {
+                case major_type::byte_string:
+                case major_type::text_string:
+                    if (!all.byte_string_decode(h->argument)) [[unlikely]]
+                        return;
+                    break;
+                case major_type::array:
+                    added = h->argument;
+                    break;
+                case major_type::map:
+                    added = validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
+                                .value_or(std::numeric_limits<std::uint64_t>::max());
+                    break;
+                case major_type::tag:
+                    if (h->argument == std::to_underlying(rfc8949::tag_number::shareable))
+                        mark(all);
+                    added = 1;
+                    break;
+                default:
+                    break;
+                }
+                pending = validity::checked_add(pending, added).value_or(std::numeric_limits<std::uint64_t>::max());
+            }
+        });
+        return sharedrefs;
     }
 
     std::size_t mark(heads::decoder const &at)
@@ -358,7 +382,8 @@ struct value_sharing::top_level_item {
         return static_cast<std::size_t>(std::ranges::distance(sharedrefs.begin(), known));
     }
 
-    std::expected<lazy, error> sharedref_decode(heads::decoder &d, std::size_t const item_at) const
+    static std::expected<lazy, error> sharedref_decode(heads::decoder &d, std::size_t const reference_at,
+                                                       std::size_t const item_at, std::vector<lazy> const &marks)
     {
         auto const n = d.head_decode();
         if (!n) [[unlikely]]
@@ -368,13 +393,36 @@ struct value_sharing::top_level_item {
                     .error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
-        auto const index = validity::check_sharedref_index(n->argument, sharedrefs.size());
+        auto const before = std::ranges::upper_bound(marks, reference_at, {}, &lazy::offset);
+        auto const index = validity::check_sharedref_index(
+            n->argument, static_cast<std::size_t>(std::ranges::distance(marks.begin(), before)));
         if (!index) [[unlikely]]
             return std::unexpected(index.error());
-        lazy const &found = sharedrefs[*index];
+        lazy const &found = marks[*index];
         if (found.offset >= item_at) [[unlikely]]
             return std::unexpected(error::sharedref_not_complete);
         return found;
+    }
+};
+
+struct value_sharing::decoded_items {
+    std::shared_ptr<top_level_item> top_level;
+    std::deque<item> items{};
+    std::vector<std::pair<std::size_t, item *>> item_offsets{};
+
+    std::expected<item *, error> entry(std::size_t const offset)
+    {
+        auto const known = item_offsets.empty() || item_offsets.back().first < offset
+                               ? item_offsets.end()
+                               : std::ranges::lower_bound(item_offsets, offset, {}, &std::pair<std::size_t, item *>::first);
+        if (known != item_offsets.end() && known->first == offset)
+            return known->second;
+        auto const h = heads::raw_head_read(top_level->encoded, offset);
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        item &placeholder = items.emplace_back(item{h->major, h->info, h->argument, lazy{{}, offset}});
+        item_offsets.insert(known, {offset, &placeholder});
+        return &placeholder;
     }
 };
 
@@ -407,19 +455,15 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level
             return std::unexpected(h.error());
         if (h->major != major_type::tag)
             return at;
-        if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-            top_level.mark(heads::decoder{std::string_view(std::span(top_level.encoded).subspan(h->at))});
-            at = h->at;
-            continue;
-        }
-        if (h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor)) {
+        if (h->argument == std::to_underlying(rfc8949::tag_number::shareable) ||
+            h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor)) {
             at = h->at;
             continue;
         }
         if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
             return at;
         heads::decoder d{std::string_view(std::span(top_level.encoded).subspan(h->at))};
-        auto const found = top_level.sharedref_decode(d, item_at);
+        auto const found = top_level_item::sharedref_decode(d, at, item_at, top_level.sharedrefs_read());
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         at = found->offset;
@@ -427,12 +471,12 @@ inline std::expected<std::size_t, error> value_sharing::shared_resolve(top_level
     }
 }
 
-inline std::expected<item *, error> value_sharing::item_resolve(top_level_item &top_level, std::size_t const at)
+inline std::expected<item *, error> value_sharing::item_resolve(decoded_items &decoded, std::size_t const at)
 {
-    auto const node = shared_resolve(top_level, at);
+    auto const node = shared_resolve(*decoded.top_level, at);
     if (!node) [[unlikely]]
         return std::unexpected(node.error());
-    return top_level.entry(*node);
+    return decoded.entry(*node);
 }
 
 inline std::expected<value_sharing::resolved, error> value_sharing::container_resolve(std::shared_ptr<top_level_item> source,
@@ -489,13 +533,9 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
         else
             return value_sharing::shared_resolve(message, at);
     };
-    auto const skip = []<class Message>(Message &message, heads::decoder &d) {
-        if constexpr (std::same_as<Message, std::string_view const>) {
-            well_formedness::no_marks none;
-            return well_formedness::item_skip(d, none);
-        } else {
-            return well_formedness::item_skip(d, message);
-        }
+    auto const skip = [](heads::decoder &d) {
+        well_formedness::no_marks none;
+        return well_formedness::item_skip(d, none);
     };
     std::string_view const a = encoded_of(first);
     std::string_view const b = encoded_of(second);
@@ -543,9 +583,9 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
                                                          b.size() - e.encoded.size(), depth + 1, depth_max);
             if (!equal || !*equal)
                 return equal;
-            if (auto const r = skip(first, d); !r) [[unlikely]]
+            if (auto const r = skip(d); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (auto const r = skip(second, e); !r) [[unlikely]]
+            if (auto const r = skip(e); !r) [[unlikely]]
                 return std::unexpected(r.error());
         }
         return true;
@@ -562,10 +602,10 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
             heads::decoder e{std::string_view(std::span(in_encoded).subspan(in_at))};
             for (std::uint64_t j = 0; j < h->argument; ++j) {
                 std::size_t const other = in_encoded.size() - e.encoded.size();
-                if (auto const r = skip(in, e); !r) [[unlikely]]
+                if (auto const r = skip(e); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 std::size_t const other_value = in_encoded.size() - e.encoded.size();
-                if (auto const r = skip(in, e); !r) [[unlikely]]
+                if (auto const r = skip(e); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 auto const key_same = keys_equivalent(from, key, in, other, depth + 1, depth_max);
                 if (!key_same) [[unlikely]]
@@ -582,10 +622,10 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
         heads::decoder d{std::string_view(std::span(a).subspan(h->at))};
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             std::size_t const key = a.size() - d.encoded.size();
-            if (auto const r = skip(first, d); !r) [[unlikely]]
+            if (auto const r = skip(d); !r) [[unlikely]]
                 return std::unexpected(r.error());
             std::size_t const value = a.size() - d.encoded.size();
-            if (auto const r = skip(first, d); !r) [[unlikely]]
+            if (auto const r = skip(d); !r) [[unlikely]]
                 return std::unexpected(r.error());
             auto const own = pairs_counted(first, key, value, first, a, h->at);
             if (!own) [[unlikely]]
@@ -634,13 +674,7 @@ std::expected<void, error> validity::check_sorted_keys_unique(Message &message, 
         encoded = message;
     else
         encoded = message.encoded;
-    well_formedness::no_marks none;
-    auto &marks = [&]() -> auto & {
-        if constexpr (std::same_as<Message, std::string_view const>)
-            return none;
-        else
-            return message;
-    }();
+    well_formedness::no_marks marks;
     heads::decoder walk{std::string_view(std::span(encoded).subspan(first_key))};
     std::size_t previous = 0;
     for (std::uint64_t i = 0; i < count; ++i) {
