@@ -1154,7 +1154,8 @@ TEST_CASE("validity: check_sorted_keys_unique compares two neighbours by RFC 894
         std::string const map = "\xa2"s + p.first + "\x00"s + p.second + "\x00"s;
         CAPTURE(map);
         std::string_view const encoded = map;
-        auto const checked = cbor::validity::check_sorted_keys_unique(encoded, 1, 2, 1, 16);
+        auto const checked = cbor::validity::check_sorted_keys_unique(encoded, 1, 2, 1, 16,
+                                                                      cbor::validity::limit_checks<false>{});
         if (p.equal)
             CHECK_EQ(checked.error(), error::duplicate_key);
         else
@@ -1168,7 +1169,8 @@ TEST_CASE("validity: check_sorted_keys_unique compares two neighbours by RFC 894
 TEST_CASE("validity: check_sorted_keys_unique finds equal neighbours at any position")
 {
     auto const checked = [](std::string_view const map, std::uint64_t const count) {
-        return cbor::validity::check_sorted_keys_unique(map, 1, count, 1, 16);
+        return cbor::validity::check_sorted_keys_unique(map, 1, count, 1, 16,
+                                                        cbor::validity::limit_checks<false>{});
     };
     CHECK(checked("\xa3\x01\x00\x02\x00\x03\x00"sv, 3).has_value());
     CHECK_EQ(checked("\xa3\x01\x00\x01\x00\x03\x00"sv, 3).error(), error::duplicate_key);

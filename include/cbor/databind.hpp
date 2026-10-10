@@ -75,7 +75,8 @@ class generic
     static constexpr bool is_byte_container = requires {
         typename U::value_type;
         requires is_byte<typename U::value_type>;
-        requires std::same_as<U, std::vector<typename U::value_type, typename U::allocator_type>> || is_std_array<U>;
+        requires std::same_as<U, std::vector<typename U::value_type, typename U::allocator_type>> ||
+                     is_std_array<U>;
     };
 
     template <class U>
@@ -83,8 +84,8 @@ class generic
         requires std::same_as<U, std::basic_string<char, std::char_traits<char>, typename U::allocator_type>>;
     };
 
-    template <class U, class V>
-    static std::expected<void, error> integer_read(heads::decoder &d, V &out)
+    template <class U, class V, bool Checked>
+    static std::expected<void, error> integer_read(heads::decoder<Checked> &d, V &out)
     {
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
@@ -144,8 +145,8 @@ class generic
     }
 
 #ifdef __SIZEOF_INT128__
-    template <class U>
-    static std::expected<void, error> wide_integer_read(heads::decoder &d, U &out)
+    template <class U, bool Checked>
+    static std::expected<void, error> wide_integer_read(heads::decoder<Checked> &d, U &out)
     {
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
@@ -187,8 +188,10 @@ class generic
     }
 #endif
 
-    template <class U, std::size_t I = 0>
-    static std::expected<void, error> variant_read(value_sharing::sharing_decoder &d, U &out, heads::head const &h, std::size_t const depth, std::size_t const depth_max)
+    template <class U, std::size_t I = 0, bool Checked>
+    static std::expected<void, error> variant_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+                                                   heads::head const &h, std::size_t const depth,
+                                                   std::size_t const depth_max)
     {
         if constexpr (I == std::variant_size_v<U>) {
             return std::unexpected(error::incorrect_type);
@@ -200,12 +203,13 @@ class generic
         }
     }
 
-    template <class U>
-    static std::expected<void, error> generic_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth, std::size_t const depth_max)
+    template <class U, bool Checked>
+    static std::expected<void, error> generic_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+                                                   std::size_t const depth, std::size_t const depth_max)
     {
         std::size_t const item_at = d.message.encoded.size() - d.encoded.size();
         for (;;) {
-            heads::decoder look = d;
+            heads::decoder<Checked> look = d;
             auto const h = look.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -231,8 +235,9 @@ class generic
         return generic_value_read(d, out, depth, depth_max);
     }
 
-    template <class U>
-    static std::expected<void, error> generic_value_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth, std::size_t const depth_max)
+    template <class U, bool Checked>
+    static std::expected<void, error> generic_value_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+                                                         std::size_t const depth, std::size_t const depth_max)
     {
         if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -258,7 +263,7 @@ class generic
         } else if constexpr (packed::is_wide_integer<U>) {
             return wide_integer_read(d, out);
         } else if constexpr (is_std_variant<U>) {
-            heads::decoder probe = d;
+            heads::decoder<Checked> probe = d;
             auto const h = probe.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -384,7 +389,10 @@ class generic
                     out.emplace(std::move(key), std::move(value));
             }
             return {};
-        } else if constexpr (requires { typename U::value_type; out.size(); }) {
+        } else if constexpr (requires {
+                                 typename U::value_type;
+                                 out.size();
+                             }) {
             using E = typename U::value_type;
             static_assert(
                 requires(E &&e) { out.insert(out.end(), std::move(e)); },
@@ -430,8 +438,9 @@ class generic
         }
     }
 
-    template <class U>
-    static std::expected<void, error> struct_read(value_sharing::sharing_decoder &d, U &out, std::size_t const depth, std::size_t const depth_max)
+    template <class U, bool Checked>
+    static std::expected<void, error> struct_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+                                                  std::size_t const depth, std::size_t const depth_max)
     {
         static constexpr auto members = packed::members_of<U>();
         constexpr std::size_t count = members.size();
@@ -449,17 +458,18 @@ class generic
                 d.message.mark(d);
                 k = d.head_decode();
             }
-            heads::decoder referenced{};
+            heads::decoder<Checked> referenced{};
             bool const indirect = k && k->major == major_type::tag &&
                                   k->argument == std::to_underlying(rfc8949::tag_number::sharedref);
             if (indirect) {
                 auto const target = value_sharing::top_level_item::sharedref_decode(d, d.message.encoded.size() - d.encoded.size(), key_at, d.message.sharedrefs);
                 if (!target) [[unlikely]]
                     return std::unexpected(target.error());
-                referenced = heads::decoder{std::string_view(std::span(d.message.encoded).subspan(target->offset))};
+                referenced = heads::decoder<Checked>{
+                    std::string_view(std::span(d.message.encoded).subspan(target->offset)), d.checks};
                 k = referenced.head_decode();
             }
-            heads::decoder &from = indirect ? referenced : d;
+            heads::decoder<Checked> &from = indirect ? referenced : d;
             if (!k) [[unlikely]]
                 return std::unexpected(k.error());
             std::string_view text;
@@ -601,7 +611,10 @@ class generic
                 size = *mapped;
             }
             return size;
-        } else if constexpr (requires { value.size(); typename U::value_type; }) {
+        } else if constexpr (requires {
+                                 value.size();
+                                 typename U::value_type;
+                             }) {
             std::size_t size = heads::head_size(value.size());
             for (auto const &e : value) {
                 auto const sum = generic_size(e).and_then([size](std::size_t const n) { return validity::checked_add(size, n); });
@@ -732,7 +745,10 @@ class generic
                 at = generic_write(out, at, v);
             }
             return at;
-        } else if constexpr (requires { value.size(); typename U::value_type; }) {
+        } else if constexpr (requires {
+                                 value.size();
+                                 typename U::value_type;
+                             }) {
             at += heads::head_write(out, at, major_type::array, value.size());
             for (auto const &e : value)
                 at = generic_write(out, at, e);
@@ -794,15 +810,19 @@ public:
         return decode(std::move(owner), encoded, T{});
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded,
-                                                      T target)
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner,
+                                                      std::string_view const encoded, T target)
     {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::databind::decode: the owner of the encoded data item is empty");
 #if defined(__cpp_exceptions)
         try {
 #endif
-            auto value = read(encoded, limits.nesting_depth, std::move(target));
+            auto value = validity::limits_apply(
+                limits.load(),
+                [&]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks) {
+                    return read(encoded, depth_max, std::move(target), checks);
+                });
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
             return owning_ref<T>(std::move(owner), std::move(*value));
@@ -819,7 +839,8 @@ public:
 
     template <class Encoded>
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded, T target) = delete;
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded,
+                                                      T target) = delete;
 
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
@@ -886,11 +907,13 @@ public:
     }
 
 private:
-    static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max, T out)
+    template <bool Checked>
+    static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max, T out,
+                                        validity::limit_checks<Checked> const checks)
     {
-        if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
+        if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
             return std::unexpected(r.error());
-        value_sharing::sharing_decoder d{{encoded}, {{}, encoded, {}, 0}};
+        value_sharing::sharing_decoder<Checked> d{{encoded, checks}, {{}, encoded, {}, 0, {}}};
         if (auto const r = generic::generic_read(d, out, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (!d.encoded.empty()) [[unlikely]]

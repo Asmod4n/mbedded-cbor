@@ -31,15 +31,16 @@ class decoding
         std::vector<bool> evaluating;
         std::vector<std::size_t> mark_depths;
 
-        void mark(heads::decoder const &, std::size_t const depth)
+        template <bool Checked>
+        void mark(heads::decoder<Checked> const &, std::size_t const depth)
         {
             mark_depths.push_back(depth);
         }
     };
 
-    template <class Binding>
+    template <class Binding, bool Checked>
     struct value_decoder {
-        heads::decoder d;
+        heads::decoder<Checked> d;
         Binding &binding;
         marks<Binding> shared;
         prefix *before;
@@ -84,7 +85,9 @@ class decoding
                 return array;
             }
             case major_type::map: {
-                std::uint64_t const entries = std::min<std::uint64_t>(h->argument, d.encoded.size() / (rfc8949::data_items_per_pair * heads::initial_byte_size));
+                std::uint64_t const entries =
+                    std::min<std::uint64_t>(h->argument, d.encoded.size() / (rfc8949::data_items_per_pair *
+                                                                             heads::initial_byte_size));
                 auto map = binding.map_decode(entries);
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
@@ -202,7 +205,7 @@ class decoding
                     if (!shared[index] && before && !before->evaluating[index] &&
                         before->top_level.sharedrefs[index].offset < before->top_level.encoded.size() - d.encoded.size()) {
                         if (before->mark_depths.empty()) {
-                            heads::decoder all{before->top_level.encoded};
+                            heads::decoder<Checked> all{before->top_level.encoded, d.checks};
                             if (auto const s = well_formedness::item_skip(all, *before, 0, depth_max); !s) [[unlikely]]
                                 return std::unexpected(s.error());
                         }
@@ -229,10 +232,13 @@ class decoding
                         return std::unexpected(error::sharedref_not_complete);
                     return *shared[index];
                 }
-                if (error const e = validity::check_tag_content(
-                                    h->argument, before->top_level.encoded, before->top_level.encoded.size() - d.encoded.size(),
-                                    [this]() -> auto const & { return before->top_level.sharedrefs_read(); }, &lazy::offset)
-                                        .error_or(error{});
+                if (error const e =
+                        validity::check_tag_content(
+                            h->argument, before->top_level.encoded,
+                            before->top_level.encoded.size() - d.encoded.size(),
+                            [this]() -> auto const & { return before->top_level.sharedrefs_read(); },
+                            &lazy::offset, d.checks)
+                            .error_or(error{});
                     e != error{}) [[unlikely]]
                     return std::unexpected(e);
                 if constexpr (requires { binding.tag_begin(h->argument); }) {
@@ -272,6 +278,10 @@ class decoding
 
     template <class Binding>
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
+
+    template <class Binding>
+    friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l,
+                                                                     limit_values loaded);
 };
 
 }

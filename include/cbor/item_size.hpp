@@ -25,13 +25,14 @@ struct lazy_entries;
 class well_formedness
 {
     struct no_marks {
-        void mark(heads::decoder const &)
+        template <bool Checked>
+        void mark(heads::decoder<Checked> const &)
         {
         }
     };
 
-    template <class Marks>
-    static std::expected<void, error> item_skip(heads::decoder &d, Marks &marks)
+    template <bool Checked, class Marks>
+    static std::expected<void, error> item_skip(heads::decoder<Checked> &d, Marks &marks)
     {
         std::uint64_t pending = 1;
         while (pending != 0) {
@@ -90,10 +91,12 @@ class well_formedness
         return {};
     }
 
-    template <class Marks>
-        requires requires(Marks &m, heads::decoder const &at, std::size_t depth) { m.mark(at, depth); }
-    static std::expected<void, error> item_skip(heads::decoder &d, Marks &marks, std::size_t const depth,
-                                                std::size_t const depth_max)
+    template <bool Checked, class Marks>
+        requires requires(Marks &m, heads::decoder<Checked> const &at, std::size_t depth) {
+            m.mark(at, depth);
+        }
+    static std::expected<void, error> item_skip(heads::decoder<Checked> &d, Marks &marks,
+                                                std::size_t const depth, std::size_t const depth_max)
     {
         std::array<std::uint64_t, validity::nesting_depth_limit + 1> left;
         if (auto const r = validity::check_nesting_depth(depth_max, validity::nesting_depth_limit); !r)
@@ -182,13 +185,18 @@ class well_formedness
 
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
 {
-    if (auto const r = validity::check_input_bytes(encoded.size()); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    heads::decoder d{encoded};
-    well_formedness::no_marks none;
-    if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    return encoded.size() - d.encoded.size();
+    return validity::limits_apply(
+        limits.load(),
+        [encoded]<bool Checked>(
+            std::size_t, validity::limit_checks<Checked> const checks) -> std::expected<std::size_t, error> {
+            if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            heads::decoder<Checked> d{encoded, checks};
+            well_formedness::no_marks none;
+            if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return encoded.size() - d.encoded.size();
+        });
 }
 
 } // namespace cbor

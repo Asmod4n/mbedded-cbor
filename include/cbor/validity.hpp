@@ -57,6 +57,13 @@ enum class pass;
 
 struct lazy;
 
+struct limit_values {
+    std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
+    std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
+    std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
+    std::size_t input_bytes = CBOR_INPUT_BYTES_DEFAULT;
+};
+
 class validity
 {
     enum class tag_number : std::uint64_t {
@@ -92,16 +99,43 @@ public:
         return check_limit(depth, depth_max, error::nesting_depth_exceeded);
     }
 
-    static std::expected<void, error> check_input_bytes(std::size_t size);
+    template <bool Checked>
+    struct limit_checks {
+        std::size_t string_length;
+        std::size_t container_elements;
+        std::size_t input_bytes;
+        std::size_t argument_max = std::min(string_length, container_elements);
+    };
 
+    template <bool Checked>
+        requires(!Checked)
+    struct limit_checks<Checked> {
+    };
+
+    template <class F>
+    static decltype(auto) limits_apply(limit_values v, F &&f);
+
+    template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_argument(major_type const major, std::uint64_t const argument, std::size_t const string_length,
-                   std::size_t const container_elements)
+    check_input_bytes(std::size_t const size, limit_checks<Checked> const checks)
     {
-        if (major == major_type::byte_string || major == major_type::text_string)
-            return check_limit(argument, string_length, error::string_length_exceeded);
-        if (major == major_type::array || major == major_type::map)
-            return check_limit(argument, container_elements, error::container_elements_exceeded);
+        if constexpr (Checked)
+            return check_limit(size, checks.input_bytes, error::input_bytes_exceeded);
+        return {};
+    }
+
+    template <bool Checked>
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_argument(major_type const major, std::uint64_t const argument, limit_checks<Checked> const checks)
+    {
+        if constexpr (Checked) {
+            if (argument <= checks.argument_max) [[likely]]
+                return {};
+            if (major == major_type::byte_string || major == major_type::text_string)
+                return check_limit(argument, checks.string_length, error::string_length_exceeded);
+            if (major == major_type::array || major == major_type::map)
+                return check_limit(argument, checks.container_elements, error::container_elements_exceeded);
+        }
         return {};
     }
 
@@ -202,20 +236,20 @@ public:
         return {};
     }
 
-    template <class First, class Second>
+    template <class First, class Second, bool Checked>
     static std::expected<bool, error> keys_equivalent(First &first, std::size_t first_at, Second &second,
                                                       std::size_t second_at, std::size_t depth,
-                                                      std::size_t depth_max);
+                                                      std::size_t depth_max, limit_checks<Checked> checks);
 
-    template <class Message>
-    static std::expected<void, error> check_sorted_keys_unique(Message &message, std::size_t first_key,
-                                                               std::uint64_t count, std::size_t depth,
-                                                               std::size_t depth_max);
+    template <class Message, bool Checked>
+    static std::expected<void, error>
+    check_sorted_keys_unique(Message &message, std::size_t first_key, std::uint64_t count, std::size_t depth,
+                             std::size_t depth_max, limit_checks<Checked> checks);
 
-    template <std::invocable MarksRead, class Projection>
+    template <std::invocable MarksRead, class Projection, bool Checked>
     static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
                                                         std::size_t content_at, MarksRead marks_read,
-                                                        Projection offset_of);
+                                                        Projection offset_of, limit_checks<Checked> checks);
 
     static constexpr error writer_error(std::errc const e) noexcept
     {
@@ -437,21 +471,6 @@ public:
     {
         return value.load(std::memory_order_relaxed);
     }
-
-    constexpr std::size_t load() const noexcept
-    {
-        if consteval {
-            return Bound;
-        }
-        return value.load(std::memory_order_relaxed);
-    }
-};
-
-struct limit_values {
-    std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
-    std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
-    std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
-    std::size_t input_bytes = CBOR_INPUT_BYTES_DEFAULT;
 };
 
 class resource_limits
@@ -477,6 +496,11 @@ public:
 
     resource_limits &operator=(resource_limits const &) = delete;
 
+    limit_values load() const noexcept
+    {
+        return {nesting_depth, string_length, container_elements, input_bytes};
+    }
+
     resource_limits &operator=(limit_values const v)
     {
         nesting_depth = v.nesting_depth;
@@ -487,8 +511,9 @@ public:
     }
 };
 
-static_assert(validity::check_nesting_depth(limit_values{}.nesting_depth, validity::nesting_depth_limit).has_value(),
-              "CBOR_NESTING_DEPTH_DEFAULT is at most validity::nesting_depth_limit.");
+static_assert(
+    validity::check_nesting_depth(limit_values{}.nesting_depth, validity::nesting_depth_limit).has_value(),
+    "CBOR_NESTING_DEPTH_DEFAULT is at most validity::nesting_depth_limit.");
 static_assert(validity::check_limit(limit_values{}.string_length, validity::size_limit, error::string_length_exceeded)
                   .has_value(),
               "CBOR_STRING_LENGTH_DEFAULT fits in std::size_t.");
@@ -502,9 +527,13 @@ static_assert(validity::check_limit(limit_values{}.input_bytes, validity::size_l
 
 inline constinit resource_limits limits{};
 
-inline std::expected<void, error> validity::check_input_bytes(std::size_t const size)
+template <class F>
+CBOR_ALWAYS_INLINE inline decltype(auto) validity::limits_apply(limit_values const v, F &&f)
 {
-    return check_limit(size, limits.input_bytes, error::input_bytes_exceeded);
+    if (v.string_length == size_limit && v.container_elements == size_limit && v.input_bytes == size_limit)
+        return std::forward<F>(f)(v.nesting_depth, limit_checks<false>{});
+    return std::forward<F>(f)(v.nesting_depth,
+                              limit_checks<true>{v.string_length, v.container_elements, v.input_bytes});
 }
 
 }
