@@ -76,6 +76,18 @@ template <fixed_string Path, class T, class Encoded>
     requires std::same_as<std::remove_const_t<Encoded>, std::string>
 std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
+template <fixed_string Path, class T>
+    requires(is_singular_query_v<Path> &&
+             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+std::expected<T, error> at_path(lazy const &l);
+
+template <fixed_string Path, class T>
+    requires(is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<owning_ref<T>, error> at_path(lazy const &l);
+
 class jsonpath
 {
     struct selector {
@@ -964,6 +976,51 @@ class jsonpath
     }
 
     template <fixed_string Path, class T>
+    static std::expected<T, error> query_walk(lazy const &root)
+    {
+        constexpr auto q = [] {
+            std::array const text = Path.value;
+            return *query_parse(std::string_view(text.data(), text.size() - 1), true, validity::nesting_depth_default);
+        };
+        constexpr std::size_t segments = q().segments.size();
+        constexpr std::size_t selectors = q().selectors.size();
+        constexpr std::size_t keys = q().keys.size();
+        constexpr auto top = q().top;
+        constexpr auto compiled = [q] {
+            auto const parsed = q();
+            std::tuple<std::array<segment, segments>, std::array<selector, selectors>, std::array<char, keys>> c{};
+            std::ranges::copy(parsed.segments, std::get<0>(c).begin());
+            std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
+            std::ranges::copy(parsed.keys, std::get<2>(c).begin());
+            return c;
+        }();
+        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys), {}};
+        limit_values const loaded = limits.load();
+        return validity::limits_apply(
+            loaded,
+            [&]<bool Checked>(std::size_t const depth_max,
+                              validity::limit_checks<Checked> const checks) -> std::expected<T, error> {
+                if (auto const r = validity::check_nesting_depth(top.segment_count, depth_max); !r)
+                    [[unlikely]]
+                    return std::unexpected(r.error());
+                auto const walked =
+                    query_walk<T>(v, top, std::string_view(std::span(root.top_level->encoded).subspan(root.offset)), checks);
+                if (walked) [[likely]]
+                    return *walked;
+                return query_walk<T>(v, top, root, loaded);
+            });
+    }
+
+    template <fixed_string Path, class T>
+    static std::expected<owning_ref<T>, error> owned_query_walk(lazy const &root)
+    {
+        auto const r = query_walk<Path, T>(root);
+        if (!r) [[unlikely]]
+            return std::unexpected(r.error());
+        return owning_ref<T>(root.top_level, *r);
+    }
+
+    template <fixed_string Path, class T>
     static std::expected<owning_ref<T>, error> query_walk(std::shared_ptr<void const> owner,
                                                           std::string_view const encoded)
     {
@@ -988,6 +1045,18 @@ class jsonpath
                   std::is_same_v<T, typed_array>))
     friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner,
                                                        std::string_view encoded);
+
+    template <fixed_string Path, class T>
+        requires(is_singular_query_v<Path> &&
+                 ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+                  std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+    friend std::expected<T, error> at_path(lazy const &l);
+
+    template <fixed_string Path, class T>
+        requires(is_singular_query_v<Path> &&
+                 (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                  std::is_same_v<T, typed_array>))
+    friend std::expected<owning_ref<T>, error> at_path(lazy const &l);
 
     template <fixed_string>
     friend class is_valid_path;
@@ -1696,6 +1765,25 @@ std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, s
 {
     validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
     return jsonpath::query_walk<Path, T>(std::move(owner), encoded);
+}
+
+
+template <fixed_string Path, class T>
+    requires(is_singular_query_v<Path> &&
+             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+std::expected<T, error> at_path(lazy const &l)
+{
+    return jsonpath::query_walk<Path, T>(l);
+}
+
+template <fixed_string Path, class T>
+    requires(is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<owning_ref<T>, error> at_path(lazy const &l)
+{
+    return jsonpath::owned_query_walk<Path, T>(l);
 }
 
 }

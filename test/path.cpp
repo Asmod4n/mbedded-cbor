@@ -1089,3 +1089,23 @@ TEST_CASE("path: tag 55799 inside the item is skipped")
     CHECK_EQ(l.at("a")->at(std::size_t{1})->get<int>(), 2);
     CHECK_EQ(cbor::lazy::from(leaf)->at("a")->get<int>(), 7);
 }
+
+// A held lazy is a start point: at_path reads a path relative to it, from
+// its bytes, and falls back to the lazy walk when a tag 29 needs the marks
+// of the whole top-level item.
+TEST_CASE("at_path: a path from a held lazy")
+{
+    std::string const s("\xa2\x63pad\x82\x01\x02\x64" "cars\x82\xa1\x62hp\x05\xa1\x62hp\x07", 24);
+    auto const cars = cbor::lazy::from(s)->at("cars");
+    REQUIRE(cars.has_value());
+    CHECK_EQ(*cbor::at_path<"$[1].hp", std::int64_t>(*cars), 7);
+    CHECK_EQ(cbor::at_path<"$[2].hp", std::int64_t>(*cars).error(), cbor::error::index_out_of_bounds);
+    std::string const shared("\x82\xd8\x1c\xa1\x62hp\x05\xd8\x1d\x00", 11);
+    auto const second = cbor::lazy::from(shared)->at(std::size_t{1});
+    REQUIRE(second.has_value());
+    CHECK_EQ(*cbor::at_path<"$.hp", std::int64_t>(*second), 5);
+    std::string const text("\xa1\x61k\x62ok", 6);
+    auto const word = cbor::at_path<"$.k", std::string_view>(*cbor::lazy::from(text));
+    REQUIRE(word.has_value());
+    CHECK_EQ(**word, "ok");
+}

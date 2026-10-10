@@ -1469,3 +1469,36 @@ TEST_CASE("lazy: a debug build refuses a lazy in a thread that does not own it")
     CHECK(refused);
 }
 #endif
+
+// A tag 28 may hold a tag 29, as CBOR::XS, cbor2 and cbor-x accept: in
+// [28(1), 28(29(0)), 29(1)] every element reads 1. A chain of such values,
+// 28(1) then 28(29(k - 1)) for each k, resolves each reference in one step
+// once the reference before it is known, so reading all of them is linear.
+TEST_CASE("lazy: a tag 28 that holds a tag 29 resolves in one step")
+{
+    std::string const small("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01", 12);
+    auto const l = *cbor::lazy::from(small);
+    for (std::size_t i = 0; i < 3; ++i)
+        CHECK_EQ(*l.at(i).and_then([](cbor::lazy const &e) { return e.get<std::int64_t>(); }), 1);
+    CHECK_EQ(cbor::lazy::from(std::string("\xd8\x1c\xd8\x1d\x00", 5))
+                 ->get<std::int64_t>()
+                 .error(),
+             error::sharedref_not_complete);
+
+    constexpr std::size_t n = 20000;
+    std::string chain("\x9a", 1);
+    for (int b = 3; b >= 0; --b)
+        chain += static_cast<char>((n >> (8 * b)) & 0xff);
+    chain += "\xd8\x1c\x01";
+    for (std::size_t k = 1; k < n; ++k) {
+        chain += "\xd8\x1c\xd8\x1d\x1a";
+        for (int b = 3; b >= 0; --b)
+            chain += static_cast<char>(((k - 1) >> (8 * b)) & 0xff);
+    }
+    auto const all = cbor::lazy::from(chain)->elements();
+    REQUIRE(all.has_value());
+    std::size_t ones = 0;
+    for (auto const e : *all)
+        ones += e.and_then([](cbor::lazy const &x) { return x.get<std::int64_t>(); }).value_or(0) == 1;
+    CHECK_EQ(ones, n);
+}
