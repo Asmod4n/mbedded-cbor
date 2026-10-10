@@ -40,7 +40,9 @@ names start with `doc path:`. A claim about allocations has its test in
 | `query(binding, path, lazy)` | run time, any | `std::expected<Binding::value, error>`, the value is an array |
 | `schema<T>::at_path<Path>(encoded, index...)` | compile time, over the members of T | `std::expected<X, error>`, X the type of the member |
 
-Every function is in the namespace `cbor`. Bad input gives an error in the
+Every function is in the namespace `cbor`. `encoded` is a
+`std::string_view`, so a `std::string` or one element of a
+`cbor::sequence` goes in directly. Bad input gives an error in the
 `std::expected`. A path is a string literal for the compile-time forms and
 a `std::string_view` for the run-time forms. A compile-time path that is not
 valid leaves no form to call: the compiler reports that no function

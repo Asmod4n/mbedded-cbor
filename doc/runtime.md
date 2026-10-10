@@ -127,6 +127,18 @@ for (auto const p : *m.entries())
 std::ranges::distance(*m.entries() | std::views::drop(1));  // 1
 ```
 
+`elements()` gives `std::expected<lazy_elements, error>`, and `*` gives the
+view. The view is a range, so an algorithm takes it directly. Each element
+is a `std::expected<lazy, error>`, and `->` reaches the lazy:
+
+```cpp
+auto const people = *cbor::lazy::from(/* [{"age": 31}, {"age": 20}, {"age": 40}] */);
+std::ranges::count_if(*people.elements(), [](std::expected<cbor::lazy, cbor::error> const &e) {
+    auto const age = e->at("age");
+    return age && age->get<std::int64_t>().value_or(0) > 30;
+});                                       // 2
+```
+
 `elements()` of a map and `entries()` of an array give `not_indexable`.
 An array or a map of indefinite length gives `indefinite_length`.
 

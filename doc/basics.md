@@ -34,7 +34,18 @@ e.message();          // "key not found"
 e.category().name();  // "cbor"
 ```
 
-Four errors compare equal to a `std::errc`:
+An error in a `std::expected` converts the same way:
+
+```cpp
+auto const r = cbor::at_path<"$.id", std::int64_t>(bytes);   // bytes: {"a": 1}
+std::error_code{r.error()}.message();   // "key not found"
+r.error() == cbor::error::key_not_found; // true
+```
+
+Four errors compare equal to a `std::errc`. No other error compares equal
+to a `std::errc`. The comparison needs a `std::error_code` on the left. A
+`cbor::error` and a `std::errc` do not compare directly: that does not
+compile.
 
 | `cbor::error` | `std::errc` |
 |---|---|
@@ -113,7 +124,10 @@ keeps the limits that it read.
 | `container_elements` | `SIZE_MAX` | `SIZE_MAX` | `container_elements_exceeded` |
 | `input_bytes` | `SIZE_MAX` | `SIZE_MAX` | `input_bytes_exceeded` |
 
-`string_length` is the length of one byte string or text string.
+`string_length` is the length of one byte string or text string. A limit
+is checked by the step that reads the item. `lazy::from` checks only
+`input_bytes`. So a string that is too long gives
+`string_length_exceeded` at `get`, not at `lazy::from`.
 `container_elements` is the count of elements of an array, or the count
 of pairs of a map. `input_bytes` is the size of the bytes that a call over
 bytes gets.
@@ -233,9 +247,22 @@ std::jthread([](cbor::sendable<cbor::lazy> const &v) {
 }, cbor::transfer(std::move(l)));
 ```
 
-A debug build records the thread that reads the marks first. A read of the
-marks in another thread then throws `std::logic_error`. A release build
-does not check. A read that does not touch the marks is not checked.
+A debug build is a build without the macro `NDEBUG`. A debug build records
+the thread that reads the marks first. A read of the marks in another
+thread then throws `std::logic_error`. A build with `NDEBUG` does not
+check. Only an item with a tag 28 or a tag 29 has marks. A read that does
+not touch the marks is not checked. So a lazy over `{"a": 1}` does not
+throw in another thread, but it is still a wrong use.
+
+`lazy::from` gives a `std::expected`. `std::move(*l)` moves the lazy out
+of it:
+
+```cpp
+auto l = cbor::lazy::from("\x82\x01\x02"s);
+std::jthread([](cbor::sendable<cbor::lazy> const &v) {
+    v.value.at(1)->get<std::int64_t>();   // 2
+}, cbor::transfer(std::move(*l)));
+```
 
 Two lazy values from two calls of `lazy::from` share nothing, also over
 the same bytes. So each thread can make its own lazy.
@@ -245,6 +272,19 @@ the same bytes. So each thread can make its own lazy.
 A view result points into the bytes. It is a `cbor::owning_ref<T>`. It
 holds a `std::shared_ptr<void const>` to the owner of the bytes, so the
 bytes live as long as the view.
+
+A `cbor::lazy` holds the owner too. So does every lazy that a step gives,
+and every iterator. A lazy from `at` stays valid after the lazy that gave
+it and after the `std::string` that went into `lazy::from` end.
+
+```cpp
+std::optional<cbor::lazy> keep;
+{
+    std::string bytes = /* {"tags": ["a", "b"]} */;
+    keep = *cbor::lazy::from(std::move(bytes))->at("tags");
+}
+keep->at(1)->get<std::string_view>();   // "b"
+```
 
 - `*r` gives the `T const &`, `r->` reaches its members.
 - `*` and `->` do not compile on a temporary `owning_ref`. So a view

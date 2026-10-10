@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <algorithm>
 #include <iterator>
 #include <memory>
 #include <ranges>
@@ -106,6 +107,17 @@ TEST_CASE("doc runtime: elements and entries")
     CHECK_EQ(cbor::lazy::from("\x9f\x01\xff"s)->elements().error(), error::indefinite_length);
     auto const it = l.elements()->begin();
     CHECK_EQ((*it)->get<std::int64_t>(), 1);
+}
+
+// A user did not know that an algorithm takes the view directly and that -> works on each element.
+TEST_CASE("doc runtime: an algorithm over elements")
+{
+    auto const people = *cbor::lazy::from(encoded(A(M("age"s, 31), M("age"s, 20), M("age"s, 40))));
+    CHECK_EQ(std::ranges::count_if(*people.elements(), [](std::expected<cbor::lazy, cbor::error> const &e) {
+                 auto const age = e->at("age");
+                 return age && age->get<std::int64_t>().value_or(0) > 30;
+             }),
+             2);
 }
 
 // The section "A search between two iterators" shows find and equal_range over a part of a sorted map.

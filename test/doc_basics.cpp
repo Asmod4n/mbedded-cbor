@@ -1,9 +1,11 @@
 #include "binding.hpp"
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -135,4 +137,67 @@ TEST_CASE("doc basics: ownership")
     auto const view = cbor::lazy::from(alias, *held)->get<std::string_view>();
     REQUIRE(view.has_value());
     CHECK_EQ((**view).data(), held->data() + 1);
+}
+
+// A user did not know how to read an error that sits in a std::expected, and compared a cbor::error with a
+// std::errc directly. The section "Errors" now shows both.
+TEST_CASE("doc basics: an error in a std::expected")
+{
+    std::string const bytes = encoded(M("a"s, 1));
+    auto const r = cbor::at_path<"$.id", std::int64_t>(bytes);
+    CHECK_EQ(std::error_code{r.error()}.message(), "key not found");
+    CHECK(r.error() == error::key_not_found);
+    static_assert(!std::equality_comparable_with<cbor::error, std::errc>);
+    CHECK(std::error_code{error::string_length_exceeded} != std::errc::value_too_large);
+    CHECK(std::error_code{error::string_length_exceeded} != std::errc::no_buffer_space);
+}
+
+// A user expected a string limit at lazy::from. The section "Limits" states that the step that reads the string
+// checks it.
+TEST_CASE("doc basics: a string limit is checked at get")
+{
+    test::limits_guard const g{{.string_length = 2}};
+    auto const l = cbor::lazy::from("\x63xyz"s);
+    REQUIRE(l.has_value());
+    CHECK_EQ(l->get<std::string_view>().error(), error::string_length_exceeded);
+}
+
+// A user did not know that a lazy from a step holds the bytes after the string and the first lazy end.
+TEST_CASE("doc basics: a lazy holds the owner")
+{
+    std::optional<cbor::lazy> keep;
+    {
+        std::string bytes = encoded(M("tags"s, A("a"s, "b"s)));
+        keep = *cbor::lazy::from(std::move(bytes))->at("tags");
+    }
+    CHECK(*keep->at(1)->get<std::string_view>() == "b"sv);
+}
+
+// A user moved a lazy out of the std::expected of lazy::from, and saw no throw over plain data in another thread.
+// The section "Threads" shows the move and states that only marks are checked.
+TEST_CASE("doc basics: a lazy moved out of the expected to another thread")
+{
+    auto l = cbor::lazy::from("\x82\x01\x02"s);
+    std::int64_t read = 0;
+    std::jthread([&read](cbor::sendable<cbor::lazy> const &v) { read = *v.value.at(1)->get<std::int64_t>(); },
+                 cbor::transfer(std::move(*l)))
+        .join();
+    CHECK_EQ(read, 2);
+    auto const plain = *cbor::lazy::from("\xa1\x61" "a\x01"s);
+    std::int64_t other = 0;
+    std::jthread([&] { other = *plain.at("a")->get<std::int64_t>(); }).join();
+    CHECK_EQ(other, 1);
+#ifndef NDEBUG
+    auto const marked = *cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
+    CHECK_EQ(marked.at(1)->get<std::int64_t>(), 1);
+    bool threw = false;
+    std::jthread([&] {
+        try {
+            std::ignore = marked.at(1)->get<std::int64_t>();
+        } catch (std::logic_error const &) {
+            threw = true;
+        }
+    }).join();
+    CHECK(threw);
+#endif
 }

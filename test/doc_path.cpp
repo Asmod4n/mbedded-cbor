@@ -38,6 +38,17 @@ TEST_CASE("doc path: a scalar from bytes")
     CHECK_EQ(cbor::at_path<"$.user.admin", bool>(bytes), true);
 }
 
+// A user did not know that encoded is a std::string_view, so an element of a cbor::sequence goes in directly.
+TEST_CASE("doc path: encoded is a string_view")
+{
+    std::string const bytes = encoded(M("n"s, 1)) + encoded(M("n"s, 2)) + encoded(M("n"s, 3));
+    std::int64_t sum = 0;
+    for (auto const e : cbor::sequence{bytes})
+        sum += *cbor::at_path<"$.n", std::int64_t>(*e);
+    CHECK_EQ(sum, 6);
+    CHECK_EQ(cbor::at_path<"$.n", std::int64_t>(std::string_view{bytes}), 1);
+}
+
 // The section "A string, a byte string or a typed array" shows that a view needs an owner, and that the view
 // points into the bytes of that owner.
 TEST_CASE("doc path: a view with its owner")
