@@ -672,7 +672,7 @@ value_sharing::item_decode(decoded_items &decoded, std::size_t const at, std::si
     }
     if (h->major == major_type::tag && h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
         heads::decoder<Checked> d{std::string_view(std::span(top_level.encoded).subspan(h->at)), checks};
-        auto const found = top_level_item::sharedref_decode(d, at, at, top_level.sharedrefs_read());
+        auto const found = top_level_item::sharedref_decode(d, at, at, top_level.sharedrefs_read(at));
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         auto const content = shared_resolve(top_level, found->offset, checks);

@@ -12,7 +12,6 @@
 #include <iterator>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <ranges>
 #include <span>
 #include <string>
@@ -371,43 +370,51 @@ struct value_sharing::top_level_item {
     std::string_view encoded;
     std::vector<lazy> sharedrefs;
     std::size_t high_water_mark;
-    std::once_flag sharedrefs_built{};
+    std::string_view sharedrefs_unread;
+    std::uint64_t sharedrefs_pending = 1;
+    bool sharedrefs_started = false;
 
-    std::vector<lazy> const &sharedrefs_read()
+    std::vector<lazy> const &sharedrefs_read(std::size_t const up_to = std::numeric_limits<std::size_t>::max())
     {
-        std::call_once(sharedrefs_built, [this] {
-            heads::decoder<false> all{encoded, validity::limit_checks<false>{}};
-            std::uint64_t pending = 1;
-            while (pending != 0) {
-                --pending;
-                auto const h = all.head_decode();
-                if (!h || !validity::check_definite_length(h->major, h->info)) [[unlikely]]
-                    return;
-                std::uint64_t added = 0;
-                switch (h->major) {
-                case major_type::byte_string:
-                case major_type::text_string:
-                    if (!all.byte_string_decode(h->argument)) [[unlikely]]
-                        return;
-                    break;
-                case major_type::array:
-                    added = h->argument;
-                    break;
-                case major_type::map:
-                    added = validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
-                                .value_or(std::numeric_limits<std::uint64_t>::max());
-                    break;
-                case major_type::tag:
-                    if (h->argument == std::to_underlying(rfc8949::tag_number::shareable))
-                        mark(all);
-                    added = 1;
-                    break;
-                default:
-                    break;
-                }
-                pending = validity::checked_add(pending, added).value_or(std::numeric_limits<std::uint64_t>::max());
+        if (!sharedrefs_started) {
+            sharedrefs_unread = encoded;
+            sharedrefs_started = true;
+        }
+        heads::decoder<false> all{sharedrefs_unread, validity::limit_checks<false>{}};
+        while (sharedrefs_pending != 0 && encoded.size() - all.encoded.size() <= up_to) {
+            --sharedrefs_pending;
+            auto const h = all.head_decode();
+            if (!h || !validity::check_definite_length(h->major, h->info)) [[unlikely]] {
+                sharedrefs_pending = 0;
+                break;
             }
-        });
+            std::uint64_t added = 0;
+            switch (h->major) {
+            case major_type::byte_string:
+            case major_type::text_string:
+                if (!all.byte_string_decode(h->argument)) [[unlikely]]
+                    sharedrefs_pending = 0;
+                break;
+            case major_type::array:
+                added = h->argument;
+                break;
+            case major_type::map:
+                added = validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
+                            .value_or(std::numeric_limits<std::uint64_t>::max());
+                break;
+            case major_type::tag:
+                if (h->argument == std::to_underlying(rfc8949::tag_number::shareable))
+                    mark(all);
+                added = 1;
+                break;
+            default:
+                break;
+            }
+            if (sharedrefs_pending != 0 || added != 0)
+                sharedrefs_pending =
+                    validity::checked_add(sharedrefs_pending, added).value_or(std::numeric_limits<std::uint64_t>::max());
+        }
+        sharedrefs_unread = all.encoded;
         return sharedrefs;
     }
 
@@ -502,7 +509,7 @@ std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &
         if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
             return at;
         heads::decoder<Checked> d{std::string_view(std::span(top_level.encoded).subspan(h->at)), checks};
-        auto const found = top_level_item::sharedref_decode(d, at, item_at, top_level.sharedrefs_read());
+        auto const found = top_level_item::sharedref_decode(d, at, item_at, top_level.sharedrefs_read(at));
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         at = found->offset;

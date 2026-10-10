@@ -44,7 +44,7 @@ one() {
 			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" >/b/configure.log 2>&1 &&
 		cmake --build /b -- -j'"$cpus"' >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
-		[ $r = 0 ] && { /b/mbedded-cbor-test >/b/test.log 2>&1; r=$?; }
+		rm -f /b/test.log; [ $r = 0 ] && { /b/mbedded-cbor-test >/b/test.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
 			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log 2>/dev/null | head -1)"

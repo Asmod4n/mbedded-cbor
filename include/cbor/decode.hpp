@@ -132,7 +132,8 @@ class decoding
                         shared[index] = *content;
                         return content;
                     }
-                    std::vector<lazy> const &all = before->top_level.sharedrefs_read();
+                    std::vector<lazy> const &all =
+                        before->top_level.sharedrefs_read(before->top_level.encoded.size() - d.encoded.size());
                     auto const known = std::ranges::lower_bound(all, before->top_level.encoded.size() - d.encoded.size(),
                                                                 {}, &lazy::offset);
                     std::size_t const index = static_cast<std::size_t>(std::ranges::distance(all.begin(), known));
@@ -190,7 +191,7 @@ class decoding
                     auto const marked = [&]() -> std::size_t {
                         if (!before)
                             return shared.size();
-                        std::vector<lazy> const &all = before->top_level.sharedrefs_read();
+                        std::vector<lazy> const &all = before->top_level.sharedrefs_read(reference_at);
                         return static_cast<std::size_t>(std::ranges::distance(
                             all.begin(), std::ranges::upper_bound(all, reference_at, {}, &lazy::offset)));
                     }();
