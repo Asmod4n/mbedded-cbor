@@ -217,11 +217,10 @@ class heads
         std::uint64_t argument;
     };
 
+    template <bool Checked>
     struct decoder {
         std::string_view encoded;
-        std::size_t string_length = limits.string_length.load();
-        std::size_t container_elements = limits.container_elements.load();
-        std::size_t argument_max = std::min(string_length, container_elements);
+        [[no_unique_address]] validity::limit_checks<Checked> checks;
 
         CBOR_ALWAYS_INLINE std::expected<head, error> head_decode()
         {
@@ -231,7 +230,7 @@ class heads
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
             if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-                if (error const r = info <= argument_max ? error{} : validity::check_argument(major, info, string_length, container_elements).error_or(error{});
+                if (error const r = validity::check_argument(major, info, checks).error_or(error{});
                     r != error{}) [[unlikely]]
                     return std::unexpected(r);
                 encoded.remove_prefix(initial_byte_size);
@@ -268,7 +267,7 @@ class heads
                 argument = unsigned_read<std::uint64_t>(rest.first<sizeof(std::uint64_t)>());
                 break;
             }
-            if (error const r = argument <= argument_max ? error{} : validity::check_argument(major, argument, string_length, container_elements).error_or(error{});
+            if (error const r = validity::check_argument(major, argument, checks).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
             encoded.remove_prefix(initial_byte_size + size);
@@ -299,7 +298,7 @@ class heads
                                  std::numeric_limits<std::uint8_t>::digits * size) &
                                 (std::numeric_limits<std::uint64_t>::digits - 1));
                 }
-                if (argument > argument_max && !validity::check_argument(major, argument, string_length, container_elements)) [[unlikely]]
+                if (!validity::check_argument(major, argument, checks)) [[unlikely]]
                     return std::nullopt;
                 encoded.remove_prefix(initial_byte_size + size);
                 return head{major, info, argument};
@@ -522,8 +521,10 @@ class heads
         std::size_t at;
     };
 
+    template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<raw_head, error>
-    raw_head_read(std::string_view const encoded, std::size_t const at)
+    raw_head_read(std::string_view const encoded, std::size_t const at,
+                  validity::limit_checks<Checked> const checks)
     {
         if (at >= encoded.size()) [[unlikely]]
             return std::unexpected(error::too_little_data);
@@ -531,10 +532,9 @@ class heads
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
         std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-            if !consteval {
-                if (error const r = validity::check_argument(major, info, limits.string_length, limits.container_elements).error_or(error{}); r != error{}) [[unlikely]]
-                    return std::unexpected(r);
-            }
+            if (error const r = validity::check_argument(major, info, checks).error_or(error{}); r != error{})
+                [[unlikely]]
+                return std::unexpected(r);
             return raw_head{major, info, info, at + initial_byte_size};
         }
         if (error const r = validity::check_additional_information(major, info).error_or(error{});
@@ -548,16 +548,15 @@ class heads
         std::uint64_t argument = 0;
         for (char const c : std::span(encoded).subspan(at + initial_byte_size, size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
-        if !consteval {
-            if (error const r = validity::check_argument(major, argument, limits.string_length, limits.container_elements).error_or(error{}); r != error{}) [[unlikely]]
-                return std::unexpected(r);
-        }
+        if (error const r = validity::check_argument(major, argument, checks).error_or(error{}); r != error{})
+            [[unlikely]]
+            return std::unexpected(r);
         return raw_head{major, info, argument, at + initial_byte_size + size};
     }
 
     static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
-        auto const h = raw_head_read(encoded, 0);
+        auto const h = raw_head_read(encoded, 0, validity::limit_checks<false>{});
         if (h && h->major == major_type::tag &&
             h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))
             return std::string_view(std::span(encoded).subspan(h->at));
@@ -607,6 +606,10 @@ class heads
     template <class Binding>
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
 
+    template <class Binding>
+    friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l,
+                                                                     limit_values loaded);
+
 #ifdef __cpp_impl_reflection
     friend class packed;
 
@@ -620,14 +623,16 @@ class heads
 #endif
 };
 
-template <std::invocable MarksRead, class Projection>
-std::expected<void, error> validity::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
-                                                       std::size_t const content_at, MarksRead const marks_read,
-                                                       Projection const offset_of)
+template <std::invocable MarksRead, class Projection, bool Checked>
+std::expected<void, error>
+validity::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
+                            std::size_t const content_at, MarksRead const marks_read,
+                            Projection const offset_of, limit_checks<Checked> const checks)
 {
     std::size_t at = content_at;
+    std::size_t references_followed = 0;
     for (;;) {
-        auto const c = heads::raw_head_read(encoded, at);
+        auto const c = heads::raw_head_read(encoded, at, checks);
         if (!c) [[unlikely]]
             return std::unexpected(c.error());
         if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
@@ -636,7 +641,7 @@ std::expected<void, error> validity::check_tag_content(std::uint64_t const tag, 
         }
         if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
             return check_tag_content(tag, c->major, c->info);
-        auto const n = heads::raw_head_read(encoded, c->at);
+        auto const n = heads::raw_head_read(encoded, c->at, checks);
         if (!n) [[unlikely]]
             return std::unexpected(n.error());
         if (error const e = check_tag_content(c->argument, n->major, n->info).error_or(error{}); e != error{})
@@ -648,6 +653,9 @@ std::expected<void, error> validity::check_tag_content(std::uint64_t const tag, 
                              std::ranges::begin(marks), std::ranges::upper_bound(marks, at, {}, offset_of))));
         if (!index) [[unlikely]]
             return std::unexpected(index.error());
+        if (auto const ends = check_sharedref_chain_ends(++references_followed, std::ranges::size(marks)); !ends)
+            [[unlikely]]
+            return std::unexpected(ends.error());
         std::size_t const marked = std::invoke(offset_of, marks[*index]);
         if (marked >= at) [[unlikely]]
             return std::unexpected(error::sharedref_not_complete);
