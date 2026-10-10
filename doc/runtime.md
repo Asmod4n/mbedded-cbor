@@ -101,9 +101,9 @@ A map with a key twice is no error. `at`, `find` and `contains` give the
 first pair. `count` counts every pair, as `std::multimap::count` does.
 
 A step reads the heads from the start of its map or array to the target.
-`at` with an index does not read the head of the target, so a missing last
-element gives its error at the next read. A step reads no byte after the
-target.
+A step also reads the head of its target. A target that is not in the
+input gives `too_little_data` at the step, not at a later read. A step
+reads no byte after the head of the target.
 
 ## 3. elements and entries
 
