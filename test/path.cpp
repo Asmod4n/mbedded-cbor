@@ -294,7 +294,7 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
 }
 
 // RFC 4648 Table 1 gives each character of the base64 alphabet a value from 0 to 63, and section 5 replaces + and /
-// with - and _. The 64 characters in order decode to the 6-bit groups 0 to 63, which the expected bytes spell out.
+// with - and _. The 64 characters in order decode to the 6-bit groups 0 to 63, which the expected bytes give.
 // Each hexadecimal digit in both cases, each radix prefix of the EDN draft and a surrogate pair in a quoted name
 // reach the same entries, so every named constant of the literal parser is read by one query.
 TEST_CASE("path: every base64 and base16 character and every radix in a compile-time query")
