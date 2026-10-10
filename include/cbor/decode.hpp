@@ -31,28 +31,19 @@ class decoding
         std::vector<bool> evaluating;
         std::vector<std::size_t> mark_depths;
 
-        void mark(heads::decoder const &, std::size_t const depth)
+        template <bool Checked>
+        void mark(heads::decoder<Checked> const &, std::size_t const depth)
         {
             mark_depths.push_back(depth);
         }
     };
 
-    template <class Binding>
+    template <class Binding, bool Checked>
     struct value_decoder {
-        heads::decoder d;
+        heads::decoder<Checked> d;
         Binding &binding;
         marks<Binding> shared;
         prefix *before;
-        std::size_t decoded_bytes_left = limits.decoded_bytes;
-
-        CBOR_ALWAYS_INLINE std::expected<void, error> decoded_bytes_count(std::uint64_t const count, std::size_t const size)
-        {
-            auto const sum = validity::check_decoded_bytes(decoded_bytes_left, count, size);
-            if (!sum) [[unlikely]]
-                return std::unexpected(sum.error());
-            decoded_bytes_left = *sum;
-            return {};
-        }
 
         std::expected<typename Binding::value, error> value_decode(std::size_t const depth, std::optional<std::size_t> const mark,
                                                                    std::size_t const depth_max)
@@ -71,22 +62,16 @@ class decoding
                 auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
-                if (auto const r = decoded_bytes_count(s->size(), sizeof(char)); !r) [[unlikely]]
-                    return std::unexpected(r.error());
                 return binding.byte_string_decode(*s);
             }
             case major_type::text_string: {
                 auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
-                if (auto const r = decoded_bytes_count(s->size(), sizeof(char)); !r) [[unlikely]]
-                    return std::unexpected(r.error());
                 return binding.text_string_decode(*s);
             }
             case major_type::array: {
                 std::uint64_t const elements = std::min<std::uint64_t>(h->argument, d.encoded.size());
-                if (auto const r = decoded_bytes_count(elements, sizeof(typename Binding::value)); !r) [[unlikely]]
-                    return std::unexpected(r.error());
                 auto array = binding.array_decode(elements);
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
@@ -100,10 +85,9 @@ class decoding
                 return array;
             }
             case major_type::map: {
-                std::uint64_t const entries = std::min<std::uint64_t>(h->argument, d.encoded.size() / (rfc8949::data_items_per_pair * heads::initial_byte_size));
-                if (auto const r = decoded_bytes_count(entries, rfc8949::data_items_per_pair * sizeof(typename Binding::value)); !r)
-                    [[unlikely]]
-                    return std::unexpected(r.error());
+                std::uint64_t const entries =
+                    std::min<std::uint64_t>(h->argument, d.encoded.size() / (rfc8949::data_items_per_pair *
+                                                                             heads::initial_byte_size));
                 auto map = binding.map_decode(entries);
                 if constexpr (requires { binding.cyclic_data_structures(); })
                     if (mark && binding.cyclic_data_structures())
@@ -117,8 +101,6 @@ class decoding
                             if (!t) [[unlikely]]
                                 return std::unexpected(t.error());
                             d = probe;
-                            if (auto const r = decoded_bytes_count(t->size(), sizeof(char)); !r) [[unlikely]]
-                                return std::unexpected(r.error());
                             auto key = binding.map_key_decode(*t);
                             auto value = value_decode(depth + 1, std::nullopt, depth_max);
                             if (!value) [[unlikely]]
@@ -150,7 +132,8 @@ class decoding
                         shared[index] = *content;
                         return content;
                     }
-                    std::vector<lazy> const &all = before->top_level.sharedrefs_read();
+                    std::vector<lazy> const &all =
+                        before->top_level.sharedrefs_read(before->top_level.encoded.size() - d.encoded.size());
                     auto const known = std::ranges::lower_bound(all, before->top_level.encoded.size() - d.encoded.size(),
                                                                 {}, &lazy::offset);
                     std::size_t const index = static_cast<std::size_t>(std::ranges::distance(all.begin(), known));
@@ -186,8 +169,6 @@ class decoding
                     if (!bytes) [[unlikely]]
                         return std::unexpected(bytes.error());
                     std::string_view const magnitude = heads::magnitude_without_leading_zeros(*bytes);
-                    if (auto const counted = decoded_bytes_count(magnitude.size(), sizeof(char)); !counted) [[unlikely]]
-                        return std::unexpected(counted.error());
                     if (magnitude.size() <= sizeof(std::uint64_t)) {
                         if (negative)
                             return binding.negative_integer_decode(heads::magnitude_value(magnitude));
@@ -210,7 +191,7 @@ class decoding
                     auto const marked = [&]() -> std::size_t {
                         if (!before)
                             return shared.size();
-                        std::vector<lazy> const &all = before->top_level.sharedrefs_read();
+                        std::vector<lazy> const &all = before->top_level.sharedrefs_read(reference_at);
                         return static_cast<std::size_t>(std::ranges::distance(
                             all.begin(), std::ranges::upper_bound(all, reference_at, {}, &lazy::offset)));
                     }();
@@ -225,7 +206,7 @@ class decoding
                     if (!shared[index] && before && !before->evaluating[index] &&
                         before->top_level.sharedrefs[index].offset < before->top_level.encoded.size() - d.encoded.size()) {
                         if (before->mark_depths.empty()) {
-                            heads::decoder all{before->top_level.encoded};
+                            heads::decoder<Checked> all{before->top_level.encoded, d.checks};
                             if (auto const s = well_formedness::item_skip(all, *before, 0, depth_max); !s) [[unlikely]]
                                 return std::unexpected(s.error());
                         }
@@ -252,10 +233,13 @@ class decoding
                         return std::unexpected(error::sharedref_not_complete);
                     return *shared[index];
                 }
-                if (error const e = validity::check_tag_content(
-                                    h->argument, before->top_level.encoded, before->top_level.encoded.size() - d.encoded.size(),
-                                    [this]() -> auto const & { return before->top_level.sharedrefs_read(); }, &lazy::offset)
-                                        .error_or(error{});
+                if (error const e =
+                        validity::check_tag_content(
+                            h->argument, before->top_level.encoded,
+                            before->top_level.encoded.size() - d.encoded.size(),
+                            [this]() -> auto const & { return before->top_level.sharedrefs_read(); },
+                            &lazy::offset, d.checks)
+                            .error_or(error{});
                     e != error{}) [[unlikely]]
                     return std::unexpected(e);
                 if constexpr (requires { binding.tag_begin(h->argument); }) {
@@ -295,6 +279,10 @@ class decoding
 
     template <class Binding>
     friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
+
+    template <class Binding>
+    friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l,
+                                                                     limit_values loaded);
 };
 
 }

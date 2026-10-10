@@ -527,13 +527,22 @@ TEST_CASE("validity: check_magnitude_size for every size up to one past the widt
 TEST_CASE("validity: check_tag_content refuses a tag 29 that names a mark at or after it")
 {
     std::vector<std::size_t> const self{1};
-    CHECK_EQ(validity::check_tag_content(1, "\xc1\xd8\x1d\x00"sv, 1, [&self]() -> auto const & { return self; }, std::identity{}).error(),
+    CHECK_EQ(validity::check_tag_content(
+                 1, "\xc1\xd8\x1d\x00"sv, 1, [&self]() -> auto const & { return self; }, std::identity{},
+                 validity::limit_checks<false>{})
+                 .error(),
              error::sharedref_not_complete);
     std::vector<std::size_t> const forward{4};
-    CHECK_EQ(validity::check_tag_content(1, "\xc1\xd8\x1d\x00\x05"sv, 1, [&forward]() -> auto const & { return forward; }, std::identity{}).error(),
+    CHECK_EQ(validity::check_tag_content(
+                 1, "\xc1\xd8\x1d\x00\x05"sv, 1, [&forward]() -> auto const & { return forward; },
+                 std::identity{}, validity::limit_checks<false>{})
+                 .error(),
              error::sharedref_index_not_marked);
     std::vector<std::size_t> const before{0};
-    CHECK(validity::check_tag_content(1, "\x05\xc1\xd8\x1d\x00"sv, 2, [&before]() -> auto const & { return before; }, std::identity{}).has_value());
+    CHECK(validity::check_tag_content(
+              1, "\x05\xc1\xd8\x1d\x00"sv, 2, [&before]() -> auto const & { return before; }, std::identity{},
+              validity::limit_checks<false>{})
+              .has_value());
 }
 
 // RFC 8949 5.6 lets a map repeat a key outside a deterministic profile. Two maps are equal only when each pair
@@ -546,10 +555,10 @@ TEST_CASE("validity: keys_equivalent compares the pairs of two maps as multisets
     std::string_view const jkk = "\xa3\x61j\x01\x61k\x01\x61k\x01"sv;
     std::string_view const kk = "\xa2\x61k\x01\x61k\x01"sv;
     std::string_view const kj = "\xa2\x61k\x01\x61j\x01"sv;
-    CHECK_FALSE(*validity::keys_equivalent(kkj, 0, kjj, 0, 0, 16));
-    CHECK_FALSE(*validity::keys_equivalent(kjj, 0, kkj, 0, 0, 16));
-    CHECK(*validity::keys_equivalent(kkj, 0, jkk, 0, 0, 16));
-    CHECK(*validity::keys_equivalent(jkk, 0, kkj, 0, 0, 16));
-    CHECK_FALSE(*validity::keys_equivalent(kk, 0, kj, 0, 0, 16));
-    CHECK(*validity::keys_equivalent(kk, 0, kk, 0, 0, 16));
+    CHECK_FALSE(*validity::keys_equivalent(kkj, 0, kjj, 0, 0, 16, validity::limit_checks<false>{}));
+    CHECK_FALSE(*validity::keys_equivalent(kjj, 0, kkj, 0, 0, 16, validity::limit_checks<false>{}));
+    CHECK(*validity::keys_equivalent(kkj, 0, jkk, 0, 0, 16, validity::limit_checks<false>{}));
+    CHECK(*validity::keys_equivalent(jkk, 0, kkj, 0, 0, 16, validity::limit_checks<false>{}));
+    CHECK_FALSE(*validity::keys_equivalent(kk, 0, kj, 0, 0, 16, validity::limit_checks<false>{}));
+    CHECK(*validity::keys_equivalent(kk, 0, kk, 0, 0, 16, validity::limit_checks<false>{}));
 }

@@ -1154,7 +1154,8 @@ TEST_CASE("validity: check_sorted_keys_unique compares two neighbours by RFC 894
         std::string const map = "\xa2"s + p.first + "\x00"s + p.second + "\x00"s;
         CAPTURE(map);
         std::string_view const encoded = map;
-        auto const checked = cbor::validity::check_sorted_keys_unique(encoded, 1, 2, 1, 16);
+        auto const checked = cbor::validity::check_sorted_keys_unique(encoded, 1, 2, 1, 16,
+                                                                      cbor::validity::limit_checks<false>{});
         if (p.equal)
             CHECK_EQ(checked.error(), error::duplicate_key);
         else
@@ -1168,7 +1169,8 @@ TEST_CASE("validity: check_sorted_keys_unique compares two neighbours by RFC 894
 TEST_CASE("validity: check_sorted_keys_unique finds equal neighbours at any position")
 {
     auto const checked = [](std::string_view const map, std::uint64_t const count) {
-        return cbor::validity::check_sorted_keys_unique(map, 1, count, 1, 16);
+        return cbor::validity::check_sorted_keys_unique(map, 1, count, 1, 16,
+                                                        cbor::validity::limit_checks<false>{});
     };
     CHECK(checked("\xa3\x01\x00\x02\x00\x03\x00"sv, 3).has_value());
     CHECK_EQ(checked("\xa3\x01\x00\x01\x00\x03\x00"sv, 3).error(), error::duplicate_key);
@@ -1349,37 +1351,30 @@ TEST_CASE("lazy: elements and entries refuse indefinite length")
     CHECK_EQ(lazy_of("\xbf\x61" "a\x01\xff"s).entries().error(), error::indefinite_length);
 }
 
-// Fault p20: two threads that called const methods on one lazy raced on
-// the marks of tag 28 and on the items that decode kept in the top-level
-// item. The standard library lets const calls on one object run at the
-// same time. The marks are now built once at the first tag 29, and each
-// decode owns its items. A thread sanitizer build reports any race left.
-TEST_CASE("lazy: const calls on one lazy and on its copies run in many threads")
+// The owner decided on 2026-10-10 that a lazy belongs to one thread at a
+// time: the library keeps no lock, no call_once and no atomic, and the
+// application moves a value from one thread to another. This test gives
+// each thread its own lazy of the same bytes, the form the library
+// supports, and a thread sanitizer build reports any state they share.
+TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
 {
     constexpr std::size_t threads = 4;
-    constexpr std::size_t rounds = 200;
     std::string const s("\x83\xd8\x1c\x65hello\xd8\x1d\x00\xa1\x61k\xd8\x1d\x00", 18);
-    for (std::size_t round = 0; round < rounds; ++round) {
-        cbor::lazy const shared = *cbor::lazy::from(s);
-        std::array<bool, threads> right{};
-        {
-            std::vector<std::jthread> workers;
-            for (std::size_t t = 0; t < threads; ++t)
-                workers.emplace_back([&shared, &right, t] {
-                    cbor::lazy const copy = shared;
-                    cbor::lazy const &l = t % 2 == 0 ? shared : copy;
-                    auto const reference = l.at(std::size_t{1});
-                    auto const text = reference.and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
-                    auto const inner = l.at(std::size_t{2}).and_then([](cbor::lazy const &m) { return m.at("k"); });
-                    auto const named = inner.and_then([](cbor::lazy const &r) { return r.decode(); });
-                    auto const whole = l.decode();
-                    right[t] = text.has_value() && **text == "hello" && named.has_value() &&
-                               std::get<std::string_view>((*named)->content) == "hello" && whole.has_value() &&
-                               (*whole)->argument == 3;
-                });
-        }
-        CHECK(std::ranges::all_of(right, std::identity{}));
+    std::array<bool, threads> right{};
+    {
+        std::vector<std::jthread> workers;
+        for (std::size_t t = 0; t < threads; ++t)
+            workers.emplace_back([&s, &right, t] {
+                cbor::lazy const l = *cbor::lazy::from(s);
+                auto const text = l.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
+                auto const named = l.at(std::size_t{2})
+                                       .and_then([](cbor::lazy const &m) { return m.at("k"); })
+                                       .and_then([](cbor::lazy const &r) { return r.decode(); });
+                right[t] = text.has_value() && **text == "hello" && named.has_value() &&
+                           std::get<std::string_view>((*named)->content) == "hello";
+            });
     }
+    CHECK(std::ranges::all_of(right, std::identity{}));
 }
 
 // Fault 2 for an array: in 82 82 01 02 the first element is the whole rest
@@ -1395,6 +1390,19 @@ TEST_CASE("lazy: an element past the end of the input is too_little_data")
     REQUIRE(steps.size() == 2);
     CHECK(steps.at(0).has_value());
     CHECK_EQ(steps.at(1).error(), error::too_little_data);
+}
+
+// Found by the fuzzer: b0 claims 16 pairs and holds none. A lookup of a key that is not there reads to the end
+// of the data and gives too_little_data, as the typed read of a path does; it does not give key_not_found.
+TEST_CASE("lazy: a lookup in a map that ends early is too_little_data")
+{
+    auto const cut = lazy_of("\xb0"s);
+    CHECK_EQ(cut.at("a").error(), error::too_little_data);
+    CHECK_EQ(cut.at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
+    CHECK_EQ(cut.contains("a").error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\xa2\x61\x61\x01"s).at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
+    CHECK(lazy_of("\xa2\x61\x61\x01"s).at("a").has_value());
+    CHECK_EQ(lazy_of("\xa1\x61\x62\x01"s).at("a").error(), error::key_not_found);
 }
 
 // A map of n pairs holds 2n data items, and each takes one byte at least.
@@ -1413,3 +1421,51 @@ TEST_CASE("lazy: a map counts two data items for each pair")
     REQUIRE(steps.size() == 1);
     CHECK_EQ(steps.at(0).error(), error::too_little_data);
 }
+
+// The owner decided on 2026-10-10 that the types say which value belongs to
+// one thread. A lazy and everything that shares its marks of tag 28 is
+// thread bound; cbor::transfer hands a lazy that nothing else shares to
+// another thread, and a debug build refuses a use from a thread that does
+// not own it. The check sits where a read changes the shared marks, the
+// resolution of a tag 29, so a read that changes nothing is not refused.
+static_assert(cbor::is_thread_bound_v<cbor::lazy>);
+static_assert(cbor::is_thread_bound_v<cbor::lazy_entries::iterator>);
+static_assert(cbor::is_thread_bound_v<cbor::owning_ref<std::string_view>>);
+static_assert(!cbor::is_sendable_v<cbor::lazy>);
+static_assert(cbor::is_sendable_v<cbor::sendable<cbor::lazy>>);
+static_assert(cbor::is_sendable_v<std::string>);
+
+TEST_CASE("lazy: transfer hands a lazy to another thread")
+{
+    std::string const s("\x82\xd8\x1c\x01\xd8\x1d\x00", 7);
+    cbor::lazy l = *cbor::lazy::from(s);
+    {
+        cbor::lazy const copy = l;
+        CHECK_THROWS_AS(std::ignore = cbor::transfer(std::move(l)), std::logic_error);
+    }
+    std::int64_t read = 0;
+    std::jthread(
+        [&read](cbor::sendable<cbor::lazy> v) {
+            read = *v.value.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::int64_t>(); });
+        },
+        cbor::transfer(std::move(l)))
+        .join();
+    CHECK_EQ(read, 1);
+}
+
+#ifndef NDEBUG
+TEST_CASE("lazy: a debug build refuses a lazy in a thread that does not own it")
+{
+    std::string const s("\x82\xd8\x1c\x01\xd8\x1d\x00", 7);
+    cbor::lazy const l = *cbor::lazy::from(s);
+    bool refused = false;
+    std::jthread([&] {
+        try {
+            std::ignore = l.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::int64_t>(); });
+        } catch (std::logic_error const &) {
+            refused = true;
+        }
+    }).join();
+    CHECK(refused);
+}
+#endif
