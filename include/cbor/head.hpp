@@ -630,6 +630,7 @@ validity::check_tag_content(std::uint64_t const tag, std::string_view const enco
                             Projection const offset_of, limit_checks<Checked> const checks)
 {
     std::size_t at = content_at;
+    std::size_t references_followed = 0;
     for (;;) {
         auto const c = heads::raw_head_read(encoded, at, checks);
         if (!c) [[unlikely]]
@@ -652,6 +653,9 @@ validity::check_tag_content(std::uint64_t const tag, std::string_view const enco
                              std::ranges::begin(marks), std::ranges::upper_bound(marks, at, {}, offset_of))));
         if (!index) [[unlikely]]
             return std::unexpected(index.error());
+        if (auto const ends = check_sharedref_chain_ends(++references_followed, std::ranges::size(marks)); !ends)
+            [[unlikely]]
+            return std::unexpected(ends.error());
         std::size_t const marked = std::invoke(offset_of, marks[*index]);
         if (marked >= at) [[unlikely]]
             return std::unexpected(error::sharedref_not_complete);

@@ -177,7 +177,7 @@ struct refusal {
 
 inline bool tag_has_meaning(std::uint64_t const tag)
 {
-    return tag == 2 || tag == 3 || tag == 24 || tag == 28 || tag == 29 || (tag >= 64 && tag <= 87);
+    return tag == 0 || tag == 1 || tag == 2 || tag == 3 || tag == 24 || tag == 28 || tag == 29 || (tag >= 64 && tag <= 87);
 }
 
 // A value of the test binding from the bytes of the input, with every kind the encoder knows. A text is ASCII,
