@@ -377,6 +377,16 @@ public:
         return {};
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_entries_all_read(std::uint64_t const claimed, std::uint64_t const readable, error const failure)
+    {
+        if (failure != error{}) [[unlikely]]
+            return std::unexpected(failure);
+        if (claimed > readable) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return {};
+    }
+
     template <std::integral I>
     CBOR_ALWAYS_INLINE static constexpr std::expected<std::uint64_t, error>
     check_index(I const index, std::uint64_t const length)

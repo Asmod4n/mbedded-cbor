@@ -1392,6 +1392,19 @@ TEST_CASE("lazy: an element past the end of the input is too_little_data")
     CHECK_EQ(steps.at(1).error(), error::too_little_data);
 }
 
+// Found by the fuzzer: b0 claims 16 pairs and holds none. A lookup of a key that is not there reads to the end
+// of the data and gives too_little_data, as the typed read of a path does; it does not give key_not_found.
+TEST_CASE("lazy: a lookup in a map that ends early is too_little_data")
+{
+    auto const cut = lazy_of("\xb0"s);
+    CHECK_EQ(cut.at("a").error(), error::too_little_data);
+    CHECK_EQ(cut.at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
+    CHECK_EQ(cut.contains("a").error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\xa2\x61\x61\x01"s).at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
+    CHECK(lazy_of("\xa2\x61\x61\x01"s).at("a").has_value());
+    CHECK_EQ(lazy_of("\xa1\x61\x62\x01"s).at("a").error(), error::key_not_found);
+}
+
 // A map of n pairs holds 2n data items, and each takes one byte at least.
 // a1 61 holds one byte for two data items, so entries() refuses it as
 // elements() refuses 81. In a1 61 61 the key fills the input, and the walk

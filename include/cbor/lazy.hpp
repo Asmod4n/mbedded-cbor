@@ -181,11 +181,15 @@ value_sharing::key_find(resolved<Checked> found, Key const key, limit_values con
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     std::size_t const first = found.source->encoded.size() - found.d.encoded.size();
-    typename Entries::iterator it(std::move(found.source), first,
-                                  std::min<std::uint64_t>(found.h.argument, found.d.encoded.size()), loaded);
+    std::uint64_t const readable = std::min<std::uint64_t>(found.h.argument, found.d.encoded.size());
+    typename Entries::iterator it(std::move(found.source), first, readable, loaded);
     auto found_at = key_find<false>(std::move(it), std::default_sentinel, key, found.d.checks);
     if (!found_at) [[unlikely]]
         return std::unexpected(found_at.error());
+    if (found_at->first == std::default_sentinel)
+        if (auto const complete = validity::check_entries_all_read(found.h.argument, readable, found_at->first.failure);
+            !complete) [[unlikely]]
+            return std::unexpected(complete.error());
     return std::move(found_at->first);
 }
 
