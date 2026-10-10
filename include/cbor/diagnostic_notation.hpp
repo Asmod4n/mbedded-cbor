@@ -695,13 +695,21 @@ class extended_diagnostic_notation
 
     static constexpr std::expected<std::size_t, error> canonical_append(std::string &out, literal_cursor const cursor, nesting const n)
     {
-        if (auto const r = validity::check_nesting_depth(n.depth, n.depth_max); !r) [[unlikely]]
-            return std::unexpected(r.error());
         std::string_view const encoded = cursor.text;
-        std::size_t const at = cursor.at;
-        auto const h = heads::raw_head_read(encoded, at, validity::limit_checks<false>{});
-        if (!h) [[unlikely]]
-            return std::unexpected(h.error());
+        std::size_t depth = n.depth;
+        auto h = heads::raw_head_read(encoded, cursor.at, validity::limit_checks<false>{});
+        for (;;) {
+            if (auto const r = validity::check_nesting_depth(depth, n.depth_max); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::tag)
+                break;
+            if (auto const r = head_append(out, major_type::tag, h->argument, no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            h = heads::raw_head_read(encoded, h->at, validity::limit_checks<false>{});
+            ++depth;
+        }
         bool const indefinite =
             h->info == std::to_underlying(rfc8949::additional_information::indefinite_length);
         std::size_t next = h->at;
@@ -749,12 +757,12 @@ class extended_diagnostic_notation
             std::vector<std::pair<std::string, std::string>> items;
             for (std::uint64_t i = 0; indefinite ? !heads::break_at(encoded, next) : i < h->argument; ++i) {
                 std::pair<std::string, std::string> item;
-                auto const first = canonical_append(item.first, {encoded, next}, {n.depth + 1, n.depth_max});
+                auto const first = canonical_append(item.first, {encoded, next}, {depth + 1, n.depth_max});
                 if (!first) [[unlikely]]
                     return first;
                 next = *first;
                 if (map) {
-                    auto const second = canonical_append(item.second, {encoded, next}, {n.depth + 1, n.depth_max});
+                    auto const second = canonical_append(item.second, {encoded, next}, {depth + 1, n.depth_max});
                     if (!second) [[unlikely]]
                         return second;
                     next = *second;
@@ -778,10 +786,6 @@ class extended_diagnostic_notation
                 out += first + second;
             return next;
         }
-        case major_type::tag:
-            if (auto const r = head_append(out, major_type::tag, h->argument, no_indicator); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            return canonical_append(out, {encoded, next}, {n.depth + 1, n.depth_max});
         default:
             break;
         }
