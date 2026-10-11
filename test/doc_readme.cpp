@@ -20,8 +20,8 @@ using namespace std::string_literals;
 // Step 2 reads a message in place: contains, size, and a loop over the elements of an array.
 TEST_CASE("doc readme: read a message")
 {
-    std::string bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
-    auto const doc = cbor::lazy::from(std::move(bytes)).value();
+    std::string const bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
+    auto const doc = cbor::lazy::from(bytes).value();
 
     bool const has_samples = doc.contains("samples").value();
     std::uint64_t const pairs = doc.size().value();
@@ -39,8 +39,8 @@ TEST_CASE("doc readme: read a message")
 // Step 3 reads one value by its path; a missing member gives key_not_found.
 TEST_CASE("doc readme: read one value by its path")
 {
-    std::string bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
-    auto const doc = cbor::lazy::from(std::move(bytes)).value();
+    std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
+    auto const doc = cbor::lazy::from(bytes).value();
 
     auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);
     auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
@@ -74,8 +74,8 @@ TEST_CASE("doc readme: set limits")
     test::array a;
     for (int i = 0; i < 101; ++i)
         a.push_back(test::V(i));
-    std::string bytes = test::preferred(test::value{std::move(a)});
-    auto const n = cbor::lazy::from(std::move(bytes)).value().size();
+    std::string const bytes = test::preferred(test::value{std::move(a)});
+    auto const n = cbor::lazy::from(bytes).value().size();
     CHECK_EQ(n.error(), cbor::error::container_elements_exceeded);
 }
 

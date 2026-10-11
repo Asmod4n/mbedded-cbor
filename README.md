@@ -43,7 +43,7 @@ reads only up to the item that it looks for. No reflection needed.
 
 ```cpp
 // bytes holds the CBOR of {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
-auto const doc = cbor::lazy::from(std::move(bytes)).value();
+auto const doc = cbor::lazy::from(bytes).value();
 
 bool const has_samples = doc.contains("samples").value();  // true
 std::uint64_t const pairs = doc.size().value();            // 3
@@ -61,7 +61,7 @@ The read side needs only C++23. It works with g++ 16 and with clang 23.
 
 ```cpp
 // bytes is a std::string with the CBOR of {"user": {"id": 42, "name": "ann"}}
-auto const doc = cbor::lazy::from(std::move(bytes)).value();
+auto const doc = cbor::lazy::from(bytes).value();
 
 auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);         // *id == 42
 auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);  // **name == "ann"
@@ -96,7 +96,7 @@ it converts to `std::error_code`.
 cbor::limits = {.nesting_depth = 16, .string_length = 4096, .container_elements = 100};
 
 // bytes holds a CBOR array of 101 elements
-auto const n = cbor::lazy::from(std::move(bytes)).value().size();
+auto const n = cbor::lazy::from(bytes).value().size();
 // n.error() == cbor::error::container_elements_exceeded
 ```
 
