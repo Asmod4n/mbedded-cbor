@@ -31,6 +31,15 @@ std::string encoded_float(double d)
     return encoded(value{d});
 }
 
+#ifdef __cpp_impl_reflection
+std::string preferred_float(double d)
+{
+    auto const e = cbor::databind<double>::encode(d);
+    REQUIRE(e.has_value());
+    return *e;
+}
+#endif
+
 } // namespace
 
 // Ported from test.rb: 'major 7: float widths decode (f16 / f32 / f64)'.
@@ -91,6 +100,15 @@ TEST_CASE("major 7: ±zero and sample floats")
         CHECK_EQ(bits_of(float_of(encoded_float(f))), bits_of(f));
 }
 
+// The walker writes a run-time float at its native width, binary64. databind writes deterministic CBOR,
+// so the width tests below go through databind, which needs reflection.
+TEST_CASE("major 7: the walker writes a float as binary64")
+{
+    for (double const v : {0.0, 1.5, 65504.0, 3.14})
+        CHECK_EQ(encoded_float(v).size(), 9);
+}
+
+#ifdef __cpp_impl_reflection
 // Ported from test.rb: '§4.1 float wire: exact bytes for well-known f16 values'.
 TEST_CASE("§4.1 float wire: exact bytes for well-known f16 values")
 {
@@ -104,13 +122,13 @@ TEST_CASE("§4.1 float wire: exact bytes for well-known f16 values")
         {INFINITY, "\xf9\x7c\x00"sv}, {-INFINITY, "\xf9\xfc\x00"sv},
     };
     for (auto const &c : cases)
-        CHECK_EQ(encoded_float(c.value), c.wire);
+        CHECK_EQ(preferred_float(c.value), c.wire);
 }
 
 // Ported from test.rb: '§4.1 float wire: NaN canonicalizes to f16 0xF97E00'.
 TEST_CASE("§4.1 float wire: NaN canonicalizes to f16 0xF97E00")
 {
-    CHECK_EQ(encoded_float(NAN), "\xf9\x7e\x00"sv);
+    CHECK_EQ(preferred_float(NAN), "\xf9\x7e\x00"sv);
 }
 
 // Ported from test.rb: '§4.1 float width: normals and subnormals select f16 (3 bytes)'.
@@ -118,13 +136,13 @@ TEST_CASE("§4.1 float width: normals and subnormals select f16")
 {
     for (double const v : {0.0, -0.0, 1.0, 1.5, -1.5, 0.5, 0.25, 100.0, 65504.0, double(INFINITY),
                            double(-INFINITY), double(NAN), 1.0 / 16777216.0, 1.0 / 8388608.0, 1.0 / 32768.0})
-        CHECK_EQ(encoded_float(v).size(), 3);
+        CHECK_EQ(preferred_float(v).size(), 3);
 }
 
 // Ported from test.rb: '§4.1 float width: subnormal 2^-24 encodes as f16 0xF90001'.
 TEST_CASE("§4.1 float width: subnormal 2^-24 encodes as f16 0xF90001")
 {
-    CHECK_EQ(encoded_float(1.0 / 16777216.0), "\xf9\x00\x01"sv);
+    CHECK_EQ(preferred_float(1.0 / 16777216.0), "\xf9\x00\x01"sv);
 }
 
 // Ported from test.rb: '§4.1 float width: subnormal powers of 2 round-trip correctly'.
@@ -132,7 +150,7 @@ TEST_CASE("§4.1 float width: subnormal powers of 2 round-trip correctly")
 {
     double v = 1.0 / 16777216.0;
     for (int i = 0; i < 10; ++i) {
-        std::string const wire = encoded_float(v);
+        std::string const wire = preferred_float(v);
         CHECK_EQ(wire.size(), 3);
         CHECK_EQ(bits_of(float_of(wire)), bits_of(v));
         v *= 2.0;
@@ -143,36 +161,37 @@ TEST_CASE("§4.1 float width: subnormal powers of 2 round-trip correctly")
 TEST_CASE("§4.1 float width: values above f16 range use f32")
 {
     for (double const v : {65505.0, 1.0e10, std::ldexp(1.0, -126)})
-        CHECK_EQ(encoded_float(v).size(), 5);
+        CHECK_EQ(preferred_float(v).size(), 5);
 }
 
 // Ported from test.rb: '§4.1 float width: f64-only values use f64 (9 bytes)'.
 TEST_CASE("§4.1 float width: f64-only values use f64")
 {
     for (double const v : {3.14, 1.0 / 3.0, 1.0e300})
-        CHECK_EQ(encoded_float(v).size(), 9);
+        CHECK_EQ(preferred_float(v).size(), 9);
 }
 
 // Ported from test.rb: '§4.1 float width: re-encoding wider-wire decoded floats narrows'.
 TEST_CASE("§4.1 float width: re-encoding wider-wire decoded floats narrows")
 {
-    CHECK_EQ(encoded_float(float_of("\xfa\x3f\x80\x00\x00"sv)).size(), 3);
-    CHECK_EQ(encoded_float(float_of("\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv)).size(), 3);
+    CHECK_EQ(preferred_float(float_of("\xfa\x3f\x80\x00\x00"sv)).size(), 3);
+    CHECK_EQ(preferred_float(float_of("\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv)).size(), 3);
 }
 
 // RFC 8949 4.1: the shortest float that holds the value. A binary32 subnormal, down to 2^-149, is five bytes.
 TEST_CASE("§4.1 float width: binary32 subnormals use f32")
 {
-    CHECK_EQ(encoded_float(std::ldexp(1.0, -149)), "\xfa\x00\x00\x00\x01"sv);
-    CHECK_EQ(encoded_float(std::ldexp(1.0, -127)), "\xfa\x00\x40\x00\x00"sv);
-    CHECK_EQ(encoded_float(std::ldexp(1.0, -150)).size(), 9);
-    CHECK_EQ(encoded_float(std::ldexp(1.0, -149) * 1.5).size(), 9);
+    CHECK_EQ(preferred_float(std::ldexp(1.0, -149)), "\xfa\x00\x00\x00\x01"sv);
+    CHECK_EQ(preferred_float(std::ldexp(1.0, -127)), "\xfa\x00\x40\x00\x00"sv);
+    CHECK_EQ(preferred_float(std::ldexp(1.0, -150)).size(), 9);
+    CHECK_EQ(preferred_float(std::ldexp(1.0, -149) * 1.5).size(), 9);
 }
 
 namespace
 {
 
-// RFC 8949 section 4.2.2: a float takes the shortest form that keeps its value.
+// RFC 8949 section 4.2.2: databind writes deterministic CBOR, so a float takes the shortest form that
+// keeps its value.
 // IEEE 754: a finite value fits a binary format when it equals n * 2^q with
 // |n| below 2^precision, q at or above the exponent of the least subnormal,
 // and the exponent of the value at most the greatest exponent of the format.
@@ -204,7 +223,7 @@ TEST_CASE("major 7: every finite exponent takes the shortest width that keeps th
                                     (std::uint64_t{0xa5} << 44 & ((std::uint64_t{1} << 52) - 1) &
                                      ~((std::uint64_t{1} << low) - 1));
                 double const v = std::bit_cast<double>(sign << 63 | exponent << 52 | significand);
-                std::string const wire = encoded_float(v);
+                std::string const wire = preferred_float(v);
                 CHECK_EQ(bits_of(float_of(wire)), bits_of(v));
                 std::size_t const expected = fits_binary(v, 11, -24, 16)     ? 3
                                              : fits_binary(v, 24, -149, 128) ? 5
@@ -212,3 +231,4 @@ TEST_CASE("major 7: every finite exponent takes the shortest width that keeps th
                 CHECK_EQ(wire.size(), expected);
             }
 }
+#endif

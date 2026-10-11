@@ -183,19 +183,19 @@ TEST_CASE("doc runtime: encode")
 {
     test_binding binding;
     std::string out = "\x00"s;
-    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, out, A(1, 2)).has_value());
-    CHECK_EQ(out, "\x00\x82\x01\x02"s);
+    REQUIRE(cbor::encode(binding, out, A(1, 2)).has_value());
+    CHECK_EQ(out, "\x00\x82"s + native_unsigned(1) + native_unsigned(2));
     std::vector<std::byte> bytes;
-    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, bytes, A(1, 2)).has_value());
-    CHECK_EQ(bytes.size(), 3u);
-    std::array<char, 3> fixed{};
-    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, std::span<char>(fixed), A(1, 2)).has_value());
-    CHECK_EQ(std::string_view(fixed.data(), fixed.size()), "\x82\x01\x02"sv);
-    std::array<char, 2> small{};
-    CHECK_EQ(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, std::span<char>(small), A(1, 2)).error(), error::no_buffer_space);
+    REQUIRE(cbor::encode(binding, bytes, A(1, 2)).has_value());
+    CHECK_EQ(bytes.size(), 19u);
+    std::array<char, 19> fixed{};
+    REQUIRE(cbor::encode(binding, std::span<char>(fixed), A(1, 2)).has_value());
+    CHECK_EQ(std::string(fixed.data(), fixed.size()), "\x82"s + native_unsigned(1) + native_unsigned(2));
+    std::array<char, 18> small{};
+    CHECK_EQ(cbor::encode(binding, std::span<char>(small), A(1, 2)).error(), error::no_buffer_space);
     string_writer w;
-    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, w, A(1, 2)).has_value());
-    CHECK_EQ(w.encoded, "\x82\x01\x02"s);
+    REQUIRE(cbor::encode(binding, w, A(1, 2)).has_value());
+    CHECK_EQ(w.encoded, "\x82"s + native_unsigned(1) + native_unsigned(2));
 }
 
 // The section "cbor::sequence" shows the items of a sequence, the error at a cut item, and the owner of the
@@ -257,5 +257,5 @@ TEST_CASE("doc runtime: tag 55799")
     test_binding binding;
     CHECK(*cbor::lazy_decode(binding, *cbor::lazy::from("\x81\xd9\xd9\xf7\x01"s)) ==
           A(value{test::tagged{55799, V(1)}}));
-    CHECK_EQ(encoded(value{test::tagged{55799, A(1, 2)}}), "\xd9\xd9\xf7\x82\x01\x02"s);
+    CHECK_EQ(encoded(value{test::tagged{55799, A(1, 2)}}), "\xd9\xd9\xf7\x82"s + native_unsigned(1) + native_unsigned(2));
 }

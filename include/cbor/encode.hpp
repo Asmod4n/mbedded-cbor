@@ -32,14 +32,10 @@ namespace cbor
 
 enum class sharedrefs { off, on };
 
-enum class preferred_serialization { off, on };
-
-template <sharedrefs Sharing = sharedrefs::off,
-          preferred_serialization Preferred = preferred_serialization::off, class Binding, class Writer>
+template <sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value);
 
-template <sharedrefs Sharing = sharedrefs::off,
-          preferred_serialization Preferred = preferred_serialization::off, class Binding>
+template <sharedrefs Sharing = sharedrefs::off, class Binding>
 std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(Binding &binding,
                                                                                typename Binding::value const &value);
 
@@ -132,7 +128,7 @@ class encoding
             return target.allocate(hint);
     }
 
-    template <sharedrefs Sharing, preferred_serialization Preferred, class Binding, class Writer>
+    template <sharedrefs Sharing, class Binding, class Writer>
     static std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer,
                                                          typename Binding::value const &value, std::size_t depth,
                                                          bool embedded, std::size_t depth_max);
@@ -140,14 +136,14 @@ class encoding
     template <class Writer>
     friend struct encoder;
 
-    template <class, class, pass, preferred_serialization>
+    template <class, class, pass>
     friend class walker;
 
-    template <sharedrefs Sharing, preferred_serialization Preferred, class Binding>
+    template <sharedrefs Sharing, class Binding>
     friend std::expected<owning_ref<std::span<std::string_view const>>, error>
     encode_iov(Binding &binding, typename Binding::value const &value);
 
-    template <sharedrefs Sharing, preferred_serialization Preferred, class Binding, class Writer>
+    template <sharedrefs Sharing, class Binding, class Writer>
     friend std::expected<void, error> encode(Binding &binding, Writer &&target,
                                                        typename Binding::value const &value);
 
@@ -484,81 +480,6 @@ struct encoder {
         return fixed_width_float_encode(value);
     }
 
-    CBOR_ALWAYS_INLINE std::expected<void, std::errc> float_encode_preferred(double const value)
-    {
-        if (block.size() - used >= item_size_max) [[likely]] {
-            using sfi = rfc8949::simple_float_information;
-            constexpr heads::precision h = heads::half_precision;
-            constexpr heads::precision f = heads::single_precision;
-            constexpr heads::precision d = heads::double_precision;
-            constexpr std::uint32_t single_min = static_cast<std::uint32_t>(d.exponent_bias - f.exponent_bias + 1);
-            constexpr std::uint32_t single_max = static_cast<std::uint32_t>(d.exponent_bias + f.exponent_bias);
-            constexpr std::uint32_t half_min = static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias + 1);
-            constexpr std::uint32_t half_max = static_cast<std::uint32_t>(d.exponent_bias + h.exponent_bias);
-            constexpr std::uint32_t half_subnormal_min = half_min - static_cast<std::uint32_t>(h.significand_bits);
-            constexpr std::uint32_t single_subnormal_min = single_min - static_cast<std::uint32_t>(f.significand_bits);
-            constexpr int single_drop = d.significand_bits - f.significand_bits;
-            constexpr int half_drop = d.significand_bits - h.significand_bits;
-            constexpr int sign_at = d.significand_bits + std::bit_width(d.exponent_max);
-            std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
-            std::uint32_t const exp = static_cast<std::uint32_t>(bits >> d.significand_bits & d.exponent_max);
-            std::uint64_t const mant = bits & ((std::uint64_t{1} << d.significand_bits) - 1u);
-            std::uint64_t const sign = bits >> sign_at;
-            if (exp - single_min <= single_max - single_min && (mant & ((std::uint64_t{1} << single_drop) - 1u)) == 0) {
-                if (exp - half_min <= half_max - half_min && (mant & ((std::uint64_t{1} << half_drop) - 1u)) == 0) {
-                    item_put(heads::initial_byte(major_type::simple_float, std::to_underlying(sfi::half_precision_float)),
-                             static_cast<std::uint16_t>(sign << (h.significand_bits + std::bit_width(h.exponent_max)) |
-                                                        std::uint64_t{exp - half_min + 1} << h.significand_bits |
-                                                        mant >> half_drop));
-                    return {};
-                }
-                if (exp - half_subnormal_min >= half_min - half_subnormal_min) {
-                    item_put(
-                        heads::initial_byte(major_type::simple_float, std::to_underlying(sfi::single_precision_float)),
-                        static_cast<std::uint32_t>(sign << (f.significand_bits + std::bit_width(f.exponent_max)) |
-                                                   std::uint64_t{exp - single_min + 1} << f.significand_bits |
-                                                   mant >> single_drop));
-                    return {};
-                }
-            } else if (exp != 0 && exp != d.exponent_max && exp - single_subnormal_min >= single_min - single_subnormal_min) {
-                item_put(heads::initial_byte(major_type::simple_float, std::to_underlying(sfi::double_precision_float)),
-                         bits);
-                return {};
-            }
-        }
-        std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
-
-        static_assert(heads::initial_byte_size + sizeof(std::uint64_t) <= std::tuple_size_v<decltype(tail)>,
-                      "A float item must hold the initial byte and the eight bytes of a double.");
-        bool const near_end = block.size() - used < tail.size();
-        if constexpr (!direct)
-            if (near_end) [[unlikely]]
-                if (auto const r = refill(item_size_max); !r) [[unlikely]]
-                    return r;
-        std::span<char> const out = block;
-        std::size_t const at = used;
-        std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const item =
-            direct && near_end
-                ? std::span(tail)
-                : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
-        auto const [info, argument] = heads::float_encode_preferred(value);
-        std::size_t const width = std::size_t{1}
-                                  << (std::to_underlying(info) -
-                                      std::to_underlying(rfc8949::simple_float_information::half_precision_float) + 1);
-        item.front() = heads::initial_byte(major_type::simple_float, std::to_underlying(info));
-        auto const v =
-            std::byteswap(argument << (std::numeric_limits<std::uint64_t>::digits -
-                                       std::numeric_limits<unsigned char>::digits * width));
-        std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
-                          item.template subspan<heads::initial_byte_size>().begin());
-        std::size_t const size = heads::initial_byte_size + width;
-        if constexpr (direct)
-            if (near_end) [[unlikely]]
-                return item_write(tail, size);
-        used = at + size;
-        return {};
-    }
-
     template <std::unsigned_integral T>
         requires(sizeof(T) <= sizeof(std::uint64_t))
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> fixed_width_head_encode(major_type const major, T const argument)
@@ -661,7 +582,7 @@ class iov_writer
     template <class>
     friend struct encoder;
 
-    template <sharedrefs Sharing, preferred_serialization Preferred, class Binding>
+    template <sharedrefs Sharing, class Binding>
     friend std::expected<owning_ref<std::span<std::string_view const>>, error>
     encode_iov(Binding &binding, typename Binding::value const &value);
 };
@@ -689,7 +610,7 @@ struct sharing {
     std::unordered_map<typename Binding::identity, typename Binding::value> replaced;
 };
 
-template <class Binding, class Writer, pass Pass, preferred_serialization Preferred>
+template <class Binding, class Writer, pass Pass>
 class walker
 {
     Binding &binding;
@@ -743,10 +664,7 @@ class walker
                 if constexpr (requires { binding.float_of(item); }) {
                     if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
                         return false;
-                    if constexpr (Preferred == preferred_serialization::on)
-                        keep(out.float_encode_preferred(binding.float_of(item)));
-                    else
-                        keep(out.float_encode(binding.float_of(item)));
+                    keep(out.float_encode(binding.float_of(item)));
                     return true;
                 }
                 return false;
@@ -754,10 +672,7 @@ class walker
                 if constexpr (requires { binding.unsigned_of(item); }) {
                     if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
                         return false;
-                    if constexpr (Preferred == preferred_serialization::on)
-                        head(major_type::unsigned_integer, binding.unsigned_of(item));
-                    else
-                        keep(out.fixed_width_head_encode(major_type::unsigned_integer, std::uint64_t{binding.unsigned_of(item)}));
+                    keep(out.fixed_width_head_encode(major_type::unsigned_integer, std::uint64_t{binding.unsigned_of(item)}));
                     return true;
                 }
                 return false;
@@ -765,10 +680,7 @@ class walker
                 if constexpr (requires { binding.unsigned_of(item); }) {
                     if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
                         return false;
-                    if constexpr (Preferred == preferred_serialization::on)
-                        head(major_type::negative_integer, binding.unsigned_of(item) - 1);
-                    else
-                        keep(out.fixed_width_head_encode(major_type::negative_integer, std::uint64_t{binding.unsigned_of(item) - 1}));
+                    keep(out.fixed_width_head_encode(major_type::negative_integer, std::uint64_t{binding.unsigned_of(item) - 1}));
                     return true;
                 }
                 return false;
@@ -813,7 +725,7 @@ class walker
             if (!outer && binding.embed_of(item)) {
                 if constexpr (Pass != pass::count) {
                     encoding::string_sink inner;
-                    auto const r = encoding::encode_from<Pass == pass::plain ? sharedrefs::off : sharedrefs::on, Preferred>(
+                    auto const r = encoding::encode_from<Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
                         binding, inner, item, depth, true, depth_max);
                     if (!r) [[unlikely]] {
                         if (failure == decltype(failure){})
@@ -876,19 +788,13 @@ class walker
         switch (k) {
         case kind::unsigned_integer:
             if constexpr (requires { binding.unsigned_of(item); }) {
-                if constexpr (Preferred == preferred_serialization::on)
-                        head(major_type::unsigned_integer, binding.unsigned_of(item));
-                    else
-                        keep(out.fixed_width_head_encode(major_type::unsigned_integer, std::uint64_t{binding.unsigned_of(item)}));
+                keep(out.fixed_width_head_encode(major_type::unsigned_integer, std::uint64_t{binding.unsigned_of(item)}));
                 return;
             }
             break;
         case kind::negative_integer:
             if constexpr (requires { binding.unsigned_of(item); }) {
-                if constexpr (Preferred == preferred_serialization::on)
-                        head(major_type::negative_integer, binding.unsigned_of(item) - 1);
-                    else
-                        keep(out.fixed_width_head_encode(major_type::negative_integer, std::uint64_t{binding.unsigned_of(item) - 1}));
+                keep(out.fixed_width_head_encode(major_type::negative_integer, std::uint64_t{binding.unsigned_of(item) - 1}));
                 return;
             }
             break;
@@ -918,10 +824,7 @@ class walker
             break;
         case kind::floating_point:
             if constexpr (requires { binding.float_of(item); }) {
-                if constexpr (Preferred == preferred_serialization::on)
-                        keep(out.float_encode_preferred(binding.float_of(item)));
-                    else
-                        keep(out.float_encode(binding.float_of(item)));
+                keep(out.float_encode(binding.float_of(item)));
                 return;
             }
             break;
@@ -1071,13 +974,13 @@ bool cycle_find(Binding &binding, typename Binding::value const &item,
     return found;
 }
 
-template <sharedrefs Sharing, preferred_serialization Preferred, class Binding, class Writer>
+template <sharedrefs Sharing, class Binding, class Writer>
 std::expected<std::size_t, error> encoding::encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
                                                         std::size_t const depth, bool const embedded,
                                                         std::size_t const depth_max)
 {
     if constexpr (Sharing == sharedrefs::off) {
-        walker<Binding, Writer, pass::plain, Preferred> walk{binding, writer, nullptr, depth, embedded, depth_max};
+        walker<Binding, Writer, pass::plain> walk{binding, writer, nullptr, depth, embedded, depth_max};
         walk.value(value);
         walk.keep(walk.out.flush());
         if (walk.failure != decltype(walk.failure){}) [[unlikely]] {
@@ -1093,14 +996,14 @@ std::expected<std::size_t, error> encoding::encode_from(Binding &binding, Writer
     } else {
         sharing<Binding> shared;
         discarding_writer nothing;
-        walker<Binding, discarding_writer, pass::count, Preferred> count{binding, nothing, &shared, depth, embedded, depth_max};
+        walker<Binding, discarding_writer, pass::count> count{binding, nothing, &shared, depth, embedded, depth_max};
         count.value(value);
         if (count.failure != decltype(count.failure){}) [[unlikely]]
             return std::unexpected(count.failure);
         for (auto const &[identity, times] : shared.seen)
             if (times > 1)
                 shared.numbers.emplace(identity, std::numeric_limits<std::uint64_t>::max());
-        walker<Binding, Writer, pass::write, Preferred> write{binding, writer, &shared, depth, embedded, depth_max};
+        walker<Binding, Writer, pass::write> write{binding, writer, &shared, depth, embedded, depth_max};
         write.value(value);
         write.keep(write.out.flush());
         if (write.failure != decltype(write.failure){}) [[unlikely]]
@@ -1109,11 +1012,11 @@ std::expected<std::size_t, error> encoding::encode_from(Binding &binding, Writer
     }
 }
 
-template <sharedrefs Sharing, preferred_serialization Preferred, class Binding, class Writer>
+template <sharedrefs Sharing, class Binding, class Writer>
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value)
 {
     decltype(auto) message = encoding::message_of(target, 0);
-    auto const size = encoding::encode_from<Sharing, Preferred>(binding, message, value, 0, false, limits.nesting_depth);
+    auto const size = encoding::encode_from<Sharing>(binding, message, value, 0, false, limits.nesting_depth);
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
     if (auto const r = message.done(*size); !r) [[unlikely]]
@@ -1121,12 +1024,12 @@ std::expected<void, error> encode(Binding &binding, Writer &&target, typename Bi
     return {};
 }
 
-template <sharedrefs Sharing, preferred_serialization Preferred, class Binding>
+template <sharedrefs Sharing, class Binding>
 std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(Binding &binding,
                                                                                typename Binding::value const &value)
 {
     iov_writer writer;
-    if (auto const size = encoding::encode_from<Sharing, Preferred>(binding, writer, value, 0, false, limits.nesting_depth); !size)
+    if (auto const size = encoding::encode_from<Sharing>(binding, writer, value, 0, false, limits.nesting_depth); !size)
         [[unlikely]]
         return std::unexpected(size.error());
     return writer.release();
