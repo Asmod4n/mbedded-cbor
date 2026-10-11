@@ -14,12 +14,6 @@ the code and the tests, branch limits-at-no-cost.
 | A document heavy in tag 29 costs more at its first tag 29. | Open | A fresh lazy reads every head once to find the marks. Measured 1.45 to 2.35 times slower. |
 | Strings are shared by identity only. Tags 25 and 256 are not used. | Decided | They break lazy and at_path. |
 
-## Results that hold a view
-
-| Limit | Status | Cause and where it is decided |
-|---|---|---|
-| `auto const &r = *cbor::at_path<...>(...);` and the same with `.value()` compile, and `r` then reads dead memory. No compiler warns. | Decided | The `*` and `value()` of a temporary `std::expected` give a reference into that temporary. The library keeps `std::expected`. Keep the result in a variable (`auto r = ...; *r`), and run `clang-query -f tools/owning_ref.query <file> -- <flags>`, which finds both forms. |
-
 ## Threads and lazy
 
 | Limit | Status | Cause and where it is decided |
@@ -38,10 +32,10 @@ the code and the tests, branch limits-at-no-cost.
 |---|---|---|
 | A path takes an EDN literal in brackets and in a filter, at compile time and at run time. 12 cases that the JSONPath Compliance Test Suite calls invalid are valid EDN and are accepted. | Decided | One parser in query.hpp. test/cts.cpp lists the 12 cases. |
 | A typed read with a key that is not a text reads through a lazy, and the form over bytes then allocates. | Open | The walk over bytes compares text keys only. test/allocation.cpp records it. |
-| The bytes form and lazy::from do not read the bytes after the target. A truncated or trailing part is not found. | Open | A path reads heads up to the target only. doc/path.md section 10. |
+| The bytes form and lazy::from do not read the bytes after the target. A truncated or trailing part is not found. | Open | A path reads heads up to the target only. [path.md](path.md), section 11. |
 | A typed read of double takes an integer from -2^53 to 2^53. Outside this range it is number_out_of_range. A bignum (tag 2 or 3) is incorrect_type for a double. No other conversion exists. | Decided | The owner, 2026-10-10. validity::check_number_range<double>. |
 | string_length and container_elements count only what a path or a lazy reads or decodes. An item that it only skips does not count. | Decided | The owner, 2026-10-10. The skip is bounded by the bytes (validity::check_pending_items). well_formedness::items_skip skips without the limits. |
-| $[-1] on a map is the key -1. A tag other than 2, 3, 24, 28, 29, 55799 and the RFC 8746 tags stops the walk. The nesting depth of a binding result counts from the node. match() and search() are refused. | Open | The owner decides. doc/path.md describes each. |
+| $[-1] on a map is the key -1. A tag that the path does not read passes to its content (RFC 8949 6.1). The nesting depth of a binding result counts from the node. match() and search() are refused. | Open | The owner decides. [path.md](path.md) describes each. |
 
 ## Floats
 
@@ -92,5 +86,5 @@ the code and the tests, branch limits-at-no-cost.
 
 | Limit | Status | Cause and where it is decided |
 |---|---|---|
-| Some functions cost O(n^2) or worse. | Open | doc/complexity.md lists them. Exponential first: generic_read and structs::read with tag 29; keys_equivalent on maps nested as keys. |
+| Some functions cost O(n^2) or worse. | Open | [complexity.md](complexity.md) lists them. Exponential first: generic_read and structs::read with tag 29; keys_equivalent on maps nested as keys. |
 | The checked form of the limits on floats with clang is 1.24 to 1.31 times slower. | Open | The no-limit form costs nothing. Measurement 2026-10-10-045701Z.json. |
