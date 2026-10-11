@@ -274,10 +274,19 @@ The owner of the bytes comes from one of these:
 
 | Call | Owner |
 |---|---|
+| `lazy::from(std::string)` with an lvalue | the library copies the string into a new `std::shared_ptr<std::string const>` |
 | `lazy::from(std::string)` with an rvalue | the library moves the string into a new `std::shared_ptr<std::string const>` |
 | `lazy::from(std::string_view)` | the library copies the bytes into a new `std::shared_ptr<std::string const>` |
 | `lazy::from(std::shared_ptr<std::string const>)` | the caller |
 | `lazy::from(owner, encoded)` | the caller: `owner` holds the bytes of `encoded` |
+
+An rvalue or a `std::shared_ptr` avoids the copy:
+
+```cpp
+auto const shared = std::make_shared<std::string const>(message());
+auto const a = cbor::lazy::from(shared).value();   // shares the bytes, no copy
+auto const b = cbor::lazy::from(std::move(bytes)).value();   // moves the string, no copy
+```
 
 `structs<T>::decode`, `packed<T>::decode` and `packed<T>::path` take the
 same forms. `at_path` takes an owner for a view result
