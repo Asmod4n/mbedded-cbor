@@ -32,10 +32,14 @@ namespace cbor
 
 enum class sharedrefs { off, on };
 
-template <sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
+enum class preferred_serialization { off, on };
+
+template <sharedrefs Sharing = sharedrefs::off,
+          preferred_serialization Preferred = preferred_serialization::off, class Binding, class Writer>
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value);
 
-template <sharedrefs Sharing = sharedrefs::off, class Binding>
+template <sharedrefs Sharing = sharedrefs::off,
+          preferred_serialization Preferred = preferred_serialization::off, class Binding>
 std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(Binding &binding,
                                                                                typename Binding::value const &value);
 
@@ -128,7 +132,7 @@ class encoding
             return target.allocate(hint);
     }
 
-    template <sharedrefs Sharing, class Binding, class Writer>
+    template <sharedrefs Sharing, preferred_serialization Preferred, class Binding, class Writer>
     static std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer,
                                                          typename Binding::value const &value, std::size_t depth,
                                                          bool embedded, std::size_t depth_max);
@@ -136,14 +140,14 @@ class encoding
     template <class Writer>
     friend struct encoder;
 
-    template <class, class, pass>
+    template <class, class, pass, preferred_serialization>
     friend class walker;
 
-    template <sharedrefs Sharing, class Binding>
+    template <sharedrefs Sharing, preferred_serialization Preferred, class Binding>
     friend std::expected<owning_ref<std::span<std::string_view const>>, error>
     encode_iov(Binding &binding, typename Binding::value const &value);
 
-    template <sharedrefs Sharing, class Binding, class Writer>
+    template <sharedrefs Sharing, preferred_serialization Preferred, class Binding, class Writer>
     friend std::expected<void, error> encode(Binding &binding, Writer &&target,
                                                        typename Binding::value const &value);
 
@@ -472,6 +476,17 @@ struct encoder {
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> float_encode(double const value)
     {
         if (block.size() - used >= item_size_max) [[likely]] {
+            item_put(heads::initial_byte(major_type::simple_float,
+                                         std::to_underlying(rfc8949::simple_float_information::double_precision_float)),
+                     std::bit_cast<std::uint64_t>(value));
+            return {};
+        }
+        return fixed_width_float_encode(value);
+    }
+
+    CBOR_ALWAYS_INLINE std::expected<void, std::errc> float_encode_preferred(double const value)
+    {
+        if (block.size() - used >= item_size_max) [[likely]] {
             using sfi = rfc8949::simple_float_information;
             constexpr heads::precision h = heads::half_precision;
             constexpr heads::precision f = heads::single_precision;
@@ -639,7 +654,7 @@ class iov_writer
     template <class>
     friend struct encoder;
 
-    template <sharedrefs Sharing, class Binding>
+    template <sharedrefs Sharing, preferred_serialization Preferred, class Binding>
     friend std::expected<owning_ref<std::span<std::string_view const>>, error>
     encode_iov(Binding &binding, typename Binding::value const &value);
 };
@@ -667,7 +682,7 @@ struct sharing {
     std::unordered_map<typename Binding::identity, typename Binding::value> replaced;
 };
 
-template <class Binding, class Writer, pass Pass>
+template <class Binding, class Writer, pass Pass, preferred_serialization Preferred>
 class walker
 {
     Binding &binding;
@@ -721,7 +736,10 @@ class walker
                 if constexpr (requires { binding.float_of(item); }) {
                     if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
                         return false;
-                    keep(out.float_encode(binding.float_of(item)));
+                    if constexpr (Preferred == preferred_serialization::on)
+                        keep(out.float_encode_preferred(binding.float_of(item)));
+                    else
+                        keep(out.float_encode(binding.float_of(item)));
                     return true;
                 }
                 return false;
@@ -782,7 +800,7 @@ class walker
             if (!outer && binding.embed_of(item)) {
                 if constexpr (Pass != pass::count) {
                     encoding::string_sink inner;
-                    auto const r = encoding::encode_from<Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
+                    auto const r = encoding::encode_from<Pass == pass::plain ? sharedrefs::off : sharedrefs::on, Preferred>(
                         binding, inner, item, depth, true, depth_max);
                     if (!r) [[unlikely]] {
                         if (failure == decltype(failure){})
@@ -881,7 +899,10 @@ class walker
             break;
         case kind::floating_point:
             if constexpr (requires { binding.float_of(item); }) {
-                keep(out.float_encode(binding.float_of(item)));
+                if constexpr (Preferred == preferred_serialization::on)
+                        keep(out.float_encode_preferred(binding.float_of(item)));
+                    else
+                        keep(out.float_encode(binding.float_of(item)));
                 return;
             }
             break;
@@ -1031,13 +1052,13 @@ bool cycle_find(Binding &binding, typename Binding::value const &item,
     return found;
 }
 
-template <sharedrefs Sharing, class Binding, class Writer>
+template <sharedrefs Sharing, preferred_serialization Preferred, class Binding, class Writer>
 std::expected<std::size_t, error> encoding::encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
                                                         std::size_t const depth, bool const embedded,
                                                         std::size_t const depth_max)
 {
     if constexpr (Sharing == sharedrefs::off) {
-        walker<Binding, Writer, pass::plain> walk{binding, writer, nullptr, depth, embedded, depth_max};
+        walker<Binding, Writer, pass::plain, Preferred> walk{binding, writer, nullptr, depth, embedded, depth_max};
         walk.value(value);
         walk.keep(walk.out.flush());
         if (walk.failure != decltype(walk.failure){}) [[unlikely]] {
@@ -1053,14 +1074,14 @@ std::expected<std::size_t, error> encoding::encode_from(Binding &binding, Writer
     } else {
         sharing<Binding> shared;
         discarding_writer nothing;
-        walker<Binding, discarding_writer, pass::count> count{binding, nothing, &shared, depth, embedded, depth_max};
+        walker<Binding, discarding_writer, pass::count, Preferred> count{binding, nothing, &shared, depth, embedded, depth_max};
         count.value(value);
         if (count.failure != decltype(count.failure){}) [[unlikely]]
             return std::unexpected(count.failure);
         for (auto const &[identity, times] : shared.seen)
             if (times > 1)
                 shared.numbers.emplace(identity, std::numeric_limits<std::uint64_t>::max());
-        walker<Binding, Writer, pass::write> write{binding, writer, &shared, depth, embedded, depth_max};
+        walker<Binding, Writer, pass::write, Preferred> write{binding, writer, &shared, depth, embedded, depth_max};
         write.value(value);
         write.keep(write.out.flush());
         if (write.failure != decltype(write.failure){}) [[unlikely]]
@@ -1069,11 +1090,11 @@ std::expected<std::size_t, error> encoding::encode_from(Binding &binding, Writer
     }
 }
 
-template <sharedrefs Sharing, class Binding, class Writer>
+template <sharedrefs Sharing, preferred_serialization Preferred, class Binding, class Writer>
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value)
 {
     decltype(auto) message = encoding::message_of(target, 0);
-    auto const size = encoding::encode_from<Sharing>(binding, message, value, 0, false, limits.nesting_depth);
+    auto const size = encoding::encode_from<Sharing, Preferred>(binding, message, value, 0, false, limits.nesting_depth);
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
     if (auto const r = message.done(*size); !r) [[unlikely]]
@@ -1081,12 +1102,12 @@ std::expected<void, error> encode(Binding &binding, Writer &&target, typename Bi
     return {};
 }
 
-template <sharedrefs Sharing, class Binding>
+template <sharedrefs Sharing, preferred_serialization Preferred, class Binding>
 std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(Binding &binding,
                                                                                typename Binding::value const &value)
 {
     iov_writer writer;
-    if (auto const size = encoding::encode_from<Sharing>(binding, writer, value, 0, false, limits.nesting_depth); !size)
+    if (auto const size = encoding::encode_from<Sharing, Preferred>(binding, writer, value, 0, false, limits.nesting_depth); !size)
         [[unlikely]]
         return std::unexpected(size.error());
     return writer.release();

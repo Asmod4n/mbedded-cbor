@@ -439,7 +439,7 @@ inline std::string encoded([[maybe_unused]] value const &v)
 {
     [[maybe_unused]] test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode(binding, w, v).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, w, v).has_value());
     return w.encoded;
 }
 

@@ -322,7 +322,7 @@ TEST_CASE("encode_iov: the walker gives the bytes of encode")
         auto const v = decoded(wire);
         REQUIRE(v.has_value());
         test_binding binding;
-        auto const p = cbor::encode_iov(binding, *v);
+        auto const p = cbor::encode_iov<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, *v);
         REQUIRE(p.has_value());
         CHECK_EQ(joined(*p), encoded(*v));
     }
@@ -343,4 +343,17 @@ TEST_CASE("encode_iov: a walk error comes back as the error value")
     auto const p = cbor::encode_iov(binding, v);
     REQUIRE_FALSE(p.has_value());
     CHECK_EQ(p.error(), error::nesting_depth_exceeded);
+}
+
+// Without preferred serialization the encoder writes every float as a double, the width that needs no
+// test of the value. With it, the shortest width that keeps the value, as RFC 8949 4.2.2 prefers.
+TEST_CASE("encode: a float is a double unless preferred serialization is on")
+{
+    test_binding binding;
+    string_writer w;
+    REQUIRE(cbor::encode(binding, w, value{1.0}).has_value());
+    CHECK_EQ(w.encoded, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv);
+    string_writer p;
+    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, p, value{1.0}).has_value());
+    CHECK_EQ(p.encoded, "\xf9\x3c\x00"sv);
 }

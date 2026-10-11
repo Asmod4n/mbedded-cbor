@@ -225,7 +225,7 @@ std::string encoded_shared(handle const &v)
 {
     ref_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<cbor::sharedrefs::on>(binding, w, v).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::on, cbor::preferred_serialization::on>(binding, w, v).has_value());
     return w.encoded;
 }
 
@@ -444,7 +444,7 @@ TEST_CASE("registered tag: before_encode runs once per object with two passes")
     auto const point = std::make_shared<node>(node{object{5000, arr({u(3), u(7)})}});
     ref_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<cbor::sharedrefs::on>(binding, w, arr({point, point, point})).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::on, cbor::preferred_serialization::on>(binding, w, arr({point, point, point})).has_value());
     CHECK_EQ(binding.before_encode_calls, 1);
     CHECK_EQ(w.encoded, "\x83\xd8\x1c\xd9\x13\x88\x82\x03\x07\xd8\x1d\x00\xd8\x1d\x00"sv);
 }
@@ -454,7 +454,7 @@ TEST_CASE("registered tag: encode_iov with shared references gives the bytes of 
 {
     auto const point = std::make_shared<node>(node{object{5000, arr({u(3), u(7)})}});
     ref_binding binding;
-    auto const p = cbor::encode_iov<cbor::sharedrefs::on>(binding, arr({point, point, point, s(std::string(40, 'x'))}));
+    auto const p = cbor::encode_iov<cbor::sharedrefs::on, cbor::preferred_serialization::on>(binding, arr({point, point, point, s(std::string(40, 'x'))}));
     REQUIRE(p.has_value());
     std::string joined;
     for (std::string_view const piece : **p)
@@ -469,7 +469,7 @@ TEST_CASE("registered tag: distinct objects with equal content do not share")
     auto const p2 = std::make_shared<node>(node{object{5000, arr({u(1), u(2)})}});
     ref_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<cbor::sharedrefs::on>(binding, w, arr({p1, p2})).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::on, cbor::preferred_serialization::on>(binding, w, arr({p1, p2})).has_value());
     CHECK_EQ(binding.before_encode_calls, 2);
     CHECK_EQ(w.encoded, "\x82\xd9\x13\x88\x82\x01\x02\xd9\x13\x88\x82\x01\x02"sv);
 }
