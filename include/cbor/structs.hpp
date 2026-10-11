@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <expected>
 #include <limits>
+#include <numeric>
 #include <memory>
 #include <new>
 #include <ranges>
@@ -32,7 +33,7 @@
 #include "head.hpp"
 #include "lazy.hpp"
 #include "owning_ref.hpp"
-#include "schema.hpp"
+#include "packed.hpp"
 #include "shared.hpp"
 
 namespace cbor
@@ -42,7 +43,7 @@ namespace cbor
 class generic
 {
     template <class>
-    friend class databind;
+    friend class structs;
 
     template <class U>
     static constexpr bool is_std_tuple = false;
@@ -115,7 +116,7 @@ class generic
             return h.major == major_type::simple_float &&
                    h.info >= std::to_underlying(rfc8949::simple_float_information::half_precision_float) &&
                    h.info <= std::to_underlying(rfc8949::simple_float_information::double_precision_float);
-        else if constexpr (packed::is_wide_integer<U>)
+        else if constexpr (reflection::is_wide_integer<U>)
             return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer ||
                    (h.major == major_type::tag &&
                     (h.argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
@@ -131,7 +132,7 @@ class generic
             return h.major == major_type::text_string;
         else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>)
             return h.major == major_type::byte_string;
-        else if constexpr (packed::is_optional<U>)
+        else if constexpr (reflection::is_optional<U>)
             return heads::is_null(h) || head_accepted<typename U::value_type>(h);
         else if constexpr (is_tagged<U>)
             return h.major == major_type::tag && h.argument == U::number;
@@ -139,7 +140,7 @@ class generic
             return false;
         else if constexpr (is_std_tuple<U> || is_std_array<U>)
             return h.major == major_type::array && h.argument == std::tuple_size_v<U>;
-        else if constexpr (packed::is_map<U>)
+        else if constexpr (reflection::is_map<U>)
             return h.major == major_type::map;
         else if constexpr (requires(U const &c) { typename U::value_type; c.size(); })
             return h.major == major_type::array;
@@ -263,7 +264,7 @@ class generic
                 return std::unexpected(r);
             out = static_cast<simple_value>(h->argument);
             return {};
-        } else if constexpr (packed::is_wide_integer<U>) {
+        } else if constexpr (reflection::is_wide_integer<U>) {
             return wide_integer_read(d, out);
         } else if constexpr (is_std_variant<U>) {
             heads::decoder<Checked> probe = d;
@@ -272,13 +273,13 @@ class generic
                 return std::unexpected(h.error());
             return variant_read(d, out, *h, depth, depth_max);
         } else if constexpr (std::is_enum_v<U>) {
-            static_assert(packed::has_fixed_underlying_type<U>,
-                          "cbor::databind reads an enum only with a fixed underlying type, because every value of that type is a value of the enum.");
+            static_assert(reflection::has_fixed_underlying_type<U>,
+                          "cbor::structs reads an enum only with a fixed underlying type, because every value of that type is a value of the enum.");
             return integer_read<std::underlying_type_t<U>>(d, out);
         } else if constexpr (std::is_integral_v<U>) {
             return integer_read<U>(d, out);
         } else if constexpr (std::is_floating_point_v<U>) {
-            static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::databind reads and writes float and double only.");
+            static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::structs reads and writes float and double only.");
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -347,7 +348,7 @@ class generic
                 std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
             }
             return {};
-        } else if constexpr (packed::is_optional<U>) {
+        } else if constexpr (reflection::is_optional<U>) {
             if (!d.encoded.empty() &&
                 d.encoded.front() == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null))) {
                 d.encoded.remove_prefix(1);
@@ -374,7 +375,7 @@ class generic
                     r = generic_read(d, std::get<i>(out), depth + 1, depth_max);
             }
             return r;
-        } else if constexpr (packed::is_map<U>) {
+        } else if constexpr (reflection::is_map<U>) {
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -382,10 +383,10 @@ class generic
                 return std::unexpected(error::incorrect_type);
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto key = packed::element_make<typename U::key_type>(out);
+                auto key = reflection::element_make<typename U::key_type>(out);
                 if (auto const r = generic_read(d, key, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
-                auto value = packed::element_make<typename U::mapped_type>(out);
+                auto value = reflection::element_make<typename U::mapped_type>(out);
                 if (auto const r = generic_read(d, value, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
                 if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); })
@@ -401,7 +402,7 @@ class generic
             using E = typename U::value_type;
             static_assert(
                 requires(E &&e) { out.insert(out.end(), std::move(e)); },
-                "cbor::databind decodes a container with insert(end(), value); this container has none.");
+                "cbor::structs decodes a container with insert(end(), value); this container has none.");
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -416,7 +417,7 @@ class generic
                         [[unlikely]]
                         return r;
                 } else {
-                    E element = packed::element_make<E>(out);
+                    E element = reflection::element_make<E>(out);
                     if (auto const r = generic_read(d, element, depth + 1, depth_max); !r) [[unlikely]]
                         return r;
                     out.insert(out.end(), std::move(element));
@@ -431,14 +432,14 @@ class generic
     template <class U, std::size_t I>
     static bool key_matches(heads::head const &k, std::string_view const text)
     {
-        if constexpr (packed::has_integer_keys<U>) {
+        if constexpr (reflection::has_integer_keys<U>) {
             constexpr std::int64_t key = std::get<I>(U::keys);
             if constexpr (key >= 0)
                 return k.major == major_type::unsigned_integer && k.argument == static_cast<std::uint64_t>(key);
             else
                 return k.major == major_type::negative_integer && k.argument == static_cast<std::uint64_t>(-1 - key);
         } else {
-            constexpr std::string_view name = packed::key_of(packed::members_of<U>()[I]);
+            constexpr std::string_view name = reflection::key_of(reflection::members_of<U>()[I]);
             return k.major == major_type::text_string && text == name;
         }
     }
@@ -447,9 +448,9 @@ class generic
     static std::expected<void, error> struct_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                   std::size_t const depth, std::size_t const depth_max)
     {
-        static_assert(!packed::tag_number_of(^^U),
-                      "cbor::databind writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
-        static constexpr auto members = packed::members_of<U>();
+        static_assert(!reflection::tag_number_of(^^U),
+                      "cbor::structs writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
+        static constexpr auto members = reflection::members_of<U>();
         constexpr std::size_t count = members.size();
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
@@ -520,17 +521,53 @@ class generic
         }
         template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, count))) {
             using M = std::remove_cvref_t<decltype(out.[:members[i]:])>;
-            if constexpr (!packed::is_optional<M>)
+            if constexpr (!reflection::is_optional<M>)
                 if (!found.test(i)) [[unlikely]]
                     return std::unexpected(error::key_not_found);
         }
         return {};
     }
 
+    static consteval std::vector<unsigned char> key_encoded(major_type const major, std::uint64_t const argument,
+                                                            std::string_view const text)
+    {
+        std::uint8_t const info = heads::preferred_argument_info(argument);
+        std::size_t const bytes = heads::argument_size(info);
+        std::vector<unsigned char> out{static_cast<unsigned char>(heads::initial_byte(major, info))};
+        for (std::size_t k = bytes; k > 0; --k)
+            out.push_back(static_cast<unsigned char>(argument >> (std::numeric_limits<std::uint8_t>::digits * (k - 1))));
+        for (char const c : text)
+            out.push_back(static_cast<unsigned char>(c));
+        return out;
+    }
+
+    template <class U>
+    static consteval std::array<std::size_t, reflection::members_of<U>().size()> key_order()
+    {
+        constexpr auto members = reflection::members_of<U>();
+        std::array<std::vector<unsigned char>, members.size()> encoded;
+        for (std::size_t i = 0; i < members.size(); ++i) {
+            if constexpr (reflection::has_integer_keys<U>) {
+                std::int64_t const key = U::keys[i];
+                encoded[i] = key >= 0 ? key_encoded(major_type::unsigned_integer, static_cast<std::uint64_t>(key), {})
+                                      : key_encoded(major_type::negative_integer, static_cast<std::uint64_t>(-1 - key), {});
+            } else {
+                std::string_view const name = reflection::key_of(members[i]);
+                encoded[i] = key_encoded(major_type::text_string, name.size(), name);
+            }
+        }
+        std::array<std::size_t, members.size()> order;
+        std::ranges::iota(order, std::size_t{0});
+        std::ranges::sort(order, [&](std::size_t const a, std::size_t const b) {
+            return std::ranges::lexicographical_compare(encoded[a], encoded[b]);
+        });
+        return order;
+    }
+
     template <class U>
     static bool member_present(U const &value)
     {
-        if constexpr (packed::is_optional<U>)
+        if constexpr (reflection::is_optional<U>)
             return value.has_value();
         else
             return true;
@@ -556,7 +593,7 @@ class generic
         } else if constexpr (std::same_as<U, simple_value>) {
             return heads::head_size(std::to_underlying(value));
 #ifdef __SIZEOF_INT128__
-        } else if constexpr (packed::is_wide_integer<U>) {
+        } else if constexpr (reflection::is_wide_integer<U>) {
             bool negative = false;
             if constexpr (std::same_as<U, int128>)
                 negative = value < 0;
@@ -580,12 +617,12 @@ class generic
             else
                 return heads::head_size(value);
         } else if constexpr (std::is_floating_point_v<U>) {
-            static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::databind reads and writes float and double only.");
+            static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::structs reads and writes float and double only.");
             return float_size(static_cast<double>(value));
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view> ||
                              std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
             return validity::checked_add(heads::head_size(value.size()), value.size());
-        } else if constexpr (packed::is_optional<U>) {
+        } else if constexpr (reflection::is_optional<U>) {
             if (!value)
                 return heads::initial_byte_size;
             return generic_size(*value);
@@ -606,7 +643,7 @@ class generic
                 },
                 value);
             return size;
-        } else if constexpr (packed::is_map<U>) {
+        } else if constexpr (reflection::is_map<U>) {
             std::size_t size = heads::head_size(value.size());
             for (auto const &[k, v] : value) {
                 auto const key = generic_size(k).and_then([size](std::size_t const n) { return validity::checked_add(size, n); });
@@ -631,30 +668,30 @@ class generic
             }
             return size;
         } else {
-            static_assert(!packed::tag_number_of(^^U),
-                          "cbor::databind writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
-            static constexpr auto members = packed::members_of<U>();
+            static_assert(!reflection::tag_number_of(^^U),
+                          "cbor::structs writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
+            static constexpr auto members = reflection::members_of<U>();
             std::size_t size = 0;
             std::size_t present = 0;
             template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
                 auto const &m = value.[:members[i]:];
                 if (member_present(m)) {
                     ++present;
-                    if constexpr (packed::has_integer_keys<U>) {
+                    if constexpr (reflection::has_integer_keys<U>) {
                         constexpr std::int64_t key = std::get<i>(U::keys);
                         auto const sum = validity::checked_add(size, *generic_size(key));
                         if (!sum) [[unlikely]]
                             return sum;
                         size = *sum;
                     } else {
-                        constexpr std::string_view name = packed::key_of(members[i]);
+                        constexpr std::string_view name = reflection::key_of(members[i]);
                         auto const sum = validity::checked_add(size, heads::head_size(name.size()) + name.size());
                         if (!sum) [[unlikely]]
                             return sum;
                         size = *sum;
                     }
                     std::expected<std::size_t, std::errc> member;
-                    if constexpr (packed::is_optional<std::remove_cvref_t<decltype(m)>>)
+                    if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
                         member = generic_size(*m);
                     else
                         member = generic_size(m);
@@ -688,7 +725,7 @@ class generic
         } else if constexpr (std::same_as<U, simple_value>) {
             return at + heads::head_write(out, at, major_type::simple_float, std::to_underlying(value));
 #ifdef __SIZEOF_INT128__
-        } else if constexpr (packed::is_wide_integer<U>) {
+        } else if constexpr (reflection::is_wide_integer<U>) {
             bool negative = false;
             if constexpr (std::same_as<U, int128>)
                 negative = value < 0;
@@ -734,7 +771,7 @@ class generic
                 std::ranges::transform(value, out.subspan(at, value.size()).begin(),
                                        [](auto const b) { return static_cast<char>(b); });
             return at + value.size();
-        } else if constexpr (packed::is_optional<U>) {
+        } else if constexpr (reflection::is_optional<U>) {
             if (!value) {
                 out.subspan(at).front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
                 return at + heads::initial_byte_size;
@@ -747,7 +784,7 @@ class generic
             at += heads::head_write(out, at, major_type::array, std::tuple_size_v<U>);
             std::apply([&](auto const &...e) { ((at = generic_write(out, at, e)), ...); }, value);
             return at;
-        } else if constexpr (packed::is_map<U>) {
+        } else if constexpr (reflection::is_map<U>) {
             at += heads::head_write(out, at, major_type::map, value.size());
             for (auto const &[k, v] : value) {
                 at = generic_write(out, at, k);
@@ -763,27 +800,27 @@ class generic
                 at = generic_write(out, at, e);
             return at;
         } else {
-            static_assert(!packed::tag_number_of(^^U),
-                          "cbor::databind writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
-            static constexpr auto members = packed::members_of<U>();
+            static_assert(!reflection::tag_number_of(^^U),
+                          "cbor::structs writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
+            static constexpr auto members = reflection::members_of<U>();
             std::size_t present = 0;
             template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
                 if (member_present(value.[:members[i]:]))
                     ++present;
             }
             at += heads::head_write(out, at, major_type::map, present);
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
+            template for (constexpr std::size_t i : std::define_static_array(key_order<U>())) {
                 auto const &m = value.[:members[i]:];
                 if (member_present(m)) {
-                    if constexpr (packed::has_integer_keys<U>) {
+                    if constexpr (reflection::has_integer_keys<U>) {
                         constexpr std::int64_t key = std::get<i>(U::keys);
                         at = generic_write(out, at, key);
                     } else {
-                        constexpr std::string_view name = packed::key_of(members[i]);
+                        constexpr std::string_view name = reflection::key_of(members[i]);
                         at += heads::head_write(out, at, major_type::text_string, name.size());
                         at = bytes_write(out, at, name);
                     }
-                    if constexpr (packed::is_optional<std::remove_cvref_t<decltype(m)>>)
+                    if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
                         at = generic_write(out, at, *m);
                     else
                         at = generic_write(out, at, m);
@@ -795,7 +832,7 @@ class generic
 };
 
 template <class T>
-class databind
+class structs
 {
 public:
     static std::expected<owning_ref<T>, error> decode(std::string_view const encoded)
@@ -838,7 +875,7 @@ public:
                                                       std::string_view const encoded, T &&target)
     {
         validity::throw_logic_error_if_empty(owner,
-                                             "cbor::databind::decode: the owner of the encoded data item is empty");
+                                             "cbor::structs::decode: the owner of the encoded data item is empty");
 #if defined(__cpp_exceptions)
         try {
 #endif

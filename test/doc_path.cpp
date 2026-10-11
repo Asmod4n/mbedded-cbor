@@ -116,18 +116,18 @@ struct [[=cbor::tag(1701)]] doc_car {
 
 } // namespace
 
-// The section "A path over a schema message" shows schema<T>::at_path, the argument for a run-time index and the
+// The section "A path over a schema message" shows packed<T>::at_path, the argument for a run-time index and the
 // accessor that gives a text as a view.
 TEST_CASE("doc path: schema at_path")
 {
-    auto const bytes = cbor::schema<doc_car>::encode(doc_car{"kia", {120, 1600}, {{90, 1200}, {75, 1000}}});
+    auto const bytes = cbor::packed<doc_car>::encode(doc_car{"kia", {120, 1600}, {{90, 1200}, {75, 1000}}});
     REQUIRE(bytes.has_value());
-    CHECK_EQ(cbor::schema<doc_car>::at_path<"$.motor.cc">(*bytes), 1600u);
-    CHECK_EQ(cbor::schema<doc_car>::at_path<"$.spares[1].hp">(*bytes), 75u);
-    CHECK_EQ(cbor::schema<doc_car>::at_path<"$.spares[].hp">(*bytes, 0uz), 90u);
-    CHECK_EQ(cbor::schema<doc_car>::at_path<"$.spares[].hp">(*bytes, 2uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::packed<doc_car>::at_path<"$.motor.cc">(*bytes), 1600u);
+    CHECK_EQ(cbor::packed<doc_car>::at_path<"$.spares[1].hp">(*bytes), 75u);
+    CHECK_EQ(cbor::packed<doc_car>::at_path<"$.spares[].hp">(*bytes, 0uz), 90u);
+    CHECK_EQ(cbor::packed<doc_car>::at_path<"$.spares[].hp">(*bytes, 2uz).error(), error::index_out_of_bounds);
     auto const owner = std::make_shared<std::string const>(*bytes);
-    auto const root = cbor::schema<doc_car>::path(owner, *owner);
+    auto const root = cbor::packed<doc_car>::path(owner, *owner);
     REQUIRE(root.has_value());
     CHECK_EQ(*root->at_path<"$.make">(), "kia"sv);
 }
@@ -141,30 +141,30 @@ struct [[=cbor::tag(1702)]] doc_log {
 // typed array gives one element.
 TEST_CASE("doc path: schema at_path in detail")
 {
-    auto const bytes = *cbor::schema<doc_car>::encode(doc_car{"kia", {120, 1600}, {{90, 1200}, {75, 1000}}});
-    CHECK_FALSE(([]<class S>(S const &) { return requires(std::string_view v) { S::template at_path<"$.make">(v); }; }(cbor::schema<doc_car>{})));
-    CHECK_FALSE(([]<class S>(S const &) { return requires(std::string_view v) { S::template at_path<"$.spares">(v); }; }(cbor::schema<doc_car>{})));
+    auto const bytes = *cbor::packed<doc_car>::encode(doc_car{"kia", {120, 1600}, {{90, 1200}, {75, 1000}}});
+    CHECK_FALSE(([]<class S>(S const &) { return requires(std::string_view v) { S::template at_path<"$.make">(v); }; }(cbor::packed<doc_car>{})));
+    CHECK_FALSE(([]<class S>(S const &) { return requires(std::string_view v) { S::template at_path<"$.spares">(v); }; }(cbor::packed<doc_car>{})));
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto root = *cbor::schema<doc_car>::path(owner, *owner);
+    auto root = *cbor::packed<doc_car>::path(owner, *owner);
     auto const motor = root.at_path<"$.motor">();
     REQUIRE(motor.has_value());
     CHECK_EQ(*motor->at_path<"@.cc">(), 1600u);
     CHECK_FALSE(([]<class R>(R &r) { return requires { std::move(r).template at_path<"$.make">(); }; }(root)));
     std::string temp = bytes;
-    auto const copied = cbor::schema<doc_car>::path(std::string_view(temp));
+    auto const copied = cbor::packed<doc_car>::path(std::string_view(temp));
     temp.assign(temp.size(), '\0');
     REQUIRE(copied.has_value());
     CHECK_EQ(*copied->at_path<"$.make">(), "kia"sv);
-    auto const log = *cbor::schema<doc_log>::encode(doc_log{{7, 8, 9}});
-    CHECK_EQ(cbor::schema<doc_log>::at_path<"$.readings[1]">(log), 8u);
-    CHECK_EQ(cbor::schema<doc_log>::at_path<"$.readings[]">(log, 2uz), 9u);
-    CHECK_EQ(cbor::schema<doc_log>::at_path<"$.readings[]">(log, 3uz).error(), error::index_out_of_bounds);
-    auto const held = cbor::schema<doc_log>::path(log);
+    auto const log = *cbor::packed<doc_log>::encode(doc_log{{7, 8, 9}});
+    CHECK_EQ(cbor::packed<doc_log>::at_path<"$.readings[1]">(log), 8u);
+    CHECK_EQ(cbor::packed<doc_log>::at_path<"$.readings[]">(log, 2uz), 9u);
+    CHECK_EQ(cbor::packed<doc_log>::at_path<"$.readings[]">(log, 3uz).error(), error::index_out_of_bounds);
+    auto const held = cbor::packed<doc_log>::path(log);
     REQUIRE(held.has_value());
     auto const readings = held->at_path<"$.readings">();
     REQUIRE(readings.has_value());
     CHECK_EQ(*readings->at_path<"@[1]">(), 8u);
-    CHECK_THROWS_AS((void)cbor::schema<doc_car>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<doc_car>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
 }
 
 // A list accessor taken from a temporary root accessor read freed bytes,
@@ -172,8 +172,8 @@ TEST_CASE("doc path: schema at_path in detail")
 // holds the owner, so the list outlives the temporary it came from.
 TEST_CASE("doc path: a list accessor keeps the bytes alive")
 {
-    auto const log = *cbor::schema<doc_log>::encode(doc_log{{7, 8, 9}});
-    auto const readings = cbor::schema<doc_log>::path(log)->at_path<"$.readings">();
+    auto const log = *cbor::packed<doc_log>::encode(doc_log{{7, 8, 9}});
+    auto const readings = cbor::packed<doc_log>::path(log)->at_path<"$.readings">();
     REQUIRE(readings.has_value());
     CHECK_EQ(readings->size(), 3u);
     CHECK_EQ(*readings->at_path<"@[2]">(), 9u);

@@ -20,7 +20,7 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of doc/schema.md. The tests exist so that every example in the document
+// Each test in this file is one example of doc/packed.md. The tests exist so that every example in the document
 // compiles and gives the result that the document states.
 
 namespace doc_schema
@@ -59,18 +59,18 @@ car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nu
 
 template <class T, cbor::fixed_string Path, class... Index>
 concept schema_path_compiles = requires(std::string_view const s, Index const... i) {
-    cbor::schema<T>::template at_path<Path>(s, i...);
+    cbor::packed<T>::template at_path<Path>(s, i...);
 };
 
 
 // The section "Encode and decode" shows the round trip of a struct. The message is one tag 113 of Packed CBOR.
 TEST_CASE("doc schema: encode and decode")
 {
-    auto const bytes = cbor::schema<car>::encode(sample);
+    auto const bytes = cbor::packed<car>::encode(sample);
     REQUIRE(bytes.has_value());
     CHECK_EQ(bytes->substr(0, 2), "\xd8\x71"s);
     CHECK_EQ(cbor::item_size(*bytes), bytes->size());
-    auto const back = cbor::schema<car>::decode(*bytes);
+    auto const back = cbor::packed<car>::decode(*bytes);
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->make, "Volvo");
     CHECK_EQ((*back)->tires.size(), 2u);
@@ -78,15 +78,15 @@ TEST_CASE("doc schema: encode and decode")
     CHECK_FALSE((*back)->note.has_value());
 }
 
-// The section "One value with no accessor" shows schema<T>::at_path for a value that holds no view.
+// The section "One value with no accessor" shows packed<T>::at_path for a value that holds no view.
 TEST_CASE("doc schema: one value with no accessor")
 {
-    std::string const bytes = *cbor::schema<car>::encode(sample);
-    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(bytes), 5u);
-    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[1].diameter">(bytes), 18u);
-    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0uz), 2.5f);
-    CHECK_EQ(cbor::schema<car>::at_path<"$.track[2]">(bytes), 3.0);
-    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
+    std::string const bytes = *cbor::packed<car>::encode(sample);
+    CHECK_EQ(cbor::packed<car>::at_path<"$.seats">(bytes), 5u);
+    CHECK_EQ(cbor::packed<car>::at_path<"$.tires[1].diameter">(bytes), 18u);
+    CHECK_EQ(cbor::packed<car>::at_path<"$.tires[].pressure">(bytes, 0uz), 2.5f);
+    CHECK_EQ(cbor::packed<car>::at_path<"$.track[2]">(bytes), 3.0);
+    CHECK_EQ(cbor::packed<car>::at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
 }
 
 // The section "One value with no accessor" says that a path to a view, a missing member or a wrong count of
@@ -103,7 +103,7 @@ TEST_CASE("doc schema: a wrong path does not compile")
 // The section "The accessor" shows path, the root accessor, and relative paths that start with @.
 TEST_CASE("doc schema: the accessor")
 {
-    auto const root = cbor::schema<car>::path(*cbor::schema<car>::encode(sample));
+    auto const root = cbor::packed<car>::path(*cbor::packed<car>::encode(sample));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
     auto const tires = root->at_path<"$.tires">();
@@ -122,19 +122,19 @@ TEST_CASE("doc schema: the accessor")
 // releases the bytes, and that an empty owner throws.
 TEST_CASE("doc schema: the accessor holds the owner")
 {
-    auto owner = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));
-    auto const root = cbor::schema<car>::path(owner, *owner);
+    auto owner = std::make_shared<std::string const>(*cbor::packed<car>::encode(sample));
+    auto const root = cbor::packed<car>::path(owner, *owner);
     owner.reset();
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
-    std::string const bytes = *cbor::schema<car>::encode(sample);
-    CHECK_THROWS_AS((void)cbor::schema<car>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    std::string const bytes = *cbor::packed<car>::encode(sample);
+    CHECK_THROWS_AS((void)cbor::packed<car>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
 }
 
 // The section "Typed arrays" shows view, which gives a typed_array_view of a list of a fixed-width number.
 TEST_CASE("doc schema: a typed array view")
 {
-    auto const root = cbor::schema<car>::path(*cbor::schema<car>::encode(sample));
+    auto const root = cbor::packed<car>::path(*cbor::packed<car>::encode(sample));
     REQUIRE(root.has_value());
     auto const track = root->view<"$.track">();
     REQUIRE(track.has_value());
@@ -156,7 +156,7 @@ TEST_CASE("doc schema: a struct needs a tag of its own")
     CHECK(cbor::tags_registered<car>());
     CHECK_FALSE(cbor::tags_registered<untagged>());
     CHECK_FALSE(cbor::tags_registered<pair_of_tags>());
-    using A = cbor::schema<car>::accessor<>;
+    using A = cbor::packed<car>::accessor<>;
     CHECK(reads_seats<A const &>);
     CHECK_FALSE(reads_seats<A>);
 }
@@ -164,12 +164,12 @@ TEST_CASE("doc schema: a struct needs a tag of its own")
 // The section "Errors" gives the error of a cut message and of a message of another class.
 TEST_CASE("doc schema: errors")
 {
-    std::string const bytes = *cbor::schema<car>::encode(sample);
-    CHECK_EQ(cbor::schema<car>::decode(std::string_view(bytes).substr(0, 3)).error(), error::too_little_data);
-    std::string const small = *cbor::schema<tire>::encode(tire{1, 1.0f});
-    CHECK_EQ(cbor::schema<car>::decode(small).error(), error::too_little_data);
-    CHECK_EQ(cbor::schema<tire>::decode(bytes).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<tire>::path(bytes).error(), error::incorrect_type);
+    std::string const bytes = *cbor::packed<car>::encode(sample);
+    CHECK_EQ(cbor::packed<car>::decode(std::string_view(bytes).substr(0, 3)).error(), error::too_little_data);
+    std::string const small = *cbor::packed<tire>::encode(tire{1, 1.0f});
+    CHECK_EQ(cbor::packed<car>::decode(small).error(), error::too_little_data);
+    CHECK_EQ(cbor::packed<tire>::decode(bytes).error(), error::incorrect_type);
+    CHECK_EQ(cbor::packed<tire>::path(bytes).error(), error::incorrect_type);
 }
 
 // The section "Typed arrays" states that a typed_array_view is a range, because a user reaches for std::ranges first.
@@ -177,7 +177,7 @@ TEST_CASE("doc schema: a typed array view is a range")
 {
     static_assert(std::ranges::random_access_range<cbor::typed_array_view<double>>);
     static_assert(std::ranges::sized_range<cbor::typed_array_view<double>>);
-    auto const root = cbor::schema<car>::path(*cbor::schema<car>::encode(sample));
+    auto const root = cbor::packed<car>::path(*cbor::packed<car>::encode(sample));
     REQUIRE(root.has_value());
     auto const track = root->view<"$.track">();
     REQUIRE(track.has_value());

@@ -141,13 +141,13 @@ std::string nests_around(std::size_t const n)
 
 } // namespace
 
-// databind::generic_read counts one level for the array of each struct and one for its element, so the empty
+// structs::generic_read counts one level for the array of each struct and one for its element, so the empty
 // array of the innermost struct of n levels is at depth 2 n + 1.
-TEST_CASE("nesting depth depth_limit: databind")
+TEST_CASE("nesting depth depth_limit: structs")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    CHECK(cbor::databind<nest>::decode(nests_around(depth_limit / 2 - 1)).has_value());
-    CHECK_EQ(cbor::databind<nest>::decode(nests_around(depth_limit / 2)).error(), error::nesting_depth_exceeded);
+    CHECK(cbor::structs<nest>::decode(nests_around(depth_limit / 2 - 1)).has_value());
+    CHECK_EQ(cbor::structs<nest>::decode(nests_around(depth_limit / 2)).error(), error::nesting_depth_exceeded);
 }
 
 #endif

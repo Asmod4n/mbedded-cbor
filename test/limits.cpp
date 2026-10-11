@@ -350,37 +350,37 @@ std::string long_texts_encoded(std::size_t const n)
 // schema checks the string and container limits on each head it reads, and the size of the input on entry.
 TEST_CASE("limits: the string and container limits of schema")
 {
-    auto const encoded = cbor::schema<note>::encode(note{"abc", {1, 2}});
+    auto const encoded = cbor::packed<note>::encode(note{"abc", {1, 2}});
     REQUIRE(encoded.has_value());
     // The list of std::int32_t is a typed array (RFC 8746), a tag over a byte string of 8 bytes.
     constexpr std::size_t typed_array_bytes = 2 * sizeof(std::int32_t);
     for (std::size_t const limit : {typed_array_bytes - 1, typed_array_bytes, typed_array_bytes + 1}) {
         test::limits_guard const guard{{.string_length = limit}};
-        auto const decoded = cbor::schema<note>::decode(*encoded);
+        auto const decoded = cbor::packed<note>::decode(*encoded);
         CHECK_EQ(decoded.has_value(), limit >= typed_array_bytes);
         if (limit < typed_array_bytes)
             CHECK_EQ(decoded.error(), error::string_length_exceeded);
     }
-    auto const list = cbor::schema<names>::encode(names{{"a", "b"}});
+    auto const list = cbor::packed<names>::encode(names{{"a", "b"}});
     REQUIRE(list.has_value());
     for (std::size_t const limit : {1uz, 2uz, 3uz}) {
         test::limits_guard const guard{{.container_elements = limit}};
-        auto const decoded = cbor::schema<names>::decode(*list);
+        auto const decoded = cbor::packed<names>::decode(*list);
         CHECK_EQ(decoded.has_value(), limit >= 2);
         if (limit < 2)
             CHECK_EQ(decoded.error(), error::container_elements_exceeded);
     }
     {
         test::limits_guard const guard{{.input_bytes = encoded->size() - 1}};
-        CHECK_EQ(cbor::schema<note>::decode(*encoded).error(), error::input_bytes_exceeded);
+        CHECK_EQ(cbor::packed<note>::decode(*encoded).error(), error::input_bytes_exceeded);
     }
 }
 
 // The memory of a decode is bounded by the caller with the standard: the target holds a std::pmr allocator
 // over a resource with a budget, every element is made with the allocator of its container, and the refusal
-// of the resource reaches the caller of databind as not_enough_memory. A monotonic_buffer_resource over a
+// of the resource reaches the caller of structs as not_enough_memory. A monotonic_buffer_resource over a
 // fixed buffer with null_memory_resource upstream refuses every byte beyond the buffer.
-TEST_CASE("databind: a std::pmr target decodes with its allocator, and the refusal of its resource is "
+TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusal of its resource is "
           "not_enough_memory")
 {
     using texts = std::pmr::vector<std::pmr::string>;
@@ -389,7 +389,7 @@ TEST_CASE("databind: a std::pmr target decodes with its allocator, and the refus
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(),
                                                    std::pmr::null_memory_resource());
-        auto const decoded = cbor::databind<texts>::decode(std::make_shared<std::string const>(encoded),
+        auto const decoded = cbor::structs<texts>::decode(std::make_shared<std::string const>(encoded),
                                                            encoded, texts(&budget));
         REQUIRE(decoded.has_value());
         CHECK_EQ((**decoded).size(), 3u);
@@ -405,7 +405,7 @@ TEST_CASE("databind: a std::pmr target decodes with its allocator, and the refus
         CAPTURE(size);
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
-        auto const decoded = cbor::databind<texts>::decode(std::make_shared<std::string const>(encoded),
+        auto const decoded = cbor::structs<texts>::decode(std::make_shared<std::string const>(encoded),
                                                            encoded, texts(&budget));
         REQUIRE_FALSE(decoded.has_value());
         CHECK_EQ(decoded.error(), error::not_enough_memory);
@@ -415,14 +415,14 @@ TEST_CASE("databind: a std::pmr target decodes with its allocator, and the refus
 // The schema reads into the members of the target that the caller made, so each member keeps its allocator.
 TEST_CASE("schema: a target with std::pmr members decodes with their allocators")
 {
-    auto const encoded = cbor::schema<pmr_names>::encode(
+    auto const encoded = cbor::packed<pmr_names>::encode(
         pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
     REQUIRE(encoded.has_value());
     std::array<std::byte, 4096> buffer{};
     std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(),
                                                std::pmr::null_memory_resource());
     auto const owner = std::make_shared<std::string const>(*encoded);
-    auto const decoded = cbor::schema<pmr_names>::decode(
+    auto const decoded = cbor::packed<pmr_names>::decode(
         owner, *owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
     REQUIRE(decoded.has_value());
     CHECK_EQ((**decoded).text, long_text);
@@ -436,11 +436,11 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
 }
 
 
-// schema reads into the members of the target as databind does, so the refusal of their resource reaches the caller
+// schema reads into the members of the target as structs does, so the refusal of their resource reaches the caller
 // of schema as not_enough_memory, and std::bad_alloc does not leave the call.
 TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enough_memory")
 {
-    auto const encoded = cbor::schema<pmr_names>::encode(
+    auto const encoded = cbor::packed<pmr_names>::encode(
         pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
     REQUIRE(encoded.has_value());
     auto const owner = std::make_shared<std::string const>(*encoded);
@@ -448,7 +448,7 @@ TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enoug
         CAPTURE(size);
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
-        auto const decoded = cbor::schema<pmr_names>::decode(
+        auto const decoded = cbor::packed<pmr_names>::decode(
             owner, *owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
         REQUIRE_FALSE(decoded.has_value());
         CHECK_EQ(decoded.error(), error::not_enough_memory);

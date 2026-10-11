@@ -9,14 +9,19 @@ namespace cbor
 {
 
 template <class T>
-class schema;
+class packed;
 
 template <class T>
-class databind;
+class structs;
 
 struct lazy;
 
 class jsonpath;
+
+template <class Writer>
+struct encoder;
+
+class iov_writer;
 
 template <class T>
 class owning_ref
@@ -29,14 +34,19 @@ class owning_ref
     }
 
     template <class>
-    friend class schema;
+    friend class packed;
 
     template <class>
-    friend class databind;
+    friend class structs;
 
     friend struct lazy;
 
     friend class jsonpath;
+
+    template <class>
+    friend struct encoder;
+
+    friend class iov_writer;
 
 public:
     owning_ref(owning_ref const &) = default;

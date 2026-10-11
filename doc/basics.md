@@ -96,7 +96,7 @@ program that calls the library.
 | `incorrect_type` | A typed read finds another kind of item than T takes. |
 | `number_out_of_range` | The number does not fit T. |
 | `cyclic_data_structure` | An encode without sharing meets a cycle. |
-| `unpopulated_table_index` | A reference in a `schema<T>` message names an entry that its table does not have. |
+| `unpopulated_table_index` | A reference in a `packed<T>` message names an entry that its table does not have. |
 | `nodelist_too_long` | One step of a query selects more nodes than the item has bytes. |
 | `duplicate_key` | A deterministic check finds a key twice in one map. |
 | `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. |
@@ -193,13 +193,13 @@ cbor::item_size("\x81\x81\x81\x01"sv);                               // 4
 
 ## 6. Memory
 
-The caller sets the bound of the memory of a decode. `databind<T>::decode`
-and `schema<T>::decode` take a target as their third argument. The target
+The caller sets the bound of the memory of a decode. `structs<T>::decode`
+and `packed<T>::decode` take a target as their third argument. The target
 holds `std::pmr` containers with a `std::pmr::memory_resource`. The decode
 reads into the target and makes each element with the allocator of its
 container (uses-allocator construction). When the resource refuses, the
 decode returns `error::not_enough_memory`. A `std::bad_alloc` does not
-leave `databind<T>::decode` or `schema<T>::decode`.
+leave `structs<T>::decode` or `packed<T>::decode`.
 
 ```cpp
 using texts = std::pmr::vector<std::pmr::string>;
@@ -207,7 +207,7 @@ std::array<std::byte, 64> buffer{};
 std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(),
                                            std::pmr::null_memory_resource());
 auto const owner = std::make_shared<std::string const>(encoded);  // three texts of 40 bytes
-cbor::databind<texts>::decode(owner, *owner, texts(&budget));       // not_enough_memory
+cbor::structs<texts>::decode(owner, *owner, texts(&budget));       // not_enough_memory
 ```
 
 The library takes no allocator in other places. These places allocate
@@ -331,8 +331,8 @@ The owner of the bytes comes from one of these:
 | `lazy::from(std::shared_ptr<std::string const>)` | the caller |
 | `lazy::from(owner, encoded)` | the caller: `owner` holds the bytes of `encoded` |
 
-`databind<T>::decode`, `schema<T>::decode` and `schema<T>::path` take the
-same forms (doc/databind.md, doc/schema.md).
+`structs<T>::decode`, `packed<T>::decode` and `packed<T>::path` take the
+same forms (doc/structs.md, doc/packed.md).
 
 The form with an owner reads bytes that something else holds, for example
 a page of a read transaction of a database. The owner can be any

@@ -214,8 +214,8 @@ TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
     CHECK(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).has_value());
 }
 
-// diagnostic_notation printed a tag 29 whose index names no shareable that came before it, and databind refused
-// the same bytes. A sharedref is now checked against the shareables seen so far, as lazy and databind check it.
+// diagnostic_notation printed a tag 29 whose index names no shareable that came before it, and structs refused
+// the same bytes. A sharedref is now checked against the shareables seen so far, as lazy and structs check it.
 TEST_CASE("diagnostic_notation: a sharedref names a shareable that comes before it")
 {
     for (std::string_view const hex : {"d81d05"sv, "81d81d00"sv, "82d81c01d81d05"sv, "82d81d00d81c01"sv})

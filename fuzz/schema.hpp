@@ -312,7 +312,7 @@ void read_all(std::string_view const message)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
     auto const owner = std::make_shared<int const>(0);
-    auto lot = cbor::schema<T>::path(owner, message);
+    auto lot = cbor::packed<T>::path(owner, message);
     if (!lot)
         return;
     template for (constexpr std::meta::info text : texts)
@@ -326,9 +326,9 @@ template <class T>
 void read_target(std::string_view const message)
 {
     read_all<T>(message);
-    auto const value = cbor::schema<T>::decode(message);
+    auto const value = cbor::packed<T>::decode(message);
     if (value) {
-        auto const again = cbor::schema<T>::encode(**value);
+        auto const again = cbor::packed<T>::encode(**value);
         require(again.has_value());
         compare_all(**value, *again);
     }
@@ -399,7 +399,7 @@ template <class T>
 void compare_all(T const &native, std::string_view const message)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
-    auto lot = cbor::schema<T>::path(message);
+    auto lot = cbor::packed<T>::path(message);
     require(lot.has_value());
     template for (constexpr std::meta::info text : texts)
         compare(native_at<T, text, 1>(native), lot->template at_path<path_text<text>>());
@@ -413,27 +413,27 @@ void round_trip(source &in)
     T native{};
     fill(native, in, 0);
     string_writer w;
-    auto const written = cbor::schema<T>::encode(native, w);
+    auto const written = cbor::packed<T>::encode(native, w);
     require(written.has_value());
-    auto const whole = cbor::schema<T>::encode(native);
+    auto const whole = cbor::packed<T>::encode(native);
     require(whole.has_value() && *whole == w.encoded && *written == w.encoded.size());
     std::string prefixed = in.string();
     std::size_t const before = prefixed.size();
-    require(cbor::schema<T>::encode(native, prefixed).has_value() && std::string_view(prefixed).substr(before) == w.encoded);
+    require(cbor::packed<T>::encode(native, prefixed).has_value() && std::string_view(prefixed).substr(before) == w.encoded);
     std::vector<char> chars(in.byte() % 4);
     std::size_t const used = chars.size();
-    require(cbor::schema<T>::encode(native, chars).has_value() &&
+    require(cbor::packed<T>::encode(native, chars).has_value() &&
             std::string_view(chars.data(), chars.size()).substr(used) == w.encoded);
     std::vector<char> room(in.number() % (w.encoded.size() + 16));
-    auto const placed = cbor::schema<T>::encode(native, std::span(room));
+    auto const placed = cbor::packed<T>::encode(native, std::span(room));
     require(placed.has_value() == (room.size() >= w.encoded.size()));
     if (placed)
         require(std::string_view(room.data(), *placed) == w.encoded);
     else
         require(placed.error() == cbor::error::no_buffer_space);
-    auto const back = cbor::schema<T>::decode(w.encoded);
+    auto const back = cbor::packed<T>::decode(w.encoded);
     require(back.has_value());
-    auto const again = cbor::schema<T>::encode(**back);
+    auto const again = cbor::packed<T>::encode(**back);
     require(again.has_value() && *again == w.encoded);
     auto const end = cbor::item_size(w.encoded);
     require(end.has_value() && *end == w.encoded.size());

@@ -183,20 +183,20 @@ TEST_CASE("simple value: simple_value_encode writes every simple value 0 to 255"
 }
 
 #ifdef __cpp_impl_reflection
-// databind reads and writes cbor::simple_value with the same bytes.
-TEST_CASE("simple value: databind reads and writes every simple value 0 to 255")
+// structs reads and writes cbor::simple_value with the same bytes.
+TEST_CASE("simple value: structs reads and writes every simple value 0 to 255")
 {
     for (unsigned i = 0; i < 256; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
-        auto const r = cbor::databind<cbor::simple_value>::decode(wire_of(v));
+        auto const r = cbor::structs<cbor::simple_value>::decode(wire_of(v));
         if (reserved(v)) {
             CHECK_EQ(r.error(), error::syntax_error);
             continue;
         }
         REQUIRE(r.has_value());
         CHECK_EQ(std::to_underlying(**r), v);
-        auto const out = cbor::databind<cbor::simple_value>::encode(static_cast<cbor::simple_value>(v));
+        auto const out = cbor::structs<cbor::simple_value>::encode(static_cast<cbor::simple_value>(v));
         REQUIRE(out.has_value());
         CHECK_EQ(*out, wire_of(v));
     }

@@ -21,7 +21,7 @@ struct [[=cbor::tag(1500)]] Car {
 
 struct [[=cbor::tag(1503)]] ParkingLot { std::vector<Car> cars; };
 
-using S = cbor::schema<ParkingLot>;
+using S = cbor::packed<ParkingLot>;
 #if defined(OLDPATH)
 template <class V> static double num(V const &v) {
   if (!v) [[unlikely]] std::abort();

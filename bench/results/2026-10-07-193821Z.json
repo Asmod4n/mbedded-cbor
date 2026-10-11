@@ -1,6 +1,6 @@
 {
  "time": "2026-10-07-193821Z",
- "commits": "e9c7283 dirty ( M bench/compare.cpp  M include/cbor/schema.hpp ); before 7eb9aae",
+ "commits": "e9c7283 dirty ( M bench/compare.cpp  M include/cbor/packed.hpp ); before 7eb9aae",
  "purpose": "typed_array_view with the std::span vocabulary (iterator, front, back, first, last). g++-16 only (clang 23 has no reflection). floats.cbor, 60000 binary64. before = 7eb9aae, after = this commit (view<>() without CBOR_ALWAYS_INLINE: forced inlining measured 23.8 ns against 20.3 ns before in a separate run). One field = element 30000. MB_FIELD_VIEW: view checked once, then operator[]; MB_FIELD_VIEW_MOVED: view of an rvalue accessor, owner moved; MB_FRONT, MB_BACK: front(), back(). Every field: MB_READ_VIEW operator[] loop; MB_READ_FOR range-for; MB_READ_FOLD std::ranges::fold_left. FB_FIELD: the vector pointer goes through benchmark::DoNotOptimize and the value is checked, so g++ keeps the element load (without it g++-16 removed the load). FB_*_V: VerifyFloatsBuffer each time. CP_*: Cap'n Proto. aa2 = the same arm built a second time. Each arm its own binary, alternating in shuffled order, 10 rounds, min_time 0.2s. ns per message, real_time.",
  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG",
  "resolved_march": "-march=                     \t\tsapphirerapids",

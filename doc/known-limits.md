@@ -54,7 +54,7 @@ the code and the tests, branch limits-at-no-cost.
 
 | Limit | Status | Cause and where it is decided |
 |---|---|---|
-| clang builds have no reflection. databind and schema need g++. | Decided | They use __cpp_impl_reflection and annotations. clang 23 has no reflection. gcc 16 does not define __cpp_annotations. |
+| clang builds have no reflection. structs and schema need g++. | Decided | They use __cpp_impl_reflection and annotations. clang 23 has no reflection. gcc 16 does not define __cpp_annotations. |
 | g++-16 -fsanitize=undefined: verify_path and at_path(binding) do not compile for keys longer than 15 bytes. | Open | Not analysed. |
 | clang ASan Debug overflows 8 MiB in value_decode at depth 1024. | Open | The stack frame per level is large in this build. |
 | bench/schema.cpp does not compile. | Open | The bench source is older than the schema API. Not repaired. |
@@ -65,7 +65,7 @@ the code and the tests, branch limits-at-no-cost.
 |---|---|---|
 | Nesting depth default is 128. The bound is 512. | Decided | CBOR_NESTING_DEPTH_DEFAULT and nesting_depth_limit in validity.hpp. Setting above 512 throws std::logic_error. A default above the bound fails a static_assert. |
 | string_length, container_elements and input_bytes are SIZE_MAX by default. | Decided | validity.hpp macros. No limit is in force until the application sets one. A count in the input reserves nothing. |
-| Memory is bounded by the memory resource of the caller (std::pmr). | Decided | decoded_bytes is removed. databind::decode and schema::decode read into a target with its allocator. |
+| Memory is bounded by the memory resource of the caller (std::pmr). | Decided | decoded_bytes is removed. structs::decode and schema::decode read into a target with its allocator. |
 | A plain struct element of a std::pmr::vector takes its members from the default resource. | Open | The allocator does not reach a type that has none. |
 | Limits are one global object. | Decided | An exception to the functional rule. Each entry reads it once. |
 
@@ -73,7 +73,7 @@ the code and the tests, branch limits-at-no-cost.
 
 | Limit | Status | Cause and where it is decided |
 |---|---|---|
-| The "enough bytes left" check is written by hand in lazy.hpp, schema.hpp, diagnostic_notation.hpp and head.hpp. | Open | validity::check_pending_items should be the one place. |
+| The "enough bytes left" check is written by hand in lazy.hpp, packed.hpp, diagnostic_notation.hpp and head.hpp. | Open | validity::check_pending_items should be the one place. |
 | The has_value() sites (item_end.hpp, query.hpp) repeat the error that validity chooses. | Open | The owner decides the form. |
 
 ## Input the decoder refuses or accepts
@@ -83,7 +83,7 @@ the code and the tests, branch limits-at-no-cost.
 | Indefinite length is refused (error indefinite_length). | Decided | head.hpp, additional information 31. |
 | UTF-8 in text strings is not checked. | Decided | The decoder returns the bytes of the string. No error for invalid UTF-8. |
 | Duplicate keys are checked only in the deterministic profile. | Decided | validity.hpp gives duplicate_key against the neighbour key. Any other read stops at the first matching key (RFC 8949 5.6). |
-| Keys 2(h'01') and 1 are distinct by RFC 8949 5.6.1, but decode turns both into 1. | Open | Not tested for databind with std::map. |
+| Keys 2(h'01') and 1 are distinct by RFC 8949 5.6.1, but decode turns both into 1. | Open | Not tested for structs with std::map. |
 | validity::check_sorted_keys_unique has no caller. | Open | Written before the profile used it. |
 | Simple values 24 to 31 are refused. | Decided | validity::check_simple_value. |
 | Tag 24: the place of the top-level item of the embedded item is not decided. | Open | |
@@ -92,5 +92,5 @@ the code and the tests, branch limits-at-no-cost.
 
 | Limit | Status | Cause and where it is decided |
 |---|---|---|
-| Some functions cost O(n^2) or worse. | Open | doc/complexity.md lists them. Exponential first: generic_read and databind::read with tag 29; keys_equivalent on maps nested as keys. |
+| Some functions cost O(n^2) or worse. | Open | doc/complexity.md lists them. Exponential first: generic_read and structs::read with tag 29; keys_equivalent on maps nested as keys. |
 | The checked form of the limits on floats with clang is 1.24 to 1.31 times slower. | Open | The no-limit form costs nothing. Measurement 2026-10-10-045701Z.json. |
