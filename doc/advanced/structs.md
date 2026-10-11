@@ -119,7 +119,7 @@ struct senml {          // RFC 8428 6: n is 0, v is 2
 
 `structs` writes a tag on a struct only through `cbor::tagged<N, E>`.
 A struct that carries `[[=cbor::tag(n)]]` does not compile in
-`structs`. Only the schema form reads that annotation
+`structs`. Only the packed form reads that annotation
 ([packed.md](packed.md)).
 
 ```cpp

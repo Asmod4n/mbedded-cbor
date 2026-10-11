@@ -23,7 +23,7 @@ the code and the tests, branch limits-at-no-cost.
 | A debug build throws std::logic_error on a foreign thread. | Decided | A release build does not check. cbor::is_thread_bound_v and is_sendable_v state it in the type. |
 | owning_ref has == with T and with owning_ref, and -> to the members of T. * and -> refuse an rvalue. | Decided | The owner, 2026-10-10: as std::optional does. The rvalue rule stays. |
 | lazy::decode through expected<lazy>::operator-> on a temporary gives a dangling reference. | Open | No overload sees the temporary. |
-| A view outlives its owner in two forms with std::expected. | Open | Not closed. typed_array_view and schema::accessor keep their view after a move. |
+| A view outlives its owner in two forms with std::expected. | Open | Not closed. typed_array_view and packed::accessor keep their view after a move. |
 | at_path(owner, encoded) does not check that the owner holds the bytes. | Open | An overload on std::shared_ptr<std::string const> would close it. The owner decides. |
 
 ## Paths
@@ -48,10 +48,10 @@ the code and the tests, branch limits-at-no-cost.
 
 | Limit | Status | Cause and where it is decided |
 |---|---|---|
-| clang builds have no reflection. structs and schema need g++. | Decided | They use __cpp_impl_reflection and annotations. clang 23 has no reflection. gcc 16 does not define __cpp_annotations. |
+| clang builds have no reflection. structs and packed need g++. | Decided | They use __cpp_impl_reflection and annotations. clang 23 has no reflection. gcc 16 does not define __cpp_annotations. |
 | g++-16 -fsanitize=undefined: verify_path and at_path(binding) do not compile for keys longer than 15 bytes. | Open | Not analysed. |
 | clang ASan Debug overflows 8 MiB in value_decode at depth 1024. | Open | The stack frame per level is large in this build. |
-| bench/schema.cpp does not compile. | Open | The bench source is older than the schema API. Not repaired. |
+| bench/schema.cpp does not compile. | Open | The bench source is older than the packed API. Not repaired. |
 
 ## Limits and memory
 
@@ -59,7 +59,7 @@ the code and the tests, branch limits-at-no-cost.
 |---|---|---|
 | Nesting depth default is 128. The bound is 512. | Decided | CBOR_NESTING_DEPTH_DEFAULT and nesting_depth_limit in validity.hpp. Setting above 512 throws std::logic_error. A default above the bound fails a static_assert. |
 | string_length, container_elements and input_bytes are SIZE_MAX by default. | Decided | validity.hpp macros. No limit is in force until the application sets one. A count in the input reserves nothing. |
-| Memory is bounded by the memory resource of the caller (std::pmr). | Decided | decoded_bytes is removed. structs::decode and schema::decode read into a target with its allocator. |
+| Memory is bounded by the memory resource of the caller (std::pmr). | Decided | decoded_bytes is removed. structs::decode and packed::decode read into a target with its allocator. |
 | A plain struct element of a std::pmr::vector takes its members from the default resource. | Open | The allocator does not reach a type that has none. |
 | Limits are one global object. | Decided | An exception to the functional rule. Each entry reads it once. |
 
