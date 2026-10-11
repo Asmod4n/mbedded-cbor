@@ -120,10 +120,13 @@ class generic
                    (h.major == major_type::tag &&
                     (h.argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
                      h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)));
+        else if constexpr (std::is_enum_v<U>)
+            return head_accepted<std::underlying_type_t<U>>(h);
         else if constexpr (std::is_unsigned_v<U>)
-            return h.major == major_type::unsigned_integer;
-        else if constexpr (std::is_integral_v<U> || std::is_enum_v<U>)
-            return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer;
+            return h.major == major_type::unsigned_integer && h.argument <= std::numeric_limits<U>::max();
+        else if constexpr (std::is_integral_v<U>)
+            return (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) &&
+                   h.argument <= static_cast<std::uint64_t>(std::numeric_limits<U>::max());
         else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>)
             return h.major == major_type::text_string;
         else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>)
@@ -269,6 +272,8 @@ class generic
                 return std::unexpected(h.error());
             return variant_read(d, out, *h, depth, depth_max);
         } else if constexpr (std::is_enum_v<U>) {
+            static_assert(packed::has_fixed_underlying_type<U>,
+                          "cbor::databind reads an enum only with a fixed underlying type, because every value of that type is a value of the enum.");
             return integer_read<std::underlying_type_t<U>>(d, out);
         } else if constexpr (std::is_integral_v<U>) {
             return integer_read<U>(d, out);
@@ -787,7 +792,20 @@ template <class T>
 class databind
 {
 public:
-    static std::expected<owning_ref<T>, error> decode(std::string_view encoded) = delete;
+    static std::expected<owning_ref<T>, error> decode(std::string_view const encoded)
+    {
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            auto copy = std::make_shared<std::string const>(encoded);
+            std::string_view const view = *copy;
+            return decode(std::move(copy), view);
+#if defined(__cpp_exceptions)
+        } catch (std::bad_alloc const &) {
+            return std::unexpected(error::not_enough_memory);
+        }
+#endif
+    }
 
     template <std::same_as<std::string> Encoded>
     static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
