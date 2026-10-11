@@ -1261,3 +1261,17 @@ TEST_CASE("path: a tag literal in a run-time filter")
     CHECK(*cbor::query(binding, "$[?@ == [1(2)]]", doc) == A(A(tagged{1, V(2)})));
     CHECK(*cbor::query<"$[?@ == 1000(1)]">(binding, doc) == A(tagged{1000, V(1)}));
 }
+
+// g++ 16 with -fsanitize=undefined refused a compile-time path whose
+// names need more than 15 bytes: the key bytes were appended from the
+// template parameter object, and the growth of the std::string compared
+// a pointer into that object, which is not a constant expression. The
+// gcc-asan build compiles this test with -fsanitize=undefined.
+TEST_CASE("a compile-time path with a long name compiles with every sanitizer")
+{
+    static_assert(cbor::is_valid_path_v<"$.average_prices_in_euro[*]">);
+    std::string const bytes = "\xa1\x76" "average_prices_in_euro" "\x81\x18\x2a";  // {"average_prices_in_euro": [42]}
+    auto const first = cbor::at_path<"$.average_prices_in_euro[0]", int>(bytes);
+    REQUIRE(first.has_value());
+    CHECK_EQ(*first, 42);
+}
