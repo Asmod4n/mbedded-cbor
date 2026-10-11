@@ -202,7 +202,6 @@ std::size_t const size = bytes.size();
   and `search()` are not supported.
 - [doc/structs.md](doc/structs.md) and
   [doc/packed.md](doc/packed.md): every type and annotation.
-- [doc/advanced/known-limits.md](doc/advanced/known-limits.md): what it does not do yet.
 
 ## Tests
 

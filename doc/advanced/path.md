@@ -39,8 +39,7 @@ A wrong use that the compiler cannot see throws `std::logic_error`:
 and `cbor::typed_array`. The owner is a `std::shared_ptr<void const>`. A
 view type without an owner does not compile. A temporary `std::string` or
 a moved `std::string` beside the owner does not compile: that overload is
-deleted. The function does not check that the owner holds the bytes
-([known-limits.md](known-limits.md)).
+deleted. The function does not check that the owner holds the bytes.
 
 An `owning_ref` compares and reaches its value as `std::optional` does:
 `*name == "ann"` and `name->size()` read the view, `name == "ann"`

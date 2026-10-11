@@ -121,8 +121,7 @@ of elements of a list or a map.
 
 A `std::string_view` stays valid while an accessor of the same owner
 lives. `at_path` on a temporary accessor does not compile. An empty owner
-throws `std::logic_error`. An accessor keeps its view after a move
-([known-limits.md](known-limits.md)).
+throws `std::logic_error`. An accessor keeps its view after a move.
 
 ## 6. Typed arrays
 
