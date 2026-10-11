@@ -61,7 +61,6 @@ the code and the tests, branch limits-at-no-cost.
 | string_length, container_elements and input_bytes are SIZE_MAX by default. | Decided | validity.hpp macros. No limit is in force until the application sets one. A count in the input reserves nothing. |
 | Memory is bounded by the memory resource of the caller (std::pmr). | Decided | decoded_bytes is removed. databind::decode and schema::decode read into a target with its allocator. |
 | A plain struct element of a std::pmr::vector takes its members from the default resource. | Open | The allocator does not reach a type that has none. |
-| schema::decode lets std::bad_alloc through. | Open | databind maps it to not_enough_memory. The owner decides whether schema does the same. |
 | Limits are one global object. | Decided | An exception to the functional rule. Each entry reads it once. |
 
 ## Checks in the code

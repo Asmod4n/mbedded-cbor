@@ -1,16 +1,19 @@
 #include "binding.hpp"
 
+#include <array>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <memory_resource>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <vector>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -201,3 +204,27 @@ TEST_CASE("doc basics: a lazy moved out of the expected to another thread")
     CHECK(threw);
 #endif
 }
+
+#ifdef __cpp_impl_reflection
+// The section "Memory" shows that the caller bounds the memory of a decode with a std::pmr resource, and that
+// a resource that refuses after 64 bytes gives not_enough_memory.
+TEST_CASE("doc basics: a std::pmr target with a resource that refuses after 64 bytes")
+{
+    using texts = std::pmr::vector<std::pmr::string>;
+    std::string const text(40, 'x');
+    std::string encoded = "\x83"s;
+    for (int i = 0; i < 3; ++i)
+        encoded += "\x78\x28"s + text;
+    std::array<std::byte, 64> buffer{};
+    std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
+    auto const owner = std::make_shared<std::string const>(encoded);
+    auto const decoded = cbor::databind<texts>::decode(owner, *owner, texts(&budget));
+    REQUIRE_FALSE(decoded.has_value());
+    CHECK_EQ(decoded.error(), error::not_enough_memory);
+    std::array<std::byte, 4096> large{};
+    std::pmr::monotonic_buffer_resource enough(large.data(), large.size(), std::pmr::null_memory_resource());
+    auto const fits = cbor::databind<texts>::decode(owner, *owner, texts(&enough));
+    REQUIRE(fits.has_value());
+    CHECK_EQ((**fits).size(), 3u);
+}
+#endif
