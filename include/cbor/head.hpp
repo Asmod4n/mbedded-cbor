@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdfloat>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -342,6 +343,15 @@ class heads
         std::uint32_t const frac = half & ((1u << h.significand_bits) - 1u);
         if (exp == h.exponent_max)
             return std::bit_cast<float>(sign | f.exponent_max << f.significand_bits | frac << widen);
+#if defined(__STDCPP_FLOAT16_T__)
+        if !consteval {
+            return static_cast<float>(std::bit_cast<std::float16_t>(half));
+        }
+#elif defined(__FLT16_MAX__)
+        if !consteval {
+            return static_cast<float>(std::bit_cast<_Float16>(half));
+        }
+#endif
         if (exp != 0)
             return std::bit_cast<float>(
                 sign | (exp + f.exponent_bias - h.exponent_bias) << f.significand_bits | frac << widen);
