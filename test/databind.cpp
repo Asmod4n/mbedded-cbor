@@ -10,6 +10,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <memory_resource>
 #include <new>
 #include <optional>
 #include <set>
@@ -578,6 +579,33 @@ TEST_CASE("databind: a map key that is not well-formed is a syntax error")
     auto const alone = cbor::databind<cbor::simple_value>::decode("\xf8\x10"s);
     REQUIRE_FALSE(alone.has_value());
     CHECK_EQ(alone.error(), error::syntax_error);
+}
+
+// A std::pmr target that a caller names was copied into the parameter
+// of decode, and the copy took the default resource. The decode then
+// ignored the limit of the caller's resource. The target is now taken
+// only as an rvalue, so the named form does not compile, and the moved
+// form keeps the resource.
+template <class T>
+concept decodes_named_target = requires(std::shared_ptr<void const> owner, std::string_view encoded, T target) {
+    cbor::databind<T>::decode(owner, encoded, target);
+};
+
+TEST_CASE("databind decode keeps the resource of a moved pmr target")
+{
+    using texts = std::pmr::vector<std::pmr::string>;
+    static_assert(!decodes_named_target<texts>);
+
+    std::vector<std::string> const value(3, std::string(40, 'x'));
+    auto const encoded = cbor::databind<std::vector<std::string>>::encode(value);
+    REQUIRE(encoded.has_value());
+    auto const owner = std::make_shared<std::string const>(*encoded);
+    std::array<std::byte, 64> buffer;
+    std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
+    texts target(&budget);
+    auto const decoded = cbor::databind<texts>::decode(owner, *owner, std::move(target));
+    REQUIRE_FALSE(decoded.has_value());
+    CHECK_EQ(decoded.error(), error::not_enough_memory);
 }
 
 #endif
