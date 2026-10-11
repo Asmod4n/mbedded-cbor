@@ -1518,3 +1518,31 @@ TEST_CASE("lazy: a step to an element past the end of the input fails at once")
     CHECK_EQ(cbor::lazy::from(std::string("\xa1\x01", 2))->at(cbor::key{1}).error(), error::too_little_data);
     CHECK_EQ(cbor::lazy::from(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1}).error(), error::too_little_data);
 }
+
+// size() returned the count of the head, also when the bytes after the
+// head cannot hold that many items. A caller who reserves with size()
+// then reserved what the input claimed. size() now checks the count
+// against the bytes that are left, as elements() and entries() do.
+TEST_CASE("lazy size refuses a count that the bytes cannot hold")
+{
+    using namespace std::string_literals;
+    for (std::string const &bytes : {"\x82\x01"s, "\x98\xff"s, "\x9b\x7f\xff\xff\xff\xff\xff\xff\xff\x01"s, "\xa1\x01"s,
+                                    "\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s}) {
+        auto const doc = cbor::lazy::from(bytes);
+        REQUIRE(doc.has_value());
+        CHECK_EQ(doc->size().error(), cbor::error::too_little_data);
+    }
+    auto const pair = cbor::lazy::from("\x82\x01\x02"s);
+    REQUIRE(pair.has_value());
+    CHECK_EQ(pair->size().value(), 2);
+}
+
+// cbor::limits = {} was ambiguous between the deleted copy assignment
+// and the assignment of limit_values. It now sets every limit to its
+// default.
+TEST_CASE("cbor::limits = {} sets the defaults")
+{
+    test::limits_guard const guard{{.nesting_depth = 4}};
+    cbor::limits = {};
+    CHECK_EQ(cbor::limits.load().nesting_depth, cbor::limit_values{}.nesting_depth);
+}
