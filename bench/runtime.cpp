@@ -162,7 +162,7 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
 }
 #endif
 
-#if defined(ARM_S_STRING) || defined(ARM_TC_WRITE)
+#if defined(ARM_S_STRING) || defined(ARM_S_STRING_REUSE) || defined(ARM_TC_WRITE)
 #define ARM_S_TREE 1
 #endif
 #if defined(ARM_TC_WRITE)
@@ -560,6 +560,9 @@ static flexbuffers::Builder fbb;
 #if defined(ARM_S)
 static std::vector<char> buf;
 #endif
+#if defined(ARM_S_STRING_REUSE)
+static std::string reused;
+#endif
 #if defined(ARM_LC_PREALLOC)
 static cbor_item_t *lc;
 static std::vector<unsigned char> lcbuf;
@@ -618,7 +621,15 @@ static void setup()
 
 static std::uint64_t op()
 {
-#if defined(ARM_S_STRING)
+#if defined(ARM_S_STRING_REUSE)
+    bench::binding b;
+    reused.clear();
+    if (!cbor::encode(b, reused, tree))
+        std::abort();
+    benchmark::DoNotOptimize(reused.data());
+    benchmark::ClobberMemory();
+    return reused.size();
+#elif defined(ARM_S_STRING)
     bench::binding b;
     std::string out;
     if (!cbor::encode(b, out, tree))
