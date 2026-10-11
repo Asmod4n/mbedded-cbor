@@ -341,10 +341,17 @@ inline std::expected<std::uint64_t, error> lazy::size() const
                             auto const found = value_sharing::container_resolve(top_level, offset, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
-                            if (found->h.major != major_type::array && found->h.major != major_type::map)
-                                [[unlikely]]
+                            auto const &[source, h, d, item_at] = *found;
+                            if (h.major != major_type::array && h.major != major_type::map) [[unlikely]]
                                 return std::unexpected(error::not_indexable);
-                            return found->h.argument;
+                            auto const items = validity::checked_mul(
+                                h.argument, h.major == major_type::map ? rfc8949::data_items_per_pair : 1);
+                            if (!items) [[unlikely]]
+                                return std::unexpected(error::too_little_data);
+                            if (auto const r = validity::check_pending_items(*items, d.encoded.size()); !r)
+                                [[unlikely]]
+                                return std::unexpected(r.error());
+                            return h.argument;
                         });
 }
 

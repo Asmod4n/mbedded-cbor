@@ -510,7 +510,7 @@ public:
     limit<validity::size_limit, error::container_elements_exceeded> container_elements;
     limit<validity::size_limit, error::input_bytes_exceeded> input_bytes;
 
-    constexpr resource_limits() noexcept
+    constexpr explicit resource_limits() noexcept
         : resource_limits(limit_values{})
     {
     }
