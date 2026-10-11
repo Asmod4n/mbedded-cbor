@@ -143,7 +143,7 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
             pk.pack_ext_body(body.data(), static_cast<std::uint32_t>(body.size()));
         }
     } break;
-    case cbor::kind::floating_point: pk.pack_double(b.float_of(x)); break;
+    case cbor::kind::floating_point: { double const d = b.float_of(x); if (static_cast<double>(static_cast<float>(d)) == d) pk.pack_float(static_cast<float>(d)); else pk.pack_double(d); } break;
     case cbor::kind::simple_value: { auto const v = b.simple_of(x); if (v == 20) pk.pack_false(); else if (v == 21) pk.pack_true(); else pk.pack_nil(); } break;
     case cbor::kind::text_string: { auto const t = b.text_of(x); pk.pack_str(std::uint32_t(t.size())); pk.pack_str_body(t.data(), std::uint32_t(t.size())); } break;
     case cbor::kind::byte_string: { auto const t = b.bytes_of(x); pk.pack_bin(std::uint32_t(t.size())); pk.pack_bin_body(t.data(), std::uint32_t(t.size())); } break;
