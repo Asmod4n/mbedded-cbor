@@ -1,0 +1,5 @@
+set output diag
+let ownref hasType(hasUnqualifiedDesugaredType(recordType(hasDeclaration(classTemplateSpecializationDecl(hasName("::cbor::owning_ref"))))))
+let ontemp hasDescendant(materializeTemporaryExpr(hasType(hasUnqualifiedDesugaredType(recordType(hasDeclaration(classTemplateSpecializationDecl(hasName("::std::expected"))))))))
+match varDecl(hasType(referenceType()), hasInitializer(ignoringImplicit(cxxOperatorCallExpr(hasOverloadedOperatorName("*"), ownref, ontemp)))).bind("a reference to the owning_ref inside a temporary std::expected; the owning_ref ends with that statement")
+match varDecl(hasType(referenceType()), hasInitializer(ignoringImplicit(cxxMemberCallExpr(callee(cxxMethodDecl(hasName("value"))), ownref, ontemp)))).bind("a reference to the owning_ref inside a temporary std::expected; the owning_ref ends with that statement")
