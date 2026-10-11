@@ -154,7 +154,7 @@ person const copy = p;
 
 ### mbedded-cbor
 
-databind reads the members of an aggregate by reflection (C++26). The struct needs no macro and no tag.
+structs reads the members of an aggregate by reflection (C++26). The struct needs no macro and no tag.
 
 ```cpp
 struct person {
@@ -162,8 +162,8 @@ struct person {
     std::uint8_t age;
 };
 
-auto const bytes = cbor::databind<person>::encode(person{"ann", 30});
-auto const back = cbor::databind<person>::decode(*bytes);
+auto const bytes = cbor::structs<person>::encode(person{"ann", 30});
+auto const back = cbor::structs<person>::decode(*bytes);
 // (*back)->name is "ann", (*back)->age is 30
 ```
 
@@ -299,14 +299,14 @@ bool const same = v[0] == v[1];
 
 ### mbedded-cbor
 
-A lazy and databind read tag 29 as the value that tag 28 marks. encode writes tags 28 and 29 with cbor::sharedrefs::on (doc/runtime.md).
+A lazy and structs read tag 29 as the value that tag 28 marks. encode writes tags 28 and 29 with cbor::sharedrefs::on (doc/runtime.md).
 
 ```cpp
 std::string const bytes = "\x82\xd8\x1c\x61x\xd8\x1d\x00"s; // [28("x"), 29(0)]
 auto const second = cbor::lazy::from(bytes)->at(1)->get<std::string_view>();
 // **second is "x"
 
-auto const v = cbor::databind<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
+auto const v = cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
 // **v is {"x", "x"}
 ```
 
@@ -373,14 +373,14 @@ double const sum = std::accumulate(values.begin(), values.end(), 0.0);
 
 ### mbedded-cbor
 
-cbor::schema writes a std::vector<double> as an RFC 8746 typed array. view gives a typed_array_view, a random access range over the bytes of the input, with no copy.
+cbor::packed writes a std::vector<double> as an RFC 8746 typed array. view gives a typed_array_view, a random access range over the bytes of the input, with no copy.
 
 ```cpp
 struct [[=cbor::tag(1900)]] series {
     std::vector<double> values;
 };
 
-auto const root = cbor::schema<series>::path(encoded_bytes);
+auto const root = cbor::packed<series>::path(encoded_bytes);
 auto const values = root->view<"$.values">();
 double const sum = std::accumulate(values->begin(), values->end(), 0.0);
 ```
@@ -542,7 +542,7 @@ does not count.
 | errors | FlatBuffers | 3 |
 | errors | Cap'n Proto | 8 |
 
-The shared row of mbedded-cbor counts the lazy form. The databind form
+The shared row of mbedded-cbor counts the lazy form. The structs form
 is 1 line. The shared rows of nlohmann/json and libcbor are left out,
 because their snippets show that the feature is absent.
 
@@ -551,7 +551,7 @@ because their snippets show that the feature is absent.
 `bench/results/2026-10-09-025729Z.json` holds the only measurement in
 bench/results that runs mbedded-cbor, FlatBuffers and Cap'n Proto on the
 same data with the commit of a recent tree (f2b1e56). The operations are
-in `bench/compare.cpp`. The mbedded-cbor arm uses `cbor::schema`
+in `bench/compare.cpp`. The mbedded-cbor arm uses `cbor::packed`
 (Packed CBOR), not the at_path and lazy forms of sections 2 and 4.
 FlatBuffers runs without its Verifier. The build is g++-16 16.2.0,
 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie,
@@ -588,6 +588,6 @@ The A/A difference of a cell lies between 0.07 and 10.9 percent (field
 through `at_path<"@[]">(i)`, not through the `view` of section 6.
 
 bench/results has no measurement of nlohmann/json, libcbor, the plain
-at_path form, the lazy elements form, databind, shared values or broken
+at_path form, the lazy elements form, structs, shared values or broken
 input against another library in this image. This document gives no
 number for them.

@@ -111,7 +111,7 @@ class value_sharing
     friend class generic;
 
     template <class>
-    friend class databind;
+    friend class structs;
 #endif
 };
 

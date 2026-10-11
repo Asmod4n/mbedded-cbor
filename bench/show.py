@@ -34,7 +34,7 @@ for job, kinds in (("encode", ("S", "_PREALLOC", "_CLEAR", "_RAW", "_REUSE")), (
 
 cw = {n[3:]: a for n, a in arms.items() if n.startswith("cw.")}
 if cw:
-    print("== cwt through cbor::databind, ns per document")
+    print("== cwt through cbor::structs, ns per document")
     for op, a in sorted(cw.items()):
         print(f"  {op:6} {a['median_ns']:8.1f}")
     print()

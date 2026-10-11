@@ -252,7 +252,7 @@ reads a byte after the item.
 A number that comes at run time is written at its native width: an
 integer as a head with eight argument bytes, a float as binary64. Lengths
 of strings, arrays and maps and tag numbers take the shortest head.
-`cbor::databind` writes deterministic CBOR (RFC 8949 4.2.1) instead.
+`cbor::structs` writes deterministic CBOR (RFC 8949 4.2.1) instead.
 
 ```cpp
 std::string out;

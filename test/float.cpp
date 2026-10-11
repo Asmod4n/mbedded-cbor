@@ -34,7 +34,7 @@ std::string encoded_float(double d)
 #ifdef __cpp_impl_reflection
 std::string preferred_float(double d)
 {
-    auto const e = cbor::databind<double>::encode(d);
+    auto const e = cbor::structs<double>::encode(d);
     REQUIRE(e.has_value());
     return *e;
 }
@@ -100,8 +100,8 @@ TEST_CASE("major 7: ±zero and sample floats")
         CHECK_EQ(bits_of(float_of(encoded_float(f))), bits_of(f));
 }
 
-// The walker writes a run-time float at its native width, binary64. databind writes deterministic CBOR,
-// so the width tests below go through databind, which needs reflection.
+// The walker writes a run-time float at its native width, binary64. structs writes deterministic CBOR,
+// so the width tests below go through structs, which needs reflection.
 TEST_CASE("major 7: the walker writes a float as binary64")
 {
     for (double const v : {0.0, 1.5, 65504.0, 3.14})
@@ -190,7 +190,7 @@ TEST_CASE("§4.1 float width: binary32 subnormals use f32")
 namespace
 {
 
-// RFC 8949 section 4.2.2: databind writes deterministic CBOR, so a float takes the shortest form that
+// RFC 8949 section 4.2.2: structs writes deterministic CBOR, so a float takes the shortest form that
 // keeps its value.
 // IEEE 754: a finite value fits a binary format when it equals n * 2^q with
 // |n| below 2^precision, q at or above the exponent of the least subnormal,
