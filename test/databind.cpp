@@ -406,10 +406,10 @@ TEST_CASE("databind: a shared reference reads as the item it names")
 template <class Encoded>
 concept decodable = requires(Encoded &&e) { cbor::databind<std::string_view>::decode(std::forward<Encoded>(e)); };
 
-// The value category of the bytes says what decode does. A moved std::string becomes the owner and is not copied:
-// the view points into the buffer that was moved. Every other form would need a copy or would leave views into bytes
-// that nothing keeps alive, so it does not compile; the caller passes an owner with the bytes instead.
-TEST_CASE("databind: decode takes a moved string as the owner and refuses every other form")
+// The value category of the bytes says what decode does, as for schema::decode and lazy::from. A moved std::string
+// becomes the owner and is not copied: the view points into the buffer that was moved. Every other form is copied
+// once, so no view points into bytes that nothing keeps alive.
+TEST_CASE("databind: decode takes a moved string as the owner and copies every other form")
 {
     std::string const text(40, 'x');
     std::string const message = "\x78\x28"s + text;
@@ -423,12 +423,18 @@ TEST_CASE("databind: decode takes a moved string as the owner and refuses every 
     CHECK_EQ(**moved, text);
 
     CHECK(decodable<std::string>);
-    CHECK_FALSE(decodable<std::string &>);
-    CHECK_FALSE(decodable<std::string const &>);
-    CHECK_FALSE(decodable<std::string const>);
-    CHECK_FALSE(decodable<char const *>);
-    CHECK_FALSE(decodable<char const (&)[3]>);
-    CHECK_FALSE(decodable<std::string_view>);
+    CHECK(decodable<std::string &>);
+    CHECK(decodable<std::string const &>);
+    CHECK(decodable<std::string const>);
+    CHECK(decodable<char const *>);
+    CHECK(decodable<std::string_view>);
+
+    std::string lvalue = message;
+    auto const copied = cbor::databind<std::string_view>::decode(lvalue);
+    REQUIRE(copied.has_value());
+    CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(lvalue.data() + 2));
+    lvalue.assign(message.size(), '\0');
+    CHECK_EQ(**copied, text);
 
     auto const owner = std::make_shared<std::string const>(message);
     auto const held = cbor::databind<std::string_view>::decode(owner, *owner);

@@ -176,8 +176,8 @@ TEST_CASE("path: a wildcard over records with large fields")
 }
 
 // RFC 9535 2.2 to 2.5: blanks before a segment and inside brackets, names in single or double quotes with their
-// escapes, an index without leading zeros in the range of I-JSON. At run time a bracket holds the selectors of
-// RFC 9535 and nothing else; every other form is invalid_path. A query has at most as many segments as the nesting depth.
+// escapes, an index without leading zeros in the range of I-JSON. Inside brackets an EDN literal is a key, at
+// run time as at compile time, so an EDN literal on an array is not_indexable; every other form is invalid_path. A query has at most as many segments as the nesting depth.
 TEST_CASE("path: the grammar")
 {
     value const doc = M("a"s, M("b c"s, A(1, 2, 3)), "ü'\""s, 4);
@@ -188,10 +188,12 @@ TEST_CASE("path: the grammar")
     CHECK(at("$.\u00fc_1", M("\u00fc_1"s, 5)) == V(5));
     for (std::string_view const bad :
          {"a"sv, ""sv, "$.1a"sv, "$["sv, "$[*"sv, "$['open"sv, "$['k'"sv, "$[x]"sv, "$[1"sv, "$#"sv, "$[01]"sv,
-          "$[-0]"sv, "$[1.5]"sv, "$[h'01']"sv, "$[true]"sv, "$.a "sv, "$.."sv, "$[1,]"sv, "$['\\x']"sv,
+          "$.a "sv, "$.."sv, "$[1,]"sv, "$['\\x']"sv,
           "$['\\ud800']"sv, "$['\x01']"sv, "$[9007199254740992]"sv, "$[*]]"sv, "$."sv})
         CHECK_EQ(path_error(bad, A(1)), error::invalid_path);
     CHECK_EQ(path_error("$[9007199254740991]", A(1)), error::index_out_of_bounds);
+    for (std::string_view const key : {"$[-0]"sv, "$[1.5]"sv, "$[h'01']"sv, "$[true]"sv})
+        CHECK_EQ(path_error(key, A(1)), error::not_indexable);
     std::string const deep = encoded(A(A(A(A(1)))));
     test_binding binding;
     {
@@ -489,9 +491,10 @@ TEST_CASE("path: the filter selector")
     CHECK(at("$[?@.a == -1e0 || @.a == 1.0e+0]", doc) == A(M("a"s, 1)));
     CHECK(at("$.*[?@ == 'x']", doc) == A("x"s));
     for (std::string_view const bad : {"$[?@.a]]"sv, "$[?1]"sv, "$[?@.a == @.*]"sv, "$[?!@.a == 1]"sv, "$[?@.a = 1]"sv,
-                                       "$[?@.a == 01]"sv, "$[?@.a == 1.]"sv, "$[?@.a == True]"sv, "$[?(@.a]"sv,
-                                       "$[?@.a == [1]]"sv, "$[?@.a == h'01']"sv, "$[?@.a == \"\\'\"]"sv})
+                                       "$[?@.a == 01]"sv, "$[?@.a == True]"sv, "$[?(@.a]"sv})
         CHECK_EQ(path_error(bad, doc), error::invalid_path);
+    for (std::string_view const edn : {"$[?@.a == 1.]"sv, "$[?@.a == [1]]"sv, "$[?@.a == h'01']"sv, "$[?@.a == \"\\'\"]"sv})
+        CHECK(path_read(edn, doc).has_value());
 }
 
 // RFC 9535 2.4.4 to 2.4.8: length counts Unicode scalar values, elements or members and gives Nothing for other
@@ -728,6 +731,45 @@ TEST_CASE("path: a moved owning_ref keeps no view")
     CHECK_EQ(**source, "xyz"sv);
 }
 
+namespace
+{
+
+template <class R>
+concept owning_ref_compares = requires(R const &r) { r == r; };
+
+template <class R>
+concept rvalue_dereferences = requires(R &&r) { *std::move(r); };
+
+template <class R>
+concept rvalue_reaches_member = requires(R &&r) { std::move(r).operator->(); };
+
+template <class R>
+concept lvalue_reaches_member = requires(R const &r) { r.operator->(); };
+
+} // namespace
+
+// std::optional compares its value with == and reaches its members with ->. An owning_ref does the same, so a caller
+// compares a view without *. The lvalue rule of * and -> stays: a view from a temporary does not compile.
+TEST_CASE("path: owning_ref compares and reaches its value as std::optional does")
+{
+    auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x63xyz\x61\x62\x63xyz"s);
+    auto const a = *cbor::at_path<"$.a", std::string_view>(owner, *owner);
+    auto const b = *cbor::at_path<"$.b", std::string_view>(owner, *owner);
+    CHECK(a == "xyz"sv);
+    CHECK("xyz"sv == a);
+    CHECK(a != "xy"sv);
+    CHECK(a == "xyz");
+    CHECK(a == b);
+    CHECK_FALSE(a != b);
+    CHECK_EQ(a->size(), 3uz);
+    std::optional<std::string_view> const o = "xyz"sv;
+    CHECK_EQ(a == "xyz"sv, o == "xyz"sv);
+    CHECK_FALSE(owning_ref_compares<cbor::owning_ref<cbor::typed_array>>);
+    CHECK_FALSE(rvalue_dereferences<cbor::owning_ref<std::string_view>>);
+    CHECK_FALSE(rvalue_reaches_member<cbor::owning_ref<std::string_view>>);
+    CHECK(lvalue_reaches_member<cbor::owning_ref<std::string_view>>);
+}
+
 // RFC 8949 3: a data item has at least its initial byte, and an argument or a string has as many bytes as its head
 // says. A message that ends before is too little data, at the target and in a sibling that the walk skips.
 TEST_CASE("path: a typed read of a message that ends too early")
@@ -803,7 +845,8 @@ TEST_CASE("path: a typed read with a negative index and with an integer key")
 
 // Each type of the read takes the CBOR items that RFC 8949 maps to it and refuses every other item as incorrect_type.
 // An integer that the type cannot hold is out of range (RFC 8949 3.1: a 64-bit magnitude and the sign in the major
-// type).
+// type). A double takes an integer up to 2^53 in magnitude, where every integer is exact (IEEE 754 binary64), and the
+// owner decided on 2026-10-10 that this is the one conversion.
 TEST_CASE("path: a typed read of each type")
 {
     check_path<"$", std::int64_t>("\x38\x63"s, {}, std::int64_t{-100});
@@ -823,7 +866,14 @@ TEST_CASE("path: a typed read of each type")
     check_path<"$", double>("\xf9\x3c\x00"s, {}, std::bit_cast<std::uint64_t>(1.0));
     check_path<"$", double>("\xfa\x47\xc3\x50\x00"s, {}, std::bit_cast<std::uint64_t>(100000.0));
     check_path<"$", double>("\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"s, {}, std::bit_cast<std::uint64_t>(1.1));
-    check_path<"$", double>("\x01"s, {}, std::unexpected(error::incorrect_type));
+    check_path<"$", double>("\x01"s, {}, std::bit_cast<std::uint64_t>(1.0));
+    check_path<"$", double>("\x20"s, {}, std::bit_cast<std::uint64_t>(-1.0));
+    check_path<"$", double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x00"s, {}, std::bit_cast<std::uint64_t>(0x1p53));
+    check_path<"$", double>("\x3b\x00\x1f\xff\xff\xff\xff\xff\xff"s, {}, std::bit_cast<std::uint64_t>(-0x1p53));
+    check_path<"$", double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s, {}, std::unexpected(error::number_out_of_range));
+    check_path<"$", double>("\x3b\x00\x20\x00\x00\x00\x00\x00\x00"s, {}, std::unexpected(error::number_out_of_range));
+    check_path<"$", double>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s, {}, std::unexpected(error::number_out_of_range));
+    check_path<"$", double>("\xc2\x41\x01"s, {}, std::unexpected(error::incorrect_type));
     check_path<"$", double>("\xf5"s, {}, std::unexpected(error::incorrect_type));
 
     check_path<"$", bool>("\xf5"s, {}, true);
@@ -964,8 +1014,8 @@ TEST_CASE("path: a typed read that is not safe does not compile")
 
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a[*]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$..a", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[1.5]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[h'01']", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[1.5]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[h'01']", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[0,1]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[0:1]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[?@.a]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
@@ -1090,6 +1140,96 @@ TEST_CASE("path: tag 55799 inside the item is skipped")
     CHECK_EQ(cbor::lazy::from(leaf)->at("a")->get<int>(), 7);
 }
 
+// RFC 8949 6.1: a generic decoder passes a tag it does not know and gives its content. The owner decided on
+// 2026-10-10 that a path does the same: it passes every tag other than 2, 3, 24, 29 and the tags of RFC 8746. Each
+// form is checked: the typed read over bytes, the typed read from a lazy, the lazy walk that tag 29 starts, a binding
+// and query. A path that ends at the tag gives the whole tagged item to a binding, because a binding knows tags.
+TEST_CASE("path: a tag that the path does not know is passed to its content")
+{
+    std::string const doc = "\xa2\x61""v\xd9\x03\xe8\x82\x01\x02\x61""m\xd9\x03\xe9\xa1\x61""k\x07"s;
+    std::string const shared = "\x82\xd8\x1c\xd9\x03\xe8\x82\x01\x02\xd8\x1d\x00"s;
+    auto const l = *cbor::lazy::from(doc);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(doc), 2);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(l), 2);
+    CHECK_EQ(cbor::at_path<"$.m.k", int>(doc), 7);
+    CHECK_EQ(cbor::at_path<"$.m.k", int>(l), 7);
+    CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared), 2);
+    CHECK_EQ(cbor::at_path<"$[1][1]", int>(*cbor::lazy::from(shared)), 2);
+    CHECK_EQ(cbor::at_path<"$", int>("\xd9\x03\xe8\x05"s), 5);
+    CHECK_EQ(cbor::at_path<"$", int>(*cbor::lazy::from("\xd9\x03\xe8\x05"s)), 5);
+    CHECK_EQ(cbor::lazy::from("\xd9\x03\xe8\x05"s)->get<int>(), 5);
+    CHECK_EQ(cbor::at_path<"$", std::int64_t>("\xc1\x1a\x5f\x5e\x10\x00"s), 1600000000);
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\xc2\x41\x01"s).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\x03\xe8\x61""k\x07"s).error(), error::key_not_found);
+    test_binding binding;
+    CHECK(found(cbor::at_path(binding, "$.v[1]", l)) == V(2));
+    CHECK(found(cbor::at_path(binding, "$.m.k", l)) == V(7));
+    CHECK(found(cbor::query(binding, "$.v[*]", l)) == A(1, 2));
+    CHECK(found(cbor::query(binding, "$..k", l)) == A(7));
+    CHECK(found(cbor::query(binding, "$.v[?@ > 1]", l)) == A(2));
+    CHECK(found(cbor::at_path(binding, "$.v", l)) == V(tagged{1000, A(1, 2)}));
+}
+
+// RFC 8746 2: a typed array holds its elements in a byte string, and the tag gives the type, the sign and the
+// byte order of each element. The owner decided on 2026-10-10 that $.v[i] reads one element and that $.v[*]
+// gives all elements. Each tag class is checked against the values that its bytes encode: unsigned and signed
+// integers in both byte orders, the clamped uint8, and floats of 16, 32 and 64 bits.
+TEST_CASE("path: an index reads one element of a typed array")
+{
+    auto const in = [](std::string const &tagged_array) { return "\xa1\x61""v"s + tagged_array; };
+    std::string const uint16_le = in("\xd8\x45\x44\x07\x00\x08\x01"s);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(uint16_le), 7);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(uint16_le), 0x108);
+    CHECK_EQ(cbor::at_path<"$.v[-1]", int>(uint16_le), 0x108);
+    CHECK_EQ(cbor::at_path<"$.v[2]", int>(uint16_le).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$.v[-3]", int>(uint16_le).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$.v[0][0]", int>(uint16_le).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$.v.a", int>(uint16_le).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$.v[0]", std::uint8_t>(uint16_le), std::uint8_t{7});
+    CHECK_EQ(cbor::at_path<"$.v[1]", std::uint8_t>(uint16_le).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$.v[1]", double>(uint16_le), 264.0);
+    CHECK_EQ(cbor::at_path<"$.v[1]", bool>(uint16_le).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(in("\xd8\x41\x44\x07\x00\x01\x08"s)), 0x108);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x48\x42\xff\x05"s)), -1);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(in("\xd8\x48\x42\xff\x05"s)), 5);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x44\x41\xff"s)), 255);
+    CHECK_EQ(cbor::at_path<"$.v[0]", std::int64_t>(in("\xd8\x4b\x48\x80\x00\x00\x00\x00\x00\x00\x00"s)),
+             std::numeric_limits<std::int64_t>::min());
+    CHECK_EQ(cbor::at_path<"$.v[0]", std::int64_t>(in("\xd8\x4f\x48\xfe\xff\xff\xff\xff\xff\xff\xff"s)), -2);
+    CHECK_EQ(cbor::at_path<"$.v[0]", std::uint64_t>(in("\xd8\x43\x48\xff\xff\xff\xff\xff\xff\xff\xff"s)),
+             std::numeric_limits<std::uint64_t>::max());
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x43\x48\xff\xff\xff\xff\xff\xff\xff\xff"s)).error(),
+             error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$.v[1]", double>(in("\xd8\x50\x44\x00\x00\x3c\x00"s)), 1.0);
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x51\x44\x3f\xc0\x00\x00"s)), 1.5);
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x56\x48\x9a\x99\x99\x99\x99\x99\xf1\x3f"s)), 1.1);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x51\x44\x3f\xc0\x00\x00"s)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x53\x50"s + std::string(16, '\0'))).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\x43\x07\x00\x08"s)).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\xd8\x1c\x42\x07\x00"s)), 7);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd9\x03\xe8\xd8\x45\x42\x07\x00"s)), 7);
+    auto const l = *cbor::lazy::from(uint16_le);
+    CHECK_EQ(cbor::at_path<"$.v[1]", int>(l), 0x108);
+    std::string const shared = "\x82\xd8\x1c\xd8\x45\x44\x07\x00\x08\x01\xd8\x1d\x00"s;
+    CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared), 0x108);
+    CHECK_EQ(cbor::at_path<"$[1][-2]", double>(*cbor::lazy::from(shared)), 7.0);
+    CHECK_EQ(cbor::at_path<"$[1][2]", int>(shared).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$[1][0][0]", int>(shared).error(), error::not_indexable);
+    test_binding binding;
+    CHECK(found(cbor::at_path(binding, "$.v[1]", l)) == V(0x108));
+    CHECK(found(cbor::at_path(binding, "$[1][0]", *cbor::lazy::from(shared))) == V(7));
+    CHECK(found(cbor::query(binding, "$.v[*]", l)) == A(7, 0x108));
+    CHECK(found(cbor::query(binding, "$.v[1:]", l)) == A(0x108));
+    CHECK(found(cbor::query(binding, "$.v[?@ > 7]", l)) == A(0x108));
+    CHECK(found(cbor::query(binding, "$..*", l)) == A(found(cbor::at_path(binding, "$.v", l)), 7, 0x108));
+    CHECK(found(cbor::query<"$.v[*]">(binding, l)) == A(7, 0x108));
+    auto const floats = *cbor::lazy::from(in("\xd8\x50\x44\x00\x00\x3c\x00"s));
+    CHECK(found(cbor::query(binding, "$.v[*]", floats)) == A(0.0, 1.0));
+    CHECK_EQ(cbor::query(binding, "$.v[*]", *cbor::lazy::from(in("\xd8\x53\x50"s + std::string(16, '\0')))).error(),
+             error::incorrect_type);
+    CHECK(found(cbor::query(binding, "$.v[*]", *cbor::lazy::from(in("\xd8\x45\x40"s)))) == A());
+}
+
 // A held lazy is a start point: at_path reads a path relative to it, from
 // its bytes, and falls back to the lazy walk when a tag 29 needs the marks
 // of the whole top-level item.
@@ -1108,4 +1248,16 @@ TEST_CASE("at_path: a path from a held lazy")
     auto const word = cbor::at_path<"$.k", std::string_view>(*cbor::lazy::from(text));
     REQUIRE(word.has_value());
     CHECK_EQ(**word, "ok");
+}
+
+// A tag literal in a filter is parsed at run time as at compile time. g++-16 -O3 made the recursion over a tag in
+// canonical_append loop until memory ran out, so this test runs a tag, two tags and a tag inside an array.
+TEST_CASE("path: a tag literal in a run-time filter")
+{
+    test_binding binding;
+    auto const doc = *cbor::lazy::from(encoded(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
+    CHECK(*cbor::query(binding, "$[?@ == 1000(1)]", doc) == A(tagged{1000, V(1)}));
+    CHECK(*cbor::query(binding, "$[?@ == 1001(1000(3))]", doc) == A(tagged{1001, V(tagged{1000, V(3)})}));
+    CHECK(*cbor::query(binding, "$[?@ == [1(2)]]", doc) == A(A(tagged{1, V(2)})));
+    CHECK(*cbor::query<"$[?@ == 1000(1)]">(binding, doc) == A(tagged{1000, V(1)}));
 }

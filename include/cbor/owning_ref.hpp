@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -67,6 +68,18 @@ public:
     T const *operator->(this Self &&self)
     {
         return &self.value;
+    }
+
+    friend bool operator==(owning_ref const &a, owning_ref const &b)
+        requires std::equality_comparable<T>
+    {
+        return a.value == b.value;
+    }
+
+    friend bool operator==(owning_ref const &a, T const &b)
+        requires std::equality_comparable<T>
+    {
+        return a.value == b;
     }
 };
 

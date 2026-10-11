@@ -91,6 +91,25 @@ class well_formedness
         return {};
     }
 
+    template <bool Checked>
+    CBOR_ALWAYS_INLINE static std::expected<void, error> items_skip(heads::decoder<Checked> &d,
+                                                                    std::uint64_t const count)
+    {
+        no_marks none;
+        if constexpr (!Checked) {
+            for (std::uint64_t i = 0; i < count; ++i)
+                if (auto const r = item_skip(d, none); !r) [[unlikely]]
+                    return r;
+            return {};
+        }
+        heads::decoder<false> unlimited{d.encoded, validity::limit_checks<false>{}};
+        for (std::uint64_t i = 0; i < count; ++i)
+            if (auto const r = item_skip(unlimited, none); !r) [[unlikely]]
+                return r;
+        d.encoded = unlimited.encoded;
+        return {};
+    }
+
     template <bool Checked, class Marks>
         requires requires(Marks &m, heads::decoder<Checked> const &at, std::size_t depth) {
             m.mark(at, depth);

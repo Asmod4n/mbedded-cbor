@@ -127,3 +127,44 @@ TEST_CASE("path: a typed read through tag 29 allocates")
     REQUIRE(first.has_value());
     CHECK_EQ(*first, 7u);
 }
+
+// A typed read enters tag 24 in the bytes it walks, so the embedded item costs no allocation.
+TEST_CASE("path: a typed read through tag 24 allocates nothing")
+{
+    std::string const doc = "\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s;
+    auto const root = *cbor::lazy::from(std::string(doc));
+    std::size_t const before = allocations;
+    auto const from_bytes = cbor::at_path<"$.a[1]", int>(std::string_view(doc));
+    auto const from_lazy = cbor::at_path<"$.a[1]", int>(root);
+    std::size_t const after = allocations;
+    CHECK_EQ(after, before);
+    CHECK_EQ(from_bytes, 2);
+    CHECK_EQ(from_lazy, 2);
+}
+
+// A key that is not a text goes through lazy, as tag 29 does. This test records that the form over bytes then
+// allocates.
+TEST_CASE("path: a typed read with a key that is not text allocates")
+{
+    std::string const doc = "\xa1\x41\x01\x07"s;
+    std::size_t const before = allocations;
+    auto const value = cbor::at_path<"$[h'01']", int>(std::string_view(doc));
+    std::size_t const after = allocations;
+    CHECK_GT(after, before);
+    CHECK_EQ(value, 7);
+}
+
+// A filter with a literal builds a value for the literal at each child it tests, so the allocations grow with the
+// children.
+TEST_CASE("path: a filter with a literal allocates for each child")
+{
+    test_binding binding;
+    auto const three = *cbor::lazy::from(encoded(A(1, 2, 3)));
+    auto const six = *cbor::lazy::from(encoded(A(4, 5, 6, 7, 8, 9)));
+    std::size_t const before = allocations;
+    (void)cbor::query(binding, "$[?@ == 1]", three);
+    std::size_t const middle = allocations;
+    (void)cbor::query(binding, "$[?@ == 1]", six);
+    std::size_t const after = allocations;
+    CHECK_GT(after - middle, middle - before);
+}

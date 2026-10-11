@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 using namespace std::string_literals;
@@ -251,9 +252,10 @@ TEST_CASE("limits: nesting_depth is checked in the unchecked and in the checked 
     }
 }
 
-// elements() and entries() are the entries that read cbor::limits; their iterators keep the limits that were
-// read, so a walk does not change its limits when cbor::limits changes during the walk.
-TEST_CASE("limits: the iterators of elements() and entries() keep the limits of the call that made them")
+// An iterator of elements() or entries() only skips the items it passes, and the owner decided on 2026-10-10 that
+// limits count only what is read or decoded. So a string longer than the limit does not stop the walk, and the read
+// of that string does.
+TEST_CASE("limits: the iterators of elements() and entries() skip without counting")
 {
     std::string const encoded = "\x82\x62"
                                 "ab\x01"s;
@@ -263,22 +265,54 @@ TEST_CASE("limits: the iterators of elements() and entries() keep the limits of 
     auto const m = cbor::lazy::from(map);
     REQUIRE(l.has_value());
     REQUIRE(m.has_value());
-    std::optional<cbor::lazy_elements> elements;
-    std::optional<cbor::lazy_entries> entries;
-    {
-        test::limits_guard const guard{{.string_length = 1}};
-        elements = *l->elements();
-        entries = *m->entries();
-    }
+    test::limits_guard const guard{{.string_length = 1}};
+    auto const elements = l->elements();
+    REQUIRE(elements.has_value());
     auto it = elements->begin();
+    CHECK_EQ((*it)->get<std::string_view>().error(), error::string_length_exceeded);
     ++it;
     REQUIRE(it != std::default_sentinel);
-    CHECK_EQ((*it).error(), error::string_length_exceeded);
+    CHECK_EQ((*it)->get<int>(), 1);
+    auto const entries = m->entries();
+    REQUIRE(entries.has_value());
     auto pair = entries->begin();
-    CHECK_EQ((*pair).error(), error::string_length_exceeded);
-    auto unlimited = l->elements()->begin();
-    ++unlimited;
-    CHECK((*unlimited).has_value());
+    REQUIRE((*pair).has_value());
+    CHECK_EQ((*pair)->first.get<std::string_view>().error(), error::string_length_exceeded);
+    CHECK_EQ((*pair)->second.get<int>(), 1);
+    ++pair;
+    CHECK_EQ((*pair)->second.get<int>(), 3);
+}
+
+// RFC 8949 does not bound what a decoder skips; the bytes bound it (check_pending_items). The owner decided on
+// 2026-10-10 that string_length and container_elements count only the heads that a path or a lazy reads: the
+// containers on the way, the keys it compares and the target. An item that it only skips does not count, in each
+// form: the typed read over bytes, the typed read from a lazy, a binding, query and the lazy chain.
+TEST_CASE("limits: an item that a path or a lazy only skips does not count")
+{
+    test_binding binding;
+    std::string const strings = "\xa2\x61""a\x63xyz\x61""n\x01"s;
+    std::string const arrays = "\xa2\x61""a\x83\x01\x02\x03\x61""n\x01"s;
+    for (auto const &[limits, doc, wanted] :
+         {std::tuple{cbor::limit_values{.string_length = 2}, strings, error::string_length_exceeded},
+          std::tuple{cbor::limit_values{.container_elements = 2}, arrays, error::container_elements_exceeded}}) {
+        test::limits_guard const guard{limits};
+        auto const l = *cbor::lazy::from(doc);
+        CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
+        CHECK_EQ(cbor::at_path<"$.n", int>(l), 1);
+        CHECK_EQ(l.at("n")->get<int>(), 1);
+        CHECK(cbor::at_path(binding, "$.n", l) == V(1));
+        CHECK(cbor::query(binding, "$.n", l) == A(1));
+        CHECK_EQ(cbor::at_path(binding, "$.a", l).error(), wanted);
+        CHECK_EQ(cbor::lazy_decode(binding, *l.at("a")).error(), wanted);
+    }
+    test::limits_guard const guard{{.string_length = 2, .container_elements = 2}};
+    std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;
+    auto const l = *cbor::lazy::from("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
+    CHECK_EQ(cbor::at_path<"$[1]", int>(l), 5);
+    CHECK_EQ(l.at(1)->get<int>(), 5);
+    CHECK_EQ(cbor::at_path<"$[0][1]", int>(l).error(), error::container_elements_exceeded);
+    CHECK_EQ(cbor::at_path<"$[0][0]", std::int64_t>(l).error(), error::string_length_exceeded);
+    CHECK_EQ(cbor::item_size(two).error(), error::string_length_exceeded);
 }
 
 #ifdef __cpp_impl_reflection
@@ -398,6 +432,26 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
     for (std::pmr::string const &text : (**decoded).list) {
         CHECK_EQ(text, long_text);
         CHECK_EQ(text.get_allocator().resource(), &budget);
+    }
+}
+
+
+// schema reads into the members of the target as databind does, so the refusal of their resource reaches the caller
+// of schema as not_enough_memory, and std::bad_alloc does not leave the call.
+TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enough_memory")
+{
+    auto const encoded = cbor::schema<pmr_names>::encode(
+        pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
+    REQUIRE(encoded.has_value());
+    auto const owner = std::make_shared<std::string const>(*encoded);
+    for (std::size_t const size : {0uz, long_text.size() + 1, 2 * long_text.size() + 2}) {
+        CAPTURE(size);
+        std::array<std::byte, 4096> buffer{};
+        std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
+        auto const decoded = cbor::schema<pmr_names>::decode(
+            owner, *owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
+        REQUIRE_FALSE(decoded.has_value());
+        CHECK_EQ(decoded.error(), error::not_enough_memory);
     }
 }
 
