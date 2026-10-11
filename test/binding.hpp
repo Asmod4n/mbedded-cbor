@@ -12,6 +12,9 @@
 #include <system_error>
 #include <type_traits>
 #include <utility>
+#include <algorithm>
+#include <bit>
+#include <cmath>
 #include <variant>
 #include <vector>
 
@@ -505,6 +508,122 @@ inline void check_both(std::string_view wire, [[maybe_unused]] value const &expe
     auto const back = decoded(encoded(expected));
     REQUIRE(back.has_value());
     CHECK(*back == expected);
+}
+
+// The preferred serialization of RFC 8949 4.2.2, written by hand from the specification: the shortest head
+// for every argument and the shortest float that keeps the value. Documentation examples read this form,
+// because it is what most senders write and what diagnostic notation prints without encoding indicators.
+inline void preferred_head(std::string &out, unsigned const major, std::uint64_t const argument)
+{
+    auto const put = [&](unsigned const info, int const bytes) {
+        out.push_back(static_cast<char>(major << 5 | info));
+        for (int shift = 8 * (bytes - 1); shift >= 0; shift -= 8)
+            out.push_back(static_cast<char>(argument >> shift));
+    };
+    if (argument < 24)
+        out.push_back(static_cast<char>(major << 5 | argument));
+    else if (argument <= 0xff)
+        put(24, 1);
+    else if (argument <= 0xffff)
+        put(25, 2);
+    else if (argument <= 0xffffffff)
+        put(26, 4);
+    else
+        put(27, 8);
+}
+
+inline bool float_fits(double const v, int const precision, int const least_exponent, int const max_exponent)
+{
+    if (v == 0)
+        return true;
+    int e = 0;
+    std::frexp(v, &e);
+    if (e > max_exponent)
+        return false;
+    int const q = std::max(e - precision, least_exponent);
+    double const n = std::ldexp(v, -q);
+    return n == std::trunc(n) && std::fabs(n) < std::ldexp(1.0, precision);
+}
+
+inline void preferred_float(std::string &out, double const v)
+{
+    auto const put = [&](unsigned const info, std::uint64_t const bits, int const bytes) {
+        out.push_back(static_cast<char>(7u << 5 | info));
+        for (int shift = 8 * (bytes - 1); shift >= 0; shift -= 8)
+            out.push_back(static_cast<char>(bits >> shift));
+    };
+    if (std::isnan(v))
+        return put(25, 0x7e00, 2);
+    std::uint64_t const sign = std::signbit(v) ? 1 : 0;
+    if (std::isinf(v))
+        return put(25, sign << 15 | 0x7c00, 2);
+    double const a = std::fabs(v);
+    if (float_fits(a, 11, -24, 16)) {
+        std::uint64_t half = 0;
+        if (a != 0) {
+            int e = 0;
+            double const m = std::frexp(a, &e);
+            if (e - 1 >= -14)
+                half = static_cast<std::uint64_t>(e - 1 + 15) << 10 | static_cast<std::uint64_t>((m * 2 - 1) * 1024);
+            else
+                half = static_cast<std::uint64_t>(std::ldexp(a, 24));
+        }
+        return put(25, sign << 15 | half, 2);
+    }
+    if (float_fits(a, 24, -149, 128))
+        return put(26, std::bit_cast<std::uint32_t>(static_cast<float>(v)), 4);
+    put(27, std::bit_cast<std::uint64_t>(v), 8);
+}
+
+inline void preferred_write(std::string &out, value const &v)
+{
+    std::visit(
+        [&](auto const &k) {
+            using K = std::remove_cvref_t<decltype(k)>;
+            if constexpr (std::same_as<K, std::uint64_t>) {
+                preferred_head(out, 0, k);
+            } else if constexpr (std::same_as<K, negative>) {
+                preferred_head(out, 1, k.argument);
+            } else if constexpr (std::same_as<K, double>) {
+                preferred_float(out, k);
+            } else if constexpr (std::same_as<K, simple>) {
+                preferred_head(out, 7, k.v);
+            } else if constexpr (std::same_as<K, short_text>) {
+                preferred_head(out, 3, k.size);
+                out.append(k.view());
+            } else if constexpr (std::same_as<K, std::string *>) {
+                preferred_head(out, 3, k->size());
+                out.append(*k);
+            } else if constexpr (std::same_as<K, bytes *>) {
+                preferred_head(out, 2, k->b.size());
+                out.append(k->b);
+            } else if constexpr (std::same_as<K, bignum *>) {
+                preferred_head(out, 6, k->negative ? 3 : 2);
+                preferred_head(out, 2, k->magnitude.size());
+                out.append(k->magnitude);
+            } else if constexpr (std::same_as<K, array *>) {
+                preferred_head(out, 4, k->size());
+                for (value const &e : *k)
+                    preferred_write(out, e);
+            } else if constexpr (std::same_as<K, map *>) {
+                preferred_head(out, 5, k->size());
+                for (entry const &e : *k) {
+                    preferred_write(out, e.key);
+                    preferred_write(out, e.val);
+                }
+            } else {
+                preferred_head(out, 6, k->tag);
+                preferred_write(out, k->content);
+            }
+        },
+        v.kind);
+}
+
+inline std::string preferred(value const &v)
+{
+    std::string out;
+    preferred_write(out, v);
+    return out;
 }
 
 // The walker writes a run-time integer at its native width: the initial byte with eight argument bytes.

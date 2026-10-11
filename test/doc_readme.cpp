@@ -1,86 +1,133 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include "binding.hpp"
 #include "limits_guard.hpp"
 
+#include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <vector>
+
+using namespace std::string_literals;
 
 // Each test in this file is one example of README.md. The tests exist so that every example in the README
 // compiles and gives the result that the README states.
 
-// The section "Quick start" reads two values from bytes, once by a path and once by steps.
-TEST_CASE("doc readme: quick start")
+// Step 2 reads a message in place: contains, size, and a loop over the elements of an array.
+TEST_CASE("doc readme: read a message")
 {
-    using namespace std::string_literals;
+    std::string const bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
+    auto const doc = cbor::lazy::from(bytes).value();
 
-    // {"user": {"id": 42, "name": "ann"}}
-    std::string const bytes = "\xa1\x64user\xa2\x62id\x18\x2a\x64name\x63" "ann"s;
+    bool const has_samples = doc.contains("samples").value();
+    std::uint64_t const pairs = doc.size().value();
+    CHECK(has_samples);
+    CHECK_EQ(pairs, 3u);
 
-    auto const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);
-    CHECK_EQ(id, 42);
+    int sum = 0;
+    if (auto const samples = doc.at("samples"))
+        for (auto const &x : samples->elements().value())
+            if (x)
+                sum += x->get<int>().value_or(0);
+    CHECK_EQ(sum, 12);
+}
 
-    auto const doc = cbor::lazy::from(bytes);
-    auto const name = doc->at("user")
-                          .and_then([](cbor::lazy const &u) { return u.at("name"); })
-                          .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
-    REQUIRE(name.has_value());
-    CHECK_EQ(**name, std::string_view{"ann"});
+// Step 3 reads one value by its path; a missing member gives key_not_found.
+TEST_CASE("doc readme: read one value by its path")
+{
+    std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
+    auto const doc = cbor::lazy::from(bytes).value();
 
-    auto const missing = cbor::at_path<"$.user.age", std::int64_t>(bytes);
-    CHECK_EQ(missing.error(), cbor::error::key_not_found);
+    auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);
+    auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
+    auto const age = cbor::at_path<"$.user.age", int>(doc);
+    CHECK_EQ(*id, 42);
+    CHECK_EQ(**name, "ann");
+    CHECK_EQ(age.error(), cbor::error::key_not_found);
+}
+
+// Step 4 cuts the last byte: a read of the cut value gives too_little_data, which converts to
+// std::error_code; a read of a value before the cut still succeeds, because a read stops at its item.
+TEST_CASE("doc readme: handle bad input")
+{
+    std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
+    std::string const cut = bytes.substr(0, bytes.size() - 1);
+
+    auto const doc = cbor::lazy::from(cut).value();
+    auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
+    REQUIRE_FALSE(name.has_value());
+    CHECK_EQ(name.error(), cbor::error::too_little_data);
+    std::string const why = std::error_code(name.error()).message();
+    CHECK_EQ(why, "too little data");
+    CHECK_EQ(cbor::at_path<"$.user.id", std::int64_t>(cut), 42);
+}
+
+// Step 5 sets limits; an array of 101 elements is over a limit of 100.
+TEST_CASE("doc readme: set limits")
+{
+    test::limits_guard const guard{{.nesting_depth = 16, .string_length = 4096, .container_elements = 100}};
+
+    test::array a;
+    for (int i = 0; i < 101; ++i)
+        a.push_back(test::V(i));
+    std::string const bytes = test::preferred(test::value{std::move(a)});
+    auto const n = cbor::lazy::from(bytes).value().size();
+    CHECK_EQ(n.error(), cbor::error::container_elements_exceeded);
+}
+
+// Step 6 reads a CBOR sequence item by item and prints each item in diagnostic notation.
+TEST_CASE("doc readme: read a stream of items")
+{
+    std::string const log = test::preferred(test::V(1)) + test::preferred(test::value{"a"s}) +
+                            test::preferred(test::A(1, 2));
+    std::vector<std::string> printed;
+    for (auto const &item : cbor::sequence{log})
+        if (item)
+            printed.push_back(cbor::diagnostic_notation(*item).value());
+    CHECK_EQ(printed, std::vector<std::string>{"1", "\"a\"", "[1, 2]"});
 }
 
 #ifdef __cpp_impl_reflection
 
-namespace doc_readme
+namespace
 {
 
-struct inner
-{
-    std::int64_t b;
+struct [[=cbor::tag(1900)]] series {
+    std::string unit;
+    std::vector<double> values;
 };
 
-struct outer
-{
-    inner a;
+struct reading {
+    std::string sensor;
+    double value;
+    std::vector<std::uint16_t> samples;
 };
 
+} // namespace
+
+// Step 7 writes a struct as Packed CBOR, reads one element at its offset and sums a view of an array.
+TEST_CASE("doc readme: packed")
+{
+    std::string const bytes = cbor::packed<series>::encode({"m", {1.5, 2.5, 3.5}}).value();
+    auto const second = cbor::packed<series>::at_path<"$.values[1]">(bytes);
+    CHECK_EQ(*second, 2.5);
+    auto const root = cbor::packed<series>::path(bytes).value();
+    auto const values = root.view<"$.values">();
+    double const sum = std::ranges::fold_left(*values, 0.0, std::plus{});
+    CHECK_EQ(sum, 7.5);
 }
 
-// The section "Write a struct and read one value by a path" writes a nested struct with structs and reads the inner
-// member back by a path. The test exists because a user combines the two parts and no other example shows both.
-TEST_CASE("doc readme: write a struct and read by a path")
+// Step 8 writes a struct as deterministic CBOR: the keys in RFC 8949 4.2.1 order, every number shortest.
+TEST_CASE("doc readme: structs")
 {
-    using namespace std::string_literals;
-
-    auto const bytes = cbor::structs<doc_readme::outer>::encode(doc_readme::outer{{5}});
-    REQUIRE(bytes.has_value());
-    CHECK_EQ(*bytes, "\xa1\x61"
-                     "a\xa1\x61"
-                     "b\x05"s);
-    auto const b = cbor::at_path<"$.a.b", std::int64_t>(*bytes);
-    CHECK_EQ(b, 5);
+    std::string const bytes = cbor::structs<reading>::encode({"t1", 21.5, {3, 4, 5}}).value();
+    std::string const text = cbor::diagnostic_notation(bytes).value();
+    CHECK_EQ(text, R"({"value": 21.5, "sensor": "t1", "samples": [3, 4, 5]})");
+    CHECK_EQ(bytes.size(), 32u);
 }
 
 #endif
-
-// The section "Set a limit" sets one field. The test exists so that the README states the error that the limit gives
-// and that the other fields keep their values.
-TEST_CASE("doc readme: set a limit")
-{
-    using namespace std::string_literals;
-
-    test::limits_guard const g{{}};
-    cbor::limits.container_elements = 100;
-    CHECK_EQ(cbor::limits.container_elements, 100u);
-    CHECK_EQ(cbor::limits.nesting_depth, 128u);
-
-    std::string bytes = "\x98\x65"s;
-    bytes.append(101, '\x01');
-    CHECK_EQ(cbor::lazy::from(bytes)->size().error(), cbor::error::container_elements_exceeded);
-    bytes = "\x98\x64"s;
-    bytes.append(100, '\x01');
-    CHECK_EQ(cbor::lazy::from(bytes)->size(), 100u);
-}

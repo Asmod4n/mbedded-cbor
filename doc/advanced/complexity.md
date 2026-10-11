@@ -415,21 +415,21 @@ All rows marked "compile time" have no run-time cost.
 | `tags_registered<Root>()` :1687 | O(t log t + t·a) compile time | O(t) | |
 | `reflection::fixed_size<T, Root>()` :1701 | compile time | O(1) | |
 | `reflection::member_offset` :1790 | O(c) compile time | O(1) | |
-| `schema::fixed_size`, `member_offset` :1813, :1820 | compile time | O(1) | |
-| `schema::accessor` constructors :1837-1850 | O(1) | O(1) | |
-| `schema::accessor::at_path`, `view` :1866, :1912 | O(p) | O(1) | |
-| `schema::accessor::size()` :1926 | O(1) | O(1) | |
-| `schema::path(shared_ptr<void const>, string_view)` :1933 | O(1) in n | O(1) | |
-| `schema::path(shared_ptr, Encoded&&) = delete` :1949 | - | - | |
-| `schema::at_path<Path>(string_view, Index...)` :1957 | O(q + p) | O(1) | |
-| `schema::path(string_view)` :1967 | O(n) | O(n) | Copies. |
-| `schema::path<Encoded>(Encoded&&)` :1977 | O(1) | O(1) | One make_shared. |
-| `schema::decode(string_view)` :1987 | O(n); + k log k ordered | O(n) copy + O(n) output | |
-| `schema::decode<Encoded>(Encoded&&)` :1999 | as decode(owner, view) | O(1) + output | |
-| `schema::decode(shared_ptr<void const>, string_view)` :2009 | O(n); + k log k ordered | O(n) output | |
-| `schema::decode(shared_ptr, Encoded&&) = delete` :2021 | - | - | |
-| `schema::encode(T const&)` :2023 | O(i + n) | O(n) | One std::string. |
-| `schema::encode<Target>(T const&, Target&&)` :2044 | O(i + n) | container O(n); span none; other message O(n) temporary | |
+| `packed::fixed_size`, `member_offset` :1813, :1820 | compile time | O(1) | |
+| `packed::accessor` constructors :1837-1850 | O(1) | O(1) | |
+| `packed::accessor::at_path`, `view` :1866, :1912 | O(p) | O(1) | |
+| `packed::accessor::size()` :1926 | O(1) | O(1) | |
+| `packed::path(shared_ptr<void const>, string_view)` :1933 | O(1) in n | O(1) | |
+| `packed::path(shared_ptr, Encoded&&) = delete` :1949 | - | - | |
+| `packed::at_path<Path>(string_view, Index...)` :1957 | O(q + p) | O(1) | |
+| `packed::path(string_view)` :1967 | O(n) | O(n) | Copies. |
+| `packed::path<Encoded>(Encoded&&)` :1977 | O(1) | O(1) | One make_shared. |
+| `packed::decode(string_view)` :1987 | O(n); + k log k ordered | O(n) copy + O(n) output | |
+| `packed::decode<Encoded>(Encoded&&)` :1999 | as decode(owner, view) | O(1) + output | |
+| `packed::decode(shared_ptr<void const>, string_view)` :2009 | O(n); + k log k ordered | O(n) output | |
+| `packed::decode(shared_ptr, Encoded&&) = delete` :2021 | - | - | |
+| `packed::encode(T const&)` :2023 | O(i + n) | O(n) | One std::string. |
+| `packed::encode<Target>(T const&, Target&&)` :2044 | O(i + n) | container O(n); span none; other message O(n) temporary | |
 
 ## structs.hpp
 
@@ -468,13 +468,13 @@ Above linear in the input:
 - `container_parse`, `literal_parse`, `canonical_append` (diagnostic_notation.hpp): O(t·d), O(n·d); maps add O(k log k).
 - `generic_read`, `structs::read`: O((n/d)^d) with tag 29.
 - `value_sharing::item_decode`: rebuilt scalars skip O(n_item) again on each call.
-- `std::map` targets in schema and structs: O(n + k log k).
+- `std::map` targets in packed and structs: O(n + k log k).
 
 Allocation on a success path:
 
 - `magnitude_plus_one`, `magnitude_minus_one`, `walker::bignum` (negative), `value_decode` (negative bignum).
 - `top_level_item::entry`, `mark`, `prefix::mark`.
-- `lazy::from`, `schema::path`, `schema::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy_decode`.
+- `lazy::from`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy_decode`.
 - jsonpath: every parser, `at_path(string_view path)`, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `encode_from` with sharing on, `walker` embeds, `cycle_find`, `string_sink`, `container_message`.
 - diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.
