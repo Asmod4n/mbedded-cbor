@@ -36,7 +36,7 @@ struct person {
 };
 
 auto const bytes = cbor::databind<person>::encode(person{"ann", 30});
-// a2 64 "name" 63 "ann" 63 "age" 18 1e
+// a2 63 "age" 18 1e 64 "name" 63 "ann"
 auto const back = cbor::databind<person>::decode(*bytes);
 (*back)->name;   // "ann"
 ```
@@ -164,7 +164,7 @@ A struct that carries `[[=cbor::tag(n)]]` does not compile in
 ```cpp
 struct person { std::string name; std::int64_t age; };
 cbor::databind<cbor::tagged<1800, person>>::encode({{"ann", 30}});
-// 1800({"name": "ann", "age": 30})
+// 1800({"age": 30, "name": "ann"})
 ```
 
 ## 5. Variants

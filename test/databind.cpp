@@ -87,6 +87,20 @@ struct get_assertion_response {
     static constexpr std::array<std::int64_t, 4> keys{1, 2, 3, 4};
 };
 
+struct text_order {
+    int aa;
+    int b;
+    bool operator==(text_order const &) const = default;
+};
+
+struct integer_order {
+    int first;
+    int second;
+    int third;
+    static constexpr std::array<std::int64_t, 3> keys{24, -1, 1};
+    bool operator==(integer_order const &) const = default;
+};
+
 } // namespace
 
 // The expectations are the examples of RFC 8949 Appendix A, each read into a C++ type and written back.
@@ -158,7 +172,7 @@ TEST_CASE("databind: a SenML pack with integer labels")
     REQUIRE(bytes.has_value());
     CHECK_EQ(static_cast<std::uint8_t>(bytes->at(0)), 0x82);
     CHECK_EQ(static_cast<std::uint8_t>(bytes->at(1)), 0xa5);
-    CHECK_EQ(static_cast<std::uint8_t>(bytes->at(2)), 0x21);
+    CHECK_EQ(static_cast<std::uint8_t>(bytes->at(2)), 0x00);
     round_trip(*bytes, pack);
 }
 
@@ -275,7 +289,7 @@ TEST_CASE("databind: an annotation gives the key of a member")
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->m0, 7u);
     CHECK((*back)->m1);
-    CHECK_EQ(*cbor::databind<annotated>::encode(annotated{7, true}), bytes);
+    CHECK_EQ(*cbor::databind<annotated>::encode(annotated{7, true}), "\xa2\x63" "EOF\xf5\x69x-user-id\x07"s);
     CHECK_EQ(cbor::databind<annotated>::decode("\xa2\x62m0\x07\x62m1\xf5"s).error(), error::key_not_found);
 }
 
@@ -321,8 +335,8 @@ TEST_CASE("databind: only public members are written and read")
     a.id = 7;
     a.hidden_set(42, 9);
     std::string const bytes = *cbor::databind<account>::encode(a);
-    CHECK_EQ(bytes, "\xa2\x64name\x63"
-                    "ann\x62id\x07"s);
+    CHECK_EQ(bytes, "\xa2\x62id\x07\x64name\x63"
+                    "ann"s);
     auto const back = cbor::databind<account>::decode("\xa4\x64name\x63"
                                                      "bob\x62id\x05\x66secret\x18\x2a\x64kept\x09"s);
     REQUIRE(back.has_value());
@@ -365,9 +379,9 @@ TEST_CASE("databind: cbor::skip leaves a public member out")
 // written and read, so a member added later stays out until someone allows it.
 TEST_CASE("databind: cbor::allowlist takes only the members marked cbor::allow")
 {
-    CHECK_EQ(*cbor::databind<profile>::encode(profile{"ann", "a@b", 30}), "\xa2\x64name\x63"
-                                                                 "ann\x63"
-                                                                 "age\x18\x1e"s);
+    CHECK_EQ(*cbor::databind<profile>::encode(profile{"ann", "a@b", 30}), "\xa2\x63"
+                                                                 "age\x18\x1e\x64name\x63"
+                                                                 "ann"s);
     auto const back = cbor::databind<profile>::decode("\xa3\x64name\x63"
                                                      "bob\x65"
                                                      "email\x61x\x63"
@@ -499,8 +513,8 @@ TEST_CASE("databind: every standard container that encode writes decodes")
     round_trip("\x82\x01\x02"s, std::set<int>{1, 2});
     round_trip("\x83\x01\x02\x03"s, std::list<int>{1, 2, 3});
     round_trip("\x82\x01\x02"s, std::deque<int>{1, 2});
-    round_trip("\xa6\x61l\x82\x01\x02\x61q\x81\x03\x61"
-               "b\x81\xf5\x61s\x82\x04\x05\x61m\x82\x06\x06\x62mm\xa2\x01\x02\x01\x03"s,
+    round_trip("\xa6\x61"
+               "b\x81\xf5\x61l\x82\x01\x02\x61m\x82\x06\x06\x61q\x81\x03\x61s\x82\x04\x05\x62mm\xa2\x01\x02\x01\x03"s,
                standard_containers{{1, 2}, {3}, {true}, {4, 5}, {6, 6}, {{1, 2}, {1, 3}}});
 }
 
@@ -606,6 +620,23 @@ TEST_CASE("databind decode keeps the resource of a moved pmr target")
     auto const decoded = cbor::databind<texts>::decode(owner, *owner, std::move(target));
     REQUIRE_FALSE(decoded.has_value());
     CHECK_EQ(decoded.error(), error::not_enough_memory);
+}
+
+// RFC 8949 4.2.1: deterministic encoding orders the keys of a map by the bytewise lexicographic order
+// of their encoded forms. A shorter text key has a shorter head, so "b" (61 62) comes before "aa"
+// (62 61 61); an unsigned integer comes before a negative one, 1 (01) and 24 (18 18) before -1 (20).
+// The declaration order differs on purpose.
+TEST_CASE("databind: keys come out in the deterministic order of RFC 8949 4.2.1")
+{
+    auto const t = cbor::databind<text_order>::encode(text_order{1, 2});
+    REQUIRE(t.has_value());
+    CHECK_EQ(*t, "\xa2\x61\x62\x02\x62\x61\x61\x01"sv);
+    auto const i = cbor::databind<integer_order>::encode(integer_order{10, 20, 30});
+    REQUIRE(i.has_value());
+    CHECK_EQ(*i, "\xa3\x01\x18\x1e\x18\x18\x0a\x20\x14"sv);
+    auto const back = cbor::databind<integer_order>::decode(std::string(*i));
+    REQUIRE(back.has_value());
+    CHECK(**back == integer_order{10, 20, 30});
 }
 
 #endif
