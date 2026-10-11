@@ -157,6 +157,12 @@ public:
 #endif
     }
 
+    static void throw_logic_error_if(bool const wrong, char const *const what)
+    {
+        if (wrong) [[unlikely]]
+            throw_logic_error(what);
+    }
+
     template <class T>
     static void throw_logic_error_if_empty(std::shared_ptr<T> const &owner, char const *const what)
     {
