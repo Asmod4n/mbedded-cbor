@@ -55,6 +55,18 @@ template <fixed_string Path, binding Binding>
     requires is_valid_path_v<Path>
 std::expected<typename Binding::value, error> query(Binding &binding, lazy const &l);
 
+std::expected<lazy, error> at_path(std::string_view path, lazy const &l);
+
+std::expected<std::vector<lazy>, error> query(std::string_view path, lazy const &l);
+
+template <fixed_string Path>
+    requires is_valid_path_v<Path>
+std::expected<lazy, error> at_path(lazy const &l);
+
+template <fixed_string Path>
+    requires is_valid_path_v<Path>
+std::expected<std::vector<lazy>, error> query(lazy const &l);
+
 template <fixed_string Path>
 class is_singular_query;
 
@@ -610,6 +622,12 @@ class jsonpath
                                                                   lazy const &start, lazy const &root,
                                                                   limit_values loaded);
 
+    static std::expected<lazy, error> singular_query_walk(query_view const &v, parsed_query const &top,
+                                                          lazy const &root, limit_values loaded);
+
+    static std::expected<std::vector<lazy>, error> query_walk(query_view const &v, parsed_query const &top,
+                                                              lazy const &root, limit_values loaded);
+
     template <class Binding>
     static std::expected<typename Binding::value, error>
     singular_query_walk(Binding &binding, query_view const &v, parsed_query const &top, lazy const &root,
@@ -1041,6 +1059,18 @@ class jsonpath
 
     template <fixed_string>
     friend class is_valid_path;
+
+    friend std::expected<lazy, error> at_path(std::string_view path, lazy const &l);
+
+    friend std::expected<std::vector<lazy>, error> query(std::string_view path, lazy const &l);
+
+    template <fixed_string Path>
+        requires is_valid_path_v<Path>
+    friend std::expected<lazy, error> at_path(lazy const &l);
+
+    template <fixed_string Path>
+        requires is_valid_path_v<Path>
+    friend std::expected<std::vector<lazy>, error> query(lazy const &l);
 
     template <binding Binding>
     friend std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
@@ -1626,10 +1656,8 @@ jsonpath::segments_apply(query_view const &v, std::size_t const segment_at, std:
     return nodes;
 }
 
-template <class Binding>
-std::expected<typename Binding::value, error>
-jsonpath::singular_query_walk(Binding &binding, query_view const &v, parsed_query const &top,
-                              lazy const &root, limit_values const loaded)
+inline std::expected<lazy, error> jsonpath::singular_query_walk(query_view const &v, parsed_query const &top,
+                                                                lazy const &root, limit_values const loaded)
 {
     validity::throw_logic_error_if_null(root.top_level, "cbor::at_path: the lazy holds no top-level item");
     lazy node = root;
@@ -1644,7 +1672,31 @@ jsonpath::singular_query_walk(Binding &binding, query_view const &v, parsed_quer
             return std::unexpected(child.error());
         node = *child;
     }
-    auto value = lazy_decode(binding, node, loaded);
+    return node;
+}
+
+inline std::expected<std::vector<lazy>, error> jsonpath::query_walk(query_view const &v, parsed_query const &top,
+                                                                    lazy const &root, limit_values const loaded)
+{
+    validity::throw_logic_error_if_null(root.top_level, "cbor::query: the lazy holds no top-level item");
+    std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
+    query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
+    for (std::size_t i = 0; i < v.expressions.size(); ++i)
+        if (v.expressions[i].kind == expression::kind::query && !v.expressions[i].relative)
+            absolute_nodelists[i] = segments_apply(with_nodelists, v.expressions[i].first,
+                                                   v.expressions[i].second, root, root, loaded);
+    return segments_apply(with_nodelists, top.segment_at, top.segment_count, root, root, loaded);
+}
+
+template <class Binding>
+std::expected<typename Binding::value, error>
+jsonpath::singular_query_walk(Binding &binding, query_view const &v, parsed_query const &top,
+                              lazy const &root, limit_values const loaded)
+{
+    auto const node = singular_query_walk(v, top, root, loaded);
+    if (!node) [[unlikely]]
+        return std::unexpected(node.error());
+    auto value = lazy_decode(binding, *node, loaded);
     if (!value) [[unlikely]]
         return std::unexpected(value.error());
     return std::move(*value);
@@ -1655,14 +1707,7 @@ std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &bind
                                                                    parsed_query const &top, lazy const &root,
                                                                    limit_values const loaded)
 {
-    validity::throw_logic_error_if_null(root.top_level, "cbor::query: the lazy holds no top-level item");
-    std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
-    query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
-    for (std::size_t i = 0; i < v.expressions.size(); ++i)
-        if (v.expressions[i].kind == expression::kind::query && !v.expressions[i].relative)
-            absolute_nodelists[i] = segments_apply(with_nodelists, v.expressions[i].first,
-                                                   v.expressions[i].second, root, root, loaded);
-    auto const nodes = segments_apply(with_nodelists, top.segment_at, top.segment_count, root, root, loaded);
+    auto const nodes = query_walk(v, top, root, loaded);
     if (!nodes) [[unlikely]]
         return std::unexpected(nodes.error());
     auto array = binding.array_decode(nodes->size());
@@ -1705,6 +1750,50 @@ auto jsonpath::compiled_apply(Walk const &walk, limit_values const loaded)
                            std::string_view(std::get<3>(compiled).data(), keys),
                            {}},
                 top, loaded);
+}
+
+inline std::expected<lazy, error> at_path(std::string_view const path, lazy const &l)
+{
+    limit_values const loaded = limits.load();
+    auto const q = jsonpath::query_parse(path, loaded.nesting_depth);
+    if (!q) [[unlikely]]
+        return std::unexpected(q.error());
+    if (!q->top.singular) [[unlikely]]
+        return std::unexpected(error::invalid_path);
+    return jsonpath::singular_query_walk({q->segments, q->selectors, q->expressions, q->keys, {}}, q->top, l, loaded);
+}
+
+inline std::expected<std::vector<lazy>, error> query(std::string_view const path, lazy const &l)
+{
+    limit_values const loaded = limits.load();
+    auto const q = jsonpath::query_parse(path, loaded.nesting_depth);
+    if (!q) [[unlikely]]
+        return std::unexpected(q.error());
+    return jsonpath::query_walk({q->segments, q->selectors, q->expressions, q->keys, {}}, q->top, l, loaded);
+}
+
+template <fixed_string Path>
+    requires is_valid_path_v<Path>
+std::expected<lazy, error> at_path(lazy const &l)
+{
+    static_assert(jsonpath::query_parse(Path.view(), validity::nesting_depth_default)->top.singular,
+                  "cbor::at_path: the path is not a singular query (RFC 9535 2.3.5.1); cbor::query reads its nodelist");
+    return jsonpath::compiled_apply<Path>(
+        [&l](jsonpath::query_view const &v, jsonpath::parsed_query const &top, limit_values const loaded) {
+            return jsonpath::singular_query_walk(v, top, l, loaded);
+        },
+        limits.load());
+}
+
+template <fixed_string Path>
+    requires is_valid_path_v<Path>
+std::expected<std::vector<lazy>, error> query(lazy const &l)
+{
+    return jsonpath::compiled_apply<Path>(
+        [&l](jsonpath::query_view const &v, jsonpath::parsed_query const &top, limit_values const loaded) {
+            return jsonpath::query_walk(v, top, l, loaded);
+        },
+        limits.load());
 }
 
 template <binding Binding>
