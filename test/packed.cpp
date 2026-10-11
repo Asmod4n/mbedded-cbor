@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <expected>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
@@ -23,6 +24,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 using namespace std::string_literals;
@@ -872,6 +874,35 @@ TEST_CASE("view: front, back, first and last")
     CHECK_EQ(v->last(4).error(), error::index_out_of_bounds);
     CHECK_EQ(v->first(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
     CHECK_EQ(v->last(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+}
+
+// The requirements of a reversible container in the C++ standard ([container.rev.reqmts]) say: a.rend() is
+// reverse_iterator(a.begin()), a.crend() is const_cast<X const&>(a).rend(), and the distance from crbegin to crend is
+// the size. The test checks each requirement on a view of three elements and on an empty view, and walks from crend
+// back to crbegin, so that the last element read is the first element of the view.
+TEST_CASE("view: crend meets the requirements of a reversible container")
+{
+    using V = cbor::typed_array_view<double>;
+    static_assert(std::same_as<decltype(std::declval<V const &>().crend()), std::reverse_iterator<V::iterator>>);
+    auto const root = cbor::packed<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+    REQUIRE(root.has_value());
+    auto const v = root->view<"$.v">();
+    REQUIRE(v.has_value());
+    CHECK(v->crend() == std::as_const(*v).rend());
+    CHECK(v->crend() == std::reverse_iterator<V::iterator>(v->begin()));
+    CHECK(v->crend().base() == v->begin());
+    CHECK_EQ(std::distance(v->crbegin(), v->crend()), 3);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*std::prev(v->crend())), 0x3ff0000000000000u);
+    std::vector<std::uint64_t> forwards;
+    for (auto i = v->crend(); i != v->crbegin();)
+        forwards.push_back(std::bit_cast<std::uint64_t>(*--i));
+    CHECK(forwards == std::vector<std::uint64_t>{0x3ff0000000000000u, 0x4000000000000000u, 0x4010000000000000u});
+    auto const empty_root = cbor::packed<doubles>::path(schema_bytes(doubles{}));
+    REQUIRE(empty_root.has_value());
+    auto const e = empty_root->view<"$.v">();
+    REQUIRE(e.has_value());
+    CHECK(e->crend() == e->crbegin());
+    CHECK_EQ(std::distance(e->crbegin(), e->crend()), 0);
 }
 
 // An empty view has no front and no back: each is a wrong use and throws std::logic_error, as the precondition of
