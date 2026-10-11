@@ -435,4 +435,24 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
     }
 }
 
+
+// schema reads into the members of the target as databind does, so the refusal of their resource reaches the caller
+// of schema as not_enough_memory, and std::bad_alloc does not leave the call.
+TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enough_memory")
+{
+    auto const encoded = cbor::schema<pmr_names>::encode(
+        pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
+    REQUIRE(encoded.has_value());
+    auto const owner = std::make_shared<std::string const>(*encoded);
+    for (std::size_t const size : {0uz, long_text.size() + 1, 2 * long_text.size() + 2}) {
+        CAPTURE(size);
+        std::array<std::byte, 4096> buffer{};
+        std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
+        auto const decoded = cbor::schema<pmr_names>::decode(
+            owner, *owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
+        REQUIRE_FALSE(decoded.has_value());
+        CHECK_EQ(decoded.error(), error::not_enough_memory);
+    }
+}
+
 #endif

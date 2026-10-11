@@ -11,6 +11,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <new>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -2147,20 +2148,36 @@ public:
     static std::expected<owning_ref<T>, error> decode(std::string_view const encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        auto copy = std::make_shared<std::string const>(encoded);
-        T value{};
-        if (auto const r = packed::root_read<T>(value, *copy, limits.load()); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        return owning_ref<T>(std::move(copy), std::move(value));
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            auto copy = std::make_shared<std::string const>(encoded);
+            T value{};
+            if (auto const r = packed::root_read<T>(value, *copy, limits.load()); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return owning_ref<T>(std::move(copy), std::move(value));
+#if defined(__cpp_exceptions)
+        } catch (std::bad_alloc const &) {
+            return std::unexpected(error::not_enough_memory);
+        }
+#endif
     }
 
     template <std::same_as<std::string> Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
     {
-        auto owner = std::make_shared<std::string const>(std::move(encoded));
-        std::string_view const view = *owner;
-        return decode(std::move(owner), view);
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            auto owner = std::make_shared<std::string const>(std::move(encoded));
+            std::string_view const view = *owner;
+            return decode(std::move(owner), view);
+#if defined(__cpp_exceptions)
+        } catch (std::bad_alloc const &) {
+            return std::unexpected(error::not_enough_memory);
+        }
+#endif
     }
 
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
@@ -2175,9 +2192,17 @@ public:
     {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::schema::decode: the owner of the encoded data item is empty");
-        if (auto const r = packed::root_read<T>(target, encoded, limits.load()); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        return owning_ref<T>(std::move(owner), std::move(target));
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            if (auto const r = packed::root_read<T>(target, encoded, limits.load()); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return owning_ref<T>(std::move(owner), std::move(target));
+#if defined(__cpp_exceptions)
+        } catch (std::bad_alloc const &) {
+            return std::unexpected(error::not_enough_memory);
+        }
+#endif
     }
 
     template <class Encoded>

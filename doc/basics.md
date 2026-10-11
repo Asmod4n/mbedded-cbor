@@ -189,9 +189,28 @@ cbor::item_size("\x81\x81\x81\x01"sv);                               // 4
 
 ## 6. Memory
 
-No function takes an allocator or a `std::pmr::memory_resource`. The
-library allocates with `operator new`, through the standard containers and
-`std::make_shared`. A failed allocation throws `std::bad_alloc`.
+The caller sets the bound of the memory of a decode. `databind<T>::decode`
+and `schema<T>::decode` take a target as their third argument. The target
+holds `std::pmr` containers with a `std::pmr::memory_resource`. The decode
+reads into the target and makes each element with the allocator of its
+container (uses-allocator construction). When the resource refuses, the
+decode returns `error::not_enough_memory`. A `std::bad_alloc` does not
+leave `databind<T>::decode` or `schema<T>::decode`.
+
+```cpp
+using texts = std::pmr::vector<std::pmr::string>;
+std::array<std::byte, 64> buffer{};
+std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(),
+                                           std::pmr::null_memory_resource());
+auto const owner = std::make_shared<std::string const>(encoded);  // three texts of 40 bytes
+cbor::databind<texts>::decode(owner, *owner, texts(&budget));       // not_enough_memory
+```
+
+The library takes no allocator in other places. These places allocate
+with `operator new`, through the standard containers and
+`std::make_shared`. A failed allocation there throws `std::bad_alloc`.
+A plain struct inside a `std::pmr` container gets no allocator, so its
+members use the default resource.
 
 These calls allocate nothing:
 
@@ -212,7 +231,6 @@ These calls allocate:
 - `diagnostic_notation` and `encode` into a `std::string` allocate the
   string.
 
-A binding that uses `std::pmr` gives its own values a memory resource.
 The writer of `encode` chooses the memory of the bytes (doc/runtime.md).
 
 ## 7. Threads
