@@ -593,7 +593,7 @@ TEST_CASE("registered tag: before_encode that returns a new value by value")
     auto const point = std::make_shared<node>(node{object{5000, nullptr}});
     fresh_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode(binding, w, arr({point, point})).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, w, arr({point, point})).has_value());
     CHECK_EQ(binding.before_encode_calls, 2);
     CHECK_EQ(w.encoded, "\x82\xd9\x13\x88\x82\x01\x82\x02\x03\xd9\x13\x88\x82\x01\x82\x02\x03"sv);
 }
