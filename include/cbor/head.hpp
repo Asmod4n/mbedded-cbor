@@ -33,6 +33,7 @@ __extension__ typedef unsigned __int128 uint128;
 #endif
 
 enum class pass;
+enum class preferred_serialization;
 
 struct lazy;
 
@@ -674,7 +675,7 @@ class heads
     template <class Writer>
     friend struct encoder;
 
-    template <class, class, pass>
+    template <class, class, pass, preferred_serialization>
     friend class walker;
 
     friend struct lazy;

@@ -437,7 +437,7 @@ std::string wire_encoded(value const &v)
 {
     test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode(binding, w, v).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, w, v).has_value());
     return w.encoded;
 }
 
