@@ -1,5 +1,6 @@
 #include "binding.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <cstdint>
@@ -166,4 +167,48 @@ TEST_CASE("§4.1 float width: binary32 subnormals use f32")
     CHECK_EQ(encoded_float(std::ldexp(1.0, -127)), "\xfa\x00\x40\x00\x00"sv);
     CHECK_EQ(encoded_float(std::ldexp(1.0, -150)).size(), 9);
     CHECK_EQ(encoded_float(std::ldexp(1.0, -149) * 1.5).size(), 9);
+}
+
+namespace
+{
+
+// RFC 8949 section 4.2.2: a float takes the shortest form that keeps its value.
+// IEEE 754: a finite value fits a binary format when it equals n * 2^q with
+// |n| below 2^precision, q at or above the exponent of the least subnormal,
+// and the exponent of the value at most the greatest exponent of the format.
+bool fits_binary(double v, int precision, int least_exponent, int max_exponent)
+{
+    if (v == 0)
+        return true;
+    int e = 0;
+    std::frexp(v, &e);
+    if (e > max_exponent)
+        return false;
+    int const q = std::max(e - precision, least_exponent);
+    double const n = std::ldexp(v, -q);
+    return n == std::trunc(n) && std::fabs(n) < std::ldexp(1.0, precision);
+}
+
+} // namespace
+
+// The encoder chooses the width from a table per exponent. This test walks every
+// exponent of a double, so that no row of that table goes unchecked.
+TEST_CASE("major 7: every finite exponent takes the shortest width that keeps the value")
+{
+    for (std::uint64_t exponent = 0; exponent < 0x7ff; ++exponent)
+        for (std::uint64_t low = 0; low <= 52; ++low)
+            for (std::uint64_t sign : {0u, 1u}) {
+                std::uint64_t const significand =
+                    low == 52 ? 0
+                              : (std::uint64_t{1} << low) |
+                                    (std::uint64_t{0xa5} << 44 & ((std::uint64_t{1} << 52) - 1) &
+                                     ~((std::uint64_t{1} << low) - 1));
+                double const v = std::bit_cast<double>(sign << 63 | exponent << 52 | significand);
+                std::string const wire = encoded_float(v);
+                CHECK_EQ(bits_of(float_of(wire)), bits_of(v));
+                std::size_t const expected = fits_binary(v, 11, -24, 16)     ? 3
+                                             : fits_binary(v, 24, -149, 128) ? 5
+                                                                             : 9;
+                CHECK_EQ(wire.size(), expected);
+            }
 }
