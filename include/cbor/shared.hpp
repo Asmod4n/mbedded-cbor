@@ -800,38 +800,6 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
     return p.value == q.value;
 }
 
-template <class Message, bool Checked>
-std::expected<void, error>
-validity::check_sorted_keys_unique(Message &message, std::size_t const first_key, std::uint64_t const count,
-                                   std::size_t const depth, std::size_t const depth_max,
-                                   limit_checks<Checked> const checks)
-{
-    std::string_view encoded;
-    if constexpr (std::same_as<Message, std::string_view const>)
-        encoded = message;
-    else
-        encoded = message.encoded;
-    well_formedness::no_marks marks;
-    heads::decoder<Checked> walk{std::string_view(std::span(encoded).subspan(first_key)), checks};
-    std::size_t previous = 0;
-    for (std::uint64_t i = 0; i < count; ++i) {
-        std::size_t const key = encoded.size() - walk.encoded.size();
-        if (i != 0) {
-            auto const equal = keys_equivalent(message, previous, message, key, depth, depth_max, checks);
-            if (!equal) [[unlikely]]
-                return std::unexpected(equal.error());
-            if (error const c = check_key_unique(*equal).error_or(error{}); c != error{}) [[unlikely]]
-                return std::unexpected(c);
-        }
-        previous = key;
-        if (auto const r = well_formedness::item_skip(walk, marks); !r) [[unlikely]]
-            return r;
-        if (auto const r = well_formedness::item_skip(walk, marks); !r) [[unlikely]]
-            return r;
-    }
-    return {};
-}
-
 template <class T>
 inline constexpr bool is_thread_bound_v =
     std::same_as<T, lazy> || std::same_as<T, lazy_elements> || std::same_as<T, lazy_entries> ||

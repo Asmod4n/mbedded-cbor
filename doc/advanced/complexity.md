@@ -112,7 +112,7 @@ A row marked "not checked" was not compared with the code.
 | `check_number_range<T, M>(bool, M)` :313 | O(1) | O(1) | Confirmed. |
 | `check_magnitude_size(size_t, size_t)` :325 | O(1) | O(1) | Bounds L for magnitude_value. Confirmed. |
 
-`keys_equivalent` and `check_sorted_keys_unique` are declared here and
+`keys_equivalent` is declared here and
 defined in shared.hpp. See that section.
 
 ## rfc8949.hpp, rfc8746.hpp, rfc9535.hpp
@@ -169,7 +169,6 @@ Enums and constants only. No function found by grep.
 | `value_sharing::item_resolve(top_level_item&, size_t)` :333 | Common O(log e); worst O(n + e) | O(1) amortized | Can allocate one item. |
 | `value_sharing::container_resolve(shared_ptr<top_level_item>, size_t)` :341 | Common O(1); worst O(t) shared_resolve, t = tag 24 levels <= n/2 | Common O(1); one top_level_item per tag 24 level | make_shared per tag 24 level. The nesting depth does not bound tag 24 nesting. |
 | `validity::keys_equivalent<First, Second>` :376 | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | check_nesting_depth bounds d. No heap except marks. |
-| `validity::check_sorted_keys_unique<Message>` :530 | Common O(n_map); worst O(n_map) plus k-1 keys_equivalent | Stack O(d) | Adjacent keys only; keys must be sorted. |
 | `lazy::from(shared_ptr<void const>, Encoded&&) = delete` :177 | - | - | |
 
 ## lazy.hpp
@@ -459,7 +458,7 @@ All rows marked "compile time" have no run-time cost.
 
 Above linear in the input:
 
-- `validity::keys_equivalent`, `check_sorted_keys_unique` (shared.hpp): map keys O(k²) per level, exponential in d worst.
+- `validity::keys_equivalent` (shared.hpp): map keys O(k²) per level, exponential in d worst.
 - `jsonpath::value_equal` :1021: O(k²) key compares per map level.
 - `jsonpath::key_find` :993, non-text key: O(k·n_map).
 - `jsonpath::segment_apply`, `segments_apply`: O(c·n·d), O(p·N·c·n·d).
