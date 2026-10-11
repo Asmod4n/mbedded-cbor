@@ -307,3 +307,34 @@ lazy_decode(binding, *cbor::lazy::from(bytes));        // [55799(1)]
 ```
 
 The encoder writes a tag 55799 that the binding gives as `d9 d9 f7`.
+
+## 13. encode_iov
+
+`cbor::encode_iov(binding, value)` writes into a list of pieces, not into
+one buffer. It gives
+`std::expected<cbor::owning_ref<std::span<std::string_view const>>, error>`:
+the pieces in order, and their storage, which lives as long as the
+result. Use the pieces with `writev` or a socket, or join them.
+
+```cpp
+auto const pieces = cbor::encode_iov(binding, value);
+for (std::string_view const piece : **pieces)
+    send(piece);
+```
+
+The encoder writes into blocks of 16 KiB and copies each byte once; a
+`std::string` that grows would copy its bytes at each doubling.
+
+`cbor::encoder<cbor::iov_writer>` writes item by item. A text or a byte
+string of 32 bytes or more that you hand over with its owner is not
+copied: `std::string&&` and `std::vector<std::byte>&&` are moved into the
+result, a `std::shared_ptr` or a `cbor::owning_ref` is kept. `release()`
+gives the pieces; a write after it throws `std::logic_error`.
+
+```cpp
+cbor::iov_writer w;
+cbor::encoder<cbor::iov_writer> e{w};
+e.text_string_encode(std::move(long_text));   // moved, not copied
+auto const pieces = e.release();
+```
+

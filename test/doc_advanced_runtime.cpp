@@ -260,5 +260,26 @@ TEST_CASE("doc advanced runtime: tag 55799")
     test_binding binding;
     CHECK(*cbor::lazy_decode(binding, *cbor::lazy::from("\x81\xd9\xd9\xf7\x01"s)) ==
           A(value{test::tagged{55799, V(1)}}));
-    CHECK_EQ(preferred(value{test::tagged{55799, A(1, 2)}}), "\xd9\xd9\xf7\x82\x01\x02"s);
+    CHECK_EQ(encoded(value{test::tagged{55799, A(1, 2)}}), "\xd9\xd9\xf7\x82"s + native_unsigned(1) + native_unsigned(2));
+}
+
+// The section "encode_iov" writes into pieces, the last of which points into a string that the caller moved
+// in, and joins them; the joined bytes are those of encode.
+TEST_CASE("doc advanced runtime: encode_iov")
+{
+    test_binding binding;
+    value const v = A(1, "abc"s);
+    auto const pieces = cbor::encode_iov(binding, v);
+    REQUIRE(pieces.has_value());
+    std::string joined;
+    for (std::string_view const piece : **pieces)
+        joined.append(piece);
+    CHECK_EQ(joined, encoded(v));
+
+    std::string text(40, 'x');
+    cbor::iov_writer w;
+    cbor::encoder<cbor::iov_writer> e{w};
+    REQUIRE(e.text_string_encode(std::move(text)).has_value());
+    auto const kept = e.release();
+    CHECK_EQ((*kept).size(), 2u);
 }
