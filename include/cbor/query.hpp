@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <iterator>
 #include <array>
 #include <bit>
 #include <concepts>
@@ -328,7 +329,7 @@ class jsonpath
                         std::size_t const key_at = keys.size();
                         if (auto const r = extended_diagnostic_notation::head_append(keys, major_type::text_string, end - at, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
                             return std::unexpected(r.error());
-                        keys += std::string_view(std::span(text).subspan(at, end - at));
+                        std::ranges::copy(std::span(text).subspan(at, end - at), std::back_inserter(keys));
                         chosen.push_back({selector::kind::key, key_at, keys.size() - key_at, 0, std::nullopt, std::nullopt, 1, 0});
                         at = end;
                     }
