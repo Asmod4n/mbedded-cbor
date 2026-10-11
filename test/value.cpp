@@ -236,19 +236,36 @@ TEST_CASE("encode: a kind the binding cannot describe is unsupported_value")
 }
 
 // A span target is written in place. The last items of a top-level item lie closer to the end than the
-// widest head, so each kind is checked as the last item of a span of exact size and of one byte less.
+// widest head, so each kind is checked as the last item of a span of exact size and of one byte less,
+// with the shortest float widths and with every float as a double.
 TEST_CASE("encode: a span of exact size holds the top-level item, one byte less is no_buffer_space")
 {
     test_binding binding;
     for (value const &v : {A(1, 24), A(1, 1.5), A(1, 100000.25), A(1, 0.1), A(1, "abc"s),
                            A(1, simple{std::to_underlying(cbor::simple_value::null)}), A(1, value{std::uint64_t{4294967296}})}) {
-        std::string const expected = encoded(v);
-        std::vector<char> exact(expected.size());
-        CHECK(cbor::encode(binding, std::span<char>(exact), v).has_value());
-        CHECK_EQ(std::string_view(exact.data(), exact.size()), expected);
-        std::vector<char> short_by_one(expected.size() - 1);
-        CHECK_EQ(cbor::encode(binding, std::span<char>(short_by_one), v).error(),
-                 cbor::error{cbor::error::no_buffer_space});
+        {
+            std::string const expected = encoded(v);
+            std::vector<char> exact(expected.size());
+            CHECK(cbor::encode(binding, std::span<char>(exact), v)
+                      .has_value());
+            CHECK_EQ(std::string_view(exact.data(), exact.size()), expected);
+            std::vector<char> short_by_one(expected.size() - 1);
+            CHECK_EQ(cbor::encode(
+                         binding, std::span<char>(short_by_one), v)
+                         .error(),
+                     cbor::error{cbor::error::no_buffer_space});
+        }
+        {
+            string_writer w;
+            REQUIRE(cbor::encode(binding, w, v).has_value());
+            std::string const expected = w.encoded;
+            std::vector<char> exact(expected.size());
+            CHECK(cbor::encode(binding, std::span<char>(exact), v).has_value());
+            CHECK_EQ(std::string_view(exact.data(), exact.size()), expected);
+            std::vector<char> short_by_one(expected.size() - 1);
+            CHECK_EQ(cbor::encode(binding, std::span<char>(short_by_one), v).error(),
+                     cbor::error{cbor::error::no_buffer_space});
+        }
     }
 }
 

@@ -38,7 +38,7 @@ names start with `doc path:`. A claim about allocations has its test in
 | `at_path(binding, path, lazy)` | run time, singular | `std::expected<Binding::value, error>` |
 | `query<Path>(binding, lazy)` | compile time, any | `std::expected<Binding::value, error>`, the value is an array |
 | `query(binding, path, lazy)` | run time, any | `std::expected<Binding::value, error>`, the value is an array |
-| `schema<T>::at_path<Path>(encoded, index...)` | compile time, over the members of T | `std::expected<X, error>`, X the type of the member |
+| `packed<T>::at_path<Path>(encoded, index...)` | compile time, over the members of T | `std::expected<X, error>`, X the type of the member |
 
 Every function is in the namespace `cbor`. `encoded` is a
 `std::string_view`, so a `std::string` or one element of a
@@ -51,7 +51,7 @@ matches.
 A wrong use that the compiler cannot see throws `std::logic_error`:
 
 - an empty owner in `at_path<Path, T>(owner, encoded)` and in
-  `schema<T>::path(owner, encoded)`;
+  `packed<T>::path(owner, encoded)`;
 - a `cbor::lazy{}` that holds no item, in every form that takes a lazy.
 
 ### A scalar from bytes
@@ -133,8 +133,8 @@ array of the binding, also for a singular path and for an empty nodelist.
 
 ### A path over a schema message
 
-`cbor::schema<T>` writes a struct in a form with a fixed offset for each
-member. `schema<T>::at_path` reads one member and goes to its offset. It
+`cbor::packed<T>` writes a struct in a form with a fixed offset for each
+member. `packed<T>::at_path` reads one member and goes to its offset. It
 needs reflection, so it compiles only with g++ (doc/known-limits.md).
 
 ```cpp
@@ -142,12 +142,12 @@ struct [[=cbor::tag(1700)]] engine { std::uint16_t hp; std::uint32_t cc; };
 struct [[=cbor::tag(1701)]] car { std::string make; engine motor; std::vector<engine> spares; };
 struct [[=cbor::tag(1702)]] log { std::vector<std::uint16_t> readings; };
 
-auto const bytes = *cbor::schema<car>::encode(car{"kia", {120, 1600}, {{90, 1200}, {75, 1000}}});
-cbor::schema<car>::at_path<"$.motor.cc">(bytes);        // 1600
-cbor::schema<car>::at_path<"$.spares[1].hp">(bytes);    // 75
-cbor::schema<car>::at_path<"$.spares[].hp">(bytes, 0);  // 90, index at run time
-cbor::schema<car>::at_path<"$.spares[].hp">(bytes, 2);  // index_out_of_bounds
-cbor::schema<log>::at_path<"$.readings[1]">(log_bytes); // one element of a typed array
+auto const bytes = *cbor::packed<car>::encode(car{"kia", {120, 1600}, {{90, 1200}, {75, 1000}}});
+cbor::packed<car>::at_path<"$.motor.cc">(bytes);        // 1600
+cbor::packed<car>::at_path<"$.spares[1].hp">(bytes);    // 75
+cbor::packed<car>::at_path<"$.spares[].hp">(bytes, 0);  // 90, index at run time
+cbor::packed<car>::at_path<"$.spares[].hp">(bytes, 2);  // index_out_of_bounds
+cbor::packed<log>::at_path<"$.readings[1]">(log_bytes); // one element of a typed array
 ```
 
 The path names members of `T`. An index is a number or `[]`. Each `[]` takes
@@ -162,15 +162,15 @@ to a text or to a member that is not trivially copyable, such as a
 For a text or a part of the message, use the accessor:
 
 ```cpp
-auto root = *cbor::schema<car>::path(owner, *owner);
+auto root = *cbor::packed<car>::path(owner, *owner);
 root.at_path<"$.make">();                // std::expected<std::string_view, error>, "kia"
 auto const motor = root.at_path<"$.motor">();
 motor->at_path<"@.cc">();                // 1600, a path relative to the accessor
 ```
 
 A path that starts with `@` starts at the node of the accessor. The
-accessor reads a path only as an lvalue. Keep the result of `schema<T>::path` in a
-variable while an accessor from it lives (doc/known-limits.md). `schema<T>::path(encoded)` with a
+accessor reads a path only as an lvalue. Keep the result of `packed<T>::path` in a
+variable while an accessor from it lives (doc/known-limits.md). `packed<T>::path(encoded)` with a
 `std::string_view` copies the bytes into a new owner.
 
 ## 2. Which types a typed read gives
@@ -458,7 +458,7 @@ This table states when a path gives each error.
 |---|---|
 | `invalid_path` | The path text is not valid. A run-time `at_path` with a path that is not singular. `match` or `search`. A comparison with a side that is not singular. An index of 16 digits or less outside ±(2^53 - 1). |
 | `key_not_found` | A name or a key is not in the map. |
-| `index_out_of_bounds` | The index is outside the array, also a run-time index of `schema<T>::at_path`. |
+| `index_out_of_bounds` | The index is outside the array, also a run-time index of `packed<T>::at_path`. |
 | `not_indexable` | A name, an index or a key meets a value that is not a map or an array, for example a text, a number, a bignum or an element of a typed array. A name or a key meets an array or a typed array. |
 | `incorrect_type` | A typed read finds another kind of item than T takes. |
 | `number_out_of_range` | The integer does not fit T. |

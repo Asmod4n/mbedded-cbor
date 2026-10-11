@@ -96,7 +96,7 @@ TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")
 // writes the tag in its preferred head 0xd9d9f7.
 TEST_CASE("self-described CBOR: the encoder writes tag 55799 as 0xd9d9f7")
 {
-    CHECK_EQ(encoded(tag(55799, A(1, 2, 3))), "\xd9\xd9\xf7\x83\x01\x02\x03"sv);
+    CHECK_EQ(encoded(tag(55799, A(1, 2, 3))), "\xd9\xd9\xf7\x83"s + native_unsigned(1) + native_unsigned(2) + native_unsigned(3));
 }
 
 // RFC 9277 2.2.1: the CBOR Tag Wrapped method. The outer tag 55799 is read as its tag content, and the inner

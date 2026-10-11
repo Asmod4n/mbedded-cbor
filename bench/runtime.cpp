@@ -124,18 +124,34 @@ static void vg_encode(vg_out &o, bench::value const &x)
 }
 #endif
 
-#if defined(ARM_MP_REUSE) || defined(ARM_MP_READ)
+#if defined(ARM_MP_FRESH_NATIVE)
+#define ARM_MP_FRESH 1
+#define ARM_MP_NATIVE 1
+#endif
+#if defined(ARM_MP_REUSE_NATIVE)
+#define ARM_MP_REUSE 1
+#define ARM_MP_NATIVE 1
+#endif
+#if defined(ARM_MP_REUSE) || defined(ARM_MP_FRESH) || defined(ARM_MP_READ)
 #define ARM_MP 1
 #include <msgpack.hpp>
 static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x)
 {
     bench::binding b;
     switch (b.kind_of(x)) {
+#if defined(ARM_MP_NATIVE)
+    case cbor::kind::unsigned_integer: pk.pack_fix_uint64(b.unsigned_of(x)); break;
+#else
     case cbor::kind::unsigned_integer: pk.pack_uint64(b.unsigned_of(x)); break;
+#endif
     case cbor::kind::negative_integer: {
         std::uint64_t const n = b.unsigned_of(x) - 1;
         if (n <= std::uint64_t(INT64_MAX)) {
+#if defined(ARM_MP_NATIVE)
+            pk.pack_fix_int64(-1 - std::int64_t(n));
+#else
             pk.pack_int64(-1 - std::int64_t(n));
+#endif
         } else {
             msgpack::sbuffer body;
             msgpack::packer<msgpack::sbuffer>(body).pack_uint64(n);
@@ -143,7 +159,11 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
             pk.pack_ext_body(body.data(), static_cast<std::uint32_t>(body.size()));
         }
     } break;
+#if defined(ARM_MP_NATIVE)
+    case cbor::kind::floating_point: pk.pack_double(b.float_of(x)); break;
+#else
     case cbor::kind::floating_point: { double const d = b.float_of(x); if (static_cast<double>(static_cast<float>(d)) == d) pk.pack_float(static_cast<float>(d)); else pk.pack_double(d); } break;
+#endif
     case cbor::kind::simple_value: { auto const v = b.simple_of(x); if (v == 20) pk.pack_false(); else if (v == 21) pk.pack_true(); else pk.pack_nil(); } break;
     case cbor::kind::text_string: { auto const t = b.text_of(x); pk.pack_str(std::uint32_t(t.size())); pk.pack_str_body(t.data(), std::uint32_t(t.size())); } break;
     case cbor::kind::byte_string: { auto const t = b.bytes_of(x); pk.pack_bin(std::uint32_t(t.size())); pk.pack_bin_body(t.data(), std::uint32_t(t.size())); } break;
@@ -162,7 +182,7 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
 }
 #endif
 
-#if defined(ARM_S_STRING) || defined(ARM_TC_WRITE)
+#if defined(ARM_S_STRING) || defined(ARM_S_STRING_REUSE) || defined(ARM_TC_WRITE) || defined(ARM_S_IOV) || defined(ARM_S_PUSH_IOV)
 #define ARM_S_TREE 1
 #endif
 #if defined(ARM_TC_WRITE)
@@ -544,6 +564,41 @@ static std::uint64_t fb_path(flexbuffers::Reference const root)
 #endif
 }
 #endif
+
+#if defined(ARM_S_PUSH_IOV)
+static std::expected<void, std::errc> push_walk(cbor::encoder<cbor::iov_writer> &e, bench::value const &x)
+{
+    bench::binding b;
+    switch (b.kind_of(x)) {
+    case cbor::kind::unsigned_integer: return e.head_encode(cbor::major_type::unsigned_integer, b.unsigned_of(x));
+    case cbor::kind::negative_integer: return e.head_encode(cbor::major_type::negative_integer, b.unsigned_of(x) - 1);
+    case cbor::kind::floating_point: return e.float_encode(b.float_of(x));
+    case cbor::kind::simple_value: return e.head_encode(cbor::major_type::simple_float, b.simple_of(x));
+    case cbor::kind::text_string: return e.text_string_encode(b.text_of(x));
+    case cbor::kind::byte_string: return e.byte_string_encode(b.bytes_of(x));
+    case cbor::kind::array: {
+        std::uint64_t const n = b.array_size(x);
+        if (auto const r = e.head_encode(cbor::major_type::array, n); !r) return r;
+        for (std::uint64_t i = 0; i < n; ++i)
+            if (auto const r = push_walk(e, b.array_at(x, i)); !r) return r;
+        return {};
+    }
+    case cbor::kind::map: {
+        if (auto const r = e.head_encode(cbor::major_type::map, b.map_size(x)); !r) return r;
+        std::expected<void, std::errc> r;
+        b.map_for_each(x, [&](bench::value const &k, bench::value const &v) {
+            if (r) r = push_walk(e, k);
+            if (r) r = push_walk(e, v);
+        });
+        return r;
+    }
+    case cbor::kind::registered:
+        if (auto const r = e.head_encode(cbor::major_type::tag, b.registered_tag(x)); !r) return r;
+        return push_walk(e, b.before_encode(x));
+    default: std::abort();
+    }
+}
+#endif
 static std::string const *bytes = &doc;
 #if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
 static bench::value tree;
@@ -559,6 +614,9 @@ static flexbuffers::Builder fbb;
 #endif
 #if defined(ARM_S)
 static std::vector<char> buf;
+#endif
+#if defined(ARM_S_STRING_REUSE)
+static std::string reused;
 #endif
 #if defined(ARM_LC_PREALLOC)
 static cbor_item_t *lc;
@@ -582,7 +640,7 @@ static void setup()
     tree = std::move(*t);
 #endif
 #if defined(ARM_S)
-    buf.resize(doc.size());
+    buf.resize(2 * doc.size() + 64);
 #endif
 #if defined(ARM_TC_WRITE)
     tcbuf.resize(2 * doc.size() + 64);
@@ -618,7 +676,44 @@ static void setup()
 
 static std::uint64_t op()
 {
-#if defined(ARM_S_STRING)
+#if defined(ARM_S_IOV)
+    bench::binding b;
+    auto const r = cbor::encode_iov(b, tree);
+    if (!r)
+        std::abort();
+    std::span<std::string_view const> const pieces = **r;
+    benchmark::DoNotOptimize(pieces.data());
+    benchmark::ClobberMemory();
+    return std::ranges::fold_left(pieces | std::views::transform(&std::string_view::size), std::size_t{0}, std::plus<>{});
+#elif defined(ARM_S_PUSH_IOV)
+    cbor::iov_writer w;
+    cbor::encoder<cbor::iov_writer> e{w};
+    if (!push_walk(e, tree))
+        std::abort();
+    auto const r = e.release();
+    std::span<std::string_view const> const pieces = *r;
+    static bool const same = [&] {
+        bench::binding b;
+        std::string plain;
+        std::string joined;
+        for (std::string_view const piece : pieces)
+            joined.append(piece);
+        return cbor::encode(b, plain, tree).has_value() && plain == joined;
+    }();
+    if (!same)
+        std::abort();
+    benchmark::DoNotOptimize(pieces.data());
+    benchmark::ClobberMemory();
+    return pieces.size();
+#elif defined(ARM_S_STRING_REUSE)
+    bench::binding b;
+    reused.clear();
+    if (!cbor::encode(b, reused, tree))
+        std::abort();
+    benchmark::DoNotOptimize(reused.data());
+    benchmark::ClobberMemory();
+    return reused.size();
+#elif defined(ARM_S_STRING)
     bench::binding b;
     std::string out;
     if (!cbor::encode(b, out, tree))
@@ -807,6 +902,13 @@ static std::uint64_t op()
     d.p = reinterpret_cast<std::uint8_t const *>(in.data());
     d.end = d.p + in.size();
     return vg_read(d, 0);
+#elif defined(ARM_MP_FRESH)
+    msgpack::sbuffer fresh;
+    msgpack::packer<msgpack::sbuffer> pk(fresh);
+    mp_pack(pk, tree);
+    benchmark::DoNotOptimize(fresh.data());
+    benchmark::ClobberMemory();
+    return fresh.size();
 #elif defined(ARM_MP_REUSE)
     mpbuf.clear();
     msgpack::packer<msgpack::sbuffer> pk(mpbuf);

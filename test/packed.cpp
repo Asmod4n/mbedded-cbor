@@ -47,20 +47,20 @@ struct [[=cbor::tag(1500)]] wheel {
 TEST_CASE("fixed_size: numbers and simple values have the size of head and argument")
 {
     // 0xf4 or 0xf5, one initial byte (RFC 8949 3.3).
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<bool>(), 1u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<bool const>(), 1u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<bool>(), 1u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<bool const>(), 1u);
     // An integer of n bytes is 0x18 + log2(n) followed by n bytes (RFC 8949 3).
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::uint8_t>(), 2u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::int16_t>(), 3u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::uint32_t>(), 5u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::int64_t>(), 9u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::uint8_t>(), 2u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::int16_t>(), 3u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::uint32_t>(), 5u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::int64_t>(), 9u);
     // An enum has the size of its underlying type.
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<color>(), 3u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::byte>(), 2u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<color>(), 3u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::byte>(), 2u);
 #ifdef __SIZEOF_INT128__
     // A 128-bit integer is tag 2 or 3 (one byte) and a byte string of 16 bytes (RFC 8949 3.4.3).
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<cbor::int128>(), 18u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<cbor::uint128>(), 18u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<cbor::int128>(), 18u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<cbor::uint128>(), 18u);
 #endif
 }
 
@@ -69,28 +69,28 @@ TEST_CASE("fixed_size: numbers and simple values have the size of head and argum
 // x87 is widened to binary128, and bfloat16 to binary32, without loss.
 TEST_CASE("fixed_size: floats by their digits")
 {
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::float16_t>(), 3u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::bfloat16_t>(), 5u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<float>(), 5u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<double>(), 9u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::float128_t>(), 19u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<long double>(), std::numeric_limits<long double>::digits == 53 ? 9u : 19u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::float16_t>(), 3u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::bfloat16_t>(), 5u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<float>(), 5u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<double>(), 9u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::float128_t>(), 19u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<long double>(), std::numeric_limits<long double>::digits == 53 ? 9u : 19u);
 }
 
 // A text or a byte string of fixed length has its head and its bytes. An array of fixed length has its head and
 // its elements, each of fixed size.
 TEST_CASE("fixed_size: text, bytes and arrays of fixed length")
 {
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<char[32]>(), 34u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<char8_t[3]>(), 4u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::array<char, 24>>(), 26u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::byte[4]>(), 5u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<unsigned char[300]>(), 303u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::array<std::uint16_t, 4>>(), 13u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<char[32]>(), 34u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<char8_t[3]>(), 4u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::array<char, 24>>(), 26u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::byte[4]>(), 5u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<unsigned char[300]>(), 303u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::array<std::uint16_t, 4>>(), 13u);
     // std::uint8_t is unsigned char, so a span of it is a byte string.
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::span<std::uint8_t, 2>>(), 3u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::span<std::uint16_t, 2>>(), 7u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::uint32_t[2]>(), 11u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::span<std::uint8_t, 2>>(), 3u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::span<std::uint16_t, 2>>(), 7u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::uint32_t[2]>(), 11u);
 }
 
 // draft-ietf-cbor-packed-19 4.2: a struct is a record, its values behind a straight reference to the table entry
@@ -99,19 +99,19 @@ TEST_CASE("fixed_size: text, bytes and arrays of fixed length")
 // bytes, so 10 bytes come before the values. wheel: 10, then 3 + 5 + 1.
 TEST_CASE("fixed_size: a struct is a record of its values under the tag of its class")
 {
-    CHECK_EQ(cbor::schema<wheel>::fixed_size(), 19u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::array<wheel, 4>>(), 1u + 4u * 19u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size(), 19u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::array<wheel, 4>>(), 1u + 4u * 19u);
 }
 
 // A part of variable size is a shared item in the table of tag 113. The record holds the reference c6 1a <N> or
 // c6 3a <N>: tag 6 with an argument of fixed width (draft-ietf-cbor-packed-19 2.2), so 6 bytes.
 TEST_CASE("fixed_size: a part of variable size takes 6 bytes")
 {
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::string>(), 6u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::vector<wheel>>(), 6u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::map<int, int>>(), 6u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::optional<int>>(), 6u);
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::span<std::uint8_t>>(), 6u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::string>(), 6u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::vector<wheel>>(), 6u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::map<int, int>>(), 6u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::optional<int>>(), 6u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::span<std::uint8_t>>(), 6u);
 }
 
 #endif
@@ -157,31 +157,31 @@ struct [[=cbor::tag(1506)]] größe {
 // behind its 5 bytes at 18.
 TEST_CASE("member_offset: the head of each value, behind the class tag and the head of the record")
 {
-    CHECK_EQ(cbor::schema<wheel>::member_offset<^^wheel::diameter>(), 10u);
-    CHECK_EQ(cbor::schema<wheel>::member_offset<^^wheel::airPressure>(), 13u);
-    CHECK_EQ(cbor::schema<wheel>::member_offset<^^wheel::snowTires>(), 18u);
-    CHECK_EQ(cbor::schema<wheel const>::member_offset<^^wheel::snowTires>(), 18u);
+    CHECK_EQ(cbor::packed<wheel>::member_offset<^^wheel::diameter>(), 10u);
+    CHECK_EQ(cbor::packed<wheel>::member_offset<^^wheel::airPressure>(), 13u);
+    CHECK_EQ(cbor::packed<wheel>::member_offset<^^wheel::snowTires>(), 18u);
+    CHECK_EQ(cbor::packed<wheel const>::member_offset<^^wheel::snowTires>(), 18u);
 }
 
 // A nested struct is a record at the offset of its member, so offsets add up. car: 10, seats 2, so the engine record
 // with its own class tag is at 12; inside it horsepower at 10.
 TEST_CASE("member_offset: offsets of nested structs add up")
 {
-    CHECK_EQ(cbor::schema<car>::member_offset<^^car::motor>(), 12u);
-    CHECK_EQ(cbor::schema<engine>::member_offset<^^engine::horsepower>(), 10u);
-    CHECK_EQ(cbor::schema<car>::member_offset<^^car::hasNavSystem>(), 12u + cbor::schema<engine>::fixed_size());
+    CHECK_EQ(cbor::packed<car>::member_offset<^^car::motor>(), 12u);
+    CHECK_EQ(cbor::packed<engine>::member_offset<^^engine::horsepower>(), 10u);
+    CHECK_EQ(cbor::packed<car>::member_offset<^^car::hasNavSystem>(), 12u + cbor::packed<engine>::fixed_size());
 }
 
 // The count of values has a head of 9a and 4 bytes whatever the count, so a member added later moves no offset, and
 // a long name or a name in UTF-8 takes no place in the record.
 TEST_CASE("member_offset: the record head has one width for any count and any name")
 {
-    CHECK_EQ(cbor::schema<thirty>::member_offset<^^thirty::m00>(), 10u);
-    CHECK_EQ(cbor::schema<thirty>::member_offset<^^thirty::m29>(), 10u + 29u * 2u);
-    CHECK_EQ(cbor::schema<thirty>::fixed_size(), 10u + 30u * 2u);
-    CHECK_EQ(cbor::schema<long_name>::member_offset<^^long_name::a_member_name_of_twenty_nine_b>(), 10u);
-    CHECK_EQ(cbor::schema<empty>::fixed_size(), 10u);
-    CHECK_EQ(cbor::schema<größe>::member_offset<^^größe::b>(), 12u);
+    CHECK_EQ(cbor::packed<thirty>::member_offset<^^thirty::m00>(), 10u);
+    CHECK_EQ(cbor::packed<thirty>::member_offset<^^thirty::m29>(), 10u + 29u * 2u);
+    CHECK_EQ(cbor::packed<thirty>::fixed_size(), 10u + 30u * 2u);
+    CHECK_EQ(cbor::packed<long_name>::member_offset<^^long_name::a_member_name_of_twenty_nine_b>(), 10u);
+    CHECK_EQ(cbor::packed<empty>::fixed_size(), 10u);
+    CHECK_EQ(cbor::packed<größe>::member_offset<^^größe::b>(), 12u);
 }
 
 #endif
@@ -215,7 +215,7 @@ struct [[=cbor::tag(1510)]] people {
 std::string schema_bytes(auto const &value)
 {
     string_writer w;
-    REQUIRE(cbor::schema<std::remove_cvref_t<decltype(value)>>::encode(value, w).has_value());
+    REQUIRE(cbor::packed<std::remove_cvref_t<decltype(value)>>::encode(value, w).has_value());
     return w.encoded;
 }
 
@@ -224,10 +224,10 @@ std::string schema_bytes(auto const &value)
 template <class T, cbor::fixed_string Path, class... Index>
 auto at_path(std::string_view const bytes, Index const... indexes)
 {
-    using X = std::remove_cvref_t<decltype(*std::declval<typename cbor::schema<T>::template accessor<> const &>().template at_path<Path>(indexes...))>;
+    using X = std::remove_cvref_t<decltype(*std::declval<typename cbor::packed<T>::template accessor<> const &>().template at_path<Path>(indexes...))>;
     using Y = std::conditional_t<std::same_as<X, std::string_view>, std::string,
                                  std::conditional_t<std::same_as<X, std::optional<std::string_view>>, std::optional<std::string>, X>>;
-    auto const root = cbor::schema<T>::path(bytes);
+    auto const root = cbor::packed<T>::path(bytes);
     if (!root)
         return std::expected<Y, cbor::error>(std::unexpect, root.error());
     auto const x = root->template at_path<Path>(indexes...);
@@ -242,9 +242,9 @@ auto at_path(std::string_view const bytes, Index const... indexes)
 // The owner form: the caller keeps the owner alive, so a text stays a view into the message.
 template <class T, cbor::fixed_string Path, class... Index>
 auto at_path(std::shared_ptr<void const> const &owner, std::string_view const bytes, Index const... indexes)
-    -> decltype(std::declval<typename cbor::schema<T>::template accessor<> const &>().template at_path<Path>(indexes...))
+    -> decltype(std::declval<typename cbor::packed<T>::template accessor<> const &>().template at_path<Path>(indexes...))
 {
-    auto const root = cbor::schema<T>::path(owner, bytes);
+    auto const root = cbor::packed<T>::path(owner, bytes);
     if (!root)
         return std::unexpected(root.error());
     return root->template at_path<Path>(indexes...);
@@ -329,7 +329,7 @@ TEST_CASE("path: a message shorter than the least size is too_little_data, a for
     CHECK_EQ(at_path<login, "$.id">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
     std::string other = bytes;
     other.replace(8, 2, "ID");
-    CHECK_EQ(cbor::schema<login>::decode(other).error(), error::incorrect_type);
+    CHECK_EQ(cbor::packed<login>::decode(other).error(), error::incorrect_type);
     CHECK_EQ(at_path<login, "$.id">(other).error(), error::incorrect_type);
 }
 
@@ -406,8 +406,8 @@ TEST_CASE("at_path: a broken offset is an error")
     std::string past = bytes;
     past.replace(make + 1, 4, "\x00\x00\xff\xff"s);
     CHECK_FALSE(at_path<vehicle, "$.make">(past).has_value());
-    CHECK_FALSE(cbor::schema<vehicle>::decode(backward).has_value());
-    CHECK_FALSE(cbor::schema<vehicle>::decode(past).has_value());
+    CHECK_FALSE(cbor::packed<vehicle>::decode(backward).has_value());
+    CHECK_FALSE(cbor::packed<vehicle>::decode(past).has_value());
 }
 
 namespace
@@ -432,7 +432,7 @@ TEST_CASE("at_path: a fixed byte array is read inline")
     CHECK_EQ(at_path<badge, "$.mac">(bytes), "\x01\x02\x03\x04"s);
     CHECK_EQ(at_path<badge, "$.tone">(bytes), shade::light);
     std::string zeros = bytes;
-    std::size_t const mac = bytes.size() - cbor::schema<badge>::fixed_size() + cbor::schema<badge>::member_offset<^^badge::mac>();
+    std::size_t const mac = bytes.size() - cbor::packed<badge>::fixed_size() + cbor::packed<badge>::member_offset<^^badge::mac>();
     zeros.replace(mac + 1, 4, "\x00\x00\x00\x00"s);
     CHECK_EQ(at_path<badge, "$.mac">(zeros), "\x00\x00\x00\x00"s);
 }
@@ -504,7 +504,7 @@ TEST_CASE("encode: a list of a fixed-width number is a typed array of RFC 8746")
 TEST_CASE("decode and at_path: every typed array gives its elements back")
 {
     std::string const bytes = schema_bytes(sample_numbers);
-    auto const back = cbor::schema<numbers>::decode(bytes);
+    auto const back = cbor::packed<numbers>::decode(bytes);
     REQUIRE(back.has_value());
     numbers const &n = **back;
     CHECK_EQ(n.u16, sample_numbers.u16);
@@ -533,7 +533,7 @@ TEST_CASE("decode and at_path: every typed array gives its elements back")
     CHECK_EQ(std::bit_cast<std::uint32_t>(*at_path<numbers, "$.f32[0]">(bytes)), 0x3f800000u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(*at_path<numbers, "$.f64[0]">(bytes)), 0x3ff0000000000000u);
     CHECK_EQ(at_path<numbers, "$.f64[1]">(bytes).error(), error::index_out_of_bounds);
-    auto const root = cbor::schema<numbers>::path(bytes);
+    auto const root = cbor::packed<numbers>::path(bytes);
     REQUIRE(root.has_value());
     auto const list = root->at_path<"$.u32">();
     REQUIRE(list.has_value());
@@ -549,20 +549,20 @@ TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length 
     std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
     std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(at, std::string::npos);
-    REQUIRE(cbor::schema<doubles>::decode(bytes).has_value());
+    REQUIRE(cbor::packed<doubles>::decode(bytes).has_value());
     for (char const tag : {'\x52', '\x55'}) {
         std::string wrong = bytes;
         wrong[at + 1] = tag;
-        CHECK_EQ(cbor::schema<doubles>::decode(wrong).error(), error::incorrect_type);
+        CHECK_EQ(cbor::packed<doubles>::decode(wrong).error(), error::incorrect_type);
         CHECK_EQ(at_path<doubles, "$.v[0]">(wrong).error(), error::incorrect_type);
     }
     std::string odd = bytes;
     odd[at + 6] = '\x0f';
-    CHECK_EQ(cbor::schema<doubles>::decode(odd).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::packed<doubles>::decode(odd).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(at_path<doubles, "$.v[0]">(odd).error(), error::inadmissible_type_for_tag_content);
     std::string longer = bytes;
     longer[at + 6] = '\x18';
-    CHECK_EQ(cbor::schema<doubles>::decode(longer).error(), error::too_little_data);
+    CHECK_EQ(cbor::packed<doubles>::decode(longer).error(), error::too_little_data);
     CHECK_EQ(at_path<doubles, "$.v[0]">(longer).error(), error::too_little_data);
 }
 
@@ -573,7 +573,7 @@ TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length 
 TEST_CASE("schema::at: one number of a typed array, with every check of path")
 {
     std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
-    using S = cbor::schema<doubles>;
+    using S = cbor::packed<doubles>;
     CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[0]">(bytes)), 0x3ff0000000000000u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[]">(bytes, 1uz)), 0x4000000000000000u);
     CHECK_EQ(S::at_path<"$.v[2]">(bytes).error(), error::index_out_of_bounds);
@@ -608,7 +608,7 @@ TEST_CASE("schema::at: one number of a typed array, with every check of path")
 // A path to a text, a list or a struct has no form of schema::at, and a wrong use does not compile.
 TEST_CASE("schema::at: a path to a text or a list does not compile")
 {
-    auto const at_compiles = []<class T, cbor::fixed_string Path>() { return requires { cbor::schema<T>::template at_path<Path>(std::string_view{}); }; };
+    auto const at_compiles = []<class T, cbor::fixed_string Path>() { return requires { cbor::packed<T>::template at_path<Path>(std::string_view{}); }; };
     CHECK(at_compiles.template operator()<doubles, "$.v[0]">());
     CHECK_FALSE(at_compiles.template operator()<doubles, "$.v">());
     CHECK_FALSE(at_compiles.template operator()<login, "$.name">());
@@ -623,7 +623,7 @@ namespace
 template <cbor::fixed_string Path>
 auto view_of(std::string const &bytes)
 {
-    auto const root = cbor::schema<numbers>::path(bytes);
+    auto const root = cbor::packed<numbers>::path(bytes);
     REQUIRE(root.has_value());
     return root->view<Path>();
 }
@@ -677,7 +677,7 @@ TEST_CASE("view: every typed array gives its elements back, and an index past th
 // A view of an empty typed array has size 0, and index 0 is already out of bounds.
 TEST_CASE("view: an empty typed array has no element")
 {
-    auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{}));
+    auto const root = cbor::packed<doubles>::path(schema_bytes(doubles{}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
@@ -694,7 +694,7 @@ TEST_CASE("view: a typed array with a wrong tag or a wrong length gives no view"
     std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(at, std::string::npos);
     auto refused = [](std::string const &wrong) {
-        auto const root = cbor::schema<doubles>::path(wrong);
+        auto const root = cbor::packed<doubles>::path(wrong);
         REQUIRE(root.has_value());
         auto const v = root->view<"$.v">();
         REQUIRE_FALSE(v.has_value());
@@ -719,7 +719,7 @@ TEST_CASE("view: the view keeps the bytes alive after the accessor is gone")
 {
     std::optional<cbor::typed_array_view<double>> kept;
     {
-        auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{{1.0, 2.0}}));
+        auto const root = cbor::packed<doubles>::path(schema_bytes(doubles{{1.0, 2.0}}));
         REQUIRE(root.has_value());
         auto v = root->view<"$.v">();
         REQUIRE(v.has_value());
@@ -842,7 +842,7 @@ TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every e
 // whole view; n one past it is index_out_of_bounds as an error value, where std::span would have undefined behaviour.
 TEST_CASE("view: front, back, first and last")
 {
-    auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+    auto const root = cbor::packed<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
@@ -879,7 +879,7 @@ TEST_CASE("view: front, back, first and last")
 // are empty views, and first(1) is out of bounds.
 TEST_CASE("view: an empty view has no front, no back and no element")
 {
-    auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{}));
+    auto const root = cbor::packed<doubles>::path(schema_bytes(doubles{}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
@@ -905,7 +905,7 @@ TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is 
     std::optional<cbor::typed_array_view<double>> moved;
     std::optional<cbor::typed_array_view<double>> taken;
     {
-        auto const root = cbor::schema<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+        auto const root = cbor::packed<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
         REQUIRE(root.has_value());
         auto v = root->view<"$.v">();
         REQUIRE(v.has_value());
@@ -915,7 +915,7 @@ TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is 
         auto m = std::move(*v).first(1);
         REQUIRE(m.has_value());
         moved.emplace(std::move(*m));
-        auto r = cbor::schema<doubles>::path(schema_bytes(doubles{{8.0}}));
+        auto r = cbor::packed<doubles>::path(schema_bytes(doubles{{8.0}}));
         REQUIRE(r.has_value());
         auto t = std::move(*r).view<"$.v">();
         REQUIRE(t.has_value());
@@ -981,17 +981,17 @@ TEST_CASE("schema: decode keeps the first entry of a repeated key")
     REQUIRE(at != std::string::npos);
     REQUIRE(bytes.find(nine, at + 1) == std::string::npos);
     bytes.replace(at, nine.size(), "\x19\x00\x07"s);
-    auto const read = cbor::schema<garage>::decode(bytes);
+    auto const read = cbor::packed<garage>::decode(bytes);
     REQUIRE(read.has_value());
     CHECK_EQ((*read)->owners, (std::map<std::uint16_t, std::string>{{7, "seven"}}));
-    CHECK(cbor::schema<garage>::decode(schema_bytes(sample_garage)).has_value());
+    CHECK(cbor::packed<garage>::decode(schema_bytes(sample_garage)).has_value());
 }
 
 template <class T, cbor::fixed_string Path>
-concept path_reads = requires(typename cbor::schema<T>::template accessor<> const &a) { a.template at_path<Path>(); };
+concept path_reads = requires(typename cbor::packed<T>::template accessor<> const &a) { a.template at_path<Path>(); };
 
 template <class T, cbor::fixed_string Path, class I>
-concept path_reads_at = requires(typename cbor::schema<T>::template accessor<> const &a, I const i) { a.template at_path<Path>(i); };
+concept path_reads_at = requires(typename cbor::packed<T>::template accessor<> const &a, I const i) { a.template at_path<Path>(i); };
 
 // A path that ends at a leaf gives the value. A path that ends at a struct, a list, a fixed array or a map gives an
 // accessor. A name that is not a member, an index into a text or a map, an index past a fixed array, and a count of
@@ -1022,11 +1022,11 @@ TEST_CASE("path: a path compiles where it names a part of the type")
     CHECK_FALSE(path_reads<garage, ".tires">);
     CHECK_FALSE(path_reads<garage, "tires">);
     CHECK(path_reads<garage, "@.tires">);
-    using A = cbor::schema<garage>::accessor<>;
+    using A = cbor::packed<garage>::accessor<>;
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.names[0]">()), std::expected<std::string_view, cbor::error>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), std::expected<cbor::schema<garage>::accessor<tire>, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), std::expected<cbor::packed<garage>::accessor<tire>, cbor::error>>);
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires">()),
-                       std::expected<cbor::schema<garage>::accessor<std::vector<tire>>, cbor::error>>);
+                       std::expected<cbor::packed<garage>::accessor<std::vector<tire>>, cbor::error>>);
 }
 
 // An accessor of a list gives its size and its elements; an accessor of a struct gives its fields. A leaf through
@@ -1034,7 +1034,7 @@ TEST_CASE("path: a path compiles where it names a part of the type")
 TEST_CASE("path: an accessor reads relative to the part it names")
 {
     std::string const bytes = schema_bytes(sample_garage);
-    auto const opened = cbor::schema<garage>::path(bytes);
+    auto const opened = cbor::packed<garage>::path(bytes);
     REQUIRE(opened.has_value());
     auto const &root = *opened;
     auto const tires = root.at_path<"$.tires">();
@@ -1068,8 +1068,8 @@ TEST_CASE("path: an accessor reads relative to the part it names")
 // went in with, the lists, the map and the optional included.
 TEST_CASE("encode and decode: a struct goes in and comes back whole")
 {
-    std::string const bytes = *cbor::schema<garage>::encode(sample_garage);
-    auto const decoded_back = *cbor::schema<garage>::decode(bytes);
+    std::string const bytes = *cbor::packed<garage>::encode(sample_garage);
+    auto const decoded_back = *cbor::packed<garage>::decode(bytes);
     garage const &back = *decoded_back;
     REQUIRE_EQ(back.tires.size(), 3u);
     CHECK_EQ(back.tires.at(2).diameter, 19u);
@@ -1078,8 +1078,8 @@ TEST_CASE("encode and decode: a struct goes in and comes back whole")
     CHECK_EQ(back.rows, sample_garage.rows);
     CHECK_EQ(back.owners, sample_garage.owners);
 
-    std::string const encoded = *cbor::schema<vehicle>::encode(sample_vehicle);
-    auto const decoded_v = *cbor::schema<vehicle>::decode(encoded);
+    std::string const encoded = *cbor::packed<vehicle>::encode(sample_vehicle);
+    auto const decoded_v = *cbor::packed<vehicle>::decode(encoded);
     vehicle const &v = *decoded_v;
     CHECK_EQ(v.make, "Tesla");
     CHECK_EQ(v.balance, -7);
@@ -1093,9 +1093,9 @@ TEST_CASE("encode and decode: a struct goes in and comes back whole")
 // Broken bytes give the error as a value, as with std::expected.
 TEST_CASE("decode: an error is read as a value")
 {
-    std::string const bytes = *cbor::schema<vehicle>::encode(sample_vehicle);
+    std::string const bytes = *cbor::packed<vehicle>::encode(sample_vehicle);
     std::string_view const cut = std::string_view(bytes).substr(0, 3);
-    auto const r = cbor::schema<vehicle>::decode(cut);
+    auto const r = cbor::packed<vehicle>::decode(cut);
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::too_little_data);
 }
@@ -1177,12 +1177,12 @@ struct [[=cbor::tag(1518)]] guarded {
 // The record is the class tag 1518 = d9 05 ee, 7 bytes of record head and the integer.
 TEST_CASE("schema: cbor::skip leaves a public member out")
 {
-    CHECK_EQ(cbor::schema<guarded>::fixed_size(), 12u);
-    std::string const bytes = *cbor::schema<guarded>::encode(guarded{7, 42});
+    CHECK_EQ(cbor::packed<guarded>::fixed_size(), 12u);
+    std::string const bytes = *cbor::packed<guarded>::encode(guarded{7, 42});
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x10\xd8\x72\x81\x62id\x5a\x00\x00\x00\x00"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
                     "\xd9\x05\xee\xd8\x80\x9a\x00\x00\x00\x01\x18\x07"s);
-    auto const decoded_back = *cbor::schema<guarded>::decode(bytes);
+    auto const decoded_back = *cbor::packed<guarded>::decode(bytes);
     guarded const &back = *decoded_back;
     CHECK_EQ(back.id, 7u);
     CHECK_EQ(back.secret, 0u);
@@ -1195,15 +1195,15 @@ TEST_CASE("schema: cbor::skip leaves a public member out")
 // number above 65535 makes the head of the class tag 5 bytes long, and every offset behind it moves by that.
 TEST_CASE("schema: an annotation gives the key of a member")
 {
-    CHECK_EQ(cbor::schema<keyed>::fixed_size(), 15u);
-    CHECK_EQ(cbor::schema<keyed>::member_offset<^^keyed::m0>(), 12u);
-    CHECK_EQ(cbor::schema<keyed>::member_offset<^^keyed::m1>(), 14u);
-    std::string const bytes = *cbor::schema<keyed>::encode(keyed{7, true});
+    CHECK_EQ(cbor::packed<keyed>::fixed_size(), 15u);
+    CHECK_EQ(cbor::packed<keyed>::member_offset<^^keyed::m0>(), 12u);
+    CHECK_EQ(cbor::packed<keyed>::member_offset<^^keyed::m1>(), 14u);
+    std::string const bytes = *cbor::packed<keyed>::encode(keyed{7, true});
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x10\xd8\x72\x82\x69x-user-id\x63"
                     "EOF\x5a\x00\x00\x00\x00"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
                     "\xda\x00\x01\x00\x00\xd8\x80\x9a\x00\x00\x00\x02\x18\x07\xf5"s);
-    auto const decoded_back = *cbor::schema<keyed>::decode(bytes);
+    auto const decoded_back = *cbor::packed<keyed>::decode(bytes);
     keyed const &back = *decoded_back;
     CHECK_EQ(back.m0, 7u);
     CHECK(back.m1);
@@ -1215,25 +1215,25 @@ TEST_CASE("schema: an annotation gives the key of a member")
 // level, as each nested item counts one in the other decoders.
 TEST_CASE("decode: a struct that holds itself stops at the nesting depth in force")
 {
-    REQUIRE_EQ(cbor::schema<node>::fixed_size(), 16u);
+    REQUIRE_EQ(cbor::packed<node>::fixed_size(), 16u);
 
-    auto const at_limit = cbor::schema<node>::decode(node_chain(128));
+    auto const at_limit = cbor::packed<node>::decode(node_chain(128));
     REQUIRE(at_limit.has_value());
     CHECK_EQ(depth_of(**at_limit), 128u);
 
-    auto const over = cbor::schema<node>::decode(node_chain(129));
+    auto const over = cbor::packed<node>::decode(node_chain(129));
     REQUIRE_FALSE(over.has_value());
     CHECK_EQ(over.error(), error::nesting_depth_exceeded);
 
     {
         test::limits_guard const depth{{.nesting_depth = 3}};
-        auto const small = cbor::schema<node>::decode(node_chain(3));
+        auto const small = cbor::packed<node>::decode(node_chain(3));
         REQUIRE(small.has_value());
         CHECK_EQ(depth_of(**small), 3u);
-        CHECK_EQ(cbor::schema<node>::decode(node_chain(4)).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(cbor::packed<node>::decode(node_chain(4)).error(), error::nesting_depth_exceeded);
     }
 
-    auto const deep = cbor::schema<node>::decode(node_chain(100000));
+    auto const deep = cbor::packed<node>::decode(node_chain(100000));
     REQUIRE_FALSE(deep.has_value());
     CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
 }
@@ -1243,10 +1243,10 @@ TEST_CASE("decode: a struct that holds itself stops at the nesting depth in forc
 TEST_CASE("nesting depth limit: schema")
 {
     test::limits_guard const depth{{.nesting_depth = cbor::validity::nesting_depth_limit}};
-    auto const deepest = cbor::schema<node>::decode(node_chain(cbor::validity::nesting_depth_limit));
+    auto const deepest = cbor::packed<node>::decode(node_chain(cbor::validity::nesting_depth_limit));
     REQUIRE(deepest.has_value());
     CHECK_EQ(depth_of(**deepest), cbor::validity::nesting_depth_limit);
-    CHECK_EQ(cbor::schema<node>::decode(node_chain(cbor::validity::nesting_depth_limit + 1)).error(),
+    CHECK_EQ(cbor::packed<node>::decode(node_chain(cbor::validity::nesting_depth_limit + 1)).error(),
              error::nesting_depth_exceeded);
 }
 
@@ -1259,26 +1259,26 @@ TEST_CASE("nesting depth limit: schema")
 // final length of the message. A span that holds the message but not the padding of a head still takes it.
 TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
 {
-    std::string const expected = *cbor::schema<garage>::encode(sample_garage);
+    std::string const expected = *cbor::packed<garage>::encode(sample_garage);
     std::string text = "x";
-    CHECK_EQ(*cbor::schema<garage>::encode(sample_garage, text), expected.size());
+    CHECK_EQ(*cbor::packed<garage>::encode(sample_garage, text), expected.size());
     CHECK_EQ(text, "x" + expected);
     std::vector<std::byte> bytes;
-    REQUIRE(cbor::schema<garage>::encode(sample_garage, bytes).has_value());
+    REQUIRE(cbor::packed<garage>::encode(sample_garage, bytes).has_value());
     CHECK_EQ(bytes.size(), expected.size());
     std::array<char, 4096> buffer{};
-    auto const fits = cbor::schema<garage>::encode(sample_garage, std::span(buffer));
+    auto const fits = cbor::packed<garage>::encode(sample_garage, std::span(buffer));
     REQUIRE(fits.has_value());
     CHECK_EQ(std::string_view(buffer.data(), *fits), expected);
     std::vector<char> chars{'x'};
-    CHECK_EQ(*cbor::schema<garage>::encode(sample_garage, chars), expected.size());
+    CHECK_EQ(*cbor::packed<garage>::encode(sample_garage, chars), expected.size());
     CHECK_EQ(std::string_view(chars.data(), chars.size()), "x" + expected);
     std::vector<char> exact(expected.size());
-    auto const fits_exactly = cbor::schema<garage>::encode(sample_garage, std::span(exact));
+    auto const fits_exactly = cbor::packed<garage>::encode(sample_garage, std::span(exact));
     REQUIRE(fits_exactly.has_value());
     CHECK_EQ(std::string_view(exact.data(), *fits_exactly), expected);
     std::array<char, 8> small{};
-    auto const too_small = cbor::schema<garage>::encode(sample_garage, std::span(small));
+    auto const too_small = cbor::packed<garage>::encode(sample_garage, std::span(small));
     REQUIRE_FALSE(too_small.has_value());
     CHECK_EQ(too_small.error(), cbor::error::no_buffer_space);
 
@@ -1307,7 +1307,7 @@ TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
             return message{*this};
         }
     } writer;
-    REQUIRE(cbor::schema<garage>::encode(sample_garage, writer).has_value());
+    REQUIRE(cbor::packed<garage>::encode(sample_garage, writer).has_value());
     CHECK_EQ(writer.sent, expected);
     CHECK_EQ(writer.finished, expected.size());
     CHECK_EQ(writer.hint, expected.size());
@@ -1360,10 +1360,10 @@ TEST_CASE("encode: into the exact span that a writer allocates")
     };
 
     auto const check = [](auto const &value) {
-        std::string const expected = *cbor::schema<std::remove_cvref_t<decltype(value)>>::encode(value);
+        std::string const expected = *cbor::packed<std::remove_cvref_t<decltype(value)>>::encode(value);
         reserving writer;
         writer.store.fill('#');
-        REQUIRE_EQ(*cbor::schema<std::remove_cvref_t<decltype(value)>>::encode(value, writer), expected.size());
+        REQUIRE_EQ(*cbor::packed<std::remove_cvref_t<decltype(value)>>::encode(value, writer), expected.size());
         CHECK_EQ(writer.asked, expected.size());
         CHECK_EQ(writer.finished, expected.size());
         CHECK_EQ(std::string_view(writer.store.data(), expected.size()), expected);
@@ -1381,16 +1381,16 @@ TEST_CASE("encode: into the exact span that a writer allocates")
 TEST_CASE("schema: an optional struct and an optional string, present and absent")
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
-    std::string const bytes = *cbor::schema<passkey_login>::encode(full);
+    std::string const bytes = *cbor::packed<passkey_login>::encode(full);
     CHECK_EQ(at_path<passkey_login, "$.note">(bytes).value(), std::optional<std::string>{"hello"});
-    auto const decoded_back = *cbor::schema<passkey_login>::decode(bytes);
+    auto const decoded_back = *cbor::packed<passkey_login>::decode(bytes);
     passkey_login const &back = *decoded_back;
     REQUIRE(back.user.has_value());
     CHECK_EQ(back.user->name, "alice");
     CHECK_EQ(back.note, std::optional<std::string>{"hello"});
 
     passkey_login const empty{{std::byte{1}}, std::nullopt, std::nullopt};
-    std::string const none = *cbor::schema<passkey_login>::encode(empty);
+    std::string const none = *cbor::packed<passkey_login>::encode(empty);
     auto const absent = at_path<passkey_login, "$.note">(none);
     REQUIRE(absent.has_value());
     CHECK_FALSE(absent->has_value());
@@ -1399,8 +1399,8 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
         REQUIRE(end.has_value());
         CHECK_EQ(*end, message.size());
     }
-    CHECK_EQ(cbor::schema<wheel>::fixed_size<std::optional<passkey_user>>(), 2 + cbor::schema<passkey_user>::fixed_size());
-    auto const decoded_back2 = *cbor::schema<passkey_login>::decode(none);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::optional<passkey_user>>(), 2 + cbor::packed<passkey_user>::fixed_size());
+    auto const decoded_back2 = *cbor::packed<passkey_login>::decode(none);
     passkey_login const &back2 = *decoded_back2;
     CHECK_FALSE(back2.user.has_value());
     CHECK_FALSE(back2.note.has_value());
@@ -1534,23 +1534,23 @@ C chain_of(std::uint8_t const v)
 // is 1600 + K, 3 bytes in front of each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
 TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
 {
-    CHECK_EQ(cbor::schema<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
-    CHECK_EQ(cbor::schema<chain19>::fixed_size(), 3u + 2u + 5u + 2u + 6u + 6u);
-    CHECK_EQ(cbor::schema<chain0>::fixed_size(), 8u * 12u + 11u * 13u + 25u);
-    CHECK_EQ((cbor::schema<chain0>::member_offset<^^chain8::next, chain8>()), 13u);
-    CHECK_EQ(cbor::schema<chain8>::member_offset<^^chain8::next>(), 12u);
+    CHECK_EQ(cbor::packed<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
+    CHECK_EQ(cbor::packed<chain19>::fixed_size(), 3u + 2u + 5u + 2u + 6u + 6u);
+    CHECK_EQ(cbor::packed<chain0>::fixed_size(), 8u * 12u + 11u * 13u + 25u);
+    CHECK_EQ((cbor::packed<chain0>::member_offset<^^chain8::next, chain8>()), 13u);
+    CHECK_EQ(cbor::packed<chain8>::member_offset<^^chain8::next>(), 12u);
 
     chain0 const value = chain_of<chain0>(0);
-    std::string const bytes = *cbor::schema<chain0>::encode(value);
+    std::string const bytes = *cbor::packed<chain0>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x19"s);
     CHECK_EQ(bytes.substr(bytes.size() - 25),
              "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x03"s);
-    CHECK_EQ(bytes.substr(bytes.size() - cbor::schema<chain0>::fixed_size() + 8u * 12u, 6), "\xd9\x06\x48\xc6\x82\x00"s);
+    CHECK_EQ(bytes.substr(bytes.size() - cbor::packed<chain0>::fixed_size() + 8u * 12u, 6), "\xd9\x06\x48\xc6\x82\x00"s);
 
-    auto const decoded_back = *cbor::schema<chain0>::decode(bytes);
+    auto const decoded_back = *cbor::packed<chain0>::decode(bytes);
     chain0 const &back = *decoded_back;
-    CHECK_EQ(*cbor::schema<chain0>::encode(back), bytes);
+    CHECK_EQ(*cbor::packed<chain0>::encode(back), bytes);
     CHECK_EQ(back.next.next.next.next.next.next.next.next.next.v, 9u);
 
     CHECK_EQ(at_path<chain0, "$.next.next.next.next.next.next.next.next.next.v">(bytes), 9u);
@@ -1570,20 +1570,20 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
 TEST_CASE("schema: a root with 17 struct types starts its shared items at index 18")
 {
     chain3 const value = chain_of<chain3>(3);
-    std::string const bytes = *cbor::schema<chain3>::encode(value);
+    std::string const bytes = *cbor::packed<chain3>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x16"s);
     CHECK_EQ(bytes.substr(bytes.size() - 25),
              "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x1a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"s);
 
-    auto const decoded_back = *cbor::schema<chain3>::decode(bytes);
+    auto const decoded_back = *cbor::packed<chain3>::decode(bytes);
     chain3 const &back = *decoded_back;
-    CHECK_EQ(*cbor::schema<chain3>::encode(back), bytes);
+    CHECK_EQ(*cbor::packed<chain3>::encode(back), bytes);
     CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(bytes), "ab"s);
 
     std::string broken = bytes;
     broken.at(broken.size() - 7) = '\x00';
-    CHECK_EQ(cbor::schema<chain3>::decode(broken).error(), error::unpopulated_table_index);
+    CHECK_EQ(cbor::packed<chain3>::decode(broken).error(), error::unpopulated_table_index);
     CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(broken).error(),
              error::unpopulated_table_index);
 }
@@ -1610,11 +1610,11 @@ struct [[=cbor::tag(1521)]] point_b {
 // because a reader that ignored the class tag would take a message of one class for the other.
 TEST_CASE("schema: a root of another class tag is incorrect_type")
 {
-    std::string const bytes = *cbor::schema<point_a>::encode(point_a{7});
-    CHECK_EQ(bytes.substr(bytes.size() - cbor::schema<point_a>::fixed_size(), 3), "\xd9\x05\xf0"s);
-    auto const point = *cbor::schema<point_a>::decode(bytes);
+    std::string const bytes = *cbor::packed<point_a>::encode(point_a{7});
+    CHECK_EQ(bytes.substr(bytes.size() - cbor::packed<point_a>::fixed_size(), 3), "\xd9\x05\xf0"s);
+    auto const point = *cbor::packed<point_a>::decode(bytes);
     CHECK_EQ(point->x, 7u);
-    CHECK_EQ(cbor::schema<point_b>::decode(bytes).error(), error::incorrect_type);
+    CHECK_EQ(cbor::packed<point_b>::decode(bytes).error(), error::incorrect_type);
     CHECK_EQ(at_path<point_b, "$.x">(bytes).error(), error::incorrect_type);
     CHECK_EQ(at_path<point_a, "$.x">(bytes), 7u);
 }
@@ -1624,12 +1624,12 @@ TEST_CASE("schema: a root of another class tag is incorrect_type")
 // decode, and a path through that record must stop too, while the root and the other fields still read.
 TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 {
-    std::string const bytes = *cbor::schema<car>::encode(car{4, {300, 1800}, true});
-    std::size_t const motor = bytes.size() - cbor::schema<car>::fixed_size() + cbor::schema<car>::member_offset<^^car::motor>();
+    std::string const bytes = *cbor::packed<car>::encode(car{4, {300, 1800}, true});
+    std::size_t const motor = bytes.size() - cbor::packed<car>::fixed_size() + cbor::packed<car>::member_offset<^^car::motor>();
     CHECK_EQ(bytes.substr(motor, 3), "\xd9\x05\xdd"s);
     std::string forged = bytes;
     forged.at(motor + 2) = '\xde';
-    CHECK_EQ(cbor::schema<car>::decode(forged).error(), error::incorrect_type);
+    CHECK_EQ(cbor::packed<car>::decode(forged).error(), error::incorrect_type);
     CHECK_EQ(at_path<car, "$.seats">(forged), 4u);
     CHECK_EQ(at_path<car, "$.motor.cc">(forged).error(), error::incorrect_type);
     CHECK_EQ(at_path<car, "$.motor.cc">(bytes), 1800u);
@@ -1648,7 +1648,7 @@ ticket const sample_ticket{"a holder name longer than the small string buffer", 
 
 std::string ticket_bytes()
 {
-    return *cbor::schema<ticket>::encode(sample_ticket);
+    return *cbor::packed<ticket>::encode(sample_ticket);
 }
 
 } // namespace
@@ -1658,7 +1658,7 @@ std::string ticket_bytes()
 // the caller would read freed memory, and the address sanitizer reports that read.
 TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 {
-    std::expected<cbor::owning_ref<ticket>, cbor::error> const t = cbor::schema<ticket>::decode(ticket_bytes());
+    std::expected<cbor::owning_ref<ticket>, cbor::error> const t = cbor::packed<ticket>::decode(ticket_bytes());
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);
@@ -1673,7 +1673,7 @@ TEST_CASE("decode: the result keeps the owner after the caller releases it")
 {
     auto owner = std::make_shared<std::string const>(ticket_bytes());
     std::string_view const bytes = *owner;
-    auto const t = cbor::schema<ticket>::decode(std::move(owner), bytes);
+    auto const t = cbor::packed<ticket>::decode(std::move(owner), bytes);
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);
@@ -1686,7 +1686,7 @@ TEST_CASE("decode: the result keeps the owner after the caller releases it")
 // address sanitizer reports that read.
 TEST_CASE("path: the copying form outlives the message of the caller")
 {
-    auto const opened = cbor::schema<ticket>::path(ticket_bytes());
+    auto const opened = cbor::packed<ticket>::path(ticket_bytes());
     REQUIRE(opened.has_value());
     auto const &root = *opened;
     CHECK_EQ(root.at_path<"$.holder">(), sample_ticket.holder);
@@ -1699,7 +1699,7 @@ TEST_CASE("path: the root keeps the owner after the caller releases it")
 {
     auto owner = std::make_shared<std::string const>(ticket_bytes());
     std::string_view const bytes = *owner;
-    auto const opened = cbor::schema<ticket>::path(std::move(owner), bytes);
+    auto const opened = cbor::packed<ticket>::path(std::move(owner), bytes);
     REQUIRE(opened.has_value());
     auto const &root = *opened;
     auto const holder = root.at_path<"$.holder">();
@@ -1741,7 +1741,7 @@ probe const sample_probe{true, -300, 1ull << 40, 2.5, -1.5f, cbor::int128{-5}, {
 
 std::size_t probe_offset(std::size_t const size, std::size_t const member)
 {
-    return size - cbor::schema<probe>::fixed_size() + member;
+    return size - cbor::packed<probe>::fixed_size() + member;
 }
 
 bool lies_inside(std::string_view const part, std::string_view const message)
@@ -1806,7 +1806,7 @@ std::size_t probe_lot_read(std::string_view const message)
         return b;
     }();
     std::string_view const bytes(block.get(), message.size());
-    auto opened = cbor::schema<probe>::path(block, bytes);
+    auto opened = cbor::packed<probe>::path(block, bytes);
     if (!opened)
         return 0;
     auto &lot = *opened;
@@ -1884,7 +1884,7 @@ concept dereferenced_as_rvalue = requires(R &&r) { *std::move(r); } || requires(
 // The whole message reads every path, and each value is the one that went in.
 TEST_CASE("attack: the sample message reads every path")
 {
-    std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
+    std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
     CHECK_EQ(probe_paths_read(bytes), probe_paths);
     CHECK_EQ(probe_lot_read(bytes), probe_lot_paths);
     CHECK_EQ(at_path<probe, "$.i16">(bytes), -300);
@@ -1899,17 +1899,17 @@ TEST_CASE("attack: the sample message reads every path")
 // wrong use and throws. The test exists because each of these would otherwise let a view outlive its bytes.
 TEST_CASE("attack: no text result outlives its bytes")
 {
-    std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
-    using A = cbor::schema<probe>::accessor<>;
+    std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
+    using A = cbor::packed<probe>::accessor<>;
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.text">()), std::expected<std::string_view, cbor::error>>);
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.code">()), std::expected<std::string_view, cbor::error>>);
     CHECK(path_reads<probe, "$.text">);
     CHECK_FALSE(temporary_reads<A, "$.text">);
-    CHECK_FALSE(temporary_reads<cbor::schema<probe>::accessor<tire>, "@.diameter">);
+    CHECK_FALSE(temporary_reads<cbor::packed<probe>::accessor<tire>, "@.diameter">);
     CHECK_FALSE(chain_reads<A>);
     CHECK_FALSE(dereferenced_as_rvalue<cbor::owning_ref<probe>>);
-    CHECK_THROWS_AS((void)cbor::schema<probe>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::schema<probe>::decode(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<probe>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<probe>::decode(std::shared_ptr<void const>{}, bytes), std::logic_error);
 }
 
 // An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
@@ -1917,21 +1917,21 @@ TEST_CASE("attack: no text result outlives its bytes")
 // outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
 TEST_CASE("attack: path and decode check that the owner holds an object")
 {
-    auto const bytes = std::make_shared<std::string const>(*cbor::schema<probe>::encode(sample_probe));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::path(o, std::string(*o)); }; }(bytes)));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::schema<probe>::path(o, std::move(s)); }; }(bytes)));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::decode(o, std::string(*o)); }; }(bytes)));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::schema<probe>::decode(o, std::move(s)); }; }(bytes)));
-    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::path(o, *o); }; }(bytes)));
-    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::schema<probe>::decode(o, *o); }; }(bytes)));
+    auto const bytes = std::make_shared<std::string const>(*cbor::packed<probe>::encode(sample_probe));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::path(o, std::string(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::packed<probe>::path(o, std::move(s)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::decode(o, std::string(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::packed<probe>::decode(o, std::move(s)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::path(o, *o); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::decode(o, *o); }; }(bytes)));
     std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
-    CHECK_THROWS_AS((void)cbor::schema<probe>::path(holds_nothing, *bytes), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::schema<probe>::decode(holds_nothing, *bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<probe>::path(holds_nothing, *bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<probe>::decode(holds_nothing, *bytes), std::logic_error);
     std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
-    auto const root = cbor::schema<probe>::path(holds_bytes, *bytes);
+    auto const root = cbor::packed<probe>::path(holds_bytes, *bytes);
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.i16">(), -300);
-    auto const decoded = cbor::schema<probe>::decode(holds_bytes, *bytes);
+    auto const decoded = cbor::packed<probe>::decode(holds_bytes, *bytes);
     REQUIRE(decoded.has_value());
     CHECK_EQ((*decoded)->i16, -300);
 }
@@ -1940,7 +1940,7 @@ TEST_CASE("attack: path and decode check that the owner holds an object")
 // wire would read past the end of the cut. No prefix reads a value: the root lies at the end of the message.
 TEST_CASE("attack: every prefix of a message is an error for every path")
 {
-    std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
+    std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
     std::size_t values = 0;
     for (std::size_t size = 0; size < bytes.size(); ++size)
         values += probe_paths_read(std::string_view(bytes).substr(0, size)) + probe_lot_read(std::string_view(bytes).substr(0, size));
@@ -1951,14 +1951,14 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
 // a reader that found the root by an offset from the start would read a record that is not there.
 TEST_CASE("attack: a shifted root is incorrect_type")
 {
-    std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
+    std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
     CHECK_EQ(at_path<probe, "$.i16">("\x00"s + bytes).error(), error::incorrect_type);
     CHECK_EQ(at_path<probe, "$.i16">(bytes + "\x00"s).error(), error::incorrect_type);
     CHECK_EQ(probe_paths_read("\x00"s + bytes), 0u);
     CHECK_EQ(probe_paths_read(bytes + "\x00"s), 0u);
     CHECK_EQ(probe_lot_read("\x00"s + bytes), 0u);
     CHECK_EQ(probe_lot_read(bytes + "\x00"s), 0u);
-    CHECK_EQ(cbor::schema<probe>::path(bytes + "\x00"s).error(), error::incorrect_type);
+    CHECK_EQ(cbor::packed<probe>::path(bytes + "\x00"s).error(), error::incorrect_type);
 }
 
 // RFC 8949 3: each fixed field has one head. The heads that are valid are written here from RFC 8949 3.3 and 3.4
@@ -1967,13 +1967,13 @@ TEST_CASE("attack: a shifted root is incorrect_type")
 // exists because a reader that ignored the head would read the argument of another type.
 TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
 {
-    std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
+    std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
     auto const forged = [&bytes](std::size_t const member, int const head) {
         std::string f = bytes;
         f.at(probe_offset(f.size(), member)) = static_cast<char>(head);
         return f;
     };
-    using S = cbor::schema<probe>;
+    using S = cbor::packed<probe>;
     for (int head = 0; head < 256; ++head) {
         CAPTURE(head);
         CHECK_EQ(at_path<probe, "$.flag">(forged(S::member_offset<^^probe::flag>(), head)).has_value(), head == 0xf4 || head == 0xf5);
@@ -1992,8 +1992,8 @@ TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
 // see that.
 TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the message")
 {
-    std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
-    std::size_t const root = bytes.size() - cbor::schema<probe>::fixed_size();
+    std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
+    std::size_t const root = bytes.size() - cbor::packed<probe>::fixed_size();
     for (std::size_t at = root; at < bytes.size(); ++at) {
         for (int const flip : {0x01, 0x20, 0x80, 0xff}) {
             std::string f = bytes;
@@ -2009,10 +2009,10 @@ TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the 
 // root would overlap bytes that another path reads as another type.
 TEST_CASE("attack: a directory entry out of range is an error")
 {
-    std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
+    std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x0c"s);
     REQUIRE_NE(head, std::string::npos);
-    std::size_t const root = bytes.size() - cbor::schema<probe>::fixed_size();
+    std::size_t const root = bytes.size() - cbor::packed<probe>::fixed_size();
     for (std::size_t j = 0; j < 3; ++j) {
         for (std::uint32_t const to : {0u, static_cast<std::uint32_t>(head), static_cast<std::uint32_t>(root),
                                        static_cast<std::uint32_t>(bytes.size()), 0x7fffffffu, 0xffffffffu}) {
@@ -2021,7 +2021,7 @@ TEST_CASE("attack: a directory entry out of range is an error")
                                                        static_cast<char>(to >> 8), static_cast<char>(to)});
             CAPTURE(j);
             CAPTURE(to);
-            CHECK_FALSE(cbor::schema<probe>::decode(f).has_value());
+            CHECK_FALSE(cbor::packed<probe>::decode(f).has_value());
             CHECK_LT(probe_paths_read(f), probe_paths);
             CHECK_LT(probe_lot_read(f), probe_lot_paths);
         }
@@ -2033,7 +2033,7 @@ TEST_CASE("attack: a directory entry out of range is an error")
 // that reached into the root would give the bytes of the root's fields as text.
 TEST_CASE("attack: overlapping items are an error")
 {
-    std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
+    std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x0c"s);
     REQUIRE_NE(head, std::string::npos);
     std::string same = bytes;
@@ -2045,7 +2045,7 @@ TEST_CASE("attack: overlapping items are an error")
     std::size_t const text = one.find("\x7a\x00\x00\x00\x02" "ab"s);
     REQUIRE_NE(text, std::string::npos);
     std::string into_root = one;
-    into_root.replace(text + 1, 4, std::string{'\x00', '\x00', '\x00', static_cast<char>(2 + cbor::schema<login>::fixed_size())});
+    into_root.replace(text + 1, 4, std::string{'\x00', '\x00', '\x00', static_cast<char>(2 + cbor::packed<login>::fixed_size())});
     CHECK_EQ(at_path<login, "$.name">(into_root).error(), error::too_little_data);
     CHECK_EQ(at_path<login, "$.id">(into_root), 5u);
 }
@@ -2054,14 +2054,14 @@ TEST_CASE("attack: overlapping items are an error")
 // because a path into a list must check the tag of the record it reaches, not only the tag of the root.
 TEST_CASE("attack: a forged class tag of a record in a list is incorrect_type")
 {
-    std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
+    std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
     std::size_t const second = bytes.find("\xd9\x05\xe7"s, bytes.find("\xd9\x05\xe7"s) + 1);
     REQUIRE_NE(second, std::string::npos);
     std::string forged = bytes;
     forged.at(second + 2) = '\xe8';
     CHECK_EQ(at_path<probe, "$.tires[0].diameter">(forged), 17u);
     CHECK_EQ(at_path<probe, "$.tires[1].diameter">(forged).error(), error::incorrect_type);
-    auto lot = *cbor::schema<probe>::path(forged);
+    auto lot = *cbor::packed<probe>::path(forged);
     for (int pass = 0; pass < 2; ++pass) {
         CHECK_EQ(lot.at_path<"$.tires[].diameter">(0uz), 17u);
         CHECK_EQ(lot.at_path<"$.tires[].diameter">(1uz).error(), error::incorrect_type);
@@ -2121,7 +2121,7 @@ std::string text_of(std::expected<std::string_view, cbor::error> const &r)
 
 // One read of every field of car i, through leaf paths from the root and through an accessor of the car and of each
 // wheel, compared with the decoded car.
-void lot_car_matches(cbor::schema<parking_lot>::accessor<> const &lot, parking_lot const &back, std::size_t const i)
+void lot_car_matches(cbor::packed<parking_lot>::accessor<> const &lot, parking_lot const &back, std::size_t const i)
 {
     CAPTURE(i);
     lot_car const &c = back.cars.at(i);
@@ -2173,9 +2173,9 @@ concept temporary_car_reads = requires(D const &d) { (*d.template at_path<"$.car
 TEST_CASE("path: an accessor gives the values of decode in every order")
 {
     std::string const bytes = schema_bytes(sample_lot());
-    auto const decoded = *cbor::schema<parking_lot>::decode(bytes);
+    auto const decoded = *cbor::packed<parking_lot>::decode(bytes);
     parking_lot const &back = *decoded;
-    auto lot = *cbor::schema<parking_lot>::path(bytes);
+    auto lot = *cbor::packed<parking_lot>::path(bytes);
     std::vector<std::size_t> order(back.cars.size());
     std::ranges::iota(order, 0uz);
     for (std::size_t const i : order)
@@ -2199,14 +2199,14 @@ TEST_CASE("path: an accessor gives the values of decode in every order")
 // the root, and a read through a temporary root would be the only use of a root that ends at once.
 TEST_CASE("path: an accessor is not read through a temporary")
 {
-    using D = cbor::schema<parking_lot>::accessor<>;
+    using D = cbor::packed<parking_lot>::accessor<>;
     CHECK(lot_reads<D, "$.cars[].seats">);
     CHECK(lot_reads<D const, "$.cars[].seats">);
     CHECK(lot_reads<D const, "$.cars[]">);
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[].seats">);
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[]">);
     CHECK_FALSE(temporary_car_reads<D>);
-    CHECK_THROWS_AS((void)cbor::schema<parking_lot>::path(std::shared_ptr<void const>{}, ""sv), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<parking_lot>::path(std::shared_ptr<void const>{}, ""sv), std::logic_error);
 }
 
 // The copying form keeps its copy: a text and a car accessor stay valid after the caller frees the message, while the
@@ -2214,7 +2214,7 @@ TEST_CASE("path: an accessor is not read through a temporary")
 TEST_CASE("path: the copying form keeps its copy after the caller frees the message")
 {
     auto bytes = std::make_unique<std::string>(schema_bytes(sample_lot()));
-    auto lot = *cbor::schema<parking_lot>::path(*bytes);
+    auto lot = *cbor::packed<parking_lot>::path(*bytes);
     auto const make = *lot.at_path<"$.cars[].make">(3uz);
     auto const car = *lot.at_path<"$.cars[]">(4uz);
     bytes.reset();
@@ -2232,7 +2232,7 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
     auto const other = [](auto const &a, auto const &b) { return a.has_value() != b.has_value() || (a && *a != *b); };
     auto const keep = std::make_shared<int const>(0);
     auto const read = [&differ, other, &keep](std::string_view const m) {
-        auto opened = cbor::schema<parking_lot>::path(keep, m);
+        auto opened = cbor::packed<parking_lot>::path(keep, m);
         std::size_t n = 0;
         if (!opened)
             return n;
@@ -2280,7 +2280,7 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
 
     auto buffer = std::make_unique<std::string>(message);
     char const *data = buffer->data();
-    auto const moved = cbor::schema<login>::path(std::move(*buffer));
+    auto const moved = cbor::packed<login>::path(std::move(*buffer));
     REQUIRE(moved.has_value());
     auto const moved_name = moved->at_path<"$.name">();
     REQUIRE(moved_name.has_value());
@@ -2290,7 +2290,7 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     CHECK_EQ(*moved_name, name);
 
     std::string lvalue = message;
-    auto const copied = cbor::schema<login>::path(lvalue);
+    auto const copied = cbor::packed<login>::path(lvalue);
     REQUIRE(copied.has_value());
     auto const copied_name = copied->at_path<"$.name">();
     REQUIRE(copied_name.has_value());
@@ -2300,27 +2300,27 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     CHECK_EQ(*copied_name, name);
 
     std::string const constant = message;
-    auto const from_const = cbor::schema<login>::path(std::move(constant));
+    auto const from_const = cbor::packed<login>::path(std::move(constant));
     REQUIRE(from_const.has_value());
     CHECK_EQ(constant, message);
 
     auto decode_buffer = std::make_unique<std::string>(message);
-    auto const decoded = cbor::schema<login>::decode(std::move(*decode_buffer));
+    auto const decoded = cbor::packed<login>::decode(std::move(*decode_buffer));
     decode_buffer.reset();
     REQUIRE(decoded.has_value());
     CHECK_EQ((*decoded)->name, name);
-    auto const from_lvalue = cbor::schema<login>::decode(lvalue = message);
+    auto const from_lvalue = cbor::packed<login>::decode(lvalue = message);
     REQUIRE(from_lvalue.has_value());
     CHECK_EQ((*from_lvalue)->id, 7u);
-    auto const decoded_const = cbor::schema<login>::decode(std::move(constant));
+    auto const decoded_const = cbor::packed<login>::decode(std::move(constant));
     REQUIRE(decoded_const.has_value());
     CHECK_EQ((*decoded_const)->id, 7u);
-    auto const from_view = cbor::schema<login>::decode(std::string_view(message));
+    auto const from_view = cbor::packed<login>::decode(std::string_view(message));
     REQUIRE(from_view.has_value());
     CHECK_EQ((*from_view)->id, 7u);
     char const *const empty = "";
-    CHECK_EQ(cbor::schema<login>::decode(empty).error(), error::too_little_data);
-    CHECK_EQ(cbor::schema<login>::path("").error(), error::too_little_data);
+    CHECK_EQ(cbor::packed<login>::decode(empty).error(), error::too_little_data);
+    CHECK_EQ(cbor::packed<login>::path("").error(), error::too_little_data);
 }
 
 #endif

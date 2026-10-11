@@ -49,13 +49,13 @@ struct outer
 
 }
 
-// The section "Write a struct and read one value by a path" writes a nested struct with databind and reads the inner
+// The section "Write a struct and read one value by a path" writes a nested struct with structs and reads the inner
 // member back by a path. The test exists because a user combines the two parts and no other example shows both.
 TEST_CASE("doc readme: write a struct and read by a path")
 {
     using namespace std::string_literals;
 
-    auto const bytes = cbor::databind<doc_readme::outer>::encode(doc_readme::outer{{5}});
+    auto const bytes = cbor::structs<doc_readme::outer>::encode(doc_readme::outer{{5}});
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, "\xa1\x61"
                      "a\xa1\x61"
