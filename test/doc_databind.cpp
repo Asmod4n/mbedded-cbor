@@ -71,9 +71,9 @@ TEST_CASE("doc databind: encode and decode a struct")
 {
     auto const bytes = cbor::databind<person>::encode(person{"ann", 30});
     REQUIRE(bytes.has_value());
-    CHECK_EQ(*bytes, "\xa2\x64name\x63"
-                     "ann\x63"
-                     "age\x18\x1e"s);
+    CHECK_EQ(*bytes, "\xa2\x63"
+                     "age\x18\x1e\x64name\x63"
+                     "ann"s);
     auto const back = cbor::databind<person>::decode(*bytes);
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->name, "ann");
@@ -122,14 +122,14 @@ TEST_CASE("doc databind: the item of each type")
     auto const bytes = cbor::databind<reading>::encode(r);
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, "\xa6"
+                     "\x62id\x61x"
+                     "\x64pair\x82\xf5\xf6"
+                     "\x65state\x01"
                      "\x65value\xf9\x41\x00"
-                     "\x67samples\x82\x01\x02"
                      "\x66"
                      "counts\xa1\x61"
                      "a\x20"
-                     "\x65state\x01"
-                     "\x62id\x61x"
-                     "\x64pair\x82\xf5\xf6"s);
+                     "\x67samples\x82\x01\x02"s);
     auto const back = cbor::databind<reading>::decode(*bytes);
     REQUIRE(back.has_value());
     CHECK(**back == r);
@@ -253,12 +253,12 @@ TEST_CASE("doc databind: the tag of a struct")
 {
     auto const bytes = cbor::databind<cbor::tagged<1800, tagged_person>>::encode({{"ann", 30}});
     REQUIRE(bytes.has_value());
-    CHECK_EQ(*bytes, "\xd9\x07\x08\xa2\x64name\x63"
-                     "ann\x63"
-                     "age\x18\x1e"s);
+    CHECK_EQ(*bytes, "\xd9\x07\x08\xa2\x63"
+                     "age\x18\x1e\x64name\x63"
+                     "ann"s);
     auto const text = cbor::diagnostic_notation(*bytes);
     REQUIRE(text.has_value());
-    CHECK_EQ(*text, R"(1800({"name": "ann", "age": 30}))");
+    CHECK_EQ(*text, R"(1800({"age": 30, "name": "ann"}))");
 }
 
 } // namespace doc_databind

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <expected>
 #include <limits>
+#include <numeric>
 #include <memory>
 #include <new>
 #include <ranges>
@@ -527,6 +528,42 @@ class generic
         return {};
     }
 
+    static consteval std::vector<unsigned char> key_encoded(major_type const major, std::uint64_t const argument,
+                                                            std::string_view const text)
+    {
+        std::uint8_t const info = heads::preferred_argument_info(argument);
+        std::size_t const bytes = heads::argument_size(info);
+        std::vector<unsigned char> out{static_cast<unsigned char>(heads::initial_byte(major, info))};
+        for (std::size_t k = bytes; k > 0; --k)
+            out.push_back(static_cast<unsigned char>(argument >> (std::numeric_limits<std::uint8_t>::digits * (k - 1))));
+        for (char const c : text)
+            out.push_back(static_cast<unsigned char>(c));
+        return out;
+    }
+
+    template <class U>
+    static consteval std::array<std::size_t, packed::members_of<U>().size()> key_order()
+    {
+        constexpr auto members = packed::members_of<U>();
+        std::array<std::vector<unsigned char>, members.size()> encoded;
+        for (std::size_t i = 0; i < members.size(); ++i) {
+            if constexpr (packed::has_integer_keys<U>) {
+                std::int64_t const key = U::keys[i];
+                encoded[i] = key >= 0 ? key_encoded(major_type::unsigned_integer, static_cast<std::uint64_t>(key), {})
+                                      : key_encoded(major_type::negative_integer, static_cast<std::uint64_t>(-1 - key), {});
+            } else {
+                std::string_view const name = packed::key_of(members[i]);
+                encoded[i] = key_encoded(major_type::text_string, name.size(), name);
+            }
+        }
+        std::array<std::size_t, members.size()> order;
+        std::ranges::iota(order, std::size_t{0});
+        std::ranges::sort(order, [&](std::size_t const a, std::size_t const b) {
+            return std::ranges::lexicographical_compare(encoded[a], encoded[b]);
+        });
+        return order;
+    }
+
     template <class U>
     static bool member_present(U const &value)
     {
@@ -772,7 +809,7 @@ class generic
                     ++present;
             }
             at += heads::head_write(out, at, major_type::map, present);
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
+            template for (constexpr std::size_t i : std::define_static_array(key_order<U>())) {
                 auto const &m = value.[:members[i]:];
                 if (member_present(m)) {
                     if constexpr (packed::has_integer_keys<U>) {
