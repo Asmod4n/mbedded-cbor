@@ -12,6 +12,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <string>
@@ -22,7 +23,8 @@
 #include <utility>
 #include <vector>
 
-#include "binding.hpp"
+#include "rfc8746.hpp"
+#include "rfc9535.hpp"
 #include "error.hpp"
 #include "head.hpp"
 #include "item_size.hpp"
@@ -50,20 +52,16 @@ class value_sharing
     struct sharing_decoder;
 
     template <bool Checked>
+    struct tree_decoder;
+
+    struct mark_depths;
+
+    template <bool Checked>
     struct resolved;
 
     template <bool Checked>
     static std::expected<std::size_t, error> shared_resolve(top_level_item &top_level, std::size_t at,
                                                             validity::limit_checks<Checked> checks);
-
-    template <bool Checked>
-    static std::expected<item *, error> item_resolve(decoded_items &decoded, std::size_t at,
-                                                     validity::limit_checks<Checked> checks);
-
-    template <bool Checked>
-    static std::expected<std::pair<item *, std::size_t>, error>
-    item_decode(decoded_items &decoded, std::size_t at, std::size_t depth, std::size_t depth_max,
-                validity::limit_checks<Checked> checks);
 
     template <bool Checked>
     static std::expected<resolved<Checked>, error> container_resolve(std::shared_ptr<top_level_item> source,
@@ -306,6 +304,8 @@ struct lazy {
 
     std::expected<bool, error> empty() const;
 
+    std::expected<cbor::type, error> type() const;
+
     template <class Last>
         requires(std::same_as<Last, lazy_entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
     static std::expected<lazy_entries::iterator, error>
@@ -479,23 +479,36 @@ struct value_sharing::top_level_item {
 struct value_sharing::decoded_items {
     std::shared_ptr<top_level_item> top_level;
     std::deque<item> items{};
-    std::vector<std::pair<std::size_t, item *>> item_offsets{};
+    std::vector<item const *> children{};
+    std::vector<item const *> shareables{};
+    std::vector<item const *> pending{};
+};
+
+struct value_sharing::mark_depths {
+    std::vector<std::size_t> depths{};
 
     template <bool Checked>
-    std::expected<item *, error> entry(std::size_t const offset, validity::limit_checks<Checked> const checks)
+    void mark(heads::decoder<Checked> const &, std::size_t const depth)
     {
-        auto const known = item_offsets.empty() || item_offsets.back().first < offset
-                               ? item_offsets.end()
-                               : std::ranges::lower_bound(item_offsets, offset, {}, &std::pair<std::size_t, item *>::first);
-        if (known != item_offsets.end() && known->first == offset)
-            return known->second;
-        auto const h = heads::raw_head_read(top_level->encoded, offset, checks);
-        if (!h) [[unlikely]]
-            return std::unexpected(h.error());
-        item &placeholder = items.emplace_back(item{h->major, h->info, h->argument, lazy{{}, offset}});
-        item_offsets.insert(known, {offset, &placeholder});
-        return &placeholder;
+        depths.push_back(depth);
     }
+};
+
+template <bool Checked>
+struct value_sharing::tree_decoder {
+    decoded_items &decoded;
+    heads::decoder<Checked> d;
+    std::size_t start;
+    std::size_t depth_max;
+    std::optional<std::size_t> mark_next;
+    std::size_t marks_before = 0;
+    item *root = nullptr;
+
+    std::expected<item *, error> item_decode(std::size_t depth, std::optional<std::size_t> mark);
+
+    std::size_t marks_counted();
+
+    std::expected<void, error> marks_before_decode();
 };
 
 template <bool Checked>
@@ -555,16 +568,6 @@ std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &
         at = found->offset;
         item_at = at;
     }
-}
-
-template <bool Checked>
-std::expected<item *, error> value_sharing::item_resolve(decoded_items &decoded, std::size_t const at,
-                                                         validity::limit_checks<Checked> const checks)
-{
-    auto const node = shared_resolve(*decoded.top_level, at, checks);
-    if (!node) [[unlikely]]
-        return std::unexpected(node.error());
-    return decoded.entry(*node, checks);
 }
 
 template <bool Checked>

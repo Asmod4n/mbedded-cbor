@@ -160,8 +160,9 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             break;
         case cbor::major_type::array:
         case cbor::major_type::map:
-            REQUIRE(std::holds_alternative<std::span<std::byte const>>(it.content));
-            CHECK(std::ranges::equal(std::get<std::span<std::byte const>>(it.content), std::as_bytes(std::span(after_head))));
+            REQUIRE(std::holds_alternative<cbor::data_items>(it.content));
+            CHECK_EQ(std::get<cbor::data_items>(it.content).span().size(),
+                     it.major_type == cbor::major_type::map ? 2 * argument : argument);
             break;
         case cbor::major_type::tag:
             REQUIRE(std::holds_alternative<cbor::item const *>(it.content));

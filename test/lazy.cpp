@@ -1354,8 +1354,11 @@ TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
                 auto const named = l.at(std::size_t{2})
                                        .and_then([](cbor::lazy const &m) { return m.at("k"); })
                                        .and_then([](cbor::lazy const &r) { return r.decode(); });
-                right[t] = text.has_value() && **text == "hello" && named.has_value() &&
-                           std::get<std::string_view>((*named)->content) == "hello";
+                auto const *const reference =
+                    named.has_value() ? std::get_if<cbor::sharedref>(&(*named)->content) : nullptr;
+                auto const *const shared =
+                    reference != nullptr ? std::get_if<std::string_view>(&reference->shareable->content) : nullptr;
+                right[t] = text.has_value() && **text == "hello" && shared != nullptr && *shared == "hello";
             });
     }
     CHECK(std::ranges::all_of(right, std::identity{}));
