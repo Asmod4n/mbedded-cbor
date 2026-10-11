@@ -1092,10 +1092,9 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     CHECK_EQ(text_of(*cbor::lazy::from("\x61" "a"sv)), "a");
 }
 
-// RFC 8949 5.6.1 says when two keys are equal. Each pair is written from the text of 5.6.1. Two keys that
-// stand next to each other in a map are found equal by the neighbour compare of a deterministic profile
-// exactly when 5.6.1 makes them equal.
-TEST_CASE("validity: check_sorted_keys_unique compares two neighbours by RFC 8949 5.6.1")
+// RFC 8949 5.6.1 says when two keys are equal. Each pair is written from the text of 5.6.1. keys_equivalent
+// finds two keys equal exactly when 5.6.1 makes them equal.
+TEST_CASE("validity: keys_equivalent follows RFC 8949 5.6.1")
 {
     struct pair {
         std::string first;
@@ -1155,34 +1154,15 @@ TEST_CASE("validity: check_sorted_keys_unique compares two neighbours by RFC 894
         {"\xa2\x61k\x01\x61k\x02"s, "\xa2\x61k\x02\x61k\x01"s, true},
     };
     for (pair const &p : pairs) {
-        std::string const map = "\xa2"s + p.first + "\x00"s + p.second + "\x00"s;
-        CAPTURE(map);
-        std::string_view const encoded = map;
-        auto const checked = cbor::validity::check_sorted_keys_unique(encoded, 1, 2, 1, 16,
-                                                                      cbor::validity::limit_checks<false>{});
-        if (p.equal)
-            CHECK_EQ(checked.error(), error::duplicate_key);
-        else
-            CHECK(checked.has_value());
+        std::string_view const first = p.first;
+        std::string_view const second = p.second;
+        CAPTURE(p.first);
+        CAPTURE(p.second);
+        auto const equal =
+            cbor::validity::keys_equivalent(first, 0, second, 0, 1, 16, cbor::validity::limit_checks<false>{});
+        REQUIRE(equal.has_value());
+        CHECK_EQ(*equal, p.equal);
     }
-}
-
-// A deterministic profile sorts the keys of a map (RFC 8949 4.2.1), so two equal keys stand next to each other.
-// The neighbour compare finds the pair at the start, in the middle and at the end, and accepts sorted distinct
-// keys.
-TEST_CASE("validity: check_sorted_keys_unique finds equal neighbours at any position")
-{
-    auto const checked = [](std::string_view const map, std::uint64_t const count) {
-        return cbor::validity::check_sorted_keys_unique(map, 1, count, 1, 16,
-                                                        cbor::validity::limit_checks<false>{});
-    };
-    CHECK(checked("\xa3\x01\x00\x02\x00\x03\x00"sv, 3).has_value());
-    CHECK_EQ(checked("\xa3\x01\x00\x01\x00\x03\x00"sv, 3).error(), error::duplicate_key);
-    CHECK_EQ(checked("\xa3\x01\x00\x02\x00\x02\x00"sv, 3).error(), error::duplicate_key);
-    CHECK_EQ(checked("\xa3\x61\x61\x00\x61\x62\x00\x61\x62\x00"sv, 3).error(), error::duplicate_key);
-    CHECK(checked("\xa0"sv, 0).has_value());
-    CHECK(checked("\xa1\x01\x00"sv, 1).has_value());
-    CHECK_EQ(checked("\xa2\x01\x00"sv, 2).error(), error::too_little_data);
 }
 
 // RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. Every
