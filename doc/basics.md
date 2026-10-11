@@ -327,6 +327,9 @@ The owner of the bytes comes from one of these:
 | `lazy::from(std::shared_ptr<std::string const>)` | the caller |
 | `lazy::from(owner, encoded)` | the caller: `owner` holds the bytes of `encoded` |
 
+`databind<T>::decode`, `schema<T>::decode` and `schema<T>::path` take the
+same forms (doc/databind.md, doc/schema.md).
+
 The form with an owner reads bytes that something else holds, for example
 a page of a read transaction of a database. The owner can be any
 `std::shared_ptr`, and the aliasing constructor of `std::shared_ptr` makes
