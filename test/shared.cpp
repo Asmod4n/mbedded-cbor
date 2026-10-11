@@ -225,7 +225,7 @@ std::string encoded_shared(handle const &v)
 {
     ref_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<cbor::sharedrefs::on, cbor::preferred_serialization::on>(binding, w, v).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::on>(binding, w, v).has_value());
     return w.encoded;
 }
 
@@ -249,7 +249,7 @@ handle at(handle const &map, std::string_view const key)
 TEST_CASE("tag 28/29: a repeated value keeps its identity")
 {
     auto const a = arr({u(1), u(2)});
-    CHECK_EQ(encoded_shared(arr({a, a})), "\x82\xd8\x1c\x82\x01\x02\xd8\x1d\x00"sv);
+    CHECK_EQ(encoded_shared(arr({a, a})), "\x82\xd8\x1c\x82"s + test::native_unsigned(1) + test::native_unsigned(2) + "\xd8\x1d\x00"s);
     auto const r = round_trip(arr({a, a}));
     CHECK(same(element(r, 0), element(r, 1)));
 }
@@ -403,7 +403,7 @@ TEST_CASE("tag 28/29: a string key without identity is written each time")
 {
     auto const k = s("repeated_key");
     CHECK_EQ(encoded_shared(arr({obj({{k, u(1)}}), obj({{k, u(2)}})})),
-             "\x82\xa1\x6crepeated_key\x01\xa1\x6crepeated_key\x02"sv);
+             "\x82\xa1\x6crepeated_key"s + test::native_unsigned(1) + "\xa1\x6crepeated_key"s + test::native_unsigned(2));
 }
 
 // Replaces test.rb: 'tag 28/29: same object as value AND key — only values share'. mruby keeps an
@@ -444,9 +444,9 @@ TEST_CASE("registered tag: before_encode runs once per object with two passes")
     auto const point = std::make_shared<node>(node{object{5000, arr({u(3), u(7)})}});
     ref_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<cbor::sharedrefs::on, cbor::preferred_serialization::on>(binding, w, arr({point, point, point})).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::on>(binding, w, arr({point, point, point})).has_value());
     CHECK_EQ(binding.before_encode_calls, 1);
-    CHECK_EQ(w.encoded, "\x83\xd8\x1c\xd9\x13\x88\x82\x03\x07\xd8\x1d\x00\xd8\x1d\x00"sv);
+    CHECK_EQ(w.encoded, "\x83\xd8\x1c\xd9\x13\x88\x82"s + test::native_unsigned(3) + test::native_unsigned(7) + "\xd8\x1d\x00\xd8\x1d\x00"s);
 }
 
 // encode_iov takes the same two passes into its own writer, so its bytes must equal those of encode.
@@ -454,7 +454,7 @@ TEST_CASE("registered tag: encode_iov with shared references gives the bytes of 
 {
     auto const point = std::make_shared<node>(node{object{5000, arr({u(3), u(7)})}});
     ref_binding binding;
-    auto const p = cbor::encode_iov<cbor::sharedrefs::on, cbor::preferred_serialization::on>(binding, arr({point, point, point, s(std::string(40, 'x'))}));
+    auto const p = cbor::encode_iov<cbor::sharedrefs::on>(binding, arr({point, point, point, s(std::string(40, 'x'))}));
     REQUIRE(p.has_value());
     std::string joined;
     for (std::string_view const piece : **p)
@@ -469,9 +469,9 @@ TEST_CASE("registered tag: distinct objects with equal content do not share")
     auto const p2 = std::make_shared<node>(node{object{5000, arr({u(1), u(2)})}});
     ref_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<cbor::sharedrefs::on, cbor::preferred_serialization::on>(binding, w, arr({p1, p2})).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::on>(binding, w, arr({p1, p2})).has_value());
     CHECK_EQ(binding.before_encode_calls, 2);
-    CHECK_EQ(w.encoded, "\x82\xd9\x13\x88\x82\x01\x02\xd9\x13\x88\x82\x01\x02"sv);
+    CHECK_EQ(w.encoded, "\x82\xd9\x13\x88\x82"s + test::native_unsigned(1) + test::native_unsigned(2) + "\xd9\x13\x88\x82"s + test::native_unsigned(1) + test::native_unsigned(2));
 }
 
 // Ported from test.rb: 'registered tag + sharedref: instance with self-referential field'. The object
@@ -593,9 +593,9 @@ TEST_CASE("registered tag: before_encode that returns a new value by value")
     auto const point = std::make_shared<node>(node{object{5000, nullptr}});
     fresh_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, w, arr({point, point})).has_value());
+    REQUIRE(cbor::encode(binding, w, arr({point, point})).has_value());
     CHECK_EQ(binding.before_encode_calls, 2);
-    CHECK_EQ(w.encoded, "\x82\xd9\x13\x88\x82\x01\x82\x02\x03\xd9\x13\x88\x82\x01\x82\x02\x03"sv);
+    CHECK_EQ(w.encoded, "\x82\xd9\x13\x88\x82"s + test::native_unsigned(1) + "\x82"s + test::native_unsigned(2) + test::native_unsigned(3) + "\xd9\x13\x88\x82"s + test::native_unsigned(1) + "\x82"s + test::native_unsigned(2) + test::native_unsigned(3));
 }
 
 // Ported from test.rb: 'tag 28/29: shared value preserved via lazy.value'. The map half: the first

@@ -246,11 +246,11 @@ TEST_CASE("encode: a span of exact size holds the top-level item, one byte less 
         {
             std::string const expected = encoded(v);
             std::vector<char> exact(expected.size());
-            CHECK(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, std::span<char>(exact), v)
+            CHECK(cbor::encode(binding, std::span<char>(exact), v)
                       .has_value());
             CHECK_EQ(std::string_view(exact.data(), exact.size()), expected);
             std::vector<char> short_by_one(expected.size() - 1);
-            CHECK_EQ(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(
+            CHECK_EQ(cbor::encode(
                          binding, std::span<char>(short_by_one), v)
                          .error(),
                      cbor::error{cbor::error::no_buffer_space});

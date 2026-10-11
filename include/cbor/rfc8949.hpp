@@ -7,7 +7,6 @@ namespace cbor
 {
 
 enum class pass;
-enum class preferred_serialization;
 
 template <std::size_t N>
 struct fixed_string;
@@ -80,7 +79,7 @@ class rfc8949
     template <class Writer>
     friend struct encoder;
 
-    template <class, class, pass, preferred_serialization>
+    template <class, class, pass>
     friend class walker;
 
     friend struct lazy;

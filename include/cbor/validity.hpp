@@ -54,7 +54,6 @@ namespace cbor
 {
 
 enum class pass;
-enum class preferred_serialization;
 
 struct lazy;
 
@@ -464,7 +463,7 @@ public:
 
     friend class jsonpath;
 
-    template <class, class, pass, preferred_serialization>
+    template <class, class, pass>
     friend class walker;
 
 #ifdef __cpp_impl_reflection

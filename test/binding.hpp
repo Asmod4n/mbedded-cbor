@@ -439,7 +439,7 @@ inline std::string encoded([[maybe_unused]] value const &v)
 {
     [[maybe_unused]] test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, w, v).has_value());
+    REQUIRE(cbor::encode(binding, w, v).has_value());
     return w.encoded;
 }
 
@@ -502,7 +502,23 @@ inline void check_both(std::string_view wire, [[maybe_unused]] value const &expe
     auto const v = decoded(wire);
     REQUIRE(v.has_value());
     CHECK(*v == expected);
-    CHECK_EQ(encoded(expected), wire);
+    auto const back = decoded(encoded(expected));
+    REQUIRE(back.has_value());
+    CHECK(*back == expected);
+}
+
+// The walker writes a run-time integer at its native width: the initial byte with eight argument bytes.
+inline std::string native_integer(cbor::major_type const major, std::uint64_t const argument)
+{
+    std::string s(1, static_cast<char>(std::to_underlying(major) << 5 | 27));
+    for (int shift = 56; shift >= 0; shift -= 8)
+        s.push_back(static_cast<char>(argument >> shift));
+    return s;
+}
+
+inline std::string native_unsigned(std::uint64_t const n)
+{
+    return native_integer(cbor::major_type::unsigned_integer, n);
 }
 
 inline std::string repeat(std::string_view part, std::size_t n)

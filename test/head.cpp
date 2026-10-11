@@ -128,29 +128,53 @@ TEST_CASE("head: an indefinite length is indefinite_length")
         CHECK_EQ(decode_error(w), error::indefinite_length);
 }
 
+namespace
+{
+
+std::string head_of(cbor::major_type const major, std::uint64_t const argument)
+{
+    string_writer w;
+    cbor::encoder<string_writer> e{w};
+    REQUIRE(e.head_encode(major, argument).has_value());
+    REQUIRE(e.flush().has_value());
+    return w.encoded;
+}
+
+} // namespace
+
+// Lengths and tag numbers take the shortest head of RFC 8949 4.1. head_encode writes them; a run-time
+// integer value goes through the fixed width instead, tested below.
 // Ported from test.rb: the major 0 roundtrip tests, here as the exact bytes of RFC 8949 4.1.
 TEST_CASE("major 0: head_encode writes the shortest form")
 {
-    CHECK_EQ(encoded(U(0)), "\x00"sv);
-    CHECK_EQ(encoded(U(23)), "\x17"sv);
-    CHECK_EQ(encoded(U(24)), "\x18\x18"sv);
-    CHECK_EQ(encoded(U(255)), "\x18\xff"sv);
-    CHECK_EQ(encoded(U(256)), "\x19\x01\x00"sv);
-    CHECK_EQ(encoded(U(65535)), "\x19\xff\xff"sv);
-    CHECK_EQ(encoded(U(65536)), "\x1a\x00\x01\x00\x00"sv);
-    CHECK_EQ(encoded(U(0xffffffff)), "\x1a\xff\xff\xff\xff"sv);
-    CHECK_EQ(encoded(U(1ull << 40)), "\x1b\x00\x00\x01\x00\x00\x00\x00\x00"sv);
-    CHECK_EQ(encoded(U(~0ull)), "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 0), "\x00"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 23), "\x17"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 24), "\x18\x18"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 255), "\x18\xff"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 256), "\x19\x01\x00"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 65535), "\x19\xff\xff"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 65536), "\x1a\x00\x01\x00\x00"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 0xffffffff), "\x1a\xff\xff\xff\xff"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 1ull << 40), "\x1b\x00\x00\x01\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, ~0ull), "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
 }
 
 // Ported from test.rb: the major 1 wire tests, in the other direction.
 TEST_CASE("major 1: head_encode writes the shortest form")
 {
-    CHECK_EQ(encoded(N(0)), "\x20"sv);
-    CHECK_EQ(encoded(N(24)), "\x38\x18"sv);
-    CHECK_EQ(encoded(N(0xffffffff)), "\x3a\xff\xff\xff\xff"sv);
-    CHECK_EQ(encoded(N(1ull << 63)), "\x3b\x80\x00\x00\x00\x00\x00\x00\x00"sv);
-    CHECK_EQ(encoded(N(~0ull)), "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+    CHECK_EQ(head_of(cbor::major_type::negative_integer, 0), "\x20"sv);
+    CHECK_EQ(head_of(cbor::major_type::negative_integer, 24), "\x38\x18"sv);
+    CHECK_EQ(head_of(cbor::major_type::negative_integer, 0xffffffff), "\x3a\xff\xff\xff\xff"sv);
+    CHECK_EQ(head_of(cbor::major_type::negative_integer, 1ull << 63), "\x3b\x80\x00\x00\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(head_of(cbor::major_type::negative_integer, ~0ull), "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+}
+
+// The walker writes a run-time integer at its native width: the binding gives std::uint64_t, so the head
+// carries eight bytes, also for a small value.
+TEST_CASE("major 0 and 1: the walker writes a run-time integer at its native width")
+{
+    CHECK_EQ(encoded(U(0)), "\x1b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(encoded(N(0)), "\x3b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
 }
 
 // Ported from test.rb: 'major 0: all powers of 2 up to 31 bits roundtrip', extended to 63 bits,
