@@ -124,6 +124,14 @@ static void vg_encode(vg_out &o, bench::value const &x)
 }
 #endif
 
+#if defined(ARM_MP_FRESH_NATIVE)
+#define ARM_MP_FRESH 1
+#define ARM_MP_NATIVE 1
+#endif
+#if defined(ARM_MP_REUSE_NATIVE)
+#define ARM_MP_REUSE 1
+#define ARM_MP_NATIVE 1
+#endif
 #if defined(ARM_MP_REUSE) || defined(ARM_MP_FRESH) || defined(ARM_MP_READ)
 #define ARM_MP 1
 #include <msgpack.hpp>
@@ -131,11 +139,19 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
 {
     bench::binding b;
     switch (b.kind_of(x)) {
+#if defined(ARM_MP_NATIVE)
+    case cbor::kind::unsigned_integer: pk.pack_fix_uint64(b.unsigned_of(x)); break;
+#else
     case cbor::kind::unsigned_integer: pk.pack_uint64(b.unsigned_of(x)); break;
+#endif
     case cbor::kind::negative_integer: {
         std::uint64_t const n = b.unsigned_of(x) - 1;
         if (n <= std::uint64_t(INT64_MAX)) {
+#if defined(ARM_MP_NATIVE)
+            pk.pack_fix_int64(-1 - std::int64_t(n));
+#else
             pk.pack_int64(-1 - std::int64_t(n));
+#endif
         } else {
             msgpack::sbuffer body;
             msgpack::packer<msgpack::sbuffer>(body).pack_uint64(n);
@@ -143,7 +159,11 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
             pk.pack_ext_body(body.data(), static_cast<std::uint32_t>(body.size()));
         }
     } break;
+#if defined(ARM_MP_NATIVE)
+    case cbor::kind::floating_point: pk.pack_double(b.float_of(x)); break;
+#else
     case cbor::kind::floating_point: { double const d = b.float_of(x); if (static_cast<double>(static_cast<float>(d)) == d) pk.pack_float(static_cast<float>(d)); else pk.pack_double(d); } break;
+#endif
     case cbor::kind::simple_value: { auto const v = b.simple_of(x); if (v == 20) pk.pack_false(); else if (v == 21) pk.pack_true(); else pk.pack_nil(); } break;
     case cbor::kind::text_string: { auto const t = b.text_of(x); pk.pack_str(std::uint32_t(t.size())); pk.pack_str_body(t.data(), std::uint32_t(t.size())); } break;
     case cbor::kind::byte_string: { auto const t = b.bytes_of(x); pk.pack_bin(std::uint32_t(t.size())); pk.pack_bin_body(t.data(), std::uint32_t(t.size())); } break;
@@ -664,7 +684,7 @@ static std::uint64_t op()
     std::span<std::string_view const> const pieces = **r;
     benchmark::DoNotOptimize(pieces.data());
     benchmark::ClobberMemory();
-    return pieces.size();
+    return std::ranges::fold_left(pieces | std::views::transform(&std::string_view::size), std::size_t{0}, std::plus<>{});
 #elif defined(ARM_S_PUSH_IOV)
     cbor::iov_writer w;
     cbor::encoder<cbor::iov_writer> e{w};
