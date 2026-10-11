@@ -21,22 +21,39 @@ read checks configurable limits. A function that reads input gives
 
 ## Add it to a CMake project
 
-The repository has no `install` step and no `find_package` support. Use
-`add_subdirectory` or `FetchContent`, and link the target
-`mbedded-cbor`:
+Install the library, then find it with `find_package` and link the
+target `mbedded-cbor::mbedded-cbor`:
+
+```sh
+cmake -S mbedded-cbor -B build -DBUILD_TESTING=OFF
+cmake --install build --prefix /usr/local
+```
+
+```cmake
+find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
+target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
+```
+
+The install also writes `share/pkgconfig/mbedded-cbor.pc`, so
+`pkg-config --cflags mbedded-cbor` gives the include directory and the
+definitions.
+
+Without an install, use `add_subdirectory` or `FetchContent`:
 
 ```cmake
 include(FetchContent)
 FetchContent_Declare(mbedded-cbor GIT_REPOSITORY <url of this repository> GIT_TAG main)
 FetchContent_MakeAvailable(mbedded-cbor)
-target_link_libraries(app PRIVATE mbedded-cbor)
+target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
 ```
 
 With `add_subdirectory` the last line is the same. A path outside the
 source tree of the project needs the second argument, the binary
 directory: `add_subdirectory(/path/to/mbedded-cbor mbedded-cbor)`. The
 target defines `_GLIBCXX_ASSERTIONS` and the libc++ fast hardening mode.
-The tests are built only when mbedded-cbor is the top-level project.
+The tests and the install rules are active only when mbedded-cbor is
+the top-level project; `-DCBOR_INSTALL=ON` turns the install rules on
+for a project that installs a target which links mbedded-cbor.
 For databind and schema, compile your target with `-std=c++26
 -freflection`.
 
