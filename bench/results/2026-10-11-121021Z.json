@@ -1,7 +1,7 @@
 {
  "time": "2026-10-11-121021Z",
  "commit": "64a46eb8826c6ac3274003b81d02fd1ea12df793",
- "purpose": "encode into an empty std::string (S_STRING): encode-speed (BASE, BASE_AA) against NEW = container_message copies chars with ranges::copy",
+ "purpose": "encode, all documents: S and S_STRING of 8053ccb (float width from a table per exponent, built at compile time) against S_BASE and S_STRING_BASE of fa1b047, with msgpack-c (MP_REUSE) and TinyCBOR (TC_WRITE); S_AA for the noise",
  "flags": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -Werror -isystem <include>",
  "processes": 10,
  "min_time": "0.2s",
