@@ -26,7 +26,6 @@ docs="cwt senml floats ints strings records twitter"
 arms=${ARMS:-"S READ LC_PREALLOC LC_READ MP_REUSE MP_READ FB_REUSE FB_READ"}
 [ -n "${JSONCONS_INCLUDE:-}" ] && arms="$arms JC_CLEAR JC_READ"
 [ -n "${VG_INCLUDE:-}" ] && arms="$arms VG_RAW VG_READ"
-schema_ops=${SCHEMA_OPS-"ENC DEC PATH FB_ENC FB_READ CP_ENC CP_READ"}
 
 arm_libraries() {
 	case "$1" in
@@ -72,26 +71,16 @@ for op in ${CWT_OPS-READ ENC}; do
 		-I"$root/include" "$here/cwt.cpp" -lbenchmark -lpthread -o "$build/cw.$op"
 done
 finish
-flatc --cpp -o "$build" "$here/carsales.fbs"
-cp "$here/carsales.capnp" "$build/"
-(cd "$build" && capnp compile -oc++ carsales.capnp)
-"$GXX" -std=c++26 $flags -c "$build/carsales.capnp.c++" $(pkg-config --cflags capnp) -o "$build/carsales.capnp.o"
-for op in $schema_ops; do
-	spawn "$GXX" -std=c++26 -freflection $flags -DOP_$op -DCARS_JSON="\"$here/cars.json\"" \
-		-I"$root/include" -I"$build" "$here/schema.cpp" "$build/carsales.capnp.o" \
-		$(pkg-config --cflags --libs capnp) -lflatbuffers -lbenchmark -lpthread -o "$build/sc.$op"
-done
-finish
 
 echo "running $PROCESSES processes per binary"
 mkdir -p "$build/out"
-for b in "$build"/rt.* "$build"/cw.* "$build"/sc.*; do
+for b in "$build"/rt.* "$build"/cw.*; do
 	[ -e "$b" ] || continue
 	echo "$(basename "$b") $(readelf -h "$b" | grep -o 'Type: *[A-Z]*' | tr -s ' ')"
 done > "$build/out/elf_type"
 i=1
 while [ "$i" -le "$PROCESSES" ]; do
-	for b in "$build"/rt.* "$build"/cw.* "$build"/sc.*; do
+	for b in "$build"/rt.* "$build"/cw.*; do
 		[ -e "$b" ] || continue
 		n=$(basename "$b")
 		"$b" --benchmark_min_time="$MIN_TIME" --benchmark_out_format=json \
