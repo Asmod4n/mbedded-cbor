@@ -19,6 +19,7 @@
 
 #include "binding.hpp"
 #include "error.hpp"
+#include "float_narrowing.hpp"
 #include "rfc8746.hpp"
 #include "rfc8949.hpp"
 #include "validity.hpp"
@@ -429,6 +430,41 @@ class heads
                        ? rfc8949::simple_float_information::half_precision_float
                        : rfc8949::simple_float_information::single_precision_float;
         return rfc8949::simple_float_information::single_precision_float;
+    }
+
+    struct preferred_float {
+        rfc8949::simple_float_information info;
+        std::uint64_t argument;
+    };
+
+    static constexpr preferred_float float_encode_preferred(double const value)
+    {
+        constexpr precision f = single_precision;
+        constexpr precision d = double_precision;
+        std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
+        std::uint32_t const exp = static_cast<std::uint32_t>(bits >> d.significand_bits & d.exponent_max);
+        if (exp == 0 || exp == d.exponent_max) [[unlikely]] {
+            rfc8949::simple_float_information const info = preferred_float_info(value);
+            return {info, float_encode(info, value)};
+        }
+        static constexpr auto float_narrowings =
+            float_narrowing::table_make(half_precision, single_precision, double_precision);
+        float_narrowing const x = float_narrowings[exp];
+        std::uint64_t const significand =
+            (bits & ((std::uint64_t{1} << d.significand_bits) - 1u)) | std::uint64_t{1} << d.significand_bits;
+        std::uint64_t const sign = bits >> (d.significand_bits + std::bit_width(d.exponent_max));
+        bool const single_fits = (significand & ((std::uint64_t{1} << x.single_precision_shift) - 1u)) == 0;
+        bool const half_fits = (significand & ((std::uint64_t{1} << x.half_precision_shift) - 1u)) == 0;
+        std::uint64_t const single_bits =
+            sign << (f.significand_bits + std::bit_width(f.exponent_max)) |
+            (x.single_precision_exponent + (significand >> x.single_precision_shift));
+        std::uint64_t const half_bits =
+            sign << (half_precision.significand_bits + std::bit_width(half_precision.exponent_max)) |
+            (x.half_precision_exponent + (significand >> x.half_precision_shift));
+        return half_fits ? preferred_float{rfc8949::simple_float_information::half_precision_float, half_bits}
+               : single_fits
+                   ? preferred_float{rfc8949::simple_float_information::single_precision_float, single_bits}
+                   : preferred_float{rfc8949::simple_float_information::double_precision_float, bits};
     }
 
     static constexpr std::uint64_t float_encode(rfc8949::simple_float_information const info,

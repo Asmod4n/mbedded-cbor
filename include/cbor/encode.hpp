@@ -304,36 +304,17 @@ struct encoder {
             direct && near_end
                 ? std::span(tail)
                 : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
-        std::size_t size;
-        switch (heads::preferred_float_info(value)) {
-        case rfc8949::simple_float_information::half_precision_float: {
-            item.front() = heads::initial_byte(
-                major_type::simple_float,
-                std::to_underlying(rfc8949::simple_float_information::half_precision_float));
-            auto const v = std::byteswap(heads::float_encode_binary16(static_cast<float>(value)));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
-                              item.template subspan<heads::initial_byte_size>().begin());
-            size = heads::initial_byte_size + sizeof v;
-        } break;
-        case rfc8949::simple_float_information::single_precision_float: {
-            item.front() = heads::initial_byte(
-                major_type::simple_float,
-                std::to_underlying(rfc8949::simple_float_information::single_precision_float));
-            auto const v = std::byteswap(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
-                              item.template subspan<heads::initial_byte_size>().begin());
-            size = heads::initial_byte_size + sizeof v;
-        } break;
-        default: {
-            item.front() = heads::initial_byte(
-                major_type::simple_float,
-                std::to_underlying(rfc8949::simple_float_information::double_precision_float));
-            auto const v = std::byteswap(std::bit_cast<std::uint64_t>(value));
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
-                              item.template subspan<heads::initial_byte_size>().begin());
-            size = heads::initial_byte_size + sizeof v;
-        } break;
-        }
+        auto const [info, argument] = heads::float_encode_preferred(value);
+        std::size_t const width = std::size_t{1}
+                                  << (std::to_underlying(info) -
+                                      std::to_underlying(rfc8949::simple_float_information::half_precision_float) + 1);
+        item.front() = heads::initial_byte(major_type::simple_float, std::to_underlying(info));
+        auto const v =
+            std::byteswap(argument << (std::numeric_limits<std::uint64_t>::digits -
+                                       std::numeric_limits<unsigned char>::digits * width));
+        std::ranges::copy(std::bit_cast<std::array<char, sizeof v>>(v),
+                          item.template subspan<heads::initial_byte_size>().begin());
+        std::size_t const size = heads::initial_byte_size + width;
         if constexpr (direct)
             if (near_end) [[unlikely]]
                 return item_write(tail, size);
