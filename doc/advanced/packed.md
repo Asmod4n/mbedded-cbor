@@ -1,4 +1,4 @@
-# Schema in detail
+# Packed in detail
 
 This page adds the details to [../packed.md](../packed.md). The examples
 use these structs:

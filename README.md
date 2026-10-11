@@ -54,7 +54,7 @@ target defines `_GLIBCXX_ASSERTIONS` and the libc++ fast hardening mode.
 The tests and the install rules are active only when mbedded-cbor is
 the top-level project; `-DCBOR_INSTALL=ON` turns the install rules on
 for a project that installs a target which links mbedded-cbor.
-For structs and schema, compile your target with `-std=c++26
+For structs and packed, compile your target with `-std=c++26
 -freflection`.
 
 ## Quick start

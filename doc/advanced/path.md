@@ -26,7 +26,7 @@ type (section 2), and `l` is a `cbor::lazy` over `bytes`.
 compile-time forms and a `std::string_view` for the run-time forms. A
 compile-time path that is not valid leaves no form to call: the compiler
 reports that no function matches. `packed<T>::at_path` reads a member of
-a schema message ([packed.md](packed.md)).
+a packed message ([packed.md](packed.md)).
 
 A wrong use that the compiler cannot see throws `std::logic_error`:
 

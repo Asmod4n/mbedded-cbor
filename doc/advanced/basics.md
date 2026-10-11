@@ -69,7 +69,7 @@ the compiler cannot see a wrong use, the library throws
 | `unpopulated_table_index` | A reference in a `packed<T>` message names an entry that its table does not have. |
 | `nodelist_too_long` | One step of a query selects more nodes than the item has bytes. |
 | `duplicate_key` | A deterministic check finds a key twice in one map. |
-| `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `schema` decode. |
+| `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `packed` decode. |
 | `string_length_exceeded`, `container_elements_exceeded`, `input_bytes_exceeded` | A limit is in force and the input goes past it (section 4). |
 
 ```cpp

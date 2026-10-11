@@ -523,7 +523,7 @@ One field, `$.cars[500].engine.cc` of cars (the carsales data):
 
 | Library | ns | Spread |
 |---|---|---|
-| mbedded-cbor schema | 13.0 | 0.50 |
+| mbedded-cbor packed | 13.0 | 0.50 |
 | FlatBuffers | 2.4 | 0.24 |
 | Cap'n Proto | 189.5 | 0.41 |
 
@@ -531,7 +531,7 @@ One element, `$.values[30000]` of floats (60000 binary64):
 
 | Library | ns | Spread |
 |---|---|---|
-| mbedded-cbor schema | 6.0 | 0.19 |
+| mbedded-cbor packed | 6.0 | 0.19 |
 | FlatBuffers | 1.3 | 0.50 |
 | Cap'n Proto | 136.5 | 0.44 |
 
@@ -540,7 +540,7 @@ section 6:
 
 | Library | ns | Spread |
 |---|---|---|
-| mbedded-cbor schema | 36063 | 0.23 |
+| mbedded-cbor packed | 36063 | 0.23 |
 | FlatBuffers | 34761 | 0.24 |
 | Cap'n Proto | 37714 | 0.23 |
 
