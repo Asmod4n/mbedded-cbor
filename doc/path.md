@@ -247,6 +247,7 @@ The parts in detail:
 - A name in dot form starts with a letter, `_` or a byte of 0x80 or more,
   and goes on with these or digits. A name in brackets is in single or
   double quotes, with the escapes of RFC 9535 2.3.1 and of EDN.
+- An index counts from 0. `[0]` is the first element and `[-1]` the last.
 - An index is an integer of at most 16 digits without leading zeros, from
   -(2^53 - 1) to 2^53 - 1. An integer of 16 digits or less outside this
   range is `invalid_path`. `$[01]` is `invalid_path`.

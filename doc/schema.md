@@ -165,7 +165,11 @@ track->at(3);                                           // error::index_out_of_b
 (*track)[3];                                            // throws std::logic_error
 track->last(2)->front();                                // 2.0
 track->first(4);                                        // error::index_out_of_bounds
+std::ranges::fold_left(*track, 0.0, std::plus<>{});     // 6.0
 ```
+
+`typed_array_view<E>` is a `std::ranges::random_access_range` and a
+`std::ranges::sized_range`. Its elements are values of E, not references.
 
 `typed_array_view` has `size`, `empty`, `begin`, `end`, `rbegin`, `rend`,
 `front`, `back`, `first`, `last`, `at` and `operator[]`. Each element is a

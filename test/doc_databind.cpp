@@ -242,6 +242,25 @@ TEST_CASE("doc databind: a std::pmr target")
     CHECK_EQ((*fits)->front().get_allocator().resource(), &enough);
 }
 
+// The section "Structs and keys" states that databind writes the tag of a struct through cbor::tagged<N, E>, because
+// a user who knows the schema form expects [[=cbor::tag(n)]] to do this.
+struct tagged_person {
+    std::string name;
+    std::int64_t age;
+};
+
+TEST_CASE("doc databind: the tag of a struct")
+{
+    auto const bytes = cbor::databind<cbor::tagged<1800, tagged_person>>::encode({{"ann", 30}});
+    REQUIRE(bytes.has_value());
+    CHECK_EQ(*bytes, "\xd9\x07\x08\xa2\x64name\x63"
+                     "ann\x63"
+                     "age\x18\x1e"s);
+    auto const text = cbor::diagnostic_notation(*bytes);
+    REQUIRE(text.has_value());
+    CHECK_EQ(*text, R"(1800({"name": "ann", "age": 30}))");
+}
+
 } // namespace doc_databind
 
 #endif

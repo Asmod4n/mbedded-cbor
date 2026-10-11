@@ -228,3 +228,13 @@ TEST_CASE("doc basics: a std::pmr target with a resource that refuses after 64 b
     CHECK_EQ((**fits).size(), 3u);
 }
 #endif
+
+// The section "Diagnostic notation" gives the signature of diagnostic_notation, because a user needs it to look at
+// encoded bytes.
+TEST_CASE("doc basics: diagnostic notation")
+{
+    std::expected<std::string, error> const text = cbor::diagnostic_notation("\xa1\x61\x61\x01"sv);
+    REQUIRE(text.has_value());
+    CHECK_EQ(*text, R"({"a": 1})");
+    CHECK_EQ(cbor::diagnostic_notation("\xa1\x61\x61"sv).error(), error::too_little_data);
+}
