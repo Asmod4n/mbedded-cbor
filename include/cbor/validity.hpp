@@ -247,11 +247,6 @@ public:
                                                       std::size_t second_at, std::size_t depth,
                                                       std::size_t depth_max, limit_checks<Checked> checks);
 
-    template <class Message, bool Checked>
-    static std::expected<void, error>
-    check_sorted_keys_unique(Message &message, std::size_t first_key, std::uint64_t count, std::size_t depth,
-                             std::size_t depth_max, limit_checks<Checked> checks);
-
     template <std::invocable MarksRead, class Projection, bool Checked>
     static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
                                                         std::size_t content_at, MarksRead marks_read,

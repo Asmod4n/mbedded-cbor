@@ -57,14 +57,15 @@ TEST_CASE("nesting depth depth_limit: lazy::decode")
 
 // validity::keys_equivalent compares two keys that differ only in the innermost item, so it recurses through
 // every level of both keys.
-TEST_CASE("nesting depth depth_limit: check_sorted_keys_unique")
+TEST_CASE("nesting depth depth_limit: keys_equivalent")
 {
     auto const checked = [](std::size_t const n) {
-        std::string const map =
-            "\xa2"s + arrays_around(n, "\x00"sv) + "\x00"s + arrays_around(n, "\x01"sv) + "\x00"s;
-        std::string_view const encoded = map;
-        return cbor::validity::check_sorted_keys_unique(encoded, 1, 2, 1, depth_limit,
-                                                        cbor::validity::limit_checks<false>{});
+        std::string const a = arrays_around(n, "\x00"sv);
+        std::string const b = arrays_around(n, "\x01"sv);
+        std::string_view const first = a;
+        std::string_view const second = b;
+        return cbor::validity::keys_equivalent(first, 0, second, 0, 1, depth_limit,
+                                               cbor::validity::limit_checks<false>{});
     };
     CHECK(checked(depth_limit - 1).has_value());
     CHECK_EQ(checked(depth_limit).error(), error::nesting_depth_exceeded);
