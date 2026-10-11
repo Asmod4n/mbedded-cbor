@@ -183,18 +183,18 @@ TEST_CASE("doc runtime: encode")
 {
     test_binding binding;
     std::string out = "\x00"s;
-    REQUIRE(cbor::encode(binding, out, A(1, 2)).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, out, A(1, 2)).has_value());
     CHECK_EQ(out, "\x00\x82\x01\x02"s);
     std::vector<std::byte> bytes;
-    REQUIRE(cbor::encode(binding, bytes, A(1, 2)).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, bytes, A(1, 2)).has_value());
     CHECK_EQ(bytes.size(), 3u);
     std::array<char, 3> fixed{};
-    REQUIRE(cbor::encode(binding, std::span<char>(fixed), A(1, 2)).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, std::span<char>(fixed), A(1, 2)).has_value());
     CHECK_EQ(std::string_view(fixed.data(), fixed.size()), "\x82\x01\x02"sv);
     std::array<char, 2> small{};
-    CHECK_EQ(cbor::encode(binding, std::span<char>(small), A(1, 2)).error(), error::no_buffer_space);
+    CHECK_EQ(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, std::span<char>(small), A(1, 2)).error(), error::no_buffer_space);
     string_writer w;
-    REQUIRE(cbor::encode(binding, w, A(1, 2)).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, w, A(1, 2)).has_value());
     CHECK_EQ(w.encoded, "\x82\x01\x02"s);
 }
 

@@ -799,7 +799,7 @@ TEST_CASE("tag 24: an embedded value is written as a top-level item of its own a
 {
     embedding_binding binding;
     test::string_writer w;
-    REQUIRE(cbor::encode(binding, w, A(1, A(2, 3))).has_value());
+    REQUIRE(cbor::encode<cbor::sharedrefs::off, cbor::preferred_serialization::on>(binding, w, A(1, A(2, 3))).has_value());
     CHECK_EQ(w.encoded, "\xd8\x18\x48\x82\x01\xd8\x18\x43\x82\x02\x03"s);
     auto const inner = lazy_of(w.encoded).at(1);
     REQUIRE(inner.has_value());

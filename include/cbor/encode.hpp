@@ -561,8 +561,15 @@ struct encoder {
 
     template <std::unsigned_integral T>
         requires(sizeof(T) <= sizeof(std::uint64_t))
-    std::expected<void, std::errc> fixed_width_head_encode(major_type const major, T const argument)
+    CBOR_ALWAYS_INLINE std::expected<void, std::errc> fixed_width_head_encode(major_type const major, T const argument)
     {
+        if (block.size() - used >= item_size_max) [[likely]] {
+            item_put(heads::initial_byte(major, static_cast<std::uint8_t>(
+                                                    std::to_underlying(rfc8949::additional_information::one_byte_argument) +
+                                                    std::countr_zero(sizeof(T)))),
+                     argument);
+            return {};
+        }
         return head_encode(major,
                            std::to_underlying(rfc8949::additional_information::one_byte_argument) +
                                std::countr_zero(sizeof(T)),
@@ -747,7 +754,10 @@ class walker
                 if constexpr (requires { binding.unsigned_of(item); }) {
                     if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
                         return false;
-                    head(major_type::unsigned_integer, binding.unsigned_of(item));
+                    if constexpr (Preferred == preferred_serialization::on)
+                        head(major_type::unsigned_integer, binding.unsigned_of(item));
+                    else
+                        keep(out.fixed_width_head_encode(major_type::unsigned_integer, std::uint64_t{binding.unsigned_of(item)}));
                     return true;
                 }
                 return false;
@@ -755,7 +765,10 @@ class walker
                 if constexpr (requires { binding.unsigned_of(item); }) {
                     if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
                         return false;
-                    head(major_type::negative_integer, binding.unsigned_of(item) - 1);
+                    if constexpr (Preferred == preferred_serialization::on)
+                        head(major_type::negative_integer, binding.unsigned_of(item) - 1);
+                    else
+                        keep(out.fixed_width_head_encode(major_type::negative_integer, std::uint64_t{binding.unsigned_of(item) - 1}));
                     return true;
                 }
                 return false;
@@ -863,13 +876,19 @@ class walker
         switch (k) {
         case kind::unsigned_integer:
             if constexpr (requires { binding.unsigned_of(item); }) {
-                head(major_type::unsigned_integer, binding.unsigned_of(item));
+                if constexpr (Preferred == preferred_serialization::on)
+                        head(major_type::unsigned_integer, binding.unsigned_of(item));
+                    else
+                        keep(out.fixed_width_head_encode(major_type::unsigned_integer, std::uint64_t{binding.unsigned_of(item)}));
                 return;
             }
             break;
         case kind::negative_integer:
             if constexpr (requires { binding.unsigned_of(item); }) {
-                head(major_type::negative_integer, binding.unsigned_of(item) - 1);
+                if constexpr (Preferred == preferred_serialization::on)
+                        head(major_type::negative_integer, binding.unsigned_of(item) - 1);
+                    else
+                        keep(out.fixed_width_head_encode(major_type::negative_integer, std::uint64_t{binding.unsigned_of(item) - 1}));
                 return;
             }
             break;
