@@ -1,16 +1,21 @@
-# Schema
+# Packed
 
-`cbor::packed<T>` writes a struct as one message and reads one field of
-the message with no decode of the rest. A field of fixed size sits at an
-offset that the compiler computes, so a read goes to the field and does
-not read the fields before it.
+A plain CBOR message carries its keys and its structure in every
+message. To read one field, a reader walks over the items before it.
+`cbor::packed<T>` removes that walk. It writes a struct as Packed CBOR
+(draft-ietf-cbor-packed): the struct is the layout, a field of fixed size
+sits at an offset that the compiler computes, and a read goes to that
+offset directly. FlatBuffers and Cap'n Proto work the same way, but the
+message stays CBOR: a decoder of Packed CBOR reads it as a map with the
+names of the members as keys.
 
-Use `schema` for messages that your programs write and read one field at
-a time. Use [structs.md](structs.md) for plain CBOR maps that any
-program writes. A decoder of Packed CBOR (draft-ietf-cbor-packed) reads a
-schema message as a map with the names of the members as keys.
+| | `packed` | [`structs`](structs.md) |
+|---|---|---|
+| Wire form | Packed CBOR, laid out by the struct | any CBOR |
+| Read one field | at its offset | walks the items before it |
+| Use it for | messages that your programs write and read | CBOR that any program writes, mapped into the members of a struct or class |
 
-Schema needs C++26 reflection: g++ 16 with `-std=c++26 -freflection`.
+`packed` needs C++26 reflection: g++ 16 with `-std=c++26 -freflection`.
 clang has no reflection yet, so a clang build has no `cbor::packed`.
 [basics.md](basics.md) states how errors come back.
 
