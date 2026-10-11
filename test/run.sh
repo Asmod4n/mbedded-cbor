@@ -1,5 +1,6 @@
 #!/bin/bash
-# Builds and runs the tests in the image mbedded-cbor-tw.
+# Builds and runs the tests in the image mbedded-cbor-tw, then the tests of
+# test/cmake, which install the library and build programs that use it.
 # usage: test/run.sh fast|full|<build>...
 #   fast: gcc-release clang-asan
 #   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx
@@ -47,7 +48,8 @@ one() {
 			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" >/b/configure.log 2>&1 &&
 		cmake --build /b -- -j'"$cpus"' >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
-		rm -f /b/test.log; [ $r = 0 ] && { /b/mbedded-cbor-test >/b/test.log 2>&1; r=$?; }
+		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test >/b/test.log 2>&1; r=$?; }
+		[ $r = 0 ] && { ctest --test-dir /b -R "^cmake_" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
 			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log 2>/dev/null | head -1)"
@@ -62,7 +64,7 @@ done
 for n in "$@"; do
 	cat "$root/$branch/$n.result"
 	[ -s "$root/$branch/$n.result" ] && grep -q "rc=0" "$root/$branch/$n.result" ||
-		tail -30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" 2>/dev/null
+		tail -30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log" 2>/dev/null
 done
 end=${EPOCHREALTIME/./}
 printf "total %ds\n" $(((end - start) / 1000000))
