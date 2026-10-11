@@ -591,12 +591,18 @@ class walker
             break;
         case kind::map:
             if constexpr (requires { binding.map_size(item); }) {
-                head(major_type::map, binding.map_size(item));
+                std::uint64_t const size = binding.map_size(item);
+                head(major_type::map, size);
+                std::uint64_t written = 0;
                 binding.map_for_each(item,
-                             [this](typename Binding::value const &map_key, typename Binding::value const &v) {
+                             [this, &written](typename Binding::value const &map_key, typename Binding::value const &v) {
                                  key(map_key);
                                  value(v);
+                                 ++written;
                              });
+                if (written != size) [[unlikely]]
+                    validity::throw_logic_error(
+                        "cbor::encode: the binding gave a map size that differs from the entries of map_for_each");
                 return;
             }
             break;
