@@ -835,7 +835,7 @@ public:
     }
 
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner,
-                                                      std::string_view const encoded, T target)
+                                                      std::string_view const encoded, T &&target)
     {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::databind::decode: the owner of the encoded data item is empty");
