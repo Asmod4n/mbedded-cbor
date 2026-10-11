@@ -1,240 +1,158 @@
 #include "binding.hpp"
 
-#include <array>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <memory>
-#include <memory_resource>
-#include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <thread>
-#include <vector>
+#include <utility>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
 // Each test in this file is one example of doc/basics.md. The tests exist so that every example in the document
-// compiles and gives the result that the document states.
+// compiles and gives the result that the document states. Where the document writes a comment with the input as
+// text, the test builds the same input with preferred().
 
-// The section "Errors" states that a cbor::error is a std::error_code with its own category, and that four errors
-// compare equal to a std::errc.
-TEST_CASE("doc basics: an error is a std::error_code")
+// The section "Errors" shows how a program reads a std::expected and the text of its error, because a new user
+// reaches for an exception first.
+TEST_CASE("doc basics: errors")
 {
-    std::error_code const e = error::key_not_found;
-    CHECK_EQ(e.message(), "key not found");
-    CHECK_EQ(std::string_view(e.category().name()), "cbor"sv);
-    CHECK(std::error_code{error::no_buffer_space} == std::errc::no_buffer_space);
-    CHECK(std::error_code{error::value_too_large} == std::errc::value_too_large);
-    CHECK(std::error_code{error::not_enough_memory} == std::errc::not_enough_memory);
-    CHECK(std::error_code{error::io_error} == std::errc::io_error);
-    CHECK_FALSE(std::error_code{error::key_not_found} == std::errc::no_buffer_space);
+    std::string const bytes = preferred(M("user"s, M("id"s, 42)));
+    std::int64_t used = 0;
+    std::string reported;
+    auto const use = [&used](std::int64_t const v) { used = v; };
+    auto const report = [&reported](std::string const &text) { reported = text; };
+
+    auto const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);
+    if (id)
+        use(*id);
+    else
+        report(std::error_code{id.error()}.message());
+    CHECK_EQ(used, 42);
+    CHECK(reported.empty());
+
+    auto const age = cbor::at_path<"$.user.age", std::int64_t>(bytes);
+    CHECK(age.error() == cbor::error::key_not_found);
+    CHECK_EQ(std::error_code{age.error()}.message(), "key not found");
 }
 
-// The section "Wrong use" lists the wrong uses that throw std::logic_error, because the compiler cannot see them.
+// The table of errors in the section "Errors" gives one example for each row. The test runs each example, because a
+// user who meets an error looks up its cause there.
+TEST_CASE("doc basics: the errors that a program meets most often")
+{
+    CHECK_EQ(cbor::at_path<"$.b", int>(preferred(M("a"s, 1))).error(), error::key_not_found);
+    CHECK_EQ(cbor::at_path<"$[2]", int>(preferred(A(1, 2))).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$.a.b", int>(preferred(M("a"s, 1))).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$", int>(preferred(V("a"s))).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(preferred(V(256))).error(), error::number_out_of_range);
+    std::string const pair = preferred(A(1, 2));
+    CHECK_EQ(cbor::at_path<"$[1]", int>(pair.substr(0, pair.size() - 1)).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path<"$", int>("\xff"s).error(), error::syntax_error);
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s).error(), error::indefinite_length);
+    test_binding b;
+    CHECK_EQ(cbor::at_path(b, "$.a[", *cbor::lazy::from(preferred(M("a"s, 1)))).error(), error::invalid_path);
+    std::string const three = preferred(A(1, 2, 3));
+    test::limits_guard const g{{.container_elements = 2}};
+    CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
+}
+
+// The section "Errors" says that a wrong use that the compiler cannot see throws std::logic_error.
 TEST_CASE("doc basics: a wrong use throws std::logic_error")
 {
-    CHECK_THROWS_AS((void)cbor::lazy::from(std::shared_ptr<std::string const>{}), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::lazy::from(std::shared_ptr<void const>{}, "\x01"sv), std::logic_error);
     CHECK_THROWS_AS((void)cbor::lazy{}.at(0), std::logic_error);
-    CHECK_THROWS_AS(cbor::limits.nesting_depth = 513, std::logic_error);
-    CHECK_EQ(cbor::limits.nesting_depth, std::size_t{CBOR_NESTING_DEPTH_DEFAULT});
 }
 
-// The section "The error values" gives one example for the errors that a lazy gives most often.
-TEST_CASE("doc basics: the error values")
+// The section "Results that point into the bytes" shows the owner rule: the view stays valid after the owner of the
+// caller ends, because the owning_ref holds the bytes.
+TEST_CASE("doc basics: results that point into the bytes")
 {
-    CHECK_EQ(cbor::lazy::from("\x82\x01"s)->at(1).error(), error::too_little_data);
-    CHECK_EQ(cbor::lazy::from("\x9f\x01\xff"s)->at(0).error(), error::indefinite_length);
-    CHECK_EQ(cbor::lazy::from("\xa1\x61" "a\x01"s)->at("b").error(), error::key_not_found);
-    CHECK_EQ(cbor::lazy::from("\x01"s)->at(0).error(), error::not_indexable);
-    CHECK_EQ(cbor::lazy::from("\x61" "a"s)->get<std::int64_t>().error(), error::incorrect_type);
-    CHECK_EQ(cbor::lazy::from("\x19\x01\x00"s)->get<std::uint8_t>().error(), error::number_out_of_range);
+    std::string bytes = preferred(M("name"s, "ann"s));
+    std::string_view text;
+    std::string copy;
+    std::optional<std::expected<cbor::owning_ref<std::string_view>, cbor::error>> kept;
+    {
+        auto const owner = std::make_shared<std::string const>(std::move(bytes));
+        auto const name = cbor::at_path<"$.name", std::string_view>(owner, *owner);
+        REQUIRE(name.has_value());
+        if (name) {
+            text = **name;
+            copy = std::string{text};
+            CHECK(*name == "ann");
+        }
+        kept = name;
+    }
+    CHECK_EQ(text, "ann"sv);
+    CHECK_EQ(copy, "ann");
+    CHECK_EQ(***kept, "ann"sv);
+    CHECK_EQ((***kept).data(), text.data());
+    CHECK_FALSE(([]<class R>(R &&) { return requires(R &&r) { *std::forward<R>(r); }; }(std::move(**kept))));
 }
 
-// The section "Limits" states how a field reads, how an assignment of limit_values sets every field, and that a
-// value above the bound throws and leaves the field as it was.
+// The section "Threads" shows two threads that read the same bytes, one with a path over the bytes and one with a
+// lazy of its own.
+TEST_CASE("doc basics: threads")
+{
+    std::string const bytes = preferred(M("id"s, 42));
+    std::int64_t first_read = 0;
+    std::int64_t second_read = 0;
+    {
+        auto const use_first = [&first_read](std::expected<std::int64_t, error> const &v) { first_read = *v; };
+        auto const use_second = [&second_read](std::expected<std::int64_t, error> const &v) { second_read = *v; };
+        std::jthread first([&bytes, &use_first] { use_first(cbor::at_path<"$.id", std::int64_t>(bytes)); });
+        std::jthread second([&bytes, &use_second] {
+            if (auto const doc = cbor::lazy::from(bytes))
+                use_second(cbor::at_path<"$.id", std::int64_t>(*doc));
+        });
+    }
+    CHECK_EQ(first_read, 42);
+    CHECK_EQ(second_read, 42);
+}
+
+// The section "Limits" sets one field and then all four, and states that a field that the braces do not name gets
+// its default, because a user expects the old value there.
 TEST_CASE("doc basics: limits")
 {
     test::limits_guard const g{{}};
-    std::size_t const depth = cbor::limits.nesting_depth;
-    CHECK_EQ(depth, 128u);
-    cbor::limits.string_length = 64;
-    CHECK_EQ(cbor::limits.string_length, 64u);
-    cbor::limits.nesting_depth = 16;
-    cbor::limits = {.string_length = 2, .container_elements = 8};
     CHECK_EQ(cbor::limits.nesting_depth, 128u);
-    CHECK_EQ(cbor::limits.string_length, 2u);
-    CHECK_EQ(cbor::limits.container_elements, 8u);
+    CHECK_EQ(cbor::limits.string_length, SIZE_MAX);
+    CHECK_EQ(cbor::limits.container_elements, SIZE_MAX);
     CHECK_EQ(cbor::limits.input_bytes, SIZE_MAX);
     CHECK_THROWS_AS(cbor::limits.nesting_depth = 513, std::logic_error);
-    CHECK_EQ(cbor::limits.nesting_depth, 128u);
-    CHECK_EQ(cbor::lazy::from("\x63xyz"s)->get<std::string_view>().error(), error::string_length_exceeded);
-    CHECK_EQ(cbor::lazy::from("\x89\x01\x01\x01\x01\x01\x01\x01\x01\x01"s)->size().error(),
-             error::container_elements_exceeded);
+    cbor::limits.container_elements = 8;
+    cbor::limits.string_length = 1024;
+    cbor::limits = {.nesting_depth = 16, .input_bytes = 65536};
+    CHECK_EQ(cbor::limits.nesting_depth, 16u);
+    CHECK_EQ(cbor::limits.input_bytes, 65536u);
+    CHECK_EQ(cbor::limits.string_length, SIZE_MAX);
+    CHECK_EQ(cbor::limits.container_elements, SIZE_MAX);
 }
 
-// The section "Limits" states that the limits count what a call reads, and that a skip does not count.
-TEST_CASE("doc basics: a skip does not count")
+// The table of the section "Limits" names the error of each field. The test exceeds each field once.
+TEST_CASE("doc basics: the error of each limit")
 {
-    test::limits_guard const g{{.string_length = 2}};
-    std::string const bytes = encoded(M("a"s, "xyz"s, "n"s, 1));
-    CHECK_EQ(cbor::lazy::from(bytes)->at("n")->get<std::int64_t>(), 1);
-    CHECK_EQ(cbor::lazy::from(bytes)->at("a")->get<std::string_view>().error(), error::string_length_exceeded);
-    CHECK_EQ(cbor::item_size(bytes).error(), error::string_length_exceeded);
-    test_binding b;
-    CHECK_EQ(cbor::lazy_decode(b, *cbor::lazy::from(bytes)).error(), error::string_length_exceeded);
-}
-
-// The section "Nesting depth" states that the top-level item has the depth 0, and that item_size keeps no stack.
-TEST_CASE("doc basics: nesting depth")
-{
-    test::limits_guard const g{{.nesting_depth = 2}};
-    test_binding binding;
-    CHECK(*cbor::lazy_decode(binding, *cbor::lazy::from("\x81\x81\x01"s)) == A(A(1)));
-    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from("\x81\x81\x81\x01"s)).error(),
-             error::nesting_depth_exceeded);
-    CHECK_EQ(cbor::item_size("\x81\x81\x81\x01"sv), 4u);
-}
-
-// The section "Threads" states the two traits and that cbor::transfer refuses a lazy that something else shares.
-TEST_CASE("doc basics: threads")
-{
-    static_assert(cbor::is_thread_bound_v<cbor::lazy>);
-    static_assert(cbor::is_thread_bound_v<cbor::lazy_elements>);
-    static_assert(cbor::is_thread_bound_v<cbor::lazy_entries::iterator>);
-    static_assert(cbor::is_thread_bound_v<cbor::owning_ref<std::string_view>>);
-    static_assert(cbor::is_sendable_v<std::string>);
-    static_assert(!cbor::is_sendable_v<cbor::lazy>);
-    static_assert(cbor::is_sendable_v<cbor::sendable<cbor::lazy>>);
-    cbor::lazy l = *cbor::lazy::from("\x82\x01\x02"s);
     {
-        cbor::lazy const copy = l;
-        CHECK_THROWS_AS(std::ignore = cbor::transfer(std::move(l)), std::logic_error);
+        std::string const deep = preferred(A(A(A(1))));
+        test::limits_guard const g{{.nesting_depth = 2}};
+        CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(deep).error(), error::nesting_depth_exceeded);
     }
-    std::int64_t read = 0;
-    std::jthread([&read](cbor::sendable<cbor::lazy> const &v) { read = *v.value.at(1)->get<std::int64_t>(); },
-                 cbor::transfer(std::move(l)))
-        .join();
-    CHECK_EQ(read, 2);
-}
-
-// The section "Ownership" states what * , -> and == of an owning_ref give, and that a view keeps its bytes alive.
-TEST_CASE("doc basics: ownership")
-{
-    auto const name = cbor::lazy::from("\xa1\x61" "a\x63xyz"s)->at("a")->get<std::string_view>();
-    REQUIRE(name.has_value());
-    CHECK_EQ(**name, "xyz"sv);
-    CHECK_EQ((*name)->size(), 3u);
-    CHECK(*name == "xyz"sv);
-    auto const copy = *name;
-    CHECK(copy == *name);
-    CHECK_EQ((*copy).data(), (**name).data());
-    auto const held = std::make_shared<std::string const>("\x63xyz"s);
-    std::shared_ptr<void const> const alias(held, nullptr);
-    auto const view = cbor::lazy::from(alias, *held)->get<std::string_view>();
-    REQUIRE(view.has_value());
-    CHECK_EQ((**view).data(), held->data() + 1);
-}
-
-// A user did not know how to read an error that sits in a std::expected, and compared a cbor::error with a
-// std::errc directly. The section "Errors" now shows both.
-TEST_CASE("doc basics: an error in a std::expected")
-{
-    std::string const bytes = encoded(M("a"s, 1));
-    auto const r = cbor::at_path<"$.id", std::int64_t>(bytes);
-    CHECK_EQ(std::error_code{r.error()}.message(), "key not found");
-    CHECK(r.error() == error::key_not_found);
-    static_assert(!std::equality_comparable_with<cbor::error, std::errc>);
-    CHECK(std::error_code{error::string_length_exceeded} != std::errc::value_too_large);
-    CHECK(std::error_code{error::string_length_exceeded} != std::errc::no_buffer_space);
-}
-
-// A user expected a string limit at lazy::from. The section "Limits" states that the step that reads the string
-// checks it.
-TEST_CASE("doc basics: a string limit is checked at get")
-{
-    test::limits_guard const g{{.string_length = 2}};
-    auto const l = cbor::lazy::from("\x63xyz"s);
-    REQUIRE(l.has_value());
-    CHECK_EQ(l->get<std::string_view>().error(), error::string_length_exceeded);
-}
-
-// A user did not know that a lazy from a step holds the bytes after the string and the first lazy end.
-TEST_CASE("doc basics: a lazy holds the owner")
-{
-    std::optional<cbor::lazy> keep;
     {
-        std::string bytes = encoded(M("tags"s, A("a"s, "b"s)));
-        keep = *cbor::lazy::from(std::move(bytes))->at("tags");
+        std::string const text = preferred(V("xyz"s));
+        test::limits_guard const g{{.string_length = 2}};
+        CHECK_EQ(cbor::lazy::from(text)->get<std::string_view>().error(), error::string_length_exceeded);
     }
-    CHECK(*keep->at(1)->get<std::string_view>() == "b"sv);
-}
-
-// A user moved a lazy out of the std::expected of lazy::from, and saw no throw over plain data in another thread.
-// The section "Threads" shows the move and states that only marks are checked.
-TEST_CASE("doc basics: a lazy moved out of the expected to another thread")
-{
-    auto l = cbor::lazy::from("\x82\x01\x02"s);
-    std::int64_t read = 0;
-    std::jthread([&read](cbor::sendable<cbor::lazy> const &v) { read = *v.value.at(1)->get<std::int64_t>(); },
-                 cbor::transfer(std::move(*l)))
-        .join();
-    CHECK_EQ(read, 2);
-    auto const plain = *cbor::lazy::from("\xa1\x61" "a\x01"s);
-    std::int64_t other = 0;
-    std::jthread([&] { other = *plain.at("a")->get<std::int64_t>(); }).join();
-    CHECK_EQ(other, 1);
-#ifndef NDEBUG
-    auto const marked = *cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
-    CHECK_EQ(marked.at(1)->get<std::int64_t>(), 1);
-    bool threw = false;
-    std::jthread([&] {
-        try {
-            std::ignore = marked.at(1)->get<std::int64_t>();
-        } catch (std::logic_error const &) {
-            threw = true;
-        }
-    }).join();
-    CHECK(threw);
-#endif
-}
-
-#ifdef __cpp_impl_reflection
-// The section "Memory" shows that the caller bounds the memory of a decode with a std::pmr resource, and that
-// a resource that refuses after 64 bytes gives not_enough_memory.
-TEST_CASE("doc basics: a std::pmr target with a resource that refuses after 64 bytes")
-{
-    using texts = std::pmr::vector<std::pmr::string>;
-    std::string const text(40, 'x');
-    std::string encoded = "\x83"s;
-    for (int i = 0; i < 3; ++i)
-        encoded += "\x78\x28"s + text;
-    std::array<std::byte, 64> buffer{};
-    std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
-    auto const owner = std::make_shared<std::string const>(encoded);
-    auto const decoded = cbor::structs<texts>::decode(owner, *owner, texts(&budget));
-    REQUIRE_FALSE(decoded.has_value());
-    CHECK_EQ(decoded.error(), error::not_enough_memory);
-    std::array<std::byte, 4096> large{};
-    std::pmr::monotonic_buffer_resource enough(large.data(), large.size(), std::pmr::null_memory_resource());
-    auto const fits = cbor::structs<texts>::decode(owner, *owner, texts(&enough));
-    REQUIRE(fits.has_value());
-    CHECK_EQ((**fits).size(), 3u);
-}
-#endif
-
-// The section "Diagnostic notation" gives the signature of diagnostic_notation, because a user needs it to look at
-// encoded bytes.
-TEST_CASE("doc basics: diagnostic notation")
-{
-    std::expected<std::string, error> const text = cbor::diagnostic_notation("\xa1\x61\x61\x01"sv);
-    REQUIRE(text.has_value());
-    CHECK_EQ(*text, R"({"a": 1})");
-    CHECK_EQ(cbor::diagnostic_notation("\xa1\x61\x61"sv).error(), error::too_little_data);
+    {
+        std::string const three = preferred(A(1, 2, 3));
+        test::limits_guard const g{{.container_elements = 2}};
+        CHECK_EQ(cbor::lazy::from(three)->size().error(), error::container_elements_exceeded);
+    }
+    {
+        std::string const three = preferred(A(1, 2, 3));
+        test::limits_guard const g{{.input_bytes = 2}};
+        CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::input_bytes_exceeded);
+    }
 }
