@@ -282,7 +282,7 @@ struct encoder {
         }
     }
 
-    std::expected<void, std::errc> float_encode(double const value)
+    CBOR_ALWAYS_INLINE std::expected<void, std::errc> float_encode(double const value)
     {
         std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
         if constexpr (!direct)
@@ -442,14 +442,63 @@ class walker
 
     void key(typename Binding::value const &item)
     {
+        if (leaf(item)) [[likely]]
+            return;
         if constexpr (Pass == pass::plain)
             child(item, std::false_type{});
         else
             child(item, binding.key_identity(item));
     }
 
+    CBOR_ALWAYS_INLINE bool leaf(typename Binding::value const &item)
+    {
+        if constexpr (Pass == pass::plain && !requires { binding.embed_of(item); }) {
+            kind const k = binding.kind_of(item);
+            switch (k) {
+            case kind::floating_point:
+                if constexpr (requires { binding.float_of(item); }) {
+                    if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
+                        return false;
+                    keep(out.float_encode(binding.float_of(item)));
+                    return true;
+                }
+                return false;
+            case kind::unsigned_integer:
+                if constexpr (requires { binding.unsigned_of(item); }) {
+                    if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
+                        return false;
+                    head(major_type::unsigned_integer, binding.unsigned_of(item));
+                    return true;
+                }
+                return false;
+            case kind::negative_integer:
+                if constexpr (requires { binding.unsigned_of(item); }) {
+                    if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
+                        return false;
+                    head(major_type::negative_integer, binding.unsigned_of(item) - 1);
+                    return true;
+                }
+                return false;
+            case kind::text_string:
+                if constexpr (requires { binding.text_of(item); }) {
+                    if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
+                        return false;
+                    keep(out.text_string_encode(binding.text_of(item)));
+                    return true;
+                }
+                return false;
+            default:
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
     void value(typename Binding::value const &item)
     {
+        if (leaf(item)) [[likely]]
+            return;
         if constexpr (Pass == pass::plain)
             child(item, std::false_type{});
         else
