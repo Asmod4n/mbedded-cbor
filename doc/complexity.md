@@ -447,7 +447,7 @@ All rows marked "compile time" have no run-time cost.
 | `generic::generic_size<U>` :492 | O(i) | O(1) heap | |
 | `generic::bytes_write` :603 | O(len) | O(1) | |
 | `generic::generic_write<U>` :610 | O(n) | O(1) heap | |
-| `databind::decode(string_view) = delete` :728 | - | - | |
+| `databind::decode(string_view)` :790 | O(n) + read | O(n) copy + read | Copies. |
 | `databind::decode<Encoded>(Encoded&&)` :732 | as read | one make_shared + read | |
 | `databind::decode(shared_ptr<void const>, string_view)` :741 | as read | as read | |
 | `databind::decode(shared_ptr, Encoded&&) = delete` :753 | - | - | |

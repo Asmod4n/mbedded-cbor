@@ -1918,6 +1918,10 @@ consteval std::size_t packed::member_offset()
 template <class T>
 class schema
 {
+    template <class X>
+    static constexpr bool value_holds_no_view = std::is_trivially_copyable_v<X> && !std::same_as<X, std::string_view> &&
+                                                !std::same_as<X, std::optional<std::string_view>>;
+
 public:
     template <class U = T>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
@@ -2101,14 +2105,13 @@ public:
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<accessor<>, error> path(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
-    template <fixed_string Path, std::convertible_to<std::size_t>... Index,
-              class X = typename decltype(packed::path_result<T, T, Path, 1>())::type>
+    template <fixed_string Path, std::convertible_to<std::size_t>... Index>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && Path.view().starts_with('$') &&
                  packed::path_valid<T, Path, 1>() && sizeof...(Index) == packed::index_slots<Path>() &&
-                 std::is_trivially_copyable_v<X> && !std::same_as<X, std::string_view> &&
-                 !std::same_as<X, std::optional<std::string_view>>)
-    static std::expected<X, error> at_path(std::string_view const encoded, Index const... indexes)
+                 value_holds_no_view<typename decltype(packed::path_result<T, T, Path, 1>())::type>)
+    static auto at_path(std::string_view const encoded, Index const... indexes)
     {
+        using X = typename decltype(packed::path_result<T, T, Path, 1>())::type;
         limit_values const loaded = limits.load();
         return validity::limits_apply(
             loaded,
