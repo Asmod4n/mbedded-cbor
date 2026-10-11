@@ -32,13 +32,20 @@ FetchContent_MakeAvailable(mbedded-cbor)
 target_link_libraries(app PRIVATE mbedded-cbor)
 ```
 
-With `add_subdirectory(mbedded-cbor)` the last line is the same. The
+With `add_subdirectory` the last line is the same. A path outside the
+source tree of the project needs the second argument, the binary
+directory: `add_subdirectory(/path/to/mbedded-cbor mbedded-cbor)`. The
 target defines `_GLIBCXX_ASSERTIONS` and the libc++ fast hardening mode.
 The tests are built only when mbedded-cbor is the top-level project.
 For databind and schema, compile your target with `-std=c++26
 -freflection`.
 
 ## Quick start
+
+`<cbor/cbor.hpp>` includes every part of the library: `cbor::lazy`,
+`cbor::at_path`, `cbor::limits`, and, with `-freflection`,
+`cbor::databind` and `cbor::schema`. A program needs no other include of
+the library.
 
 ```cpp
 #include <cbor/cbor.hpp>
@@ -61,6 +68,39 @@ auto const missing = cbor::at_path<"$.user.age", std::int64_t>(bytes);
 
 This example is the test `doc readme: quick start` in
 `test/doc_readme.cpp`.
+
+### Write a struct and read one value by a path
+
+This example needs `-std=c++26 -freflection`.
+
+```cpp
+#include <cbor/cbor.hpp>
+
+struct inner { std::int64_t b; };
+struct outer { inner a; };
+
+auto const bytes = cbor::databind<outer>::encode(outer{{5}});
+// a1 61 "a" a1 61 "b" 05, which is {"a": {"b": 5}}
+auto const b = cbor::at_path<"$.a.b", std::int64_t>(*bytes);
+// *b == 5
+```
+
+This example is the test `doc readme: write a struct and read by a path`
+in `test/doc_readme.cpp`.
+
+### Set a limit
+
+```cpp
+#include <cbor/cbor.hpp>
+
+cbor::limits.container_elements = 100;
+// an array or a map with more than 100 elements now gives
+// cbor::error::container_elements_exceeded
+```
+
+`cbor::limits` is one object for the whole process. doc/basics.md
+section 4 describes every limit. This example is the test
+`doc readme: set a limit` in `test/doc_readme.cpp`.
 
 ## Documents
 

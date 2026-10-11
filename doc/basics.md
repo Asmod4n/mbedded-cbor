@@ -113,7 +113,8 @@ cbor::lazy::from("\x19\x01\x00"s)->get<std::uint8_t>().error(); // number_out_of
 
 ## 4. Limits
 
-`cbor::limits` holds the limits that are in force. It is one object for
+`cbor::limits` holds the limits that are in force. `<cbor/cbor.hpp>`
+declares it. It is one object for
 the whole process. Each call reads it once at its start. An assignment
 changes the limits for every later call in every thread. A call that runs
 keeps the limits that it read.
@@ -139,6 +140,8 @@ throws `std::logic_error` and does not change the field. An assignment of
 initializers do not name gets its default, not its old value.
 
 ```cpp
+#include <cbor/cbor.hpp>
+
 std::size_t const depth = cbor::limits.nesting_depth;   // 128
 cbor::limits.string_length = 64;
 cbor::limits = {.string_length = 2, .container_elements = 8};  // nesting_depth is 128 again
