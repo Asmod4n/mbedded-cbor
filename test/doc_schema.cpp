@@ -37,6 +37,22 @@ struct [[=cbor::tag(1701)]] car {
     std::optional<std::string> note;
 };
 
+struct untagged {
+    std::uint8_t a;
+};
+
+struct [[=cbor::tag(1700)]] twin {
+    std::uint8_t a;
+};
+
+struct [[=cbor::tag(1702)]] pair_of_tags {
+    tire t;
+    twin w;
+};
+
+template <class A>
+concept reads_seats = requires(A &&a) { std::forward<A>(a).template at_path<"$.seats">(); };
+
 car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nullopt};
 
 template <class T, cbor::fixed_string Path, class... Index>
@@ -129,6 +145,18 @@ TEST_CASE("doc schema: a typed array view")
     REQUIRE(tail.has_value());
     CHECK_EQ(tail->front(), 2.0);
     CHECK_EQ(track->first(4).error(), error::index_out_of_bounds);
+}
+
+// The section "Classes and tags" says that every struct needs its own tag, and that a temporary accessor gives no
+// value.
+TEST_CASE("doc schema: a struct needs a tag of its own")
+{
+    CHECK(cbor::tags_registered<car>());
+    CHECK_FALSE(cbor::tags_registered<untagged>());
+    CHECK_FALSE(cbor::tags_registered<pair_of_tags>());
+    using A = cbor::schema<car>::accessor<>;
+    CHECK(reads_seats<A const &>);
+    CHECK_FALSE(reads_seats<A>);
 }
 
 // The section "Errors" gives the error of a cut message and of a message of another class.

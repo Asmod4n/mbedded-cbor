@@ -196,6 +196,10 @@ TEST_CASE("doc databind: unknown, repeated and missing keys")
     REQUIRE(twice.has_value());
     CHECK_EQ((*twice)->age, 1u);
     CHECK_EQ(cbor::databind<person>::decode("\xa1\x64name\x61x"s).error(), error::key_not_found);
+    CHECK_EQ(cbor::databind<person>::decode("\xa3\x64name\x61x\x63"
+                                            "age\x01\x80\x00"s)
+                 .error(),
+             error::unsupported_value);
 }
 
 // The section "Errors" gives one input for each error that databind gives.
