@@ -160,6 +160,19 @@ auto const values = root.view<"$.values">();  // *values: a random-access range 
 double const sum = std::ranges::fold_left(*values, 0.0, std::plus{});  // 7.5
 ```
 
+`values` is stored as a typed array (RFC 8746): tag 86, float64
+little-endian, followed by one byte string with all elements. Every
+range of integers or floats is stored this way. A typed array is fast
+for these reasons:
+
+- The elements have no head each. Element `i` sits at offset `i * 8`
+  from the start of the byte string.
+- On a little-endian machine, the encode copies the whole range as one
+  block of bytes.
+- The read checks the tag and the length once. After that, a read of an
+  element checks only the index against the size.
+- `view` gives the elements in place, with no copy.
+
 ## 8. Structs: any CBOR into a struct
 
 `cbor::structs` puts any CBOR into the members of a C++ struct or
