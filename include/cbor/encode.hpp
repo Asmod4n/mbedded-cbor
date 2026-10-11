@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <expected>
 #include <iterator>
+#include <memory>
 #include <limits>
 #include <ranges>
 #include <span>
@@ -24,6 +25,7 @@
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
+#include "owning_ref.hpp"
 
 namespace cbor
 {
@@ -32,6 +34,10 @@ enum class sharedrefs { off, on };
 
 template <sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
 std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value);
+
+template <sharedrefs Sharing = sharedrefs::off, class Binding>
+std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(Binding &binding,
+                                                                               typename Binding::value const &value);
 
 class encoding
 {
@@ -133,6 +139,10 @@ class encoding
     template <class, class, pass>
     friend class walker;
 
+    template <sharedrefs Sharing, class Binding>
+    friend std::expected<owning_ref<std::span<std::string_view const>>, error>
+    encode_iov(Binding &binding, typename Binding::value const &value);
+
     template <sharedrefs Sharing, class Binding, class Writer>
     friend std::expected<void, error> encode(Binding &binding, Writer &&target,
                                                        typename Binding::value const &value);
@@ -149,9 +159,18 @@ class encoding
 template <class Writer>
 struct encoder {
     static constexpr bool direct = std::same_as<Writer, encoding::span_message<char>>;
+    static constexpr bool blocks = requires(Writer &w, std::size_t const n) {
+        { w.block_next(n) } -> std::same_as<std::span<char>>;
+    };
+    static constexpr std::size_t block_size = 16384;
+    static constexpr std::size_t item_size_max = heads::initial_byte_size + sizeof(std::uint64_t);
+    static constexpr std::size_t ref_size = 32;
+    static_assert(block_size >= item_size_max, "A block must hold one whole head or float.");
+
     Writer &writer;
-    std::conditional_t<direct, std::span<char>, std::array<char, 16384>> block;
+    std::conditional_t<direct || blocks, std::span<char>, std::array<char, block_size>> block;
     std::size_t used = 0;
+    std::size_t closed = 0;
     std::size_t written = 0;
 
     explicit encoder(Writer &w) : writer(w)
@@ -159,6 +178,30 @@ struct encoder {
         if constexpr (direct) {
             block = w.out;
             used = w.used;
+        } else if constexpr (blocks) {
+            block_take(item_size_max);
+        }
+    }
+
+    void block_take(std::size_t const needed)
+        requires blocks
+    {
+        block = writer.block_next(std::max(needed, block_size));
+        validity::throw_logic_error_if(block.size() < needed,
+                                       "cbor::encoder: the writer gave a block shorter than the item");
+        used = 0;
+        closed = 0;
+    }
+
+    std::expected<void, std::errc> refill(std::size_t const needed)
+    {
+        if constexpr (blocks) {
+            if (auto const r = flush(); !r) [[unlikely]]
+                return r;
+            block_take(needed);
+            return {};
+        } else {
+            return flush();
         }
     }
 
@@ -167,6 +210,13 @@ struct encoder {
         if constexpr (direct) {
             written += used - writer.used;
             writer.used = used;
+            return {};
+        } else if constexpr (blocks) {
+            std::size_t const size = used - closed;
+            std::string_view const part(block.data() + closed, size);
+            closed = used;
+            written += size;
+            writer.block_close(part);
             return {};
         } else {
             std::size_t const size = used;
@@ -187,7 +237,7 @@ struct encoder {
                 std::ranges::copy(std::span(item).first(size), block.subspan(used).begin());
                 used += size;
                 return {};
-            } else if (auto const r = flush(); !r) [[unlikely]] {
+            } else if (auto const r = refill(item.size()); !r) [[unlikely]] {
                 return r;
             }
         }
@@ -205,11 +255,9 @@ struct encoder {
                                        (std::numeric_limits<std::uint64_t>::digits - 1)));
         if constexpr (!direct) {
             if (block.size() - used < heads::initial_byte_size + sizeof(std::uint64_t)) [[unlikely]]
-                if (auto const r = flush(); !r) [[unlikely]]
+                if (auto const r = refill(item_size_max); !r) [[unlikely]]
                     return r;
             std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> head;
-            static_assert(std::tuple_size_v<decltype(block)> >= std::tuple_size_v<decltype(head)>,
-                          "The block must hold one whole head.");
             static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(head)>,
                           "A head must hold the initial byte and the eight argument bytes.");
             std::get<0>(head) = heads::initial_byte(major, info);
@@ -256,6 +304,16 @@ struct encoder {
         }
         if constexpr (direct) {
             return std::unexpected(std::errc::no_buffer_space);
+        } else if constexpr (blocks) {
+            std::size_t const first = out.size() - at;
+            std::ranges::copy(bytes.substr(0, first), out.subspan(at).begin());
+            used = out.size();
+            std::string_view const rest = bytes.substr(first);
+            if (auto const r = refill(rest.size()); !r) [[unlikely]]
+                return r;
+            std::ranges::copy(rest, block.begin());
+            used = rest.size();
+            return {};
         } else {
             if (auto const r = flush(); !r) [[unlikely]]
                 return r;
@@ -277,6 +335,16 @@ struct encoder {
         }
         if constexpr (direct) {
             return std::unexpected(std::errc::no_buffer_space);
+        } else if constexpr (blocks) {
+            std::size_t const first = out.size() - at;
+            std::ranges::copy(text.substr(0, first), out.subspan(at).begin());
+            used = out.size();
+            std::string_view const rest = text.substr(first);
+            if (auto const r = refill(rest.size()); !r) [[unlikely]]
+                return r;
+            std::ranges::copy(rest, block.begin());
+            used = rest.size();
+            return {};
         } else {
             if (auto const r = flush(); !r) [[unlikely]]
                 return r;
@@ -285,18 +353,102 @@ struct encoder {
         }
     }
 
+    template <class S>
+        requires std::same_as<S, std::string>
+    std::expected<void, std::errc> text_string_encode(S &&text)
+    {
+        if constexpr (blocks)
+            if (text.size() >= ref_size) {
+                auto const owner = std::make_shared<std::string const>(std::move(text));
+                return piece_encode(major_type::text_string, *owner, owner);
+            }
+        return text_string_encode(std::string_view(text));
+    }
+
+    std::expected<void, std::errc> text_string_encode(std::shared_ptr<std::string const> const text)
+    {
+        validity::throw_logic_error_if_null(text, "cbor::encoder::text_string_encode: the string is null");
+        if constexpr (blocks)
+            if (text->size() >= ref_size)
+                return piece_encode(major_type::text_string, *text, text);
+        return text_string_encode(std::string_view(*text));
+    }
+
+    std::expected<void, std::errc> text_string_encode(owning_ref<std::string_view> const text)
+    {
+        if constexpr (blocks)
+            if ((*text).size() >= ref_size)
+                return piece_encode(major_type::text_string, *text, text.owner);
+        return text_string_encode(*text);
+    }
+
+    template <class V>
+        requires std::same_as<V, std::vector<std::byte>>
+    std::expected<void, std::errc> byte_string_encode(V &&bytes)
+    {
+        if constexpr (blocks)
+            if (bytes.size() >= ref_size) {
+                auto const owner = std::make_shared<std::vector<std::byte> const>(std::move(bytes));
+                return piece_encode(major_type::byte_string, chars_of(*owner), owner);
+            }
+        return byte_string_encode(chars_of(bytes));
+    }
+
+    std::expected<void, std::errc> byte_string_encode(std::shared_ptr<std::vector<std::byte> const> const bytes)
+    {
+        validity::throw_logic_error_if_null(bytes, "cbor::encoder::byte_string_encode: the bytes are null");
+        if constexpr (blocks)
+            if (bytes->size() >= ref_size)
+                return piece_encode(major_type::byte_string, chars_of(*bytes), bytes);
+        return byte_string_encode(chars_of(*bytes));
+    }
+
+    std::expected<void, std::errc> byte_string_encode(owning_ref<std::span<std::byte const>> const bytes)
+    {
+        if constexpr (blocks)
+            if ((*bytes).size() >= ref_size)
+                return piece_encode(major_type::byte_string, chars_of(*bytes), bytes.owner);
+        return byte_string_encode(chars_of(*bytes));
+    }
+
+    static std::string_view chars_of(std::span<std::byte const> const bytes)
+    {
+        return {reinterpret_cast<char const *>(bytes.data()), bytes.size()};
+    }
+
+    std::expected<void, std::errc> piece_encode(major_type const major, std::string_view const piece,
+                                                std::shared_ptr<void const> owner)
+        requires blocks
+    {
+        if (auto const r = head_encode(major, piece.size()); !r) [[unlikely]]
+            return r;
+        if (auto const r = flush(); !r) [[unlikely]]
+            return r;
+        written += piece.size();
+        writer.piece_reference(piece, std::move(owner));
+        return {};
+    }
+
+    owning_ref<std::span<std::string_view const>> release()
+        requires blocks
+    {
+        std::ignore = flush();
+        block = {};
+        used = 0;
+        closed = 0;
+        return writer.release();
+    }
+
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> float_encode(double const value)
     {
         std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
-        if constexpr (!direct)
-            static_assert(std::tuple_size_v<decltype(block)> >= std::tuple_size_v<decltype(tail)>,
-                          "The block must hold one whole float.");
+
         static_assert(heads::initial_byte_size + sizeof(std::uint64_t) <= std::tuple_size_v<decltype(tail)>,
                       "A float item must hold the initial byte and the eight bytes of a double.");
         bool const near_end = block.size() - used < tail.size();
         if constexpr (!direct)
             if (near_end) [[unlikely]]
-                if (auto const r = flush(); !r) [[unlikely]]
+                if (auto const r = refill(item_size_max); !r) [[unlikely]]
                     return r;
         std::span<char> const out = block;
         std::size_t const at = used;
@@ -364,6 +516,62 @@ struct encoder {
             std::bit_cast<
                 std::conditional_t<sizeof(T) == sizeof(std::uint32_t), std::uint32_t, std::uint64_t>>(value));
     }
+};
+
+class iov_writer
+{
+    struct storage {
+        std::vector<std::unique_ptr<char[]>> blocks;
+        std::vector<std::shared_ptr<void const>> owners;
+        std::vector<std::string_view> pieces;
+    };
+
+    std::shared_ptr<storage> kept = std::make_shared<storage>();
+    bool piece_open = false;
+    bool released = false;
+
+    std::span<char> block_next(std::size_t const size)
+    {
+        validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
+        kept->blocks.push_back(std::make_unique_for_overwrite<char[]>(size));
+        piece_open = false;
+        return {kept->blocks.back().get(), size};
+    }
+
+    void block_close(std::string_view const part)
+    {
+        validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
+        if (part.empty())
+            return;
+        if (piece_open)
+            kept->pieces.back() = std::string_view(kept->pieces.back().data(), kept->pieces.back().size() + part.size());
+        else
+            kept->pieces.push_back(part);
+        piece_open = true;
+    }
+
+    void piece_reference(std::string_view const piece, std::shared_ptr<void const> owner)
+    {
+        validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
+        kept->owners.push_back(std::move(owner));
+        kept->pieces.push_back(piece);
+        piece_open = false;
+    }
+
+    owning_ref<std::span<std::string_view const>> release()
+    {
+        validity::throw_logic_error_if(released, "cbor::iov_writer: a second release");
+        released = true;
+        std::span<std::string_view const> const pieces = kept->pieces;
+        return {std::move(kept), pieces};
+    }
+
+    template <class>
+    friend struct encoder;
+
+    template <sharedrefs Sharing, class Binding>
+    friend std::expected<owning_ref<std::span<std::string_view const>>, error>
+    encode_iov(Binding &binding, typename Binding::value const &value);
 };
 
 enum class pass { plain, count, write };
@@ -801,6 +1009,17 @@ std::expected<void, error> encode(Binding &binding, Writer &&target, typename Bi
     if (auto const r = message.done(*size); !r) [[unlikely]]
         return std::unexpected(validity::writer_error(r.error()));
     return {};
+}
+
+template <sharedrefs Sharing, class Binding>
+std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(Binding &binding,
+                                                                               typename Binding::value const &value)
+{
+    iov_writer writer;
+    if (auto const size = encoding::encode_from<Sharing>(binding, writer, value, 0, false, limits.nesting_depth); !size)
+        [[unlikely]]
+        return std::unexpected(size.error());
+    return writer.release();
 }
 
 }

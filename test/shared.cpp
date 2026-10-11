@@ -449,6 +449,19 @@ TEST_CASE("registered tag: before_encode runs once per object with two passes")
     CHECK_EQ(w.encoded, "\x83\xd8\x1c\xd9\x13\x88\x82\x03\x07\xd8\x1d\x00\xd8\x1d\x00"sv);
 }
 
+// encode_iov takes the same two passes into its own writer, so its bytes must equal those of encode.
+TEST_CASE("registered tag: encode_iov with shared references gives the bytes of encode")
+{
+    auto const point = std::make_shared<node>(node{object{5000, arr({u(3), u(7)})}});
+    ref_binding binding;
+    auto const p = cbor::encode_iov<cbor::sharedrefs::on>(binding, arr({point, point, point, s(std::string(40, 'x'))}));
+    REQUIRE(p.has_value());
+    std::string joined;
+    for (std::string_view const piece : **p)
+        joined.append(piece);
+    CHECK_EQ(joined, encoded_shared(arr({point, point, point, s(std::string(40, 'x'))})));
+}
+
 // Ported from test.rb: 'registered tag + sharedref: distinct instances with equal fields do NOT share'.
 TEST_CASE("registered tag: distinct objects with equal content do not share")
 {

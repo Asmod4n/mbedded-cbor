@@ -18,6 +18,11 @@ struct lazy;
 
 class jsonpath;
 
+template <class Writer>
+struct encoder;
+
+class iov_writer;
+
 template <class T>
 class owning_ref
 {
@@ -37,6 +42,11 @@ class owning_ref
     friend struct lazy;
 
     friend class jsonpath;
+
+    template <class>
+    friend struct encoder;
+
+    friend class iov_writer;
 
 public:
     owning_ref(owning_ref const &) = default;
