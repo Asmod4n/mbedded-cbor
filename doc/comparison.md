@@ -102,14 +102,14 @@ libcbor has no lookup of a key. The caller writes it.
 ```cpp
 static cbor_item_t *map_get(cbor_item_t *map, std::string_view key)
 {
-cbor_pair const *pairs = cbor_map_handle(map);
-for (std::size_t i = 0; i < cbor_map_size(map); i++) {
-    cbor_item_t *k = pairs[i].key;
-    if (cbor_isa_string(k) && cbor_string_length(k) == key.size() &&
-        std::memcmp(cbor_string_handle(k), key.data(), key.size()) == 0)
-        return pairs[i].value;
-}
-return nullptr;
+    cbor_pair const *pairs = cbor_map_handle(map);
+    for (std::size_t i = 0; i < cbor_map_size(map); i++) {
+        cbor_item_t *k = pairs[i].key;
+        if (cbor_isa_string(k) && cbor_string_length(k) == key.size() &&
+            std::memcmp(cbor_string_handle(k), key.data(), key.size()) == 0)
+            return pairs[i].value;
+    }
+    return nullptr;
 }
 
 cbor_load_result result;
@@ -145,8 +145,8 @@ The struct holds a name and an age. The code writes it and reads it back.
 
 ```cpp
 struct person {
-std::string name;
-int age;
+    std::string name;
+    int age;
 };
 person const p{"ann", 30};
 person const copy = p;
@@ -158,8 +158,8 @@ databind reads the members of an aggregate by reflection (C++26). The struct nee
 
 ```cpp
 struct person {
-std::string name;
-std::uint8_t age;
+    std::string name;
+    std::uint8_t age;
 };
 
 auto const bytes = cbor::databind<person>::encode(person{"ann", 30});
@@ -173,8 +173,8 @@ A macro names each member once more.
 
 ```cpp
 struct person {
-std::string name;
-int age;
+    std::string name;
+    int age;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(person, name, age)
 
@@ -228,7 +228,7 @@ The input is [1, 2, 3]. The result is the sum 6.
 std::vector<int> const v{1, 2, 3};
 int sum = 0;
 for (int const x : v)
-sum += x;
+    sum += x;
 ```
 
 ### mbedded-cbor
@@ -247,7 +247,7 @@ for (auto const e : *doc->elements())
 ```cpp
 int sum = 0;
 for (auto const &x : nlohmann::json::from_cbor(bytes))
-sum += x.get<int>();
+    sum += x.get<int>();
 ```
 
 ### libcbor
@@ -257,7 +257,7 @@ cbor_load_result result;
 cbor_item_t *doc = cbor_load(bytes, sizeof bytes, &result);
 std::uint64_t sum = 0;
 for (std::size_t i = 0; i < cbor_array_size(doc); i++)
-sum += cbor_get_int(cbor_array_handle(doc)[i]);
+    sum += cbor_get_int(cbor_array_handle(doc)[i]);
 cbor_decref(&doc);
 ```
 
@@ -266,7 +266,7 @@ cbor_decref(&doc);
 ```cpp
 int sum = 0;
 for (int const x : *flatbuffers::GetRoot<fb::Ints>(buf)->values())
-sum += x;
+    sum += x;
 ```
 
 ### Cap'n Proto
@@ -275,7 +275,7 @@ sum += x;
 capnp::FlatArrayMessageReader reader(words);
 int sum = 0;
 for (int const x : reader.getRoot<Ints>().getValues())
-sum += x;
+    sum += x;
 ```
 
 ### jsoncons, TinyCBOR, QCBOR
@@ -377,7 +377,7 @@ cbor::schema writes a std::vector<double> as an RFC 8746 typed array. view gives
 
 ```cpp
 struct [[=cbor::tag(1900)]] series {
-std::vector<double> values;
+    std::vector<double> values;
 };
 
 auto const root = cbor::schema<series>::path(encoded_bytes);
@@ -403,7 +403,7 @@ cbor_load_result result;
 cbor_item_t *doc = cbor_load(bytes, sizeof bytes, &result);
 double sum = 0;
 for (std::size_t i = 0; i < cbor_array_size(doc); i++)
-sum += cbor_float_get_float(cbor_array_handle(doc)[i]);
+    sum += cbor_float_get_float(cbor_array_handle(doc)[i]);
 cbor_decref(&doc);
 ```
 
@@ -436,9 +436,9 @@ Data in memory is not parsed. The snippet shows the standard form of an error: a
 
 ```cpp
 auto const parse = [](std::string const &s) -> std::expected<int, std::errc> {
-if (s.empty())
-    return std::unexpected(std::errc::invalid_argument);
-return std::stoi(s);
+    if (s.empty())
+        return std::unexpected(std::errc::invalid_argument);
+    return std::stoi(s);
 };
 auto const r = parse("");
 ```
@@ -489,10 +489,10 @@ bool const broken = !verifier.VerifyBuffer<fb::Person>(nullptr);
 auto const cut = whole.asPtr().slice(0, whole.size() - 1);
 bool broken = false;
 try {
-capnp::FlatArrayMessageReader reader(cut);
-(void)reader.getRoot<Person>().getName();
+    capnp::FlatArrayMessageReader reader(cut);
+    (void)reader.getRoot<Person>().getName();
 } catch (kj::Exception const &) {
-broken = true;
+    broken = true;
 }
 ```
 
