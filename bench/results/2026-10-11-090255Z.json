@@ -1,0 +1,261 @@
+{
+ "time": "2026-10-11-090255Z",
+ "commit": "b41b860271b9d8e87274a1f20a178ec257284203",
+ "purpose": "mbedded-cbor runtime API against CBOR libraries that openSUSE Tumbleweed does not package, in Debian sid",
+ "flags": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -Werror",
+ "pie": "-fPIE -pie",
+ "elf_type_count": {
+  "Type: DYN clang++-23": 4,
+  "Type: DYN g++-16": 4
+ },
+ "processes": 10,
+ "min_time": "0.2s",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-3) 16.2.0",
+  "Debian clang version 23.1.2 (1)"
+ ],
+ "packages": [
+  "clang-23 1:23.1.2-1",
+  "g++-16 16.2.0-3",
+  "libbenchmark-dev 1.9.1-1+b2",
+  "libc6 2.43-7",
+  "libcbor0.10 0.10.2-2.2",
+  "libflatbuffers-dev 23.5.26+dfsg-4+b2",
+  "libjsoncons-dev 1.5.0-2",
+  "libmsgpack-cxx-dev 8.0.0-1",
+  "libstdc++6 16.2.0-3",
+  "libtinycbor0 7.0-1"
+ ],
+ "ldd_sample": {},
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "kernel": "6.18.44-fc-v114",
+ "scheduler": "CFS/EEVDF (no sched_ext state)",
+ "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-sid-gb (debian:sid)",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 0,
+ "priority": "",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; 3 of 4 cpus stay to the rest of the machine",
+ "cold": "each process rotates over copies of the input that hold twice the L3 size",
+ "loadavg_start": "1.06 0.36 0.69 1/121 91",
+ "loadavg_end": "1.11 0.50 0.72 1/120 232",
+ "run": {
+  "rounds": [
+   {
+    "round": 1,
+    "wall_s": 5.233144521713257,
+    "steal_ticks": 6,
+    "steal_percent_of_cpu_time": 0.2861230329041488
+   },
+   {
+    "round": 2,
+    "wall_s": 5.314458131790161,
+    "steal_ticks": 7,
+    "steal_percent_of_cpu_time": 0.32833020637898686
+   },
+   {
+    "round": 3,
+    "wall_s": 5.667564868927002,
+    "steal_ticks": 10,
+    "steal_percent_of_cpu_time": 0.43898156277436345
+   },
+   {
+    "round": 4,
+    "wall_s": 5.274553298950195,
+    "steal_ticks": 5,
+    "steal_percent_of_cpu_time": 0.23651844843897823
+   },
+   {
+    "round": 5,
+    "wall_s": 5.378982305526733,
+    "steal_ticks": 7,
+    "steal_percent_of_cpu_time": 0.3248259860788863
+   },
+   {
+    "round": 6,
+    "wall_s": 5.354880094528198,
+    "steal_ticks": 7,
+    "steal_percent_of_cpu_time": 0.3257328990228013
+   },
+   {
+    "round": 7,
+    "wall_s": 5.29715371131897,
+    "steal_ticks": 5,
+    "steal_percent_of_cpu_time": 0.23540489642184556
+   },
+   {
+    "round": 8,
+    "wall_s": 5.5854785442352295,
+    "steal_ticks": 8,
+    "steal_percent_of_cpu_time": 0.3560302625723186
+   },
+   {
+    "round": 9,
+    "wall_s": 5.296554803848267,
+    "steal_ticks": 16,
+    "steal_percent_of_cpu_time": 0.7508212106992023
+   },
+   {
+    "round": 10,
+    "wall_s": 5.286811113357544,
+    "steal_ticks": 7,
+    "steal_percent_of_cpu_time": 0.33065658951346244
+   }
+  ],
+  "steal_percent_of_cpu_time_max": 0.7508212106992023
+ },
+ "failed": [],
+ "arms": {
+  "clang++-23.floats.MP_REUSE": {
+   "repetitions_ns": [
+    272062.3686236667,
+    286007.0434783993,
+    278098.84502921865,
+    299513.56703042047,
+    271659.0794258238,
+    292865.1764103471,
+    292811.34863391303,
+    283999.04591253167,
+    279191.2320857017,
+    270729.0295274371
+   ],
+   "median_ns": 281595.1389991167,
+   "spread": 0.1063223162777458,
+   "check": "375735",
+   "copies": "1452"
+  },
+  "clang++-23.floats.S": {
+   "repetitions_ns": [
+    483123.7266320565,
+    496443.04663208284,
+    498373.9128925435,
+    479496.92255848146,
+    514634.00528201787,
+    490232.8402063817,
+    480587.36878199753,
+    524443.0719174439,
+    545398.4672562629,
+    606856.9292734655
+   ],
+   "median_ns": 497408.4797623132,
+   "spread": 0.2656117291335707,
+   "check": "335441",
+   "copies": "1626"
+  },
+  "clang++-23.floats.S_AA": {
+   "repetitions_ns": [
+    550676.8839584101,
+    523201.1263730214,
+    487109.1827579158,
+    516603.8568995569,
+    482404.63965518354,
+    497058.4822700428,
+    498430.58407057356,
+    519915.01213138766,
+    501900.7828467939,
+    508521.2738301018
+   ],
+   "median_ns": 505211.02833844785,
+   "spread": 0.14152485007612414,
+   "check": "335441",
+   "copies": "1626"
+  },
+  "clang++-23.floats.TC_WRITE": {
+   "repetitions_ns": [
+    686884.4623113546,
+    645330.1441654748,
+    642569.1009169879,
+    832558.9905055069,
+    702960.0810184361,
+    637801.0783403788,
+    716093.3542172094,
+    686116.4965038537,
+    652294.3621493031,
+    716928.7218313373
+   ],
+   "median_ns": 686500.4794076041,
+   "spread": 0.3053583927325856,
+   "check": "540003",
+   "copies": "1626"
+  },
+  "g++-16.floats.MP_REUSE": {
+   "repetitions_ns": [
+    267326.68316804466,
+    262098.89189173025,
+    255503.09909083974,
+    262010.53846167406,
+    251403.0340193938,
+    254558.17473109707,
+    275882.30348737683,
+    291778.10381353175,
+    264551.3809525735,
+    265178.7619929212
+   ],
+   "median_ns": 263325.1364221519,
+   "spread": 0.1605989758700499,
+   "check": "375735",
+   "copies": "1452"
+  },
+  "g++-16.floats.S": {
+   "repetitions_ns": [
+    654846.9629634651,
+    511383.27757334587,
+    481411.55536056875,
+    507159.25252570317,
+    489896.8126097144,
+    517402.12629769853,
+    584581.8130363997,
+    482412.1183332864,
+    495150.9029850248,
+    545374.9204338843
+   ],
+   "median_ns": 509271.2650495245,
+   "spread": 0.3602643220165256,
+   "check": "335441",
+   "copies": "1626"
+  },
+  "g++-16.floats.S_AA": {
+   "repetitions_ns": [
+    478619.77054786275,
+    491416.42439921695,
+    493032.717391835,
+    487185.08931705164,
+    633526.7749143651,
+    502030.54591874615,
+    494699.91011286667,
+    486067.800350638,
+    498002.0461540008,
+    480850.9208265235
+   ],
+   "median_ns": 492224.570895526,
+   "spread": 0.3236535845336783,
+   "check": "335441",
+   "copies": "1626"
+  },
+  "g++-16.floats.TC_WRITE": {
+   "repetitions_ns": [
+    669634.99520382,
+    846006.4770115317,
+    665680.7663549979,
+    662874.4375002834,
+    714728.7130179749,
+    720752.1395874426,
+    685755.1666659792,
+    672800.2780486039,
+    657650.6000002315,
+    728651.9565218936
+   ],
+   "median_ns": 679277.7223572915,
+   "spread": 0.2864072153378008,
+   "check": "540003",
+   "copies": "1626"
+  }
+ }
+}
