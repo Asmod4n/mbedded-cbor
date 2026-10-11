@@ -129,12 +129,12 @@ public:
     check_argument(major_type const major, std::uint64_t const argument, limit_checks<Checked> const checks)
     {
         if constexpr (Checked) {
-            if (argument <= checks.argument_max) [[likely]]
+            if (major < major_type::byte_string || major > major_type::map || argument <= checks.argument_max)
+                [[likely]]
                 return {};
-            if (major == major_type::byte_string || major == major_type::text_string)
+            if (major <= major_type::text_string)
                 return check_limit(argument, checks.string_length, error::string_length_exceeded);
-            if (major == major_type::array || major == major_type::map)
-                return check_limit(argument, checks.container_elements, error::container_elements_exceeded);
+            return check_limit(argument, checks.container_elements, error::container_elements_exceeded);
         }
         return {};
     }
