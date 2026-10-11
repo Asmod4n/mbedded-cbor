@@ -55,8 +55,7 @@ inline lazy_elements::iterator &lazy_elements::iterator::operator++()
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) -> iterator & {
             heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(offset)),
                                       checks};
-            well_formedness::no_marks none;
-            if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]] {
+            if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
                 failure = r.error();
                 --left;
                 return *this;
@@ -76,8 +75,7 @@ inline void lazy_entries::iterator::value_find()
     validity::limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
             heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(key)), checks};
-            well_formedness::no_marks none;
-            if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]] {
+            if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
                 failure = r.error();
                 return;
             }
@@ -112,8 +110,7 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
     validity::limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
             heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(value)), checks};
-            well_formedness::no_marks none;
-            if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]] {
+            if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
                 failure = r.error();
                 --left;
                 return;
@@ -454,17 +451,17 @@ inline std::expected<lazy, error> lazy::at(std::size_t const index) const
                             auto found = value_sharing::container_resolve(top_level, offset, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
-                            auto &[source, h, d] = *found;
+                            auto &[source, h, d, item_at] = *found;
                             if (h.major != major_type::array) [[unlikely]]
                                 return std::unexpected(error::not_indexable);
                             auto const position = validity::check_index(index, h.argument);
                             if (!position) [[unlikely]]
                                 return std::unexpected(position.error());
-                            well_formedness::no_marks none;
-                            for (std::uint64_t i = 0; i < *position; ++i)
-                                if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
-                                    return std::unexpected(r.error());
+                            if (auto const r = well_formedness::items_skip(d, *position); !r) [[unlikely]]
+                                return std::unexpected(r.error());
                             std::size_t const element = source->encoded.size() - d.encoded.size();
+                            if (auto const target = heads::decoder<Checked>(d).head_decode(); !target) [[unlikely]]
+                                return std::unexpected(target.error());
                             return lazy{source, element};
                         });
 }
@@ -491,10 +488,10 @@ auto lazy::get(limit_values const loaded) const
                                  error>;
     return limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) -> result {
-            auto const found = value_sharing::container_resolve(top_level, offset, checks);
+            auto const found = value_sharing::tag_content_resolve(top_level, offset, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
-            auto [source, h, d] = *found;
+            auto [source, h, d, item_at] = *found;
             if constexpr (std::integral<T> && !std::is_same_v<T, bool>) {
                 bool negative = h.major == major_type::negative_integer;
                 std::uint64_t argument = h.argument;
@@ -534,6 +531,13 @@ auto lazy::get(limit_values const loaded) const
                 T const magnitude = static_cast<T>(argument);
                 return static_cast<T>(negative ? ~magnitude : magnitude);
             } else if constexpr (std::is_same_v<T, double>) {
+                if (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) {
+                    bool const negative = h.major == major_type::negative_integer;
+                    if (error const c = validity::check_number_range<double>(negative, h.argument).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::unexpected(c);
+                    return negative ? -1.0 - static_cast<double>(h.argument) : static_cast<double>(h.argument);
+                }
                 if (h.major != major_type::simple_float) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
                 switch (static_cast<rfc8949::simple_float_information>(h.info)) {
@@ -567,32 +571,10 @@ auto lazy::get(limit_values const loaded) const
                     return std::unexpected(text.error());
                 return owning_ref<T>(source->owner, *text);
             } else if constexpr (std::is_same_v<T, typed_array>) {
-                if (h.major != major_type::tag) [[unlikely]]
-                    return std::unexpected(error::incorrect_type);
-                if (error const r = validity::typed_array_check(h.argument, 0).error_or(error{});
-                    r != error{}) [[unlikely]]
-                    return std::unexpected(r);
-                auto const content =
-                    value_sharing::shared_resolve(*source, source->encoded.size() - d.encoded.size(), checks);
-                if (!content) [[unlikely]]
-                    return std::unexpected(content.error());
-                d = heads::decoder<Checked>{std::string_view(std::span(source->encoded).subspan(*content)),
-                                            checks};
-                auto const r = d.head_decode();
-                if (!r) [[unlikely]]
-                    return std::unexpected(r.error());
-                if (error const c =
-                        validity::check_tag_content(h.argument, r->major, r->info).error_or(error{});
-                    c != error{}) [[unlikely]]
-                    return std::unexpected(c);
-                auto const bytes = d.byte_string_decode(r->argument);
+                auto const bytes = value_sharing::typed_array_bytes_read(*found);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
-                if (error const c = validity::typed_array_check(h.argument, bytes->size()).error_or(error{});
-                    c != error{}) [[unlikely]]
-                    return std::unexpected(c);
-                return owning_ref<T>(source->owner,
-                                     typed_array{h.argument, std::as_bytes(std::span(*bytes))});
+                return owning_ref<T>(source->owner, typed_array{h.argument, std::as_bytes(std::span(*bytes))});
             } else {
                 if (h.major != major_type::byte_string) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
@@ -618,7 +600,7 @@ inline std::expected<lazy_elements, error> lazy::elements(limit_values const loa
             auto const found = value_sharing::container_resolve(top_level, offset, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
-            auto const &[source, h, d] = *found;
+            auto const &[source, h, d, item_at] = *found;
             if (h.major != major_type::array) [[unlikely]]
                 return std::unexpected(error::not_indexable);
             if (auto const r = validity::check_definite_length(h.major, h.info); !r) [[unlikely]]
@@ -643,7 +625,7 @@ inline std::expected<lazy_entries, error> lazy::entries(limit_values const loade
             auto const found = value_sharing::container_resolve(top_level, offset, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
-            auto const &[source, h, d] = *found;
+            auto const &[source, h, d, item_at] = *found;
             if (h.major != major_type::map) [[unlikely]]
                 return std::unexpected(error::not_indexable);
             if (auto const r = validity::check_definite_length(h.major, h.info); !r) [[unlikely]]

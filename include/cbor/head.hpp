@@ -514,6 +514,46 @@ class heads
         return h.major == major_type::simple_float && h.info == std::to_underlying(simple_value::null);
     }
 
+    static constexpr bool is_tag_passed(std::uint64_t const tag)
+    {
+        return tag != std::to_underlying(rfc8949::tag_number::unsigned_bignum) &&
+               tag != std::to_underlying(rfc8949::tag_number::negative_bignum) &&
+               tag != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item) &&
+               tag != std::to_underlying(rfc8949::tag_number::sharedref) &&
+               !validity::typed_array_check(tag, 0).has_value();
+    }
+
+    static constexpr std::expected<head, error> typed_array_element_decode(std::uint64_t const tag,
+                                                                           std::string_view const elements,
+                                                                           std::uint64_t const position)
+    {
+        std::size_t const size = validity::typed_array_element_size(tag);
+        bool const floating = (tag >> std::to_underlying(rfc8746::bit_field::f) & 1) != 0;
+        bool const signed_integer = (tag >> std::to_underlying(rfc8746::bit_field::s) & 1) != 0;
+        bool const little_endian = (tag >> std::to_underlying(rfc8746::bit_field::e) & 1) != 0;
+        if (size > sizeof(std::uint64_t)) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        auto const element = std::span(elements).subspan(static_cast<std::size_t>(position) * size, size);
+        std::uint64_t bits = 0;
+        for (std::size_t i = 0; i < size; ++i)
+            bits = bits << std::numeric_limits<std::uint8_t>::digits |
+                   static_cast<std::uint8_t>(element[little_endian ? size - 1 - i : i]);
+        if (floating) {
+            auto const info = size == sizeof(std::uint16_t)
+                                  ? rfc8949::simple_float_information::half_precision_float
+                              : size == sizeof(std::uint32_t)
+                                  ? rfc8949::simple_float_information::single_precision_float
+                                  : rfc8949::simple_float_information::double_precision_float;
+            return head{major_type::simple_float, std::to_underlying(info), bits};
+        }
+        std::uint64_t const sign = std::uint64_t{1} << (size * std::numeric_limits<std::uint8_t>::digits - 1);
+        if (signed_integer && (bits & sign) != 0) {
+            std::uint64_t const argument = ~(bits | ~(sign - 1));
+            return head{major_type::negative_integer, preferred_argument_info(argument), argument};
+        }
+        return head{major_type::unsigned_integer, preferred_argument_info(bits), bits};
+    }
+
     struct raw_head {
         major_type major;
         std::uint8_t info;

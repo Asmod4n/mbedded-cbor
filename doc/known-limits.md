@@ -21,9 +21,21 @@ the code and the tests, branch limits-at-no-cost.
 | A lazy belongs to one thread. | Decided | The marks grow with no lock. Thread safety is the job of the application. |
 | cbor::transfer hands a lazy to another thread. | Decided | Only a lazy that nothing else shares. Names are provisional. |
 | A debug build throws std::logic_error on a foreign thread. | Decided | A release build does not check. cbor::is_thread_bound_v and is_sendable_v state it in the type. |
+| owning_ref has == with T and with owning_ref, and -> to the members of T. * and -> refuse an rvalue. | Decided | The owner, 2026-10-10: as std::optional does. The rvalue rule stays. |
 | lazy::decode through expected<lazy>::operator-> on a temporary gives a dangling reference. | Open | No overload sees the temporary. |
 | A view outlives its owner in two forms with std::expected. | Open | Not closed. typed_array_view and schema::accessor keep their view after a move. |
-| at_path(owner, encoded) trusts the owner. | Open | An overload on std::shared_ptr<std::string const> would close it. The owner decides. |
+| at_path(owner, encoded) does not check that the owner holds the bytes. | Open | An overload on std::shared_ptr<std::string const> would close it. The owner decides. |
+
+## Paths
+
+| Limit | Status | Cause and where it is decided |
+|---|---|---|
+| A path takes an EDN literal in brackets and in a filter, at compile time and at run time. 12 cases that the JSONPath Compliance Test Suite calls invalid are valid EDN and are accepted. | Decided | One parser in query.hpp. test/cts.cpp lists the 12 cases. |
+| A typed read with a key that is not a text reads through a lazy, and the form over bytes then allocates. | Open | The walk over bytes compares text keys only. test/allocation.cpp records it. |
+| The bytes form and lazy::from do not read the bytes after the target. A truncated or trailing part is not found. | Open | A path reads heads up to the target only. doc/path.md section 10. |
+| A typed read of double takes an integer from -2^53 to 2^53. Outside this range it is number_out_of_range. A bignum (tag 2 or 3) is incorrect_type for a double. No other conversion exists. | Decided | The owner, 2026-10-10. validity::check_number_range<double>. |
+| string_length and container_elements count only what a path or a lazy reads or decodes. An item that it only skips does not count. | Decided | The owner, 2026-10-10. The skip is bounded by the bytes (validity::check_pending_items). well_formedness::items_skip skips without the limits. |
+| $[-1] on a map is the key -1. A tag other than 2, 3, 24, 28, 29, 55799 and the RFC 8746 tags stops the walk. The nesting depth of a binding result counts from the node. match() and search() are refused. | Open | The owner decides. doc/path.md describes each. |
 
 ## Floats
 
@@ -49,7 +61,6 @@ the code and the tests, branch limits-at-no-cost.
 | string_length, container_elements and input_bytes are SIZE_MAX by default. | Decided | validity.hpp macros. No limit is in force until the application sets one. A count in the input reserves nothing. |
 | Memory is bounded by the memory resource of the caller (std::pmr). | Decided | decoded_bytes is removed. databind::decode and schema::decode read into a target with its allocator. |
 | A plain struct element of a std::pmr::vector takes its members from the default resource. | Open | The allocator does not reach a type that has none. |
-| schema::decode lets std::bad_alloc through. | Open | databind maps it to not_enough_memory. The owner decides whether schema does the same. |
 | Limits are one global object. | Decided | An exception to the functional rule. Each entry reads it once. |
 
 ## Checks in the code
@@ -69,7 +80,6 @@ the code and the tests, branch limits-at-no-cost.
 | Keys 2(h'01') and 1 are distinct by RFC 8949 5.6.1, but decode turns both into 1. | Open | Not tested for databind with std::map. |
 | validity::check_sorted_keys_unique has no caller. | Open | Written before the profile used it. |
 | Simple values 24 to 31 are refused. | Decided | validity::check_simple_value. |
-| Tag 55799 inside tag 24 is not skipped. | Open | Cost not measured. |
 | Tag 24: the place of the top-level item of the embedded item is not decided. | Open | |
 
 ## Cost
