@@ -68,8 +68,11 @@ class encoding
         {
             auto const at = std::ranges::ssize(container);
             container.resize(std::ranges::size(container) + part.size());
-            std::ranges::transform(part, std::ranges::next(std::ranges::begin(container), at),
-                                   [](char const c) { return static_cast<std::ranges::range_value_t<C>>(c); });
+            if constexpr (std::same_as<std::ranges::range_value_t<C>, char>)
+                std::ranges::copy(part, std::ranges::next(std::ranges::begin(container), at));
+            else
+                std::ranges::transform(part, std::ranges::next(std::ranges::begin(container), at),
+                                       [](char const c) { return static_cast<std::ranges::range_value_t<C>>(c); });
             return {};
         }
 
