@@ -105,7 +105,7 @@ static T load()
     return lot;
 }
 
-static void foreign_build(T const &lot)
+static std::size_t fb_encode(T const &lot, bool const kept)
 {
     flatbuffers::FlatBufferBuilder fbb;
     std::vector<flatbuffers::Offset<fbcar::Car>> cs;
@@ -117,7 +117,13 @@ static void foreign_build(T const &lot)
                                       c.fuelCapacity, c.fuelLevel, c.hasPowerWindows, c.hasPowerSteering, c.hasCruiseControl, c.cupHolders, c.hasNavSystem));
     }
     fbb.Finish(fbcar::CreateParkingLot(fbb, fbb.CreateVector(cs)));
-    fb_store(fbb);
+    if (kept)
+        fb_store(fbb);
+    return fbb.GetSize();
+}
+
+static std::size_t cp_encode(T const &lot, bool const kept)
+{
     capnp::MallocMessageBuilder mb;
     auto bs = mb.initRoot<carsales::ParkingLot>().initCars(unsigned(lot.cars.size()));
     for (unsigned k = 0; k < lot.cars.size(); k++) {
@@ -134,7 +140,15 @@ static void foreign_build(T const &lot)
         b.setFuelCapacity(c.fuelCapacity); b.setFuelLevel(c.fuelLevel);
         b.setHasPowerWindows(c.hasPowerWindows); b.setHasPowerSteering(c.hasPowerSteering); b.setHasCruiseControl(c.hasCruiseControl); b.setCupHolders(c.cupHolders); b.setHasNavSystem(c.hasNavSystem);
     }
-    cp_store(mb);
+    if (kept)
+        cp_store(mb);
+    return mb.getSegmentsForOutput().size();
+}
+
+static void foreign_build(T const &lot)
+{
+    fb_encode(lot, true);
+    cp_encode(lot, true);
 }
 
 static bool fb_verify()
@@ -290,15 +304,29 @@ static T load()
     return f;
 }
 
-static void foreign_build(T const &f)
+static std::size_t fb_encode(T const &f, bool const kept)
 {
     flatbuffers::FlatBufferBuilder fbb;
     fbb.Finish(fbfloats::CreateFloats(fbb, fbb.CreateVector(f.values)));
-    fb_store(fbb);
+    if (kept)
+        fb_store(fbb);
+    return fbb.GetSize();
+}
+
+static std::size_t cp_encode(T const &f, bool const kept)
+{
     capnp::MallocMessageBuilder mb;
     auto v = mb.initRoot<cpfloats::Floats>().initValues(unsigned(f.values.size()));
     for (unsigned i = 0; i < f.values.size(); ++i) v.set(i, f.values[i]);
-    cp_store(mb);
+    if (kept)
+        cp_store(mb);
+    return mb.getSegmentsForOutput().size();
+}
+
+static void foreign_build(T const &f)
+{
+    fb_encode(f, true);
+    cp_encode(f, true);
 }
 
 static double sum(T const &f) { return std::accumulate(f.values.begin(), f.values.end(), 0.0); }
@@ -487,7 +515,7 @@ static T load()
     return rs;
 }
 
-static void foreign_build(T const &rs)
+static std::size_t fb_encode(T const &rs, bool const kept)
 {
     flatbuffers::FlatBufferBuilder fbb;
     std::vector<flatbuffers::Offset<fbrecords::Record>> os;
@@ -499,7 +527,13 @@ static void foreign_build(T const &rs)
         os.push_back(fbrecords::CreateRecord(fbb, r.id, text, user, r.ratio, fbb.CreateVector(ts), r.neg));
     }
     fbb.Finish(fbrecords::CreateRecords(fbb, fbb.CreateVector(os)));
-    fb_store(fbb);
+    if (kept)
+        fb_store(fbb);
+    return fbb.GetSize();
+}
+
+static std::size_t cp_encode(T const &rs, bool const kept)
+{
     capnp::MallocMessageBuilder mb;
     auto bs = mb.initRoot<cprecords::Records>().initRecords(unsigned(rs.records.size()));
     for (unsigned k = 0; k < rs.records.size(); ++k) {
@@ -515,7 +549,15 @@ static void foreign_build(T const &rs)
         for (unsigned i = 0; i < r.tags.size(); ++i) ts.set(i, capnp::Text::Reader(r.tags[i].data(), r.tags[i].size()));
         b.setNeg(r.neg);
     }
-    cp_store(mb);
+    if (kept)
+        cp_store(mb);
+    return mb.getSegmentsForOutput().size();
+}
+
+static void foreign_build(T const &rs)
+{
+    fb_encode(rs, true);
+    cp_encode(rs, true);
 }
 
 static double sum(T const &rs)
@@ -626,9 +668,22 @@ static double cp_field()
 }
 #endif
 
+#if defined(OP_MB_ENCODE) || defined(OP_FB_ENCODE) || defined(OP_CP_ENCODE)
+static T const *encoded_source;
+#endif
 static double op()
 {
-#if defined(OP_MB_DECODE)
+#if defined(OP_MB_ENCODE)
+    auto const e = S::encode(*encoded_source);
+    if (!e)
+        std::abort();
+    benchmark::DoNotOptimize(e->data());
+    return double(e->size());
+#elif defined(OP_FB_ENCODE)
+    return double(fb_encode(*encoded_source, false));
+#elif defined(OP_CP_ENCODE)
+    return double(cp_encode(*encoded_source, false));
+#elif defined(OP_MB_DECODE)
     auto const l = S::decode(keep, msg);
     if (!l) [[unlikely]] std::abort();
     benchmark::DoNotOptimize(&**l);
@@ -706,6 +761,9 @@ static void run(benchmark::State &state)
 int main(int argc, char **argv)
 {
     static T const data = load();
+#if defined(OP_MB_ENCODE) || defined(OP_FB_ENCODE) || defined(OP_CP_ENCODE)
+    encoded_source = &data;
+#endif
     if (!S::encode(data, msg)) std::abort();
     foreign_build(data);
     if (!fb_verify()) std::abort();
