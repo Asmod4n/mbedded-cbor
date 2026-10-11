@@ -1,6 +1,8 @@
 #include "binding.hpp"
 
 #include <initializer_list>
+#include <limits>
+#include <stdexcept>
 #include <span>
 #include <string>
 #include <string_view>
@@ -248,4 +250,31 @@ TEST_CASE("encode: a span of exact size holds the top-level item, one byte less 
         CHECK_EQ(cbor::encode(binding, std::span<char>(short_by_one), v).error(),
                  cbor::error{cbor::error::no_buffer_space});
     }
+}
+
+// A binding whose map_size differs from the entries of map_for_each made
+// encode write a map head with the wrong count and report success. The
+// bytes were not CBOR. A binding is code of the user, so the wrong count
+// is a wrong use, and encode throws std::logic_error.
+struct miscounting_binding : test_binding {
+    std::uint64_t extra = 0;
+
+    std::uint64_t map_size(value const &v)
+    {
+        return test_binding::map_size(v) + extra;
+    }
+};
+
+TEST_CASE("encode: a map size that differs from the entries throws")
+{
+    value const m = M(1, 2, 3, 4);
+    for (std::uint64_t const extra : {std::uint64_t{1}, std::numeric_limits<std::uint64_t>::max()}) {
+        miscounting_binding binding;
+        binding.extra = extra;
+        string_writer w;
+        CHECK_THROWS_AS(static_cast<void>(cbor::encode(binding, w, m)), std::logic_error);
+    }
+    miscounting_binding exact;
+    string_writer w;
+    CHECK(cbor::encode(exact, w, m).has_value());
 }
