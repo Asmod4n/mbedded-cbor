@@ -558,3 +558,12 @@ TEST_CASE("doc path: the owner thread of a lazy")
     CHECK(threw);
 #endif
 }
+
+// The section "Path syntax" states that an index counts from 0, because a task that names "element 2" leaves the base
+// open.
+TEST_CASE("doc path: an index counts from 0")
+{
+    std::string const bytes = "\x83\x0a\x0b\x0c"s;
+    CHECK_EQ(cbor::at_path<"$[0]", int>(bytes).value(), 10);
+    CHECK_EQ(cbor::at_path<"$[-1]", int>(bytes).value(), 12);
+}

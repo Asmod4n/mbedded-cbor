@@ -17,6 +17,7 @@ names start with `doc basics:`.
 6. Memory
 7. Threads
 8. Ownership
+9. Diagnostic notation
 
 ## 1. Errors
 
@@ -339,3 +340,15 @@ An empty owner throws `std::logic_error`. A temporary `std::string` or a
 moved `std::string` beside an owner does not compile, because the owner
 does not hold it. The library does not check that the owner holds the
 bytes of `encoded`.
+
+## 9. Diagnostic notation
+
+`cbor::diagnostic_notation(std::string_view encoded)` gives the text of
+one item in the diagnostic notation of RFC 8949 section 8. It returns
+`std::expected<std::string, cbor::error>`. Bytes that are not one
+well-formed item give an error.
+
+```cpp
+cbor::diagnostic_notation("\xa1\x61\x61\x01"sv);   // {"a": 1}
+cbor::diagnostic_notation("\xa1\x61\x61"sv);       // error::too_little_data
+```

@@ -6,9 +6,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -168,6 +170,18 @@ TEST_CASE("doc schema: errors")
     CHECK_EQ(cbor::schema<car>::decode(small).error(), error::too_little_data);
     CHECK_EQ(cbor::schema<tire>::decode(bytes).error(), error::incorrect_type);
     CHECK_EQ(cbor::schema<tire>::path(bytes).error(), error::incorrect_type);
+}
+
+// The section "Typed arrays" states that a typed_array_view is a range, because a user reaches for std::ranges first.
+TEST_CASE("doc schema: a typed array view is a range")
+{
+    static_assert(std::ranges::random_access_range<cbor::typed_array_view<double>>);
+    static_assert(std::ranges::sized_range<cbor::typed_array_view<double>>);
+    auto const root = cbor::schema<car>::path(*cbor::schema<car>::encode(sample));
+    REQUIRE(root.has_value());
+    auto const track = root->view<"$.track">();
+    REQUIRE(track.has_value());
+    CHECK_EQ(std::ranges::fold_left(*track, 0.0, std::plus<>{}), 6.0);
 }
 
 } // namespace doc_schema

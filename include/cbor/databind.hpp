@@ -447,6 +447,8 @@ class generic
     static std::expected<void, error> struct_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                   std::size_t const depth, std::size_t const depth_max)
     {
+        static_assert(!packed::tag_number_of(^^U),
+                      "cbor::databind writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
         static constexpr auto members = packed::members_of<U>();
         constexpr std::size_t count = members.size();
         auto const h = d.head_decode();
@@ -629,6 +631,8 @@ class generic
             }
             return size;
         } else {
+            static_assert(!packed::tag_number_of(^^U),
+                          "cbor::databind writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
             static constexpr auto members = packed::members_of<U>();
             std::size_t size = 0;
             std::size_t present = 0;
@@ -759,6 +763,8 @@ class generic
                 at = generic_write(out, at, e);
             return at;
         } else {
+            static_assert(!packed::tag_number_of(^^U),
+                          "cbor::databind writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
             static constexpr auto members = packed::members_of<U>();
             std::size_t present = 0;
             template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {

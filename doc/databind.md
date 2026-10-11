@@ -157,9 +157,15 @@ struct senml {          // RFC 8428 6: n is 0, v is 2
 - a missing key of a member that is not optional: `error::key_not_found`;
 - a key that is an array, a map or a tag: `error::unsupported_value`.
 
-The type of the tag of a struct comes from `cbor::tagged<N, E>`.
-doc/schema.md describes `[[=cbor::tag(n)]]`, which the schema form
-reads.
+`databind` writes a tag on a struct only through `cbor::tagged<N, E>`.
+A struct that carries `[[=cbor::tag(n)]]` does not compile in
+`databind`. Only the schema form reads that annotation (doc/schema.md).
+
+```cpp
+struct person { std::string name; std::int64_t age; };
+cbor::databind<cbor::tagged<1800, person>>::encode({{"ann", 30}});
+// 1800({"name": "ann", "age": 30})
+```
 
 ## 5. Variants
 
