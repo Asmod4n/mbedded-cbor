@@ -20,18 +20,11 @@ arm_libraries() {
 	esac
 }
 
-arm_source() {
-	case "$1" in
-	TA_*) echo typed_array.cpp ;;
-	*) echo runtime.cpp ;;
-	esac
-}
-
 compile() {
 	local cc=$1 a=$2 d=$3 out=$4
 	"$cc" -std=c++23 $flags -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" -DDOC_$d \
 		-DDOC_PATH="\"$here/docs/$d.cbor\"" -I"$root/include" \
-		"$here/$(arm_source "$a")" $(arm_libraries "$a") -lbenchmark -lpthread -o "$out"
+		"$here/runtime.cpp" $(arm_libraries "$a") -lbenchmark -lpthread -o "$out"
 }
 
 mkdir -p "$build/bin" "$build/out"
