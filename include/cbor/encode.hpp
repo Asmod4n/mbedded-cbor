@@ -286,8 +286,38 @@ struct encoder {
         }
     }
 
-    std::expected<void, std::errc> head_encode(major_type const major, std::uint64_t const argument)
+    template <std::unsigned_integral T>
+    CBOR_ALWAYS_INLINE void item_put(char const initial, T const argument)
     {
+        std::span<char> const out = std::span<char>(block).subspan(used);
+        out.front() = initial;
+        std::ranges::copy(std::bit_cast<std::array<char, sizeof(T)>>(std::byteswap(argument)),
+                          out.subspan(heads::initial_byte_size).begin());
+        used += heads::initial_byte_size + sizeof(T);
+    }
+
+    CBOR_ALWAYS_INLINE std::expected<void, std::errc> head_encode(major_type const major, std::uint64_t const argument)
+    {
+        using info = rfc8949::additional_information;
+        if (block.size() - used >= item_size_max) [[likely]] {
+            if (argument < std::to_underlying(info::one_byte_argument)) {
+                std::span<char> const out = block;
+                out[used] = heads::initial_byte(major, static_cast<std::uint8_t>(argument));
+                used += heads::initial_byte_size;
+            } else if (argument <= std::numeric_limits<std::uint8_t>::max()) {
+                item_put(heads::initial_byte(major, std::to_underlying(info::one_byte_argument)),
+                         static_cast<std::uint8_t>(argument));
+            } else if (argument <= std::numeric_limits<std::uint16_t>::max()) {
+                item_put(heads::initial_byte(major, std::to_underlying(info::two_byte_argument)),
+                         static_cast<std::uint16_t>(argument));
+            } else if (argument <= std::numeric_limits<std::uint32_t>::max()) {
+                item_put(heads::initial_byte(major, std::to_underlying(info::four_byte_argument)),
+                         static_cast<std::uint32_t>(argument));
+            } else {
+                item_put(heads::initial_byte(major, std::to_underlying(info::eight_byte_argument)), argument);
+            }
+            return {};
+        }
         return head_encode(major, heads::preferred_argument_info(argument), argument);
     }
 
@@ -322,7 +352,7 @@ struct encoder {
         }
     }
 
-    std::expected<void, std::errc> text_string_encode(std::string_view text)
+    CBOR_ALWAYS_INLINE std::expected<void, std::errc> text_string_encode(std::string_view text)
     {
         if (auto const r = head_encode(major_type::text_string, text.size()); !r) [[unlikely]]
             return r;
@@ -441,6 +471,46 @@ struct encoder {
 
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> float_encode(double const value)
     {
+        if (block.size() - used >= item_size_max) [[likely]] {
+            using sfi = rfc8949::simple_float_information;
+            constexpr heads::precision h = heads::half_precision;
+            constexpr heads::precision f = heads::single_precision;
+            constexpr heads::precision d = heads::double_precision;
+            constexpr std::uint32_t single_min = static_cast<std::uint32_t>(d.exponent_bias - f.exponent_bias + 1);
+            constexpr std::uint32_t single_max = static_cast<std::uint32_t>(d.exponent_bias + f.exponent_bias);
+            constexpr std::uint32_t half_min = static_cast<std::uint32_t>(d.exponent_bias - h.exponent_bias + 1);
+            constexpr std::uint32_t half_max = static_cast<std::uint32_t>(d.exponent_bias + h.exponent_bias);
+            constexpr std::uint32_t half_subnormal_min = half_min - static_cast<std::uint32_t>(h.significand_bits);
+            constexpr std::uint32_t single_subnormal_min = single_min - static_cast<std::uint32_t>(f.significand_bits);
+            constexpr int single_drop = d.significand_bits - f.significand_bits;
+            constexpr int half_drop = d.significand_bits - h.significand_bits;
+            constexpr int sign_at = d.significand_bits + std::bit_width(d.exponent_max);
+            std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
+            std::uint32_t const exp = static_cast<std::uint32_t>(bits >> d.significand_bits & d.exponent_max);
+            std::uint64_t const mant = bits & ((std::uint64_t{1} << d.significand_bits) - 1u);
+            std::uint64_t const sign = bits >> sign_at;
+            if (exp - single_min <= single_max - single_min && (mant & ((std::uint64_t{1} << single_drop) - 1u)) == 0) {
+                if (exp - half_min <= half_max - half_min && (mant & ((std::uint64_t{1} << half_drop) - 1u)) == 0) {
+                    item_put(heads::initial_byte(major_type::simple_float, std::to_underlying(sfi::half_precision_float)),
+                             static_cast<std::uint16_t>(sign << (h.significand_bits + std::bit_width(h.exponent_max)) |
+                                                        std::uint64_t{exp - half_min + 1} << h.significand_bits |
+                                                        mant >> half_drop));
+                    return {};
+                }
+                if (exp - half_subnormal_min >= half_min - half_subnormal_min) {
+                    item_put(
+                        heads::initial_byte(major_type::simple_float, std::to_underlying(sfi::single_precision_float)),
+                        static_cast<std::uint32_t>(sign << (f.significand_bits + std::bit_width(f.exponent_max)) |
+                                                   std::uint64_t{exp - single_min + 1} << f.significand_bits |
+                                                   mant >> single_drop));
+                    return {};
+                }
+            } else if (exp != 0 && exp != d.exponent_max && exp - single_subnormal_min >= single_min - single_subnormal_min) {
+                item_put(heads::initial_byte(major_type::simple_float, std::to_underlying(sfi::double_precision_float)),
+                         bits);
+                return {};
+            }
+        }
         std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
 
         static_assert(heads::initial_byte_size + sizeof(std::uint64_t) <= std::tuple_size_v<decltype(tail)>,
