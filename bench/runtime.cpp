@@ -124,7 +124,7 @@ static void vg_encode(vg_out &o, bench::value const &x)
 }
 #endif
 
-#if defined(ARM_MP_REUSE) || defined(ARM_MP_READ)
+#if defined(ARM_MP_REUSE) || defined(ARM_MP_FRESH) || defined(ARM_MP_READ)
 #define ARM_MP 1
 #include <msgpack.hpp>
 static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x)
@@ -818,6 +818,13 @@ static std::uint64_t op()
     d.p = reinterpret_cast<std::uint8_t const *>(in.data());
     d.end = d.p + in.size();
     return vg_read(d, 0);
+#elif defined(ARM_MP_FRESH)
+    msgpack::sbuffer fresh;
+    msgpack::packer<msgpack::sbuffer> pk(fresh);
+    mp_pack(pk, tree);
+    benchmark::DoNotOptimize(fresh.data());
+    benchmark::ClobberMemory();
+    return fresh.size();
 #elif defined(ARM_MP_REUSE)
     mpbuf.clear();
     msgpack::packer<msgpack::sbuffer> pk(mpbuf);
