@@ -71,10 +71,7 @@ class validity
         basic_packed_cbor = 113,
         record_function = 114,
         straight_argument_first = 128,
-        straight_argument_last = 135,
-        inverted_argument_first = 136,
-        inverted_argument_last = 143,
-        split_basic_packed_cbor = 1113
+        straight_argument_last = 135
     };
 
 public:
