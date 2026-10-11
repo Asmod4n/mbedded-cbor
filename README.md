@@ -40,6 +40,9 @@ the same flags.
 
 `cbor::lazy` reads the bytes in place and builds no tree. Each call
 reads only up to the item that it looks for. No reflection needed.
+`lazy::from(bytes)` copies the bytes once. `std::move` or a
+`std::shared_ptr` avoids the copy
+([doc/advanced/basics.md](doc/advanced/basics.md#8-owners)).
 
 ```cpp
 // bytes holds the CBOR of {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}

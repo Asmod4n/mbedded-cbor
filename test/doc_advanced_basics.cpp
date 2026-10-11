@@ -244,3 +244,23 @@ TEST_CASE("doc advanced basics: owners")
     CHECK_EQ(**view, "xyz"sv);
     CHECK_EQ((**view).data(), p->bytes.data() + 1);
 }
+
+// The section "Owners" states that an lvalue string is copied, and that a shared_ptr or an rvalue avoids the copy.
+TEST_CASE("doc advanced basics: an owner avoids the copy")
+{
+    auto const message = [] { return preferred(V("xyz"s)); };
+    std::string const lvalue = message();
+    auto const copied = cbor::lazy::from(lvalue)->get<std::string_view>();
+    CHECK_NE((**copied).data(), lvalue.data() + 1);
+
+    auto const shared = std::make_shared<std::string const>(message());
+    auto const a = cbor::lazy::from(shared).value();
+    auto const va = a.get<std::string_view>().value();
+    CHECK_EQ((*va).data(), shared->data() + 1);
+
+    std::string bytes = preferred(V(std::string(40, 'x')));
+    char const *const data = bytes.data();
+    auto const b = cbor::lazy::from(std::move(bytes)).value();
+    auto const vb = b.get<std::string_view>().value();
+    CHECK_EQ((*vb).data(), data + 2);
+}
