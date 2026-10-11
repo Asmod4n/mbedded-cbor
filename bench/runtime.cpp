@@ -16,7 +16,7 @@
 
 #include "value.hpp"
 
-static std::uint64_t bytes_sum(std::string_view const s)
+[[maybe_unused]] static std::uint64_t bytes_sum(std::string_view const s)
 {
     return std::transform_reduce(s.begin(), s.end(), std::uint64_t{0}, std::plus<>{},
                                  [](char const c) { return std::uint64_t(std::uint8_t(c)); });
@@ -47,8 +47,13 @@ struct read_binding {
 #endif
 
 #if defined(ARM_JC_CLEAR) || defined(ARM_JC_READ)
+#pragma GCC diagnostic push
+#if !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #include <jsoncons/json.hpp>
 #include <jsoncons_ext/cbor/cbor.hpp>
+#pragma GCC diagnostic pop
 #endif
 
 #if defined(ARM_VG_READ)
@@ -135,7 +140,7 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
             msgpack::sbuffer body;
             msgpack::packer<msgpack::sbuffer>(body).pack_uint64(n);
             pk.pack_ext(body.size(), 2);
-            pk.pack_ext_body(body.data(), body.size());
+            pk.pack_ext_body(body.data(), static_cast<std::uint32_t>(body.size()));
         }
     } break;
     case cbor::kind::floating_point: pk.pack_double(b.float_of(x)); break;
@@ -150,11 +155,88 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
         inner.pack_uint64(b.registered_tag(x));
         mp_pack(inner, b.before_encode(x));
         pk.pack_ext(body.size(), 1);
-        pk.pack_ext_body(body.data(), body.size());
+        pk.pack_ext_body(body.data(), static_cast<std::uint32_t>(body.size()));
     } break;
     default: std::abort();
     }
 }
+#endif
+
+#if defined(ARM_PK_A) || defined(ARM_PK_B) || defined(ARM_PK_C) || defined(ARM_S_STRING) || defined(ARM_TC_WRITE)
+#define ARM_S_TREE 1
+#endif
+#if defined(ARM_PK_A) || defined(ARM_PK_B) || defined(ARM_PK_C)
+#include "packer.hpp"
+template <class P>
+static void pk_walk(P &p, bench::value const &x)
+{
+    bench::binding b;
+    switch (b.kind_of(x)) {
+    case cbor::kind::unsigned_integer: p.unsigned_integer(b.unsigned_of(x)); break;
+    case cbor::kind::negative_integer: p.negative_integer(b.unsigned_of(x) - 1); break;
+    case cbor::kind::floating_point: p.floating_point(b.float_of(x)); break;
+    case cbor::kind::simple_value: p.simple_value(b.simple_of(x)); break;
+    case cbor::kind::text_string: p.text_string(b.text_of(x)); break;
+    case cbor::kind::byte_string: { auto const s = b.bytes_of(x); p.byte_string(std::string_view(reinterpret_cast<char const *>(s.data()), s.size())); } break;
+    case cbor::kind::array:
+        if constexpr (requires { p.start_array(); }) {
+            p.start_array();
+            for (std::uint64_t i = 0, n = b.array_size(x); i < n; ++i) pk_walk(p, b.array_at(x, i));
+            p.end_array();
+        } else {
+            auto const n = b.array_size(x);
+            p.array(n);
+            for (std::uint64_t i = 0; i < n; ++i) pk_walk(p, b.array_at(x, i));
+        }
+        break;
+    case cbor::kind::map:
+        if constexpr (requires { p.start_map(); }) {
+            p.start_map();
+            b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { pk_walk(p, k); pk_walk(p, v); });
+            p.end_map();
+        } else {
+            p.map(b.map_size(x));
+            b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { pk_walk(p, k); pk_walk(p, v); });
+        }
+        break;
+    case cbor::kind::registered: p.tag(b.registered_tag(x)); pk_walk(p, b.before_encode(x)); break;
+    default: std::abort();
+    }
+}
+static std::string pk_encode(bench::value const &x)
+{
+#if defined(ARM_PK_A)
+    proto::direct d;
+    pk_walk(d, x);
+    return std::move(d.out);
+#elif defined(ARM_PK_B)
+    proto::batch bt;
+    pk_walk(bt, x);
+    return bt.finish();
+#else
+    return proto::count_then_write([&](auto &p) { pk_walk(p, x); });
+#endif
+}
+#endif
+#if defined(ARM_TC_WRITE)
+#include <tinycbor/cbor.h>
+static void tc_walk(CborEncoder *e, bench::value const &x)
+{
+    bench::binding b;
+    switch (b.kind_of(x)) {
+    case cbor::kind::unsigned_integer: cbor_encode_uint(e, b.unsigned_of(x)); break;
+    case cbor::kind::negative_integer: cbor_encode_negative_int(e, b.unsigned_of(x)); break;
+    case cbor::kind::floating_point: cbor_encode_double(e, b.float_of(x)); break;
+    case cbor::kind::simple_value: cbor_encode_simple_value(e, b.simple_of(x)); break;
+    case cbor::kind::text_string: { auto const t = b.text_of(x); cbor_encode_text_string(e, t.data(), t.size()); } break;
+    case cbor::kind::byte_string: { auto const s = b.bytes_of(x); cbor_encode_byte_string(e, reinterpret_cast<std::uint8_t const *>(s.data()), s.size()); } break;
+    case cbor::kind::array: { CborEncoder sub; auto const n = b.array_size(x); cbor_encoder_create_array(e, &sub, n); for (std::uint64_t i = 0; i < n; ++i) tc_walk(&sub, b.array_at(x, i)); cbor_encoder_close_container(e, &sub); } break;
+    case cbor::kind::map: { CborEncoder sub; cbor_encoder_create_map(e, &sub, b.map_size(x)); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { tc_walk(&sub, k); tc_walk(&sub, v); }); cbor_encoder_close_container(e, &sub); } break;
+    case cbor::kind::registered: cbor_encode_tag(e, b.registered_tag(x)); tc_walk(e, b.before_encode(x)); break;
+    default: std::abort();
+    }
+}
+static std::vector<std::uint8_t> tcbuf;
 #endif
 
 #if defined(ARM_FB_REUSE) || defined(ARM_FB_READ) || defined(ARM_FB_READ_V) || defined(ARM_FB_PATH) || defined(ARM_FB_PATH_V)
@@ -327,8 +409,13 @@ static void tc_index(CborValue *const it, std::size_t const i)
 #endif
 
 #if defined(ARM_JC_DECODE)
+#pragma GCC diagnostic push
+#if !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #include <jsoncons/json.hpp>
 #include <jsoncons_ext/cbor/cbor.hpp>
+#pragma GCC diagnostic pop
 static std::uint64_t json_sum(jsoncons::json const &j)
 {
     switch (j.type()) {
@@ -348,8 +435,13 @@ static std::uint64_t json_sum(jsoncons::json const &j)
 #endif
 
 #if defined(ARM_JC_PATH)
+#pragma GCC diagnostic push
+#if !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #include <jsoncons/json.hpp>
 #include <jsoncons_ext/cbor/cbor.hpp>
+#pragma GCC diagnostic pop
 using jc_cursor = jsoncons::cbor::cbor_bytes_cursor;
 static void jc_skip(jc_cursor &c)
 {
@@ -506,7 +598,7 @@ static std::uint64_t fb_path(flexbuffers::Reference const root)
 }
 #endif
 static std::string const *bytes = &doc;
-#if defined(ARM_S) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
+#if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
 static bench::value tree;
 #endif
 #if defined(ARM_MP) || defined(ARM_FB)
@@ -535,7 +627,7 @@ static vg_out vo;
 
 static void setup()
 {
-#if defined(ARM_S) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
+#if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
     bench::binding b;
     auto t = cbor::lazy_decode(b, *cbor::lazy::from(std::string_view(doc)));
     if (!t)
@@ -544,6 +636,17 @@ static void setup()
 #endif
 #if defined(ARM_S)
     buf.resize(doc.size());
+#endif
+#if defined(ARM_TC_WRITE)
+    tcbuf.resize(2 * doc.size() + 64);
+#endif
+#if defined(ARM_PK_A) || defined(ARM_PK_B) || defined(ARM_PK_C)
+    {
+        bench::binding rb;
+        std::string ref;
+        if (!cbor::encode(rb, ref, tree) || pk_encode(tree) != ref)
+            std::abort();
+    }
 #endif
 #if defined(ARM_MP)
     msgpack::sbuffer sb;
@@ -576,7 +679,26 @@ static void setup()
 
 static std::uint64_t op()
 {
-#if defined(ARM_S)
+#if defined(ARM_PK_A) || defined(ARM_PK_B) || defined(ARM_PK_C)
+    std::string const out = pk_encode(tree);
+    benchmark::DoNotOptimize(out.data());
+    benchmark::ClobberMemory();
+    return out.size();
+#elif defined(ARM_S_STRING)
+    bench::binding b;
+    std::string out;
+    if (!cbor::encode(b, out, tree))
+        std::abort();
+    benchmark::DoNotOptimize(out.data());
+    benchmark::ClobberMemory();
+    return out.size();
+#elif defined(ARM_TC_WRITE)
+    CborEncoder e;
+    cbor_encoder_init(&e, tcbuf.data(), tcbuf.size(), 0);
+    tc_walk(&e, tree);
+    benchmark::ClobberMemory();
+    return cbor_encoder_get_buffer_size(&e, tcbuf.data());
+#elif defined(ARM_S)
     bench::binding b;
     if (!cbor::encode(b, std::span<char>(buf), tree))
         std::abort();
