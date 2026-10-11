@@ -620,7 +620,7 @@ static void setup()
     tree = std::move(*t);
 #endif
 #if defined(ARM_S)
-    buf.resize(doc.size());
+    buf.resize(2 * doc.size() + 64);
 #endif
 #if defined(ARM_TC_WRITE)
     tcbuf.resize(2 * doc.size() + 64);
