@@ -77,7 +77,7 @@ TEST_CASE("path: a second read of a top-level item with shared values allocates 
     CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
 }
 
-// The count in the head of an array is not trusted. The item of an array is its count and a view on its bytes, so a
+// The count in the head of an array is not trusted. The decode keeps room only for the elements it has read, so a
 // head that claims many elements makes decode take no room for them. Here the array claims 4096 elements and its
 // first element is not well-formed, so decode fails before it builds anything but the array.
 TEST_CASE("decode: the room kept for the elements of an array is bounded by the bytes left")
@@ -91,6 +91,20 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::syntax_error);
     CHECK_LE(after - before, 2 * bytes.size());
+}
+
+// An array that claims 2^63 elements with one byte after its head is refused with too_little_data, and the
+// decode takes memory in proportion to the input and not to the claimed count: one fixed block for the items.
+TEST_CASE("decode: a claimed count of 2^63 with one byte left allocates in proportion to the input")
+{
+    std::string const bytes = "\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s;
+    auto const root = *cbor::lazy::from(std::string(bytes));
+    std::size_t const before = allocated_bytes;
+    auto const r = root.decode();
+    std::size_t const after = allocated_bytes;
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::too_little_data);
+    CHECK_LE(after - before, 8192u);
 }
 
 // The typed read of a path walks the bytes of the caller and builds no top-level item: a text with the owner of the

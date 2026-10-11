@@ -524,6 +524,54 @@ class heads
         return h.major == major_type::simple_float && h.info == std::to_underlying(simple_value::null);
     }
 
+    static constexpr cbor::type type_of(major_type const major, std::uint8_t const info, std::uint64_t const argument)
+    {
+        switch (major) {
+        case major_type::unsigned_integer:
+            return cbor::type::unsigned_integer;
+        case major_type::negative_integer:
+            return cbor::type::negative_integer;
+        case major_type::byte_string:
+            return cbor::type::byte_string;
+        case major_type::text_string:
+            return cbor::type::text_string;
+        case major_type::array:
+            return cbor::type::array;
+        case major_type::map:
+            return cbor::type::map;
+        case major_type::tag:
+            if (argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum))
+                return cbor::type::unsigned_bignum;
+            if (argument == std::to_underlying(rfc8949::tag_number::negative_bignum))
+                return cbor::type::negative_bignum;
+            if (argument >= std::to_underlying(rfc8746::tag_number::typed_array_first) &&
+                argument <= std::to_underlying(rfc8746::tag_number::typed_array_last) &&
+                argument != std::to_underlying(rfc8746::tag_number::typed_array_reserved))
+                return cbor::type::typed_array;
+            return cbor::type::tag;
+        case major_type::simple_float:
+            break;
+        }
+        switch (info) {
+        case std::to_underlying(simple_value::false_value):
+            return cbor::type::false_value;
+        case std::to_underlying(simple_value::true_value):
+            return cbor::type::true_value;
+        case std::to_underlying(simple_value::null):
+            return cbor::type::null;
+        case std::to_underlying(simple_value::undefined):
+            return cbor::type::undefined;
+        case std::to_underlying(rfc8949::simple_float_information::half_precision_float):
+            return cbor::type::half_float;
+        case std::to_underlying(rfc8949::simple_float_information::single_precision_float):
+            return cbor::type::single_float;
+        case std::to_underlying(rfc8949::simple_float_information::double_precision_float):
+            return cbor::type::double_float;
+        default:
+            return cbor::type::simple_value;
+        }
+    }
+
     static constexpr bool is_tag_passed(std::uint64_t const tag)
     {
         return tag != std::to_underlying(rfc8949::tag_number::unsigned_bignum) &&
@@ -642,6 +690,8 @@ class heads
     friend class walker;
 
     friend struct lazy;
+
+    friend struct item;
 
     friend struct lazy_elements;
 
