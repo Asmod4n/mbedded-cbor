@@ -218,12 +218,12 @@ TEST_CASE("doc basics: a std::pmr target with a resource that refuses after 64 b
     std::array<std::byte, 64> buffer{};
     std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
     auto const owner = std::make_shared<std::string const>(encoded);
-    auto const decoded = cbor::databind<texts>::decode(owner, *owner, texts(&budget));
+    auto const decoded = cbor::structs<texts>::decode(owner, *owner, texts(&budget));
     REQUIRE_FALSE(decoded.has_value());
     CHECK_EQ(decoded.error(), error::not_enough_memory);
     std::array<std::byte, 4096> large{};
     std::pmr::monotonic_buffer_resource enough(large.data(), large.size(), std::pmr::null_memory_resource());
-    auto const fits = cbor::databind<texts>::decode(owner, *owner, texts(&enough));
+    auto const fits = cbor::structs<texts>::decode(owner, *owner, texts(&enough));
     REQUIRE(fits.has_value());
     CHECK_EQ((**fits).size(), 3u);
 }

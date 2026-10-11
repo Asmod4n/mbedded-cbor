@@ -353,7 +353,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `diagnostic_write` :954 | O(n) common; worst depends on check_tag_content | O(n) output; O(s) marks; O(d) frames | |
 | `diagnostic_notation` :1084 | O(n) common | O(n) string; O(s); O(d) | |
 
-## schema.hpp
+## packed.hpp
 
 All rows marked "compile time" have no run-time cost.
 
@@ -361,50 +361,50 @@ All rows marked "compile time" have no run-time cost.
 |---|---|---|---|
 | `no_fixed_size<T>()` :44 | O(1) compile time | O(1) | |
 | `key::key(char const*)` :58 | O(len) compile time | O(len) static | |
-| `packed::key_of` :115 | O(a + len) compile time | O(len) static | |
-| `packed::tag_number_of` :124 | O(a) compile time | O(1) | Not confirmed. |
-| `packed::keys_unique` :132 | O(c log c·len) compile time | O(c) | |
-| `packed::annotated` :141 | O(a) compile time | O(1) | |
-| `packed::data_members<U>()` :149 | O(c·a) compile time | O(c) static | |
-| `packed::typed_array_tag<E>()` :221 | O(1) compile time | O(1) | |
-| `packed::typed_array_element_read<E>` :256 | O(1) | O(1) stack | |
-| `packed::typed_array_element_write<E>` :266 | O(1) | O(1) | |
-| `packed::fixed_width_head_encode` :274 | O(1) amortized | O(1) | Compile time only. |
-| `packed::zero_initialized_encode<Root, T>` :284 | O(fixed_size) compile time | O(fixed_size) | |
-| `packed::zero_initialized<Root, T>()` :354 | O(fixed_size) compile time; O(1) at run time | O(fixed_size) static | |
-| `packed::record_keys<U>()` :362 | O(c·len) compile time | O(c·len) static | |
-| `packed::record_types_collect<T>` :386 | O(t² + Σc) compile time | O(t) | |
-| `packed::packing_table_of<Root>()` :408 | O(t² + Σc) compile time | O(t) static | |
-| `packed::shared_first_of`, `argument_index_of` :416, :426 | O(1), O(t) compile time | O(1) | |
-| `packed::straight_reference_encode`, `_size` :433, :447 | O(t) compile time | O(1) | |
-| `packed::packing_prefix_of<Root>()` :455 | O(q) compile time | O(q) static | |
-| `packed::float_bits<U>(U)` :470 | O(1) | O(1) | |
+| `reflection::key_of` :115 | O(a + len) compile time | O(len) static | |
+| `reflection::tag_number_of` :124 | O(a) compile time | O(1) | Not confirmed. |
+| `reflection::keys_unique` :132 | O(c log c·len) compile time | O(c) | |
+| `reflection::annotated` :141 | O(a) compile time | O(1) | |
+| `reflection::data_members<U>()` :149 | O(c·a) compile time | O(c) static | |
+| `reflection::typed_array_tag<E>()` :221 | O(1) compile time | O(1) | |
+| `reflection::typed_array_element_read<E>` :256 | O(1) | O(1) stack | |
+| `reflection::typed_array_element_write<E>` :266 | O(1) | O(1) | |
+| `reflection::fixed_width_head_encode` :274 | O(1) amortized | O(1) | Compile time only. |
+| `reflection::zero_initialized_encode<Root, T>` :284 | O(fixed_size) compile time | O(fixed_size) | |
+| `reflection::zero_initialized<Root, T>()` :354 | O(fixed_size) compile time; O(1) at run time | O(fixed_size) static | |
+| `reflection::record_keys<U>()` :362 | O(c·len) compile time | O(c·len) static | |
+| `reflection::record_types_collect<T>` :386 | O(t² + Σc) compile time | O(t) | |
+| `reflection::packing_table_of<Root>()` :408 | O(t² + Σc) compile time | O(t) static | |
+| `reflection::shared_first_of`, `argument_index_of` :416, :426 | O(1), O(t) compile time | O(1) | |
+| `reflection::straight_reference_encode`, `_size` :433, :447 | O(t) compile time | O(1) | |
+| `reflection::packing_prefix_of<Root>()` :455 | O(q) compile time | O(q) static | |
+| `reflection::float_bits<U>(U)` :470 | O(1) | O(1) | |
 | `second_item::bytes_add`, `block_add` :499, :506 | O(1) | O(1) | checked_add, checked_mul. |
 | `second_item::elements_add<E, R>` :514 | O(1) or O(m) | O(1) heap; O(d) stack | |
 | `second_item::add<T>` :531 | O(v); common O(i) | O(1) heap; O(d) stack | Depth follows the value. |
-| `packed::zero_initialized_copy<Root, E>` :572 | O(fixed_size<E>) | O(1) | |
-| `packed::directory_at<Root>()` :586 | O(1) | O(1) | |
-| `packed::elements_encode` :592 | O(m·fixed_size + dynamic) | O(1) heap | |
-| `packed::reference_encode` :607 | O(len), O(m) or O(k) plus content | O(1) heap | No allocation. |
-| `packed::value_encode` :684 | whole value O(n) | O(1) heap | |
-| `packed::member_named`, `step_end`, `index_end`, `index_of` :763-784 | O(c·len), O(L), O(L), O(digits) compile time | O(1) | |
-| `packed::fixed_value_read<T>` :794 | O(1) | O(1) | |
-| `packed::fixed_head_valid<T>` :846 | O(1) | O(1) | |
-| `packed::class_tag_valid` :872 | O(1) | O(1) | |
-| `packed::shared_index_read` :889 | O(1) | O(1) | Not opened. |
-| `packed::item_reference_read` :904 | O(1) | O(1) | checked_mul. |
-| `packed::directory_entry` :944 | O(1) | O(1) | |
-| `packed::reference_read`, `item_read` :951, :962 | O(1) | O(1) | check_index. |
-| `packed::directory_read<T>` :978 | O(1) in n | O(1) | |
-| `packed::index_slots`, `index_slot` :1017, :1025 | O(L) compile time | O(1) | |
-| `packed::path_valid`, `path_result` :1034, :1074 | O(p·(L + c·len)) compile time | O(p) instantiations | |
-| `packed::path_walk` :1102 | O(p) | O(1) | check_index. |
+| `reflection::zero_initialized_copy<Root, E>` :572 | O(fixed_size<E>) | O(1) | |
+| `reflection::directory_at<Root>()` :586 | O(1) | O(1) | |
+| `reflection::elements_encode` :592 | O(m·fixed_size + dynamic) | O(1) heap | |
+| `reflection::reference_encode` :607 | O(len), O(m) or O(k) plus content | O(1) heap | No allocation. |
+| `reflection::value_encode` :684 | whole value O(n) | O(1) heap | |
+| `reflection::member_named`, `step_end`, `index_end`, `index_of` :763-784 | O(c·len), O(L), O(L), O(digits) compile time | O(1) | |
+| `reflection::fixed_value_read<T>` :794 | O(1) | O(1) | |
+| `reflection::fixed_head_valid<T>` :846 | O(1) | O(1) | |
+| `reflection::class_tag_valid` :872 | O(1) | O(1) | |
+| `reflection::shared_index_read` :889 | O(1) | O(1) | Not opened. |
+| `reflection::item_reference_read` :904 | O(1) | O(1) | checked_mul. |
+| `reflection::directory_entry` :944 | O(1) | O(1) | |
+| `reflection::reference_read`, `item_read` :951, :962 | O(1) | O(1) | check_index. |
+| `reflection::directory_read<T>` :978 | O(1) in n | O(1) | |
+| `reflection::index_slots`, `index_slot` :1017, :1025 | O(L) compile time | O(1) | |
+| `reflection::path_valid`, `path_result` :1034, :1074 | O(p·(L + c·len)) compile time | O(p) instantiations | |
+| `reflection::path_walk` :1102 | O(p) | O(1) | check_index. |
 | `decode_cursor::reference_take` :1248 | O(1) | O(1) | Changes the cursor. |
 | `decode_cursor::value_read<Root, T>` :1267 | O(n); O(n + k log k) with an ordered map | O(n) output; O(d) stack | Allocates per string, list and node. |
-| `packed::root_read<T>` :1411 | as value_read | as value_read | |
-| `packed::encoded_size<T>` :1433 | O(1) | O(1) | |
-| `packed::encoded_write<Exact, T>` :1455 | O(n) | O(1) heap | |
-| `packed::members_of<U>()` :1483 | O(c log c·len) compile time | O(c) static | |
+| `reflection::root_read<T>` :1411 | as value_read | as value_read | |
+| `reflection::encoded_size<T>` :1433 | O(1) | O(1) | |
+| `reflection::encoded_write<Exact, T>` :1455 | O(n) | O(1) heap | |
+| `reflection::members_of<U>()` :1483 | O(c log c·len) compile time | O(c) static | |
 | `typed_array_view<E>` constructor :1505 | O(1) | O(1) | |
 | `typed_array_view::iterator` members :1517-1604 | O(1) | O(1) | |
 | `typed_array_view::size`, `empty`, `begin`, `end` | O(1) | O(1) | |
@@ -413,8 +413,8 @@ All rows marked "compile time" have no run-time cost.
 | `typed_array_view::front`, `back`, `operator[]` | O(1) | O(1) | Checked; a wrong index or an empty view throws std::logic_error. |
 | `typed_array_view::first`, `last` | O(1) | O(1) | Checked. |
 | `tags_registered<Root>()` :1687 | O(t log t + t·a) compile time | O(t) | |
-| `packed::fixed_size<T, Root>()` :1701 | compile time | O(1) | |
-| `packed::member_offset` :1790 | O(c) compile time | O(1) | |
+| `reflection::fixed_size<T, Root>()` :1701 | compile time | O(1) | |
+| `reflection::member_offset` :1790 | O(c) compile time | O(1) | |
 | `schema::fixed_size`, `member_offset` :1813, :1820 | compile time | O(1) | |
 | `schema::accessor` constructors :1837-1850 | O(1) | O(1) | |
 | `schema::accessor::at_path`, `view` :1866, :1912 | O(p) | O(1) | |
@@ -431,7 +431,7 @@ All rows marked "compile time" have no run-time cost.
 | `schema::encode(T const&)` :2023 | O(i + n) | O(n) | One std::string. |
 | `schema::encode<Target>(T const&, Target&&)` :2044 | O(i + n) | container O(n); span none; other message O(n) temporary | |
 
-## databind.hpp
+## structs.hpp
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
@@ -447,13 +447,13 @@ All rows marked "compile time" have no run-time cost.
 | `generic::generic_size<U>` :492 | O(i) | O(1) heap | |
 | `generic::bytes_write` :603 | O(len) | O(1) | |
 | `generic::generic_write<U>` :610 | O(n) | O(1) heap | |
-| `databind::decode(string_view)` :790 | O(n) + read | O(n) copy + read | Copies. |
-| `databind::decode<Encoded>(Encoded&&)` :732 | as read | one make_shared + read | |
-| `databind::decode(shared_ptr<void const>, string_view)` :741 | as read | as read | |
-| `databind::decode(shared_ptr, Encoded&&) = delete` :753 | - | - | |
-| `databind::encode(T const&)` :755 | O(i + n) | O(n) | |
-| `databind::encode<Target>(T const&, Target&&)` :772 | O(i + n) | container O(n); else O(n) temporary | Not opened. |
-| `databind::read(string_view)` :821 | common O(n); worst O((n/d)^d) | output; O(s); O(d) | |
+| `structs::decode(string_view)` :790 | O(n) + read | O(n) copy + read | Copies. |
+| `structs::decode<Encoded>(Encoded&&)` :732 | as read | one make_shared + read | |
+| `structs::decode(shared_ptr<void const>, string_view)` :741 | as read | as read | |
+| `structs::decode(shared_ptr, Encoded&&) = delete` :753 | - | - | |
+| `structs::encode(T const&)` :755 | O(i + n) | O(n) | |
+| `structs::encode<Target>(T const&, Target&&)` :772 | O(i + n) | container O(n); else O(n) temporary | Not opened. |
+| `structs::read(string_view)` :821 | common O(n); worst O((n/d)^d) | output; O(s); O(d) | |
 
 ## Above linear, or allocation on a success path
 
@@ -466,15 +466,15 @@ Above linear in the input:
 - `query_walk` lazy forms and the tag 29 fallback of `at_path`: O(n·p).
 - `walker::child`, `encode_from` with sharing off, `cycle_find`: exponential in d for a DAG.
 - `container_parse`, `literal_parse`, `canonical_append` (diagnostic_notation.hpp): O(t·d), O(n·d); maps add O(k log k).
-- `generic_read`, `databind::read`: O((n/d)^d) with tag 29.
+- `generic_read`, `structs::read`: O((n/d)^d) with tag 29.
 - `value_sharing::item_decode`: rebuilt scalars skip O(n_item) again on each call.
-- `std::map` targets in schema and databind: O(n + k log k).
+- `std::map` targets in schema and structs: O(n + k log k).
 
 Allocation on a success path:
 
 - `magnitude_plus_one`, `magnitude_minus_one`, `walker::bignum` (negative), `value_decode` (negative bignum).
 - `top_level_item::entry`, `mark`, `prefix::mark`.
-- `lazy::from`, `schema::path`, `schema::decode`, `databind::decode`, `container_resolve` (tag 24), `lazy_decode`.
+- `lazy::from`, `schema::path`, `schema::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy_decode`.
 - jsonpath: every parser, `at_path(string_view path)`, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `encode_from` with sharing on, `walker` embeds, `cycle_find`, `string_sink`, `container_message`.
 - diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.

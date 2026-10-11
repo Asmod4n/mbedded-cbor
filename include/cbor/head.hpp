@@ -661,15 +661,15 @@ class heads
                                                                      limit_values loaded);
 
 #ifdef __cpp_impl_reflection
-    friend class packed;
+    friend class reflection;
 
     friend class generic;
 
     template <class>
-    friend class schema;
+    friend class packed;
 
     template <class>
-    friend class databind;
+    friend class structs;
 #endif
 };
 

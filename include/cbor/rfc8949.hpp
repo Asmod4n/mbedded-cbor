@@ -88,7 +88,7 @@ class rfc8949
     friend class is_singular_query;
 
 #ifdef __cpp_impl_reflection
-    friend class packed;
+    friend class reflection;
 
     friend class generic;
 #endif

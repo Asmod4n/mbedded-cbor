@@ -1,12 +1,12 @@
 # Databind
 
-`cbor::databind<T>` writes a C++ value as one CBOR data item and reads one
+`cbor::structs<T>` writes a C++ value as one CBOR data item and reads one
 CBOR data item into a C++ value. The type `T` gives the form of the item.
 The compiler reads the members of a struct by reflection, so a struct
 needs no code of its own.
 
 Each claim in this document has a test in `test/doc_databind.cpp`. The test
-names start with `doc databind:`. doc/basics.md describes what every API
+names start with `doc structs:`. doc/basics.md describes what every API
 shares: errors, wrong use, limits, memory, threads and owners.
 
 ## Contents
@@ -25,9 +25,9 @@ shares: errors, wrong use, limits, memory, threads and owners.
 
 | Call | Result |
 |---|---|
-| `databind<T>::encode(value)` | `std::expected<std::string, error>`, the bytes |
-| `databind<T>::encode(value, target)` | `std::expected<std::size_t, error>`, the count of bytes appended to `target` |
-| `databind<T>::decode(...)` | `std::expected<owning_ref<T>, error>` |
+| `structs<T>::encode(value)` | `std::expected<std::string, error>`, the bytes |
+| `structs<T>::encode(value, target)` | `std::expected<std::size_t, error>`, the count of bytes appended to `target` |
+| `structs<T>::decode(...)` | `std::expected<owning_ref<T>, error>` |
 
 ```cpp
 struct person {
@@ -35,9 +35,9 @@ struct person {
     std::uint8_t age;
 };
 
-auto const bytes = cbor::databind<person>::encode(person{"ann", 30});
+auto const bytes = cbor::structs<person>::encode(person{"ann", 30});
 // a2 63 "age" 18 1e 64 "name" 63 "ann"
-auto const back = cbor::databind<person>::decode(*bytes);
+auto const back = cbor::structs<person>::decode(*bytes);
 (*back)->name;   // "ann"
 ```
 
@@ -46,8 +46,8 @@ container of `char`, a `std::span<char>` or a writer (doc/runtime.md).
 
 ```cpp
 std::string out = "\x82";
-cbor::databind<std::uint8_t>::encode(1, out);   // 1
-cbor::databind<std::uint8_t>::encode(2, out);   // 1; out is 82 01 02
+cbor::structs<std::uint8_t>::encode(1, out);   // 1
+cbor::structs<std::uint8_t>::encode(2, out);   // 1; out is 82 01 02
 ```
 
 `decode` reads exactly one item. Bytes after the item give
@@ -71,11 +71,11 @@ A `std::string` lvalue and a `char const *` take the copying form.
 
 ```cpp
 std::string const bytes = "\x63" "abc";
-cbor::databind<std::string_view>::decode(bytes);                 // a copy
+cbor::structs<std::string_view>::decode(bytes);                 // a copy
 std::string moved = /* a text of 40 bytes */;
-cbor::databind<std::string_view>::decode(std::move(moved));      // no copy
+cbor::structs<std::string_view>::decode(std::move(moved));      // no copy
 auto const owner = std::make_shared<std::string const>(bytes);
-cbor::databind<std::string_view>::decode(owner, *owner);         // views into *owner
+cbor::structs<std::string_view>::decode(owner, *owner);         // views into *owner
 ```
 
 An empty owner throws `std::logic_error`. A temporary `std::string` beside
@@ -106,9 +106,9 @@ an owner does not compile (doc/basics.md, section 8).
 the owner. Every other type holds its own copy.
 
 ```cpp
-cbor::databind<std::set<std::uint8_t>>::encode({3, 1});                  // 82 01 03
-cbor::databind<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}});   // 42 01 02
-cbor::databind<cbor::tagged<1, std::int64_t>>::encode({1700000000});     // c1 1a 65 53 f1 00
+cbor::structs<std::set<std::uint8_t>>::encode({3, 1});                  // 82 01 03
+cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}});   // 42 01 02
+cbor::structs<cbor::tagged<1, std::int64_t>>::encode({1700000000});     // c1 1a 65 53 f1 00
 ```
 
 An enum with no fixed underlying type does not compile in `decode`,
@@ -157,13 +157,13 @@ struct senml {          // RFC 8428 6: n is 0, v is 2
 - a missing key of a member that is not optional: `error::key_not_found`;
 - a key that is an array, a map or a tag: `error::unsupported_value`.
 
-`databind` writes a tag on a struct only through `cbor::tagged<N, E>`.
+`structs` writes a tag on a struct only through `cbor::tagged<N, E>`.
 A struct that carries `[[=cbor::tag(n)]]` does not compile in
-`databind`. Only the schema form reads that annotation (doc/schema.md).
+`structs`. Only the schema form reads that annotation (doc/packed.md).
 
 ```cpp
 struct person { std::string name; std::int64_t age; };
-cbor::databind<cbor::tagged<1800, person>>::encode({{"ann", 30}});
+cbor::structs<cbor::tagged<1800, person>>::encode({{"ann", 30}});
 // 1800({"age": 30, "name": "ann"})
 ```
 
@@ -189,7 +189,7 @@ decode f5         // error::incorrect_type
 the IANA tag registry. A tag 29 reads as the item that it names.
 
 ```cpp
-cbor::databind<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);   // {"x", "x"}
+cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);   // {"x", "x"}
 ```
 
 `encode` writes no shared reference.
@@ -227,7 +227,7 @@ using texts = std::pmr::vector<std::pmr::string>;
 std::array<std::byte, 64> small{};
 std::pmr::monotonic_buffer_resource budget(small.data(), small.size(),
                                            std::pmr::null_memory_resource());
-cbor::databind<texts>::decode(owner, *owner, texts(&budget));   // three texts of 40 bytes: not_enough_memory
+cbor::structs<texts>::decode(owner, *owner, texts(&budget));   // three texts of 40 bytes: not_enough_memory
 ```
 
 doc/basics.md, section 6, describes the memory of every API, and section
@@ -235,6 +235,6 @@ doc/basics.md, section 6, describes the memory of every API, and section
 
 ## 9. Compilers
 
-`databind` needs static reflection and annotations of C++26. g++ 16 with
+`structs` needs static reflection and annotations of C++26. g++ 16 with
 `-freflection` builds it. clang has no reflection, so a clang build has no
-`cbor::databind`.
+`cbor::structs`.

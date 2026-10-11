@@ -14,7 +14,7 @@ read checks configurable limits. A function that reads input gives
 
 - The library needs C++23. The tests build with clang++-23 and with
   g++-16, with libstdc++ and with libc++.
-- `cbor::databind` and `cbor::schema` need C++26 with `-freflection`.
+- `cbor::structs` and `cbor::packed` need C++26 with `-freflection`.
   Only g++-16 has it. With clang, these two parts are not available,
   and the rest of the library works.
 - The tests need doctest.
@@ -54,14 +54,14 @@ target defines `_GLIBCXX_ASSERTIONS` and the libc++ fast hardening mode.
 The tests and the install rules are active only when mbedded-cbor is
 the top-level project; `-DCBOR_INSTALL=ON` turns the install rules on
 for a project that installs a target which links mbedded-cbor.
-For databind and schema, compile your target with `-std=c++26
+For structs and schema, compile your target with `-std=c++26
 -freflection`.
 
 ## Quick start
 
 `<cbor/cbor.hpp>` includes every part of the library: `cbor::lazy`,
 `cbor::at_path`, `cbor::limits`, and, with `-freflection`,
-`cbor::databind` and `cbor::schema`. A program needs no other include of
+`cbor::structs` and `cbor::packed`. A program needs no other include of
 the library.
 
 ```cpp
@@ -96,7 +96,7 @@ This example needs `-std=c++26 -freflection`.
 struct inner { std::int64_t b; };
 struct outer { inner a; };
 
-auto const bytes = cbor::databind<outer>::encode(outer{{5}});
+auto const bytes = cbor::structs<outer>::encode(outer{{5}});
 // a1 61 "a" a1 61 "b" 05, which is {"a": {"b": 5}}
 auto const b = cbor::at_path<"$.a.b", std::int64_t>(*bytes);
 // *b == 5
@@ -126,8 +126,8 @@ section 4 describes every limit. This example is the test
 - [doc/runtime.md](doc/runtime.md): `cbor::lazy`, decode, encode,
   sequences, diagnostic notation and `item_size`.
 - [doc/path.md](doc/path.md): JSONPath on CBOR.
-- [doc/databind.md](doc/databind.md): a C++ value to CBOR and back.
-- [doc/schema.md](doc/schema.md): reads by a schema that a struct gives.
+- [doc/structs.md](doc/structs.md): a C++ value to CBOR and back.
+- [doc/packed.md](doc/packed.md): reads by a schema that a struct gives.
 - [doc/comparison.md](doc/comparison.md): six tasks with mbedded-cbor and
   other libraries.
 - [doc/known-limits.md](doc/known-limits.md): what the library does not

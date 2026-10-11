@@ -9,10 +9,10 @@ namespace cbor
 {
 
 template <class T>
-class schema;
+class packed;
 
 template <class T>
-class databind;
+class structs;
 
 struct lazy;
 
@@ -34,10 +34,10 @@ class owning_ref
     }
 
     template <class>
-    friend class schema;
+    friend class packed;
 
     template <class>
-    friend class databind;
+    friend class structs;
 
     friend struct lazy;
 

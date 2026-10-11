@@ -149,10 +149,10 @@ class encoding
 
 #ifdef __cpp_impl_reflection
     template <class>
-    friend class schema;
+    friend class packed;
 
     template <class>
-    friend class databind;
+    friend class structs;
 #endif
 };
 

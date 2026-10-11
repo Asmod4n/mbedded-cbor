@@ -37,7 +37,7 @@ TEST_CASE("doc comparison: iterate an array")
     CHECK_EQ(sum, 6);
 }
 
-// The section "Shared values" reads tag 29 as the item that tag 28 marks, through a lazy and through databind.
+// The section "Shared values" reads tag 29 as the item that tag 28 marks, through a lazy and through structs.
 TEST_CASE("doc comparison: shared values")
 {
     // begin shared
@@ -76,12 +76,12 @@ struct [[=cbor::tag(1900)]] series {
 };
 // end numbers-decl
 
-// The section "Read and write a struct" gives the round trip of an aggregate through databind.
+// The section "Read and write a struct" gives the round trip of an aggregate through structs.
 TEST_CASE("doc comparison: read and write a struct")
 {
     // begin struct
-    auto const bytes = cbor::databind<person>::encode(person{"ann", 30});
-    auto const back = cbor::databind<person>::decode(*bytes);
+    auto const bytes = cbor::structs<person>::encode(person{"ann", 30});
+    auto const back = cbor::structs<person>::decode(*bytes);
     // (*back)->name is "ann", (*back)->age is 30
     // end struct
     REQUIRE(back.has_value());
@@ -89,22 +89,22 @@ TEST_CASE("doc comparison: read and write a struct")
     CHECK_EQ((*back)->age, 30u);
 }
 
-// The section "Shared values" says that databind reads tag 29 as the item that tag 28 marks.
-TEST_CASE("doc comparison: shared values through databind")
+// The section "Shared values" says that structs reads tag 29 as the item that tag 28 marks.
+TEST_CASE("doc comparison: shared values through structs")
 {
-    // begin shared-databind
-    auto const v = cbor::databind<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
+    // begin shared-structs
+    auto const v = cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
     // **v is {"x", "x"}
-    // end shared-databind
+    // end shared-structs
     CHECK_EQ(**v, std::vector<std::string>{"x", "x"});
 }
 
 // The section "A number array" reads a std::vector<double> member as an RFC 8746 typed array with no copy.
 TEST_CASE("doc comparison: a number array")
 {
-    std::string const encoded_bytes = *cbor::schema<series>::encode(series{{1.5, 2.5, 3.5}});
+    std::string const encoded_bytes = *cbor::packed<series>::encode(series{{1.5, 2.5, 3.5}});
     // begin numbers
-    auto const root = cbor::schema<series>::path(encoded_bytes);
+    auto const root = cbor::packed<series>::path(encoded_bytes);
     auto const values = root->view<"$.values">();
     double const sum = std::accumulate(values->begin(), values->end(), 0.0);
     // end numbers
