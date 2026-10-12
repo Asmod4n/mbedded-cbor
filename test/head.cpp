@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -95,7 +95,7 @@ TEST_CASE("major 0: uint64 max")
 }
 
 // Ported from test.rb: the major 1 tests. The argument n means -1 - n,
-// and the binding computes that value, because only it knows its integer type.
+// and the application computes that value, because only it knows its integer type.
 TEST_CASE("major 1: every width and boundary")
 {
     check_value("\x20"sv, N(0));
@@ -134,7 +134,7 @@ namespace
 std::string head_of(cbor::major_type const major, std::uint64_t const argument)
 {
     string_writer w;
-    cbor::encoder<string_writer> e{w};
+    cbor::encoding::encoder<string_writer> e{w};
     REQUIRE(e.head_encode(major, argument).has_value());
     REQUIRE(e.flush().has_value());
     return w.encoded;
@@ -169,9 +169,9 @@ TEST_CASE("major 1: head_encode writes the shortest form")
     CHECK_EQ(head_of(cbor::major_type::negative_integer, ~0ull), "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
 }
 
-// The walker writes a run-time integer at its native width: the binding gives std::uint64_t, so the head
+// The encoder writes an integer at its native width: the reference model gives std::uint64_t, so the head
 // carries eight bytes, also for a small value.
-TEST_CASE("major 0 and 1: the walker writes a run-time integer at its native width")
+TEST_CASE("major 0 and 1: the encoder writes an integer at its native width")
 {
     CHECK_EQ(encoded(U(0)), "\x1b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
     CHECK_EQ(encoded(N(0)), "\x3b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
@@ -192,14 +192,12 @@ TEST_CASE("head: every power of 2 survives encode and decode")
 TEST_CASE("head: encode returns the error of the Writer")
 {
     full_writer w;
-    test_binding binding;
-    CHECK_EQ(cbor::encode(binding, w, U(0)).error(), cbor::error{cbor::error::not_enough_memory});
+    CHECK_EQ(test::encode(w, U(0)).error(), cbor::error{cbor::error::not_enough_memory});
 }
 
 // A Writer error that has no member of its own must still fail, and never read as success.
 TEST_CASE("head: encode returns io_error for any other error of the Writer")
 {
     broken_writer w;
-    test_binding binding;
-    CHECK_EQ(cbor::encode(binding, w, U(0)).error(), cbor::error::io_error);
+    CHECK_EQ(test::encode(w, U(0)).error(), cbor::error::io_error);
 }

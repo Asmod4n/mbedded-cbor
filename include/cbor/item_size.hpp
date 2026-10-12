@@ -185,7 +185,6 @@ class well_formedness
 
     friend class validity;
 
-    friend class decoding;
 
     friend struct lazy;
 

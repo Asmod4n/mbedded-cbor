@@ -3,6 +3,11 @@
 #include <cbor/cbor.hpp>
 
 #include <algorithm>
+#include <expected>
+#include <span>
+#if defined(__STDCPP_FLOAT16_T__)
+#include <stdfloat>
+#endif
 #include <array>
 #include <cstdint>
 #include <string>
@@ -219,110 +224,33 @@ T const *get_if(value const &v)
     return p ? *p : nullptr;
 }
 
-struct binding {
-    using value = bench::value;
-
-    value unsigned_integer_decode(std::uint64_t const a)
-    {
-        return {a};
-    }
-
-    value negative_integer_decode(std::uint64_t a)
-    {
-        return {negative{a}};
-    }
-
-    value unsigned_bignum_decode(std::string_view m)
-    {
-        return {bignum{false, std::string(m)}};
-    }
-
-    value negative_bignum_decode(std::string_view m)
-    {
-        return {bignum{true, std::string(m)}};
-    }
-
-    value byte_string_decode(std::string_view b)
-    {
-        return {bytes{std::string(b)}};
-    }
-
-    value text_string_decode(std::string_view t)
-    {
-        if (t.size() > short_text{}.c.size())
-            return {std::string(t)};
-        short_text s{};
-        std::ranges::copy(t, s.c.begin());
-        s.size = static_cast<std::uint8_t>(t.size());
-        return {s};
-    }
-
-    value float_decode(double f)
-    {
-        return {f};
-    }
-
-    value simple_value_decode(std::uint8_t s)
-    {
-        return {simple{s}};
-    }
-
-    value array_decode(std::uint64_t const size)
-    {
-        array a;
-        a.reserve(size);
-        return {std::move(a)};
-    }
-
-    value array_append(value &&a, value &&e)
-    {
-        std::get<array *>(a.kind)->push_back(std::move(e));
-        return std::move(a);
-    }
-
-    value map_decode(std::uint64_t const size)
-    {
-        map m;
-        m.reserve(size);
-        return {std::move(m)};
-    }
-
-    value map_insert(value &&m, value &&k, value &&v)
-    {
-        std::get<map *>(m.kind)->emplace_back(std::move(k), std::move(v));
-        return std::move(m);
-    }
-
-    value tag_decode(std::uint64_t tag, value content)
-    {
-        return {tagged{tag, std::move(content)}};
-    }
-
-    cbor::kind kind_of(value const &v)
+// The questions that the writers of the other libraries ask of a value.
+struct reader {
+    cbor::type kind_of(value const &v)
     {
         switch (v.kind.index()) {
         case 0:
-            return cbor::kind::unsigned_integer;
+            return cbor::type::unsigned_integer;
         case 1:
-            return cbor::kind::negative_integer;
+            return cbor::type::negative_integer;
         case 2:
-            return cbor::kind::floating_point;
+            return cbor::type::double_float;
         case 3:
-            return cbor::kind::simple_value;
+            return cbor::type::simple_value;
         case 4:
         case 5:
-            return cbor::kind::text_string;
+            return cbor::type::text_string;
         case 6:
-            return cbor::kind::byte_string;
+            return cbor::type::byte_string;
         case 7:
-            return std::get<bignum *>(v.kind)->negative ? cbor::kind::negative_bignum
-                                                        : cbor::kind::unsigned_bignum;
+            return std::get<bignum *>(v.kind)->negative ? cbor::type::negative_bignum
+                                                        : cbor::type::unsigned_bignum;
         case 8:
-            return cbor::kind::array;
+            return cbor::type::array;
         case 9:
-            return cbor::kind::map;
+            return cbor::type::map;
         default:
-            return cbor::kind::registered;
+            return cbor::type::tag;
         }
     }
 
@@ -390,5 +318,140 @@ struct binding {
         return std::get<tagged *>(v.kind)->content;
     }
 };
+
+inline value text_value(std::string_view const t)
+{
+    if (t.size() > short_text{}.c.size())
+        return {std::string(t)};
+    short_text s{};
+    std::ranges::copy(t, s.c.begin());
+    s.size = static_cast<std::uint8_t>(t.size());
+    return {s};
+}
+
+// The value of a decoded item tree. Tag 28 is the value it marks and tag 29 the value it points to; a bignum of at
+// most 8 bytes is an integer, as a dynamic language reads it. A float is a double.
+inline value value_of(cbor::item const &it)
+{
+    if (auto const *t = std::get_if<std::string_view>(&it.content))
+        return text_value(*t);
+    if (auto const *b = std::get_if<std::span<std::byte const>>(&it.content))
+        return {bytes{std::string(reinterpret_cast<char const *>(b->data()), b->size())}};
+    if (auto const *d = std::get_if<double>(&it.content))
+        return {*d};
+    if (auto const *f = std::get_if<float>(&it.content))
+        return {static_cast<double>(*f)};
+#if defined(__STDCPP_FLOAT16_T__)
+    if (auto const *h = std::get_if<std::float16_t>(&it.content))
+        return {static_cast<double>(*h)};
+#endif
+    if (auto const *v = std::get_if<cbor::simple_value>(&it.content))
+        return {simple{std::to_underlying(*v)}};
+    if (auto const *r = std::get_if<cbor::sharedref>(&it.content))
+        return value_of(*r->shareable);
+    if (auto const *c = std::get_if<cbor::data_items>(&it.content)) {
+        auto const children = c->span();
+        if (it.major_type == cbor::major_type::array) {
+            array a;
+            a.reserve(children.size());
+            for (cbor::item const *const child : children)
+                a.push_back(value_of(*child));
+            return {std::move(a)};
+        }
+        map m;
+        m.reserve(children.size() / 2);
+        for (std::size_t i = 0; i + 1 < children.size(); i += 2)
+            m.push_back(entry{value_of(*children[i]), value_of(*children[i + 1])});
+        return {std::move(m)};
+    }
+    if (auto const *inner = std::get_if<cbor::item const *>(&it.content)) {
+        if (it.argument == 28)
+            return value_of(**inner);
+        auto const *magnitude = std::get_if<std::span<std::byte const>>(&(*inner)->content);
+        if ((it.argument == 2 || it.argument == 3) && magnitude != nullptr) {
+            std::string m(reinterpret_cast<char const *>(magnitude->data()), magnitude->size());
+            m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
+            if (m.size() <= sizeof(std::uint64_t)) {
+                std::uint64_t n = 0;
+                for (char const ch : m)
+                    n = n << 8 | static_cast<unsigned char>(ch);
+                return it.argument == 3 ? value{negative{n}} : value{n};
+            }
+            return {bignum{it.argument == 3, std::move(m)}};
+        }
+        return {tagged{it.argument, value_of(**inner)}};
+    }
+    if (it.major_type == cbor::major_type::unsigned_integer)
+        return {it.argument};
+    return {negative{it.argument}};
+}
+
+inline std::expected<value, error> value_of(cbor::lazy const &l)
+{
+    auto const tree = l.decode();
+    if (!tree)
+        return std::unexpected(tree.error());
+    return value_of(**tree);
+}
+
+// A value written through the public encoder: an integer at 64 bits, a float as a double, a bignum as tag 2 or 3
+// over the magnitude that it holds.
+template <class Target>
+std::expected<void, error> value_encode(cbor::encoder<Target> &e, value const &x)
+{
+    reader b;
+    switch (b.kind_of(x)) {
+    case cbor::type::unsigned_integer:
+        return e.unsigned_integer(b.unsigned_of(x));
+    case cbor::type::negative_integer:
+        return e.negative_integer(b.unsigned_of(x) - 1);
+    case cbor::type::double_float:
+        return e.floating_point(b.float_of(x));
+    case cbor::type::simple_value:
+        return e.simple_value(static_cast<cbor::simple_value>(b.simple_of(x)));
+    case cbor::type::text_string:
+        return e.text_string(b.text_of(x));
+    case cbor::type::byte_string:
+        return e.byte_string(std::as_bytes(std::span(b.bytes_of(x))));
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum:
+        if (auto const r = e.tag(b.kind_of(x) == cbor::type::negative_bignum ? 3 : 2); !r)
+            return r;
+        return e.byte_string(std::as_bytes(std::span(b.magnitude_of(x))));
+    case cbor::type::array: {
+        if (auto const r = e.array(b.array_size(x)); !r)
+            return r;
+        for (value const &v : *std::get<array *>(x.kind))
+            if (auto const r = value_encode(e, v); !r)
+                return r;
+        return {};
+    }
+    case cbor::type::map: {
+        if (auto const r = e.map(b.map_size(x)); !r)
+            return r;
+        for (entry const &v : *std::get<map *>(x.kind)) {
+            if (auto const r = value_encode(e, v.key); !r)
+                return r;
+            if (auto const r = value_encode(e, v.val); !r)
+                return r;
+        }
+        return {};
+    }
+    default:
+        if (auto const r = e.tag(b.registered_tag(x)); !r)
+            return r;
+        return value_encode(e, b.before_encode(x));
+    }
+}
+
+template <class Target>
+auto encode(Target &&target, value const &x)
+    -> decltype(std::declval<cbor::encoder<std::remove_cvref_t<Target>> &>().finish())
+{
+    cbor::encoder e{std::forward<Target>(target)};
+    if (auto const r = value_encode(e, x); !r)
+        return std::unexpected(r.error());
+    return e.finish();
+}
 
 } // namespace bench

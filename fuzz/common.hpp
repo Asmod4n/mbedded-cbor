@@ -1,7 +1,6 @@
 #pragma once
 
-#include "../test/binding.hpp"
-#include "../test/ref_binding.hpp"
+#include "../test/reference.hpp"
 
 #include <array>
 #include <bit>
@@ -180,8 +179,8 @@ inline bool tag_has_meaning(std::uint64_t const tag)
     return tag == 0 || tag == 1 || tag == 2 || tag == 3 || tag == 24 || tag == 28 || tag == 29 || (tag >= 64 && tag <= 87);
 }
 
-// A value of the test binding from the bytes of the input, with every kind the encoder knows. A text is ASCII,
-// because the binding promises the encoder valid UTF-8.
+// A value of the reference model from the bytes of the input, with every kind the encoder knows. A text is ASCII,
+// because the model promises the encoder valid UTF-8.
 inline test::value value_from(source &in, refusal &r, int const depth)
 {
     std::uint8_t const k = in.byte() % (depth > 6 ? 7 : 10);
@@ -230,47 +229,6 @@ inline test::value value_from(source &in, refusal &r, int const depth)
         return {test::tagged{tag, value_from(in, r, depth + 1)}};
     }
     }
-}
-
-// A graph of the reference binding is compared node by node. The map pairs the nodes already seen, so two
-// graphs are the same only when their sharing is the same. An integer and a string key have no identity in
-// that binding, so the encoder writes them each time; integers and strings compare by value.
-inline bool same_graph(shared_test::handle const &a, shared_test::handle const &b,
-                       std::map<shared_test::node const *, shared_test::node const *> &pairs)
-{
-    if (a->kind.index() != b->kind.index())
-        return false;
-    if (auto const *x = std::get_if<std::uint64_t>(&a->kind))
-        return *x == std::get<std::uint64_t>(b->kind);
-    if (auto const *x = std::get_if<std::string>(&a->kind))
-        return *x == std::get<std::string>(b->kind);
-    auto const [at, fresh] = pairs.try_emplace(a.get(), b.get());
-    if (!fresh)
-        return at->second == b.get();
-    if (auto const *x = std::get_if<std::vector<shared_test::handle>>(&a->kind)) {
-        auto const &y = std::get<std::vector<shared_test::handle>>(b->kind);
-        if (x->size() != y.size())
-            return false;
-        for (std::size_t i = 0; i < x->size(); ++i)
-            if (!same_graph(x->at(i), y.at(i), pairs))
-                return false;
-        return true;
-    }
-    if (auto const *x = std::get_if<std::vector<std::pair<shared_test::handle, shared_test::handle>>>(&a->kind)) {
-        auto const &y = std::get<std::vector<std::pair<shared_test::handle, shared_test::handle>>>(b->kind);
-        if (x->size() != y.size())
-            return false;
-        for (std::size_t i = 0; i < x->size(); ++i)
-            if (!same_graph(x->at(i).first, y.at(i).first, pairs) ||
-                !same_graph(x->at(i).second, y.at(i).second, pairs))
-                return false;
-        return true;
-    }
-    if (auto const *x = std::get_if<shared_test::object>(&a->kind)) {
-        auto const &y = std::get<shared_test::object>(b->kind);
-        return x->tag == y.tag && same_graph(x->content, y.content, pairs);
-    }
-    return false;
 }
 
 } // namespace fuzz

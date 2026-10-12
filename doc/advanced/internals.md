@@ -10,7 +10,7 @@ Every example of a document in `doc/` is a doctest case. The cases of
 `doc <name>:`. The cases of `doc/advanced/<name>.md` are in
 `test/doc_advanced_<name>.cpp`, and their names start with
 `doc advanced <name>:`. A test builds the input that a comment of the
-document shows as text with `encoded()` of `test/binding.hpp`. A claim
+document shows as text with `encoded()` of `test/reference.hpp`. A claim
 about allocations has its test in `test/allocation.cpp`. `test/cts.cpp`
 runs the JSONPath Compliance Test Suite.
 
@@ -54,7 +54,19 @@ when it meets a tag 29, so that it finds the marks.
 The compiler parses a compile-time path once. At run time it is a set of
 constant arrays.
 
-## 7. A binding
+## 7. The item tree
 
-`decode.hpp` lists the calls that the library makes on a binding for each
-kind of item. `encode.hpp` lists the calls of an encode.
+`lazy::decode` builds one `cbor::item` for each data item in a
+`std::deque`, so an item keeps its address while the tree grows. The
+children of every array and map stand in one `std::vector` of pointers:
+a container holds the index of its first child and the count, and
+`data_items::span()` computes the view when it is read, so the growth of
+the vector leaves every container valid. A scratch vector holds the
+children of the containers that are open, with a base for each depth. A
+count is checked against the bytes that are left before an element is
+read.
+
+Tag 29 holds a `sharedref` with the pointer to the item that its tag 28
+marks. A tag 28 before the start of a lazy is decoded at the depth of its
+own position. `encode` of an item writes each head with its stored
+additional information and does not follow a `sharedref`.

@@ -6,8 +6,7 @@ and in a filter also takes a literal of CBOR diagnostic notation, EDN
 at compile time and a path at run time read the same grammar.
 
 Every function is in the namespace `cbor`. A comment shows the CBOR in
-`bytes` as text. In the examples, `binding` is an object of a binding
-type (section 2), and `l` is a `cbor::lazy` over `bytes`.
+`bytes` as text. In the examples, `l` is a `cbor::lazy` over `bytes`.
 
 ## 1. The forms
 
@@ -16,10 +15,10 @@ type (section 2), and `l` is a `cbor::lazy` over `bytes`.
 | `at_path<Path, T>(encoded)` | compile time, singular | `std::expected<T, error>`, T a scalar |
 | `at_path<Path, T>(owner, encoded)` | compile time, singular | `std::expected<owning_ref<T>, error>`, T a view |
 | `at_path<Path, T>(lazy)` | compile time, singular | T a scalar: `std::expected<T, error>`. T a view: `std::expected<owning_ref<T>, error>` |
-| `at_path<Path>(binding, lazy)` | compile time, singular | `std::expected<Binding::value, error>` |
-| `at_path(binding, path, lazy)` | run time, singular | `std::expected<Binding::value, error>` |
-| `query<Path>(binding, lazy)` | compile time, any | `std::expected<Binding::value, error>`, the value is an array |
-| `query(binding, path, lazy)` | run time, any | `std::expected<Binding::value, error>`, the value is an array |
+| `at_path<Path>(lazy)` | compile time, singular | `std::expected<lazy, error>`, the node |
+| `at_path(path, lazy)` | run time, singular | `std::expected<lazy, error>`, the node |
+| `query<Path>(lazy)` | compile time, any | `std::expected<std::vector<lazy>, error>`, the nodelist |
+| `query(path, lazy)` | run time, any | `std::expected<std::vector<lazy>, error>`, the nodelist |
 
 `encoded` is a `std::string_view`, so a `std::string` or one element of a
 `cbor::sequence` goes in directly. A path is a string literal for the
@@ -47,29 +46,24 @@ compares it, and two `owning_ref` compare their values.
 `owning_ref<cbor::typed_array>` has no `==`, as `cbor::typed_array` has
 none.
 
-## 2. Any value into your own type
+## 2. Any item as a node
 
-A binding is a type of your own that builds values. The concept
-`cbor::binding` requires a member type `value`. The reader of
-`decode.hpp` states what else a binding gives for each kind of item.
-`query` also calls `array_decode(count)` and
-`array_append(array, value)` to build the array of the nodelist. Every
-form takes the binding as an lvalue.
-
-With a binding, the result can be any CBOR item: a map, an array, a tag.
+The forms without a type give the node as a `cbor::lazy`. The node can be
+any CBOR item: a map, an array, a tag. Read it on with a step, `get`,
+`type()` or `decode()` ([runtime.md](runtime.md)).
 
 ```cpp
 // {"a": [1, 2, 3]}
-cbor::at_path<"$.a">(binding, l);          // [1, 2, 3]
-cbor::at_path(binding, "$.a[2]", l);       // 3, path at run time
-cbor::query<"$.a[*]">(binding, l);         // [1, 2, 3]
-cbor::query(binding, "$.a[?@ > 1]", l);    // [2, 3]
-cbor::query(binding, "$.b", l);            // [], no error
+cbor::at_path<"$.a">(l);          // the node of [1, 2, 3]
+cbor::at_path("$.a[2]", l);       // the node of 3, path at run time
+cbor::query<"$.a[*]">(l);         // the nodes of 1, 2 and 3
+cbor::query("$.a[?@ > 1]", l);    // the nodes of 2 and 3
+cbor::query("$.b", l);            // no node, no error
 ```
 
-`at_path` gives the value of one node. `query` gives the nodelist as an
-array of the binding, also for a singular path and for an empty nodelist.
-`query` gives no error when a selector finds nothing.
+`at_path` gives one node. `query` gives the nodelist, also for a singular
+path and for an empty nodelist. `query` gives no error when a selector
+finds nothing.
 
 ## 3. Which types a typed read gives
 
@@ -100,7 +94,7 @@ A typed read passes a tag that the path does not read (section 7), so
 `at_path<"$", int>` reads 5 from `1(5)` and
 `at_path<"$", std::string_view>` reads the text of `32("x")`. Any other T
 does not compile, for example `float`, `std::string` or a view without an
-owner. For any other result, use a binding.
+owner. For any other result, read the node of `at_path<Path>(lazy)`.
 
 ## 4. Path syntax
 
@@ -202,10 +196,10 @@ its `length` is Nothing.
 
 ```cpp
 // [{"t": "abc"}, {"t": [1, 2]}, {"t": 5}]
-cbor::query(binding, "$[?length(@.t) == 3].t", l);    // ["abc"]
-cbor::query(binding, "$[?count(@.t[*]) == 2].t", l);  // [[1, 2]]
-cbor::query(binding, "$[?value(@..t) == 5].t", l);    // [5]
-cbor::query(binding, "$[?match(@.t, 'a.c')]", l);     // invalid_path
+cbor::query("$[?length(@.t) == 3].t", l);    // the node of "abc"
+cbor::query("$[?count(@.t[*]) == 2].t", l);  // the node of [1, 2]
+cbor::query("$[?value(@..t) == 5].t", l);    // the node of 5
+cbor::query("$[?match(@.t, 'a.c')]", l);     // invalid_path
 ```
 
 A compile-time path with `match` or `search` does not compile:
@@ -227,11 +221,11 @@ A map key in CBOR can be any item. Two ways reach such a key:
 
 ```cpp
 // {1: "x", -2: "y", h'01': "z", [1, 2]: "w"}
-cbor::at_path<"$[1]">(binding, l);                   // "x"
-cbor::at_path<"$[-2]">(binding, l);                  // "y"
-cbor::at_path<"$[h'01']">(binding, l);               // "z"
-cbor::at_path<"$[[1, 2]]">(binding, l);              // "w"
-cbor::at_path(binding, "$[h'01']", l);               // "z", path at run time
+cbor::at_path<"$[1]">(l);                   // the node of "x"
+cbor::at_path<"$[-2]">(l);                  // the node of "y"
+cbor::at_path<"$[h'01']">(l);               // the node of "z"
+cbor::at_path<"$[[1, 2]]">(l);              // the node of "w"
+cbor::at_path("$[h'01']", l);               // the node of "z", path at run time
 cbor::at_path<"$[h'01']", std::string_view>(l);      // owning_ref, "z"
 ```
 
@@ -262,12 +256,12 @@ pair. A wildcard, a descendant segment and a filter take all pairs.
 | `55799({"a": 5})` | `at_path<"$.a", int>` | `5` |
 | `{"a": 24(<<55799([1, 2])>>)}` | `at_path<"$.a[1]", int>` | `2` |
 | `{"v": 1000([1, 2])}` | `at_path<"$.v[1]", int>` | `2` |
-| `{"v": 1000([1, 2])}` | `query(binding, "$.v[*]", l)` | `[1, 2]` |
-| `{"v": 1000([1, 2])}` | `at_path(binding, "$.v", l)` | `1000([1, 2])` |
+| `{"v": 1000([1, 2])}` | `query("$.v[*]", l)` | the nodes of `1` and `2` |
+| `{"v": 1000([1, 2])}` | `at_path("$.v", l)` | the node of `1000([1, 2])` |
 
 A path passes a tag that it does not read, as a generic decoder does (RFC
 8949 6.1): a step and a typed read go to the content. A path that ends at the
-tag gives the whole tagged item to a binding, because a binding gets the tag
+tag gives the node of the whole tagged item, so the caller reads the tag
 number. Tags 2 and 3 are not passed: a typed read into an integer reads the
 bignum, and an index on a bignum is `not_indexable`. A map key behind tag 28
 or tag 55799 is matched as the key without the tag. A key behind any other
@@ -289,7 +283,7 @@ cbor::at_path<"$.v[1]", int>(bytes);                       // 8
 cbor::at_path<"$.v[-1]", double>(bytes);                   // 8.0
 cbor::at_path<"$.v[2]", int>(bytes);                       // index_out_of_bounds
 cbor::at_path<"$.v[1][0]", int>(bytes);                    // not_indexable
-cbor::query(binding, "$.v[*]", l);                         // [7, 8]
+cbor::query("$.v[*]", l);                                  // the nodes of 7 and 8
 cbor::at_path<"$.v", cbor::typed_array>(l);                // tag 69, 4 bytes
 ```
 
@@ -319,9 +313,9 @@ static_assert(!cbor::is_valid_path_v<"$.a[">);
 - `is_singular_query_v<Path>` is true when the path is valid and singular.
 
 `at_path<Path, T>` with a path that is not singular does not compile.
-`at_path<Path>(binding, lazy)` with such a path stops at a `static_assert`
-that names `cbor::query`. `at_path(binding, path, lazy)` with such a path
-gives `invalid_path`.
+`at_path<Path>(lazy)` with such a path stops at a `static_assert` that
+names `cbor::query`. `at_path(path, lazy)` with such a path gives
+`invalid_path`.
 
 ## 9. Compile time and run time
 
@@ -356,13 +350,12 @@ the same path many times, use a compile-time path.
 
 | bytes | Call | Result |
 |---|---|---|
-| `{"a": [1, 2], "s": "x"}` | `at_path(binding, "$.a[", l)` | `invalid_path` |
+| `{"a": [1, 2], "s": "x"}` | `at_path("$.a[", l)` | `invalid_path` |
 | the same | `at_path<"$.s[0]", int>(bytes)` | `not_indexable` |
 | the first 5 bytes of the same | `at_path<"$.a[1]", int>` | `too_little_data` |
 | `{"a": 29(5)}` | `at_path<"$.a", int>` | `sharedref_index_not_marked` |
-| `28([29(0)])` | `at_path(binding, "$", l)` | `sharedref_not_complete` |
 | `{"a": 24(5)}` | `at_path<"$.a", int>` | `inadmissible_type_for_tag_content` |
-| `[28([0, 0, 0, 0, 0, 0, 0, 0]), 29(0)]` | `query(binding, "$[*][*]", l)` | `nodelist_too_long` |
+| `[28([0, 0, 0, 0, 0, 0, 0, 0]), 29(0)]` | `query("$[*][*]", l)` | `nodelist_too_long` |
 
 ## 11. What the form over bytes checks
 
@@ -398,8 +391,8 @@ the macros. A path reads the limits once at each call.
 - a filter, a group in parentheses, a function call or a literal in the
   path is nested deeper than the depth;
 - a descendant segment goes deeper than the depth;
-- a binding decodes a result that is deeper than the depth. The binding
-  counts the depth from the selected node.
+- `decode()` of a node reads an item that is deeper than the depth. It
+  counts the depth from the node.
 
 An item that a typed read only skips can be deeper than the depth. A
 compile-time path has at most the default nesting depth of segments, or it
@@ -437,10 +430,10 @@ when a key is not a text: these two cases read the item through a lazy. A
 view result allocates nothing: the owner is a copy of a
 `std::shared_ptr`.
 
-A binding allocates for its own values. `query` allocates the nodelist. A
-filter with a literal allocates for each child that it tests. A binding,
-`query` and the lazy walk read an element of a typed array as a small CBOR
-item that the library writes, and this allocates once for each step.
+`query` allocates the nodelist. A filter with a literal allocates for each
+child that it tests. `at_path`, `query` and the lazy walk read an element
+of a typed array as a small CBOR item that the library writes, and this
+allocates once for each step.
 
 A held lazy is a start point. A path from a lazy at `$.cars` does not read
 the bytes before `cars` again. Many reads below the same node are cheaper

@@ -50,7 +50,7 @@ inline void encoder_target(std::string_view const input)
     string_writer w;
     std::vector<written> items;
     {
-        cbor::encoder<string_writer> out{w};
+        cbor::encoding::encoder<string_writer> out{w};
         for (std::size_t n = in.byte() % 24; n > 0; --n) {
             switch (in.byte() % 9) {
             case 0: {
@@ -148,13 +148,12 @@ inline void encoder_target(std::string_view const input)
         require(out.flush().has_value());
     }
     std::string_view rest = w.encoded;
-    test_binding binding;
     for (auto const &item : items) {
         auto const end = cbor::item_size(rest);
         require(end.has_value());
         if (item.size)
             require(*end == *item.size);
-        auto const back = cbor::lazy_decode(binding, *cbor::lazy::from(rest.substr(0, *end)));
+        auto const back = test::decoded(rest.substr(0, *end));
         require(back.has_value() && same(*back, item.value));
         rest.remove_prefix(*end);
     }

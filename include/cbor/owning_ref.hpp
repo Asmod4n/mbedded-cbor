@@ -18,8 +18,7 @@ struct lazy;
 
 class jsonpath;
 
-template <class Writer>
-struct encoder;
+class encoding;
 
 class iov_writer;
 
@@ -43,8 +42,7 @@ class owning_ref
 
     friend class jsonpath;
 
-    template <class>
-    friend struct encoder;
+    friend class encoding;
 
     friend class iov_writer;
 

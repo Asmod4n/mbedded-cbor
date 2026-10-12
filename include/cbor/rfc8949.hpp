@@ -6,8 +6,6 @@
 namespace cbor
 {
 
-enum class pass;
-
 template <std::size_t N>
 struct fixed_string;
 
@@ -26,6 +24,27 @@ enum class major_type : std::uint8_t {
 };
 
 enum class simple_value : std::uint8_t { false_value = 20, true_value, null, undefined };
+
+enum class type : std::uint8_t {
+    unsigned_integer,
+    negative_integer,
+    byte_string,
+    text_string,
+    array,
+    map,
+    tag,
+    false_value,
+    true_value,
+    null,
+    undefined,
+    simple_value,
+    half_float,
+    single_float,
+    double_float,
+    unsigned_bignum,
+    negative_bignum,
+    typed_array
+};
 
 class rfc8949
 {
@@ -66,8 +85,6 @@ class rfc8949
 
     friend class heads;
 
-    friend class decoding;
-
     friend class well_formedness;
 
     friend class value_sharing;
@@ -76,11 +93,7 @@ class rfc8949
 
     friend class jsonpath;
 
-    template <class Writer>
-    friend struct encoder;
-
-    template <class, class, pass>
-    friend class walker;
+    friend class encoding;
 
     friend struct lazy;
 

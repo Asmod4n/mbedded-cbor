@@ -21,9 +21,9 @@
 #include <stdckdint.h>
 #endif
 
-#include "binding.hpp"
-#include "error.hpp"
 #include "rfc8746.hpp"
+#include "rfc9535.hpp"
+#include "error.hpp"
 #include "rfc8949.hpp"
 
 #ifdef _MSC_VER
@@ -52,8 +52,6 @@
 
 namespace cbor
 {
-
-enum class pass;
 
 struct lazy;
 
@@ -254,6 +252,9 @@ public:
                                                         std::size_t content_at, MarksRead marks_read,
                                                         Projection offset_of, limit_checks<Checked> checks);
 
+    template <class Item>
+    static std::expected<void, error> check_tag_content(std::uint64_t tag, Item const *content, std::size_t marked);
+
     static constexpr error writer_error(std::errc const e) noexcept
     {
         if (e == std::errc::no_buffer_space)
@@ -448,8 +449,6 @@ public:
 
     friend class heads;
 
-    friend class decoding;
-
     friend struct lazy;
 
     friend class well_formedness;
@@ -459,9 +458,6 @@ public:
     friend class extended_diagnostic_notation;
 
     friend class jsonpath;
-
-    template <class, class, pass>
-    friend class walker;
 
 #ifdef __cpp_impl_reflection
     friend class reflection;

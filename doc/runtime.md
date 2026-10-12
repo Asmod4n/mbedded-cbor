@@ -131,10 +131,18 @@ not CBOR give an error.
 
 `cbor::structs<T>::encode` writes a C++ value as CBOR
 ([structs.md](structs.md)). It needs `-freflection`. Without
-reflection, `cbor::encode` writes through a binding, a type that you
-write; the advanced document describes it.
+reflection, `cbor::encoder` writes one item per call:
+
+```cpp
+std::string out;
+cbor::encoder e(out);
+e.map(1);
+e.text_string("a");
+e.unsigned_integer(std::uint8_t{5});
+e.finish();   // out holds {"a": 5}
+```
 
 More: the other forms of `lazy::from`, `find` and `count`, a search
-between two iterators, `decode`, `encode` with a binding, CBOR sequences,
+between two iterators, `decode`, the encoder, CBOR sequences,
 `item_size`, shared values and tag 55799 are in
 [advanced/runtime.md](advanced/runtime.md).

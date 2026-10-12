@@ -1,9 +1,16 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace cbor
 {
+
+struct typed_array {
+    std::uint64_t tag;
+    std::span<std::byte const> bytes;
+};
 
 class rfc8746
 {

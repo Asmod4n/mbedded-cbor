@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <algorithm>
 #include <array>
@@ -32,12 +32,11 @@ namespace
 std::expected<value, cbor::error> path_read(std::string_view const path, value const &data)
 {
     std::string const doc = encoded(data);
-    test_binding binding;
     auto const l = *cbor::lazy::from(doc);
-    auto const r = cbor::at_path(binding, path, l);
+    auto const r = test::at_path(path, l);
     if (r || r.error() != error::invalid_path)
         return r;
-    return cbor::query(binding, path, l);
+    return test::query(path, l);
 }
 
 value at(std::string_view const path, value const &data)
@@ -57,15 +56,13 @@ error path_error(std::string_view const path, value const &data)
 template <cbor::fixed_string Path>
 std::expected<value, cbor::error> compiled_at(std::string const &doc)
 {
-    test_binding binding;
-    return cbor::at_path<Path>(binding, *cbor::lazy::from(doc));
+    return test::at_path<Path>(*cbor::lazy::from(doc));
 }
 
 template <cbor::fixed_string Path>
 std::expected<value, cbor::error> compiled_query(std::string const &doc)
 {
-    test_binding binding;
-    return cbor::query<Path>(binding, *cbor::lazy::from(doc));
+    return test::query<Path>(*cbor::lazy::from(doc));
 }
 
 value found(std::expected<value, cbor::error> const &r)
@@ -76,7 +73,7 @@ value found(std::expected<value, cbor::error> const &r)
 }
 
 template <cbor::fixed_string Path>
-concept path_compiles = requires(test_binding &b, cbor::lazy const &l) { cbor::at_path<Path>(b, l); };
+concept path_compiles = requires(cbor::lazy const &l) { cbor::at_path<Path>(l); };
 
 } // namespace
 
@@ -195,13 +192,12 @@ TEST_CASE("path: the grammar")
     for (std::string_view const key : {"$[-0]"sv, "$[1.5]"sv, "$[h'01']"sv, "$[true]"sv})
         CHECK_EQ(path_error(key, A(1)), error::not_indexable);
     std::string const deep = encoded(A(A(A(A(1)))));
-    test_binding binding;
     {
         test::limits_guard const depth{{.nesting_depth = 3}};
-        CHECK_EQ(cbor::at_path(binding, "$[0][0][0][0]", *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(test::at_path("$[0][0][0][0]", *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
     }
     test::limits_guard const depth{{.nesting_depth = 4}};
-    CHECK(cbor::at_path(binding, "$[0][0][0][0]", *cbor::lazy::from(deep)).has_value());
+    CHECK(test::at_path("$[0][0][0][0]", *cbor::lazy::from(deep)).has_value());
 }
 
 // The compile-time form reads the same grammar and, inside brackets, any literal of CBOR diagnostic notation
@@ -291,8 +287,7 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
     CHECK(found(compiled_at<"$[[_ 1, 2]]">(doc)) == V(4));
     CHECK_EQ(compiled_at<"$[1.0]">(doc).error(), error::key_not_found);
     std::string runtime_text = "$[16]";
-    test_binding binding;
-    CHECK(*cbor::at_path(binding, runtime_text, *cbor::lazy::from(doc)) == V(14));
+    CHECK(*test::at_path(runtime_text, *cbor::lazy::from(doc)) == V(14));
 }
 
 // RFC 4648 Table 1 gives each character of the base64 alphabet a value from 0 to 63, and section 5 replaces + and /
@@ -326,11 +321,10 @@ TEST_CASE("path: a nodelist is no longer than the message")
     std::string doc = "\x87\xd8\x1c\x82\x00\x00"s;
     for (char level = 0; level < 6; ++level)
         doc += "\xd8\x1c\x82\xd8\x1d"s + level + "\xd8\x1d"s + level;
-    test_binding binding;
-    auto const four = cbor::query(binding, "$[2][*][*][*]", *cbor::lazy::from(doc));
+    auto const four = test::query("$[2][*][*][*]", *cbor::lazy::from(doc));
     REQUIRE(four.has_value());
     CHECK(*four == A(0, 0, 0, 0, 0, 0, 0, 0));
-    CHECK_EQ(cbor::query(binding, "$[6][*][*][*][*][*][*][*]", *cbor::lazy::from(doc)).error(),
+    CHECK_EQ(test::query("$[6][*][*][*][*][*][*][*]", *cbor::lazy::from(doc)).error(),
              error::nodelist_too_long);
 }
 
@@ -400,8 +394,7 @@ TEST_CASE("path: a key map with duplicate keys is no match for other keys")
 TEST_CASE("path: every form gives the first entry of a repeated key")
 {
     std::string const doc = "\xa2\x61\x61\x01\x61\x61\x02"s;
-    test_binding binding;
-    CHECK(cbor::at_path(binding, "$.a", *cbor::lazy::from(doc)).has_value());
+    CHECK(test::at_path("$.a", *cbor::lazy::from(doc)).has_value());
     CHECK(compiled_at<"$.a">(doc).has_value());
     CHECK_EQ((cbor::at_path<"$.a", int>(doc)), 1);
     auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x61x\x61\x61\x61y"s);
@@ -416,9 +409,9 @@ TEST_CASE("path: every form gives the first entry of a repeated key")
     std::string const deep = "\xa1\x61\x62\xa2\x61\x61\x01\x61\x61\x02"s;
     CHECK_EQ((cbor::at_path<"$.b.a", int>(deep)), 1);
     CHECK(compiled_at<"$.b.a">(deep).has_value());
-    CHECK(cbor::query(binding, "$.*", *cbor::lazy::from(doc)).has_value());
-    CHECK(cbor::query(binding, "$..c", *cbor::lazy::from(deep)).has_value());
-    CHECK(cbor::query(binding, "$[?@ == 1]", *cbor::lazy::from(doc)).has_value());
+    CHECK(test::query("$.*", *cbor::lazy::from(doc)).has_value());
+    CHECK(test::query("$..c", *cbor::lazy::from(deep)).has_value());
+    CHECK(test::query("$[?@ == 1]", *cbor::lazy::from(doc)).has_value());
     std::string const arrays = "\xa2\x81\x01\x00\x81\x18\x01\x01"s;
     CHECK(compiled_at<"$[[1]]">(arrays).has_value());
 }
@@ -466,9 +459,8 @@ TEST_CASE("path: the descendant segment")
     for (std::string_view const bad : {"$..."sv, "$.. b"sv, "$..1"sv})
         CHECK_EQ(path_error(bad, doc), error::invalid_path);
     std::string const deep = encoded(A(A(A(A(A(1))))));
-    test_binding binding;
     test::limits_guard const depth{{.nesting_depth = 3}};
-    CHECK_EQ(cbor::query(binding, "$..[0]", *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(test::query("$..[0]", *cbor::lazy::from(deep)).error(), error::nesting_depth_exceeded);
 }
 
 // RFC 9535 2.3.5: a filter keeps the children for which the logical expression is true. A comparison of numbers
@@ -985,7 +977,7 @@ TEST_CASE("path: a typed read skips an item of any nesting depth")
 // moved std::string beside an owner does not compile either, because the owner does not hold it and the view would
 // read freed memory. A std::string that the caller keeps is read beside an owner. A scalar holds no bytes and is read
 // from any of them. The path is a singular query of RFC 9535 2.3.5.1 with names and indexes only: a wildcard, a
-// descendant segment and a literal key of EDN go to at_path with a binding. A path with more segments than the
+// descendant segment and a literal key of EDN go to at_path that gives a lazy node. A path with more segments than the
 // default nesting depth does not compile.
 TEST_CASE("path: a typed read that is not safe does not compile")
 {
@@ -1035,9 +1027,8 @@ TEST_CASE("at_path: a compiled path with more segments than the nesting depth in
     CHECK_EQ(cbor::at_path<"$[0][0][0]", std::string_view>(owner, *owner).error(), error::nesting_depth_exceeded);
     auto const l = cbor::lazy::from(text);
     REQUIRE(l.has_value());
-    test_binding binding;
-    CHECK_EQ(cbor::at_path<"$[0][0][0]">(binding, *l).error(), error::nesting_depth_exceeded);
-    CHECK_EQ(cbor::at_path(binding, "$[0][0][0]", *l).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(test::at_path<"$[0][0][0]">(*l).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(test::at_path("$[0][0][0]", *l).error(), error::nesting_depth_exceeded);
 }
 
 // RFC 9535 2.3.5.1: a singular query selects at most one node. at_path reads only such a query and gives the value
@@ -1046,21 +1037,18 @@ TEST_CASE("at_path: a compiled path with more segments than the nesting depth in
 TEST_CASE("path: at_path reads a singular query, cbor::query reads a nodelist")
 {
     std::string const doc = encoded(M("a"s, A(1, 2)));
-    test_binding binding;
     cbor::lazy const l = *cbor::lazy::from(doc);
-    CHECK(*cbor::at_path(binding, "$.a[1]", l) == V(2));
-    CHECK(*cbor::query(binding, "$.a[1]", l) == A(2));
-    CHECK(*cbor::query(binding, "$.a[*]", l) == A(1, 2));
-    CHECK(*cbor::query(binding, "$.b", l) == A());
-    CHECK_EQ(cbor::at_path(binding, "$.a[*]", l).error(), error::invalid_path);
-    CHECK_EQ(cbor::at_path(binding, "$..a", l).error(), error::invalid_path);
-    CHECK_EQ(cbor::at_path(binding, "$.b", l).error(), error::key_not_found);
-    CHECK_EQ(cbor::query(binding, "a", l).error(), error::invalid_path);
-    CHECK(*cbor::at_path<"$.a[0]">(binding, l) == V(1));
-    CHECK(*cbor::query<"$.a[0]">(binding, l) == A(1));
-    CHECK(*cbor::query<"$..[1]">(binding, l) == A(2));
-    static_assert(cbor::binding<test_binding>);
-    static_assert(!cbor::binding<int>);
+    CHECK(*test::at_path("$.a[1]", l) == V(2));
+    CHECK(*test::query("$.a[1]", l) == A(2));
+    CHECK(*test::query("$.a[*]", l) == A(1, 2));
+    CHECK(*test::query("$.b", l) == A());
+    CHECK_EQ(test::at_path("$.a[*]", l).error(), error::invalid_path);
+    CHECK_EQ(test::at_path("$..a", l).error(), error::invalid_path);
+    CHECK_EQ(test::at_path("$.b", l).error(), error::key_not_found);
+    CHECK_EQ(test::query("a", l).error(), error::invalid_path);
+    CHECK(*test::at_path<"$.a[0]">(l) == V(1));
+    CHECK(*test::query<"$.a[0]">(l) == A(1));
+    CHECK(*test::query<"$..[1]">(l) == A(2));
     static_assert(cbor::is_valid_path_v<"$..a">);
     static_assert(!cbor::is_valid_path_v<"a">);
     static_assert(cbor::is_singular_query_v<"$.a[0]">);
@@ -1073,7 +1061,6 @@ TEST_CASE("path: at_path reads a singular query, cbor::query reads a nodelist")
 TEST_CASE("path: a long chain of || or && in one filter is tested without recursion")
 {
     std::string const doc = encoded(A(1));
-    test_binding binding;
     auto const l = *cbor::lazy::from(doc);
     for (std::string_view const op : {"||"sv, "&&"sv}) {
         std::string path = "$[?@==1";
@@ -1081,11 +1068,11 @@ TEST_CASE("path: a long chain of || or && in one filter is tested without recurs
             path.append(op).append("@==1");
         path += "]";
         CAPTURE(op);
-        CHECK(found(cbor::query(binding, path, l)) == A(1));
+        CHECK(found(test::query(path, l)) == A(1));
     }
-    CHECK(found(cbor::query(binding, "$[?@==2 || @==1 && @==3 || @==1 && @==1]", l)) == A(1));
-    CHECK(found(cbor::query(binding, "$[?@==2 || @==1 && @==3 || @==1 && @==2]", l)) == A());
-    CHECK(found(cbor::query(binding, "$[?@==1 && (@==2 || @==1) && !(@==2)]", l)) == A(1));
+    CHECK(found(test::query("$[?@==2 || @==1 && @==3 || @==1 && @==1]", l)) == A(1));
+    CHECK(found(test::query("$[?@==2 || @==1 && @==3 || @==1 && @==2]", l)) == A());
+    CHECK(found(test::query("$[?@==1 && (@==2 || @==1) && !(@==2)]", l)) == A(1));
 }
 
 // A filter that compares with an absolute query evaluated the absolute query again for each child, and $[-1] skips
@@ -1098,18 +1085,17 @@ TEST_CASE("path: an absolute query in a filter is evaluated once")
     doc += static_cast<char>(n >> 8);
     doc += static_cast<char>(n & 0xff);
     doc.append(n, '\x01');
-    test_binding binding;
     auto const l = *cbor::lazy::from(doc);
-    CHECK_EQ(binding.array_size(found(cbor::query(binding, "$[?@ == $[-1]]", l))), n);
-    CHECK_EQ(binding.array_size(found(cbor::query(binding, "$[?$[-1]]", l))), n);
-    CHECK_EQ(binding.array_size(found(cbor::query(binding, "$[?count($[*]) == 5000]", l))), n);
+    CHECK_EQ(std::get<test::array *>(found(test::query("$[?@ == $[-1]]", l)).kind)->size(), n);
+    CHECK_EQ(std::get<test::array *>(found(test::query("$[?$[-1]]", l)).kind)->size(), n);
+    CHECK_EQ(std::get<test::array *>(found(test::query("$[?count($[*]) == 5000]", l)).kind)->size(), n);
 
     std::string const small = encoded(M("a"s, A(1, 2, 3), "b"s, 2));
     auto const s = *cbor::lazy::from(small);
-    CHECK(found(cbor::query(binding, "$.a[?@ == $.b]", s)) == A(2));
-    CHECK(found(cbor::query(binding, "$.a[?$.a[?@ == $.b]]", s)) == A(1, 2, 3));
-    CHECK(found(cbor::query(binding, "$.a[?$.c]", s)) == A());
-    CHECK(found(cbor::query<"$.a[?@ > $.b]">(binding, s)) == A(3));
+    CHECK(found(test::query("$.a[?@ == $.b]", s)) == A(2));
+    CHECK(found(test::query("$.a[?$.a[?@ == $.b]]", s)) == A(1, 2, 3));
+    CHECK(found(test::query("$.a[?$.c]", s)) == A());
+    CHECK(found(test::query<"$.a[?@ > $.b]">(s)) == A(3));
 }
 
 // Tag 55799 was skipped only in front of the top-level item, so a path through 55799 inside the item gave
@@ -1133,17 +1119,16 @@ TEST_CASE("path: tag 55799 inside the item is skipped")
     CHECK_EQ(cbor::at_path<"$.a[1]", int>(inner), 2);
     CHECK_EQ(cbor::at_path<"$.a", int>(leaf), 7);
     CHECK_EQ(cbor::at_path<"$.a", int>(key), 7);
-    test_binding binding;
     auto const l = *cbor::lazy::from(inner);
-    CHECK(found(cbor::query(binding, "$.a[1]", l)) == A(2));
+    CHECK(found(test::query("$.a[1]", l)) == A(2));
     CHECK_EQ(l.at("a")->at(std::size_t{1})->get<int>(), 2);
     CHECK_EQ(cbor::lazy::from(leaf)->at("a")->get<int>(), 7);
 }
 
 // RFC 8949 6.1: a generic decoder passes a tag it does not know and gives its content. The owner decided on
 // 2026-10-10 that a path does the same: it passes every tag other than 2, 3, 24, 29 and the tags of RFC 8746. Each
-// form is checked: the typed read over bytes, the typed read from a lazy, the lazy walk that tag 29 starts, a binding
-// and query. A path that ends at the tag gives the whole tagged item to a binding, because a binding knows tags.
+// form is checked: the typed read over bytes, the typed read from a lazy, the lazy walk that tag 29 starts, at_path
+// and query. A path that ends at the tag gives the node of the whole tagged item, so the caller reads the tag.
 TEST_CASE("path: a tag that the path does not know is passed to its content")
 {
     std::string const doc = "\xa2\x61""v\xd9\x03\xe8\x82\x01\x02\x61""m\xd9\x03\xe9\xa1\x61""k\x07"s;
@@ -1161,13 +1146,12 @@ TEST_CASE("path: a tag that the path does not know is passed to its content")
     CHECK_EQ(cbor::at_path<"$", std::int64_t>("\xc1\x1a\x5f\x5e\x10\x00"s), 1600000000);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\xc2\x41\x01"s).error(), error::not_indexable);
     CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\x03\xe8\x61""k\x07"s).error(), error::key_not_found);
-    test_binding binding;
-    CHECK(found(cbor::at_path(binding, "$.v[1]", l)) == V(2));
-    CHECK(found(cbor::at_path(binding, "$.m.k", l)) == V(7));
-    CHECK(found(cbor::query(binding, "$.v[*]", l)) == A(1, 2));
-    CHECK(found(cbor::query(binding, "$..k", l)) == A(7));
-    CHECK(found(cbor::query(binding, "$.v[?@ > 1]", l)) == A(2));
-    CHECK(found(cbor::at_path(binding, "$.v", l)) == V(tagged{1000, A(1, 2)}));
+    CHECK(found(test::at_path("$.v[1]", l)) == V(2));
+    CHECK(found(test::at_path("$.m.k", l)) == V(7));
+    CHECK(found(test::query("$.v[*]", l)) == A(1, 2));
+    CHECK(found(test::query("$..k", l)) == A(7));
+    CHECK(found(test::query("$.v[?@ > 1]", l)) == A(2));
+    CHECK(found(test::at_path("$.v", l)) == V(tagged{1000, A(1, 2)}));
 }
 
 // RFC 8746 2: a typed array holds its elements in a byte string, and the tag gives the type, the sign and the
@@ -1215,19 +1199,18 @@ TEST_CASE("path: an index reads one element of a typed array")
     CHECK_EQ(cbor::at_path<"$[1][-2]", double>(*cbor::lazy::from(shared)), 7.0);
     CHECK_EQ(cbor::at_path<"$[1][2]", int>(shared).error(), error::index_out_of_bounds);
     CHECK_EQ(cbor::at_path<"$[1][0][0]", int>(shared).error(), error::not_indexable);
-    test_binding binding;
-    CHECK(found(cbor::at_path(binding, "$.v[1]", l)) == V(0x108));
-    CHECK(found(cbor::at_path(binding, "$[1][0]", *cbor::lazy::from(shared))) == V(7));
-    CHECK(found(cbor::query(binding, "$.v[*]", l)) == A(7, 0x108));
-    CHECK(found(cbor::query(binding, "$.v[1:]", l)) == A(0x108));
-    CHECK(found(cbor::query(binding, "$.v[?@ > 7]", l)) == A(0x108));
-    CHECK(found(cbor::query(binding, "$..*", l)) == A(found(cbor::at_path(binding, "$.v", l)), 7, 0x108));
-    CHECK(found(cbor::query<"$.v[*]">(binding, l)) == A(7, 0x108));
+    CHECK(found(test::at_path("$.v[1]", l)) == V(0x108));
+    CHECK(found(test::at_path("$[1][0]", *cbor::lazy::from(shared))) == V(7));
+    CHECK(found(test::query("$.v[*]", l)) == A(7, 0x108));
+    CHECK(found(test::query("$.v[1:]", l)) == A(0x108));
+    CHECK(found(test::query("$.v[?@ > 7]", l)) == A(0x108));
+    CHECK(found(test::query("$..*", l)) == A(found(test::at_path("$.v", l)), 7, 0x108));
+    CHECK(found(test::query<"$.v[*]">(l)) == A(7, 0x108));
     auto const floats = *cbor::lazy::from(in("\xd8\x50\x44\x00\x00\x3c\x00"s));
-    CHECK(found(cbor::query(binding, "$.v[*]", floats)) == A(0.0, 1.0));
-    CHECK_EQ(cbor::query(binding, "$.v[*]", *cbor::lazy::from(in("\xd8\x53\x50"s + std::string(16, '\0')))).error(),
+    CHECK(found(test::query("$.v[*]", floats)) == A(0.0, 1.0));
+    CHECK_EQ(test::query("$.v[*]", *cbor::lazy::from(in("\xd8\x53\x50"s + std::string(16, '\0')))).error(),
              error::incorrect_type);
-    CHECK(found(cbor::query(binding, "$.v[*]", *cbor::lazy::from(in("\xd8\x45\x40"s)))) == A());
+    CHECK(found(test::query("$.v[*]", *cbor::lazy::from(in("\xd8\x45\x40"s)))) == A());
 }
 
 // A held lazy is a start point: at_path reads a path relative to it, from
@@ -1254,12 +1237,11 @@ TEST_CASE("at_path: a path from a held lazy")
 // canonical_append loop until memory ran out, so this test runs a tag, two tags and a tag inside an array.
 TEST_CASE("path: a tag literal in a run-time filter")
 {
-    test_binding binding;
     auto const doc = *cbor::lazy::from(encoded(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
-    CHECK(*cbor::query(binding, "$[?@ == 1000(1)]", doc) == A(tagged{1000, V(1)}));
-    CHECK(*cbor::query(binding, "$[?@ == 1001(1000(3))]", doc) == A(tagged{1001, V(tagged{1000, V(3)})}));
-    CHECK(*cbor::query(binding, "$[?@ == [1(2)]]", doc) == A(A(tagged{1, V(2)})));
-    CHECK(*cbor::query<"$[?@ == 1000(1)]">(binding, doc) == A(tagged{1000, V(1)}));
+    CHECK(*test::query("$[?@ == 1000(1)]", doc) == A(tagged{1000, V(1)}));
+    CHECK(*test::query("$[?@ == 1001(1000(3))]", doc) == A(tagged{1001, V(tagged{1000, V(3)})}));
+    CHECK(*test::query("$[?@ == [1(2)]]", doc) == A(A(tagged{1, V(2)})));
+    CHECK(*test::query<"$[?@ == 1000(1)]">(doc) == A(tagged{1000, V(1)}));
 }
 
 // g++ 16 with -fsanitize=undefined refused a compile-time path whose
