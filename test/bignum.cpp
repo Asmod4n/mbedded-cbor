@@ -112,13 +112,13 @@ TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
     std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
     std::string const deep = std::string(16, '\x81') + bignum;
     std::string const shallow = std::string(15, '\x81') + bignum;
-    auto const tree = cbor::lazy::from(deep)->decode();
+    auto const tree = cbor::lazy::copy(deep)->decode();
     REQUIRE(tree.has_value());
     test::limits_guard const depth{{.nesting_depth = 16}};
-    CHECK_EQ(cbor::lazy::from(deep)->decode().error(), error::nesting_depth_exceeded);
+    CHECK_EQ(cbor::lazy::copy(deep)->decode().error(), error::nesting_depth_exceeded);
     std::string out;
     CHECK_EQ(cbor::encode(**tree, out).error(), error::nesting_depth_exceeded);
-    auto const ok = cbor::lazy::from(shallow)->decode();
+    auto const ok = cbor::lazy::copy(shallow)->decode();
     REQUIRE(ok.has_value());
     std::string again;
     REQUIRE(cbor::encode(**ok, again).has_value());

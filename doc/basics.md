@@ -59,10 +59,16 @@ A text or a byte string comes back as a view into the bytes, with no
 copy. The view sits in a `cbor::owning_ref`. The `owning_ref` holds the
 bytes, so the view stays valid while the `owning_ref` lives.
 
+Bytes go into the library in two forms only. A `std::string_view` or a
+`std::string` is copied into storage that the library owns; an rvalue
+`std::string` is moved there with no copy. A
+`std::shared_ptr<std::string const>` is read in place, and every result
+keeps it alive. The library takes no other pointer to bytes.
+
 ```cpp
 // bytes: {"name": "ann"}
 auto const owner = std::make_shared<std::string const>(std::move(bytes));
-auto const name = cbor::at_path<"$.name", std::string_view>(owner, *owner);
+auto const name = cbor::at_path<"$.name", std::string_view>(owner);
 if (name) {
     std::string_view const text = **name;   // "ann"
     std::string const copy{text};           // a copy of your own
@@ -86,7 +92,7 @@ that made them, so each thread makes its own lazy.
 // bytes: {"id": 42}
 std::jthread first([&bytes] { use(cbor::at_path<"$.id", std::int64_t>(bytes)); });
 std::jthread second([&bytes] {
-    if (auto const doc = cbor::lazy::from(bytes))   // the lazy of this thread
+    if (auto const doc = cbor::lazy::copy(bytes))   // the lazy of this thread
         use(cbor::at_path<"$.id", std::int64_t>(*doc));
 });
 ```

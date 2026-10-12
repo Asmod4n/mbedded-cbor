@@ -86,7 +86,7 @@ TEST_CASE("doc advanced structs: the forms of decode")
     CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(bytes.data() + 1));
 
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const held = cbor::structs<std::string_view>::decode(owner, *owner);
+    auto const held = cbor::structs<std::string_view>::decode(owner);
     REQUIRE(held.has_value());
     CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(owner->data() + 1));
 
@@ -96,7 +96,7 @@ TEST_CASE("doc advanced structs: the forms of decode")
     REQUIRE(taken.has_value());
     CHECK_EQ(static_cast<void const *>((*taken)->data()), static_cast<void const *>(data + 2));
 
-    CHECK_THROWS_AS((void)cbor::structs<std::string_view>::decode(std::shared_ptr<void const>{}, bytes),
+    CHECK_THROWS_AS((void)cbor::structs<std::string_view>::decode(std::shared_ptr<std::string const>{}),
                     std::logic_error);
 }
 
@@ -185,10 +185,10 @@ TEST_CASE("doc advanced structs: a std::pmr target")
         *cbor::structs<std::vector<std::string>>::encode({std::string(40, 'a'), std::string(40, 'b')}));
     std::array<std::byte, 64> small{};
     std::pmr::monotonic_buffer_resource budget(small.data(), small.size(), std::pmr::null_memory_resource());
-    CHECK_EQ(cbor::structs<texts>::decode(owner, *owner, texts(&budget)).error(), error::not_enough_memory);
+    CHECK_EQ(cbor::structs<texts>::decode(owner, texts(&budget)).error(), error::not_enough_memory);
     std::array<std::byte, 1024> large{};
     std::pmr::monotonic_buffer_resource enough(large.data(), large.size(), std::pmr::null_memory_resource());
-    auto const fits = cbor::structs<texts>::decode(owner, *owner, texts(&enough));
+    auto const fits = cbor::structs<texts>::decode(owner, texts(&enough));
     REQUIRE(fits.has_value());
     CHECK_EQ((*fits)->size(), 2u);
     CHECK_EQ((*fits)->front().get_allocator().resource(), &enough);

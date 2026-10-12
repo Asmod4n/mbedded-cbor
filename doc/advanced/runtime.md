@@ -4,32 +4,30 @@ This page adds the details to [../runtime.md](../runtime.md). Every
 function is in the namespace `cbor`. A comment shows the CBOR in `bytes`
 as text. Where the bytes themselves matter, a comment gives them in hex.
 
-## 1. lazy::from
+## 1. lazy::copy and lazy::view
 
-A `cbor::lazy` is a position in one top-level item. `lazy::from` makes
-the lazy of the top-level item.
+A `cbor::lazy` is a position in one top-level item. `lazy::copy` and
+`lazy::view` make the lazy of the top-level item.
 
 | Form | The bytes |
 |---|---|
-| `lazy::from(std::string&&)` | moved into a new owner, no copy |
-| `lazy::from(std::string_view)` | copied into a new owner |
-| `lazy::from(std::shared_ptr<std::string const>)` | the shared pointer is the owner |
-| `lazy::from(std::shared_ptr<void const> owner, std::string_view)` | `owner` holds them |
+| `lazy::copy(std::string&&)` | moved into a new owner, no copy |
+| `lazy::copy(std::string_view)` | copied into a new owner |
+| `lazy::view(std::shared_ptr<std::string const>)` | the shared pointer is the owner, no copy |
 
 ```cpp
-auto const a = cbor::lazy::from(std::move(bytes));         // moved
-auto const b = cbor::lazy::from(std::string_view{bytes});  // copied
+auto const a = cbor::lazy::copy(std::move(bytes));         // moved
+auto const b = cbor::lazy::copy(std::string_view{bytes});  // copied
 auto const held = std::make_shared<std::string const>(bytes);
-auto const c = cbor::lazy::from(held);
-auto const d = cbor::lazy::from(held, *held);              // owner and bytes
+auto const c = cbor::lazy::view(held);                     // no copy
 ```
 
 Each form gives `std::expected<lazy, error>`. A null pointer or an empty
-owner throws `std::logic_error`. A `std::string` lvalue goes to the form
-with `std::string_view` and is copied. The form with an owner does not take
-a temporary `std::string`.
+owner throws `std::logic_error`. A `std::string` lvalue and a literal go
+to the form with `std::string_view` and are copied. `lazy::view` takes
+no `std::string` and no `std::string_view`.
 
-`lazy::from` checks only the limit `input_bytes`. It does not check that
+`lazy::copy` and `lazy::view` check only the limit `input_bytes`. It does not check that
 the bytes are one complete item. It accepts `82 01`, an array of two
 elements with one element, and a read of the missing element gives
 `too_little_data`. It accepts bytes after the item, and no step reads
@@ -53,7 +51,7 @@ them.
 
 ```cpp
 // {"cars": [{"hp": 5}, {"hp": 7}], 7: "seven"}
-auto const doc = *cbor::lazy::from(bytes);
+auto const doc = *cbor::lazy::copy(bytes);
 doc.at(cbor::key{7});                     // the lazy of "seven"
 doc.find("cars");                         // the iterator of the pair "cars"
 doc.count(std::int64_t{7});               // 1
@@ -85,12 +83,12 @@ range and a borrowed range. The standard algorithms and views take them.
 
 ```cpp
 // [1, "a", [2]]
-auto const l = *cbor::lazy::from(bytes);
+auto const l = *cbor::lazy::copy(bytes);
 for (auto const e : *l.elements())
     e->get<std::int64_t>();               // 1, then incorrect_type, then incorrect_type
 l.elements()->size();                     // 3
 // {"a": 1, 2: "b"}
-auto const m = *cbor::lazy::from(bytes);
+auto const m = *cbor::lazy::copy(bytes);
 std::ranges::distance(*m.entries() | std::views::drop(1));  // 1
 ```
 
@@ -99,7 +97,7 @@ An algorithm takes the view directly. Each element is a
 
 ```cpp
 // [{"age": 31}, {"age": 20}, {"age": 40}]
-auto const people = *cbor::lazy::from(bytes);
+auto const people = *cbor::lazy::copy(bytes);
 std::ranges::count_if(*people.elements(), [](std::expected<cbor::lazy, cbor::error> const &e) {
     auto const age = e->at("age");
     return age && age->get<std::int64_t>().value_or(0) > 30;
@@ -135,7 +133,7 @@ be. A map that is not sorted gives a result with no meaning.
 
 ```cpp
 // {"b": 2, "d": 4, "f": 6, "h": 8}
-auto const m = *cbor::lazy::from(bytes);
+auto const m = *cbor::lazy::copy(bytes);
 auto const e = *m.entries();
 auto const h = *m.find("h");
 cbor::lazy::find(e.begin(), h, "d");             // the pair "d": 4
@@ -191,11 +189,11 @@ string in it is a view into the bytes.
 
 ```cpp
 // [1, {"a": 2}]
-auto const i = cbor::lazy::from(bytes)->decode();
+auto const i = cbor::lazy::copy(bytes)->decode();
 (*i)->major_type;                                        // major_type::array
 std::get<cbor::data_items>((*i)->content).span().size(); // 2
 // 82 01, an array of two elements with one element
-cbor::lazy::from(bytes)->decode();                       // too_little_data
+cbor::lazy::copy(bytes)->decode();                       // too_little_data
 ```
 
 A tag 28 stays a tag item, and a tag 29 points to the item that the tag 28
@@ -274,7 +272,7 @@ after the other, with nothing between them. Its iterator gives
 
 ```cpp
 // 1, "a", [1, 2]
-for (auto const e : cbor::sequence{bytes})
+for (auto const e : cbor::sequence{owner})   // owner: std::shared_ptr<std::string const>
     *e;   // the bytes of 1, then of "a", then of [1, 2]
 ```
 
@@ -283,11 +281,12 @@ for (auto const e : cbor::sequence{bytes})
   stream can read them again with more bytes.
 - An item that is not well-formed gives its error, and the sequence ends
   there.
-- The sequence does not take a temporary string.
+- The sequence takes only a `std::shared_ptr<std::string const>`, and
+  keeps it alive.
 
 Each element is a top-level item of its own. A tag 29 in one element does
-not reach a tag 28 in another. `lazy::from(owner, *e)` reads an element
-with the owner of the whole sequence and copies nothing.
+not reach a tag 28 in another. `lazy::copy(*e)` reads an element; it
+copies the element, because `lazy::view` takes a whole `std::string`.
 
 ## 9. diagnostic_notation
 
@@ -328,24 +327,24 @@ value of the n-th tag 28, counted from 0 in the order of the bytes.
 
 ```cpp
 // [28(1), 29(0)]
-cbor::lazy::from(bytes)->at(1)->get<std::int64_t>();        // 1
+cbor::lazy::copy(bytes)->at(1)->get<std::int64_t>();        // 1
 cbor::diagnostic_notation(bytes);                           // "[28(1), 29(0)]"
 // [29(0), 28(5)]
-cbor::lazy::from(bytes)->decode();                          // sharedref_index_not_marked
+cbor::lazy::copy(bytes)->decode();                          // sharedref_index_not_marked
 ```
 
 ## 12. Tag 55799
 
-Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR. `lazy::from`, `decode`
+Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR. `lazy::copy`, `lazy::view`, `decode`
 and a path read one leading tag 55799 as its content, in
 every width of the argument. A second tag 55799, and a tag 55799 inside an
 item, stay tags.
 
 ```cpp
 // 55799([1, 2])
-cbor::lazy::from(bytes)->at(1)->get<std::int64_t>();   // 2
+cbor::lazy::copy(bytes)->at(1)->get<std::int64_t>();   // 2
 // [55799(1)]
-cbor::lazy::from(bytes)->decode();                     // an array that holds the tag item 55799(1)
+cbor::lazy::copy(bytes)->decode();                     // an array that holds the tag item 55799(1)
 ```
 
 `e.tag(55799)` writes `d9 d9 f7`.
@@ -359,7 +358,7 @@ the pieces in order, and their storage, which lives as long as the
 result. Use the pieces with `writev` or a socket, or join them.
 
 ```cpp
-auto const pieces = cbor::encode_iov(**cbor::lazy::from(bytes)->decode());
+auto const pieces = cbor::encode_iov(**cbor::lazy::copy(bytes)->decode());
 for (std::string_view const piece : **pieces)
     send(piece);
 ```

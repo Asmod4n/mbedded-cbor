@@ -37,8 +37,8 @@ value arrays_around_zero(std::size_t const n)
 TEST_CASE("nesting depth depth_limit: decode of the item tree")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    CHECK(test::value_of(*cbor::lazy::from(arrays_around(depth_limit, "\x00"sv))).has_value());
-    CHECK_EQ(test::value_of(*cbor::lazy::from(arrays_around(depth_limit + 1, "\x00"sv))).error(),
+    CHECK(test::value_of(*cbor::lazy::copy(arrays_around(depth_limit, "\x00"sv))).has_value());
+    CHECK_EQ(test::value_of(*cbor::lazy::copy(arrays_around(depth_limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
 
@@ -46,10 +46,10 @@ TEST_CASE("nesting depth depth_limit: decode of the item tree")
 TEST_CASE("nesting depth depth_limit: lazy::decode")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    auto const deepest = cbor::lazy::from(repeat("\xd8\x64"sv, depth_limit) + '\x00');
+    auto const deepest = cbor::lazy::copy(repeat("\xd8\x64"sv, depth_limit) + '\x00');
     REQUIRE(deepest.has_value());
     CHECK(deepest->decode().has_value());
-    auto const deeper = cbor::lazy::from(repeat("\xd8\x64"sv, depth_limit + 1) + '\x00');
+    auto const deeper = cbor::lazy::copy(repeat("\xd8\x64"sv, depth_limit + 1) + '\x00');
     REQUIRE(deeper.has_value());
     CHECK_EQ(deeper->decode().error(), error::nesting_depth_exceeded);
 }
@@ -83,7 +83,7 @@ TEST_CASE("nesting depth depth_limit: a comparison in a filter")
                                 arrays_around(n, "\x00"sv) +
                                 "\x61"
                                 "c\x01"s;
-        return test::query("$[?@.a == @.b].c", *cbor::lazy::from(doc));
+        return test::query("$[?@.a == @.b].c", *cbor::lazy::copy(doc));
     };
     CHECK(found(depth_limit).has_value());
     CHECK_EQ(found(depth_limit + 1).error(), error::nesting_depth_exceeded);
@@ -93,8 +93,8 @@ TEST_CASE("nesting depth depth_limit: a comparison in a filter")
 TEST_CASE("nesting depth depth_limit: a descendant segment")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    CHECK(test::query("$..[0]", *cbor::lazy::from(arrays_around(depth_limit, "\x00"sv))).has_value());
-    CHECK_EQ(test::query("$..[0]", *cbor::lazy::from(arrays_around(depth_limit + 1, "\x00"sv))).error(),
+    CHECK(test::query("$..[0]", *cbor::lazy::copy(arrays_around(depth_limit, "\x00"sv))).has_value());
+    CHECK_EQ(test::query("$..[0]", *cbor::lazy::copy(arrays_around(depth_limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
 
@@ -111,7 +111,7 @@ TEST_CASE("nesting depth depth_limit: diagnostic_notation")
 TEST_CASE("nesting depth depth_limit: encode")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    auto const deepest = cbor::lazy::from(preferred(arrays_around_zero(depth_limit)))->decode();
+    auto const deepest = cbor::lazy::copy(preferred(arrays_around_zero(depth_limit)))->decode();
     REQUIRE(deepest.has_value());
     std::string out;
     CHECK(cbor::encode(**deepest, out).has_value());
