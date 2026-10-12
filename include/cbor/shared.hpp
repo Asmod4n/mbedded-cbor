@@ -556,6 +556,11 @@ struct value_sharing::tree_decoder {
 
     std::expected<item *, error> item_decode(item *storage, std::size_t depth, std::optional<std::size_t> mark);
 
+    std::expected<item *, error> content_decode(item *storage, heads::head h, std::size_t depth,
+                                                std::optional<std::size_t> mark);
+
+    CBOR_ALWAYS_INLINE inline std::expected<void, error> scalar_decode(item &node, heads::head h);
+
     std::size_t marks_counted();
 
     std::expected<void, error> marks_before_decode();
