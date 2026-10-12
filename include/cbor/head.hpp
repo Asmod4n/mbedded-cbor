@@ -12,10 +12,13 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdfloat>
 #include <string>
 #include <string_view>
 #include <utility>
+
+#if __has_include(<stdfloat>)
+#include <stdfloat>
+#endif
 
 #include "binding.hpp"
 #include "error.hpp"
