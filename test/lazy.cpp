@@ -1596,3 +1596,20 @@ TEST_CASE("lazy::view: the lazy reads the bytes of the owner and keeps it")
     CHECK_THROWS_AS((void)cbor::lazy::view(nullptr), std::logic_error);
 }
 
+// The typed read of a path has the same two forms for a type that views the bytes.
+TEST_CASE("at_path: the copy form and the view form of a text")
+{
+    auto const owner = std::make_shared<std::string const>("\x81"s + two_forms::long_text());
+    auto const viewed = cbor::at_path<"$[0]", std::string_view>(owner);
+    REQUIRE(viewed.has_value());
+    CHECK_EQ((**viewed).data(), owner->data() + 3);
+    auto const copied = cbor::at_path<"$[0]", std::string_view>(std::string_view(*owner));
+    REQUIRE(copied.has_value());
+    CHECK_NE((**copied).data(), owner->data() + 3);
+    CHECK_EQ(**copied, **viewed);
+    std::string moved = *owner;
+    char const *const data = moved.data();
+    auto const taken = cbor::at_path<"$[0]", std::string_view>(std::move(moved));
+    REQUIRE(taken.has_value());
+    CHECK_EQ((**taken).data(), data + 3);
+}

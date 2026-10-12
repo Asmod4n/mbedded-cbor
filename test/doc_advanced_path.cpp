@@ -69,7 +69,7 @@ TEST_CASE("doc advanced path: a view with its owner")
     REQUIRE(array.has_value());
     CHECK_EQ((*array)->tag, 69u);
     CHECK_EQ((*array)->bytes.size(), 4u);
-    CHECK_FALSE(([]<class S>(S &&) {
+    CHECK(([]<class S>(S &&) {
         return requires(S &&s) { cbor::at_path<"$.name", std::string_view>(std::forward<S>(s)); };
     }(std::string_view(*owner))));
 }
@@ -122,7 +122,7 @@ TEST_CASE("doc advanced path: the types of a typed read")
     CHECK(*cbor::at_path<"$", std::string_view>(*cbor::lazy::from("\xd8\x20\x61x"s)) == "x"sv);
     CHECK_FALSE((advanced_typed_path_compiles<"$", float>));
     CHECK_FALSE((advanced_typed_path_compiles<"$", std::string>));
-    CHECK_FALSE((advanced_typed_path_compiles<"$", std::string_view>));
+    CHECK((advanced_typed_path_compiles<"$", std::string_view>));
 }
 
 // The section "Path syntax" shows each selector and segment of RFC 9535 with its result.
