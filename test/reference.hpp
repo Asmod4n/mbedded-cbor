@@ -558,6 +558,9 @@ inline std::expected<value, error> value_of(cbor::item const &it, std::vector<cb
             made = c ? std::expected<value, error>(value{tagged{it.argument, std::move(*c)}})
                      : std::unexpected(c.error());
         }
+    } else if (auto const *embedded = std::get_if<cbor::encoded_cbor_data_item>(&it.content)) {
+        auto c = value_of(*embedded->content, open);
+        made = c ? std::expected<value, error>(value{tagged{it.argument, std::move(*c)}}) : std::unexpected(c.error());
     } else if (it.major_type == cbor::major_type::unsigned_integer) {
         made = value{it.argument};
     } else {
