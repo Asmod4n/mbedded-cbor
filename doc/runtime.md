@@ -142,6 +142,40 @@ e.unsigned_integer(std::uint8_t{5});
 e.finish();   // out holds {"a": 5}
 ```
 
+## 7. Read items from a socket
+
+A socket or a pipe gives bytes in pieces. A piece can end in the
+middle of an item. `cbor::sequence_reader` reads a CBOR sequence
+(RFC 8742): items one after the other, with nothing between them.
+
+```cpp
+cbor::sequence_reader r;
+r.feed(chunk);                    // the bytes that arrived
+while (auto item = r.next())      // each item that is complete
+    handle(*item);                // a cbor::lazy
+// r.next().error() == cbor::error::too_little_data: wait for more bytes
+```
+
+`feed` keeps a copy of the bytes. `next` gives one item when all of
+its bytes are there. It gives `too_little_data` while it waits. Call
+`feed` again with the next piece. The reader continues where it
+stopped and does not read a byte again.
+
+Each item is a `cbor::lazy` that keeps its bytes alive. You can keep
+it after later calls of `feed` and after the reader is gone. An item
+that you keep also keeps the block of memory that holds it.
+
+Bytes that are not CBOR give their error, for example
+`syntax_error`. They never give `too_little_data`. After such an
+error the reader gives the same error again, because RFC 8742 gives
+no way to find the start of the next item.
+
+The limits of `cbor::limits` hold for each item. Input from a network
+can announce a string or an array of any size, and the reader then
+waits for its bytes. Set `input_bytes` to the largest item that you
+accept, and the reader refuses a larger item as soon as its head
+arrives.
+
 More: the other forms of `lazy::from`, `find` and `count`, a search
 between two iterators, `decode`, the encoder, CBOR sequences,
 `item_size`, shared values and tag 55799 are in

@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "sequence_reader.hpp"
 
 #include <algorithm>
 #include <array>
@@ -720,5 +721,98 @@ TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the val
             CHECK_EQ(l.error(), c.refused);
             CHECK_EQ(text.error(), c.refused);
         }
+    }
+}
+
+namespace
+{
+
+// A reader of a CBOR Sequence (RFC 8742) that gets the bytes one at a time gives the same items, and the same error,
+// as cbor::sequence over the whole buffer. Every cut of a well-formed item is a prefix that waits for more bytes, so
+// it gives too_little_data and no other error.
+void sequence_reader_check(std::string_view const wire)
+{
+    test::sequence_outcome const whole = test::sequence_outcome_of(wire);
+    CHECK_EQ(test::reader_outcome_byte_by_byte(wire), whole);
+    if (whole.last != error::too_little_data)
+        return;
+    for (std::size_t cut = 0; cut < wire.size(); ++cut) {
+        test::sequence_outcome const prefix = test::reader_outcome_split_at(wire.substr(0, cut), 0);
+        CHECK(prefix.items.empty());
+        CHECK_EQ(prefix.last, error::too_little_data);
+    }
+}
+
+} // namespace
+
+// RFC 8949 Appendix A, each example on its own and all of them as one sequence.
+TEST_CASE("sequence_reader: RFC 8949 Appendix A fed byte by byte")
+{
+    std::string all;
+    for (vector_case const &c : cases_of(TEST_VECTORS "/appendix_a.json")) {
+        CAPTURE(c.hex);
+        std::string const wire = bytes_of_hex(c.hex);
+        sequence_reader_check(wire);
+        if (test::sequence_outcome_of(wire).last == error::too_little_data)
+            all += wire;
+    }
+    CHECK_EQ(test::reader_outcome_byte_by_byte(all), test::sequence_outcome_of(all));
+}
+
+// The good vectors of the CBOR working group, each on its own and each file as one sequence.
+TEST_CASE("sequence_reader: cbor-wg vectors fed byte by byte")
+{
+    test::limits_guard const depth{{.nesting_depth = depth_limit}};
+    for (char const *const file :
+         {"/rfc8949/good.cbor", "/rfc8949-appendixA/mt0.cbor", "/rfc8949-appendixA/mt1.cbor",
+          "/rfc8949-appendixA/mt2.cbor", "/rfc8949-appendixA/mt3.cbor", "/rfc8949-appendixA/mt4.cbor",
+          "/rfc8949-appendixA/mt5.cbor", "/rfc8949-appendixA/mt6.cbor", "/rfc8949-appendixA/mt7-float.cbor",
+          "/rfc8949-appendixA/mt7-simple.cbor", "/spike/spike.cbor"}) {
+        CAPTURE(file);
+        std::string all;
+        for (wg_vector const &v : wg_vectors_of(std::string(CBOR_TEST_VECTORS "/tests") + file)) {
+            CAPTURE(v.encoded);
+            sequence_reader_check(v.encoded);
+            all += v.encoded;
+        }
+        CHECK_EQ(test::reader_outcome_byte_by_byte(all), test::sequence_outcome_of(all));
+    }
+}
+
+namespace
+{
+
+// A reader gives one outcome for an item at every split. Where cbor::sequence over the whole buffer finds a malformed
+// item, the reader gives the same error; where the reader waits for bytes, cbor::sequence also finds only a cut item.
+// The reverse does not hold: cbor::sequence gives too_little_data as soon as an array or a map announces more items
+// than bytes remain, before it reads a malformed byte after the head; the reader reads that byte and gives its error.
+void sequence_reader_malformed_check(std::string_view const wire)
+{
+    test::sequence_outcome const whole = test::sequence_outcome_of(wire);
+    test::sequence_outcome const read = test::reader_outcome_split_at(wire, 0);
+    if (whole.last != error::too_little_data)
+        CHECK_EQ(read.last, whole.last);
+    if (read.last == error::too_little_data)
+        CHECK_EQ(whole.last, error::too_little_data);
+    for (std::size_t at = 1; at <= wire.size(); ++at) {
+        CAPTURE(at);
+        CHECK_EQ(test::reader_outcome_split_at(wire, at), read);
+    }
+    CHECK_EQ(test::reader_outcome_byte_by_byte(wire), read);
+}
+
+} // namespace
+
+// fail.json of test-vectors and bad.cbor of the CBOR working group hold items that are not well-formed or not valid.
+TEST_CASE("sequence_reader: not well-formed items give one error at every split")
+{
+    for (vector_case const &c : cases_of(TEST_VECTORS "/fail.json")) {
+        CAPTURE(c.hex);
+        sequence_reader_malformed_check(bytes_of_hex(c.hex));
+    }
+    test::limits_guard const depth{{.nesting_depth = depth_limit}};
+    for (wg_vector const &v : wg_vectors_of(CBOR_TEST_VECTORS "/tests/rfc8949/bad.cbor")) {
+        CAPTURE(v.encoded);
+        sequence_reader_malformed_check(v.encoded);
     }
 }
