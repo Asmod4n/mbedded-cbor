@@ -273,6 +273,10 @@ struct lazy {
     std::shared_ptr<value_sharing::top_level_item> top_level;
     std::size_t offset;
 
+    static std::expected<lazy, error> copy(std::string_view encoded);
+    template <std::same_as<std::string> Encoded>
+    static std::expected<lazy, error> copy(Encoded &&encoded);
+    static std::expected<lazy, error> view(std::shared_ptr<std::string const> encoded);
     template <std::same_as<std::string> Encoded>
     static std::expected<lazy, error> from(Encoded &&encoded);
     static std::expected<lazy, error> from(std::string_view encoded);
