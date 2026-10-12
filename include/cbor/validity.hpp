@@ -134,10 +134,15 @@ public:
         return {};
     }
 
+    static constexpr bool pending_items_fit(std::uint64_t const pending, std::size_t const bytes_left)
+    {
+        return pending <= bytes_left;
+    }
+
     static constexpr std::expected<void, error> check_pending_items(std::uint64_t const pending,
                                                                     std::size_t const bytes_left)
     {
-        if (pending > bytes_left) [[unlikely]]
+        if (!pending_items_fit(pending, bytes_left)) [[unlikely]]
             return std::unexpected(error::too_little_data);
         return {};
     }

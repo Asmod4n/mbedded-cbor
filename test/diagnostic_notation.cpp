@@ -214,6 +214,19 @@ TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
     CHECK(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).has_value());
 }
 
+// RFC 8949 Section 3.2.3: an indefinite-length string is a sequence of chunks that ends with the break 0xff. 5f and
+// 7f with no byte after them have neither a chunk nor a break. Section 3.4: a tag is followed by its content, and
+// c1 18 is tag 1 with a head whose one-byte argument (Section 3) is missing. The test exists because each of these
+// reads a head where no byte or too few bytes are left, and each must give too_little_data.
+TEST_CASE("diagnostic_notation: a chunk or a tag content with too few bytes is too_little_data")
+{
+    CHECK_EQ(cbor::diagnostic_notation("\x5f"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\x7f"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\x5f\x41\x61"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\xc1\x18"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\xc1\x19\x01"sv).error(), error::too_little_data);
+}
+
 // diagnostic_notation printed a tag 29 whose index names no shareable that came before it, and structs refused
 // the same bytes. A sharedref is now checked against the shareables seen so far, as lazy and structs check it.
 TEST_CASE("diagnostic_notation: a sharedref names a shareable that comes before it")
