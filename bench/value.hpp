@@ -330,60 +330,64 @@ inline value text_value(std::string_view const t)
 }
 
 // The value of a decoded item tree. Tag 28 is the value it marks and tag 29 the value it points to; a bignum of at
-// most 8 bytes is an integer, as a dynamic language reads it. A float is a double.
-inline value value_of(cbor::item const &it)
+// most 8 bytes is an integer, as a dynamic language reads it. A float is a double. The tree is passed to find the
+// item that a tag 29 points to.
+inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it)
 {
-    if (auto const *t = std::get_if<std::string_view>(&it.content))
-        return text_value(*t);
-    if (auto const *b = std::get_if<std::span<std::byte const>>(&it.content))
-        return {bytes{std::string(reinterpret_cast<char const *>(b->data()), b->size())}};
-    if (auto const *d = std::get_if<double>(&it.content))
-        return {*d};
-    if (auto const *f = std::get_if<float>(&it.content))
-        return {static_cast<double>(*f)};
-#if defined(__STDCPP_FLOAT16_T__)
-    if (auto const *h = std::get_if<std::float16_t>(&it.content))
-        return {static_cast<double>(*h)};
-#endif
-    if (auto const *v = std::get_if<cbor::simple_value>(&it.content))
-        return {simple{std::to_underlying(*v)}};
-    if (auto const *r = std::get_if<cbor::sharedref>(&it.content))
-        return value_of(*r->shareable);
-    if (auto const *c = std::get_if<cbor::data_items>(&it.content)) {
-        auto const children = c->span();
-        if (it.major_type == cbor::major_type::array) {
-            array a;
-            a.reserve(children.size());
-            for (cbor::item const *const child : children)
-                a.push_back(value_of(*child));
-            return {std::move(a)};
-        }
+    switch (it.type) {
+    case cbor::type::text_string:
+        return text_value(it.via.str);
+    case cbor::type::byte_string:
+        return {bytes{std::string(reinterpret_cast<char const *>(it.via.bin.data()), it.via.bin.size())}};
+    case cbor::type::half_float:
+    case cbor::type::single_float:
+    case cbor::type::double_float:
+        return {it.via.f64};
+    case cbor::type::false_value:
+    case cbor::type::true_value:
+    case cbor::type::null:
+    case cbor::type::undefined:
+    case cbor::type::simple_value:
+        return {simple{std::to_underlying(it.via.simple_value)}};
+    case cbor::type::unsigned_integer:
+        return {it.via.u64};
+    case cbor::type::negative_integer:
+        return {negative{it.via.u64}};
+    case cbor::type::array: {
+        array a;
+        a.reserve(it.via.array.size());
+        for (cbor::item const &child : it.via.array)
+            a.push_back(value_of(tree, child));
+        return {std::move(a)};
+    }
+    case cbor::type::map: {
         map m;
-        m.reserve(children.size() / 2);
-        for (std::size_t i = 0; i + 1 < children.size(); i += 2)
-            m.push_back(entry{value_of(*children[i]), value_of(*children[i + 1])});
+        m.reserve(it.via.map.size() / 2);
+        for (std::size_t i = 0; i + 1 < it.via.map.size(); i += 2)
+            m.push_back(entry{value_of(tree, it.via.map[i]), value_of(tree, it.via.map[i + 1])});
         return {std::move(m)};
     }
-    if (auto const *inner = std::get_if<cbor::item const *>(&it.content)) {
-        if (it.argument == 28)
-            return value_of(**inner);
-        auto const *magnitude = std::get_if<std::span<std::byte const>>(&(*inner)->content);
-        if ((it.argument == 2 || it.argument == 3) && magnitude != nullptr) {
-            std::string m(reinterpret_cast<char const *>(magnitude->data()), magnitude->size());
-            m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
-            if (m.size() <= sizeof(std::uint64_t)) {
-                std::uint64_t n = 0;
-                for (char const ch : m)
-                    n = n << 8 | static_cast<unsigned char>(ch);
-                return it.argument == 3 ? value{negative{n}} : value{n};
-            }
-            return {bignum{it.argument == 3, std::move(m)}};
-        }
-        return {tagged{it.argument, value_of(**inner)}};
+    default:
+        break;
     }
-    if (it.major_type == cbor::major_type::unsigned_integer)
-        return {it.argument};
-    return {negative{it.argument}};
+    std::uint64_t const number = it.via.tag.number;
+    cbor::item const &inner = *it.via.tag.content;
+    if (number == 29)
+        return value_of(tree, cbor::shared_value(tree, it));
+    if (number == 28)
+        return value_of(tree, inner);
+    if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
+        std::string m(reinterpret_cast<char const *>(inner.via.bin.data()), inner.via.bin.size());
+        m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
+        if (m.size() <= sizeof(std::uint64_t)) {
+            std::uint64_t n = 0;
+            for (char const ch : m)
+                n = n << 8 | static_cast<unsigned char>(ch);
+            return number == 3 ? value{negative{n}} : value{n};
+        }
+        return {bignum{number == 3, std::move(m)}};
+    }
+    return {tagged{number, value_of(tree, inner)}};
 }
 
 inline std::expected<value, error> value_of(cbor::lazy const &l)
@@ -391,7 +395,7 @@ inline std::expected<value, error> value_of(cbor::lazy const &l)
     auto const tree = l.decode();
     if (!tree)
         return std::unexpected(tree.error());
-    return value_of(**tree);
+    return value_of(*tree, **tree);
 }
 
 // A value written through the public encoder: an integer at 64 bits, a float as a double, a bignum as tag 2 or 3
