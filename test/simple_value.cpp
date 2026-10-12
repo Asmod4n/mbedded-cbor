@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "item_head.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -119,11 +120,10 @@ TEST_CASE("simple value: lazy::decode gives every simple value 0 to 255 as its c
         auto const r = top_level->decode();
         REQUIRE(r.has_value());
         cbor::item const &it = **r;
-        CHECK_EQ(it.major_type, cbor::major_type::simple_float);
+        CHECK_EQ(major_of(it.type), cbor::major_type::simple_float);
         CHECK_EQ(it.additional_information, v < 24 ? v : 24);
-        CHECK_EQ(it.argument, v);
-        REQUIRE(std::holds_alternative<cbor::simple_value>(it.content));
-        CHECK_EQ(std::to_underlying(std::get<cbor::simple_value>(it.content)), v);
+        CHECK_EQ(argument_of(it), v);
+        CHECK_EQ(std::to_underlying(it.via.simple_value), v);
     }
 }
 

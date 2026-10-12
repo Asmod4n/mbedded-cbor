@@ -255,7 +255,8 @@ public:
                                                         Projection offset_of, limit_checks<Checked> checks);
 
     template <class Item>
-    static std::expected<void, error> check_tag_content(std::uint64_t tag, Item const *content, std::size_t marked);
+    static std::expected<void, error> check_tag_content(std::uint64_t tag, Item const *content,
+                                                        std::span<Item const *const> shareables);
 
     static constexpr error writer_error(std::errc const e) noexcept
     {

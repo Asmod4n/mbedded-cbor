@@ -810,23 +810,71 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
 {
     if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
         return r;
-    std::expected<void, std::errc> written = out.head_encode(node.major_type, node.additional_information, node.argument);
-    if (auto const *const text = std::get_if<std::string_view>(&node.content); written && text != nullptr) {
-        written = out.payload_encode(*text);
-    } else if (auto const *const bytes = std::get_if<std::span<std::byte const>>(&node.content);
-               written && bytes != nullptr) {
-        written = out.payload_encode(encoder<Writer>::chars_of(*bytes));
-    } else if (auto const *const children = std::get_if<data_items>(&node.content); written && children != nullptr) {
-        for (item const *const child : children->span())
-            if (auto const r = item_encode(out, *child, depth + 1, depth_max); !r) [[unlikely]]
+    major_type const major = heads::major_type_of(node.type);
+    std::uint64_t argument = node.via.u64;
+    switch (node.type) {
+    case cbor::type::byte_string:
+        argument = node.via.bin.size();
+        break;
+    case cbor::type::text_string:
+        argument = node.via.str.size();
+        break;
+    case cbor::type::array:
+        argument = node.via.array.size();
+        break;
+    case cbor::type::map:
+        validity::throw_logic_error_if(node.via.map.size() % rfc8949::data_items_per_pair != 0,
+                                       "cbor::encode: a map holds a key and a value for each entry");
+        argument = node.via.map.size() / rfc8949::data_items_per_pair;
+        break;
+    case cbor::type::tag:
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum:
+    case cbor::type::typed_array:
+        argument = node.via.tag.number;
+        break;
+    case cbor::type::false_value:
+    case cbor::type::true_value:
+    case cbor::type::null:
+    case cbor::type::undefined:
+    case cbor::type::simple_value:
+        argument = std::to_underlying(node.via.simple_value);
+        break;
+    case cbor::type::half_float:
+        argument = heads::float_encode(rfc8949::simple_float_information::half_precision_float, node.via.f64);
+        break;
+    case cbor::type::single_float:
+        argument = heads::float_encode(rfc8949::simple_float_information::single_precision_float, node.via.f64);
+        break;
+    case cbor::type::double_float:
+        argument = heads::float_encode(rfc8949::simple_float_information::double_precision_float, node.via.f64);
+        break;
+    case cbor::type::unsigned_integer:
+    case cbor::type::negative_integer:
+        break;
+    }
+    std::expected<void, std::errc> written = out.head_encode(major, node.additional_information, argument);
+    if (!written) [[unlikely]]
+        return std::unexpected(validity::writer_error(written.error()));
+    switch (major) {
+    case major_type::byte_string:
+        written = out.payload_encode(encoder<Writer>::chars_of(node.via.bin));
+        break;
+    case major_type::text_string:
+        written = out.payload_encode(node.via.str);
+        break;
+    case major_type::array:
+    case major_type::map:
+        for (item const &child : major == major_type::array ? node.via.array : node.via.map)
+            if (auto const r = item_encode(out, child, depth + 1, depth_max); !r) [[unlikely]]
                 return r;
-    } else if (auto const *const content = std::get_if<item const *>(&node.content); written && content != nullptr) {
-        return item_encode(out, **content, depth + 1, depth_max);
-    } else if (auto const *const embedded = std::get_if<encoded_cbor_data_item>(&node.content);
-               written && embedded != nullptr) {
-        return item_encode(out, *embedded->content, depth + 1, depth_max);
-    } else if (auto const *const reference = std::get_if<sharedref>(&node.content); written && reference != nullptr) {
-        written = out.head_encode(major_type::unsigned_integer, reference->additional_information, reference->argument);
+        break;
+    case major_type::tag:
+        return item_encode(out, *node.via.tag.content, depth + 1, depth_max);
+    case major_type::unsigned_integer:
+    case major_type::negative_integer:
+    case major_type::simple_float:
+        break;
     }
     if (!written) [[unlikely]]
         return std::unexpected(validity::writer_error(written.error()));

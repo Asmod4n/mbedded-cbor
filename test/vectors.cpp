@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "item_head.hpp"
 
 #include <algorithm>
 #include <array>
@@ -144,58 +145,47 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
         std::uint64_t argument = info < 24 ? info : 0;
         for (std::size_t i = 1; i <= argument_bytes; ++i)
             argument = argument << 8 | static_cast<std::uint8_t>(wire[i]);
-        CHECK_EQ(std::to_underlying(it.major_type), initial >> 5);
+        cbor::major_type const major = static_cast<cbor::major_type>(initial >> 5);
         CHECK_EQ(it.additional_information, info);
-        CHECK_EQ(it.argument, argument);
+        CHECK_EQ(argument_of(it), argument);
         std::string_view const after_head = std::string_view(wire).substr(1 + argument_bytes);
-        switch (it.major_type) {
+        switch (major) {
         case cbor::major_type::unsigned_integer:
+            CHECK_EQ(it.type, cbor::type::unsigned_integer);
+            break;
         case cbor::major_type::negative_integer:
-            CHECK(std::holds_alternative<std::monostate>(it.content));
+            CHECK_EQ(it.type, cbor::type::negative_integer);
             break;
         case cbor::major_type::byte_string:
-            REQUIRE(std::holds_alternative<std::span<std::byte const>>(it.content));
-            CHECK(std::ranges::equal(std::get<std::span<std::byte const>>(it.content), std::as_bytes(std::span(after_head))));
+            REQUIRE_EQ(it.type, cbor::type::byte_string);
+            CHECK(std::ranges::equal(it.via.bin, std::as_bytes(std::span(after_head))));
             break;
         case cbor::major_type::text_string:
-            REQUIRE(std::holds_alternative<std::string_view>(it.content));
-            CHECK_EQ(std::get<std::string_view>(it.content), after_head);
+            REQUIRE_EQ(it.type, cbor::type::text_string);
+            CHECK_EQ(it.via.str, after_head);
             break;
         case cbor::major_type::array:
         case cbor::major_type::map:
-            REQUIRE(std::holds_alternative<cbor::data_items>(it.content));
-            CHECK_EQ(std::get<cbor::data_items>(it.content).span().size(),
-                     it.major_type == cbor::major_type::map ? 2 * argument : argument);
+            REQUIRE((it.type == cbor::type::array || it.type == cbor::type::map));
+            CHECK_EQ(children_of(it).size(), it.type == cbor::type::map ? 2 * argument : argument);
             break;
-        case cbor::major_type::tag:
-            if (it.argument == 24) {
-                REQUIRE(std::holds_alternative<cbor::encoded_cbor_data_item>(it.content));
-                CHECK_EQ(std::to_underlying(std::get<cbor::encoded_cbor_data_item>(it.content).content->major_type),
-                         static_cast<std::uint8_t>(after_head.front()) >> 5);
-                break;
-            }
-            REQUIRE(std::holds_alternative<cbor::item const *>(it.content));
-            CHECK_EQ(std::to_underlying(std::get<cbor::item const *>(it.content)->major_type),
-                     static_cast<std::uint8_t>(after_head.front()) >> 5);
+        case cbor::major_type::tag: {
+            REQUIRE((it.type == cbor::type::tag || it.type == cbor::type::unsigned_bignum ||
+                     it.type == cbor::type::negative_bignum || it.type == cbor::type::typed_array));
+            std::string content;
+            REQUIRE(cbor::encode(*it.via.tag.content, content).has_value());
+            CHECK_EQ(static_cast<std::uint8_t>(content.front()) >> 5, static_cast<std::uint8_t>(after_head.front()) >> 5);
             break;
+        }
         case cbor::major_type::simple_float:
-            if (info == 25) {
-#if defined(__STDCPP_FLOAT16_T__)
-                REQUIRE(std::holds_alternative<std::float16_t>(it.content));
-                CHECK_EQ(std::bit_cast<std::uint16_t>(std::get<std::float16_t>(it.content)), argument);
-#else
-                REQUIRE(std::holds_alternative<float>(it.content));
-#endif
-            } else if (info == 26) {
-                REQUIRE(std::holds_alternative<float>(it.content));
-                CHECK_EQ(std::bit_cast<std::uint32_t>(std::get<float>(it.content)), argument);
-            } else if (info == 27) {
-                REQUIRE(std::holds_alternative<double>(it.content));
-                CHECK_EQ(std::bit_cast<std::uint64_t>(std::get<double>(it.content)), argument);
-            } else {
-                REQUIRE(std::holds_alternative<cbor::simple_value>(it.content));
-                CHECK_EQ(std::to_underlying(std::get<cbor::simple_value>(it.content)), argument);
-            }
+            if (info == 25)
+                CHECK_EQ(it.type, cbor::type::half_float);
+            else if (info == 26)
+                CHECK_EQ(it.type, cbor::type::single_float);
+            else if (info == 27)
+                CHECK_EQ(it.type, cbor::type::double_float);
+            else
+                CHECK_EQ(std::to_underlying(it.via.simple_value), argument);
             break;
         }
     }
@@ -377,19 +367,19 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
     if (!decoded_item)
         return std::unexpected(decoded_item.error());
     cbor::item const &it = **decoded_item;
-    switch (it.major_type) {
+    switch (major_of(it.type)) {
     case cbor::major_type::unsigned_integer:
-        return value{it.argument};
+        return value{argument_of(it)};
     case cbor::major_type::negative_integer:
-        return value{negative{it.argument}};
+        return value{negative{argument_of(it)}};
     case cbor::major_type::byte_string: {
         std::string b;
-        for (std::byte const x : std::get<std::span<std::byte const>>(it.content))
+        for (std::byte const x : it.via.bin)
             b.push_back(static_cast<char>(x));
         return value{bytes{std::move(b)}};
     }
     case cbor::major_type::text_string:
-        return value{std::string(std::get<std::string_view>(it.content))};
+        return value{std::string(it.via.str)};
     case cbor::major_type::array: {
         auto const elements = l.elements();
         if (!elements)
@@ -430,7 +420,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         auto content = lazy_value(cbor::lazy{l.top_level, l.offset + 1 + argument_bytes});
         if (!content)
             return content;
-        return value{tagged{it.argument, std::move(*content)}};
+        return value{tagged{argument_of(it), std::move(*content)}};
     }
     case cbor::major_type::simple_float:
         if (it.additional_information >= 25 && it.additional_information <= 27) {
@@ -439,7 +429,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
                 return std::unexpected(d.error());
             return value{*d};
         }
-        return value{simple{static_cast<std::uint8_t>(it.argument)}};
+        return value{simple{static_cast<std::uint8_t>(argument_of(it))}};
     }
     return std::unexpected(error::syntax_error);
 }
