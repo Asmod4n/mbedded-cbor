@@ -83,10 +83,9 @@ std::span<std::byte const> span_of(std::string_view const s)
 template <class Target>
 std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item const &node)
 {
-    using cbor::major_type;
+    using cbor::type;
     std::uint8_t const info = node.additional_information;
-    std::uint64_t const arg = node.argument;
-    auto const integer = [&](auto const call) {
+    auto const integer = [&](std::uint64_t const arg, auto const call) {
         if (info <= 24)
             return call(static_cast<std::uint8_t>(arg));
         if (info == 25)
@@ -95,49 +94,54 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
             return call(static_cast<std::uint32_t>(arg));
         return call(arg);
     };
-    switch (node.major_type) {
-    case major_type::unsigned_integer:
-        return integer([&](auto const v) { return e.unsigned_integer(v); });
-    case major_type::negative_integer:
-        return integer([&](auto const v) { return e.negative_integer(v); });
-    case major_type::byte_string:
-        return e.byte_string(node.via.bin);
-    case major_type::text_string:
-        return e.text_string(node.via.str);
-    case major_type::array:
-    case major_type::map: {
-        auto const r = node.major_type == major_type::array ? e.array(arg) : e.map(arg);
+    auto const container = [&](std::span<cbor::item const> const children, std::uint64_t const count, bool const array) {
+        auto const r = array ? e.array(count) : e.map(count);
         if (!r)
             return r;
-        for (cbor::item const *const child : children_of(node))
-            if (auto const c = item_walk(e, *child); !c)
+        for (cbor::item const &child : children)
+            if (auto const c = item_walk(e, child); !c)
                 return c;
-        return {};
-    }
-    case major_type::tag: {
-        if (auto const *const ref = std::get_if<cbor::sharedref>(&node.content)) {
-            if (auto const r = e.tag(arg); !r)
-                return r;
-            cbor::item const number{major_type::unsigned_integer, ref->additional_information, ref->argument, {}};
-            return item_walk(e, number);
-        }
-        cbor::item const &content = *node.via.tag.content;
-        if (arg >= 64 && arg <= 87 && content.major_type == major_type::byte_string)
-            return e.typed_array({arg, content.via.bin});
-        if (auto const r = e.tag(arg); !r)
+        return std::expected<void, cbor::error>{};
+    };
+    // A float goes through the encoder at the width and with the bits of the wire, so a NaN keeps its payload.
+    auto const bits = [&] {
+        std::string head;
+        (void)cbor::encode(node, head);
+        std::uint64_t v = 0;
+        for (char const c : std::string_view(head).substr(1))
+            v = v << 8 | static_cast<std::uint8_t>(c);
+        return v;
+    };
+    switch (node.type) {
+    case type::unsigned_integer:
+        return integer(node.via.u64, [&](auto const v) { return e.unsigned_integer(v); });
+    case type::negative_integer:
+        return integer(node.via.u64, [&](auto const v) { return e.negative_integer(v); });
+    case type::byte_string:
+        return e.byte_string(node.via.bin);
+    case type::text_string:
+        return e.text_string(node.via.str);
+    case type::array:
+        return container(node.via.array, node.via.array.size(), true);
+    case type::map:
+        return container(node.via.map, node.via.map.size() / 2, false);
+    case type::typed_array:
+        return e.typed_array({node.via.tag.number, node.via.tag.content->via.bin});
+    case type::tag:
+    case type::unsigned_bignum:
+    case type::negative_bignum:
+        if (auto const r = e.tag(node.via.tag.number); !r)
             return r;
-        return item_walk(e, content);
+        return item_walk(e, *node.via.tag.content);
+    case type::half_float:
+        return e.floating_point(std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(bits())));
+    case type::single_float:
+        return e.floating_point(std::bit_cast<float>(static_cast<std::uint32_t>(bits())));
+    case type::double_float:
+        return e.floating_point(std::bit_cast<double>(bits()));
+    default:
+        return e.simple_value(node.via.simple_value);
     }
-    case major_type::simple_float:
-        if (info == 25)
-            return e.floating_point(std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(arg)));
-        if (info == 26)
-            return e.floating_point(std::bit_cast<float>(static_cast<std::uint32_t>(arg)));
-        if (info == 27)
-            return e.floating_point(std::bit_cast<double>(arg));
-        return e.simple_value(static_cast<cbor::simple_value>(arg));
-    }
-    return std::unexpected(cbor::error::syntax_error);
 }
 
 // One input item goes through both generic writers: cbor::encode of the decoded item, and cbor::encoder
