@@ -14,6 +14,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <memory_resource>
 #include <numeric>
 #include <optional>
 #include <random>
@@ -212,6 +213,36 @@ struct [[=cbor::tag(1509)]] named {
 
 struct [[=cbor::tag(1510)]] people {
     std::vector<named> people;
+};
+
+struct [[=cbor::tag(1533)]] pmr_named {
+    std::pmr::string n;
+};
+
+struct [[=cbor::tag(1534)]] pmr_people {
+    std::pmr::vector<pmr_named> people;
+};
+
+class counting_resource : public std::pmr::memory_resource
+{
+    void *do_allocate(std::size_t const bytes, std::size_t const alignment) override
+    {
+        ++allocations;
+        return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+    }
+
+    void do_deallocate(void *const p, std::size_t const bytes, std::size_t const alignment) override
+    {
+        std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+    }
+
+    bool do_is_equal(std::pmr::memory_resource const &other) const noexcept override
+    {
+        return this == &other;
+    }
+
+public:
+    std::size_t allocations = 0;
 };
 
 std::string schema_bytes(auto const &value)
@@ -1119,6 +1150,30 @@ TEST_CASE("encode and decode: a struct goes in and comes back whole")
     CHECK_EQ(std::string_view(v.code, 4), "ABCD"sv);
     CHECK_EQ(v.owner, std::optional<std::uint8_t>{9});
     CHECK_FALSE(v.none.has_value());
+}
+
+// A plain struct has no allocator, so a std::pmr::vector cannot give its resource to it, but it can give it to each
+// member that takes an allocator, as uses-allocator construction ([allocator.uses.construction]) does for one
+// object. The test puts a counting resource as the default resource, so that a member that took the default
+// resource shows as a count above zero. Each name is longer than any short string buffer, so each one allocates.
+TEST_CASE("decode: a plain struct in a std::pmr::vector takes the resource of the vector for its members")
+{
+    std::string const long_name(40, 'n');
+    std::string const bytes = schema_bytes(pmr_people{{{std::pmr::string(long_name)}, {std::pmr::string(long_name)}}});
+    counting_resource fallback;
+    counting_resource target;
+    auto const owner = std::make_shared<std::string const>(bytes);
+    std::pmr::memory_resource *const was = std::pmr::set_default_resource(&fallback);
+    auto const decoded = cbor::packed<pmr_people>::decode(owner, *owner, pmr_people{std::pmr::vector<pmr_named>(&target)});
+    std::pmr::set_default_resource(was);
+    REQUIRE(decoded.has_value());
+    REQUIRE_EQ((**decoded).people.size(), 2u);
+    for (pmr_named const &p : (**decoded).people) {
+        CHECK_EQ(p.n, long_name);
+        CHECK_EQ(p.n.get_allocator().resource(), &target);
+    }
+    CHECK_EQ(fallback.allocations, 0u);
+    CHECK_GT(target.allocations, 0u);
 }
 
 // Broken bytes give the error as a value, as with std::expected.
