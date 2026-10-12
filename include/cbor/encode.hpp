@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <expected>
 #include <iterator>
+#include <optional>
 #include <memory>
 #include <limits>
 #include <ranges>
@@ -812,6 +813,7 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
         return r;
     major_type const major = heads::major_type_of(node.type);
     std::uint64_t argument = node.via.u64;
+    std::optional<rfc8949::simple_float_information> width;
     switch (node.type) {
     case cbor::type::byte_string:
         argument = node.via.bin.size();
@@ -827,9 +829,24 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
                                        "cbor::encode: a map holds a key and a value for each entry");
         argument = node.via.map.size() / rfc8949::data_items_per_pair;
         break;
-    case cbor::type::tag:
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
+        if (node.via.tag.content->type == cbor::type::byte_string) {
+            std::string_view const magnitude =
+                heads::magnitude_without_leading_zeros(encoder<Writer>::chars_of(node.via.tag.content->via.bin));
+            if (validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
+                std::expected<void, std::errc> const fits =
+                    out.head_encode(node.type == cbor::type::negative_bignum ? major_type::negative_integer
+                                                                            : major_type::unsigned_integer,
+                                    heads::magnitude_value(magnitude));
+                if (!fits) [[unlikely]]
+                    return std::unexpected(validity::writer_error(fits.error()));
+                return {};
+            }
+        }
+        argument = node.via.tag.number;
+        break;
+    case cbor::type::tag:
     case cbor::type::typed_array:
         argument = node.via.tag.number;
         break;
@@ -841,19 +858,23 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
         argument = std::to_underlying(node.via.simple_value);
         break;
     case cbor::type::half_float:
-        argument = heads::float_encode(rfc8949::simple_float_information::half_precision_float, node.via.f64);
+        width = rfc8949::simple_float_information::half_precision_float;
+        argument = heads::float_encode(*width, node.via.f64);
         break;
     case cbor::type::single_float:
-        argument = heads::float_encode(rfc8949::simple_float_information::single_precision_float, node.via.f64);
+        width = rfc8949::simple_float_information::single_precision_float;
+        argument = heads::float_encode(*width, node.via.f64);
         break;
     case cbor::type::double_float:
-        argument = heads::float_encode(rfc8949::simple_float_information::double_precision_float, node.via.f64);
+        width = rfc8949::simple_float_information::double_precision_float;
+        argument = heads::float_encode(*width, node.via.f64);
         break;
     case cbor::type::unsigned_integer:
     case cbor::type::negative_integer:
         break;
     }
-    std::expected<void, std::errc> written = out.head_encode(major, node.additional_information, argument);
+    std::expected<void, std::errc> written =
+        width ? out.head_encode(major, std::to_underlying(*width), argument) : out.head_encode(major, argument);
     if (!written) [[unlikely]]
         return std::unexpected(validity::writer_error(written.error()));
     switch (major) {

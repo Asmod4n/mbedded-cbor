@@ -706,4 +706,16 @@ TEST_CASE("structs: keys come out in the deterministic order of RFC 8949 4.2.1")
     CHECK(**back == integer_order{10, 20, 30});
 }
 
+// RFC 8949 3.4.3 and 5.6.1: a key written as a bignum that fits 64 bits is the integer key of the same value, so
+// structs finds each member of integer_order under 2(h'18') for 24, 3(h'00') for -1 and 2(h'0001') for 1. A
+// bignum key that does not fit 64 bits names no member and is skipped.
+TEST_CASE("structs: an integer key written as a bignum that fits")
+{
+    auto const back = cbor::structs<integer_order>::decode(
+        "\xa4\xc2\x41\x18\x0a\xc3\x41\x00\x14\xc2\x42\x00\x01\x18\x1e\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"s);
+    REQUIRE(back.has_value());
+    CHECK(**back == integer_order{10, 20, 30});
+}
+
+
 #endif

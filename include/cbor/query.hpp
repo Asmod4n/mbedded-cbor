@@ -771,6 +771,16 @@ class jsonpath
                              k->argument == static_cast<std::uint64_t>(each.index)) ||
                             (k->major == major_type::negative_integer && each.index < 0 &&
                              k->argument == static_cast<std::uint64_t>(-1 - each.index));
+                    if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
+                        heads::decoder content = probe;
+                        auto const read = content.bignum_decode(k->argument);
+                        if (!read) [[unlikely]]
+                            return std::nullopt;
+                        bool const negative = k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
+                        found = *read && negative == (each.index < 0) &&
+                                **read == (each.index < 0 ? static_cast<std::uint64_t>(-1 - each.index)
+                                                          : static_cast<std::uint64_t>(each.index));
+                    }
                 }
                 if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
@@ -784,9 +794,7 @@ class jsonpath
         if constexpr (std::integral<T> && !std::is_same_v<T, bool>) {
             bool negative = h.major == major_type::negative_integer;
             std::uint64_t argument = h.argument;
-            if (h.major == major_type::tag &&
-                (h.argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
-                 h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum))) {
+            if (heads::is_bignum(h.major, h.argument)) {
                 negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
                 for (;;) {
                     heads::decoder const before = d;
@@ -803,21 +811,12 @@ class jsonpath
                         break;
                     }
                 }
-                auto const r = d.head_decode();
-                if (!r) [[unlikely]]
-                    return std::unexpected(r.error());
-                if (error const c = validity::check_tag_content(h.argument, r->major, r->info).error_or(error{});
-                    c != error{}) [[unlikely]]
-                    return std::unexpected(c);
-                auto const bytes = d.byte_string_decode(r->argument);
-                if (!bytes) [[unlikely]]
-                    return std::unexpected(bytes.error());
-                std::string_view const magnitude = heads::magnitude_without_leading_zeros(*bytes);
-                if (error const c = validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))
-                                        .error_or(error{});
-                    c != error{}) [[unlikely]]
-                    return std::unexpected(c);
-                argument = heads::magnitude_value(magnitude);
+                auto const read = d.bignum_decode(h.argument);
+                if (!read) [[unlikely]]
+                    return std::unexpected(read.error());
+                if (!*read) [[unlikely]]
+                    return std::unexpected(error::number_out_of_range);
+                argument = **read;
             } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
                 return std::unexpected(error::incorrect_type);
             }
@@ -827,6 +826,8 @@ class jsonpath
             T const magnitude = static_cast<T>(argument);
             return static_cast<T>(negative ? ~magnitude : magnitude);
         } else if constexpr (std::is_same_v<T, double>) {
+            if (heads::is_bignum(h.major, h.argument)) [[unlikely]]
+                return std::nullopt;
             if (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) {
                 bool const negative = h.major == major_type::negative_integer;
                 if (error const c = validity::check_number_range<double>(negative, h.argument).error_or(error{});

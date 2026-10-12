@@ -744,8 +744,36 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
         return std::unexpected(c);
     if (error const c = check_definite_length(k->major, k->info).error_or(error{}); c != error{}) [[unlikely]]
         return std::unexpected(c);
-    if (h->major != k->major)
-        return false;
+    if (h->major != k->major || heads::is_bignum(h->major, h->argument)) [[unlikely]] {
+        auto const integer_of = [&]<class Message>(Message &message, std::string_view const encoded,
+                                                   heads::raw_head const n)
+            -> std::expected<std::optional<std::pair<bool, std::uint64_t>>, error> {
+            if (n.major == major_type::unsigned_integer || n.major == major_type::negative_integer)
+                return std::pair{n.major == major_type::negative_integer, n.argument};
+            if (!heads::is_bignum(n.major, n.argument))
+                return std::nullopt;
+            auto const content = resolve(message, n.at);
+            if (!content) [[unlikely]]
+                return std::unexpected(content.error());
+            heads::decoder<Checked> d{std::string_view(std::span(encoded).subspan(*content)), checks};
+            auto const read = d.bignum_decode(n.argument);
+            if (!read) [[unlikely]]
+                return std::unexpected(read.error());
+            if (!*read)
+                return std::nullopt;
+            return std::pair{n.argument == std::to_underlying(rfc8949::tag_number::negative_bignum), **read};
+        };
+        auto const x_value = integer_of(first, a, *h);
+        if (!x_value) [[unlikely]]
+            return std::unexpected(x_value.error());
+        auto const y_value = integer_of(second, b, *k);
+        if (!y_value) [[unlikely]]
+            return std::unexpected(y_value.error());
+        if (*x_value && *y_value)
+            return **x_value == **y_value;
+        if (h->major != k->major)
+            return false;
+    }
     switch (h->major) {
     case major_type::unsigned_integer:
     case major_type::negative_integer:

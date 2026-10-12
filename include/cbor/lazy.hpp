@@ -233,6 +233,18 @@ value_sharing::key_find(Iterator it, Last const last, Key const key,
         } else {
             equal = (k->major == major_type::unsigned_integer && key >= 0 && k->argument == static_cast<std::uint64_t>(key)) ||
                     (k->major == major_type::negative_integer && key < 0 && k->argument == static_cast<std::uint64_t>(-1 - key));
+            if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
+                auto const content = shared_resolve(*it.top_level, it.top_level->encoded.size() - probe.encoded.size(), checks);
+                if (!content) [[unlikely]]
+                    return std::unexpected(content.error());
+                heads::decoder<Checked> d{std::string_view(std::span(it.top_level->encoded).subspan(*content)), checks};
+                auto const read = d.bignum_decode(k->argument);
+                if (!read) [[unlikely]]
+                    return std::unexpected(read.error());
+                bool const negative = k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
+                equal = *read && negative == (key < 0) &&
+                        **read == (key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key));
+            }
         }
         if (equal)
             return std::pair{std::move(it), true};
@@ -367,7 +379,21 @@ inline std::expected<cbor::type, error> lazy::type() const
                             auto const h = heads::raw_head_read(top_level->encoded, *at, checks);
                             if (!h) [[unlikely]]
                                 return std::unexpected(h.error());
-                            return heads::type_of(h->major, h->info, h->argument);
+                            if (!heads::is_bignum(h->major, h->argument)) [[likely]]
+                                return heads::type_of(h->major, h->info, h->argument);
+                            auto const content = value_sharing::shared_resolve(*top_level, h->at, checks);
+                            if (!content) [[unlikely]]
+                                return std::unexpected(content.error());
+                            heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(*content)),
+                                                      checks};
+                            auto const read = d.bignum_decode(h->argument);
+                            if (!read) [[unlikely]]
+                                return std::unexpected(read.error());
+                            if (!*read)
+                                return heads::type_of(h->major, h->info, h->argument);
+                            return h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
+                                       ? cbor::type::negative_integer
+                                       : cbor::type::unsigned_integer;
                         });
 }
 
@@ -513,9 +539,7 @@ auto lazy::get(limit_values const loaded) const
             if constexpr (std::integral<T> && !std::is_same_v<T, bool>) {
                 bool negative = h.major == major_type::negative_integer;
                 std::uint64_t argument = h.argument;
-                if (h.major == major_type::tag &&
-                    (h.argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
-                     h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum))) {
+                if (heads::is_bignum(h.major, h.argument)) {
                     negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
                     auto const content = value_sharing::shared_resolve(
                         *source, source->encoded.size() - d.encoded.size(), checks);
@@ -523,23 +547,12 @@ auto lazy::get(limit_values const loaded) const
                         return std::unexpected(content.error());
                     d = heads::decoder<Checked>{
                         std::string_view(std::span(source->encoded).subspan(*content)), checks};
-                    auto const r = d.head_decode();
-                    if (!r) [[unlikely]]
-                        return std::unexpected(r.error());
-                    if (error const c =
-                            validity::check_tag_content(h.argument, r->major, r->info).error_or(error{});
-                        c != error{}) [[unlikely]]
-                        return std::unexpected(c);
-                    auto const bytes = d.byte_string_decode(r->argument);
-                    if (!bytes) [[unlikely]]
-                        return std::unexpected(bytes.error());
-                    std::string_view const magnitude = heads::magnitude_without_leading_zeros(*bytes);
-                    if (error const c =
-                            validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))
-                                .error_or(error{});
-                        c != error{}) [[unlikely]]
-                        return std::unexpected(c);
-                    argument = heads::magnitude_value(magnitude);
+                    auto const read = d.bignum_decode(h.argument);
+                    if (!read) [[unlikely]]
+                        return std::unexpected(read.error());
+                    if (!*read) [[unlikely]]
+                        return std::unexpected(error::number_out_of_range);
+                    argument = **read;
                 } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
                     return std::unexpected(error::incorrect_type);
                 }
@@ -549,6 +562,23 @@ auto lazy::get(limit_values const loaded) const
                 T const magnitude = static_cast<T>(argument);
                 return static_cast<T>(negative ? ~magnitude : magnitude);
             } else if constexpr (std::is_same_v<T, double>) {
+                if (heads::is_bignum(h.major, h.argument)) [[unlikely]] {
+                    auto const content = value_sharing::shared_resolve(
+                        *source, source->encoded.size() - d.encoded.size(), checks);
+                    if (!content) [[unlikely]]
+                        return std::unexpected(content.error());
+                    d = heads::decoder<Checked>{
+                        std::string_view(std::span(source->encoded).subspan(*content)), checks};
+                    auto const read = d.bignum_decode(h.argument);
+                    if (!read) [[unlikely]]
+                        return std::unexpected(read.error());
+                    if (!*read) [[unlikely]]
+                        return std::unexpected(error::number_out_of_range);
+                    h.major = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
+                                  ? major_type::negative_integer
+                                  : major_type::unsigned_integer;
+                    h.argument = **read;
+                }
                 if (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) {
                     bool const negative = h.major == major_type::negative_integer;
                     if (error const c = validity::check_number_range<double>(negative, h.argument).error_or(error{});
@@ -841,6 +871,26 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
         return &node;
     }
     case major_type::tag: {
+        auto const next = heads::is_bignum(head.major, head.argument)
+                              ? heads::raw_head_read(d.encoded, 0, d.checks)
+                              : std::expected<heads::raw_head, error>(std::unexpect, error{});
+        if (next && next->major == major_type::byte_string) {
+            if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            heads::decoder<Checked> const before = d;
+            auto const read = d.bignum_decode(head.argument);
+            if (!read) [[unlikely]]
+                return std::unexpected(read.error());
+            if (*read) {
+                node = item{head.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
+                                ? cbor::type::negative_integer
+                                : cbor::type::unsigned_integer,
+                            heads::preferred_argument_info(**read),
+                            {.u64 = **read}};
+                return &node;
+            }
+            d = before;
+        }
         if (head.argument == std::to_underlying(rfc8949::tag_number::shareable)) {
             std::size_t const number = marks_counted();
             mark_next = number + 1;
@@ -877,6 +927,11 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
             decoded.sharedrefs.emplace_back(&node, shareable);
             return &node;
         }
+        if (auto const inner = heads::raw_head_read(d.encoded, 0, d.checks);
+            inner && heads::is_bignum(inner->major, inner->argument)) [[unlikely]]
+            if (error const c = validity::check_tag_content(head.argument, inner->major, inner->info).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
         auto const content =
             item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, std::nullopt);
         if (!content) [[unlikely]]

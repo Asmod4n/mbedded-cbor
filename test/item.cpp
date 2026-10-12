@@ -578,8 +578,10 @@ TEST_CASE("type: every type of an item, through lazy and through the decoded ite
         row{"\xf9\x00\x00"sv, cbor::type::half_float},
         row{"\xfa\x00\x00\x00\x00"sv, cbor::type::single_float},
         row{"\xfb\x00\x00\x00\x00\x00\x00\x00\x00"sv, cbor::type::double_float},
-        row{"\xc2\x40"sv, cbor::type::unsigned_bignum},
-        row{"\xc3\x40"sv, cbor::type::negative_bignum},
+        row{"\xc2\x40"sv, cbor::type::unsigned_integer},
+        row{"\xc3\x40"sv, cbor::type::negative_integer},
+        row{"\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv, cbor::type::unsigned_bignum},
+        row{"\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv, cbor::type::negative_bignum},
         row{"\xd8\x40\x40"sv, cbor::type::typed_array},
         row{"\xd8\x57\x40"sv, cbor::type::typed_array},
     };
@@ -619,28 +621,35 @@ TEST_CASE("type: an empty lazy throws")
 namespace item_test
 {
 
-// encode writes the tree back with the additional information of each head, so an item that is not in preferred
-// form and a tag 29 that points back into its own container come back byte for byte. 28([29(0)]) is an array
-// that holds itself; encode writes the head of tag 29 and its index and does not follow the pointer.
-TEST_CASE("encode: a tree with a cycle through tag 29 comes back byte for byte")
+// RFC 8949 2: the tree holds values, so encode writes the library's own form: each length, tag number and integer
+// in its shortest head. A head that is not in preferred form comes back shorter, with the same value. 28([29(0)])
+// is an array that holds itself; encode writes the head of tag 29 and its index and does not follow the pointer.
+// The index of tag 29 is an integer like any other and is written shortest.
+TEST_CASE("encode: a tree is written in its shortest heads, also with a cycle through tag 29")
 {
-    for (std::string_view const wire : {"\xd8\x1c\x81\xd8\x1d\x00"sv, "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x18\x00"sv,
-                                        "\x9a\x00\x00\x00\x01\x7a\x00\x00\x00\x02hi"sv}) {
-        CAPTURE(wire);
-        auto const top_level = cbor::lazy::copy(std::string(wire));
+    struct row {
+        std::string_view wire;
+        std::string_view own;
+    };
+    for (row const r : {row{"\xd8\x1c\x81\xd8\x1d\x00"sv, "\xd8\x1c\x81\xd8\x1d\x00"sv},
+                        row{"\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x18\x00"sv, "\x82\xd8\x1c\x01\xd8\x1d\x00"sv},
+                        row{"\x9a\x00\x00\x00\x01\x7a\x00\x00\x00\x02hi"sv, "\x81\x62hi"sv}}) {
+        CAPTURE(r.wire);
+        auto const top_level = cbor::lazy::copy(std::string(r.wire));
         REQUIRE(top_level.has_value());
         auto const root = item_of(top_level->decode());
         std::string out;
         auto const size = cbor::encode(*root, out);
         REQUIRE(size.has_value());
-        CHECK_EQ(*size, wire.size());
-        CHECK_EQ(out, wire);
+        CHECK_EQ(*size, r.own.size());
+        CHECK_EQ(out, r.own);
+        CHECK(same_value(out, r.wire));
         auto const pieces = cbor::encode_iov(*root);
         REQUIRE(pieces.has_value());
         std::string joined;
         for (std::string_view const piece : **pieces)
             joined.append(piece);
-        CHECK_EQ(joined, wire);
+        CHECK_EQ(joined, r.own);
     }
 }
 
@@ -890,8 +899,9 @@ TEST_CASE("encode: a float of each width comes back byte for byte")
 // finite set, so every pair of major type 0 to 7 and additional information 0 to 27 is checked. A head that is not
 // in preferred form is well-formed, so an argument of 1 stands in every width; a simple value in one extra byte
 // needs 32 or more. Each tag takes a content that RFC 8949 3.4 admits; tag 29 needs a mark and has its own tests.
-// The expected type is written from the tables of RFC 8949 3.1 and 3.3, and the item must come
-// back byte for byte, which also checks the major type that encode takes from the type.
+// The expected type is written from the tables of RFC 8949 3.1 and 3.3. A tag 2 or 3 over h'05' fits a basic
+// integer and is that integer (RFC 8949 3.4.3). encode writes the same value with the shortest head and a float at
+// its width, which also checks the major type that encode takes from the type.
 TEST_CASE("decode: every major type and additional information gives the type of RFC 8949")
 {
     for (unsigned major = 0; major < 8; ++major) {
@@ -938,8 +948,8 @@ TEST_CASE("decode: every major type and additional information gives the type of
                 expected = cbor::type::map;
                 break;
             case 6:
-                expected = argument == 2   ? cbor::type::unsigned_bignum
-                           : argument == 3 ? cbor::type::negative_bignum
+                expected = argument == 2   ? cbor::type::unsigned_integer
+                           : argument == 3 ? cbor::type::negative_integer
                                            : cbor::type::tag;
                 break;
             default:
@@ -958,26 +968,52 @@ TEST_CASE("decode: every major type and additional information gives the type of
             auto const decoded = top_level->decode();
             REQUIRE(decoded.has_value());
             CHECK_EQ((*decoded)->type, expected);
-            CHECK_EQ((*decoded)->additional_information, info);
-            CHECK_EQ(major_of((*decoded)->type), static_cast<cbor::major_type>(major));
+            bool const bignum = major == 6 && (argument == 2 || argument == 3);
+            CHECK_EQ((*decoded)->additional_information, bignum ? 5 : info);
+            CHECK_EQ(major_of((*decoded)->type), bignum ? static_cast<cbor::major_type>(argument - 2)
+                                                        : static_cast<cbor::major_type>(major));
+            std::string own = wire.substr(0, 1);
+            if (bignum)
+                own = argument == 2 ? "\x05"s : "\x25"s;
+            else if (major == 7 && info >= 25)
+                own = wire;
+            else {
+                own[0] = static_cast<char>(major << 5 | (argument < 24 ? argument : 24));
+                if (argument >= 24)
+                    own += static_cast<char>(argument);
+                own += wire.substr(1 + width);
+            }
             std::string again;
             REQUIRE(cbor::encode(**decoded, again).has_value());
-            CHECK_EQ(again, wire);
+            CHECK_EQ(again, own);
+            CHECK(same_value(again, wire));
         }
     }
 }
 
-// The types of RFC 8949 3.4.3 and RFC 8746 are tags: a bignum and a typed array keep major type 6 when they are
-// written back.
-TEST_CASE("encode: a bignum and a typed array are written back as tags")
+// RFC 8949 3.4.3: a bignum that fits a basic integer is that integer, and preferred serialization never writes
+// it as a bignum. A larger bignum and a typed array of RFC 8746 keep major type 6 when they are written back.
+TEST_CASE("encode: a bignum that fits is an integer, a larger bignum and a typed array stay tags")
 {
-    for (std::string_view const wire : {"\xc2\x41\x05"sv, "\xc3\x41\x05"sv, "\xd8\x40\x40"sv}) {
-        CAPTURE(wire);
-        auto const root = item_of(cbor::lazy::copy(std::string(wire))->decode());
-        CHECK_EQ(major_of(root->type), cbor::major_type::tag);
+    struct row {
+        std::string_view wire;
+        std::string_view own;
+        cbor::major_type major;
+    };
+    std::string const two_64 = "\xc2\x49\x01"s + std::string(8, '\0');
+    std::string const minus_two_64_minus_1 = "\xc3\x49\x01"s + std::string(8, '\0');
+    for (row const r : {row{"\xc2\x41\x05"sv, "\x05"sv, cbor::major_type::unsigned_integer},
+                        row{"\xc3\x41\x05"sv, "\x25"sv, cbor::major_type::negative_integer},
+                        row{two_64, two_64, cbor::major_type::tag},
+                        row{minus_two_64_minus_1, minus_two_64_minus_1, cbor::major_type::tag},
+                        row{"\xd8\x40\x40"sv, "\xd8\x40\x40"sv, cbor::major_type::tag}}) {
+        CAPTURE(r.wire);
+        auto const root = item_of(cbor::lazy::copy(std::string(r.wire))->decode());
+        CHECK_EQ(major_of(root->type), r.major);
         std::string again;
         REQUIRE(cbor::encode(*root, again).has_value());
-        CHECK_EQ(again, wire);
+        CHECK_EQ(again, r.own);
+        CHECK(same_value(again, r.wire));
     }
 }
 

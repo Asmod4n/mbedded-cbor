@@ -170,7 +170,8 @@ TEST_CASE("doc advanced runtime: decode")
     CHECK_EQ(children_of(*(*i)).size(), 2u);
     CHECK_EQ(cbor::lazy::copy("\x82\x01"s)->decode().error(), error::too_little_data);
     CHECK_EQ(cbor::lazy::copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->decode().error(), error::too_little_data);
-    CHECK_EQ(*cbor::lazy::copy("\xc2\x41\x05"s)->type(), cbor::type::unsigned_bignum);
+    CHECK_EQ(*cbor::lazy::copy("\xc2\x41\x05"s)->type(), cbor::type::unsigned_integer);
+    CHECK_EQ(*cbor::lazy::copy("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s)->type(), cbor::type::unsigned_bignum);
     CHECK_EQ(*cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::unsigned_integer);
     auto const tree = cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->decode();
     REQUIRE(tree.has_value());
@@ -221,9 +222,11 @@ TEST_CASE("doc advanced runtime: encode")
     cbor::item const *const reference = six->via.tag.content;
     CHECK_EQ(&cbor::shared_value(tagged, *reference), six);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
+    std::string const own = "\x82\xd8\x1c\x01\xd8\x1d\x00"s;
     std::string again;
-    CHECK_EQ(cbor::encode(**cbor::lazy::copy(wire)->decode(), again), wire.size());
-    CHECK_EQ(again, wire);
+    CHECK_EQ(cbor::encode(**cbor::lazy::copy(wire)->decode(), again), own.size());
+    CHECK_EQ(again, own);
+    CHECK(same_value(again, wire));
 }
 
 // The section "cbor::sequence" shows the items of a sequence, the error at a cut item, and the owner of the
