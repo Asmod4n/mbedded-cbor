@@ -267,7 +267,7 @@ inline std::expected<lazy_entries::iterator, error> lazy::find(std::string_view 
     return limits_apply(loaded,
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<lazy_entries::iterator, error> {
-                            auto found = value_sharing::container_resolve(top_level, offset, checks);
+                            auto found = value_sharing::tag_content_resolve(top_level, offset, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
                             return value_sharing::key_find(std::move(*found), key, loaded);
@@ -285,7 +285,7 @@ inline std::expected<lazy_entries::iterator, error> lazy::find(std::int64_t cons
     return limits_apply(loaded,
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<lazy_entries::iterator, error> {
-                            auto found = value_sharing::container_resolve(top_level, offset, checks);
+                            auto found = value_sharing::tag_content_resolve(top_level, offset, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
                             return value_sharing::key_find(std::move(*found), key, loaded);
@@ -338,7 +338,7 @@ inline std::expected<std::uint64_t, error> lazy::size() const
     return limits_apply(limits.load(),
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<std::uint64_t, error> {
-                            auto const found = value_sharing::container_resolve(top_level, offset, checks);
+                            auto const found = value_sharing::tag_content_resolve(top_level, offset, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
                             auto const &[source, h, d, item_at] = *found;
@@ -471,7 +471,7 @@ inline std::expected<lazy, error> lazy::at(std::size_t const index) const
     return limits_apply(limits.load(),
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<lazy, error> {
-                            auto found = value_sharing::container_resolve(top_level, offset, checks);
+                            auto found = value_sharing::tag_content_resolve(top_level, offset, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
                             auto &[source, h, d, item_at] = *found;
@@ -620,7 +620,7 @@ inline std::expected<lazy_elements, error> lazy::elements(limit_values const loa
         loaded,
         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
             -> std::expected<lazy_elements, error> {
-            auto const found = value_sharing::container_resolve(top_level, offset, checks);
+            auto const found = value_sharing::tag_content_resolve(top_level, offset, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
             auto const &[source, h, d, item_at] = *found;
@@ -645,7 +645,7 @@ inline std::expected<lazy_entries, error> lazy::entries(limit_values const loade
         loaded,
         [&]<bool Checked>(
             std::size_t, validity::limit_checks<Checked> const checks) -> std::expected<lazy_entries, error> {
-            auto const found = value_sharing::container_resolve(top_level, offset, checks);
+            auto const found = value_sharing::tag_content_resolve(top_level, offset, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
             auto const &[source, h, d, item_at] = *found;
