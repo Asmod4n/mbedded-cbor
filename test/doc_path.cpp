@@ -71,7 +71,7 @@ TEST_CASE("doc path: read a text")
     auto const key = cbor::at_path<"$.user.key", std::span<std::byte const>>(owner, *owner);
     REQUIRE(key.has_value());
     CHECK_EQ((*key)->size(), 2u);
-    CHECK_FALSE((doc_path_compiles<"$.user.name", std::string_view>));
+    CHECK((doc_path_compiles<"$.user.name", std::string_view>));
 }
 
 // The section "Start at a lazy" shows that $ is the value of the lazy and that a text needs no separate owner there.

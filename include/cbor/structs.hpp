@@ -867,6 +867,18 @@ public:
 #endif
     }
 
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
+    {
+        return decode(std::move(encoded), T{});
+    }
+
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded, T &&target)
+    {
+        validity::throw_logic_error_if_null(encoded, "cbor::structs::decode: the encoded data item is null");
+        std::string_view const bytes = *encoded;
+        return decode(std::move(encoded), bytes, std::move(target));
+    }
+
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         return decode(std::move(owner), encoded, T{});

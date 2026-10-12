@@ -2145,6 +2145,14 @@ public:
         requires std::same_as<std::remove_const_t<Encoded>, std::string>
     static std::expected<accessor<>, error> path(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
+    static std::expected<accessor<>, error> path(std::shared_ptr<std::string const> encoded)
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    {
+        validity::throw_logic_error_if_null(encoded, "cbor::packed::path: the encoded data item is null");
+        std::string_view const bytes = *encoded;
+        return path(std::move(encoded), bytes);
+    }
+
     template <fixed_string Path, std::convertible_to<std::size_t>... Index>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_slots<Path>() &&
@@ -2221,6 +2229,20 @@ public:
             return std::unexpected(error::not_enough_memory);
         }
 #endif
+    }
+
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    {
+        return decode(std::move(encoded), T{});
+    }
+
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded, T target)
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    {
+        validity::throw_logic_error_if_null(encoded, "cbor::packed::decode: the encoded data item is null");
+        std::string_view const bytes = *encoded;
+        return decode(std::move(encoded), bytes, std::move(target));
     }
 
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)

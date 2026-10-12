@@ -973,7 +973,8 @@ TEST_CASE("path: a typed read skips an item of any nesting depth")
 }
 
 // The typed read compiles only where it is safe. A view is read only with an owner of the bytes, so it cannot outlive
-// them: a std::string, a temporary std::string, a std::string_view and a literal alone give no view. A temporary or a
+// them: a std::string, a temporary std::string, a std::string_view and a literal alone are copied into an owner that
+// the result keeps, and a temporary std::string is moved into it. A temporary or a
 // moved std::string beside an owner does not compile either, because the owner does not hold it and the view would
 // read freed memory. A std::string that the caller keeps is read beside an owner. A scalar holds no bytes and is read
 // from any of them. The path is a singular query of RFC 9535 2.3.5.1 with names and indexes only: a wildcard, a
@@ -986,19 +987,19 @@ TEST_CASE("path: a typed read that is not safe does not compile")
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o, std::string_view(*o)); }; }(owner)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::span<std::byte const>>(o, std::string_view(*o)); }; }(owner)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", cbor::typed_array>(o, std::string_view(*o)); }; }(owner)));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(text)));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::as_const(text))));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string{})));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::move(std::as_const(text)))));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string_view(text))));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }("\xa1\x61\x61\x61x")));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(text)));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::as_const(text))));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string{})));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::move(std::as_const(text)))));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string_view(text))));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }("\xa1\x61\x61\x61x")));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o, std::string(*o)); }; }(owner)));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::at_path<"$.a", std::string_view>(o, std::move(s)); }; }(owner)));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o, std::declval<std::string const>()); }; }(owner)));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", cbor::typed_array>(o, std::string(*o)); }; }(owner)));
     CHECK(([]<class O>(O const &) { return requires(O const &o, std::string const &s) { cbor::at_path<"$.a", std::string_view>(o, s); }; }(owner)));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::span<std::byte const>>(std::forward<S>(s)); }; }(text)));
-    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", cbor::typed_array>(std::forward<S>(s)); }; }(std::string_view(text))));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::span<std::byte const>>(std::forward<S>(s)); }; }(text)));
+    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", cbor::typed_array>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::int64_t>(o, std::string_view(*o)); }; }(owner)));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::int64_t>(std::forward<S>(s)); }; }(std::string{})));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));

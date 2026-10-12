@@ -198,6 +198,18 @@ TEST_CASE("structs: a COSE_Sign1 under tag 18 reads as views into the message")
     CHECK_EQ(*cbor::structs<cose_sign1>::encode(**sign1), message);
 }
 
+// Owner decision: structs::decode has the view form decode(std::shared_ptr<std::string const>). It copies nothing
+// and keeps the owner.
+TEST_CASE("structs: the view form reads the bytes of the owner")
+{
+    auto const owner = std::make_shared<std::string const>(
+        "\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s);
+    auto const held = cbor::structs<cose_sign1>::decode(owner);
+    REQUIRE(held.has_value());
+    CHECK_EQ(reinterpret_cast<char const *>(std::get<2>((*held)->content).data()), owner->data() + 12);
+    CHECK_THROWS_AS((void)cbor::structs<cose_sign1>::decode(std::shared_ptr<std::string const>()), std::logic_error);
+}
+
 // An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
 // owner does not compile, because the owner does not hold it. The test exists because each of these let a view
 // outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
