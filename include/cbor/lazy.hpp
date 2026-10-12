@@ -731,14 +731,15 @@ std::expected<void, error> value_sharing::tree_decoder<Checked>::marks_before_de
                              depth_max,
                              j + 1,
                              j};
-        if (auto const r = outside.item_decode(found.depths[*marked] + 1, j); !r) [[unlikely]]
+        if (auto const r = outside.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), found.depths[*marked] + 1, j); !r) [[unlikely]]
             return std::unexpected(r.error());
     }
     return {};
 }
 
 template <bool Checked>
-std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(std::size_t const depth,
+std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(item *const storage,
+                                                                               std::size_t const depth,
                                                                                std::optional<std::size_t> const mark)
 {
     if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
@@ -746,8 +747,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
     auto const h = d.head_decode();
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    item &node = *std::pmr::polymorphic_allocator<item>(&decoded.memory)
-                      .new_object<item>(item{h->major, h->info, h->argument, std::monostate{}});
+    item &node = *::new (storage) item{h->major, h->info, h->argument, std::monostate{}};
     if (root == nullptr)
         root = &node;
     if (mark && shareables[*mark] == nullptr)
@@ -781,13 +781,14 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
         std::size_t const n = static_cast<std::size_t>(*count);
         std::span<item const *> const children(
             std::pmr::polymorphic_allocator<item const *>(&decoded.memory).allocate(n), n);
+        std::span<item> const nodes(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(n), n);
         open = *reserved;
-        for (item const *&child : children) {
+        for (std::size_t i = 0; i < n; ++i) {
             --open;
-            auto const decoded_child = item_decode(depth + 1, std::nullopt);
+            auto const decoded_child = item_decode(&nodes[i], depth + 1, std::nullopt);
             if (!decoded_child) [[unlikely]]
                 return decoded_child;
-            child = *decoded_child;
+            children[i] = *decoded_child;
         }
         node.content = data_items{children.data(), n};
         return &node;
@@ -798,7 +799,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
             mark_next = number + 1;
             if (shareables.size() <= number)
                 shareables.resize(number + 1);
-            auto const content = item_decode(depth + 1, number);
+            auto const content = item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, number);
             if (!content) [[unlikely]]
                 return content;
             node.content = static_cast<item const *>(*content);
@@ -825,7 +826,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
             node.content = sharedref{shareable, n->info, n->argument};
             return &node;
         }
-        auto const content = item_decode(depth + 1, std::nullopt);
+        auto const content = item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, std::nullopt);
         if (!content) [[unlikely]]
             return content;
         if (error const c =
@@ -852,7 +853,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
             std::vector<lazy>{}, 0);
         std::vector<item const *> nested_shareables;
         tree_decoder inner{decoded, nested, nested_shareables, {nested.encoded, d.checks}, 0, depth_max, 0, 0};
-        auto const data_item = inner.item_decode(depth + 2, std::nullopt);
+        auto const data_item = inner.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 2, std::nullopt);
         if (!data_item) [[unlikely]]
             return data_item;
         if (auto const one = validity::check_one_data_item(inner.d.encoded); !one) [[unlikely]]
@@ -903,7 +904,8 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
             value_sharing::tree_decoder<Checked> tree{
                 *decoded, *top_level, shareables, {encoded, checks}, offset, depth_max,
                 offset == 0 ? std::optional<std::size_t>{0} : std::nullopt, 0};
-            auto const built = tree.item_decode(0, std::nullopt);
+            auto const built = tree.item_decode(
+                std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0, std::nullopt);
             if (!built) [[unlikely]]
                 return std::unexpected(built.error());
             return std::shared_ptr<item const>(std::move(decoded), *built);
