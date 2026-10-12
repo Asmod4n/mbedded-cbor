@@ -2136,6 +2136,59 @@ TEST_CASE("attack: overlapping items are an error")
     CHECK_EQ(at_path<login, "$.id">(into_root), 5u);
 }
 
+// Each item of a packed message starts with an RFC 8949 head: a typed array with the tag head d8 56 and the head
+// 5a of its byte string, a text with the head 7a. A four-byte argument is read big endian (RFC 8949 Section 3).
+// A directory entry is forged so that the head of the last item no longer fits before the root record. The test
+// exists because the read of that head must stop at the bytes that are left and give too_little_data.
+TEST_CASE("attack: an item head that does not fit before the root is too_little_data")
+{
+    auto const big_endian = [](std::size_t const x) {
+        return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
+                           static_cast<char>(x)};
+    };
+    std::string const array = schema_bytes(doubles{{1.0, 2.0}});
+    std::size_t const head = array.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
+    REQUIRE_NE(head, std::string::npos);
+    std::size_t const entry = array.find(big_endian(head));
+    REQUIRE_LT(entry, head);
+    std::string cut_array = array;
+    cut_array.replace(entry, 4, big_endian(array.size() - cbor::packed<doubles>::fixed_size() - 3));
+    CHECK_EQ(at_path<doubles, "$.v[0]">(cut_array).error(), error::too_little_data);
+
+    std::string const text = schema_bytes(login{5, true, "ab"});
+    std::size_t const name = text.find("\x7a\x00\x00\x00\x02" "ab"sv);
+    REQUIRE_NE(name, std::string::npos);
+    std::size_t const name_entry = text.find(big_endian(name));
+    REQUIRE_LT(name_entry, name);
+    std::string cut_text = text;
+    cut_text.replace(name_entry, 4, big_endian(text.size() - cbor::packed<login>::fixed_size() - 3));
+    CHECK_EQ(at_path<login, "$.name">(cut_text).error(), error::too_little_data);
+}
+
+// The directory is a byte string with a four-byte argument (RFC 8949 Section 3.1, major type 2). Its length is
+// forged far past the end of the message, and the count in the prefix is forged to match it. The test exists
+// because the read of the directory must stop at the bytes that are left and give too_little_data.
+TEST_CASE("attack: a directory longer than the message is too_little_data")
+{
+    auto const big_endian = [](std::size_t const x) {
+        return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
+                           static_cast<char>(x)};
+    };
+    std::string const bytes = schema_bytes(login{5, true, "ab"});
+    std::size_t const directory = bytes.find("\x5a\x00\x00\x00\x04"sv, 8);
+    REQUIRE_NE(directory, std::string::npos);
+    std::size_t const forged_length = 0x00fffff0;
+    std::size_t const first =
+        (std::size_t{static_cast<std::uint8_t>(bytes[4])} << 24 | std::size_t{static_cast<std::uint8_t>(bytes[5])} << 16 |
+         std::size_t{static_cast<std::uint8_t>(bytes[6])} << 8 | std::size_t{static_cast<std::uint8_t>(bytes[7])}) -
+        1;
+    std::string forged = bytes;
+    forged.replace(4, 4, big_endian(first + forged_length / 4));
+    forged.replace(directory + 1, 4, big_endian(forged_length));
+    CHECK_EQ(cbor::packed<login>::path(forged).error(), error::too_little_data);
+    CHECK_EQ(cbor::packed<login>::decode(forged).error(), error::too_little_data);
+}
+
 // A record inside a list carries its class tag like the root. The tag of the second tire is forged. The test exists
 // because a path into a list must check the tag of the record it reaches, not only the tag of the root.
 TEST_CASE("attack: a forged class tag of a record in a list is incorrect_type")
