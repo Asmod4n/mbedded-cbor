@@ -1,10 +1,12 @@
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <expected>
 #include <initializer_list>
 #include <memory>
 #include <optional>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -316,12 +318,10 @@ struct shared_writer {
         node const *const id = sharing ? identity(v, key) : nullptr;
         if (id != nullptr) {
             if (auto const n = numbers.find(id); n != numbers.end()) {
-                if (auto const r = e.tag(29); !r)
-                    return r;
-                return e.unsigned_integer(static_cast<std::uint8_t>(n->second));
+                return e.sharedref(n->second);
             }
             if (seen[id] > 1) {
-                if (auto const r = e.tag(28); !r)
+                if (auto const r = e.shareable(); !r)
                     return r;
                 numbers.emplace(id, next++);
             }
@@ -390,7 +390,7 @@ cbor::item const *at(P const &map, std::string_view const key)
 TEST_CASE("tag 28/29: a repeated value keeps its identity")
 {
     auto const a = arr({u(1), u(2)});
-    CHECK_EQ(encoded_shared(arr({a, a})), "\x82\xd8\x1c\x82"s + test::native_unsigned(1) + test::native_unsigned(2) + "\xd8\x1d\x18\x00"s);
+    CHECK_EQ(encoded_shared(arr({a, a})), "\x82\xd8\x1c\x82"s + test::native_unsigned(1) + test::native_unsigned(2) + "\xd8\x1d\x00"s);
     auto const r = round_trip(arr({a, a}));
     CHECK(same(element(r, 0), element(r, 1)));
 }
@@ -422,7 +422,7 @@ TEST_CASE("tag 28/29: a cyclic array and a cyclic map")
 {
     auto const a = arr({});
     std::get<std::vector<handle>>(a->kind).push_back(a);
-    CHECK_EQ(encoded_shared(a), "\xd8\x1c\x81\xd8\x1d\x18\x00"sv);
+    CHECK_EQ(encoded_shared(a), "\xd8\x1c\x81\xd8\x1d\x00"sv);
     auto const ra = round_trip(a);
     CHECK(same(ra, element(ra, 0)));
     auto const h = obj({});
@@ -566,7 +566,7 @@ TEST_CASE("application tag: one object three times is one mark and two reference
     shared_writer w;
     w.count(arr({p, p, p}), false);
     CHECK_EQ(w.content_reads, 1);
-    CHECK_EQ(encoded_shared(arr({p, p, p})), "\x83\xd8\x1c\xd9\x13\x88\x82"s + test::native_unsigned(3) + test::native_unsigned(7) + "\xd8\x1d\x18\x00\xd8\x1d\x18\x00"s);
+    CHECK_EQ(encoded_shared(arr({p, p, p})), "\x83\xd8\x1c\xd9\x13\x88\x82"s + test::native_unsigned(3) + test::native_unsigned(7) + "\xd8\x1d\x00\xd8\x1d\x00"s);
 }
 
 // The iov target of the encoder gives the bytes of the string target, the marks and a long string included.
@@ -891,4 +891,69 @@ TEST_CASE("tag 29: a chain of marks before the start of a lazy keeps the stack b
         CHECK_EQ(element(at_mark, 0)->argument, 0u);
         CHECK(test::at_path("$[" + std::to_string(n) + "]", *cbor::lazy::from(doc)).has_value());
     }
+}
+
+// The bytes come from the value-sharing specification: tag 28 is d8 1c before the value, and tag 29 is d8 1d before
+// the index as an unsigned integer in its shortest head. An index of 24 or more takes a longer head.
+TEST_CASE("encoder: shareable and sharedref write the bytes of the specification")
+{
+    std::string out;
+    cbor::encoder e(out);
+    REQUIRE(e.array(4).has_value());
+    REQUIRE(e.shareable().has_value());
+    REQUIRE(e.text_string("a").has_value());
+    REQUIRE(e.sharedref(0).has_value());
+    REQUIRE(e.sharedref(23).has_value());
+    REQUIRE(e.sharedref(24).has_value());
+    REQUIRE(e.finish().has_value());
+    CHECK_EQ(out, "\x84\xd8\x1c\x61" "a" "\xd8\x1d\x00\xd8\x1d\x17\xd8\x1d\x18\x18"s);
+    std::string const larger = [] {
+        std::string o;
+        cbor::encoder f(o);
+        REQUIRE(f.sharedref(256).has_value());
+        REQUIRE(f.finish().has_value());
+        return o;
+    }();
+    CHECK_EQ(larger, "\xd8\x1d\x19\x01\x00"s);
+}
+
+// The contract of every call: an error of the target is a value, and a call after it throws.
+TEST_CASE("encoder: sharedref after an error throws")
+{
+    std::array<char, 3> fixed{};
+    cbor::encoder e{std::span<char>(fixed)};
+    REQUIRE(e.shareable().has_value());
+    CHECK_EQ(e.sharedref(0).error(), error::no_buffer_space);
+    CHECK_THROWS_AS((void)e.shareable(), std::logic_error);
+}
+
+// The encoder writes 28(["a", 29(0)]); decode gives the reference as the marked array itself.
+TEST_CASE("encoder: shareable and sharedref keep the identity through decode")
+{
+    std::string out;
+    cbor::encoder e(out);
+    REQUIRE(e.array(2).has_value());
+    REQUIRE(e.shareable().has_value());
+    REQUIRE(e.array(1).has_value());
+    REQUIRE(e.text_string("a").has_value());
+    REQUIRE(e.sharedref(0).has_value());
+    REQUIRE(e.finish().has_value());
+    auto const r = decoded_ref(out);
+    CHECK(same(element(r, 0), element(r, 1)));
+}
+
+// The owner allows a cycle through a tag that is not an array or a map. The encoder writes 28(6(29(0))), and decode
+// gives a tree where the content of tag 6 is the marked tag itself.
+TEST_CASE("encoder: a cycle through tag 6 decodes into a tree with a cycle")
+{
+    std::string out;
+    cbor::encoder e(out);
+    REQUIRE(e.shareable().has_value());
+    REQUIRE(e.tag(6).has_value());
+    REQUIRE(e.sharedref(0).has_value());
+    REQUIRE(e.finish().has_value());
+    CHECK_EQ(out, "\xd8\x1c\xc6\xd8\x1d\x00"s);
+    auto const r = decoded_ref(out);
+    CHECK_EQ(target(r)->argument, 6u);
+    CHECK(same(content(r), r));
 }

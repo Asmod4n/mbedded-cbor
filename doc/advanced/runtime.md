@@ -213,7 +213,8 @@ It reads no byte after the item.
 
 `cbor::encoder` writes one data item per call, in the order of the bytes:
 `unsigned_integer`, `negative_integer`, `byte_string`, `text_string`,
-`array`, `map`, `tag`, `simple_value`, `floating_point` and `typed_array`.
+`array`, `map`, `tag`, `shareable`, `sharedref`, `simple_value`,
+`floating_point` and `typed_array`.
 An integer and a float take the width of their type; a count, a length and
 a tag number take the shortest head. The encoder counts nothing: the counts
 of `array` and `map` are yours.
@@ -240,6 +241,25 @@ e.unsigned_integer(std::uint8_t{1});
 e.text_string("a");
 e.finish();   // 5: out holds 82 18 01 61 61
 ```
+
+`shareable()` writes tag 28, and the next item is the shared value.
+`sharedref(n)` writes tag 29 with the index `n` in the shortest head. The
+index counts the tags 28 in the order of the bytes, from 0
+([value-sharing](http://cbor.schmorp.de/value-sharing)).
+
+```cpp
+std::string out;
+cbor::encoder e(out);
+e.array(2);
+e.shareable();
+e.text_string("a");
+e.sharedref(0);
+e.finish();   // 8: out holds 82 d8 1c 61 61 d8 1d 00
+```
+
+A cycle through a tag that is not an array or a map is allowed. For
+example, `28(6(29(0)))` decodes into a tree where the content of tag 6 is
+a reference to that tag 6 item.
 
 `cbor::encode(item, target)` writes a decoded item back. Each head keeps
 the additional information that it had on the wire, so the bytes come back
