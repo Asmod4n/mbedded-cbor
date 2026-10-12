@@ -53,8 +53,6 @@
 namespace cbor
 {
 
-enum class pass;
-
 struct lazy;
 
 struct limit_values {
@@ -446,8 +444,6 @@ public:
 
     friend class heads;
 
-    friend class decoding;
-
     friend struct lazy;
 
     friend class well_formedness;
@@ -457,9 +453,6 @@ public:
     friend class extended_diagnostic_notation;
 
     friend class jsonpath;
-
-    template <class, class, pass>
-    friend class walker;
 
 #ifdef __cpp_impl_reflection
     friend class reflection;

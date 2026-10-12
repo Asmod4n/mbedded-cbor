@@ -19,7 +19,6 @@
 #include <utility>
 #include <vector>
 
-#include "binding.hpp"
 #include "item_size.hpp"
 #include "error.hpp"
 #include "validity.hpp"
@@ -35,25 +34,11 @@ namespace cbor
 
 struct lazy;
 
-template <binding Binding>
-std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
-
-template <binding Binding>
-std::expected<typename Binding::value, error> query(Binding &binding, std::string_view path, lazy const &l);
-
 template <fixed_string Path>
 class is_valid_path;
 
 template <fixed_string Path>
 inline constexpr bool is_valid_path_v = is_valid_path<Path>::value;
-
-template <fixed_string Path, binding Binding>
-    requires is_valid_path_v<Path>
-std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
-
-template <fixed_string Path, binding Binding>
-    requires is_valid_path_v<Path>
-std::expected<typename Binding::value, error> query(Binding &binding, lazy const &l);
 
 std::expected<lazy, error> at_path(std::string_view path, lazy const &l);
 
@@ -628,16 +613,6 @@ class jsonpath
     static std::expected<std::vector<lazy>, error> query_walk(query_view const &v, parsed_query const &top,
                                                               lazy const &root, limit_values loaded);
 
-    template <class Binding>
-    static std::expected<typename Binding::value, error>
-    singular_query_walk(Binding &binding, query_view const &v, parsed_query const &top, lazy const &root,
-                        limit_values loaded);
-
-    template <class Binding>
-    static std::expected<typename Binding::value, error> query_walk(Binding &binding, query_view const &v,
-                                                                    parsed_query const &top, lazy const &root,
-                                                                    limit_values loaded);
-
     template <fixed_string Path, class Walk>
     static auto compiled_apply(Walk const &walk, limit_values loaded);
 
@@ -1072,19 +1047,6 @@ class jsonpath
         requires is_valid_path_v<Path>
     friend std::expected<std::vector<lazy>, error> query(lazy const &l);
 
-    template <binding Binding>
-    friend std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view path, lazy const &l);
-
-    template <binding Binding>
-    friend std::expected<typename Binding::value, error> query(Binding &binding, std::string_view path, lazy const &l);
-
-    template <fixed_string Path, binding Binding>
-        requires is_valid_path_v<Path>
-    friend std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l);
-
-    template <fixed_string Path, binding Binding>
-        requires is_valid_path_v<Path>
-    friend std::expected<typename Binding::value, error> query(Binding &binding, lazy const &l);
 };
 
 template <fixed_string Path>
@@ -1688,38 +1650,6 @@ inline std::expected<std::vector<lazy>, error> jsonpath::query_walk(query_view c
     return segments_apply(with_nodelists, top.segment_at, top.segment_count, root, root, loaded);
 }
 
-template <class Binding>
-std::expected<typename Binding::value, error>
-jsonpath::singular_query_walk(Binding &binding, query_view const &v, parsed_query const &top,
-                              lazy const &root, limit_values const loaded)
-{
-    auto const node = singular_query_walk(v, top, root, loaded);
-    if (!node) [[unlikely]]
-        return std::unexpected(node.error());
-    auto value = lazy_decode(binding, *node, loaded);
-    if (!value) [[unlikely]]
-        return std::unexpected(value.error());
-    return std::move(*value);
-}
-
-template <class Binding>
-std::expected<typename Binding::value, error> jsonpath::query_walk(Binding &binding, query_view const &v,
-                                                                   parsed_query const &top, lazy const &root,
-                                                                   limit_values const loaded)
-{
-    auto const nodes = query_walk(v, top, root, loaded);
-    if (!nodes) [[unlikely]]
-        return std::unexpected(nodes.error());
-    auto array = binding.array_decode(nodes->size());
-    for (lazy const &node : *nodes) {
-        auto value = lazy_decode(binding, node, loaded);
-        if (!value) [[unlikely]]
-            return std::unexpected(value.error());
-        array = binding.array_append(std::move(array), std::move(*value));
-    }
-    return array;
-}
-
 template <fixed_string Path, class Walk>
 auto jsonpath::compiled_apply(Walk const &walk, limit_values const loaded)
 {
@@ -1792,56 +1722,6 @@ std::expected<std::vector<lazy>, error> query(lazy const &l)
     return jsonpath::compiled_apply<Path>(
         [&l](jsonpath::query_view const &v, jsonpath::parsed_query const &top, limit_values const loaded) {
             return jsonpath::query_walk(v, top, l, loaded);
-        },
-        limits.load());
-}
-
-template <binding Binding>
-std::expected<typename Binding::value, error> at_path(Binding &binding, std::string_view const path, lazy const &l)
-{
-    limit_values const loaded = limits.load();
-    auto const q = jsonpath::query_parse(path, loaded.nesting_depth);
-    if (!q) [[unlikely]]
-        return std::unexpected(q.error());
-    if (!q->top.singular) [[unlikely]]
-        return std::unexpected(error::invalid_path);
-    return jsonpath::singular_query_walk(binding, {q->segments, q->selectors, q->expressions, q->keys, {}},
-                                         q->top, l, loaded);
-}
-
-template <binding Binding>
-std::expected<typename Binding::value, error> query(Binding &binding, std::string_view const path, lazy const &l)
-{
-    limit_values const loaded = limits.load();
-    auto const q = jsonpath::query_parse(path, loaded.nesting_depth);
-    if (!q) [[unlikely]]
-        return std::unexpected(q.error());
-    return jsonpath::query_walk(binding, {q->segments, q->selectors, q->expressions, q->keys, {}}, q->top, l,
-                                loaded);
-}
-
-template <fixed_string Path, binding Binding>
-    requires is_valid_path_v<Path>
-std::expected<typename Binding::value, error> at_path(Binding &binding, lazy const &l)
-{
-    static_assert(jsonpath::query_parse(Path.view(), validity::nesting_depth_default)->top.singular,
-                  "cbor::at_path: the path is not a singular query (RFC 9535 2.3.5.1); cbor::query reads its nodelist");
-    return jsonpath::compiled_apply<Path>(
-        [&binding, &l](jsonpath::query_view const &v, jsonpath::parsed_query const &top,
-                       limit_values const loaded) {
-            return jsonpath::singular_query_walk(binding, v, top, l, loaded);
-        },
-        limits.load());
-}
-
-template <fixed_string Path, binding Binding>
-    requires is_valid_path_v<Path>
-std::expected<typename Binding::value, error> query(Binding &binding, lazy const &l)
-{
-    return jsonpath::compiled_apply<Path>(
-        [&binding, &l](jsonpath::query_view const &v, jsonpath::parsed_query const &top,
-                       limit_values const loaded) {
-            return jsonpath::query_walk(binding, v, top, l, loaded);
         },
         limits.load());
 }
