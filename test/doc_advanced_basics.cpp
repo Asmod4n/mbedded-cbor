@@ -100,7 +100,7 @@ TEST_CASE("doc advanced basics: limits")
              error::container_elements_exceeded);
 }
 
-// A user expected a string limit at lazy::from. The section "Limits" states that the step that reads the string
+// A user expected a string limit at lazy::copy. The section "Limits" states that the step that reads the string
 // checks it.
 TEST_CASE("doc advanced basics: a string limit is checked at get")
 {
@@ -175,7 +175,7 @@ TEST_CASE("doc advanced basics: threads")
     CHECK_EQ(read, 2);
 }
 
-// A user moved a lazy out of the std::expected of lazy::from, and saw no throw over plain data in another thread.
+// A user moved a lazy out of the std::expected of lazy::copy, and saw no throw over plain data in another thread.
 // The section "Threads" shows the move and states that only marks are checked.
 TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thread")
 {

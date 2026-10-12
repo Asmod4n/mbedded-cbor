@@ -432,7 +432,7 @@ TEST_CASE("structs: a shared reference reads as the item it names")
 template <class Encoded>
 concept decodable = requires(Encoded &&e) { cbor::structs<std::string_view>::decode(std::forward<Encoded>(e)); };
 
-// The value category of the bytes says what decode does, as for schema::decode and lazy::from. A moved std::string
+// The value category of the bytes says what decode does, as for packed::decode and lazy::copy. A moved std::string
 // becomes the owner and is not copied: the view points into the buffer that was moved. Every other form is copied
 // once, so no view points into bytes that nothing keeps alive.
 TEST_CASE("structs: decode takes a moved string as the owner and copies every other form")

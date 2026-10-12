@@ -549,7 +549,7 @@ auto comparable(T const &v)
 template <class T>
 using comparable_t = decltype(comparable(std::declval<T>()));
 
-// The reference: lazy::from, one lazy::at for each step and lazy::get, as the chain of test/lazy.cpp.
+// The reference: lazy::copy, one lazy::at for each step and lazy::get, as the chain of test/lazy.cpp.
 template <class T>
 std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vector<step> const &steps)
 {
