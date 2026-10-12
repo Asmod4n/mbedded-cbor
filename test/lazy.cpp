@@ -19,6 +19,7 @@
 #include <system_error>
 #include <thread>
 #include <tuple>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -1528,3 +1529,70 @@ TEST_CASE("lazy: a step passes a tag that it does not read")
     CHECK_EQ(*lazy_of(doc).at(1)->get<int>(), 2);
     CHECK_EQ(*lazy_of(doc).size(), 2u);
 }
+
+namespace two_forms
+{
+
+// A text of 100 bytes, longer than any small-string buffer, so a moved std::string keeps its heap bytes.
+std::string long_text()
+{
+    return "\x78\x64"s + std::string(100, 'a');
+}
+
+char const *text_data(std::expected<cbor::lazy, error> const &l)
+{
+    auto const text = l->get<std::string_view>();
+    return (**text).data();
+}
+
+} // namespace two_forms
+
+// Owner decision: bytes enter the library in two forms only. An lvalue std::string goes to copy(std::string_view)
+// and is copied; the caller's string stays as it was.
+TEST_CASE("lazy::copy: an lvalue std::string is copied")
+{
+    std::string const bytes = two_forms::long_text();
+    auto const l = cbor::lazy::copy(bytes);
+    REQUIRE(l.has_value());
+    CHECK_NE(two_forms::text_data(l), bytes.data() + 2);
+    CHECK_EQ(bytes, two_forms::long_text());
+}
+
+// An rvalue std::string goes to copy(std::string&&) and is moved: the lazy reads the same heap bytes.
+TEST_CASE("lazy::copy: an rvalue std::string is moved")
+{
+    std::string bytes = two_forms::long_text();
+    char const *const data = bytes.data();
+    auto const l = cbor::lazy::copy(std::move(bytes));
+    REQUIRE(l.has_value());
+    CHECK_EQ(two_forms::text_data(l), data + 2);
+}
+
+// The overloads are chosen at compile time: a std::string_view and a literal of characters are copied, and a
+// std::shared_ptr goes to view.
+TEST_CASE("lazy::copy and lazy::view: overload resolution")
+{
+    std::string_view const view = "\x01"sv;
+    CHECK(cbor::lazy::copy(view).has_value());
+    CHECK(cbor::lazy::copy("\x01").has_value());
+    auto const viewable = []<class S>(S &&) { return requires(S &&t) { cbor::lazy::view(std::forward<S>(t)); }; };
+    CHECK_FALSE(viewable(std::string()));
+    CHECK_FALSE(viewable(std::string_view()));
+    CHECK(viewable(std::make_shared<std::string const>()));
+}
+
+// view copies nothing and keeps the owner alive after the caller drops it.
+TEST_CASE("lazy::view: the lazy reads the bytes of the owner and keeps it")
+{
+    auto owner = std::make_shared<std::string const>(two_forms::long_text());
+    char const *const data = owner->data();
+    auto const l = cbor::lazy::view(owner);
+    REQUIRE(l.has_value());
+    CHECK_EQ(two_forms::text_data(l), data + 2);
+    CHECK_GT(owner.use_count(), 1);
+    owner.reset();
+    auto const text = l->get<std::string_view>();
+    CHECK_EQ((**text).size(), 100u);
+    CHECK_THROWS_AS((void)cbor::lazy::view(nullptr), std::logic_error);
+}
+

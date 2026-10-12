@@ -170,6 +170,24 @@ inline std::expected<lazy, error> lazy::from(std::string_view const encoded)
     return from(std::make_shared<std::string const>(encoded));
 }
 
+inline std::expected<lazy, error> lazy::view(std::shared_ptr<std::string const> encoded)
+{
+    validity::throw_logic_error_if_null(encoded, "cbor::lazy::view: the encoded data item is null");
+    std::string_view const bytes = *encoded;
+    return from(std::move(encoded), bytes, limits.load());
+}
+
+template <std::same_as<std::string> Encoded>
+std::expected<lazy, error> lazy::copy(Encoded &&encoded)
+{
+    return view(std::make_shared<std::string const>(std::move(encoded)));
+}
+
+inline std::expected<lazy, error> lazy::copy(std::string_view const encoded)
+{
+    return view(std::make_shared<std::string const>(encoded));
+}
+
 template <class Key, class Entries, bool Checked>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
 std::expected<typename Entries::iterator, error>
