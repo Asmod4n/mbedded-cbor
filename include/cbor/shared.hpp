@@ -277,14 +277,6 @@ struct lazy {
     template <std::same_as<std::string> Encoded>
     static std::expected<lazy, error> copy(Encoded &&encoded);
     static std::expected<lazy, error> view(std::shared_ptr<std::string const> encoded);
-    template <std::same_as<std::string> Encoded>
-    static std::expected<lazy, error> from(Encoded &&encoded);
-    static std::expected<lazy, error> from(std::string_view encoded);
-    static std::expected<lazy, error> from(std::shared_ptr<std::string const> encoded);
-    static std::expected<lazy, error> from(std::shared_ptr<void const> owner, std::string_view encoded);
-    template <class Encoded>
-        requires std::same_as<std::remove_const_t<Encoded>, std::string>
-    static std::expected<lazy, error> from(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
     std::expected<lazy, error> at(std::string_view key) const;
 
