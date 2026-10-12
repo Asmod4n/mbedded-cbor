@@ -513,7 +513,7 @@ struct value_sharing::tree_decoder {
     item *root = nullptr;
     std::size_t open = 0;
 
-    std::expected<item *, error> item_decode(std::size_t depth, std::optional<std::size_t> mark);
+    std::expected<item *, error> item_decode(item *storage, std::size_t depth, std::optional<std::size_t> mark);
 
     std::size_t marks_counted();
 
