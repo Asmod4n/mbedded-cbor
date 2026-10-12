@@ -225,8 +225,8 @@ class heads
 
         CBOR_ALWAYS_INLINE std::expected<head, error> head_decode()
         {
-            if (auto const r = validity::check_pending_items(initial_byte_size, encoded.size()); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (!validity::pending_items_fit(initial_byte_size, encoded.size())) [[unlikely]]
+                return std::unexpected(error::too_little_data);
             auto const initial = static_cast<std::uint8_t>(encoded.front());
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
@@ -250,8 +250,8 @@ class heads
                               rfc8949::additional_information::eight_byte_argument)) >= sizeof(std::uint64_t),
                           "An eight-byte argument must cover the bytes of one std::uint64_t.");
             std::size_t const size = argument_size(info);
-            if (auto const r = validity::check_pending_items(initial_byte_size + size, encoded.size()); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (!validity::pending_items_fit(initial_byte_size + size, encoded.size())) [[unlikely]]
+                return std::unexpected(error::too_little_data);
             std::span<char const> const rest = std::span(encoded).subspan(initial_byte_size, size);
             std::uint64_t argument;
             switch (static_cast<rfc8949::additional_information>(info)) {
@@ -309,8 +309,8 @@ class heads
 
         constexpr std::expected<std::string_view, error> byte_string_decode(std::uint64_t const length)
         {
-            if (auto const r = validity::check_pending_items(length, encoded.size()); !r) [[unlikely]]
-                return std::unexpected(r.error());
+            if (!validity::pending_items_fit(length, encoded.size())) [[unlikely]]
+                return std::unexpected(error::too_little_data);
             std::string_view const string{std::span(encoded).first(length)};
             encoded.remove_prefix(length);
             return string;
@@ -593,8 +593,8 @@ class heads
         if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
             return raw_head{major, info, info, at + initial_byte_size};
         std::size_t const size = argument_size(info);
-        if (auto const r = validity::check_pending_items(size, encoded.size() - at - initial_byte_size); !r) [[unlikely]]
-            return std::unexpected(r.error());
+        if (!validity::pending_items_fit(size, encoded.size() - at - initial_byte_size)) [[unlikely]]
+            return std::unexpected(error::too_little_data);
         std::uint64_t argument = 0;
         for (char const c : std::span(encoded).subspan(at + initial_byte_size, size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
