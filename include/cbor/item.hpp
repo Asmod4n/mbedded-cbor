@@ -9,7 +9,6 @@
 #include <span>
 #include <string_view>
 #include <variant>
-#include <vector>
 #if defined(__STDCPP_FLOAT16_T__)
 #include <stdfloat>
 #endif
@@ -29,13 +28,12 @@ struct record {
 };
 
 struct data_items {
-    std::vector<item const *> const *decoded;
-    std::size_t first;
+    item const *const *first;
     std::size_t count;
 
     std::span<item const *const> span() const
     {
-        return std::span(*decoded).subspan(first, count);
+        return std::span(first, count);
     }
 };
 

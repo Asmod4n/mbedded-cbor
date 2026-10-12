@@ -106,6 +106,79 @@ TEST_CASE("decode: a claimed count of 2^63 with one byte left allocates in propo
     CHECK_LE(after - before, 8192u);
 }
 
+namespace
+{
+
+std::string array_of_ones(std::size_t const count)
+{
+    std::string bytes = "\x99"s;
+    bytes += static_cast<char>(count >> 8);
+    bytes += static_cast<char>(count & 0xff);
+    bytes.append(count, '\x01');
+    return bytes;
+}
+
+std::size_t decode_allocations(std::string const &bytes)
+{
+    auto const root = *cbor::lazy::from(std::string(bytes));
+    std::size_t const before = allocations;
+    auto const r = root.decode();
+    std::size_t const after = allocations;
+    REQUIRE(r.has_value());
+    return after - before;
+}
+
+} // namespace
+
+// The items of a decode live in a memory resource that takes few large blocks, sized from the input length. An
+// allocation for each item would make the count grow with the items, so the count for 4000 items must equal the
+// count for 40 items.
+TEST_CASE("decode: the count of allocations does not grow with the count of items")
+{
+    std::size_t const few = decode_allocations(array_of_ones(40));
+    std::size_t const many = decode_allocations(array_of_ones(4000));
+    CHECK_EQ(many, few);
+}
+
+// Each array claims 4096 elements, and the input has room for only one such claim. A reservation for each claim
+// would take 100 times 4096 pointers. The sum of the open reservations must stay within the bytes left, so the
+// second claim gives too_little_data, and the memory stays in proportion to the input.
+TEST_CASE("decode: nested arrays that each claim a large count do not multiply the reserved memory")
+{
+    std::string bytes;
+    for (int i = 0; i < 100; ++i)
+        bytes += "\x99\x10\x00"s;
+    bytes.append(4200, '\x01');
+    auto const root = *cbor::lazy::from(std::string(bytes));
+    std::size_t const before = allocated_bytes;
+    auto const r = root.decode();
+    std::size_t const after = allocated_bytes;
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::too_little_data);
+    CHECK_LE(after - before, 2 * (sizeof(cbor::item) + sizeof(cbor::item const *)) * bytes.size());
+}
+
+// A wide array of small arrays fills many blocks of the memory resource. Under the address sanitizer the walk
+// reads every item, so an item in a block that moved or was freed would be found.
+TEST_CASE("decode: a wide array of nested arrays is read whole after the decode")
+{
+    std::size_t const count = 30000;
+    std::string bytes = "\x99"s;
+    bytes += static_cast<char>(count >> 8);
+    bytes += static_cast<char>(count & 0xff);
+    for (std::size_t i = 0; i < count; ++i)
+        bytes += "\x82\x01\x02"s;
+    auto r = cbor::lazy::from(std::string(bytes))->decode();
+    REQUIRE(r.has_value());
+    auto const outer = std::get<cbor::data_items>((*r)->content).span();
+    REQUIRE_EQ(outer.size(), count);
+    std::uint64_t sum = 0;
+    for (cbor::item const *const inner : outer)
+        for (cbor::item const *const leaf : std::get<cbor::data_items>(inner->content).span())
+            sum += leaf->argument;
+    CHECK_EQ(sum, 3 * count);
+}
+
 // The typed read of a path walks the bytes of the caller and builds no top-level item: a text with the owner of the
 // caller, an integer from a std::string_view and a value under a mark of tag 28 are read with no allocation.
 TEST_CASE("path: a typed read allocates nothing")
