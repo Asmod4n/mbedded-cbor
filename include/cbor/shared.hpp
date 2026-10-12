@@ -597,12 +597,6 @@ value_sharing::container_resolve(std::shared_ptr<top_level_item> source, std::si
         auto const embedded = d.byte_string_decode(r->argument);
         if (!embedded) [[unlikely]]
             return std::unexpected(embedded.error());
-        heads::decoder<Checked> whole{*embedded, checks};
-        well_formedness::no_marks none;
-        if (auto const w = well_formedness::item_skip(whole, none); !w) [[unlikely]]
-            return std::unexpected(w.error());
-        if (auto const one = validity::check_one_data_item(whole.encoded); !one) [[unlikely]]
-            return std::unexpected(one.error());
         source = std::make_shared<top_level_item>(source->owner, *embedded, std::vector<lazy>{}, 0);
         offset = 0;
     }

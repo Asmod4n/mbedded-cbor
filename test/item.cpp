@@ -822,10 +822,10 @@ TEST_CASE("decode: the limits and the nesting depth count inside tag 24")
     CHECK_EQ(refused.error(), cbor::error::container_elements_exceeded);
 }
 
-// RFC 8949 3.4.5.1: the byte string of tag 24 holds one encoded data item. Bytes after that item are refused
-// with syntax_error by decode, by a lazy step and by a typed read alike. The error is a provisional form that the
-// owner has not decided yet.
-TEST_CASE("tag 24 with bytes after its data item is refused everywhere")
+// RFC 8949 3.4.5.1: the byte string of tag 24 holds one encoded data item. decode reads everything and refuses
+// bytes after that item with syntax_error; the error is a provisional form that the owner has not decided yet.
+// A lazy step and a typed read read only up to their target, by owner decision, so they do not see those bytes.
+TEST_CASE("tag 24 with bytes after its data item is refused by decode and not seen by a step")
 {
     std::string const wire = "\xd8\x18\x42\x01\x02"s;
     auto const top_level = cbor::lazy::from(wire);
@@ -833,11 +833,11 @@ TEST_CASE("tag 24 with bytes after its data item is refused everywhere")
     auto const tree = top_level->decode();
     REQUIRE_FALSE(tree.has_value());
     CHECK_EQ(tree.error(), cbor::error::syntax_error);
-    CHECK_EQ(top_level->get<int>().error(), cbor::error::syntax_error);
-    CHECK_EQ(cbor::at_path<"$", int>(std::string_view(wire)).error(), cbor::error::syntax_error);
+    CHECK_EQ(*top_level->get<int>(), 1);
+    CHECK_EQ(*cbor::at_path<"$", int>(std::string_view(wire)), 1);
     std::string const in_array = "\xd8\x18\x43\x81\x01\x02"s;
-    CHECK_EQ(cbor::lazy::from(in_array)->at(0).error(), cbor::error::syntax_error);
-    CHECK_EQ(cbor::at_path<"$[0]", int>(std::string_view(in_array)).error(), cbor::error::syntax_error);
+    CHECK_EQ(*cbor::lazy::from(in_array)->at(0)->get<int>(), 1);
+    CHECK_EQ(*cbor::at_path<"$[0]", int>(std::string_view(in_array)), 1);
 }
 
 }
