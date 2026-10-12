@@ -272,12 +272,12 @@ auto at_path(std::string_view const bytes, Index const... indexes)
         return std::expected<Y, cbor::error>(Y(*x));
 }
 
-// The owner form: the caller keeps the owner alive, so a text stays a view into the message.
+// The view form: the caller keeps the owner alive, so a text stays a view into the message.
 template <class T, cbor::fixed_string Path, class... Index>
-auto at_path(std::shared_ptr<void const> const &owner, std::string_view const bytes, Index const... indexes)
+auto at_path(std::shared_ptr<std::string const> const &owner, Index const... indexes)
     -> decltype(std::declval<typename cbor::packed<T>::template accessor<> const &>().template at_path<Path>(indexes...))
 {
-    auto const root = cbor::packed<T>::path(owner, bytes);
+    auto const root = cbor::packed<T>::path(owner);
     if (!root)
         return std::unexpected(root.error());
     return root->template at_path<Path>(indexes...);
@@ -1164,7 +1164,7 @@ TEST_CASE("decode: a plain struct in a std::pmr::vector takes the resource of th
     counting_resource target;
     auto const owner = std::make_shared<std::string const>(bytes);
     std::pmr::memory_resource *const was = std::pmr::set_default_resource(&fallback);
-    auto const decoded = cbor::packed<pmr_people>::decode(owner, *owner, pmr_people{std::pmr::vector<pmr_named>(&target)});
+    auto const decoded = cbor::packed<pmr_people>::decode(owner, pmr_people{std::pmr::vector<pmr_named>(&target)});
     std::pmr::set_default_resource(was);
     REQUIRE(decoded.has_value());
     REQUIRE_EQ((**decoded).people.size(), 2u);
@@ -1753,13 +1753,12 @@ TEST_CASE("decode: the views of the result outlive the bytes of the caller")
     CHECK_EQ((*t)->row, 12u);
 }
 
-// decode(owner, bytes) copies nothing and keeps the owner. The caller releases its own pointer to the owner before
+// decode(owner) copies nothing and keeps the owner. The caller releases its own pointer to the owner before
 // it reads. The test exists because the result alone must keep the bytes alive.
 TEST_CASE("decode: the result keeps the owner after the caller releases it")
 {
     auto owner = std::make_shared<std::string const>(ticket_bytes());
-    std::string_view const bytes = *owner;
-    auto const t = cbor::packed<ticket>::decode(std::move(owner), bytes);
+    auto const t = cbor::packed<ticket>::decode(std::move(owner));
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);
@@ -1784,8 +1783,7 @@ TEST_CASE("path: the copying form outlives the message of the caller")
 TEST_CASE("path: the root keeps the owner after the caller releases it")
 {
     auto owner = std::make_shared<std::string const>(ticket_bytes());
-    std::string_view const bytes = *owner;
-    auto const opened = cbor::packed<ticket>::path(std::move(owner), bytes);
+    auto const opened = cbor::packed<ticket>::path(std::move(owner));
     REQUIRE(opened.has_value());
     auto const &root = *opened;
     auto const holder = root.at_path<"$.holder">();
@@ -1800,9 +1798,10 @@ TEST_CASE("path: the root keeps the owner after the caller releases it")
 
 #ifdef __cpp_impl_reflection
 
-// The tests below attack the path reader with forged and cut messages. Every message is copied into a heap block of
-// its exact size, so the address sanitizer reports a read of one byte past its end. Every text of the owner form must
-// lie inside the message.
+// The tests below attack the path reader with forged and cut messages. Every message is copied into a
+// std::string, because the view form takes one. The address sanitizer reports a read past the capacity of that
+// string, not a read of the bytes between its size and its capacity. Every text of the view form must lie inside the
+// message.
 
 namespace
 {
@@ -1837,16 +1836,12 @@ bool lies_inside(std::string_view const part, std::string_view const message)
                             !before(message.data() + message.size(), part.data() + part.size()));
 }
 
-// Reads every leaf path of probe, each through a new root and through a root with an owner, from a heap block of the exact size of the message. Gives the count of
+// Reads every leaf path of probe, each through a new root and through a root with an owner, from a copy of the message. Gives the count of
 // paths that gave a value.
 std::size_t probe_paths_read(std::string_view const message)
 {
-    std::shared_ptr<char const[]> const block = [message] {
-        auto b = std::make_unique_for_overwrite<char[]>(message.size());
-        std::ranges::copy(message, b.get());
-        return b;
-    }();
-    std::string_view const bytes(block.get(), message.size());
+    auto const block = std::make_shared<std::string const>(message);
+    std::string_view const bytes = *block;
     std::size_t n = 0;
     auto const count = [&n](auto const &r) {
         if (r)
@@ -1865,9 +1860,9 @@ std::size_t probe_paths_read(std::string_view const message)
     count(at_path<probe, "$.f32">(bytes));
     count(at_path<probe, "$.i128">(bytes));
     count(at_path<probe, "$.code">(bytes));
-    owned(at_path<probe, "$.code">(block, bytes));
+    owned(at_path<probe, "$.code">(block));
     count(at_path<probe, "$.text">(bytes));
-    owned(at_path<probe, "$.text">(block, bytes));
+    owned(at_path<probe, "$.text">(block));
     for (std::size_t i = 0; i < 3; ++i) {
         count(at_path<probe, "$.tires[].diameter">(bytes, i));
         count(at_path<probe, "$.tires[].airPressure">(bytes, i));
@@ -1886,13 +1881,9 @@ constexpr std::size_t probe_paths = 6 + 2 + 2 + 3 * 2 + 3;
 // a later pass is the value of the first pass.
 std::size_t probe_lot_read(std::string_view const message)
 {
-    std::shared_ptr<char const[]> const block = [message] {
-        auto b = std::make_unique_for_overwrite<char[]>(message.size());
-        std::ranges::copy(message, b.get());
-        return b;
-    }();
-    std::string_view const bytes(block.get(), message.size());
-    auto opened = cbor::packed<probe>::path(block, bytes);
+    auto const block = std::make_shared<std::string const>(message);
+    std::string_view const bytes = *block;
+    auto opened = cbor::packed<probe>::path(block);
     if (!opened)
         return 0;
     auto &lot = *opened;
@@ -1994,30 +1985,29 @@ TEST_CASE("attack: no text result outlives its bytes")
     CHECK_FALSE(temporary_reads<cbor::packed<probe>::accessor<tire>, "@.diameter">);
     CHECK_FALSE(chain_reads<A>);
     CHECK_FALSE(dereferenced_as_rvalue<cbor::owning_ref<probe>>);
-    CHECK_THROWS_AS((void)cbor::packed<probe>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::packed<probe>::decode(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<probe>::path(std::shared_ptr<std::string const>{}), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<probe>::decode(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
-// An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
-// owner does not compile, because the owner does not hold it. The test exists because each of these let a view
-// outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
+// An owner is empty when it holds no object, whatever pointer it stores. An owner beside separate bytes does not
+// compile, because the owner may not hold them. The test exists because each of these let a view outlive its bytes,
+// and a check of the stored pointer refused an owner that holds the bytes.
 TEST_CASE("attack: path and decode check that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>(*cbor::packed<probe>::encode(sample_probe));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::path(o, std::string(*o)); }; }(bytes)));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::packed<probe>::path(o, std::move(s)); }; }(bytes)));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::decode(o, std::string(*o)); }; }(bytes)));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::packed<probe>::decode(o, std::move(s)); }; }(bytes)));
-    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::path(o, *o); }; }(bytes)));
-    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::decode(o, *o); }; }(bytes)));
-    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
-    CHECK_THROWS_AS((void)cbor::packed<probe>::path(holds_nothing, *bytes), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::packed<probe>::decode(holds_nothing, *bytes), std::logic_error);
-    std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
-    auto const root = cbor::packed<probe>::path(holds_bytes, *bytes);
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::path(o, std::string_view(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::decode(o, std::string_view(*o)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::path(o); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::packed<probe>::decode(o); }; }(bytes)));
+    std::shared_ptr<std::string const> const holds_nothing(std::shared_ptr<std::string const>{}, bytes.get());
+    CHECK_THROWS_AS((void)cbor::packed<probe>::path(holds_nothing), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<probe>::decode(holds_nothing), std::logic_error);
+    std::shared_ptr<std::string const> const holds_bytes(std::shared_ptr<void const>(bytes), bytes.get());
+    auto const root = cbor::packed<probe>::path(holds_bytes);
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.i16">(), -300);
-    auto const decoded = cbor::packed<probe>::decode(holds_bytes, *bytes);
+    auto const decoded = cbor::packed<probe>::decode(holds_bytes);
     REQUIRE(decoded.has_value());
     CHECK_EQ((*decoded)->i16, -300);
 }
@@ -2345,7 +2335,7 @@ TEST_CASE("path: an accessor is not read through a temporary")
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[].seats">);
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[]">);
     CHECK_FALSE(temporary_car_reads<D>);
-    CHECK_THROWS_AS((void)cbor::packed<parking_lot>::path(std::shared_ptr<void const>{}, ""sv), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<parking_lot>::path(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
 // The copying form keeps its copy: a text and a car accessor stay valid after the caller frees the message, while the
@@ -2369,9 +2359,8 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
     std::string const bytes = schema_bytes(sample_lot());
     std::size_t differ = 0;
     auto const other = [](auto const &a, auto const &b) { return a.has_value() != b.has_value() || (a && *a != *b); };
-    auto const keep = std::make_shared<int const>(0);
-    auto const read = [&differ, other, &keep](std::string_view const m) {
-        auto opened = cbor::packed<parking_lot>::path(keep, m);
+    auto const read = [&differ, other](std::string_view const m) {
+        auto opened = cbor::packed<parking_lot>::path(std::make_shared<std::string const>(m));
         std::size_t n = 0;
         if (!opened)
             return n;

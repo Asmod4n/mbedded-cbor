@@ -9,7 +9,7 @@
 
 std::size_t safe(std::shared_ptr<std::string const> const &owner)
 {
-    auto const result = cbor::at_path<"$.name", std::string_view>(owner, *owner);
+    auto const result = cbor::at_path<"$.name", std::string_view>(owner);
     auto const &name = *result;
     return (*name).size();
 }

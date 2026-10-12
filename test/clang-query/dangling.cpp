@@ -11,7 +11,7 @@
 
 std::size_t dangling(std::shared_ptr<std::string const> const &owner)
 {
-    auto const &by_star = *cbor::at_path<"$.name", std::string_view>(owner, *owner);
-    auto const &by_value = cbor::at_path<"$.name", std::string_view>(owner, *owner).value();
+    auto const &by_star = *cbor::at_path<"$.name", std::string_view>(owner);
+    auto const &by_value = cbor::at_path<"$.name", std::string_view>(owner).value();
     return (*by_star).size() + (*by_value).size();
 }

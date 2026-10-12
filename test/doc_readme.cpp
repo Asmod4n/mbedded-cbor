@@ -21,7 +21,7 @@ using namespace std::string_literals;
 TEST_CASE("doc readme: read a message")
 {
     std::string const bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
-    auto const doc = cbor::lazy::from(bytes).value();
+    auto const doc = cbor::lazy::copy(bytes).value();
 
     bool const has_samples = doc.contains("samples").value();
     std::uint64_t const pairs = doc.size().value();
@@ -40,7 +40,7 @@ TEST_CASE("doc readme: read a message")
 TEST_CASE("doc readme: read one value by its path")
 {
     std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
-    auto const doc = cbor::lazy::from(bytes).value();
+    auto const doc = cbor::lazy::copy(bytes).value();
 
     auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);
     auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
@@ -57,7 +57,7 @@ TEST_CASE("doc readme: handle bad input")
     std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
     std::string const cut = bytes.substr(0, bytes.size() - 1);
 
-    auto const doc = cbor::lazy::from(cut).value();
+    auto const doc = cbor::lazy::copy(cut).value();
     auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
     REQUIRE_FALSE(name.has_value());
     CHECK_EQ(name.error(), cbor::error::too_little_data);
@@ -75,15 +75,15 @@ TEST_CASE("doc readme: set limits")
     for (int i = 0; i < 101; ++i)
         a.push_back(test::V(i));
     std::string const bytes = test::preferred(test::value{std::move(a)});
-    auto const n = cbor::lazy::from(bytes).value().size();
+    auto const n = cbor::lazy::copy(bytes).value().size();
     CHECK_EQ(n.error(), cbor::error::container_elements_exceeded);
 }
 
 // Step 6 reads a CBOR sequence item by item and prints each item in diagnostic notation.
 TEST_CASE("doc readme: read a stream of items")
 {
-    std::string const log = test::preferred(test::V(1)) + test::preferred(test::value{"a"s}) +
-                            test::preferred(test::A(1, 2));
+    auto const log = std::make_shared<std::string const>(test::preferred(test::V(1)) +
+                                                         test::preferred(test::value{"a"s}) + test::preferred(test::A(1, 2)));
     std::vector<std::string> printed;
     for (auto const &item : cbor::sequence{log})
         if (item)

@@ -573,7 +573,7 @@ inline std::expected<value, error> value_of(std::expected<cbor::lazy, E> const &
 
 inline std::expected<value, error> decoded(std::string_view const wire)
 {
-    auto const l = cbor::lazy::from(wire);
+    auto const l = cbor::lazy::copy(wire);
     if (!l)
         return std::unexpected(l.error());
     return value_of(*l);

@@ -139,8 +139,7 @@ Enums and constants only. No function found by grep.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `sequence(string_view)` :25 | O(1) | O(1) | Parses nothing. |
-| `sequence(Encoded&&) = delete` :30 | none | none | A std::string does not compile. |
+| `sequence(shared_ptr<string const>)` | O(1) | O(1) | Parses nothing. |
 | `sequence::empty()` | O(1) | O(1) | Reads no item. |
 | `iterator::operator*() const` :39 | O(1) | O(1) | Returns the cached size. |
 | `iterator::operator++()` :46 | O(n_next); O(1) on error | O(1) | Full walk O(N). |
@@ -158,7 +157,6 @@ Enums and constants only. No function found by grep.
 | `value_sharing::shared_resolve(top_level_item&, size_t)` :308 | Common O(1); worst O(c log s + tag 29 steps), bounded by O(n) | O(1) plus marks | No depth check in the loop. Bytes left bound it. |
 | `value_sharing::container_resolve(shared_ptr<top_level_item>, size_t)` :341 | Common O(1); worst O(t) shared_resolve, t = tag 24 levels <= n/2 | Common O(1); one top_level_item per tag 24 level | make_shared per tag 24 level. The nesting depth does not bound tag 24 nesting. |
 | `validity::keys_equivalent<First, Second>` :376 | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | check_nesting_depth bounds d. No heap except marks. |
-| `lazy::from(shared_ptr<void const>, Encoded&&) = delete` :177 | - | - | |
 
 ## lazy.hpp
 
@@ -180,11 +178,10 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy_entries::begin()` :171 | O(bytes of the first key) | O(1) plus marks | |
 | `lazy_entries::end()` :178 | O(1) | O(1) | |
 | `lazy_entries::size()`, `empty()` (view_interface) | O(1) | O(1) | The count of the head. |
-| `lazy::from(shared_ptr<void const>, string_view)` :209 | O(1) | O(1) | One top_level_item. |
-| `lazy::from(shared_ptr<string const>)` :218 | O(1) | O(1) | |
-| `lazy::from<Encoded>(Encoded&&)` :226 | O(1) | O(1) | Moves; two allocations. |
-| `lazy::from(string_view)` :231 | O(n) | O(n) | Copies the input. |
-| `value_sharing::tree_decoder::item_decode(size_t depth, optional<size_t> mark)` | O(n) heads and string views; a tag 29 that names a mark before the start of the lazy adds one item_skip over the top-level item, O(N_top), once | one item per data item and one pointer per child, both in one std::pmr::monotonic_buffer_resource that the result owns; its first block is sized from the input length, at most validity::initial_size_limit; a scratch vector for the marks of tag 28; stack O(d) | Recursive, bounded by the nesting depth. A container reserves its count of child pointers only when the sum of all reservations still open fits in the bytes left, so the memory is bounded by the input length and nested counts cannot multiply it. |
+| `lazy::view(shared_ptr<string const>)` | O(1) | O(1) | One top_level_item. |
+| `lazy::copy<Encoded>(Encoded&&)` | O(1) | O(1) | Moves; two allocations. |
+| `lazy::copy(string_view)` :231 | O(n) | O(n) | Copies the input. |
+| `value_sharing::tree_decoder::item_decode(size_t depth, optional<size_t> mark)` | O(n) heads and string views; a tag 29 that names a mark before the start of the lazy adds one item_skip over the top-level item, O(N_top), once | one item per data item in a deque; one pointer per child in one vector; a scratch vector of pointers for the open containers; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. An empty container allocates nothing. |
 | `lazy::decode()` | as item_decode | as item_decode, plus one make_shared | |
 | `lazy::type()` | O(1) plus shared_resolve | O(1) plus marks | |
 | `value_sharing::key_find<Key>(resolved, Key)` :238 | O(bytes up to the pair); worst O(n_map) + k shared_resolve | O(1) plus marks | Linear scan. |
@@ -251,8 +248,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `is_valid_path<Path>`, `is_valid_path_v<Path>` :985 | O(t) compile time | none at run time | |
 | `is_singular_query<Path>`, `is_singular_query_v<Path>` :1506 | O(t + c) compile time | none at run time | |
 | `at_path<Path, T>(string_view)` :1525 | O(n); fallback O(n·p) | O(1); fallback allocates | |
-| `at_path<Path, T>(shared_ptr<void const>, string_view)` :1543 | as :1525 | as :1525 | |
-| `at_path(shared_ptr<void const>, Encoded&&) = delete` :71 | none | none | |
+| `at_path<Path, T>(shared_ptr<string const>)` | as :1525 | as :1525 | |
 | local lambdas :171, :446, :1322, :1364, :1036-1045 | O(digits) or O(1) amortized | O(1) | Included in the rows above. |
 
 ## encode.hpp
@@ -383,15 +379,13 @@ All rows marked "compile time" have no run-time cost.
 | `packed::accessor` constructors :1837-1850 | O(1) | O(1) | |
 | `packed::accessor::at_path`, `view` :1866, :1912 | O(p) | O(1) | |
 | `packed::accessor::size()` :1926 | O(1) | O(1) | |
-| `packed::path(shared_ptr<void const>, string_view)` :1933 | O(1) in n | O(1) | |
-| `packed::path(shared_ptr, Encoded&&) = delete` :1949 | - | - | |
+| `packed::path(shared_ptr<string const>)` | O(1) in n | O(1) | |
 | `packed::at_path<Path>(string_view, Index...)` :1957 | O(q + p) | O(1) | |
 | `packed::path(string_view)` :1967 | O(n) | O(n) | Copies. |
 | `packed::path<Encoded>(Encoded&&)` :1977 | O(1) | O(1) | One make_shared. |
 | `packed::decode(string_view)` :1987 | O(n); + k log k ordered | O(n) copy + O(n) output | |
 | `packed::decode<Encoded>(Encoded&&)` :1999 | as decode(owner, view) | O(1) + output | |
-| `packed::decode(shared_ptr<void const>, string_view)` :2009 | O(n); + k log k ordered | O(n) output | |
-| `packed::decode(shared_ptr, Encoded&&) = delete` :2021 | - | - | |
+| `packed::decode(shared_ptr<string const>)` | O(n); + k log k ordered | O(n) output | |
 | `packed::encode(T const&)` :2023 | O(i + n) | O(n) | One std::string. |
 | `packed::encode<Target>(T const&, Target&&)` :2044 | O(i + n) | container O(n); span none; other message O(n) temporary | |
 
@@ -413,8 +407,7 @@ All rows marked "compile time" have no run-time cost.
 | `generic::generic_write<U>` :610 | O(n) | O(1) heap | |
 | `structs::decode(string_view)` :790 | O(n) + read | O(n) copy + read | Copies. |
 | `structs::decode<Encoded>(Encoded&&)` :732 | as read | one make_shared + read | |
-| `structs::decode(shared_ptr<void const>, string_view)` :741 | as read | as read | |
-| `structs::decode(shared_ptr, Encoded&&) = delete` :753 | - | - | |
+| `structs::decode(shared_ptr<string const>)` | as read | as read | |
 | `structs::encode(T const&)` :755 | O(i + n) | O(n) | |
 | `structs::encode<Target>(T const&, Target&&)` :772 | O(i + n) | container O(n); else O(n) temporary | Not opened. |
 | `structs::read(string_view)` :821 | common O(n); worst O((n/d)^d) | output; O(s); O(d) | |
@@ -435,7 +428,7 @@ Above linear in the input:
 Allocation on a success path:
 
 - `top_level_item::mark`, `tree_decoder::item_decode`.
-- `lazy::from`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::decode`.
+- `lazy::copy`, `lazy::view`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::decode`.
 - jsonpath: every parser, `at_path(string_view path)`, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `string_sink`, `container_message`.
 - diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.

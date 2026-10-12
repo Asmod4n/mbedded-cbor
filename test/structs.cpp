@@ -191,26 +191,37 @@ TEST_CASE("structs: a COSE_Sign1 under tag 18 reads as views into the message")
     CHECK_EQ(signature.size(), 2u);
     CHECK_NE(reinterpret_cast<char const *>(payload.data()), message.data() + 12);
     auto const owner = std::make_shared<std::string const>(message);
-    auto const held = cbor::structs<cose_sign1>::decode(owner, *owner);
+    auto const held = cbor::structs<cose_sign1>::decode(owner);
     REQUIRE(held.has_value());
     CHECK_EQ(reinterpret_cast<char const *>(std::get<2>((*held)->content).data()), owner->data() + 12);
-    CHECK_THROWS_AS((void)cbor::structs<cose_sign1>::decode(nullptr, message), std::logic_error);
     CHECK_EQ(*cbor::structs<cose_sign1>::encode(**sign1), message);
 }
 
-// An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
-// owner does not compile, because the owner does not hold it. The test exists because each of these let a view
-// outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
+// Owner decision: structs::decode has the view form decode(std::shared_ptr<std::string const>). It copies nothing
+// and keeps the owner.
+TEST_CASE("structs: the view form reads the bytes of the owner")
+{
+    auto const owner = std::make_shared<std::string const>(
+        "\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s);
+    auto const held = cbor::structs<cose_sign1>::decode(owner);
+    REQUIRE(held.has_value());
+    CHECK_EQ(reinterpret_cast<char const *>(std::get<2>((*held)->content).data()), owner->data() + 12);
+    CHECK_THROWS_AS((void)cbor::structs<cose_sign1>::decode(std::shared_ptr<std::string const>()), std::logic_error);
+}
+
+// An owner is empty when it holds no object, whatever pointer it stores. An owner beside separate bytes does not
+// compile, because the owner may not hold them. The test exists because each of these let a view outlive its bytes,
+// and a check of the stored pointer refused an owner that holds the bytes.
 TEST_CASE("structs: decode checks that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>("\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s);
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::structs<cose_sign1>::decode(o, std::string(*o)); }; }(bytes)));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::structs<cose_sign1>::decode(o, std::move(s)); }; }(bytes)));
-    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::structs<cose_sign1>::decode(o, *o); }; }(bytes)));
-    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
-    CHECK_THROWS_AS((void)cbor::structs<cose_sign1>::decode(holds_nothing, *bytes), std::logic_error);
-    std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
-    auto const held = cbor::structs<cose_sign1>::decode(holds_bytes, *bytes);
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::structs<cose_sign1>::decode(o, std::string_view(*o)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::structs<cose_sign1>::decode(o); }; }(bytes)));
+    std::shared_ptr<std::string const> const holds_nothing(std::shared_ptr<std::string const>{}, bytes.get());
+    CHECK_THROWS_AS((void)cbor::structs<cose_sign1>::decode(holds_nothing), std::logic_error);
+    std::shared_ptr<std::string const> const holds_bytes(std::shared_ptr<void const>(bytes), bytes.get());
+    auto const held = cbor::structs<cose_sign1>::decode(holds_bytes);
     REQUIRE(held.has_value());
     CHECK_EQ(reinterpret_cast<char const *>(std::get<2>((*held)->content).data()), bytes->data() + 12);
 }
@@ -421,7 +432,7 @@ TEST_CASE("structs: a shared reference reads as the item it names")
 template <class Encoded>
 concept decodable = requires(Encoded &&e) { cbor::structs<std::string_view>::decode(std::forward<Encoded>(e)); };
 
-// The value category of the bytes says what decode does, as for schema::decode and lazy::from. A moved std::string
+// The value category of the bytes says what decode does, as for packed::decode and lazy::copy. A moved std::string
 // becomes the owner and is not copied: the view points into the buffer that was moved. Every other form is copied
 // once, so no view points into bytes that nothing keeps alive.
 TEST_CASE("structs: decode takes a moved string as the owner and copies every other form")
@@ -452,7 +463,7 @@ TEST_CASE("structs: decode takes a moved string as the owner and copies every ot
     CHECK_EQ(**copied, text);
 
     auto const owner = std::make_shared<std::string const>(message);
-    auto const held = cbor::structs<std::string_view>::decode(owner, *owner);
+    auto const held = cbor::structs<std::string_view>::decode(owner);
     REQUIRE(held.has_value());
     CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(owner->data() + 2));
 }
@@ -601,8 +612,8 @@ TEST_CASE("structs: a map key that is not well-formed is a syntax error")
 // only as an rvalue, so the named form does not compile, and the moved
 // form keeps the resource.
 template <class T>
-concept decodes_named_target = requires(std::shared_ptr<void const> owner, std::string_view encoded, T target) {
-    cbor::structs<T>::decode(owner, encoded, target);
+concept decodes_named_target = requires(std::shared_ptr<std::string const> owner, T target) {
+    cbor::structs<T>::decode(owner, target);
 };
 
 TEST_CASE("structs decode keeps the resource of a moved pmr target")
@@ -617,7 +628,7 @@ TEST_CASE("structs decode keeps the resource of a moved pmr target")
     std::array<std::byte, 64> buffer;
     std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
     texts target(&budget);
-    auto const decoded = cbor::structs<texts>::decode(owner, *owner, std::move(target));
+    auto const decoded = cbor::structs<texts>::decode(owner, std::move(target));
     REQUIRE_FALSE(decoded.has_value());
     CHECK_EQ(decoded.error(), error::not_enough_memory);
 }
@@ -666,7 +677,7 @@ TEST_CASE("structs: a plain struct in a std::pmr::vector takes the resource of t
     counting_resource target;
     std::pmr::memory_resource *const was = std::pmr::set_default_resource(&fallback);
     auto const decoded =
-        cbor::structs<people>::decode(std::make_shared<std::string const>(*encoded), *encoded, people(&target));
+        cbor::structs<people>::decode(std::make_shared<std::string const>(*encoded), people(&target));
     std::pmr::set_default_resource(was);
     REQUIRE(decoded.has_value());
     REQUIRE_EQ((**decoded).size(), 2u);

@@ -841,9 +841,7 @@ public:
 #if defined(__cpp_exceptions)
         try {
 #endif
-            auto copy = std::make_shared<std::string const>(encoded);
-            std::string_view const view = *copy;
-            return decode(std::move(copy), view);
+            return decode(std::make_shared<std::string const>(encoded));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
             return std::unexpected(error::not_enough_memory);
@@ -857,9 +855,7 @@ public:
 #if defined(__cpp_exceptions)
         try {
 #endif
-            auto owner = std::make_shared<std::string const>(std::move(encoded));
-            std::string_view const view = *owner;
-            return decode(std::move(owner), view);
+            return decode(std::make_shared<std::string const>(std::move(encoded)));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
             return std::unexpected(error::not_enough_memory);
@@ -867,42 +863,17 @@ public:
 #endif
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
     {
-        return decode(std::move(owner), encoded, T{});
+        return decode(std::move(encoded), T{});
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner,
-                                                      std::string_view const encoded, T &&target)
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded, T &&target)
     {
-        validity::throw_logic_error_if_empty(owner,
-                                             "cbor::structs::decode: the owner of the encoded data item is empty");
-#if defined(__cpp_exceptions)
-        try {
-#endif
-            auto value = validity::limits_apply(
-                limits.load(),
-                [&]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks) {
-                    return read(encoded, depth_max, std::move(target), checks);
-                });
-            if (!value) [[unlikely]]
-                return std::unexpected(value.error());
-            return owning_ref<T>(std::move(owner), std::move(*value));
-#if defined(__cpp_exceptions)
-        } catch (std::bad_alloc const &) {
-            return std::unexpected(error::not_enough_memory);
-        }
-#endif
+        validity::throw_logic_error_if_null(encoded, "cbor::structs::decode: the encoded data item is null");
+        std::string_view const bytes = *encoded;
+        return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
-
-    template <class Encoded>
-        requires std::same_as<std::remove_const_t<Encoded>, std::string>
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
-
-    template <class Encoded>
-        requires std::same_as<std::remove_const_t<Encoded>, std::string>
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded,
-                                                      T target) = delete;
 
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
@@ -969,6 +940,29 @@ public:
     }
 
 private:
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner,
+                                                      std::string_view const encoded, T &&target)
+    {
+        validity::throw_logic_error_if_empty(owner,
+                                             "cbor::structs::decode: the owner of the encoded data item is empty");
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            auto value = validity::limits_apply(
+                limits.load(),
+                [&]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks) {
+                    return read(encoded, depth_max, std::move(target), checks);
+                });
+            if (!value) [[unlikely]]
+                return std::unexpected(value.error());
+            return owning_ref<T>(std::move(owner), std::move(*value));
+#if defined(__cpp_exceptions)
+        } catch (std::bad_alloc const &) {
+            return std::unexpected(error::not_enough_memory);
+        }
+#endif
+    }
+
     template <bool Checked>
     static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max, T out,
                                         validity::limit_checks<Checked> const checks)

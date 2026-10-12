@@ -68,11 +68,19 @@ template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view encoded);
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded);
 
-template <fixed_string Path, class T, class Encoded>
-    requires std::same_as<std::remove_const_t<Encoded>, std::string>
-std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
+template <fixed_string Path, class T>
+    requires(is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<owning_ref<T>, error> at_path(std::string_view encoded);
+
+template <fixed_string Path, class T, std::same_as<std::string> Encoded>
+    requires(is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<owning_ref<T>, error> at_path(Encoded &&encoded);
 
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
@@ -1017,8 +1025,7 @@ class jsonpath
         requires(is_singular_query_v<Path> &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, typed_array>))
-    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner,
-                                                       std::string_view encoded);
+    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded);
 
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> &&
@@ -1750,10 +1757,30 @@ template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, std::string_view const encoded)
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded)
 {
-    validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
-    return jsonpath::query_walk<Path, T>(std::move(owner), encoded);
+    validity::throw_logic_error_if_null(encoded, "cbor::at_path: the encoded data item is null");
+    validity::throw_logic_error_if_empty(encoded, "cbor::at_path: the owner of the encoded data item is empty");
+    std::string_view const bytes = *encoded;
+    return jsonpath::query_walk<Path, T>(std::move(encoded), bytes);
+}
+
+template <fixed_string Path, class T>
+    requires(is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<owning_ref<T>, error> at_path(std::string_view const encoded)
+{
+    return at_path<Path, T>(std::make_shared<std::string const>(encoded));
+}
+
+template <fixed_string Path, class T, std::same_as<std::string> Encoded>
+    requires(is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<owning_ref<T>, error> at_path(Encoded &&encoded)
+{
+    return at_path<Path, T>(std::make_shared<std::string const>(std::move(encoded)));
 }
 
 

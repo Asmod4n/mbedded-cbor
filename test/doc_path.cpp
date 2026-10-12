@@ -62,23 +62,23 @@ TEST_CASE("doc path: read a text")
     std::string_view used;
     auto const use = [&used](std::string_view const v) { used = v; };
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const name = cbor::at_path<"$.user.name", std::string_view>(owner, *owner);
+    auto const name = cbor::at_path<"$.user.name", std::string_view>(owner);
     if (name)
         use(**name);
     CHECK_EQ(used, "ann"sv);
     CHECK_GE(used.data(), owner->data());
     CHECK_LT(used.data(), owner->data() + owner->size());
-    auto const key = cbor::at_path<"$.user.key", std::span<std::byte const>>(owner, *owner);
+    auto const key = cbor::at_path<"$.user.key", std::span<std::byte const>>(owner);
     REQUIRE(key.has_value());
     CHECK_EQ((*key)->size(), 2u);
-    CHECK_FALSE((doc_path_compiles<"$.user.name", std::string_view>));
+    CHECK((doc_path_compiles<"$.user.name", std::string_view>));
 }
 
 // The section "Start at a lazy" shows that $ is the value of the lazy and that a text needs no separate owner there.
 TEST_CASE("doc path: start at a lazy")
 {
     std::string const bytes = preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
-    auto const cars = cbor::lazy::from(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
+    auto const cars = cbor::lazy::copy(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
     REQUIRE(cars.has_value());
     if (cars) {
         CHECK_EQ(cbor::at_path<"$[1].hp", std::int64_t>(*cars), 7);
@@ -96,13 +96,13 @@ TEST_CASE("doc path: path syntax")
                                               M("title"s, "C"s, "price"s, 9, "isbn"s, "x"s)),
                                     "bicycle"s, M("price"s, 20)));
     std::string const bytes = preferred(doc);
-    auto const l = *cbor::lazy::from(bytes);
+    auto const l = *cbor::lazy::copy(bytes);
     CHECK(*test::query("$", l) == A(doc));
     CHECK_EQ(cbor::at_path<"$.store.bicycle.price", int>(bytes), 20);
     CHECK_EQ(cbor::at_path<"$['store']['bicycle']['price']", int>(bytes), 20);
     auto const owner = std::make_shared<std::string const>(bytes);
-    CHECK(*cbor::at_path<"$.store.book[0].title", std::string_view>(owner, *owner) == "A"sv);
-    CHECK(*cbor::at_path<"$.store.book[-1].title", std::string_view>(owner, *owner) == "C"sv);
+    CHECK(*cbor::at_path<"$.store.book[0].title", std::string_view>(owner) == "A"sv);
+    CHECK(*cbor::at_path<"$.store.book[-1].title", std::string_view>(owner) == "C"sv);
     CHECK(*test::query("$.store.book[*].price", l) == A(8, 12, 9));
     CHECK(*test::query("$..price", l) == A(8, 12, 9, 20));
     CHECK(*test::query("$.store.book[?@.price < 10].title", l) == A("A"s, "C"s));
@@ -153,7 +153,7 @@ TEST_CASE("doc path: a path does not read past its value")
 // The section "What is not supported" names match and search, which a user of other JSONPath libraries tries.
 TEST_CASE("doc path: what is not supported")
 {
-    auto const l = *cbor::lazy::from(preferred(A("abc"s)));
+    auto const l = *cbor::lazy::copy(preferred(A("abc"s)));
     CHECK_EQ(test::query("$[?match(@, 'a.c')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?search(@, 'b')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?foo(@)]", l).error(), error::invalid_path);

@@ -62,14 +62,14 @@ TEST_CASE("self-described CBOR: a tag 55799 with no tag content gives too_little
 TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
 {
     std::string const document = "\xd9\xd9\xf7\xa1\x61\x61\x82\x05\x06"s;
-    auto const l = cbor::lazy::from(document);
+    auto const l = cbor::lazy::copy(document);
     REQUIRE(l.has_value());
     auto const a = l->at("a"sv);
     REQUIRE(a.has_value());
     auto const second = a->at(1);
     REQUIRE(second.has_value());
     CHECK_EQ(second->get<std::uint64_t>().value(), 6u);
-    auto const owned = cbor::lazy::from(std::make_shared<std::string const>(document));
+    auto const owned = cbor::lazy::view(std::make_shared<std::string const>(document));
     REQUIRE(owned.has_value());
     CHECK_EQ(owned->at("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
 }
@@ -81,10 +81,10 @@ TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")
     std::string const document = "\xd9\xd9\xf7\xa1\x61\x61\x82\x05\x06"s;
     CHECK_EQ(cbor::at_path<"$.a[1]", std::uint64_t>(document).value(), 6u);
     auto const owner = std::make_shared<std::string const>("\xd9\xd9\xf7\xa1\x61\x61\x62\x68\x69"s);
-    auto const text = cbor::at_path<"$.a", std::string_view>(owner, *owner);
+    auto const text = cbor::at_path<"$.a", std::string_view>(owner);
     REQUIRE(text.has_value());
     CHECK_EQ(**text, "hi"sv);
-    auto const l = cbor::lazy::from(document);
+    auto const l = cbor::lazy::copy(document);
     REQUIRE(l.has_value());
     auto const v = test::at_path("$.a"sv, *l);
     REQUIRE(v.has_value());
@@ -117,7 +117,7 @@ TEST_CASE("RFC 9277: the label of a Labeled CBOR Sequence is the first element a
     REQUIRE(v.has_value());
     CHECK(*v == expected);
     CHECK_EQ(encoded(expected), label);
-    std::string const file = label + "\x00\x08\x0f"s;
+    auto const file = std::make_shared<std::string const>(label + "\x00\x08\x0f"s);
     std::vector<std::string_view> elements;
     for (auto const e : cbor::sequence{file})
         elements.push_back(e.value());

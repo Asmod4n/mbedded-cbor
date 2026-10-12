@@ -146,7 +146,7 @@ TEST_CASE("doc advanced schema: the accessor")
 TEST_CASE("doc advanced schema: the accessor holds the owner")
 {
     auto owner = std::make_shared<std::string const>(*cbor::packed<car>::encode(sample));
-    auto const root = cbor::packed<car>::path(owner, *owner);
+    auto const root = cbor::packed<car>::path(owner);
     owner.reset();
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
@@ -155,8 +155,7 @@ TEST_CASE("doc advanced schema: the accessor holds the owner")
     temp.assign(temp.size(), '\0');
     REQUIRE(copied.has_value());
     CHECK_EQ(*copied->at_path<"$.make">(), "Volvo"sv);
-    std::string const bytes = *cbor::packed<car>::encode(sample);
-    CHECK_THROWS_AS((void)cbor::packed<car>::path(std::shared_ptr<void const>{}, bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::packed<car>::path(std::shared_ptr<std::string const>{}), std::logic_error);
     using A = cbor::packed<car>::accessor<>;
     CHECK(reads_seats<A const &>);
     CHECK_FALSE(reads_seats<A>);

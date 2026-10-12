@@ -311,12 +311,12 @@ template <class T>
 void read_all(std::string_view const message)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
-    auto const owner = std::make_shared<int const>(0);
-    auto lot = cbor::packed<T>::path(owner, message);
+    auto const owner = std::make_shared<std::string const>(message);
+    auto lot = cbor::packed<T>::path(owner);
     if (!lot)
         return;
     template for (constexpr std::meta::info text : texts)
-        consume(lot->template at_path<path_text<text>>(), message);
+        consume(lot->template at_path<path_text<text>>(), *owner);
 }
 
 template <class T>

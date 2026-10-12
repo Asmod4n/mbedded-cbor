@@ -30,7 +30,7 @@ inline void decode_encode_decode(std::string_view const input)
 // gives the same bytes.
 inline void tree_encode(std::string_view const input)
 {
-    auto const top_level = cbor::lazy::from(input);
+    auto const top_level = cbor::lazy::copy(input);
     if (!top_level)
         return;
     auto const tree = top_level->decode();
