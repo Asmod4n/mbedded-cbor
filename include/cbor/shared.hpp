@@ -11,6 +11,7 @@
 #include <functional>
 #include <iterator>
 #include <limits>
+#include <list>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -481,6 +482,7 @@ struct value_sharing::decoded_items {
     std::vector<item const *> children{};
     std::vector<item const *> shareables{};
     std::vector<item const *> pending{};
+    std::list<decoded_items> embedded{};
 };
 
 struct value_sharing::mark_depths {
