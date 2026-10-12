@@ -691,19 +691,19 @@ std::size_t value_sharing::tree_decoder<Checked>::marks_counted()
         return *mark_next;
     std::size_t before = 0;
     if (start != 0) {
-        std::vector<lazy> const &marks = decoded.top_level->sharedrefs_read(start);
+        std::vector<lazy> const &marks = top_level.sharedrefs_read(start);
         auto const at = std::ranges::lower_bound(marks, start, {}, &lazy::offset);
         before = static_cast<std::size_t>(std::ranges::distance(marks.begin(), at));
         if (at != marks.end() && at->offset == start) {
-            if (decoded.shareables.size() <= before)
-                decoded.shareables.resize(before + 1);
-            if (decoded.shareables[before] == nullptr)
-                decoded.shareables[before] = root;
+            if (shareables.size() <= before)
+                shareables.resize(before + 1);
+            if (shareables[before] == nullptr)
+                shareables[before] = root;
             ++before;
         }
     }
-    if (decoded.shareables.size() < before)
-        decoded.shareables.resize(before);
+    if (shareables.size() < before)
+        shareables.resize(before);
     marks_before = before;
     mark_next = before;
     return before;
@@ -713,18 +713,20 @@ template <bool Checked>
 std::expected<void, error> value_sharing::tree_decoder<Checked>::marks_before_decode()
 {
     mark_depths found;
-    heads::decoder<Checked> all{decoded.top_level->encoded, d.checks};
+    heads::decoder<Checked> all{top_level.encoded, d.checks};
     if (auto const r = well_formedness::item_skip(all, found, 0, depth_max); !r) [[unlikely]]
         return r;
     for (std::size_t j = 0; j < marks_before; ++j) {
-        if (decoded.shareables[j] != nullptr)
+        if (shareables[j] != nullptr)
             continue;
         auto const marked = validity::check_sharedref_index(j, found.depths.size());
         if (!marked) [[unlikely]]
             return std::unexpected(marked.error());
-        std::size_t const at = decoded.top_level->sharedrefs_read(start)[j].offset;
+        std::size_t const at = top_level.sharedrefs_read(start)[j].offset;
         tree_decoder outside{decoded,
-                             {std::string_view(std::span(decoded.top_level->encoded).subspan(at)), d.checks},
+                             top_level,
+                             shareables,
+                             {std::string_view(std::span(top_level.encoded).subspan(at)), d.checks},
                              at,
                              depth_max,
                              j + 1,
@@ -744,11 +746,12 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
     auto const h = d.head_decode();
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    item &node = decoded.items.emplace_back(item{h->major, h->info, h->argument, std::monostate{}});
+    item &node = *std::pmr::polymorphic_allocator<item>(&decoded.memory)
+                      .new_object<item>(item{h->major, h->info, h->argument, std::monostate{}});
     if (root == nullptr)
         root = &node;
-    if (mark && decoded.shareables[*mark] == nullptr)
-        decoded.shareables[*mark] = &node;
+    if (mark && shareables[*mark] == nullptr)
+        shareables[*mark] = &node;
     switch (h->major) {
     case major_type::unsigned_integer:
     case major_type::negative_integer:
@@ -770,30 +773,31 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
             h->argument, h->major == major_type::map ? rfc8949::data_items_per_pair : std::size_t{1});
         if (!count) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (auto const r = validity::check_pending_items(*count, d.encoded.size()); !r) [[unlikely]]
+        auto const reserved = validity::checked_add(open, *count);
+        if (!reserved) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        if (auto const r = validity::check_pending_items(*reserved, d.encoded.size()); !r) [[unlikely]]
             return std::unexpected(r.error());
-        std::size_t const base = decoded.pending.size();
-        for (std::uint64_t i = 0; i < *count; ++i) {
-            auto const child = item_decode(depth + 1, std::nullopt);
-            if (!child) [[unlikely]] {
-                decoded.pending.resize(base);
-                return child;
-            }
-            decoded.pending.push_back(*child);
+        std::size_t const n = static_cast<std::size_t>(*count);
+        std::span<item const *> const children(
+            std::pmr::polymorphic_allocator<item const *>(&decoded.memory).allocate(n), n);
+        open = *reserved;
+        for (item const *&child : children) {
+            --open;
+            auto const decoded_child = item_decode(depth + 1, std::nullopt);
+            if (!decoded_child) [[unlikely]]
+                return decoded_child;
+            child = *decoded_child;
         }
-        std::size_t const first = decoded.children.size();
-        decoded.children.insert(decoded.children.end(), std::ranges::next(decoded.pending.begin(), static_cast<std::ptrdiff_t>(base)),
-                                decoded.pending.end());
-        decoded.pending.resize(base);
-        node.content = data_items{&decoded.children, first, decoded.children.size() - first};
+        node.content = data_items{children.data(), n};
         return &node;
     }
     case major_type::tag: {
         if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
             std::size_t const number = marks_counted();
             mark_next = number + 1;
-            if (decoded.shareables.size() <= number)
-                decoded.shareables.resize(number + 1);
+            if (shareables.size() <= number)
+                shareables.resize(number + 1);
             auto const content = item_decode(depth + 1, number);
             if (!content) [[unlikely]]
                 return content;
@@ -812,10 +816,10 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
             auto const index = validity::check_sharedref_index(n->argument, marks_counted());
             if (!index) [[unlikely]]
                 return std::unexpected(index.error());
-            if (decoded.shareables[*index] == nullptr)
+            if (shareables[*index] == nullptr)
                 if (auto const r = marks_before_decode(); !r) [[unlikely]]
                     return std::unexpected(r.error());
-            item const *const shareable = decoded.shareables[*index];
+            item const *const shareable = shareables[*index];
             if (shareable == nullptr) [[unlikely]]
                 return std::unexpected(error::sharedref_not_complete);
             node.content = sharedref{shareable, n->info, n->argument};
@@ -825,7 +829,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
         if (!content) [[unlikely]]
             return content;
         if (error const c =
-                validity::check_tag_content(h->argument, static_cast<item const *>(*content), decoded.shareables.size())
+                validity::check_tag_content(h->argument, static_cast<item const *>(*content), shareables.size())
                     .error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
@@ -843,10 +847,11 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
                 break;
         }
         std::span<std::byte const> const encoded = std::get<std::span<std::byte const>>(bytes->content);
-        decoded_items &nested = decoded.embedded.emplace_back(std::make_shared<top_level_item>(
-            decoded.top_level->owner,
-            std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()), std::vector<lazy>{}, 0));
-        tree_decoder inner{nested, {nested.top_level->encoded, d.checks}, 0, depth_max, 0, 0};
+        top_level_item &nested = decoded.embedded.emplace_front(
+            top_level.owner, std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()),
+            std::vector<lazy>{}, 0);
+        std::vector<item const *> nested_shareables;
+        tree_decoder inner{decoded, nested, nested_shareables, {nested.encoded, d.checks}, 0, depth_max, 0, 0};
         auto const data_item = inner.item_decode(depth + 2, std::nullopt);
         if (!data_item) [[unlikely]]
             return data_item;
@@ -889,9 +894,14 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
         limits.load(),
         [this]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
             -> std::expected<std::shared_ptr<item const>, error> {
-            auto decoded = std::make_shared<value_sharing::decoded_items>(top_level);
+            std::string_view const encoded(std::span(top_level->encoded).subspan(offset));
+            auto decoded = std::make_shared<value_sharing::zone>(
+                top_level, validity::checked_mul(encoded.size(), sizeof(item) + sizeof(item const *))
+                               .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
+                               .value_or(validity::initial_size_limit));
+            std::vector<item const *> shareables;
             value_sharing::tree_decoder<Checked> tree{
-                *decoded, {std::string_view(std::span(top_level->encoded).subspan(offset)), checks}, offset, depth_max,
+                *decoded, *top_level, shareables, {encoded, checks}, offset, depth_max,
                 offset == 0 ? std::optional<std::size_t>{0} : std::nullopt, 0};
             auto const built = tree.item_decode(0, std::nullopt);
             if (!built) [[unlikely]]

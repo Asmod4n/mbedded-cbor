@@ -6,13 +6,13 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <expected>
 #include <functional>
 #include <iterator>
 #include <limits>
-#include <list>
+#include <forward_list>
 #include <memory>
+#include <memory_resource>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -47,7 +47,7 @@ class value_sharing
 {
     struct top_level_item;
 
-    struct decoded_items;
+    struct zone;
 
     template <bool Checked>
     struct sharing_decoder;
@@ -476,14 +476,19 @@ struct value_sharing::top_level_item {
     }
 };
 
-struct value_sharing::decoded_items {
+struct value_sharing::zone {
     std::shared_ptr<top_level_item> top_level;
-    std::deque<item> items{};
-    std::vector<item const *> children{};
-    std::vector<item const *> shareables{};
-    std::vector<item const *> pending{};
-    std::list<decoded_items> embedded{};
+    std::pmr::monotonic_buffer_resource memory;
+    std::pmr::forward_list<top_level_item> embedded{&memory};
+
+    zone(std::shared_ptr<top_level_item> top, std::size_t const initial_size)
+        : top_level(std::move(top)), memory(initial_size)
+    {
+    }
 };
+
+static_assert(std::is_trivially_destructible_v<item>,
+              "The zone runs no destructor of an item, so an item must have no destructor to run.");
 
 struct value_sharing::mark_depths {
     std::vector<std::size_t> depths{};
@@ -497,13 +502,16 @@ struct value_sharing::mark_depths {
 
 template <bool Checked>
 struct value_sharing::tree_decoder {
-    decoded_items &decoded;
+    zone &decoded;
+    top_level_item &top_level;
+    std::vector<item const *> &shareables;
     heads::decoder<Checked> d;
     std::size_t start;
     std::size_t depth_max;
     std::optional<std::size_t> mark_next;
     std::size_t marks_before = 0;
     item *root = nullptr;
+    std::size_t open = 0;
 
     std::expected<item *, error> item_decode(std::size_t depth, std::optional<std::size_t> mark);
 

@@ -744,6 +744,36 @@ TEST_CASE("decode: a tag 24 inside a tag 24 is decoded at each level")
     CHECK_EQ(again, wire);
 }
 
+// The tree of a tag 24 lives in the memory of the decode result. The result must keep it, its bytes and their
+// owner alive after the lazy and the caller's string are gone, so the address sanitizer sees every read here.
+TEST_CASE("decode: the embedded item of a tag 24 lives as long as the result")
+{
+    std::shared_ptr<cbor::item const> root;
+    {
+        std::string const wire = "\xd8\x18\x47\xd8\x18\x44\x82\x01\x61x"s;
+        root = item_of(cbor::lazy::from(std::string(wire))->decode());
+    }
+    auto const outer = std::get<cbor::encoded_cbor_data_item>(root->content);
+    auto const inner = std::get<cbor::encoded_cbor_data_item>(outer.data_item->content);
+    auto const children = std::get<cbor::data_items>(inner.data_item->content).span();
+    REQUIRE_EQ(children.size(), 2u);
+    CHECK_EQ(children[0]->argument, 1u);
+    CHECK_EQ(std::get<std::string_view>(children[1]->content), "x");
+}
+
+// RFC 8949 and the value-sharing tags: a tag 29 names the item of its tag 28, so both reach the same node of the
+// tree and not two copies.
+TEST_CASE("decode: a tag 29 reaches the same node as its tag 28")
+{
+    std::string const wire = "\x82\xd8\x1c\x82\x01\x02\xd8\x1d\x00"s;
+    auto const root = item_of(cbor::lazy::from(std::string(wire))->decode());
+    auto const children = std::get<cbor::data_items>(root->content).span();
+    cbor::item const *const marked = std::get<cbor::item const *>(children[0]->content);
+    cbor::item const *const referred = std::get<cbor::sharedref>(children[1]->content).shareable;
+    CHECK_EQ(&*marked, &*referred);
+    CHECK_EQ(std::get<cbor::data_items>(referred->content).span()[1]->argument, 2u);
+}
+
 // Owner decision: the embedded item is a top-level item of its own. A tag 29 inside it refers to a tag 28 inside
 // the same embedded item, and the marks outside do not count there.
 TEST_CASE("decode: a shared reference inside tag 24 refers to a mark inside the same embedded item")
