@@ -412,6 +412,7 @@ class generic
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 if constexpr (requires {
                                   { out.emplace_back() } -> std::same_as<E &>;
+                                  requires !reflection::uses_allocator_aggregate<E, decltype(out.get_allocator())>();
                               }) {
                     if (auto const r = generic_read(d, out.emplace_back(), depth + 1, depth_max); !r)
                         [[unlikely]]
