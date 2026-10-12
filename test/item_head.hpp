@@ -2,6 +2,7 @@
 
 #include <cbor/cbor.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -85,4 +86,54 @@ inline cbor::major_type major_of(cbor::type const t)
     default:
         return cbor::major_type::simple_float;
     }
+}
+
+// RFC 8949 2 defines the data model. Two items are the same value when their types and values agree; a float
+// is compared by its width and its bits, so a NaN keeps its payload; a bignum is compared by its magnitude
+// without leading zeros (RFC 8949 3.4.3). The tests compare encode(item) with its input by this, and not by the
+// bytes, because the encoder writes its own form.
+inline bool item_values_equal(cbor::item const &a, cbor::item const &b)
+{
+    if (a.type != b.type)
+        return false;
+    switch (a.type) {
+    case cbor::type::byte_string:
+        return std::ranges::equal(a.via.bin, b.via.bin);
+    case cbor::type::text_string:
+        return a.via.str == b.via.str;
+    case cbor::type::array:
+    case cbor::type::map: {
+        auto const x = children_of(a);
+        auto const y = children_of(b);
+        return std::ranges::equal(x, y, [](cbor::item const *l, cbor::item const *r) { return item_values_equal(*l, *r); });
+    }
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum: {
+        auto const digits = [](cbor::item const &n) {
+            std::string_view const s(reinterpret_cast<char const *>(n.via.tag.content->via.bin.data()),
+                                     n.via.tag.content->via.bin.size());
+            return s.substr(std::min(s.find_first_not_of('\0'), s.size()));
+        };
+        return digits(a) == digits(b);
+    }
+    case cbor::type::tag:
+    case cbor::type::typed_array:
+        return a.via.tag.number == b.via.tag.number && item_values_equal(*a.via.tag.content, *b.via.tag.content);
+    default:
+        return argument_of(a) == argument_of(b);
+    }
+}
+
+// Decodes both byte strings into trees and compares their values.
+inline bool same_value(std::string_view const a, std::string_view const b)
+{
+    auto const x = cbor::lazy::copy(std::string(a));
+    auto const y = cbor::lazy::copy(std::string(b));
+    REQUIRE(x.has_value());
+    REQUIRE(y.has_value());
+    auto const p = x->decode();
+    auto const q = y->decode();
+    REQUIRE(p.has_value());
+    REQUIRE(q.has_value());
+    return item_values_equal(**p, **q);
 }

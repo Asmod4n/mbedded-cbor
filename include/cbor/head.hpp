@@ -317,7 +317,34 @@ class heads
             encoded.remove_prefix(length);
             return string;
         }
+
+        std::expected<std::optional<std::uint64_t>, error> bignum_decode(std::uint64_t const tag)
+        {
+            auto const r = head_decode();
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (error const c = validity::check_tag_content(tag, r->major, r->info).error_or(error{}); c != error{})
+                [[unlikely]]
+                return std::unexpected(c);
+            if (error const c = validity::check_definite_length(r->major, r->info).error_or(error{}); c != error{})
+                [[unlikely]]
+                return std::unexpected(c);
+            auto const bytes = byte_string_decode(r->argument);
+            if (!bytes) [[unlikely]]
+                return std::unexpected(bytes.error());
+            std::string_view const magnitude = magnitude_without_leading_zeros(*bytes);
+            if (!validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t)))
+                return std::nullopt;
+            return magnitude_value(magnitude);
+        }
     };
+
+    static constexpr bool is_bignum(major_type const major, std::uint64_t const argument)
+    {
+        return major == major_type::tag &&
+               (argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
+                argument == std::to_underlying(rfc8949::tag_number::negative_bignum));
+    }
 
     struct precision {
         int significand_bits;

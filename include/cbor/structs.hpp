@@ -482,7 +482,16 @@ class generic
             if (!k) [[unlikely]]
                 return std::unexpected(k.error());
             std::string_view text;
-            if (k->major == major_type::text_string) {
+            if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
+                auto const read = from.bignum_decode(k->argument);
+                if (!read) [[unlikely]]
+                    return std::unexpected(read.error());
+                if (*read)
+                    k = heads::head{k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
+                                        ? major_type::negative_integer
+                                        : major_type::unsigned_integer,
+                                    heads::preferred_argument_info(**read), **read};
+            } else if (k->major == major_type::text_string) {
                 auto const t = from.byte_string_decode(k->argument);
                 if (!t) [[unlikely]]
                     return std::unexpected(t.error());

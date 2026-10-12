@@ -864,7 +864,9 @@ TEST_CASE("path: a typed read of each type")
     check_path<"$", double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s, {}, std::unexpected(error::number_out_of_range));
     check_path<"$", double>("\x3b\x00\x20\x00\x00\x00\x00\x00\x00"s, {}, std::unexpected(error::number_out_of_range));
     check_path<"$", double>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s, {}, std::unexpected(error::number_out_of_range));
-    check_path<"$", double>("\xc2\x41\x01"s, {}, std::unexpected(error::incorrect_type));
+    check_path<"$", double>("\xc2\x41\x01"s, {}, std::bit_cast<std::uint64_t>(1.0));
+    check_path<"$", double>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s, {},
+                            std::unexpected(error::number_out_of_range));
     check_path<"$", double>("\xf5"s, {}, std::unexpected(error::incorrect_type));
 
     check_path<"$", bool>("\xf5"s, {}, true);

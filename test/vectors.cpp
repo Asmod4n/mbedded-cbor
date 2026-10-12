@@ -116,7 +116,8 @@ TEST_CASE("test vectors: not well-formed items fail")
 // in the low 5 bits and the argument after it. The item of each example keeps these fields from the wire, and its
 // content follows section 3.1: a string is the bytes after the head, an array and a map hold as many members as the
 // argument says, a tag points to its content, a float holds the bits of the argument in the width of the additional
-// information. Indefinite lengths are refused, as cbor::decode refuses them.
+// information. Indefinite lengths are refused, as cbor::decode refuses them. Every example is in preferred form,
+// which is the own form of encode(item), so encode gives the bytes of the example.
 TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fields of the wire")
 {
     auto const cases = cases_of(TEST_VECTORS "/appendix_a.json");
@@ -510,15 +511,19 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     REQUIRE(l.has_value());
     CHECK(equivalent(*l, *expected));
 
-    // encode of the decoded tree writes each head with the additional information of the wire, so every vector,
-    // also one that is not in preferred form, comes back byte for byte.
+    // encode of the decoded tree writes the library's own form: the same value (RFC 8949 2), and the own form is a
+    // fixed point, so a second decode and encode gives the same bytes. The bytes of the vector itself are checked
+    // only where it is in the own form, which the test of RFC 8949 Appendix A does.
     auto const top_level = cbor::lazy::copy(std::string(v.encoded));
     REQUIRE(top_level.has_value());
     auto const tree = top_level->decode();
     REQUIRE(tree.has_value());
     std::string again;
     REQUIRE(cbor::encode(**tree, again).has_value());
-    CHECK_EQ(again, v.encoded);
+    CHECK(same_value(again, v.encoded));
+    std::string twice;
+    REQUIRE(cbor::encode(**cbor::lazy::copy(again)->decode(), twice).has_value());
+    CHECK_EQ(twice, again);
 
     auto const text = cbor::diagnostic_notation(v.encoded);
     REQUIRE(text.has_value());

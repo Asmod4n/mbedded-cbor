@@ -212,6 +212,18 @@ element.
 the major type, or for a tag 2, 3 or a typed array of RFC 8746 the kind of
 that tag. A lazy reads through tags 28 and 29; an item keeps them as tags.
 
+A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value
+as a basic integer (RFC 8949 3.4.3). `decode()` makes it an
+`unsigned_integer` or `negative_integer` item, and `type()` of a lazy
+gives that type. A larger bignum stays `unsigned_bignum` or
+`negative_bignum`. A key 2(h'01') is the same key as 1.
+
+Such a bignum is a number everywhere: `type()`, `get<int>`, `get<double>`,
+a path and a key lookup read it as the integer, and no read gives it as a
+tag. A bignum larger than 64 bits stays a tag item. Its content is the
+magnitude as raw bytes, a span into the input. The library has no type
+for big numbers and depends on no library for them.
+
 The decode reads every head of the item, so every limit counts each head.
 It reads no byte after the item.
 
@@ -267,9 +279,11 @@ A cycle through a tag that is not an array or a map is allowed. For
 example, `28(6(29(0)))` decodes into a tree where the content of tag 6 is
 a reference to that tag 6 item.
 
-`cbor::encode(item, target)` writes a decoded item back. Each head keeps
-the additional information that it had on the wire, so the bytes come back
-unchanged, tags 28 and 29 included. It gives the size in bytes.
+`cbor::encode(item, target)` writes an item in the library's own form.
+It writes the same value, not the same bytes. Each integer, length and
+tag number takes its shortest head, tags 28 and 29 included. A float
+keeps the width of its type, and a NaN keeps its bits. A bignum that fits
+in 64 bits is written as a basic integer. It gives the size in bytes.
 
 ## 8. cbor::sequence
 

@@ -1104,11 +1104,11 @@ TEST_CASE("validity: keys_equivalent follows RFC 8949 5.6.1")
         {"\x62\x61\x62"s, "\x62\x61\x63"s, false},
         {"\x61\x61"s, "\x62\x61\x62"s, false},
         {"\x61\x61"s, "\x41\x61"s, false},
-        // A big number is distinct from an integer, and a tagged value from an untagged one. Tagged values
-        // are
-        // equal when the tag numbers and the contents are equal.
-        {"\x01"s, "\xc2\x41\x01"s, false},
-        {"\xc2\x41\x01"s, "\xc2\x42\x00\x01"s, false},
+        // RFC 8949 3.4.3: a big number that fits 64 bits is the integer of the same value, and leading zeros do
+        // not change the value. A tagged value is distinct from an untagged one. Tagged values are equal when
+        // the tag numbers and the contents are equal.
+        {"\x01"s, "\xc2\x41\x01"s, true},
+        {"\xc2\x41\x01"s, "\xc2\x42\x00\x01"s, true},
         {"\xc2\x41\x01"s, "\xc3\x41\x01"s, false},
         {"\xc1\x00"s, "\x00"s, false},
         {"\xc1\x00"s, "\xc1\x18\x00"s, true},
