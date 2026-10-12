@@ -5,6 +5,7 @@
 #   fast: gcc-release clang-asan
 #   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx
 #   tsan is run by name and not in fast or full.
+#   full also runs test/interop/run.sh, which decodes the output of the library with other decoders.
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
 # The builds run one after the other, and each uses every processor.
@@ -16,6 +17,8 @@ image=${CBOR_IMAGE:-mbedded-cbor-tw}
 branch=$(git -C "$src" rev-parse --abbrev-ref HEAD | tr / -)
 cpus=$(nproc)
 
+interop=0
+[ "${1:-fast}" = full ] && interop=1
 case ${1:-fast} in
 fast) set -- gcc-release clang-asan ;;
 full) set -- gcc-asan gcc-release clang-asan clang-release clang-libcxx ;;
@@ -66,6 +69,10 @@ for n in "$@"; do
 	[ -s "$root/$branch/$n.result" ] && grep -q "rc=0" "$root/$branch/$n.result" ||
 		tail -30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log" 2>/dev/null
 done
+if [ $interop = 1 ]; then
+	"$src/test/interop/run.sh" | tail -40
+	[ "${PIPESTATUS[0]}" = 0 ] || rc=1
+fi
 end=${EPOCHREALTIME/./}
 printf "total %ds\n" $(((end - start) / 1000000))
 exit $rc
