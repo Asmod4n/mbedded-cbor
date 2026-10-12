@@ -23,23 +23,22 @@
 }
 
 #if defined(ARM_READ) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
-struct read_binding {
-    using value = std::uint64_t;
-
-    std::uint64_t unsigned_integer_decode(std::uint64_t a) { return a; }
-    std::uint64_t negative_integer_decode(std::uint64_t a) { return a; }
-    std::uint64_t unsigned_bignum_decode(std::string_view m) { return bytes_sum(m); }
-    std::uint64_t negative_bignum_decode(std::string_view m) { return bytes_sum(m); }
-    std::uint64_t byte_string_decode(std::string_view s) { return bytes_sum(s); }
-    std::uint64_t text_string_decode(std::string_view s) { return bytes_sum(s); }
-    std::uint64_t float_decode(double f) { return std::bit_cast<std::uint64_t>(f); }
-    std::uint64_t simple_value_decode(std::uint8_t s) { return s; }
-    std::uint64_t array_decode(std::uint64_t n) { return n; }
-    std::uint64_t array_append(std::uint64_t a, std::uint64_t e) { return a + e; }
-    std::uint64_t map_decode(std::uint64_t n) { return n; }
-    std::uint64_t map_insert(std::uint64_t m, std::uint64_t k, std::uint64_t v) { return m + k + v; }
-    std::uint64_t tag_decode(std::uint64_t t, std::uint64_t c) { return t + c; }
-};
+// The sum of a decoded item tree: the argument of each head and the bytes of each string. A reference of tag 29
+// adds its index and is not followed.
+static std::uint64_t item_tree_sum(cbor::item const &it)
+{
+    std::uint64_t s = it.argument;
+    if (auto const *t = std::get_if<std::string_view>(&it.content))
+        s += bytes_sum(*t);
+    else if (auto const *b = std::get_if<std::span<std::byte const>>(&it.content))
+        s += bytes_sum(std::string_view(reinterpret_cast<char const *>(b->data()), b->size()));
+    else if (auto const *c = std::get_if<cbor::data_items>(&it.content))
+        for (cbor::item const *const child : c->span())
+            s += item_tree_sum(*child);
+    else if (auto const *inner = std::get_if<cbor::item const *>(&it.content))
+        s += item_tree_sum(**inner);
+    return s;
+}
 #endif
 
 #if defined(ARM_LC_PREALLOC) || defined(ARM_LC_READ) || defined(ARM_LC_DECODE)
@@ -108,17 +107,17 @@ struct vg_out final : cbor_encoder {
 };
 static void vg_encode(vg_out &o, bench::value const &x)
 {
-    bench::binding b;
+    bench::reader b;
     switch (b.kind_of(x)) {
-    case cbor::kind::unsigned_integer: o.write_uint(b.unsigned_of(x)); break;
-    case cbor::kind::negative_integer: o.neg(b.unsigned_of(x) - 1); break;
-    case cbor::kind::floating_point: o.write_float_shortest(b.float_of(x)); break;
-    case cbor::kind::simple_value: o.write_simple(b.simple_of(x)); break;
-    case cbor::kind::text_string: { auto const t = b.text_of(x); o.write_string_header(t.size()); o.payload(t); } break;
-    case cbor::kind::byte_string: { auto const t = b.bytes_of(x); o.write_bytes_header(t.size()); o.payload(t); } break;
-    case cbor::kind::array: { auto const n = b.array_size(x); o.write_array(n); for (std::uint64_t i = 0; i < n; ++i) vg_encode(o, b.array_at(x, i)); } break;
-    case cbor::kind::map: o.write_map(b.map_size(x)); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { vg_encode(o, k); vg_encode(o, v); }); break;
-    case cbor::kind::registered: o.write_tag(b.registered_tag(x)); vg_encode(o, b.before_encode(x)); break;
+    case cbor::type::unsigned_integer: o.write_uint(b.unsigned_of(x)); break;
+    case cbor::type::negative_integer: o.neg(b.unsigned_of(x) - 1); break;
+    case cbor::type::double_float: o.write_float_shortest(b.float_of(x)); break;
+    case cbor::type::simple_value: o.write_simple(b.simple_of(x)); break;
+    case cbor::type::text_string: { auto const t = b.text_of(x); o.write_string_header(t.size()); o.payload(t); } break;
+    case cbor::type::byte_string: { auto const t = b.bytes_of(x); o.write_bytes_header(t.size()); o.payload(t); } break;
+    case cbor::type::array: { auto const n = b.array_size(x); o.write_array(n); for (std::uint64_t i = 0; i < n; ++i) vg_encode(o, b.array_at(x, i)); } break;
+    case cbor::type::map: o.write_map(b.map_size(x)); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { vg_encode(o, k); vg_encode(o, v); }); break;
+    case cbor::type::tag: o.write_tag(b.registered_tag(x)); vg_encode(o, b.before_encode(x)); break;
     default: std::abort();
     }
 }
@@ -137,14 +136,14 @@ static void vg_encode(vg_out &o, bench::value const &x)
 #include <msgpack.hpp>
 static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x)
 {
-    bench::binding b;
+    bench::reader b;
     switch (b.kind_of(x)) {
 #if defined(ARM_MP_NATIVE)
-    case cbor::kind::unsigned_integer: pk.pack_fix_uint64(b.unsigned_of(x)); break;
+    case cbor::type::unsigned_integer: pk.pack_fix_uint64(b.unsigned_of(x)); break;
 #else
-    case cbor::kind::unsigned_integer: pk.pack_uint64(b.unsigned_of(x)); break;
+    case cbor::type::unsigned_integer: pk.pack_uint64(b.unsigned_of(x)); break;
 #endif
-    case cbor::kind::negative_integer: {
+    case cbor::type::negative_integer: {
         std::uint64_t const n = b.unsigned_of(x) - 1;
         if (n <= std::uint64_t(INT64_MAX)) {
 #if defined(ARM_MP_NATIVE)
@@ -160,16 +159,16 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
         }
     } break;
 #if defined(ARM_MP_NATIVE)
-    case cbor::kind::floating_point: pk.pack_double(b.float_of(x)); break;
+    case cbor::type::double_float: pk.pack_double(b.float_of(x)); break;
 #else
-    case cbor::kind::floating_point: { double const d = b.float_of(x); if (static_cast<double>(static_cast<float>(d)) == d) pk.pack_float(static_cast<float>(d)); else pk.pack_double(d); } break;
+    case cbor::type::double_float: { double const d = b.float_of(x); if (static_cast<double>(static_cast<float>(d)) == d) pk.pack_float(static_cast<float>(d)); else pk.pack_double(d); } break;
 #endif
-    case cbor::kind::simple_value: { auto const v = b.simple_of(x); if (v == 20) pk.pack_false(); else if (v == 21) pk.pack_true(); else pk.pack_nil(); } break;
-    case cbor::kind::text_string: { auto const t = b.text_of(x); pk.pack_str(std::uint32_t(t.size())); pk.pack_str_body(t.data(), std::uint32_t(t.size())); } break;
-    case cbor::kind::byte_string: { auto const t = b.bytes_of(x); pk.pack_bin(std::uint32_t(t.size())); pk.pack_bin_body(t.data(), std::uint32_t(t.size())); } break;
-    case cbor::kind::array: { auto const n = b.array_size(x); pk.pack_array(std::uint32_t(n)); for (std::uint64_t i = 0; i < n; ++i) mp_pack(pk, b.array_at(x, i)); } break;
-    case cbor::kind::map: pk.pack_map(std::uint32_t(b.map_size(x))); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { mp_pack(pk, k); mp_pack(pk, v); }); break;
-    case cbor::kind::registered: {
+    case cbor::type::simple_value: { auto const v = b.simple_of(x); if (v == 20) pk.pack_false(); else if (v == 21) pk.pack_true(); else pk.pack_nil(); } break;
+    case cbor::type::text_string: { auto const t = b.text_of(x); pk.pack_str(std::uint32_t(t.size())); pk.pack_str_body(t.data(), std::uint32_t(t.size())); } break;
+    case cbor::type::byte_string: { auto const t = b.bytes_of(x); pk.pack_bin(std::uint32_t(t.size())); pk.pack_bin_body(t.data(), std::uint32_t(t.size())); } break;
+    case cbor::type::array: { auto const n = b.array_size(x); pk.pack_array(std::uint32_t(n)); for (std::uint64_t i = 0; i < n; ++i) mp_pack(pk, b.array_at(x, i)); } break;
+    case cbor::type::map: pk.pack_map(std::uint32_t(b.map_size(x))); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { mp_pack(pk, k); mp_pack(pk, v); }); break;
+    case cbor::type::tag: {
         msgpack::sbuffer body;
         msgpack::packer<msgpack::sbuffer> inner(body);
         inner.pack_uint64(b.registered_tag(x));
@@ -189,17 +188,17 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
 #include <tinycbor/cbor.h>
 static void tc_walk(CborEncoder *e, bench::value const &x)
 {
-    bench::binding b;
+    bench::reader b;
     switch (b.kind_of(x)) {
-    case cbor::kind::unsigned_integer: cbor_encode_uint(e, b.unsigned_of(x)); break;
-    case cbor::kind::negative_integer: cbor_encode_negative_int(e, b.unsigned_of(x)); break;
-    case cbor::kind::floating_point: cbor_encode_double(e, b.float_of(x)); break;
-    case cbor::kind::simple_value: cbor_encode_simple_value(e, b.simple_of(x)); break;
-    case cbor::kind::text_string: { auto const t = b.text_of(x); cbor_encode_text_string(e, t.data(), t.size()); } break;
-    case cbor::kind::byte_string: { auto const s = b.bytes_of(x); cbor_encode_byte_string(e, reinterpret_cast<std::uint8_t const *>(s.data()), s.size()); } break;
-    case cbor::kind::array: { CborEncoder sub; auto const n = b.array_size(x); cbor_encoder_create_array(e, &sub, n); for (std::uint64_t i = 0; i < n; ++i) tc_walk(&sub, b.array_at(x, i)); cbor_encoder_close_container(e, &sub); } break;
-    case cbor::kind::map: { CborEncoder sub; cbor_encoder_create_map(e, &sub, b.map_size(x)); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { tc_walk(&sub, k); tc_walk(&sub, v); }); cbor_encoder_close_container(e, &sub); } break;
-    case cbor::kind::registered: cbor_encode_tag(e, b.registered_tag(x)); tc_walk(e, b.before_encode(x)); break;
+    case cbor::type::unsigned_integer: cbor_encode_uint(e, b.unsigned_of(x)); break;
+    case cbor::type::negative_integer: cbor_encode_negative_int(e, b.unsigned_of(x)); break;
+    case cbor::type::double_float: cbor_encode_double(e, b.float_of(x)); break;
+    case cbor::type::simple_value: cbor_encode_simple_value(e, b.simple_of(x)); break;
+    case cbor::type::text_string: { auto const t = b.text_of(x); cbor_encode_text_string(e, t.data(), t.size()); } break;
+    case cbor::type::byte_string: { auto const s = b.bytes_of(x); cbor_encode_byte_string(e, reinterpret_cast<std::uint8_t const *>(s.data()), s.size()); } break;
+    case cbor::type::array: { CborEncoder sub; auto const n = b.array_size(x); cbor_encoder_create_array(e, &sub, n); for (std::uint64_t i = 0; i < n; ++i) tc_walk(&sub, b.array_at(x, i)); cbor_encoder_close_container(e, &sub); } break;
+    case cbor::type::map: { CborEncoder sub; cbor_encoder_create_map(e, &sub, b.map_size(x)); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { tc_walk(&sub, k); tc_walk(&sub, v); }); cbor_encoder_close_container(e, &sub); } break;
+    case cbor::type::tag: cbor_encode_tag(e, b.registered_tag(x)); tc_walk(e, b.before_encode(x)); break;
     default: std::abort();
     }
 }
@@ -211,10 +210,10 @@ static std::vector<std::uint8_t> tcbuf;
 #include <flatbuffers/flexbuffers.h>
 static void fb_build(flexbuffers::Builder &f, bench::value const &x)
 {
-    bench::binding b;
+    bench::reader b;
     switch (b.kind_of(x)) {
-    case cbor::kind::unsigned_integer: f.UInt(b.unsigned_of(x)); break;
-    case cbor::kind::negative_integer: {
+    case cbor::type::unsigned_integer: f.UInt(b.unsigned_of(x)); break;
+    case cbor::type::negative_integer: {
         std::uint64_t const n = b.unsigned_of(x) - 1;
         if (n <= std::uint64_t(INT64_MAX)) {
             f.Int(-1 - std::int64_t(n));
@@ -224,14 +223,14 @@ static void fb_build(flexbuffers::Builder &f, bench::value const &x)
             f.EndVector(st, false, false);
         }
     } break;
-    case cbor::kind::floating_point: f.Double(b.float_of(x)); break;
-    case cbor::kind::simple_value: { auto const v = b.simple_of(x); if (v == 20 || v == 21) f.Bool(v == 21); else f.Null(); } break;
-    case cbor::kind::text_string: { auto const t = b.text_of(x); f.String(t.data(), t.size()); } break;
-    case cbor::kind::byte_string: { auto const t = b.bytes_of(x); f.Blob(t.data(), t.size()); } break;
-    case cbor::kind::array: { auto const st = f.StartVector(); auto const n = b.array_size(x); for (std::uint64_t i = 0; i < n; ++i) fb_build(f, b.array_at(x, i)); f.EndVector(st, false, false); } break;
-    case cbor::kind::map: {
+    case cbor::type::double_float: f.Double(b.float_of(x)); break;
+    case cbor::type::simple_value: { auto const v = b.simple_of(x); if (v == 20 || v == 21) f.Bool(v == 21); else f.Null(); } break;
+    case cbor::type::text_string: { auto const t = b.text_of(x); f.String(t.data(), t.size()); } break;
+    case cbor::type::byte_string: { auto const t = b.bytes_of(x); f.Blob(t.data(), t.size()); } break;
+    case cbor::type::array: { auto const st = f.StartVector(); auto const n = b.array_size(x); for (std::uint64_t i = 0; i < n; ++i) fb_build(f, b.array_at(x, i)); f.EndVector(st, false, false); } break;
+    case cbor::type::map: {
         bool text_keys = true;
-        b.map_for_each(x, [&](bench::value const &k, bench::value const &) { text_keys = text_keys && b.kind_of(k) == cbor::kind::text_string; });
+        b.map_for_each(x, [&](bench::value const &k, bench::value const &) { text_keys = text_keys && b.kind_of(k) == cbor::type::text_string; });
         if (text_keys) {
             auto const st = f.StartMap();
             b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { std::string const t(b.text_of(k)); f.Key(t.c_str(), t.size()); fb_build(f, v); });
@@ -242,7 +241,7 @@ static void fb_build(flexbuffers::Builder &f, bench::value const &x)
             f.EndVector(st, false, false);
         }
     } break;
-    case cbor::kind::registered: { auto const st = f.StartVector(); f.UInt(b.registered_tag(x)); fb_build(f, b.before_encode(x)); f.EndVector(st, false, false); } break;
+    case cbor::type::tag: { auto const st = f.StartVector(); f.UInt(b.registered_tag(x)); fb_build(f, b.before_encode(x)); f.EndVector(st, false, false); } break;
     default: std::abort();
     }
 }
@@ -467,17 +466,17 @@ static std::shared_ptr<void const> const keep = std::make_shared<int const>(0);
 #if defined(ARM_MB_DECODE)
 static std::uint64_t value_sum(bench::value const &x)
 {
-    bench::binding b;
+    bench::reader b;
     switch (b.kind_of(x)) {
-    case cbor::kind::unsigned_integer: return b.unsigned_of(x);
-    case cbor::kind::negative_integer: return b.unsigned_of(x) - 1;
-    case cbor::kind::floating_point: return std::bit_cast<std::uint64_t>(b.float_of(x));
-    case cbor::kind::simple_value: return b.simple_of(x);
-    case cbor::kind::text_string: return bytes_sum(b.text_of(x));
-    case cbor::kind::byte_string: return bytes_sum(b.bytes_of(x));
-    case cbor::kind::array: { std::uint64_t s = b.array_size(x); for (std::uint64_t i = 0; i < b.array_size(x); ++i) s += value_sum(b.array_at(x, i)); return s; }
-    case cbor::kind::map: { std::uint64_t s = b.map_size(x); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { s += value_sum(k) + value_sum(v); }); return s; }
-    case cbor::kind::registered: return b.registered_tag(x) + value_sum(b.before_encode(x));
+    case cbor::type::unsigned_integer: return b.unsigned_of(x);
+    case cbor::type::negative_integer: return b.unsigned_of(x) - 1;
+    case cbor::type::double_float: return std::bit_cast<std::uint64_t>(b.float_of(x));
+    case cbor::type::simple_value: return b.simple_of(x);
+    case cbor::type::text_string: return bytes_sum(b.text_of(x));
+    case cbor::type::byte_string: return bytes_sum(b.bytes_of(x));
+    case cbor::type::array: { std::uint64_t s = b.array_size(x); for (std::uint64_t i = 0; i < b.array_size(x); ++i) s += value_sum(b.array_at(x, i)); return s; }
+    case cbor::type::map: { std::uint64_t s = b.map_size(x); b.map_for_each(x, [&](bench::value const &k, bench::value const &v) { s += value_sum(k) + value_sum(v); }); return s; }
+    case cbor::type::tag: return b.registered_tag(x) + value_sum(b.before_encode(x));
     default: std::abort();
     }
 }
@@ -566,24 +565,24 @@ static std::uint64_t fb_path(flexbuffers::Reference const root)
 #endif
 
 #if defined(ARM_S_PUSH_IOV)
-static std::expected<void, std::errc> push_walk(cbor::encoder<cbor::iov_writer> &e, bench::value const &x)
+static std::expected<void, std::errc> push_walk(cbor::encoding::encoder<cbor::iov_writer> &e, bench::value const &x)
 {
-    bench::binding b;
+    bench::reader b;
     switch (b.kind_of(x)) {
-    case cbor::kind::unsigned_integer: return e.head_encode(cbor::major_type::unsigned_integer, b.unsigned_of(x));
-    case cbor::kind::negative_integer: return e.head_encode(cbor::major_type::negative_integer, b.unsigned_of(x) - 1);
-    case cbor::kind::floating_point: return e.float_encode(b.float_of(x));
-    case cbor::kind::simple_value: return e.head_encode(cbor::major_type::simple_float, b.simple_of(x));
-    case cbor::kind::text_string: return e.text_string_encode(b.text_of(x));
-    case cbor::kind::byte_string: return e.byte_string_encode(b.bytes_of(x));
-    case cbor::kind::array: {
+    case cbor::type::unsigned_integer: return e.head_encode(cbor::major_type::unsigned_integer, b.unsigned_of(x));
+    case cbor::type::negative_integer: return e.head_encode(cbor::major_type::negative_integer, b.unsigned_of(x) - 1);
+    case cbor::type::double_float: return e.float_encode(b.float_of(x));
+    case cbor::type::simple_value: return e.head_encode(cbor::major_type::simple_float, b.simple_of(x));
+    case cbor::type::text_string: return e.text_string_encode(b.text_of(x));
+    case cbor::type::byte_string: return e.byte_string_encode(b.bytes_of(x));
+    case cbor::type::array: {
         std::uint64_t const n = b.array_size(x);
         if (auto const r = e.head_encode(cbor::major_type::array, n); !r) return r;
         for (std::uint64_t i = 0; i < n; ++i)
             if (auto const r = push_walk(e, b.array_at(x, i)); !r) return r;
         return {};
     }
-    case cbor::kind::map: {
+    case cbor::type::map: {
         if (auto const r = e.head_encode(cbor::major_type::map, b.map_size(x)); !r) return r;
         std::expected<void, std::errc> r;
         b.map_for_each(x, [&](bench::value const &k, bench::value const &v) {
@@ -592,7 +591,7 @@ static std::expected<void, std::errc> push_walk(cbor::encoder<cbor::iov_writer> 
         });
         return r;
     }
-    case cbor::kind::registered:
+    case cbor::type::tag:
         if (auto const r = e.head_encode(cbor::major_type::tag, b.registered_tag(x)); !r) return r;
         return push_walk(e, b.before_encode(x));
     default: std::abort();
@@ -633,8 +632,7 @@ static vg_out vo;
 static void setup()
 {
 #if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
-    bench::binding b;
-    auto t = cbor::lazy_decode(b, *cbor::lazy::from(std::string_view(doc)));
+    auto t = bench::value_of(*cbor::lazy::from(std::string_view(doc)));
     if (!t)
         std::abort();
     tree = std::move(*t);
@@ -677,8 +675,8 @@ static void setup()
 static std::uint64_t op()
 {
 #if defined(ARM_S_IOV)
-    bench::binding b;
-    auto const r = cbor::encode_iov(b, tree);
+    cbor::iov_writer w;
+    auto const r = bench::encode(w, tree);
     if (!r)
         std::abort();
     std::span<std::string_view const> const pieces = **r;
@@ -687,18 +685,17 @@ static std::uint64_t op()
     return std::ranges::fold_left(pieces | std::views::transform(&std::string_view::size), std::size_t{0}, std::plus<>{});
 #elif defined(ARM_S_PUSH_IOV)
     cbor::iov_writer w;
-    cbor::encoder<cbor::iov_writer> e{w};
+    cbor::encoding::encoder<cbor::iov_writer> e{w};
     if (!push_walk(e, tree))
         std::abort();
     auto const r = e.release();
     std::span<std::string_view const> const pieces = *r;
     static bool const same = [&] {
-        bench::binding b;
         std::string plain;
         std::string joined;
         for (std::string_view const piece : pieces)
             joined.append(piece);
-        return cbor::encode(b, plain, tree).has_value() && plain == joined;
+        return bench::encode(plain, tree).has_value() && plain == joined;
     }();
     if (!same)
         std::abort();
@@ -706,17 +703,15 @@ static std::uint64_t op()
     benchmark::ClobberMemory();
     return pieces.size();
 #elif defined(ARM_S_STRING_REUSE)
-    bench::binding b;
     reused.clear();
-    if (!cbor::encode(b, reused, tree))
+    if (!bench::encode(reused, tree))
         std::abort();
     benchmark::DoNotOptimize(reused.data());
     benchmark::ClobberMemory();
     return reused.size();
 #elif defined(ARM_S_STRING)
-    bench::binding b;
     std::string out;
-    if (!cbor::encode(b, out, tree))
+    if (!bench::encode(out, tree))
         std::abort();
     benchmark::DoNotOptimize(out.data());
     benchmark::ClobberMemory();
@@ -728,20 +723,17 @@ static std::uint64_t op()
     benchmark::ClobberMemory();
     return cbor_encoder_get_buffer_size(&e, tcbuf.data());
 #elif defined(ARM_S)
-    bench::binding b;
-    if (!cbor::encode(b, std::span<char>(buf), tree))
+    if (!bench::encode(std::span<char>(buf), tree))
         std::abort();
     benchmark::ClobberMemory();
     return buf.size();
 #elif defined(ARM_READ)
-    read_binding b;
-    auto const r = cbor::lazy_decode(b, *cbor::lazy::from(keep, in));
+    auto const r = cbor::lazy::from(keep, in)->decode();
     if (!r)
         std::abort();
-    return *r;
+    return item_tree_sum(**r);
 #elif defined(ARM_MB_DECODE)
-    bench::binding b;
-    auto r = cbor::lazy_decode(b, *cbor::lazy::from(keep, in));
+    auto r = bench::value_of(*cbor::lazy::from(keep, in));
     if (!r) [[unlikely]]
         std::abort();
     benchmark::DoNotOptimize(&*r);
@@ -760,11 +752,10 @@ static std::uint64_t op()
 #elif defined(ARM_MB_AT_PATH)
     return mb_at_path();
 #elif defined(ARM_MB_PATH_ALL)
-    read_binding b;
-    auto const r = cbor::query<"$..*">(b, *cbor::lazy::from(keep, in));
+    auto const r = cbor::query<"$..*">(*cbor::lazy::from(keep, in));
     if (!r) [[unlikely]]
         std::abort();
-    return *r;
+    return r->size();
 #elif defined(ARM_TC_READ)
     CborParser parser;
     CborValue it;
@@ -989,8 +980,7 @@ int main(int argc, char **argv)
     in = *bytes;
 #if defined(ARM_MB_DECODE)
     {
-        bench::binding b;
-        auto const r = cbor::lazy_decode(b, *cbor::lazy::from(keep, std::string_view(doc)));
+        auto const r = bench::value_of(*cbor::lazy::from(keep, std::string_view(doc)));
         benchmark::AddCustomContext("check", std::to_string(value_sum(*r)));
     }
 #elif defined(ARM_LC_DECODE)

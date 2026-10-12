@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <array>
 #include <cstddef>
@@ -81,10 +81,9 @@ TEST_CASE("limits: operator= above the bound throws std::logic_error")
 }
 
 // The length of each string head is checked, in the immediate form, in the form with a one-byte argument, and in
-// every reader: the well-formedness walk, the lazy item, the decoder of a binding and the diagnostic notation.
+// every reader: the well-formedness walk, the lazy item, the item tree and the diagnostic notation.
 TEST_CASE("limits: string_length on each string head")
 {
-    test_binding binding;
     for (std::size_t const limit : {3uz, 30uz}) {
         test::limits_guard const guard{{.string_length = limit}};
         for (std::size_t const n : {limit - 1, limit, limit + 1}) {
@@ -92,7 +91,7 @@ TEST_CASE("limits: string_length on each string head")
             for (std::string const &encoded : {text_of_length(n), "\x82"s + text_of_length(n) + "\x00"s}) {
                 bool const passes = n <= limit;
                 auto const size = cbor::item_size(encoded);
-                auto const decoded = cbor::lazy_decode(binding, *cbor::lazy::from(encoded));
+                auto const decoded = test::value_of(*cbor::lazy::from(encoded));
                 auto const notation = cbor::diagnostic_notation(encoded);
                 CHECK_EQ(size.has_value(), passes);
                 CHECK_EQ(decoded.has_value(), passes);
@@ -115,14 +114,13 @@ TEST_CASE("limits: string_length on each string head")
 // The count of each array and map head is checked; a map counts its pairs.
 TEST_CASE("limits: container_elements on each array and map head")
 {
-    test_binding binding;
     test::limits_guard const guard{{.container_elements = 2}};
     for (std::size_t const n : {1uz, 2uz, 3uz}) {
         CAPTURE(n);
         bool const passes = n <= 2;
         for (std::string const &encoded : {array_of(n), map_of(n), "\x81"s + array_of(n)}) {
             auto const size = cbor::item_size(encoded);
-            auto const decoded = cbor::lazy_decode(binding, *cbor::lazy::from(encoded));
+            auto const decoded = test::value_of(*cbor::lazy::from(encoded));
             auto const notation = cbor::diagnostic_notation(encoded);
             CHECK_EQ(size.has_value(), passes);
             CHECK_EQ(decoded.has_value(), passes);
@@ -286,10 +284,9 @@ TEST_CASE("limits: the iterators of elements() and entries() skip without counti
 // RFC 8949 does not bound what a decoder skips; the bytes bound it (check_pending_items). The owner decided on
 // 2026-10-10 that string_length and container_elements count only the heads that a path or a lazy reads: the
 // containers on the way, the keys it compares and the target. An item that it only skips does not count, in each
-// form: the typed read over bytes, the typed read from a lazy, a binding, query and the lazy chain.
+// form: the typed read over bytes, the typed read from a lazy, at_path, query and the lazy chain.
 TEST_CASE("limits: an item that a path or a lazy only skips does not count")
 {
-    test_binding binding;
     std::string const strings = "\xa2\x61""a\x63xyz\x61""n\x01"s;
     std::string const arrays = "\xa2\x61""a\x83\x01\x02\x03\x61""n\x01"s;
     for (auto const &[limits, doc, wanted] :
@@ -300,10 +297,10 @@ TEST_CASE("limits: an item that a path or a lazy only skips does not count")
         CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
         CHECK_EQ(cbor::at_path<"$.n", int>(l), 1);
         CHECK_EQ(l.at("n")->get<int>(), 1);
-        CHECK(cbor::at_path(binding, "$.n", l) == V(1));
-        CHECK(cbor::query(binding, "$.n", l) == A(1));
-        CHECK_EQ(cbor::at_path(binding, "$.a", l).error(), wanted);
-        CHECK_EQ(cbor::lazy_decode(binding, *l.at("a")).error(), wanted);
+        CHECK(test::at_path("$.n", l) == V(1));
+        CHECK(test::query("$.n", l) == A(1));
+        CHECK_EQ(test::at_path("$.a", l).error(), wanted);
+        CHECK_EQ(test::value_of(*l.at("a")).error(), wanted);
     }
     test::limits_guard const guard{{.string_length = 2, .container_elements = 2}};
     std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;

@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <algorithm>
 #include <array>
@@ -38,8 +38,7 @@ cbor::lazy lazy_of(std::string const &document)
 
 value value_at(cbor::lazy const &l)
 {
-    test_binding binding;
-    auto const v = cbor::lazy_decode(binding, l);
+    auto const v = test::value_of(l);
     REQUIRE(v.has_value());
     return *v;
 }
@@ -132,8 +131,8 @@ TEST_CASE("lazy: deep nesting and a wide map")
 }
 
 // Ported from test.rb: 'lazy: dig — missing keys return nil, negative array indices work'. dig maps
-// to a chain of at; a miss is an error value, and the binding makes nil of it. at takes a std::size_t, as
-// std::vector::at does, so a binding counts a negative index from size(). A path keeps the negative index of
+// to a chain of at; a miss is an error value, and the application makes nil of it. at takes a std::size_t, as
+// std::vector::at does, so an application counts a negative index from size(). A path keeps the negative index of
 // RFC 9535.
 TEST_CASE("lazy: negative indices and misses")
 {
@@ -191,8 +190,7 @@ TEST_CASE("lazy: a reference to its own enclosing mark ends")
 {
     std::string const doc = "\xd8\x1c\xd8\x1d\x00"s;
     CHECK_EQ(lazy_of(doc).at(0).error(), error::sharedref_not_complete);
-    test_binding binding;
-    CHECK_FALSE(cbor::lazy_decode(binding, lazy_of(doc)).has_value());
+    CHECK_FALSE(test::value_of(lazy_of(doc)).has_value());
 }
 
 // Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. A lookup stops at the first key that
@@ -642,7 +640,7 @@ auto get(std::string const &document)
 
 } // namespace
 
-// The integers of RFC 8949 Appendix A, read without a binding.
+// The integers of RFC 8949 Appendix A, read with get.
 TEST_CASE("lazy: get reads an integer")
 {
     CHECK_EQ(*get<std::uint64_t>("\x00"s), 0u);
@@ -731,29 +729,15 @@ TEST_CASE("lazy: get reads a typed array")
 namespace
 {
 
-// A binding whose only value is a typed array, as a language with ArrayBuffers has.
-struct typed_binding {
-    using value = cbor::typed_array;
-
-    cbor::kind kind_of(cbor::typed_array const &)
-    {
-        return cbor::kind::typed_array;
-    }
-
-    cbor::typed_array typed_array_of(cbor::typed_array const &a)
-    {
-        return a;
-    }
-};
-
+// The bytes of the public encoder for one typed array.
 std::expected<std::string, cbor::error> typed_encoded(std::uint64_t const tag, std::string_view const bytes)
 {
-    typed_binding binding;
-    test::string_writer w;
-    auto const r = cbor::encode(binding, w, cbor::typed_array{tag, std::as_bytes(std::span(bytes))});
-    if (!r)
+    std::string out;
+    cbor::encoder e(out);
+    if (auto const r = e.typed_array(cbor::typed_array{tag, std::as_bytes(std::span(bytes))}); !r)
         return std::unexpected(r.error());
-    return w.encoded;
+    REQUIRE(e.finish().has_value());
+    return out;
 }
 
 } // namespace
@@ -773,34 +757,29 @@ TEST_CASE("encode: a typed array is a tag and a byte string")
 
 // A tag outside 64 to 87, or the reserved 76, is no typed array; a length that is not a multiple of the
 // element size is inadmissible content.
-TEST_CASE("encode: a typed array the binding answers wrongly")
+TEST_CASE("encode: a typed array with a wrong tag or length")
 {
     CHECK((typed_encoded(76, "\x00"sv).error() == cbor::error{cbor::error::unsupported_value}));
     CHECK((typed_encoded(63, "\x00"sv).error() == cbor::error{cbor::error::unsupported_value}));
     CHECK((typed_encoded(66, "\x00\x01\x02"sv).error() == cbor::error{cbor::error::inadmissible_type_for_tag_content}));
 }
 
-namespace
+// RFC 8949 3.4.5.1: tag 24 carries an encoded data item in a byte string. The library never writes tag 24 by
+// itself, so the application writes the tag and the bytes of the embedded item, and a view passes through the tag
+// into it.
+TEST_CASE("tag 24: an embedded item written by the application is read through")
 {
-
-// A binding that embeds every array as an encoded data item of its own.
-struct embedding_binding : test_binding {
-    bool embed_of(value const &v)
-    {
-        return std::holds_alternative<test::array *>(v.kind);
-    }
-};
-
-} // namespace
-
-// RFC 8949 3.4.5.1: tag 24 carries an encoded data item in a byte string. The encoder writes each embedded
-// value as a top-level item of its own, and a view passes through the tag into it.
-TEST_CASE("tag 24: an embedded value is written as a top-level item of its own and read through")
-{
-    embedding_binding binding;
+    std::string const embedded = test::encoded(A(2, 3));
     test::string_writer w;
-    REQUIRE(cbor::encode(binding, w, A(1, A(2, 3))).has_value());
-    CHECK_EQ(w.encoded, "\xd8\x18\x58\x20\x82"s + test::native_unsigned(1) + "\xd8\x18\x53\x82"s + test::native_unsigned(2) + test::native_unsigned(3));
+    {
+        cbor::encoder e(w);
+        REQUIRE(e.array(2).has_value());
+        REQUIRE(e.unsigned_integer(std::uint64_t{1}).has_value());
+        REQUIRE(e.tag(24).has_value());
+        REQUIRE(e.byte_string(std::as_bytes(std::span(embedded))).has_value());
+        REQUIRE(e.finish().has_value());
+    }
+    CHECK_EQ(w.encoded, "\x82"s + test::native_unsigned(1) + "\xd8\x18\x53\x82"s + test::native_unsigned(2) + test::native_unsigned(3));
     auto const inner = lazy_of(w.encoded).at(1);
     REQUIRE(inner.has_value());
     auto const three = inner->at(1);
@@ -865,8 +844,7 @@ TEST_CASE("lazy: a reference forward to a mark that navigation read is not marke
     CHECK_EQ(*second->get<std::uint64_t>(), 5u);
     auto const first = root.at(0);
     REQUIRE(first.has_value());
-    test_binding binding;
-    CHECK_EQ(cbor::lazy_decode(binding, *first).error(), error::sharedref_index_not_marked);
+    CHECK_EQ(test::value_of(*first).error(), error::sharedref_index_not_marked);
 }
 
 namespace
@@ -1030,8 +1008,7 @@ TEST_CASE("lazy: every member refuses a lazy that holds no top-level item")
     CHECK_THROWS_AS((void)none.elements(), std::logic_error);
     CHECK_THROWS_AS((void)none.entries(), std::logic_error);
     CHECK_THROWS_AS((void)none.decode(), std::logic_error);
-    test_binding binding;
-    CHECK_THROWS_AS((void)cbor::lazy_decode(binding, none), std::logic_error);
+    CHECK_THROWS_AS((void)test::value_of(none), std::logic_error);
 }
 
 // A shared reference may stand for the content of a tag: the magnitude of a bignum, the bytes of a typed array.
@@ -1167,7 +1144,7 @@ TEST_CASE("validity: keys_equivalent follows RFC 8949 5.6.1")
 
 // RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. Every
 // lookup stops at the first key that matches and gives its value with no error, also when the second key
-// stands after it. The entries, decode and lazy_decode read such a map with no error.
+// stands after it. The entries and decode read such a map with no error.
 TEST_CASE("lazy: a repeated key gives the first entry with no error")
 {
     std::string const twice = "\xa2\x61\x61\x01\x61\x61\x02"s;
@@ -1179,25 +1156,23 @@ TEST_CASE("lazy: a repeated key gives the first entry with no error")
     CHECK(lazy_of(twice).entries().has_value());
     cbor::lazy const top = lazy_of(twice);
     CHECK(top.decode().has_value());
-    test_binding binding;
-    CHECK(cbor::lazy_decode(binding, lazy_of(twice)).has_value());
-    CHECK(cbor::lazy_decode(binding, lazy_of("\x81\xa2\x01\x00\x18\x01\x00"s)).has_value());
+    CHECK(test::value_of(lazy_of(twice)).has_value());
+    CHECK(test::value_of(lazy_of("\x81\xa2\x01\x00\x18\x01\x00"s)).has_value());
 }
 
 // A repeated key at depth 3 and a repeated key of the outer map after a nested map are read with no error.
 // A lookup gives the value of the first key.
 TEST_CASE("lazy: a repeated key at depth 3 is read with no error")
 {
-    test_binding binding;
     std::string const inner = "\xa1\x61\x61\xa1\x61\x62\xa3\x61\x63\x01\x61\x64\x02\x61\x64\x03"s;
     std::string const outer = "\xa2\x61\x61\xa1\x61\x62\xa1\x61\x63\x01\x61\x61\x00"s;
-    CHECK(cbor::lazy_decode(binding, lazy_of(inner)).has_value());
-    CHECK(cbor::lazy_decode(binding, lazy_of(outer)).has_value());
+    CHECK(test::value_of(lazy_of(inner)).has_value());
+    CHECK(test::value_of(lazy_of(outer)).has_value());
     CHECK_EQ(*lazy_of(inner).at("a")->at("b")->at("d")->get<std::uint64_t>(), 2u);
     CHECK(lazy_of(outer).at("a")->at("b").has_value());
     CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(inner)), 2);
-    CHECK(cbor::query(binding, "$..*", lazy_of(inner)).has_value());
-    CHECK(cbor::at_path(binding, "$.a.b.d", lazy_of(inner)).has_value());
+    CHECK(test::query("$..*", lazy_of(inner)).has_value());
+    CHECK(test::at_path("$.a.b.d", lazy_of(inner)).has_value());
     CHECK(lazy_of(inner).at("a")->at("b")->decode().has_value());
 }
 
@@ -1208,12 +1183,11 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
     std::string doc = "\x98\x40"s;
     for (int i = 0; i < 64; ++i)
         doc += "\xa2\x61\x61\x01\x61\x62\x02"s;
-    test_binding binding;
     cbor::lazy const top = lazy_of(doc);
     CHECK(top.decode().has_value());
-    CHECK(cbor::lazy_decode(binding, lazy_of(doc)).has_value());
-    CHECK(cbor::query(binding, "$..*", lazy_of(doc)).has_value());
-    CHECK(cbor::query(binding, "$[*].a", lazy_of(doc)).has_value());
+    CHECK(test::value_of(lazy_of(doc)).has_value());
+    CHECK(test::query("$..*", lazy_of(doc)).has_value());
+    CHECK(test::query("$[*].a", lazy_of(doc)).has_value());
     CHECK_EQ(*(cbor::at_path<"$[63].b", int>(doc)), 2);
     CHECK_EQ(*lazy_of(doc).at(63)->at("a")->get<std::uint64_t>(), 1u);
 }
@@ -1354,8 +1328,11 @@ TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
                 auto const named = l.at(std::size_t{2})
                                        .and_then([](cbor::lazy const &m) { return m.at("k"); })
                                        .and_then([](cbor::lazy const &r) { return r.decode(); });
-                right[t] = text.has_value() && **text == "hello" && named.has_value() &&
-                           std::get<std::string_view>((*named)->content) == "hello";
+                auto const *const reference =
+                    named.has_value() ? std::get_if<cbor::sharedref>(&(*named)->content) : nullptr;
+                auto const *const shared =
+                    reference != nullptr ? std::get_if<std::string_view>(&reference->shareable->content) : nullptr;
+                right[t] = text.has_value() && **text == "hello" && shared != nullptr && *shared == "hello";
             });
     }
     CHECK(std::ranges::all_of(right, std::identity{}));

@@ -1,5 +1,6 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -49,14 +50,13 @@ TEST_CASE("path: a key is compared without an allocation")
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
     auto const root = *cbor::lazy::from(std::string(bytes));
     auto const map = *root.at(1);
-    test_binding binding;
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(binding, map).has_value());
+    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(map).has_value());
     std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]">(binding, map);
+    auto const found = cbor::at_path<"$[[1, \"x\"]]">(map);
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
     CHECK_EQ(after, before);
-    CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
+    CHECK_EQ(found->get<std::uint64_t>(), 1u);
 }
 
 // A top-level item with a shared value (tag 28) reads its marks once, at the first tag 29, and keeps them for
@@ -67,17 +67,16 @@ TEST_CASE("path: a second read of a top-level item with shared values allocates 
     std::string const bytes = "\x82\xd8\x1c\x61x\xa2\x82\x01\xd8\x1d\x00\x01\xa1\x61k\xd8\x1d\x00\x02"s;
     auto const root = *cbor::lazy::from(std::string(bytes));
     auto const map = *root.at(1);
-    test_binding binding;
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(binding, map).has_value());
+    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(map).has_value());
     std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]">(binding, map);
+    auto const found = cbor::at_path<"$[[1, \"x\"]]">(map);
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
     CHECK_EQ(after, before);
-    CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
+    CHECK_EQ(found->get<std::uint64_t>(), 1u);
 }
 
-// The count in the head of an array is not trusted. The item of an array is its count and a view on its bytes, so a
+// The count in the head of an array is not trusted. The decode keeps room only for the elements it has read, so a
 // head that claims many elements makes decode take no room for them. Here the array claims 4096 elements and its
 // first element is not well-formed, so decode fails before it builds anything but the array.
 TEST_CASE("decode: the room kept for the elements of an array is bounded by the bytes left")
@@ -91,6 +90,20 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::syntax_error);
     CHECK_LE(after - before, 2 * bytes.size());
+}
+
+// An array that claims 2^63 elements with one byte after its head is refused with too_little_data, and the
+// decode takes memory in proportion to the input and not to the claimed count: one fixed block for the items.
+TEST_CASE("decode: a claimed count of 2^63 with one byte left allocates in proportion to the input")
+{
+    std::string const bytes = "\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s;
+    auto const root = *cbor::lazy::from(std::string(bytes));
+    std::size_t const before = allocated_bytes;
+    auto const r = root.decode();
+    std::size_t const after = allocated_bytes;
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::too_little_data);
+    CHECK_LE(after - before, 8192u);
 }
 
 // The typed read of a path walks the bytes of the caller and builds no top-level item: a text with the owner of the
@@ -158,13 +171,30 @@ TEST_CASE("path: a typed read with a key that is not text allocates")
 // children.
 TEST_CASE("path: a filter with a literal allocates for each child")
 {
-    test_binding binding;
     auto const three = *cbor::lazy::from(encoded(A(1, 2, 3)));
     auto const six = *cbor::lazy::from(encoded(A(4, 5, 6, 7, 8, 9)));
     std::size_t const before = allocations;
-    (void)cbor::query(binding, "$[?@ == 1]", three);
+    (void)test::query("$[?@ == 1]", three);
     std::size_t const middle = allocations;
-    (void)cbor::query(binding, "$[?@ == 1]", six);
+    (void)test::query("$[?@ == 1]", six);
     std::size_t const after = allocations;
     CHECK_GT(after - middle, middle - before);
+}
+
+// The public encoder over a span of the caller writes into that memory only: a whole data item of every kind of
+// head, a string and a float allocates nothing.
+TEST_CASE("encoder: the span target allocates nothing")
+{
+    std::array<char, 64> buffer{};
+    std::array<std::byte, 2> const bytes{std::byte{1}, std::byte{2}};
+    std::size_t const before = allocations;
+    cbor::encoder e{std::span<char>(buffer)};
+    bool const all = e.array(5).has_value() && e.unsigned_integer(std::uint32_t{7}).has_value() &&
+                     e.text_string("abc"sv).has_value() && e.byte_string(std::span<std::byte const>(bytes)).has_value() &&
+                     e.floating_point(1.5).has_value() && e.typed_array(cbor::typed_array{64, bytes}).has_value();
+    auto const size = e.finish();
+    std::size_t const after = allocations;
+    CHECK(all);
+    REQUIRE(size.has_value());
+    CHECK_EQ(after, before);
 }

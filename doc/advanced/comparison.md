@@ -276,7 +276,7 @@ bool const same = v[0] == v[1];
 
 ### mbedded-cbor
 
-A lazy and structs read tag 29 as the value that tag 28 marks. encode writes tags 28 and 29 with cbor::sharedrefs::on ([runtime.md](runtime.md)).
+A lazy and structs read tag 29 as the value that tag 28 marks. `decode` keeps tag 28 as a tag and points tag 29 to the marked item; the application writes tags 28 and 29 through `cbor::encoder` ([runtime.md](runtime.md)).
 
 ```cpp
 // bytes: [28("x"), 29(0)]

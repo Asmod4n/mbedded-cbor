@@ -170,61 +170,80 @@ Two iterators of two different maps throw `std::logic_error`.
 
 `get` follows a tag 29 to the item that it names, and passes a tag 28.
 
-## 6. decode and lazy_decode
+## 6. decode
 
 `lazy::decode()` gives `std::expected<std::shared_ptr<cbor::item const>,
-error>`. It reads the whole item at the lazy and checks every head. A
-`cbor::item` holds the major type, the additional information, the
-argument and the content of one item. A string in it is a view into the
-bytes.
+error>`. It reads the whole item at the lazy, checks every head and builds
+one `cbor::item` for each data item. An item holds the major type, the
+additional information, the argument and the content of one data item. A
+string in it is a view into the bytes.
+
+| Data item | Content |
+|---|---|
+| integer | nothing; the value is the argument |
+| byte string, text string | `std::span<std::byte const>`, `std::string_view` |
+| array, map | `cbor::data_items`; `span()` gives the children, a map key and value one after the other |
+| tag | `cbor::item const *`, the item of the content |
+| tag 29 | `cbor::sharedref`: the item that the tag 28 marks, and the head of the index |
+| float | `std::float16_t` where the compiler has it, `float`, `double` |
+| simple value | `cbor::simple_value` |
 
 ```cpp
-// [1, 2]
+// [1, {"a": 2}]
 auto const i = cbor::lazy::from(bytes)->decode();
-(*i)->major_type;   // major_type::array
-(*i)->argument;     // 2
-```
-
-`lazy_decode(binding, l)` reads the whole item at `l` into the values of
-a binding. A binding is a type of your own with a member type `value`.
-The library calls the binding for each item: `decode.hpp` lists the calls.
-The binding is an lvalue. In the examples, `binding` is an object of such
-a type.
-
-```cpp
-// {"a": [1, 2]}
-lazy_decode(binding, *cbor::lazy::from(bytes));   // the value {"a": [1, 2]} of the binding
+(*i)->major_type;                                        // major_type::array
+std::get<cbor::data_items>((*i)->content).span().size(); // 2
 // 82 01, an array of two elements with one element
-lazy_decode(binding, *cbor::lazy::from(bytes));   // too_little_data
+cbor::lazy::from(bytes)->decode();                       // too_little_data
 ```
 
-Both read every head of the item, so every limit counts each head. Neither
-reads a byte after the item.
+A tag 28 stays a tag item, and a tag 29 points to the item that the tag 28
+marks. No read of the library follows that pointer, so a cycle ends. A
+count in a head reserves nothing: an array that claims more elements than
+bytes are left gives `too_little_data` before it reads an element.
+
+`type()` of a lazy and of an item gives `std::expected<cbor::type, error>`:
+the major type, or for a tag 2, 3 or a typed array of RFC 8746 the kind of
+that tag. A lazy reads through tags 28 and 29; an item keeps them as tags.
+
+The decode reads every head of the item, so every limit counts each head.
+It reads no byte after the item.
 
 ## 7. encode
 
-`encode(binding, target, value)` writes `value` as CBOR. It gives
-`std::expected<void, error>`. The binding answers what kind each value is.
+`cbor::encoder` writes one data item per call, in the order of the bytes:
+`unsigned_integer`, `negative_integer`, `byte_string`, `text_string`,
+`array`, `map`, `tag`, `simple_value`, `floating_point` and `typed_array`.
+An integer and a float take the width of their type; a count, a length and
+a tag number take the shortest head. The encoder counts nothing: the counts
+of `array` and `map` are yours.
 
-`target` is one of:
+Each call gives `std::expected<void, error>`. After an error, and after
+`finish()`, every call throws `std::logic_error`. `finish()` gives the size
+in bytes, or the pieces for an `iov_writer`.
+
+The target of the encoder is one of:
 
 - a container of bytes, for example `std::string` or
-  `std::vector<std::byte>`: the encode appends to it;
-- a fixed span of bytes: the encode writes into it and gives
-  `no_buffer_space` when it does not fit;
+  `std::vector<std::byte>`: the encoder appends to it;
+- a fixed span of bytes: the encoder writes into it, allocates nothing, and
+  gives `no_buffer_space` when an item does not fit;
+- a `cbor::iov_writer` ([13](#13-encode_iov));
 - a writer of your own with `allocate`, `append` and `done`. An error of
   the writer comes back as a `cbor::error` ([basics.md](basics.md)).
 
 ```cpp
 std::string out;
-cbor::encode(binding, out, value);   // value [1, 2]: out holds 82 1b 00 00 00 00 00 00 00 01
-                                     //                1b 00 00 00 00 00 00 00 02
+cbor::encoder e(out);
+e.array(2);
+e.unsigned_integer(std::uint8_t{1});
+e.text_string("a");
+e.finish();   // 5: out holds 82 18 01 61 61
 ```
 
-`encode<cbor::sharedrefs::on>(...)` writes a value that the binding gives
-more than once as one tag 28 and a tag 29 for each further use. The default
-`sharedrefs::off` writes each use in full, and a cycle gives
-`cyclic_data_structure`.
+`cbor::encode(item, target)` writes a decoded item back. Each head keeps
+the additional information that it had on the wire, so the bytes come back
+unchanged, tags 28 and 29 included. It gives the size in bytes.
 
 ## 8. cbor::sequence
 
@@ -280,8 +299,10 @@ value of the n-th tag 28, counted from 0 in the order of the bytes.
   to its content, and through a tag 29 to the value it names.
 - A tag 29 must come after the tag 28 that it names. A tag 29 that names
   no tag 28 before it gives `sharedref_index_not_marked`.
-- A tag 29 inside the tag 28 that it names is a cycle. A binding that does
-  not take a cycle gets `sharedref_not_complete`.
+- A tag 29 inside the tag 28 that it names is a cycle. A step and
+  `decode` read it; the tree holds the cycle as a pointer. A tag 29 that is
+  itself the content of the tag 28 that it names names no value, and a step
+  gives `sharedref_not_complete`.
 - `diagnostic_notation` writes the tags as they are.
 
 ```cpp
@@ -289,13 +310,13 @@ value of the n-th tag 28, counted from 0 in the order of the bytes.
 cbor::lazy::from(bytes)->at(1)->get<std::int64_t>();        // 1
 cbor::diagnostic_notation(bytes);                           // "[28(1), 29(0)]"
 // [29(0), 28(5)]
-lazy_decode(binding, *cbor::lazy::from(bytes));             // sharedref_index_not_marked
+cbor::lazy::from(bytes)->decode();                          // sharedref_index_not_marked
 ```
 
 ## 12. Tag 55799
 
-Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR. `lazy::from`, `decode`,
-`lazy_decode` and a path read one leading tag 55799 as its content, in
+Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR. `lazy::from`, `decode`
+and a path read one leading tag 55799 as its content, in
 every width of the argument. A second tag 55799, and a tag 55799 inside an
 item, stay tags.
 
@@ -303,21 +324,21 @@ item, stay tags.
 // 55799([1, 2])
 cbor::lazy::from(bytes)->at(1)->get<std::int64_t>();   // 2
 // [55799(1)]
-lazy_decode(binding, *cbor::lazy::from(bytes));        // [55799(1)]
+cbor::lazy::from(bytes)->decode();                     // an array that holds the tag item 55799(1)
 ```
 
-The encoder writes a tag 55799 that the binding gives as `d9 d9 f7`.
+`e.tag(55799)` writes `d9 d9 f7`.
 
 ## 13. encode_iov
 
-`cbor::encode_iov(binding, value)` writes into a list of pieces, not into
-one buffer. It gives
+`cbor::encode_iov(item)` writes a decoded item into a list of pieces, not
+into one buffer. It gives
 `std::expected<cbor::owning_ref<std::span<std::string_view const>>, error>`:
 the pieces in order, and their storage, which lives as long as the
 result. Use the pieces with `writev` or a socket, or join them.
 
 ```cpp
-auto const pieces = cbor::encode_iov(binding, value);
+auto const pieces = cbor::encode_iov(**cbor::lazy::from(bytes)->decode());
 for (std::string_view const piece : **pieces)
     send(piece);
 ```
@@ -325,16 +346,15 @@ for (std::string_view const piece : **pieces)
 The encoder writes into blocks of 16 KiB and copies each byte once; a
 `std::string` that grows would copy its bytes at each doubling.
 
-`cbor::encoder<cbor::iov_writer>` writes item by item. A text or a byte
-string of 32 bytes or more that you hand over with its owner is not
+`cbor::encoder` over a `cbor::iov_writer` writes item by item. A text or a
+byte string of 32 bytes or more that you hand over with its owner is not
 copied: `std::string&&` and `std::vector<std::byte>&&` are moved into the
-result, a `std::shared_ptr` or a `cbor::owning_ref` is kept. `release()`
-gives the pieces; a write after it throws `std::logic_error`.
+result, a `std::shared_ptr` or a `cbor::owning_ref` is kept. `finish()`
+gives the pieces.
 
 ```cpp
 cbor::iov_writer w;
-cbor::encoder<cbor::iov_writer> e{w};
-e.text_string_encode(std::move(long_text));   // moved, not copied
-auto const pieces = e.release();
+cbor::encoder e(w);
+e.text_string(std::move(long_text));   // moved, not copied
+auto const pieces = e.finish();
 ```
-

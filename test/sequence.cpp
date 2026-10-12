@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -129,8 +129,7 @@ TEST_CASE("sequence: lazy, path and decode read each element with the owner of t
     CHECK(inside(*owner, (*path)->data()));
     CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]).value(), 1u);
 
-    test_binding binding;
-    auto const decoded = cbor::lazy_decode(binding, items[1]);
+    auto const decoded = test::value_of(items[1]);
     REQUIRE(decoded.has_value());
     CHECK(*decoded == A(1, 2));
 }

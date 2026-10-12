@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -127,17 +127,16 @@ TEST_CASE("simple value: lazy::decode gives every simple value 0 to 255 as its c
     }
 }
 
-// decode hands every simple value to the binding, and encode writes it back in the same bytes.
-TEST_CASE("simple value: decode and encode through a binding for every simple value 0 to 255")
+// decode gives every simple value to the reference model, and the encoder writes it back in the same bytes.
+TEST_CASE("simple value: decode and encode for every simple value 0 to 255")
 {
     for (unsigned i = 0; i < 256; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         if (reserved(v)) {
             CHECK_EQ(decode_error(wire_of(v)), error::syntax_error);
-            test_binding binding;
             string_writer w;
-            auto const r = cbor::encode(binding, w, V(simple{v}));
+            auto const r = test::encode(w, V(simple{v}));
             REQUIRE_FALSE(r.has_value());
             CHECK((r.error() == cbor::error{error::reserved_simple_value}));
             continue;
@@ -170,7 +169,7 @@ TEST_CASE("simple value: simple_value_encode writes every simple value 0 to 255"
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         string_writer w;
-        cbor::encoder<string_writer> e{w};
+        cbor::encoding::encoder<string_writer> e{w};
         auto const r = e.simple_value_encode(static_cast<cbor::simple_value>(v));
         if (reserved(v)) {
             CHECK_EQ(r.error(), std::errc::invalid_argument);

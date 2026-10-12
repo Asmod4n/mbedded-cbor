@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <algorithm>
 #include <array>
@@ -69,8 +69,8 @@ std::string bytes_of_hex(std::string_view const hex)
 // Ported from test-vectors.rb: 'passes the official test vectors', the examples of RFC 8949
 // Appendix A. Indefinite lengths are refused, as in mruby-cbor. Every other example decodes, and
 // one that a generic encoder writes back comes back as the same value. The bytes differ: the examples
-// are in preferred form, and the walker writes a run-time number at its native width. The skip list of
-// mruby-cbor is not needed: the test binding keeps bytes, text, simple values and tags apart.
+// are in preferred form, and the encoder writes a run-time number at its native width. The skip list of
+// mruby-cbor is not needed: the reference model keeps bytes, text, simple values and tags apart.
 TEST_CASE("test vectors: RFC 8949 Appendix A")
 {
     auto const cases = cases_of(TEST_VECTORS "/appendix_a.json");
@@ -136,6 +136,9 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             continue;
         }
         cbor::item const &it = **decoded_item;
+        std::string again;
+        REQUIRE(cbor::encode(it, again).has_value());
+        CHECK_EQ(again, wire);
         std::uint8_t const info = initial & 0x1f;
         std::size_t const argument_bytes = info < 24 ? 0 : std::size_t{1} << (info - 24);
         std::uint64_t argument = info < 24 ? info : 0;
@@ -160,8 +163,9 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             break;
         case cbor::major_type::array:
         case cbor::major_type::map:
-            REQUIRE(std::holds_alternative<std::span<std::byte const>>(it.content));
-            CHECK(std::ranges::equal(std::get<std::span<std::byte const>>(it.content), std::as_bytes(std::span(after_head))));
+            REQUIRE(std::holds_alternative<cbor::data_items>(it.content));
+            CHECK_EQ(std::get<cbor::data_items>(it.content).span().size(),
+                     it.major_type == cbor::major_type::map ? 2 * argument : argument);
             break;
         case cbor::major_type::tag:
             REQUIRE(std::holds_alternative<cbor::item const *>(it.content));
@@ -443,9 +447,8 @@ std::expected<value, error> lazy_value_of(std::string_view const wire)
 
 std::string wire_encoded(value const &v)
 {
-    test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode(binding, w, v).has_value());
+    REQUIRE(test::encode(w, v).has_value());
     return w.encoded;
 }
 
@@ -500,7 +503,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     REQUIRE(d.has_value());
     CHECK(equivalent(*d, *expected));
     if (v.roundtrip) {
-        // The walker writes a run-time number at its native width, so the bytes differ from the vector,
+        // The encoder writes a run-time number at its native width, so the bytes differ from the vector,
         // which is in preferred form. The value read back must be the same.
         auto const back = decoded(wire_encoded(*d));
         REQUIRE(back.has_value());
@@ -510,6 +513,16 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     auto const l = lazy_value_of(v.encoded);
     REQUIRE(l.has_value());
     CHECK(equivalent(*l, *expected));
+
+    // encode of the decoded tree writes each head with the additional information of the wire, so every vector,
+    // also one that is not in preferred form, comes back byte for byte.
+    auto const top_level = cbor::lazy::from(std::string(v.encoded));
+    REQUIRE(top_level.has_value());
+    auto const tree = top_level->decode();
+    REQUIRE(tree.has_value());
+    std::string again;
+    REQUIRE(cbor::encode(**tree, again).has_value());
+    CHECK_EQ(again, v.encoded);
 
     auto const text = cbor::diagnostic_notation(v.encoded);
     REQUIRE(text.has_value());
