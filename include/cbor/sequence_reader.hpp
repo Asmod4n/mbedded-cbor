@@ -23,7 +23,7 @@ namespace cbor
 
 class sequence_reader
 {
-    enum class phase { head, argument, string_content };
+    enum class phase { head, argument, string_content, elements };
 
     std::shared_ptr<std::string> buffer = std::make_shared<std::string>();
     std::size_t item_begin = 0;
@@ -31,6 +31,7 @@ class sequence_reader
     std::uint64_t phase_end = 0;
     phase at = phase::head;
     std::size_t level = 0;
+    std::uint64_t pending = 1;
     std::array<std::uint64_t, validity::nesting_depth_limit + 1> left{1};
     error failure{};
     limit_values item_limits{};
@@ -64,6 +65,12 @@ class sequence_reader
                 if (item_completed())
                     return {};
             }
+            if (at == phase::elements) {
+                if (auto const r = validity::check_pending_items(pending, item.size() - scanned); !r)
+                    [[unlikely]]
+                    return r;
+                at = phase::head;
+            }
             if (at == phase::argument && item.size() < phase_end) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             heads::decoder<Checked> d{std::string_view{std::span(item).subspan(scanned)}, checks};
@@ -82,6 +89,7 @@ class sequence_reader
             if (auto const r = validity::check_input_bytes(scanned, checks); !r) [[unlikely]]
                 return r;
             --left[level];
+            --pending;
             std::uint64_t children = 0;
             switch (h->major) {
             case major_type::byte_string:
@@ -113,14 +121,15 @@ class sequence_reader
                 if (auto const r = validity::check_nesting_depth(level + 1, depth_max); !r) [[unlikely]]
                     return r;
                 left[++level] = children;
+                pending = validity::checked_add(pending, children)
+                              .value_or(std::numeric_limits<std::uint64_t>::max());
+                at = phase::elements;
                 continue;
             }
             if (item_completed())
                 return {};
         }
     }
-
-    friend struct sequence_reader_test;
 
 public:
     sequence_reader() = default;
@@ -154,6 +163,12 @@ public:
         buffer->append(bytes);
     }
 
+    bool empty() const
+    {
+        validity::throw_logic_error_if_null(buffer, "cbor::sequence_reader: the reader was moved from");
+        return buffer->size() == item_begin;
+    }
+
     std::expected<lazy, error> next()
     {
         validity::throw_logic_error_if_null(buffer, "cbor::sequence_reader: the reader was moved from");
@@ -176,6 +191,7 @@ public:
         scanned = 0;
         level = 0;
         left[0] = 1;
+        pending = 1;
         return lazy::from(buffer, item, item_limits);
     }
 };

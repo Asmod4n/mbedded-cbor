@@ -14,11 +14,9 @@ namespace fuzz
 
 // A sequence_reader gives one outcome for the same bytes, whatever the pieces they arrive in. The first byte
 // of the input seeds the lengths of the pieces; the rest is the CBOR Sequence. The outcome is compared with
-// cbor::sequence over the whole buffer. Two differences are allowed, and each is checked for what it is:
-// cbor::sequence gives too_little_data when an array or a map announces more items than bytes remain, where
-// the reader reads the malformed byte after the head; and the reader refuses an item nested deeper than the
-// limit, which cbor::sequence does not check. A decode of that item also fails, with nesting_depth_exceeded or
-// with an error that it finds first on its way down.
+// cbor::sequence over the whole buffer, and it is the same, with one difference: the reader refuses an item
+// nested deeper than the limit, which cbor::sequence does not check. A decode of that item also fails, with
+// nesting_depth_exceeded or with an error that it finds first on its way down.
 inline void sequence_reader_target(std::string_view const input)
 {
     if (input.empty())
@@ -47,11 +45,7 @@ inline void sequence_reader_target(std::string_view const input)
         }
         return;
     }
-    require(whole.items.size() == n);
-    if (read.last == cbor::error::too_little_data)
-        require(whole.last == cbor::error::too_little_data);
-    else if (whole.last != cbor::error::too_little_data)
-        require(whole.last == read.last);
+    require(whole == read);
 }
 
 } // namespace fuzz

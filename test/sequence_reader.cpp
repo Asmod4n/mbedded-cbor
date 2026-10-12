@@ -14,25 +14,6 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-namespace cbor
-{
-
-// The state of a reader is private. This test-only access reads where the scan of the current item stands, so
-// that a test can count the bytes that each call of next() reads.
-struct sequence_reader_test {
-    static std::size_t scanned(sequence_reader const &r)
-    {
-        return r.scanned;
-    }
-
-    static bool head_waits(sequence_reader const &r)
-    {
-        return r.at == sequence_reader::phase::argument;
-    }
-};
-
-} // namespace cbor
-
 namespace
 {
 
@@ -218,41 +199,37 @@ TEST_CASE("sequence_reader: the stack holds the hard bound of the nesting depth"
              error::nesting_depth_exceeded);
 }
 
-// feed() continues where the scan stopped. Each call of next() reads only the bytes after the place where the
-// previous call stopped: the head of an item that is cut waits until all its bytes are there, and the content
-// of a string is skipped by its length. The sum of the bytes that the scan passes is then the size of the
-// item.
-TEST_CASE("sequence_reader: no byte is read twice")
+// RFC 8949 3 and the decision of the owner of 2026-10-12: an array or a map that announces more items than
+// bytes follow gives too_little_data before any of its elements is read, in every reader. Each item takes one
+// byte at least, so such a container cannot be complete. With the bytes that complete the count, the element
+// is read and gives its own error.
+TEST_CASE("sequence_reader: a count larger than the bytes left waits before its elements")
 {
-    std::string const bytes = "\xa1\x61k\x9a\x00\x00\x00\x02\x19\x01\x00\x58\x1a"s + std::string(26, 'x') +
-                              "\x63"
-                              "end"s;
-    cbor::sequence_reader r;
-    std::size_t passed = 0;
-    std::size_t waits = 0;
-    std::size_t items = 0;
-    for (char const c : bytes) {
-        r.feed(std::string_view(&c, 1));
-        std::size_t const before = cbor::sequence_reader_test::scanned(r);
-        bool const waited = cbor::sequence_reader_test::head_waits(r);
-        auto const item = r.next();
-        if (item) {
-            passed += item->top_level->encoded.size() - before;
-            ++items;
-            continue;
-        }
-        REQUIRE_EQ(item.error(), error::too_little_data);
-        std::size_t const after = cbor::sequence_reader_test::scanned(r);
-        REQUIRE_GE(after, before);
-        passed += after - before;
-        if (!waited && cbor::sequence_reader_test::head_waits(r))
-            ++waits;
+    for (std::size_t at = 0; at <= 2; ++at) {
+        CAPTURE(at);
+        CHECK_EQ(test::reader_outcome_split_at("\x82\xff"s, at).last, error::too_little_data);
+        CHECK_EQ(test::reader_outcome_split_at("\x82\xff"s, at), test::sequence_outcome_of("\x82\xff"sv));
     }
-    CHECK_EQ(items, 2u);
-    CHECK_EQ(passed, bytes.size());
-    // Three heads arrive cut: 9a with its four bytes, 19 with two, 58 with one. The initial byte of each is
-    // read once to learn the size of the head, and once more when the head is whole.
-    CHECK_EQ(waits, 3u);
+    for (std::size_t at = 0; at <= 3; ++at) {
+        CAPTURE(at);
+        CHECK_EQ(test::reader_outcome_split_at("\x82\xff\x00"s, at).last, error::syntax_error);
+    }
+}
+
+// empty() says whether the reader holds a byte that no item has taken yet, as std::ranges::empty says whether
+// a range has an element. At the end of a stream, a reader that is not empty holds a cut item.
+TEST_CASE("sequence_reader: empty() is true when no unread byte is held")
+{
+    cbor::sequence_reader r;
+    CHECK(r.empty());
+    r.feed("\x01\x82"sv);
+    CHECK_FALSE(r.empty());
+    CHECK(r.next().has_value());
+    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_FALSE(r.empty());
+    r.feed("\x01\x02"sv);
+    CHECK(r.next().has_value());
+    CHECK(r.empty());
 }
 
 // A reader holds bytes that other items view, so a copy is refused at compile time. A reader that was moved

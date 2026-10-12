@@ -151,4 +151,5 @@ TEST_CASE("doc runtime: read items from a socket")
         CHECK_EQ(r.next().error(), cbor::error::too_little_data);
     }
     CHECK_EQ(handled, std::vector<std::string>{"[1, 2]", "\"abc\""});
+    CHECK(r.empty());
 }

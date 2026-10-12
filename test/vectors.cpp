@@ -782,18 +782,14 @@ TEST_CASE("sequence_reader: cbor-wg vectors fed byte by byte")
 namespace
 {
 
-// A reader gives one outcome for an item at every split. Where cbor::sequence over the whole buffer finds a malformed
-// item, the reader gives the same error; where the reader waits for bytes, cbor::sequence also finds only a cut item.
-// The reverse does not hold: cbor::sequence gives too_little_data as soon as an array or a map announces more items
-// than bytes remain, before it reads a malformed byte after the head; the reader reads that byte and gives its error.
+// A reader gives one outcome for an item at every split, and it is the outcome of cbor::sequence over the whole
+// buffer. An array or a map that announces more items than bytes follow gives too_little_data before its elements in
+// both (owner, 2026-10-12).
 void sequence_reader_malformed_check(std::string_view const wire)
 {
     test::sequence_outcome const whole = test::sequence_outcome_of(wire);
     test::sequence_outcome const read = test::reader_outcome_split_at(wire, 0);
-    if (whole.last != error::too_little_data)
-        CHECK_EQ(read.last, whole.last);
-    if (read.last == error::too_little_data)
-        CHECK_EQ(whole.last, error::too_little_data);
+    CHECK_EQ(read, whole);
     for (std::size_t at = 1; at <= wire.size(); ++at) {
         CAPTURE(at);
         CHECK_EQ(test::reader_outcome_split_at(wire, at), read);
