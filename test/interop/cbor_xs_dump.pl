@@ -21,6 +21,7 @@ sub dump_value {
     if ($r eq "Types::Serialiser::Boolean" || $r eq "JSON::PP::Boolean") { return $v ? "s(21)" : "s(20)" }
     if ($r eq "CBOR::XS::Undefined" || (Types::Serialiser->can("is_undef") && $r =~ /Undef/)) { return "s(23)" }
     if ($r eq "CBOR::XS::Simple") { return "s(" . ($$v + 0) . ")" }
+    if ($r eq "Math::BigInt") { return $v->bstr }
     return "<$r>" if $r;
     my $flags = B::svref_2object(\$v)->FLAGS;
     if ($flags & B::SVp_POK) {

@@ -34,7 +34,38 @@ UNSUPPORTED = [
     ("cbor_xs", "undefined as a map key", "RFC 8949 3.3, 5.6", r"Types::Serialiser::error"),
 ]
 
+# RFC 8949 2 and 3.4.3: the library writes values, and a bignum is the integer of the same numeric value. The
+# decoders show a bignum in their own way: 2(h'..') and 3(h'..'), the decimal text of jsoncons after its
+# semantic_tag bigint <2>, and the decimal of Math::BigInt. Each is read as the decimal integer, so that a
+# written integer and an expected bignum of the same value agree.
+BIGNUM_BYTES = re.compile(r"\b([23])\(h'([0-9a-f]*)'\)")
+BIGNUM_TEXT = re.compile(r"<2>t'([0-9a-f]*)'")
+
+
+def numeric(dump):
+    def from_bytes(m):
+        magnitude = int(m.group(2) or "0", 16)
+        return str(magnitude if m.group(1) == "2" else -1 - magnitude)
+
+    def from_text(m):
+        text = bytes.fromhex(m.group(1)).decode("ascii", "replace")
+        return text if re.fullmatch(r"-?[0-9]+", text) else m.group(0)
+
+    return BIGNUM_TEXT.sub(from_text, BIGNUM_BYTES.sub(from_bytes, dump))
+
+
+# PROVISIONAL, the owner decides: decoders that read a well-formed value wrong. The written bytes are the
+# preferred serialization of RFC 8949 4.2.1 and 3.4.3. Each entry: decoder, fault, RFC section, a pattern of the
+# written hex, a pattern of the expected hex. CBOR::XS gives 3(h'01') as -1 and not -2, 2(h'') as NaN and not 0,
+# and a major type 1 argument of 2^63 or more as another number; jsoncons reads that argument wrong too.
+MISREAD = [
+    ("cbor_xs", "tag 2 and 3 bignums: -n for 3(n) and NaN for an empty magnitude; major type 1 arguments of 2^63 "
+     "or more", "RFC 8949 3.1, 3.4.3", r"", r"^c[23]"),
+    ("jsoncons", "major type 1 arguments of 2^63 or more", "RFC 8949 3.1", r"^3b[89a-f]", r""),
+]
+
 findings = []
+misread = collections.Counter()
 unsupported = collections.Counter()
 notes = collections.Counter()
 limits = collections.defaultdict(list)
@@ -59,8 +90,13 @@ for arg in sys.argv[3:]:
                 findings.append((decoder, name, section, written, expected, got, want))
         elif want.startswith("!"):
             limits[decoder].append((name, "expected only: " + want))
-        elif want != "-" and got != want:
-            findings.append((decoder, name, section, written, expected, got, want))
+        elif want != "-" and numeric(got) != numeric(want):
+            entry = next((m for m in MISREAD if m[0] == decoder and re.search(m[3], written) and
+                          re.search(m[4], expected)), None)
+            if entry:
+                misread[entry] += 1
+            else:
+                findings.append((decoder, name, section, written, expected, got, want))
         else:
             ok += 1
     counts[decoder] = ok
@@ -69,6 +105,8 @@ for d, n in counts.items():
     print("%-10s %-28s agree %d" % (d, versions.get(d, "?"), n))
 for (d, feature, section, _), n in unsupported.items():
     print("not supported by %s (%s): %s [%s], %d cases" % (d, versions.get(d, "?"), feature, section, n))
+for (d, fault, section, _, _), n in misread.items():
+    print("misread by %s (%s): %s [%s], %d cases" % (d, versions.get(d, "?"), fault, section, n))
 for k, n in notes.items():
     print("note: %d cases: %s" % (n, k))
 for d, items in limits.items():
