@@ -166,9 +166,14 @@ it after later calls of `feed` and after the reader is gone. An item
 that you keep also keeps the block of memory that holds it.
 
 Bytes that are not CBOR give their error, for example
-`syntax_error`. They never give `too_little_data`. After such an
-error the reader gives the same error again, because RFC 8742 gives
-no way to find the start of the next item.
+`syntax_error`. After such an error the reader gives the same error
+again, because RFC 8742 gives no way to find the start of the next
+item. An array or a map that announces more items than bytes follow
+gives `too_little_data` before its elements are read, as in
+`cbor::sequence`.
+
+At the end of the stream, `r.empty()` tells you whether the reader
+still holds bytes of an item that is not complete.
 
 The limits of `cbor::limits` hold for each item. Input from a network
 can announce a string or an array of any size, and the reader then
