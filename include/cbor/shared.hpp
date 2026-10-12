@@ -359,6 +359,8 @@ private:
     decltype(auto) limits_apply(limit_values loaded, F &&f) const;
 
     friend class jsonpath;
+
+    friend class sequence_reader;
 };
 
 }

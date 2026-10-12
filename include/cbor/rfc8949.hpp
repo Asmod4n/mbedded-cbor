@@ -85,6 +85,8 @@ class rfc8949
 
     friend class heads;
 
+    friend class sequence_reader;
+
     friend class well_formedness;
 
     friend class value_sharing;

@@ -10,6 +10,7 @@
 #include "encode.hpp"
 #include "item_size.hpp"
 #include "sequence.hpp"
+#include "sequence_reader.hpp"
 #include "shared.hpp"
 #include "item.hpp"
 #include "lazy.hpp"
