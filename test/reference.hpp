@@ -720,7 +720,9 @@ struct string_writer {
 inline std::string encoded(value const &v)
 {
     std::string out;
-    REQUIRE(encode(out, v).has_value());
+    auto const written = encode(out, v);
+    REQUIRE(written.has_value());
+    static_cast<void>(written);
     return out;
 }
 

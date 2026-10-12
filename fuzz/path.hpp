@@ -28,7 +28,7 @@ inline void text_keys(test::value const &v, std::vector<std::string> &keys, int 
         return;
     if (auto const *m = test::get_if<test::map>(v)) {
         for (auto const &[k, x] : *m) {
-            if (test::test_binding{}.kind_of(k) == cbor::kind::text_string)
+            if ((std::holds_alternative<test::short_text>(k.kind) || std::holds_alternative<std::string *>(k.kind)))
                 keys.emplace_back(k.text());
             text_keys(x, keys, depth + 1);
         }
@@ -154,8 +154,7 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
                 auto const *b = test::get_if<test::bytes>(t->content);
                 if (!b)
                     return std::nullopt;
-                test_binding binding;
-                auto inner = cbor::lazy_decode(binding, *cbor::lazy::from(b->b));
+                auto inner = test::decoded(b->b);
                 if (!inner)
                     throw undecided{};
                 v = *inner;
@@ -175,7 +174,7 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
             }
             if (auto const *m = test::get_if<test::map>(v)) {
                 for (auto const &[k, x] : *m) {
-                    bool const t = test::test_binding{}.kind_of(k) == cbor::kind::text_string;
+                    bool const t = (std::holds_alternative<test::short_text>(k.kind) || std::holds_alternative<std::string *>(k.kind));
                     auto const *u = std::get_if<std::uint64_t>(&k.kind);
                     auto const *n = std::get_if<test::negative>(&k.kind);
                     bool const match =
@@ -288,9 +287,8 @@ inline void path_target(std::string_view const input)
     typed_reads_check<"$['a'][-1]['b']">(whole, {"a", std::int64_t{-1}, "b"});
 
     if (auto const any = cbor::lazy::from(std::string(1, '\0'))) {
-        test_binding any_binding;
-        (void)cbor::at_path(any_binding, input, *any);
-        (void)cbor::query(any_binding, input, *any);
+        (void)test::at_path(input, *any);
+        (void)test::query(input, *any);
     }
 
     if (input.empty())
@@ -298,8 +296,7 @@ inline void path_target(std::string_view const input)
     std::size_t const split = std::min<std::size_t>(static_cast<unsigned char>(input.front()) % 64, input.size() - 1);
     std::string_view const path_bytes = input.substr(1, split);
     std::string_view const document = input.substr(1 + split);
-    test_binding binding;
-    auto const eager = cbor::lazy_decode(binding, *cbor::lazy::from(document));
+    auto const eager = test::decoded(document);
     if (!eager)
         return;
     std::vector<std::string> keys;
@@ -308,9 +305,9 @@ inline void path_target(std::string_view const input)
     query const q = query_from(pin, keys);
     auto const root = cbor::lazy::from(std::string{document});
     require(root.has_value());
-    auto found = cbor::at_path(binding, q.text, *root);
+    auto found = test::at_path(q.text, *root);
     if (!found && found.error() == cbor::error::invalid_path)
-        found = cbor::query(binding, q.text, *root);
+        found = test::query(q.text, *root);
     if (!q.valid)
         return;
     std::optional<test::value> expected;
