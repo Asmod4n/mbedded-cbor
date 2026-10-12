@@ -873,8 +873,8 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
     case cbor::type::negative_integer:
         break;
     }
-    std::expected<void, std::errc> written =
-        width ? out.head_encode(major, std::to_underlying(*width), argument) : out.head_encode(major, argument);
+    std::expected<void, std::errc> written = out.head_encode(
+        major, width ? std::to_underlying(*width) : heads::preferred_argument_info(argument), argument);
     if (!written) [[unlikely]]
         return std::unexpected(validity::writer_error(written.error()));
     switch (major) {
