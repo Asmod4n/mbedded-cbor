@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <array>
 #include <cstddef>
@@ -50,14 +50,13 @@ TEST_CASE("path: a key is compared without an allocation")
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
     auto const root = *cbor::lazy::from(std::string(bytes));
     auto const map = *root.at(1);
-    test_binding binding;
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(binding, map).has_value());
+    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(map).has_value());
     std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]">(binding, map);
+    auto const found = cbor::at_path<"$[[1, \"x\"]]">(map);
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
     CHECK_EQ(after, before);
-    CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
+    CHECK_EQ(found->get<std::uint64_t>(), 1u);
 }
 
 // A top-level item with a shared value (tag 28) reads its marks once, at the first tag 29, and keeps them for
@@ -68,14 +67,13 @@ TEST_CASE("path: a second read of a top-level item with shared values allocates 
     std::string const bytes = "\x82\xd8\x1c\x61x\xa2\x82\x01\xd8\x1d\x00\x01\xa1\x61k\xd8\x1d\x00\x02"s;
     auto const root = *cbor::lazy::from(std::string(bytes));
     auto const map = *root.at(1);
-    test_binding binding;
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(binding, map).has_value());
+    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(map).has_value());
     std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]">(binding, map);
+    auto const found = cbor::at_path<"$[[1, \"x\"]]">(map);
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
     CHECK_EQ(after, before);
-    CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
+    CHECK_EQ(found->get<std::uint64_t>(), 1u);
 }
 
 // The count in the head of an array is not trusted. The decode keeps room only for the elements it has read, so a
@@ -173,13 +171,12 @@ TEST_CASE("path: a typed read with a key that is not text allocates")
 // children.
 TEST_CASE("path: a filter with a literal allocates for each child")
 {
-    test_binding binding;
     auto const three = *cbor::lazy::from(encoded(A(1, 2, 3)));
     auto const six = *cbor::lazy::from(encoded(A(4, 5, 6, 7, 8, 9)));
     std::size_t const before = allocations;
-    (void)cbor::query(binding, "$[?@ == 1]", three);
+    (void)test::query("$[?@ == 1]", three);
     std::size_t const middle = allocations;
-    (void)cbor::query(binding, "$[?@ == 1]", six);
+    (void)test::query("$[?@ == 1]", six);
     std::size_t const after = allocations;
     CHECK_GT(after - middle, middle - before);
 }

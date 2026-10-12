@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -192,14 +192,12 @@ TEST_CASE("head: every power of 2 survives encode and decode")
 TEST_CASE("head: encode returns the error of the Writer")
 {
     full_writer w;
-    test_binding binding;
-    CHECK_EQ(cbor::encode(binding, w, U(0)).error(), cbor::error{cbor::error::not_enough_memory});
+    CHECK_EQ(test::encode(w, U(0)).error(), cbor::error{cbor::error::not_enough_memory});
 }
 
 // A Writer error that has no member of its own must still fail, and never read as success.
 TEST_CASE("head: encode returns io_error for any other error of the Writer")
 {
     broken_writer w;
-    test_binding binding;
-    CHECK_EQ(cbor::encode(binding, w, U(0)).error(), cbor::error::io_error);
+    CHECK_EQ(test::encode(w, U(0)).error(), cbor::error::io_error);
 }

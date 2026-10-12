@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstdint>
 #include <string>
@@ -97,30 +97,30 @@ TEST_CASE("bignum: among normal integers in an array")
 // is no value and is refused.
 TEST_CASE("bignum tag 3: an empty magnitude is refused")
 {
-    test_binding binding;
     string_writer w;
-    CHECK_EQ(cbor::encode(binding, w, big(true, "")).error(), cbor::error{error::unsupported_value});
-    CHECK_EQ(cbor::encode(binding, w, big(true, std::string(2, '\0'))).error(),
+    CHECK_EQ(test::encode(w, big(true, "")).error(), cbor::error{error::unsupported_value});
+    string_writer w2;
+    CHECK_EQ(test::encode(w2, big(true, std::string(2, '\0'))).error(),
              cbor::error{error::unsupported_value});
 }
 
 // Found by the fuzzer: the decoder counts the content of tag 2 or 3 one level deeper, as the content of every
-// tag. The encoder wrote a bignum at the depth limit without that level, so its own output did not decode.
+// tag. encode of a tree counts the same levels, so a tree that decode refuses at a depth is refused by encode at
+// that depth too.
 TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
 {
+    std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
+    std::string const deep = std::string(16, '\x81') + bignum;
+    std::string const shallow = std::string(15, '\x81') + bignum;
+    auto const tree = cbor::lazy::from(deep)->decode();
+    REQUIRE(tree.has_value());
     test::limits_guard const depth{{.nesting_depth = 16}};
-    value deep = V(value{bignum{false, std::string(9, '\x01')}});
-    for (int i = 0; i < 16; ++i)
-        deep = A(deep);
-    test_binding binding;
-    string_writer w;
-    auto const r = cbor::encode(binding, w, deep);
-    REQUIRE_FALSE(r.has_value());
-    CHECK_EQ(r.error(), cbor::error{error::nesting_depth_exceeded});
-    value shallow = V(value{bignum{false, std::string(9, '\x01')}});
-    for (int i = 0; i < 15; ++i)
-        shallow = A(shallow);
-    string_writer ok;
-    REQUIRE(cbor::encode(binding, ok, shallow).has_value());
-    CHECK(decoded(ok.encoded).has_value());
+    CHECK_EQ(cbor::lazy::from(deep)->decode().error(), error::nesting_depth_exceeded);
+    std::string out;
+    CHECK_EQ(cbor::encode(**tree, out).error(), error::nesting_depth_exceeded);
+    auto const ok = cbor::lazy::from(shallow)->decode();
+    REQUIRE(ok.has_value());
+    std::string again;
+    REQUIRE(cbor::encode(**ok, again).has_value());
+    CHECK_EQ(again, shallow);
 }

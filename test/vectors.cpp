@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <algorithm>
 #include <array>
@@ -447,9 +447,8 @@ std::expected<value, error> lazy_value_of(std::string_view const wire)
 
 std::string wire_encoded(value const &v)
 {
-    test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode(binding, w, v).has_value());
+    REQUIRE(test::encode(w, v).has_value());
     return w.encoded;
 }
 

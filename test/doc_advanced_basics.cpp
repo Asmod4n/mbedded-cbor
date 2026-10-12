@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <array>
 #include <concepts>
@@ -119,8 +119,7 @@ TEST_CASE("doc advanced basics: a skip does not count")
     CHECK_EQ(cbor::lazy::from(bytes)->at("n")->get<std::int64_t>(), 1);
     CHECK_EQ(cbor::lazy::from(bytes)->at("a")->get<std::string_view>().error(), error::string_length_exceeded);
     CHECK_EQ(cbor::item_size(bytes).error(), error::string_length_exceeded);
-    test_binding b;
-    CHECK_EQ(cbor::lazy_decode(b, *cbor::lazy::from(bytes)).error(), error::string_length_exceeded);
+    CHECK_EQ(test::value_of(*cbor::lazy::from(bytes)).error(), error::string_length_exceeded);
 }
 
 // The section "Nesting depth" states that the top-level item has the depth 0, and that item_size keeps no stack.
@@ -132,9 +131,8 @@ TEST_CASE("doc advanced basics: nesting depth")
     CHECK_EQ(cbor::diagnostic_notation(two), "[[1]]");
     CHECK_EQ(cbor::diagnostic_notation(three).error(), error::nesting_depth_exceeded);
     CHECK_EQ(cbor::item_size(three), 4u);
-    test_binding binding;
-    CHECK(*cbor::lazy_decode(binding, *cbor::lazy::from(two)) == A(A(1)));
-    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(three)).error(), error::nesting_depth_exceeded);
+    CHECK(*test::value_of(*cbor::lazy::from(two)) == A(A(1)));
+    CHECK_EQ(test::value_of(*cbor::lazy::from(three)).error(), error::nesting_depth_exceeded);
 }
 
 #ifdef __cpp_impl_reflection
