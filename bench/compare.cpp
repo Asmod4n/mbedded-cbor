@@ -19,11 +19,13 @@ static std::shared_ptr<void const> const keep = std::make_shared<int const>(0);
 static std::string msg, fbmsg;
 static std::vector<capnp::word> cpmsg;
 
+#if defined(DS_CARS) || defined(DS_RECORDS)
 static double bytes_sum(std::string_view const s)
 {
     return double(std::transform_reduce(s.begin(), s.end(), std::uint64_t{0}, std::plus<>{},
                                         [](char const c) { return std::uint64_t(std::uint8_t(c)); }));
 }
+#endif
 
 static std::string file_read(char const *path)
 {
@@ -31,12 +33,14 @@ static std::string file_read(char const *path)
     return {std::istreambuf_iterator<char>(in), {}};
 }
 
+#if defined(OP_CP_DECODE) || defined(OP_CP_READ) || defined(OP_CP_FIELD)
 static capnp::FlatArrayMessageReader cp_reader()
 {
     capnp::ReaderOptions opt;
     opt.traversalLimitInWords = std::uint64_t(1) << 40;
     return capnp::FlatArrayMessageReader(kj::arrayPtr(cpmsg.data(), cpmsg.size()), opt);
 }
+#endif
 
 static void cp_store(capnp::MallocMessageBuilder &mb)
 {
@@ -643,7 +647,9 @@ static double sum(FbT const &rs)
 }
 #endif
 
+#if defined(OP_CP_DECODE) || defined(OP_CP_READ) || defined(OP_CP_FIELD)
 static std::string_view view(capnp::Text::Reader const t) { return {t.begin(), t.size()}; }
+#endif
 
 #if defined(OP_CP_DECODE)
 static T cp_copy()
