@@ -81,7 +81,7 @@ TEST_CASE("limits: operator= above the bound throws std::logic_error")
 }
 
 // The length of each string head is checked, in the immediate form, in the form with a one-byte argument, and in
-// every reader: the well-formedness walk, the lazy item, the decoder of a binding and the diagnostic notation.
+// every reader: the well-formedness walk, the lazy item, the item tree and the diagnostic notation.
 TEST_CASE("limits: string_length on each string head")
 {
     for (std::size_t const limit : {3uz, 30uz}) {
@@ -284,7 +284,7 @@ TEST_CASE("limits: the iterators of elements() and entries() skip without counti
 // RFC 8949 does not bound what a decoder skips; the bytes bound it (check_pending_items). The owner decided on
 // 2026-10-10 that string_length and container_elements count only the heads that a path or a lazy reads: the
 // containers on the way, the keys it compares and the target. An item that it only skips does not count, in each
-// form: the typed read over bytes, the typed read from a lazy, a binding, query and the lazy chain.
+// form: the typed read over bytes, the typed read from a lazy, at_path, query and the lazy chain.
 TEST_CASE("limits: an item that a path or a lazy only skips does not count")
 {
     std::string const strings = "\xa2\x61""a\x63xyz\x61""n\x01"s;

@@ -131,8 +131,8 @@ TEST_CASE("lazy: deep nesting and a wide map")
 }
 
 // Ported from test.rb: 'lazy: dig — missing keys return nil, negative array indices work'. dig maps
-// to a chain of at; a miss is an error value, and the binding makes nil of it. at takes a std::size_t, as
-// std::vector::at does, so a binding counts a negative index from size(). A path keeps the negative index of
+// to a chain of at; a miss is an error value, and the application makes nil of it. at takes a std::size_t, as
+// std::vector::at does, so an application counts a negative index from size(). A path keeps the negative index of
 // RFC 9535.
 TEST_CASE("lazy: negative indices and misses")
 {
@@ -640,7 +640,7 @@ auto get(std::string const &document)
 
 } // namespace
 
-// The integers of RFC 8949 Appendix A, read without a binding.
+// The integers of RFC 8949 Appendix A, read with get.
 TEST_CASE("lazy: get reads an integer")
 {
     CHECK_EQ(*get<std::uint64_t>("\x00"s), 0u);
@@ -1144,7 +1144,7 @@ TEST_CASE("validity: keys_equivalent follows RFC 8949 5.6.1")
 
 // RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. Every
 // lookup stops at the first key that matches and gives its value with no error, also when the second key
-// stands after it. The entries, decode and lazy_decode read such a map with no error.
+// stands after it. The entries and decode read such a map with no error.
 TEST_CASE("lazy: a repeated key gives the first entry with no error")
 {
     std::string const twice = "\xa2\x61\x61\x01\x61\x61\x02"s;

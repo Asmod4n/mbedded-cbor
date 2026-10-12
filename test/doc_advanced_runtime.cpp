@@ -164,25 +164,35 @@ TEST_CASE("doc advanced runtime: get")
     CHECK_EQ(cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(0)->get<std::int64_t>(), 1);
 }
 
-// The section "decode and lazy_decode" shows the item of an array and the decode into a binding.
-TEST_CASE("doc advanced runtime: decode and lazy_decode")
+// The section "decode" shows the item of an array, its children, an error, and type().
+TEST_CASE("doc advanced runtime: decode")
 {
-    auto const i = cbor::lazy::from(preferred(A(1, 2)))->decode();
+    auto const i = cbor::lazy::from(preferred(A(1, M("a"s, 2))))->decode();
     REQUIRE(i.has_value());
     CHECK_EQ((*i)->major_type, cbor::major_type::array);
-    CHECK_EQ((*i)->argument, 2u);
-    CHECK(*test::value_of(*cbor::lazy::from(preferred(M("a"s, A(1, 2))))) == M("a"s, A(1, 2)));
-    CHECK_EQ(test::value_of(*cbor::lazy::from("\x82\x01"s)).error(), error::too_little_data);
+    CHECK_EQ(std::get<cbor::data_items>((*i)->content).span().size(), 2u);
     CHECK_EQ(cbor::lazy::from("\x82\x01"s)->decode().error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::from("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->decode().error(), error::too_little_data);
+    CHECK_EQ(*cbor::lazy::from("\xc2\x41\x05"s)->type(), cbor::type::unsigned_bignum);
+    CHECK_EQ(*cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::unsigned_integer);
+    auto const tree = cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->decode();
+    REQUIRE(tree.has_value());
+    CHECK_EQ(*std::get<cbor::data_items>((*tree)->content).span()[1]->type(), cbor::type::tag);
 }
 
-// The section "encode" shows each kind of target.
+// The section "encode" shows the calls of the encoder, each kind of target, and encode of an item.
 TEST_CASE("doc advanced runtime: encode")
 {
-    value const v = A(1, 2);
     std::string out;
-    REQUIRE(test::encode(out, v).has_value());
-    CHECK_EQ(out, "\x82"s + native_unsigned(1) + native_unsigned(2));
+    {
+        cbor::encoder e(out);
+        REQUIRE(e.array(2).has_value());
+        REQUIRE(e.unsigned_integer(std::uint8_t{1}).has_value());
+        REQUIRE(e.text_string("a").has_value());
+        CHECK_EQ(e.finish(), 5u);
+    }
+    CHECK_EQ(out, "\x82\x18\x01\x61" "a"s);
+    value const v = A(1, 2);
     std::string appended = "\x00"s;
     REQUIRE(test::encode(appended, v).has_value());
     CHECK_EQ(appended, "\x00"s + "\x82"s + native_unsigned(1) + native_unsigned(2));
@@ -197,6 +207,10 @@ TEST_CASE("doc advanced runtime: encode")
     string_writer w;
     REQUIRE(test::encode(w, v).has_value());
     CHECK_EQ(w.encoded, "\x82"s + native_unsigned(1) + native_unsigned(2));
+    std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
+    std::string again;
+    CHECK_EQ(cbor::encode(**cbor::lazy::from(wire)->decode(), again), wire.size());
+    CHECK_EQ(again, wire);
 }
 
 // The section "cbor::sequence" shows the items of a sequence, the error at a cut item, and the owner of the
@@ -244,37 +258,48 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     auto const l = *cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     CHECK_EQ(l.at(1)->get<std::int64_t>(), 1);
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
-    CHECK_EQ(test::value_of(*cbor::lazy::from("\x82\xd8\x1d\x00\xd8\x1c\x05"s)).error(),
+    CHECK_EQ(cbor::lazy::from("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->decode().error(),
              error::sharedref_index_not_marked);
-    CHECK_EQ(test::value_of(*cbor::lazy::from("\xd8\x1c\x81\xd8\x1d\x00"s)).error(),
-             error::sharedref_not_complete);
+    CHECK(cbor::lazy::from("\xd8\x1c\x81\xd8\x1d\x00"s)->decode().has_value());
+    CHECK(cbor::lazy::from("\xd8\x1c\x81\xd8\x1d\x00"s)->at(0).has_value());
+    CHECK_EQ(cbor::lazy::from("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::sharedref_not_complete);
 }
 
 // The section "Tag 55799" shows that only a leading tag 55799 is read as its content.
 TEST_CASE("doc advanced runtime: tag 55799")
 {
     CHECK_EQ(cbor::lazy::from("\xd9\xd9\xf7\x82\x01\x02"s)->at(1)->get<std::int64_t>(), 2);
-    CHECK(*test::value_of(*cbor::lazy::from("\x81\xd9\xd9\xf7\x01"s)) ==
-          A(value{test::tagged{55799, V(1)}}));
-    CHECK_EQ(encoded(value{test::tagged{55799, A(1, 2)}}), "\xd9\xd9\xf7\x82"s + native_unsigned(1) + native_unsigned(2));
+    auto const tree = cbor::lazy::from("\x81\xd9\xd9\xf7\x01"s)->decode();
+    REQUIRE(tree.has_value());
+    cbor::item const *const inner = std::get<cbor::data_items>((*tree)->content).span()[0];
+    CHECK_EQ(*inner->type(), cbor::type::tag);
+    CHECK_EQ(inner->argument, 55799u);
+    std::string out;
+    cbor::encoder e(out);
+    REQUIRE(e.tag(55799).has_value());
+    REQUIRE(e.finish().has_value());
+    CHECK_EQ(out, "\xd9\xd9\xf7"s);
 }
 
-// The section "encode_iov" writes into pieces, the last of which points into a string that the caller moved
-// in, and joins them; the joined bytes are those of encode.
+// The section "encode_iov" writes an item into pieces and joins them; the joined bytes are those of encode. The
+// encoder over an iov_writer keeps a string that the caller moved in as a piece of its own.
 TEST_CASE("doc advanced runtime: encode_iov")
 {
-    value const v = A(1, "abc"s);
-    auto const pieces = test::encode_iov(v);
+    std::string const wire = "\x82\x01\x63" "abc"s;
+    auto const tree = cbor::lazy::from(wire)->decode();
+    REQUIRE(tree.has_value());
+    auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces.has_value());
     std::string joined;
     for (std::string_view const piece : **pieces)
         joined.append(piece);
-    CHECK_EQ(joined, encoded(v));
+    CHECK_EQ(joined, wire);
 
     std::string text(40, 'x');
     cbor::iov_writer w;
-    cbor::encoding::encoder<cbor::iov_writer> e{w};
-    REQUIRE(e.text_string_encode(std::move(text)).has_value());
-    auto const kept = e.release();
-    CHECK_EQ((*kept).size(), 2u);
+    cbor::encoder e(w);
+    REQUIRE(e.text_string(std::move(text)).has_value());
+    auto const kept = e.finish();
+    REQUIRE(kept.has_value());
+    CHECK_EQ((**kept).size(), 2u);
 }

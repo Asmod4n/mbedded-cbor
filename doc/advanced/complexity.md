@@ -40,7 +40,6 @@ A row marked "not checked" was not compared with the code.
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `diagnostic_notation(string_view)` friend decl, :553-555 | not given here | not given here | Body in diagnostic_notation.hpp. |
-| `item_size`, `lazy_decode` friend decls, :545-559 | not given here | not given here | Bodies in other headers. |
 | `heads::unsigned_read<V>(span<char const, sizeof(V)>)` :45 | O(1); sizeof(V) <= 8 | O(1) | No allocation. Confirmed. |
 | `heads::initial_byte(major_type, uint64_t)` :55 | O(1) | O(1) | constexpr. Confirmed. |
 | `heads::preferred_argument_info(uint64_t)` :60 | O(1) | O(1) | Confirmed. |
@@ -125,14 +124,16 @@ Enums and constants only. No function found by grep.
 |---|---|---|---|
 | `well_formedness::no_marks::mark(decoder const&)` :30 | O(1) | O(1) | Empty body. Confirmed. |
 | `well_formedness::item_skip<Marks>(decoder&, Marks&)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(1): one count of the items still to read. No allocation. | Iterative. No depth check: nothing recurses. Each add to the count goes through checked_add, and a count larger than the bytes left is too_little_data at once (check_pending_items). Used with no_marks and with top_level_item. |
-| `well_formedness::item_skip<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 1 counts of 8 bytes, about 4 KiB. No allocation. | Iterative. Only for marks that record a depth (decoding::prefix). check_nesting_depth on every item. |
+| `well_formedness::item_skip<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n); plus marks.mark per tag 28 | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 1 counts of 8 bytes, about 4 KiB. No allocation. | Iterative. Only for marks that record a depth (value_sharing::mark_depths). check_nesting_depth on every item. |
 | `item_size(string_view)` | O(i), bounded by O(n) | O(1). No allocation. | One item_skip with no_marks. No depth check. |
 
 ## item.hpp
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `record`, `item` (aggregates) :22, :28 | none; implicit copy O(1) | sizeof only; views, a pointer, lazy and scalars | No function defined. |
+| `record`, `item`, `data_items`, `sharedref` (aggregates) | none; implicit copy O(1) | sizeof only; views, pointers, indexes and scalars | |
+| `data_items::span()` | O(1) | O(1) | A view into the vector of children, made on each call. |
+| `item::type()` | O(1) | O(1) | |
 
 ## sequence.hpp
 
@@ -148,25 +149,13 @@ Enums and constants only. No function found by grep.
 | `begin() const` :68 | O(n_first) | O(1) | Parses the first item. |
 | `end() const` :73 | O(1) | O(1) | |
 
-## decode.hpp
-
-| Function | Time | Memory | Notes |
-|---|---|---|---|
-| `decoding::marks<Binding>` alias :27 | none | O(s) heap when filled | One slot for each tag 28. |
-| `decoding::prefix` aggregate :29 | none beyond mark | evaluating O(s) bits, mark_depths O(s) | |
-| `decoding::prefix::mark(decoder const&, size_t)` :34 | O(1) amortized; O(s) on growth | O(1) amortized | mark_depths.push_back allocates. |
-| `decoding::value_decoder<Binding>::value_decode(size_t, optional<size_t>)` :48 | Common: O(n) plus binding costs. Bignum: O(length). Forward tag 29: one item_skip over the top-level item, O(N_top), once; total stays O(N_top). | Stack O(d). Heap: shared O(s), evaluating O(s), mark_depths O(s); magnitude_plus_one O(length) for a negative bignum over 8 bytes; plus binding values. | Recursive. Reserve hints min(count, bytes left) and min(count, bytes left / 2). A stored shared value is copied on each use. :212 dereferences before with no null check. Cost of check_tag_content at :212 and top_level.mark at :130 not checked. |
-| `lazy_decode` friend decl :255 | not checked | not checked | Defined in lazy.hpp. |
-
 ## shared.hpp
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `value_sharing::top_level_item::entry(size_t)` :251 | Common O(1); known offset O(log e); worst O(e) for an insert in the middle | O(1) amortized per new item | deque emplace_back and vector insert. |
 | `top_level_item::mark(decoder const&)` :266 | O(1) amortized; O(log s) for a known offset | O(1) amortized | push_back on sharedrefs. |
 | `top_level_item::sharedref_decode(decoder&, size_t) const` :278 | O(1) | O(1) | Target strictly earlier. |
 | `value_sharing::shared_resolve(top_level_item&, size_t)` :308 | Common O(1); worst O(c log s + tag 29 steps), bounded by O(n) | O(1) plus marks | No depth check in the loop. Bytes left bound it. |
-| `value_sharing::item_resolve(top_level_item&, size_t)` :333 | Common O(log e); worst O(n + e) | O(1) amortized | Can allocate one item. |
 | `value_sharing::container_resolve(shared_ptr<top_level_item>, size_t)` :341 | Common O(1); worst O(t) shared_resolve, t = tag 24 levels <= n/2 | Common O(1); one top_level_item per tag 24 level | make_shared per tag 24 level. The nesting depth does not bound tag 24 nesting. |
 | `validity::keys_equivalent<First, Second>` :376 | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | check_nesting_depth bounds d. No heap except marks. |
 | `lazy::from(shared_ptr<void const>, Encoded&&) = delete` :177 | - | - | |
@@ -195,6 +184,9 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy::from(shared_ptr<string const>)` :218 | O(1) | O(1) | |
 | `lazy::from<Encoded>(Encoded&&)` :226 | O(1) | O(1) | Moves; two allocations. |
 | `lazy::from(string_view)` :231 | O(n) | O(n) | Copies the input. |
+| `value_sharing::tree_decoder::item_decode(size_t depth, optional<size_t> mark)` | O(n) heads and string views; a tag 29 that names a mark before the start of the lazy adds one item_skip over the top-level item, O(N_top), once | one item per data item in a deque; one pointer per child in one vector; a scratch vector of pointers for the open containers; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. An empty container allocates nothing. |
+| `lazy::decode()` | as item_decode | as item_decode, plus one make_shared | |
+| `lazy::type()` | O(1) plus shared_resolve | O(1) plus marks | |
 | `value_sharing::key_find<Key>(resolved, Key)` :238 | O(bytes up to the pair); worst O(n_map) + k shared_resolve | O(1) plus marks | Linear scan. |
 | `value_sharing::key_find<Sorted, Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to last); Sorted stops at the first plain key with greater encoded bytes | O(1) plus marks | No allocation. Throws std::logic_error when the end of the map comes before last. |
 | `lazy::find(string_view)`, `find(int64_t)` :373, :383 | container_resolve + O(n_map) | O(1) | |
@@ -210,9 +202,6 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `jsonpath::index_select(lazy const&, int64_t)` (private) | array O(n_array) worst; map linear key_find | O(1) plus marks | The index selector of a path: negative counts from the end; on a map the integer key. |
 | `lazy::get<T>() const` :476 | container_resolve + O(1); bignum + O(len) | O(1) | |
 | `lazy::elements()`, `entries()` :583, :595 | container_resolve | O(1) | |
-| `value_sharing::item_decode(top_level_item&, size_t, size_t)` :606 | First time: O(log e), worst O(e); containers + O(n_item). Built scalar or string: O(n_item) again. | O(1) amortized per item; stack O(d + s) | Tag 29 recursion is at the same depth, bounded by s. |
-| `lazy::decode<Self>(this Self&&)` :721 | as item_decode | as item_decode | |
-| `lazy_decode<Binding>(Binding&, lazy const&)` :733 | O(s) + value_decode | O(s) plus the binding | Two allocations of size s. |
 
 ## owning_ref.hpp
 
@@ -258,15 +247,9 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `jsonpath::selector_apply` :1318 | O(bytes of the node); filter adds one expression_test per child | O(m) or O(k) | Changes nodelist. nodelist bounded by root bytes. |
 | `jsonpath::segment_apply` :1398 | child: sum of selector_apply; descendant: O(c·n·d) | O(i) children vectors; O(d) frames | |
 | `jsonpath::segments_apply` :1419 | worst O(p·N·c·n·d); common O(p·n) | O(N), N <= n | |
-| `singular_query_walk<Binding>(Binding&, ...)` | O(n·p) + lazy_decode | O(1) | |
-| `query_walk<Binding>(Binding&, ...)` | segments_apply + one lazy_decode per node | O(N) | Gives the nodelist as an array of the binding. |
 | `compiled_apply<Path, Walk>(Walk const&)` | O(1) at run time | O(1) | Compiles the path into arrays at compile time and calls the walk. |
 | `is_valid_path<Path>`, `is_valid_path_v<Path>` :985 | O(t) compile time | none at run time | |
 | `is_singular_query<Path>`, `is_singular_query_v<Path>` :1506 | O(t + c) compile time | none at run time | |
-| `at_path<Binding>(Binding&, string_view, lazy const&)` | O(t) + singular_query_walk | O(t) | Parses at run time. A path that is not singular is invalid_path. |
-| `query<Binding>(Binding&, string_view, lazy const&)` | O(t) + query_walk | O(t) + O(N) | Parses at run time. |
-| `at_path<Path, Binding>(Binding&, lazy const&)` | singular_query_walk | O(1) | A path that is not singular fails a static_assert. |
-| `query<Path, Binding>(Binding&, lazy const&)` | query_walk | O(N) | |
 | `at_path<Path, T>(string_view)` :1525 | O(n); fallback O(n·p) | O(1); fallback allocates | |
 | `at_path<Path, T>(shared_ptr<void const>, string_view)` :1543 | as :1525 | as :1525 | |
 | `at_path(shared_ptr<void const>, Encoded&&) = delete` :71 | none | none | |
@@ -286,7 +269,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `span_message<B>::done` :97 | O(1) | O(1) | |
 | `byte_container<C>` :103 | compile time | O(1) | |
 | `message_of<Target>` :110 | O(1) or Target::allocate | O(1) or Target::allocate | Not confirmed. |
-| `encoder<Writer>::encoder` :151 | O(1) | O(1) direct; 16384-byte member otherwise | No heap. |
+| `encoding::encoder<Writer>::encoder` :151 | O(1) | O(1) direct; 16384-byte member otherwise | No heap. |
 | `encoder::flush` :159 | O(1) direct; O(16384) + append otherwise | O(1); writer may allocate | |
 | `encoder::item_write` :173 | O(1) plus one flush | O(1) | |
 | `encoder::head_encode(major, info, argument)` :193 | O(1) plus one flush | O(1) | |
@@ -297,28 +280,10 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `encoder::fixed_width_head_encode<T>` :330 | O(1) | O(1) | |
 | `encoder::simple_value_encode` :340 | O(1) | O(1) | |
 | `encoder::fixed_width_unsigned_encode`, `signed`, `float` :348, :355, :363 | O(1) | O(1) | |
-| `discarding_writer::append`, `done` :377, :382 | O(1) | O(1) | |
-| `sharing<Binding>` aggregate :388 | none | three unordered_map; one node per entry | |
-| `walker::walker` :412 | O(1) | O(1) plus the encoder | |
-| `walker::keep`, `keep_error`, `head` :417, :423, :429 | O(1) | O(1) | |
-| `walker::key`, `value` :434, :442 | as child | as child | |
-| `walker::child<Identity>` :450 | O(1) here; whole walk O(r + n_out); r exponential in d for a DAG with pass::plain; embeds O(n_out·d) worst | O(1) per frame; O(d) frames; embed allocates a string | check_nesting_depth at :455. |
-| `walker::content_of<Identity>` :501 | before_encode + expected O(1) hash, O(s) worst | pass::count adds one node | |
-| `walker::describe<Identity>` :518 | scalar O(1); string O(len); array O(m); map O(k) | O(1) per frame | |
-| `walker::bignum` :627 | O(len) | negative: O(len) std::string | |
-| `walker::simple` :660 | O(1) | O(1) | |
-| `walker` copy = delete :670 | none | none | |
-| `cycle_find<Binding>` :673 | O(r·d); r exponential in d for a DAG | O(d) vector + O(d) stack | Cold path only. |
-| `encoding::encode_from<Sharing, Binding, Writer>` (private) :707 | off: O(r + n_out); on: O(i + n_out) expected | off: O(d); on: O(i) hash entries | |
-| `encode<Sharing, Binding, Writer>` :745 | as encode_from | as encode_from plus target | |
-
-## binding.hpp
-
-| Function | Time | Memory | Notes |
-|---|---|---|---|
-| `concept binding<B>` | compile time | none | B names its value type. The user binding defines the cost of each callback. |
-| `fixed_string<N>::fixed_string` :80 | O(N) compile time | O(N) | |
-| `fixed_string<N>::view` :85 | O(1) | O(1) | |
+| `cbor::encoder<Target>` calls | O(1) per head; O(len) per string | O(1); a container target grows; a span target allocates nothing | Each call checks that no earlier call failed. |
+| `cbor::encoder::finish` | O(1) plus one flush | O(1); an iov_writer gives its storage | |
+| `encoding::item_encode(encoder&, item const&, size_t, size_t)` | O(items + string bytes) | stack O(d) | Recursive, bounded by the nesting depth. A tag 29 is written as stored and not followed. |
+| `encode(item const&, Target&&)`, `encode_iov(item const&)` | as item_encode | the target | |
 
 ## diagnostic_notation.hpp
 
@@ -463,17 +428,14 @@ Above linear in the input:
 - `jsonpath::key_find` :993, non-text key: O(k·n_map).
 - `jsonpath::segment_apply`, `segments_apply`: O(c·n·d), O(p·N·c·n·d).
 - `query_walk` lazy forms and the tag 29 fallback of `at_path`: O(n·p).
-- `walker::child`, `encode_from` with sharing off, `cycle_find`: exponential in d for a DAG.
 - `container_parse`, `literal_parse`, `canonical_append` (diagnostic_notation.hpp): O(t·d), O(n·d); maps add O(k log k).
 - `generic_read`, `structs::read`: O((n/d)^d) with tag 29.
-- `value_sharing::item_decode`: rebuilt scalars skip O(n_item) again on each call.
 - `std::map` targets in packed and structs: O(n + k log k).
 
 Allocation on a success path:
 
-- `magnitude_plus_one`, `magnitude_minus_one`, `walker::bignum` (negative), `value_decode` (negative bignum).
-- `top_level_item::entry`, `mark`, `prefix::mark`.
-- `lazy::from`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy_decode`.
+- `top_level_item::mark`, `tree_decoder::item_decode`.
+- `lazy::from`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::decode`.
 - jsonpath: every parser, `at_path(string_view path)`, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
-- `encode_from` with sharing on, `walker` embeds, `cycle_find`, `string_sink`, `container_message`.
+- `string_sink`, `container_message`.
 - diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.

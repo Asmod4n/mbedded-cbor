@@ -977,7 +977,7 @@ TEST_CASE("path: a typed read skips an item of any nesting depth")
 // moved std::string beside an owner does not compile either, because the owner does not hold it and the view would
 // read freed memory. A std::string that the caller keeps is read beside an owner. A scalar holds no bytes and is read
 // from any of them. The path is a singular query of RFC 9535 2.3.5.1 with names and indexes only: a wildcard, a
-// descendant segment and a literal key of EDN go to at_path with a binding. A path with more segments than the
+// descendant segment and a literal key of EDN go to at_path that gives a lazy node. A path with more segments than the
 // default nesting depth does not compile.
 TEST_CASE("path: a typed read that is not safe does not compile")
 {
@@ -1127,8 +1127,8 @@ TEST_CASE("path: tag 55799 inside the item is skipped")
 
 // RFC 8949 6.1: a generic decoder passes a tag it does not know and gives its content. The owner decided on
 // 2026-10-10 that a path does the same: it passes every tag other than 2, 3, 24, 29 and the tags of RFC 8746. Each
-// form is checked: the typed read over bytes, the typed read from a lazy, the lazy walk that tag 29 starts, a binding
-// and query. A path that ends at the tag gives the whole tagged item to a binding, because a binding knows tags.
+// form is checked: the typed read over bytes, the typed read from a lazy, the lazy walk that tag 29 starts, at_path
+// and query. A path that ends at the tag gives the node of the whole tagged item, so the caller reads the tag.
 TEST_CASE("path: a tag that the path does not know is passed to its content")
 {
     std::string const doc = "\xa2\x61""v\xd9\x03\xe8\x82\x01\x02\x61""m\xd9\x03\xe9\xa1\x61""k\x07"s;

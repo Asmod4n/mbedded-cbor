@@ -127,8 +127,8 @@ TEST_CASE("simple value: lazy::decode gives every simple value 0 to 255 as its c
     }
 }
 
-// decode hands every simple value to the binding, and encode writes it back in the same bytes.
-TEST_CASE("simple value: decode and encode through a binding for every simple value 0 to 255")
+// decode gives every simple value to the reference model, and the encoder writes it back in the same bytes.
+TEST_CASE("simple value: decode and encode for every simple value 0 to 255")
 {
     for (unsigned i = 0; i < 256; ++i) {
         auto const v = static_cast<std::uint8_t>(i);

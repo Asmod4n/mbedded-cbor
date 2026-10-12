@@ -122,3 +122,15 @@ TEST_CASE("doc runtime: print CBOR as text")
     CHECK_EQ(text, R"({"cars": [{"hp": 5}, {"hp": 7}]})");
     CHECK_EQ(cbor::diagnostic_notation("\xff"sv).error(), error::syntax_error);
 }
+
+// The section "Write CBOR" writes {"a": 5} with the encoder, one item per call.
+TEST_CASE("doc runtime: write CBOR")
+{
+    std::string out;
+    cbor::encoder e(out);
+    REQUIRE(e.map(1).has_value());
+    REQUIRE(e.text_string("a").has_value());
+    REQUIRE(e.unsigned_integer(std::uint8_t{5}).has_value());
+    REQUIRE(e.finish().has_value());
+    CHECK_EQ(cbor::diagnostic_notation(out), "{\"a\": 5_0}");
+}

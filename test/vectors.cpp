@@ -69,8 +69,8 @@ std::string bytes_of_hex(std::string_view const hex)
 // Ported from test-vectors.rb: 'passes the official test vectors', the examples of RFC 8949
 // Appendix A. Indefinite lengths are refused, as in mruby-cbor. Every other example decodes, and
 // one that a generic encoder writes back comes back as the same value. The bytes differ: the examples
-// are in preferred form, and the walker writes a run-time number at its native width. The skip list of
-// mruby-cbor is not needed: the test binding keeps bytes, text, simple values and tags apart.
+// are in preferred form, and the encoder writes a run-time number at its native width. The skip list of
+// mruby-cbor is not needed: the reference model keeps bytes, text, simple values and tags apart.
 TEST_CASE("test vectors: RFC 8949 Appendix A")
 {
     auto const cases = cases_of(TEST_VECTORS "/appendix_a.json");
@@ -503,7 +503,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     REQUIRE(d.has_value());
     CHECK(equivalent(*d, *expected));
     if (v.roundtrip) {
-        // The walker writes a run-time number at its native width, so the bytes differ from the vector,
+        // The encoder writes a run-time number at its native width, so the bytes differ from the vector,
         // which is in preferred form. The value read back must be the same.
         auto const back = decoded(wire_encoded(*d));
         REQUIRE(back.has_value());

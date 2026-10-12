@@ -187,7 +187,7 @@ TEST_CASE("doc advanced path: keys that are not text")
     CHECK_EQ(cbor::at_path<"$[h'02']", int>(std::string_view(counted)).error(), error::key_not_found);
 }
 
-// The typed forms that take a lazy refuse a lazy that holds no item, as the binding forms do.
+// The typed forms that take a lazy refuse a lazy that holds no item, as the node forms do.
 TEST_CASE("doc advanced path: a typed read of an empty lazy throws")
 {
     CHECK_THROWS_AS(((void)cbor::at_path<"$.a", int>(cbor::lazy{})), std::logic_error);
@@ -196,7 +196,8 @@ TEST_CASE("doc advanced path: a typed read of an empty lazy throws")
 }
 
 // The section "Tags on the way" shows that tags 24, 28, 29 and 55799 are passed, and that a tag the path does
-// not know is passed to its content (RFC 8949 6.1), while a binding at the tag gets the whole tagged item.
+// not know is passed to its content (RFC 8949 6.1), while a path that ends at the tag gives the node of the whole
+// tagged item.
 TEST_CASE("doc advanced path: tags on the way")
 {
     CHECK_EQ(cbor::at_path<"$.a[1]", int>("\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s), 2);
@@ -292,7 +293,7 @@ TEST_CASE("doc advanced path: a lazy in another thread")
 }
 
 
-// The section "The forms" says that a binding is taken as an lvalue and that a path that is not valid leaves no form to
+// The section "The forms" says that a path that is not valid leaves no form to
 // call, and section 1 says which wrong uses throw.
 TEST_CASE("doc advanced path: the forms in detail")
 {
@@ -392,7 +393,7 @@ TEST_CASE("doc advanced path: tags in detail")
     CHECK_EQ(cbor::at_path<"$.a[1]", int>(inside), 2);
     CHECK(*test::at_path("$.a[1]", *cbor::lazy::from(inside)) == V(2));
     CHECK_EQ(cbor::at_path<"$.a", int>("\xa1\x61\x61\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(test::at_path("$", *cbor::lazy::from("\xd8\x1c\x81\xd8\x1d\x00"s)).error(), error::sharedref_not_complete);
+    CHECK(cbor::at_path("$[0][0]", *cbor::lazy::from("\xd8\x1c\x81\xd8\x1d\x00"s)).has_value());
     std::string const many = "\x82\xd8\x1c\x88\x00\x00\x00\x00\x00\x00\x00\x00\xd8\x1d\x00"s;
     CHECK_EQ(test::query("$[*][*]", *cbor::lazy::from(many)).error(), error::nodelist_too_long);
 }
