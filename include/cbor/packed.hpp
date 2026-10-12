@@ -1586,6 +1586,24 @@ class typed_array_view
     friend class packed;
 
 public:
+    typed_array_view(typed_array_view const &) = default;
+
+    typed_array_view(typed_array_view &&other) noexcept
+        : owner(std::move(other.owner)), bytes(std::exchange(other.bytes, std::span<char const>()))
+    {
+    }
+
+    typed_array_view &operator=(typed_array_view const &) = default;
+
+    typed_array_view &operator=(typed_array_view &&other) noexcept
+    {
+        owner = std::move(other.owner);
+        bytes = std::exchange(other.bytes, std::span<char const>());
+        return *this;
+    }
+
+    ~typed_array_view() = default;
+
     class iterator
     {
         std::span<char const>::iterator at;
@@ -1762,7 +1780,7 @@ public:
     {
         if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
             return std::unexpected(c);
-        return typed_array_view(std::move(owner), bytes.first(n * sizeof(E)));
+        return typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).first(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) const &
@@ -1776,7 +1794,7 @@ public:
     {
         if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
             return std::unexpected(c);
-        return typed_array_view(std::move(owner), bytes.last(n * sizeof(E)));
+        return typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).last(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<E, error> at(std::size_t const i) const
@@ -1983,6 +2001,7 @@ public:
                      sizeof...(Index) == reflection::index_slots<Path>() && std::is_lvalue_reference_v<Self>)
         CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
+            validity::throw_logic_error_if_empty(self.owner, "cbor::packed::accessor::at_path: the accessor was moved from");
             auto result = [&] {
                 std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
                 constexpr std::string_view path = Path.view();
