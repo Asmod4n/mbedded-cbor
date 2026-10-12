@@ -95,7 +95,7 @@ TEST_CASE("major 0: uint64 max")
 }
 
 // Ported from test.rb: the major 1 tests. The argument n means -1 - n,
-// and the binding computes that value, because only it knows its integer type.
+// and the application computes that value, because only it knows its integer type.
 TEST_CASE("major 1: every width and boundary")
 {
     check_value("\x20"sv, N(0));
@@ -169,9 +169,9 @@ TEST_CASE("major 1: head_encode writes the shortest form")
     CHECK_EQ(head_of(cbor::major_type::negative_integer, ~0ull), "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
 }
 
-// The walker writes a run-time integer at its native width: the binding gives std::uint64_t, so the head
+// The encoder writes an integer at its native width: the reference model gives std::uint64_t, so the head
 // carries eight bytes, also for a small value.
-TEST_CASE("major 0 and 1: the walker writes a run-time integer at its native width")
+TEST_CASE("major 0 and 1: the encoder writes an integer at its native width")
 {
     CHECK_EQ(encoded(U(0)), "\x1b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
     CHECK_EQ(encoded(N(0)), "\x3b\x00\x00\x00\x00\x00\x00\x00\x00"sv);

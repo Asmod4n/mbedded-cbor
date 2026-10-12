@@ -56,9 +56,9 @@ the compiler cannot see a wrong use, the library throws
 | `inadmissible_type_for_tag_content` | A tag has content that its definition does not allow. |
 | `sharedref_index_not_marked` | A tag 29 names no tag 28 before it. |
 | `sharedref_index_out_of_range` | The index of a tag 29 does not fit `std::size_t`. |
-| `sharedref_not_complete` | A tag 29 names a tag 28 that contains it, and the binding does not take a cycle. |
+| `sharedref_not_complete` | A step or a path meets a tag 29 inside the tag 28 that it names, or a chain of marks that refers to its own start. |
 | `reserved_simple_value` | An encode meets a simple value from 24 to 31. |
-| `unsupported_value` | An encode meets a value that the binding gives as `kind::unsupported`, or a typed array with a reserved tag. `structs` gives it for a map key that is an array, a map or a tag. |
+| `unsupported_value` | The encoder meets a typed array with a reserved tag or a tag outside RFC 8746. `structs` gives it for a map key that is an array, a map or a tag. |
 | `not_indexable` | A key or an index meets an item that is not a map or an array. |
 | `index_out_of_bounds` | The index is outside the array. |
 | `key_not_found` | The key is not in the map. |
@@ -136,7 +136,7 @@ program use the same values: a different value is a violation of the one
 definition rule.
 
 The limits count what a call reads or decodes. An item that a path or a
-lazy only skips does not count. `item_size`, `decode`, `lazy_decode` and
+lazy only skips does not count. `item_size`, `decode` and
 `diagnostic_notation` read every item, so every item counts there.
 
 ```cpp
@@ -151,8 +151,8 @@ cbor::item_size(bytes);                                       // string_length_e
 
 The nesting depth counts the arrays, maps and tags around an item. The
 top-level item has the depth 0. An item deeper than `nesting_depth` gives
-`nesting_depth_exceeded` where a call recurses: `decode`, `lazy_decode`,
-`encode`, `diagnostic_notation`, a path and a filter.
+`nesting_depth_exceeded` where a call recurses: `decode`, `encode` of an
+item, `diagnostic_notation`, a path and a filter.
 
 An item that a call only skips can be deeper than the limit, and so can
 the item of `item_size`: neither keeps a stack.
@@ -199,10 +199,10 @@ members use the default resource.
 | `lazy::from` | the shared state of the top-level item, once; the forms with `std::string_view` and `std::string` also the `std::shared_ptr<std::string const>` that holds the bytes |
 | the first tag 29 of a top-level item | the marks of the tags 28 before it |
 | `lazy::decode` | its items |
-| a binding | its own values; the library does not choose their memory |
-| `diagnostic_notation`, `encode` into a `std::string` | the string |
+| `diagnostic_notation`, the encoder into a `std::string` | the string |
+| the encoder into a span | nothing |
 
-The writer of `encode` chooses the memory of the bytes
+The target of the encoder chooses the memory of the bytes
 ([runtime.md](runtime.md)).
 
 ## 7. Threads

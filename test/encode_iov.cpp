@@ -310,9 +310,9 @@ TEST_CASE("encode_iov: the owner forms copy with the other writers")
     CHECK_EQ(span_out, expected);
 }
 
-// The walker passes views that the binding gave, so it copies every byte. Its result must equal the
+// The encoder copies every byte of a view that it is given. Its result must equal the
 // bytes that encode writes into a std::string, for examples of RFC 8949 Appendix A of each major type.
-TEST_CASE("encode_iov: the walker gives the bytes of encode")
+TEST_CASE("encode_iov: the encoder over views gives the bytes of encode")
 {
     for (std::string_view const wire :
          {"\x00"sv, "\x18\x64"sv, "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv, "\xf9\x3c\x00"sv,

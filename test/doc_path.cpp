@@ -88,8 +88,8 @@ TEST_CASE("doc path: start at a lazy")
     }
 }
 
-// The section "Path syntax" gives each row of its table. The paths that select many values go through query with a
-// binding, as the section states.
+// The section "Path syntax" gives each row of its table. The paths that select many values go through query, as the
+// section states.
 TEST_CASE("doc path: path syntax")
 {
     value const doc = M("store"s, M("book"s, A(M("title"s, "A"s, "price"s, 8), M("title"s, "B"s, "price"s, 12),

@@ -81,9 +81,8 @@ The examples select from this value:
 
 `at_path` reads a path that selects one value: names and indexes only.
 `[*]`, `..`, a filter and a slice such as `[0:2]` select many values, and
-only `cbor::query` reads them. `query` gives every match as an array,
-and an empty array when nothing matches. It builds its result through a
-binding, a type that you write; the advanced document describes it.
+only `cbor::query` reads them. `query` gives every match as a
+`cbor::lazy`, in a `std::vector`, and an empty vector when nothing matches.
 
 In a filter, `@` is the current value. A filter compares with `==`,
 `!=`, `<`, `<=`, `>` and `>=`, and joins tests with `&&`, `||` and `!`.

@@ -33,8 +33,8 @@ value arrays_around_zero(std::size_t const n)
 
 } // namespace
 
-// decoding::value_decode counts one level for each array.
-TEST_CASE("nesting depth depth_limit: lazy_decode with a binding")
+// The decode of the item tree counts one level for each array.
+TEST_CASE("nesting depth depth_limit: decode of the item tree")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
     CHECK(test::value_of(*cbor::lazy::from(arrays_around(depth_limit, "\x00"sv))).has_value());

@@ -74,8 +74,8 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     CHECK_EQ(owned->at("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
 }
 
-// Both forms of at_path read through a leading tag 55799: the typed read on the bytes and the read into a
-// binding.
+// Both forms of at_path read through a leading tag 55799: the typed read on the bytes and the form that gives a
+// lazy node.
 TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")
 {
     std::string const document = "\xd9\xd9\xf7\xa1\x61\x61\x82\x05\x06"s;
