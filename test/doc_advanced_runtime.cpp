@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <algorithm>
 #include <array>
@@ -96,7 +96,7 @@ TEST_CASE("doc advanced runtime: elements and entries")
     auto const m = *cbor::lazy::from(preferred(M("a"s, 1, 2, "b"s)));
     std::vector<value> keys;
     for (auto const p : *m.entries())
-        keys.push_back(*cbor::lazy_decode(*std::make_unique<test_binding>(), p->first));
+        keys.push_back(*test::value_of(p->first));
     CHECK(keys == std::vector<value>{V("a"s), V(2)});
     CHECK_EQ(std::ranges::distance(*m.entries() | std::views::drop(1)), 1);
     CHECK_EQ(m.elements().error(), error::not_indexable);
@@ -171,33 +171,31 @@ TEST_CASE("doc advanced runtime: decode and lazy_decode")
     REQUIRE(i.has_value());
     CHECK_EQ((*i)->major_type, cbor::major_type::array);
     CHECK_EQ((*i)->argument, 2u);
-    test_binding binding;
-    CHECK(*cbor::lazy_decode(binding, *cbor::lazy::from(preferred(M("a"s, A(1, 2))))) == M("a"s, A(1, 2)));
-    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from("\x82\x01"s)).error(), error::too_little_data);
+    CHECK(*test::value_of(*cbor::lazy::from(preferred(M("a"s, A(1, 2))))) == M("a"s, A(1, 2)));
+    CHECK_EQ(test::value_of(*cbor::lazy::from("\x82\x01"s)).error(), error::too_little_data);
     CHECK_EQ(cbor::lazy::from("\x82\x01"s)->decode().error(), error::too_little_data);
 }
 
 // The section "encode" shows each kind of target.
 TEST_CASE("doc advanced runtime: encode")
 {
-    test_binding binding;
     value const v = A(1, 2);
     std::string out;
-    REQUIRE(cbor::encode(binding, out, v).has_value());
+    REQUIRE(test::encode(out, v).has_value());
     CHECK_EQ(out, "\x82"s + native_unsigned(1) + native_unsigned(2));
     std::string appended = "\x00"s;
-    REQUIRE(cbor::encode(binding, appended, v).has_value());
+    REQUIRE(test::encode(appended, v).has_value());
     CHECK_EQ(appended, "\x00"s + "\x82"s + native_unsigned(1) + native_unsigned(2));
     std::vector<std::byte> bytes;
-    REQUIRE(cbor::encode(binding, bytes, v).has_value());
+    REQUIRE(test::encode(bytes, v).has_value());
     CHECK_EQ(bytes.size(), 19u);
     std::array<char, 19> fixed{};
-    REQUIRE(cbor::encode(binding, std::span<char>(fixed), v).has_value());
+    REQUIRE(test::encode(std::span<char>(fixed), v).has_value());
     CHECK_EQ(std::string(fixed.data(), fixed.size()), "\x82"s + native_unsigned(1) + native_unsigned(2));
     std::array<char, 18> small{};
-    CHECK_EQ(cbor::encode(binding, std::span<char>(small), v).error(), error::no_buffer_space);
+    CHECK_EQ(test::encode(std::span<char>(small), v).error(), error::no_buffer_space);
     string_writer w;
-    REQUIRE(cbor::encode(binding, w, v).has_value());
+    REQUIRE(test::encode(w, v).has_value());
     CHECK_EQ(w.encoded, "\x82"s + native_unsigned(1) + native_unsigned(2));
 }
 
@@ -246,10 +244,9 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     auto const l = *cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     CHECK_EQ(l.at(1)->get<std::int64_t>(), 1);
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
-    test_binding binding;
-    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from("\x82\xd8\x1d\x00\xd8\x1c\x05"s)).error(),
+    CHECK_EQ(test::value_of(*cbor::lazy::from("\x82\xd8\x1d\x00\xd8\x1c\x05"s)).error(),
              error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from("\xd8\x1c\x81\xd8\x1d\x00"s)).error(),
+    CHECK_EQ(test::value_of(*cbor::lazy::from("\xd8\x1c\x81\xd8\x1d\x00"s)).error(),
              error::sharedref_not_complete);
 }
 
@@ -257,8 +254,7 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
 TEST_CASE("doc advanced runtime: tag 55799")
 {
     CHECK_EQ(cbor::lazy::from("\xd9\xd9\xf7\x82\x01\x02"s)->at(1)->get<std::int64_t>(), 2);
-    test_binding binding;
-    CHECK(*cbor::lazy_decode(binding, *cbor::lazy::from("\x81\xd9\xd9\xf7\x01"s)) ==
+    CHECK(*test::value_of(*cbor::lazy::from("\x81\xd9\xd9\xf7\x01"s)) ==
           A(value{test::tagged{55799, V(1)}}));
     CHECK_EQ(encoded(value{test::tagged{55799, A(1, 2)}}), "\xd9\xd9\xf7\x82"s + native_unsigned(1) + native_unsigned(2));
 }
@@ -267,9 +263,8 @@ TEST_CASE("doc advanced runtime: tag 55799")
 // in, and joins them; the joined bytes are those of encode.
 TEST_CASE("doc advanced runtime: encode_iov")
 {
-    test_binding binding;
     value const v = A(1, "abc"s);
-    auto const pieces = cbor::encode_iov(binding, v);
+    auto const pieces = test::encode_iov(v);
     REQUIRE(pieces.has_value());
     std::string joined;
     for (std::string_view const piece : **pieces)

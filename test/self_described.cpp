@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -84,10 +84,9 @@ TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")
     auto const text = cbor::at_path<"$.a", std::string_view>(owner, *owner);
     REQUIRE(text.has_value());
     CHECK_EQ(**text, "hi"sv);
-    test_binding binding;
     auto const l = cbor::lazy::from(document);
     REQUIRE(l.has_value());
-    auto const v = cbor::at_path(binding, "$.a"sv, *l);
+    auto const v = test::at_path("$.a"sv, *l);
     REQUIRE(v.has_value());
     CHECK(*v == A(5, 6));
 }

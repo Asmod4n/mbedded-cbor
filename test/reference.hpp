@@ -15,6 +15,11 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <expected>
+#include <span>
+#if defined(__STDCPP_FLOAT16_T__)
+#include <stdfloat>
+#endif
 #include <variant>
 #include <vector>
 
@@ -433,6 +438,338 @@ inline std::expected<cbor::lazy, cbor::error> index_select(cbor::lazy const &l, 
     if (back > *size)
         return std::unexpected(cbor::error::index_out_of_bounds);
     return l.at(static_cast<std::size_t>(*size - back));
+}
+
+// The magnitude of a bignum without its leading zero bytes, as RFC 8949 3.4.3 lets a sender add them.
+inline std::string_view magnitude_without_leading_zeros(std::string_view const m)
+{
+    std::size_t const first = m.find_first_not_of('\0');
+    return first == std::string_view::npos ? std::string_view{} : m.substr(first);
+}
+
+// RFC 8949 3.4.3: tag 3 holds n for the value -1 - n, so the absolute value is n + 1.
+inline std::string magnitude_plus_one(std::string_view const m)
+{
+    std::string sum(m);
+    for (auto it = sum.rbegin(); it != sum.rend(); ++it) {
+        *it = static_cast<char>(static_cast<unsigned char>(*it) + 1);
+        if (*it != '\0')
+            return sum;
+    }
+    sum.insert(sum.begin(), '\1');
+    return sum;
+}
+
+// RFC 8949 3.3 and Appendix D: a float of 16 or 32 bits as a double. A NaN keeps its sign and its payload, which
+// RFC 8949 4.1 extends with zeros at the right; a conversion of the processor would set the quiet bit.
+inline double double_of(std::uint8_t const info, std::uint64_t const bits)
+{
+    if (info == 27)
+        return std::bit_cast<double>(bits);
+    bool const half = info == 25;
+    int const exponent_bits = half ? 5 : 8;
+    int const significand_bits = half ? 10 : 23;
+    std::uint64_t const sign = bits >> (exponent_bits + significand_bits) & 1;
+    std::uint64_t const exponent = bits >> significand_bits & ((1u << exponent_bits) - 1);
+    std::uint64_t const significand = bits & ((std::uint64_t{1} << significand_bits) - 1);
+    if (exponent == (1u << exponent_bits) - 1)
+        return std::bit_cast<double>(sign << 63 | std::uint64_t{0x7ff} << 52 | significand << (52 - significand_bits));
+    if (!half)
+        return static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(bits)));
+    double const magnitude = exponent == 0 ? std::ldexp(static_cast<double>(significand), -24)
+                                           : std::ldexp(static_cast<double>(1024 + significand),
+                                                        static_cast<int>(exponent) - 25);
+    return sign != 0 ? -magnitude : magnitude;
+}
+
+inline std::expected<value, error> value_of(cbor::item const &it, std::vector<cbor::item const *> &open);
+
+// The reference model of a decoded item tree. Tag 28 is the value it marks, and tag 29 is the value it points to,
+// as an application without identity reads them. A bignum that fits 64 bits is an integer. A reference to an item
+// whose read is not complete is sharedref_not_complete, as a cycle has no value in this model.
+inline std::expected<value, error> value_of(cbor::item const &it, std::vector<cbor::item const *> &open)
+{
+    if (auto const *t = std::get_if<std::string_view>(&it.content))
+        return value{std::string(*t)};
+    if (auto const *b = std::get_if<std::span<std::byte const>>(&it.content))
+        return value{bytes{std::string(reinterpret_cast<char const *>(b->data()), b->size())}};
+    if (it.major_type == cbor::major_type::simple_float && it.additional_information >= 25 &&
+        it.additional_information <= 27)
+        return value{double_of(it.additional_information, it.argument)};
+    if (auto const *v = std::get_if<cbor::simple_value>(&it.content))
+        return value{simple{std::to_underlying(*v)}};
+    if (auto const *r = std::get_if<cbor::sharedref>(&it.content)) {
+        if (std::ranges::find(open, r->shareable) != open.end())
+            return std::unexpected(error::sharedref_not_complete);
+        open.push_back(&it);
+        auto shared = value_of(*r->shareable, open);
+        open.pop_back();
+        return shared;
+    }
+    open.push_back(&it);
+    std::expected<value, error> made = value{};
+    if (auto const *container = std::get_if<cbor::data_items>(&it.content)) {
+        auto const children = container->span();
+        if (it.major_type == cbor::major_type::array) {
+            array a;
+            for (cbor::item const *const child : children) {
+                auto e = value_of(*child, open);
+                if (!e) {
+                    made = std::unexpected(e.error());
+                    break;
+                }
+                a.push_back(std::move(*e));
+            }
+            if (made)
+                made = value{std::move(a)};
+        } else {
+            map m;
+            for (std::size_t i = 0; i + 1 < children.size(); i += 2) {
+                auto k = value_of(*children[i], open);
+                auto v = k ? value_of(*children[i + 1], open) : std::expected<value, error>(std::unexpected(k.error()));
+                if (!v) {
+                    made = std::unexpected(v.error());
+                    break;
+                }
+                m.push_back(entry{std::move(*k), std::move(*v)});
+            }
+            if (made)
+                made = value{std::move(m)};
+        }
+    } else if (auto const *content = std::get_if<cbor::item const *>(&it.content)) {
+        cbor::item const &inner = **content;
+        auto const *magnitude = std::get_if<std::span<std::byte const>>(&inner.content);
+        if (it.argument == 28) {
+            made = value_of(inner, open);
+        } else if ((it.argument == 2 || it.argument == 3) && magnitude != nullptr) {
+            bool const negative_value = it.argument == 3;
+            std::string_view const m = magnitude_without_leading_zeros(
+                std::string_view(reinterpret_cast<char const *>(magnitude->data()), magnitude->size()));
+            if (m.size() <= sizeof(std::uint64_t)) {
+                std::uint64_t n = 0;
+                for (char const c : m)
+                    n = n << 8 | static_cast<unsigned char>(c);
+                made = negative_value ? value{negative{n}} : value{n};
+            } else {
+                made = value{bignum{negative_value, negative_value ? magnitude_plus_one(m) : std::string(m)}};
+            }
+        } else {
+            auto c = value_of(inner, open);
+            made = c ? std::expected<value, error>(value{tagged{it.argument, std::move(*c)}})
+                     : std::unexpected(c.error());
+        }
+    } else if (it.major_type == cbor::major_type::unsigned_integer) {
+        made = value{it.argument};
+    } else {
+        made = value{negative{it.argument}};
+    }
+    open.pop_back();
+    return made;
+}
+
+inline std::expected<value, error> value_of(cbor::lazy const &l)
+{
+    auto const tree = l.decode();
+    if (!tree)
+        return std::unexpected(tree.error());
+    std::vector<cbor::item const *> open;
+    return value_of(**tree, open);
+}
+
+template <class E>
+inline std::expected<value, error> value_of(std::expected<cbor::lazy, E> const &l)
+{
+    if (!l)
+        return std::unexpected(l.error());
+    return value_of(*l);
+}
+
+inline std::expected<value, error> decoded(std::string_view const wire)
+{
+    auto const l = cbor::lazy::from(wire);
+    if (!l)
+        return std::unexpected(l.error());
+    return value_of(*l);
+}
+
+inline error decode_error(std::string_view const wire)
+{
+    auto const v = decoded(wire);
+    REQUIRE_FALSE(v.has_value());
+    return v.error();
+}
+
+// RFC 8949 3.4.3: tag 3 holds n for the value -1 - n, so n is the absolute value less one.
+inline std::string magnitude_minus_one(std::string_view const m)
+{
+    std::string n(m);
+    for (auto it = n.rbegin(); it != n.rend(); ++it) {
+        *it = static_cast<char>(static_cast<unsigned char>(*it) - 1);
+        if (*it != '\xff')
+            break;
+    }
+    return std::string(magnitude_without_leading_zeros(n));
+}
+
+// A bignum of the model is an integer where its value fits 64 bits, and a tag over its magnitude otherwise. A
+// negative bignum of absolute value zero is no value.
+template <class Target>
+std::expected<void, error> bignum_encode(cbor::encoder<Target> &e, bignum const &b)
+{
+    std::string_view const m = magnitude_without_leading_zeros(b.magnitude);
+    if (b.negative && m.empty())
+        return std::unexpected(error::unsupported_value);
+    std::string const n = b.negative ? magnitude_minus_one(m) : std::string(m);
+    if (n.size() <= sizeof(std::uint64_t)) {
+        std::uint64_t a = 0;
+        for (char const c : n)
+            a = a << 8 | static_cast<unsigned char>(c);
+        return b.negative ? e.negative_integer(a) : e.unsigned_integer(a);
+    }
+    if (auto const r = e.tag(b.negative ? 3 : 2); !r)
+        return r;
+    return e.byte_string(std::as_bytes(std::span(n)));
+}
+
+// The reference model written through the public encoder: an integer at its native width of 64 bits, a float as
+// a double, a bignum as tag 2 or 3 over its magnitude, every other head in its shortest form.
+template <class Target>
+std::expected<void, error> value_encode(cbor::encoder<Target> &e, value const &v)
+{
+    return std::visit(
+        [&](auto const &k) -> std::expected<void, error> {
+            using K = std::remove_cvref_t<decltype(k)>;
+            if constexpr (std::same_as<K, std::uint64_t>) {
+                return e.unsigned_integer(k);
+            } else if constexpr (std::same_as<K, negative>) {
+                return e.negative_integer(k.argument);
+            } else if constexpr (std::same_as<K, double>) {
+                return e.floating_point(k);
+            } else if constexpr (std::same_as<K, simple>) {
+                return e.simple_value(static_cast<cbor::simple_value>(k.v));
+            } else if constexpr (std::same_as<K, short_text>) {
+                return e.text_string(k.view());
+            } else if constexpr (std::same_as<K, std::string *>) {
+                return e.text_string(std::string_view(*k));
+            } else if constexpr (std::same_as<K, bytes *>) {
+                return e.byte_string(std::as_bytes(std::span(k->b)));
+            } else if constexpr (std::same_as<K, bignum *>) {
+                return bignum_encode(e, *k);
+            } else if constexpr (std::same_as<K, array *>) {
+                if (auto const r = e.array(k->size()); !r)
+                    return r;
+                for (value const &x : *k)
+                    if (auto const r = value_encode(e, x); !r)
+                        return r;
+                return {};
+            } else if constexpr (std::same_as<K, map *>) {
+                if (auto const r = e.map(k->size()); !r)
+                    return r;
+                for (entry const &x : *k) {
+                    if (auto const r = value_encode(e, x.key); !r)
+                        return r;
+                    if (auto const r = value_encode(e, x.val); !r)
+                        return r;
+                }
+                return {};
+            } else {
+                if (auto const r = e.tag(k->tag); !r)
+                    return r;
+                return value_encode(e, k->content);
+            }
+        },
+        v.kind);
+}
+
+template <class Target>
+auto encode(Target &&target, value const &v)
+    -> decltype(std::declval<cbor::encoder<std::remove_cvref_t<Target>> &>().finish())
+{
+    cbor::encoder e{std::forward<Target>(target)};
+    if (auto const r = value_encode(e, v); !r)
+        return std::unexpected(r.error());
+    return e.finish();
+}
+
+inline std::expected<cbor::owning_ref<std::span<std::string_view const>>, error> encode_iov(value const &v)
+{
+    cbor::iov_writer w;
+    return encode(w, v);
+}
+
+struct string_writer {
+    std::string encoded;
+
+    string_writer &allocate(std::size_t)
+    {
+        return *this;
+    }
+
+    std::expected<void, std::errc> append(std::string_view const part)
+    {
+        encoded.append(part);
+        return {};
+    }
+
+    std::expected<void, std::errc> done(std::size_t)
+    {
+        return {};
+    }
+};
+
+inline std::string encoded(value const &v)
+{
+    std::string out;
+    REQUIRE(encode(out, v).has_value());
+    return out;
+}
+
+inline void check_both(std::string_view const wire, value const &expected)
+{
+    auto const v = decoded(wire);
+    REQUIRE(v.has_value());
+    CHECK(*v == expected);
+    auto const back = decoded(encoded(expected));
+    REQUIRE(back.has_value());
+    CHECK(*back == expected);
+}
+
+// The value of the node that a singular query selects.
+inline std::expected<value, error> at_path(std::string_view const path, cbor::lazy const &l)
+{
+    return value_of(cbor::at_path(path, l));
+}
+
+template <cbor::fixed_string Path>
+std::expected<value, error> at_path(cbor::lazy const &l)
+{
+    return value_of(cbor::at_path<Path>(l));
+}
+
+// The nodelist of a query as an array of the values of its nodes.
+inline std::expected<value, error> values_of(std::expected<std::vector<cbor::lazy>, error> const &nodes)
+{
+    if (!nodes)
+        return std::unexpected(nodes.error());
+    array a;
+    for (cbor::lazy const &n : *nodes) {
+        auto v = value_of(n);
+        if (!v)
+            return std::unexpected(v.error());
+        a.push_back(std::move(*v));
+    }
+    return value{std::move(a)};
+}
+
+inline std::expected<value, error> query(std::string_view const path, cbor::lazy const &l)
+{
+    return values_of(cbor::query(path, l));
+}
+
+template <cbor::fixed_string Path>
+std::expected<value, error> query(cbor::lazy const &l)
+{
+    return values_of(cbor::query<Path>(l));
 }
 
 } // namespace test

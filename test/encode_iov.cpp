@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstddef>
 #include <memory>
@@ -306,8 +306,7 @@ TEST_CASE("encode_iov: the owner forms copy with the other writers")
     CHECK_EQ(copied([&](auto &e) { return e.text_string_encode(owner); }), expected);
     CHECK_EQ(copied([&](auto &e) { return e.text_string_encode(std::string(text)); }), expected);
     std::string span_out(expected.size(), '\0');
-    test_binding binding;
-    REQUIRE(cbor::encode(binding, std::span<char>(span_out), value{std::string(text)}).has_value());
+    REQUIRE(test::encode(std::span<char>(span_out), value{std::string(text)}).has_value());
     CHECK_EQ(span_out, expected);
 }
 
@@ -321,26 +320,23 @@ TEST_CASE("encode_iov: the walker gives the bytes of encode")
           "\xa2\x61\x61\x01\x61\x62\x82\x02\x03"sv, "\xc1\x1a\x51\x4b\x67\xb0"sv}) {
         auto const v = decoded(wire);
         REQUIRE(v.has_value());
-        test_binding binding;
-        auto const p = cbor::encode_iov(binding, *v);
+        auto const p = test::encode_iov(*v);
         REQUIRE(p.has_value());
         CHECK_EQ(joined(*p), encoded(*v));
     }
     value const long_text{std::string(40000, 'w')};
-    test_binding binding;
-    auto const p = cbor::encode_iov(binding, long_text);
+    auto const p = test::encode_iov(long_text);
     REQUIRE(p.has_value());
     CHECK_EQ(joined(*p), encoded(long_text));
 }
 
-// An error of the walk must come back as the error value, and the writer must free what it holds.
-TEST_CASE("encode_iov: a walk error comes back as the error value")
+// An error of encode_iov of a tree must come back as the error value, and the writer must free what it holds.
+TEST_CASE("encode_iov: an error of the tree comes back as the error value")
 {
-    value v{array{}};
-    for (int i = 0; i < 2000; ++i)
-        v = value{array{v}};
-    test_binding binding;
-    auto const p = cbor::encode_iov(binding, v);
+    auto const tree = cbor::lazy::from(std::string(100, '\x81') + '\x80')->decode();
+    REQUIRE(tree.has_value());
+    test::limits_guard const depth{{.nesting_depth = 16}};
+    auto const p = cbor::encode_iov(**tree);
     REQUIRE_FALSE(p.has_value());
     CHECK_EQ(p.error(), error::nesting_depth_exceeded);
 }
@@ -349,11 +345,10 @@ TEST_CASE("encode_iov: a walk error comes back as the error value")
 // test of the value. With it, the shortest width that keeps the value, as RFC 8949 4.2.2 prefers.
 TEST_CASE("encode: a float is a double unless preferred serialization is on")
 {
-    test_binding binding;
     string_writer w;
-    REQUIRE(cbor::encode(binding, w, value{1.0}).has_value());
+    REQUIRE(test::encode(w, value{1.0}).has_value());
     CHECK_EQ(w.encoded, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv);
     string_writer p;
-    REQUIRE(cbor::encode(binding, p, value{1.0}).has_value());
+    REQUIRE(test::encode(p, value{1.0}).has_value());
     CHECK_EQ(p.encoded, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv);
 }

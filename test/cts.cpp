@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <algorithm>
 #include <array>
@@ -53,8 +53,7 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
     std::string const suite{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
     auto const root = cbor::lazy::from(suite);
     REQUIRE(root.has_value());
-    test_binding binding;
-    auto const all = cbor::lazy_decode(binding, *root);
+    auto const all = test::value_of(*root);
     REQUIRE(all.has_value());
     array const *const suite_cases = get_if<array>(*all);
     REQUIRE(suite_cases != nullptr);
@@ -72,7 +71,7 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         CAPTURE(name);
         CAPTURE(selector);
         if (c.size() == 2 && edn_extension(selector)) {
-            auto const r = cbor::query(binding, selector, *cbor::lazy::from(std::string_view("\xf6")));
+            auto const r = test::query(selector, *cbor::lazy::from(std::string_view("\xf6")));
             CHECK(r.has_value());
             extended += r.has_value() ? 1uz : 0uz;
             continue;
@@ -80,7 +79,7 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         if (c.size() == 2 || function_without_support(selector)) {
             auto const document = c.size() == 2 ? cbor::lazy::from(std::string_view("\xf6")) : root->at(i)->at(2);
             REQUIRE(document.has_value());
-            auto const r = cbor::query(binding, selector, *document);
+            auto const r = test::query(selector, *document);
             bool const invalid = !r && r.error() == error::invalid_path;
             CHECK(invalid);
             refused += c.size() == 2 ? 0uz : 1uz;
@@ -89,7 +88,7 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         }
         auto const document = root->at(i)->at(2);
         REQUIRE(document.has_value());
-        auto const r = cbor::query(binding, selector, *document);
+        auto const r = test::query(selector, *document);
         CAPTURE((r.has_value() ? error{} : r.error()));
         bool matched = false;
         array const *const results = get_if<array>(c.at(3));

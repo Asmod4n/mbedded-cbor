@@ -801,6 +801,8 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
             return &node;
         }
         if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
+            if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
+                return std::unexpected(r.error());
             auto const n = d.head_decode();
             if (!n) [[unlikely]]
                 return std::unexpected(n.error());

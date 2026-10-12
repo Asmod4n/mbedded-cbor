@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstddef>
 #include <string>
@@ -37,9 +37,8 @@ value arrays_around_zero(std::size_t const n)
 TEST_CASE("nesting depth depth_limit: lazy_decode with a binding")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    test_binding binding;
-    CHECK(cbor::lazy_decode(binding, *cbor::lazy::from(arrays_around(depth_limit, "\x00"sv))).has_value());
-    CHECK_EQ(cbor::lazy_decode(binding, *cbor::lazy::from(arrays_around(depth_limit + 1, "\x00"sv))).error(),
+    CHECK(test::value_of(*cbor::lazy::from(arrays_around(depth_limit, "\x00"sv))).has_value());
+    CHECK_EQ(test::value_of(*cbor::lazy::from(arrays_around(depth_limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
 
@@ -84,8 +83,7 @@ TEST_CASE("nesting depth depth_limit: a comparison in a filter")
                                 arrays_around(n, "\x00"sv) +
                                 "\x61"
                                 "c\x01"s;
-        test_binding binding;
-        return cbor::query(binding, "$[?@.a == @.b].c", *cbor::lazy::from(doc));
+        return test::query("$[?@.a == @.b].c", *cbor::lazy::from(doc));
     };
     CHECK(found(depth_limit).has_value());
     CHECK_EQ(found(depth_limit + 1).error(), error::nesting_depth_exceeded);
@@ -95,9 +93,8 @@ TEST_CASE("nesting depth depth_limit: a comparison in a filter")
 TEST_CASE("nesting depth depth_limit: a descendant segment")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    test_binding binding;
-    CHECK(cbor::query(binding, "$..[0]", *cbor::lazy::from(arrays_around(depth_limit, "\x00"sv))).has_value());
-    CHECK_EQ(cbor::query(binding, "$..[0]", *cbor::lazy::from(arrays_around(depth_limit + 1, "\x00"sv))).error(),
+    CHECK(test::query("$..[0]", *cbor::lazy::from(arrays_around(depth_limit, "\x00"sv))).has_value());
+    CHECK_EQ(test::query("$..[0]", *cbor::lazy::from(arrays_around(depth_limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
 
@@ -109,17 +106,20 @@ TEST_CASE("nesting depth depth_limit: diagnostic_notation")
     CHECK_EQ(cbor::diagnostic_notation(arrays_around(depth_limit + 1, "\x00"sv)).error(), error::nesting_depth_exceeded);
 }
 
-// The walker of encode counts one level for each array.
+// encode of a tree counts one level for each array, as decode does. The hard bound admits no deeper tree, so the
+// tree at the bound is encoded under the bound and under one level less.
 TEST_CASE("nesting depth depth_limit: encode")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    test_binding binding;
-    string_writer deepest;
-    CHECK(cbor::encode(binding, deepest, arrays_around_zero(depth_limit)).has_value());
-    string_writer deeper;
-    auto const r = cbor::encode(binding, deeper, arrays_around_zero(depth_limit + 1));
+    auto const deepest = cbor::lazy::from(preferred(arrays_around_zero(depth_limit)))->decode();
+    REQUIRE(deepest.has_value());
+    std::string out;
+    CHECK(cbor::encode(**deepest, out).has_value());
+    test::limits_guard const lower{{.nesting_depth = depth_limit - 1}};
+    std::string more;
+    auto const r = cbor::encode(**deepest, more);
     REQUIRE_FALSE(r.has_value());
-    CHECK((r.error() == cbor::error{error::nesting_depth_exceeded}));
+    CHECK_EQ(r.error(), error::nesting_depth_exceeded);
 }
 
 #ifdef __cpp_impl_reflection

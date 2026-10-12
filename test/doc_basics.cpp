@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -54,8 +54,7 @@ TEST_CASE("doc basics: the errors that a program meets most often")
     CHECK_EQ(cbor::at_path<"$[1]", int>(pair.substr(0, pair.size() - 1)).error(), error::too_little_data);
     CHECK_EQ(cbor::at_path<"$", int>("\xff"s).error(), error::syntax_error);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s).error(), error::indefinite_length);
-    test_binding b;
-    CHECK_EQ(cbor::at_path(b, "$.a[", *cbor::lazy::from(preferred(M("a"s, 1)))).error(), error::invalid_path);
+    CHECK_EQ(test::at_path("$.a[", *cbor::lazy::from(preferred(M("a"s, 1)))).error(), error::invalid_path);
     std::string const three = preferred(A(1, 2, 3));
     test::limits_guard const g{{.container_elements = 2}};
     CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
