@@ -168,6 +168,12 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
                      it.major_type == cbor::major_type::map ? 2 * argument : argument);
             break;
         case cbor::major_type::tag:
+            if (it.argument == 24) {
+                REQUIRE(std::holds_alternative<cbor::encoded_cbor_data_item>(it.content));
+                CHECK_EQ(std::to_underlying(std::get<cbor::encoded_cbor_data_item>(it.content).content->major_type),
+                         static_cast<std::uint8_t>(after_head.front()) >> 5);
+                break;
+            }
             REQUIRE(std::holds_alternative<cbor::item const *>(it.content));
             CHECK_EQ(std::to_underlying(std::get<cbor::item const *>(it.content)->major_type),
                      static_cast<std::uint8_t>(after_head.front()) >> 5);

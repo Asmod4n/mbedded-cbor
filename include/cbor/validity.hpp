@@ -299,6 +299,14 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_one_data_item(std::string_view const rest)
+    {
+        if (!rest.empty()) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_simple_value(std::uint8_t const info, std::uint64_t const argument)
     {
         if (info == std::to_underlying(rfc8949::simple_float_information::simple_value_follows) &&

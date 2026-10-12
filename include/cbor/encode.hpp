@@ -807,6 +807,9 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
                 return r;
     } else if (auto const *const content = std::get_if<item const *>(&node.content); written && content != nullptr) {
         return item_encode(out, **content, depth + 1, depth_max);
+    } else if (auto const *const embedded = std::get_if<encoded_cbor_data_item>(&node.content);
+               written && embedded != nullptr) {
+        return item_encode(out, *embedded->content, depth + 1, depth_max);
     } else if (auto const *const reference = std::get_if<sharedref>(&node.content); written && reference != nullptr) {
         written = out.head_encode(major_type::unsigned_integer, reference->additional_information, reference->argument);
     }

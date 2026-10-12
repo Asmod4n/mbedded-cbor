@@ -707,4 +707,137 @@ TEST_CASE("decode: a reference before its mark is refused")
     CHECK_EQ(r.error(), cbor::error::sharedref_index_not_marked);
 }
 
+// RFC 8949 3.4.5.1: tag 24 holds a byte string with one encoded CBOR data item. The decode gives both the byte
+// string as written and the embedded item as a tree, so a reader takes the item without a second decode, and
+// encode writes the byte string again bit for bit.
+TEST_CASE("decode: tag 24 gives the byte string and the embedded item")
+{
+    std::string const wire = "\xd8\x18\x45\x64IETF"s;
+    auto const top_level = cbor::lazy::from(wire);
+    REQUIRE(top_level.has_value());
+    auto const root = item_of(top_level->decode());
+    REQUIRE(std::holds_alternative<cbor::encoded_cbor_data_item>(root->content));
+    auto const embedded = std::get<cbor::encoded_cbor_data_item>(root->content);
+    CHECK_EQ(embedded.content->major_type, cbor::major_type::byte_string);
+    CHECK_EQ(std::get<std::span<std::byte const>>(embedded.content->content).size(), 5u);
+    CHECK_EQ(std::get<std::string_view>(embedded.data_item->content), "IETF");
+    std::string again;
+    REQUIRE(cbor::encode(*root, again).has_value());
+    CHECK_EQ(again, wire);
+}
+
+// RFC 8949 3.4.5.1: the embedded item is a data item like any other, so it can itself be a tag 24. The decode
+// enters each level, and encode writes the outer bytes again unchanged.
+TEST_CASE("decode: a tag 24 inside a tag 24 is decoded at each level")
+{
+    std::string const wire = "\xd8\x18\x44\xd8\x18\x41\x01"s;
+    auto const top_level = cbor::lazy::from(wire);
+    REQUIRE(top_level.has_value());
+    auto const root = item_of(top_level->decode());
+    auto const outer = std::get<cbor::encoded_cbor_data_item>(root->content);
+    REQUIRE(std::holds_alternative<cbor::encoded_cbor_data_item>(outer.data_item->content));
+    auto const inner = std::get<cbor::encoded_cbor_data_item>(outer.data_item->content);
+    CHECK_EQ(inner.data_item->major_type, cbor::major_type::unsigned_integer);
+    CHECK_EQ(inner.data_item->argument, 1u);
+    std::string again;
+    REQUIRE(cbor::encode(*root, again).has_value());
+    CHECK_EQ(again, wire);
+}
+
+// Owner decision: the embedded item is a top-level item of its own. A tag 29 inside it refers to a tag 28 inside
+// the same embedded item, and the marks outside do not count there.
+TEST_CASE("decode: a shared reference inside tag 24 refers to a mark inside the same embedded item")
+{
+    auto const top_level = cbor::lazy::from(std::string("\xd8\x18\x48\x82\xd8\x1c\x61\x61\xd8\x1d\x00"sv));
+    REQUIRE(top_level.has_value());
+    auto const root = item_of(top_level->decode());
+    auto const elements = children_of(*std::get<cbor::encoded_cbor_data_item>(root->content).data_item);
+    REQUIRE_EQ(elements.size(), 2u);
+    CHECK_EQ(std::get<cbor::sharedref>(elements[1]->content).shareable,
+             std::get<cbor::item const *>(elements[0]->content));
+}
+
+// The other direction of the same decision: a mark outside is not visible inside, so 29(0) inside the embedded
+// item has no mark to refer to.
+TEST_CASE("decode: a shared reference inside tag 24 does not see a mark outside")
+{
+    auto const top_level = cbor::lazy::from(std::string("\x82\xd8\x1c\x61\x61\xd8\x18\x43\xd8\x1d\x00"sv));
+    REQUIRE(top_level.has_value());
+    auto const r = top_level->decode();
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), cbor::error::sharedref_index_not_marked);
+}
+
+// And a mark inside the embedded item does not count outside: the 29(0) after the tag 24 has no mark.
+TEST_CASE("decode: a mark inside tag 24 does not count outside")
+{
+    auto const top_level = cbor::lazy::from(std::string("\x82\xd8\x18\x43\xd8\x1c\x01\xd8\x1d\x00"sv));
+    REQUIRE(top_level.has_value());
+    auto const r = top_level->decode();
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), cbor::error::sharedref_index_not_marked);
+}
+
+// The embedded bytes are read with the same checks as the outer bytes, so malformed embedded bytes give the
+// error that the same bytes give at the top level.
+TEST_CASE("decode: malformed bytes inside tag 24 give their own error")
+{
+    auto const short_head = cbor::lazy::from(std::string("\xd8\x18\x41\x18"sv));
+    REQUIRE(short_head.has_value());
+    auto const r = short_head->decode();
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), cbor::error::too_little_data);
+    auto const reserved = cbor::lazy::from(std::string("\xd8\x18\x41\x1c"sv));
+    REQUIRE(reserved.has_value());
+    auto const at_top = cbor::lazy::from(std::string("\x1c"sv));
+    REQUIRE(at_top.has_value());
+    auto const inside = reserved->decode();
+    auto const outside = at_top->decode();
+    REQUIRE_FALSE(inside.has_value());
+    REQUIRE_FALSE(outside.has_value());
+    CHECK_EQ(inside.error(), outside.error());
+}
+
+// The limits hold across the boundary: the embedded root of 24(<<0>>) is at depth 2, below the byte string, and
+// an embedded array counts against the container limit as an outer array does.
+TEST_CASE("decode: the limits and the nesting depth count inside tag 24")
+{
+    auto const top_level = cbor::lazy::from(std::string("\xd8\x18\x41\x00"sv));
+    REQUIRE(top_level.has_value());
+    {
+        test::limits_guard const depth{{.nesting_depth = 1}};
+        auto const refused = top_level->decode();
+        REQUIRE_FALSE(refused.has_value());
+        CHECK_EQ(refused.error(), cbor::error::nesting_depth_exceeded);
+    }
+    {
+        test::limits_guard const depth{{.nesting_depth = 2}};
+        CHECK(top_level->decode().has_value());
+    }
+    auto const array = cbor::lazy::from(std::string("\xd8\x18\x44\x83\x01\x02\x03"sv));
+    REQUIRE(array.has_value());
+    test::limits_guard const elements{{.container_elements = 2}};
+    auto const refused = array->decode();
+    REQUIRE_FALSE(refused.has_value());
+    CHECK_EQ(refused.error(), cbor::error::container_elements_exceeded);
+}
+
+// RFC 8949 3.4.5.1: the byte string of tag 24 holds one encoded data item. Bytes after that item are refused
+// with syntax_error by decode, by a lazy step and by a typed read alike. The error is a provisional form that the
+// owner has not decided yet.
+TEST_CASE("tag 24 with bytes after its data item is refused everywhere")
+{
+    std::string const wire = "\xd8\x18\x42\x01\x02"s;
+    auto const top_level = cbor::lazy::from(wire);
+    REQUIRE(top_level.has_value());
+    auto const tree = top_level->decode();
+    REQUIRE_FALSE(tree.has_value());
+    CHECK_EQ(tree.error(), cbor::error::syntax_error);
+    CHECK_EQ(top_level->get<int>().error(), cbor::error::syntax_error);
+    CHECK_EQ(cbor::at_path<"$", int>(std::string_view(wire)).error(), cbor::error::syntax_error);
+    std::string const in_array = "\xd8\x18\x43\x81\x01\x02"s;
+    CHECK_EQ(cbor::lazy::from(in_array)->at(0).error(), cbor::error::syntax_error);
+    CHECK_EQ(cbor::at_path<"$[0]", int>(std::string_view(in_array)).error(), cbor::error::syntax_error);
+}
+
 }
