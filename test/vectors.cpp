@@ -136,6 +136,9 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             continue;
         }
         cbor::item const &it = **decoded_item;
+        std::string again;
+        REQUIRE(cbor::encode(it, again).has_value());
+        CHECK_EQ(again, wire);
         std::uint8_t const info = initial & 0x1f;
         std::size_t const argument_bytes = info < 24 ? 0 : std::size_t{1} << (info - 24);
         std::uint64_t argument = info < 24 ? info : 0;
@@ -511,6 +514,16 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     auto const l = lazy_value_of(v.encoded);
     REQUIRE(l.has_value());
     CHECK(equivalent(*l, *expected));
+
+    // encode of the decoded tree writes each head with the additional information of the wire, so every vector,
+    // also one that is not in preferred form, comes back byte for byte.
+    auto const top_level = cbor::lazy::from(std::string(v.encoded));
+    REQUIRE(top_level.has_value());
+    auto const tree = top_level->decode();
+    REQUIRE(tree.has_value());
+    std::string again;
+    REQUIRE(cbor::encode(**tree, again).has_value());
+    CHECK_EQ(again, v.encoded);
 
     auto const text = cbor::diagnostic_notation(v.encoded);
     REQUIRE(text.has_value());

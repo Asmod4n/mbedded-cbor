@@ -683,8 +683,8 @@ class heads
 
     friend class jsonpath;
 
-    template <class Writer>
-    friend struct encoder;
+    template <class>
+    friend class encoder;
 
     template <class, class, pass>
     friend class walker;

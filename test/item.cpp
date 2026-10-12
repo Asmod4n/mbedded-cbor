@@ -633,3 +633,70 @@ TEST_CASE("type: lazy reads through tags 28 and 29, the item keeps them")
 }
 
 }
+
+namespace item_test
+{
+
+// encode writes the tree back with the additional information of each head, so an item that is not in preferred
+// form and a tag 29 that points back into its own container come back byte for byte. 28([29(0)]) is an array
+// that holds itself; encode writes the head of tag 29 and its index and does not follow the pointer.
+TEST_CASE("encode: a tree with a cycle through tag 29 comes back byte for byte")
+{
+    for (std::string_view const wire : {"\xd8\x1c\x81\xd8\x1d\x00"sv, "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x18\x00"sv,
+                                        "\x9a\x00\x00\x00\x01\x7a\x00\x00\x00\x02hi"sv}) {
+        CAPTURE(wire);
+        auto const top_level = cbor::lazy::from(std::string(wire));
+        REQUIRE(top_level.has_value());
+        auto const root = item_of(top_level->decode());
+        std::string out;
+        auto const size = cbor::encode(*root, out);
+        REQUIRE(size.has_value());
+        CHECK_EQ(*size, wire.size());
+        CHECK_EQ(out, wire);
+        auto const pieces = cbor::encode_iov(*root);
+        REQUIRE(pieces.has_value());
+        std::string joined;
+        for (std::string_view const piece : **pieces)
+            joined.append(piece);
+        CHECK_EQ(joined, wire);
+    }
+}
+
+// encode reads the nesting depth once and refuses a tree deeper than it, as decode does: [[[0]]] decodes at the
+// default and fails to encode at depth 2.
+TEST_CASE("encode: the nesting depth bounds the tree")
+{
+    auto const top_level = cbor::lazy::from(std::string("\x81\x81\x81\x00"sv));
+    REQUIRE(top_level.has_value());
+    auto const root = item_of(top_level->decode());
+    test::limits_guard const depth{{.nesting_depth = 2}};
+    std::string out;
+    auto const r = cbor::encode(*root, out);
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), cbor::error::nesting_depth_exceeded);
+}
+
+// encode into a span that is too short gives no_buffer_space.
+TEST_CASE("encode: a span that is too short")
+{
+    auto const top_level = cbor::lazy::from(std::string("\x63" "abc"sv));
+    REQUIRE(top_level.has_value());
+    auto const root = item_of(top_level->decode());
+    std::array<char, 3> buffer{};
+    auto const r = cbor::encode(*root, std::span<char>(buffer));
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), cbor::error::no_buffer_space);
+}
+
+// A tag 29 that names a mark which comes later on the wire is refused: [29(0), 28(1)] names mark 0 before tag 28
+// stands, so the decode of the whole item fails and builds no pointer to an item that does not exist yet.
+TEST_CASE("decode: a reference before its mark is refused")
+{
+    auto const top_level = cbor::lazy::from(std::string("\x82\xd8\x1d\x00\xd8\x1c\x01"sv));
+    REQUIRE(top_level.has_value());
+    auto const r = top_level->decode();
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), cbor::error::sharedref_index_not_marked);
+}
+
+}

@@ -15,7 +15,7 @@ using namespace std::string_view_literals;
 namespace
 {
 
-using iov_encoder = cbor::encoder<cbor::iov_writer>;
+using iov_encoder = cbor::encoding::encoder<cbor::iov_writer>;
 using pieces = cbor::owning_ref<std::span<std::string_view const>>;
 
 std::string joined(pieces const &p)
@@ -41,7 +41,7 @@ template <class F>
 std::string copied(F const &f)
 {
     string_writer w;
-    cbor::encoder<string_writer> e{w};
+    cbor::encoding::encoder<string_writer> e{w};
     REQUIRE(f(e).has_value());
     REQUIRE(e.flush().has_value());
     return w.encoded;

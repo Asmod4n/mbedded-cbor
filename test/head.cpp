@@ -134,7 +134,7 @@ namespace
 std::string head_of(cbor::major_type const major, std::uint64_t const argument)
 {
     string_writer w;
-    cbor::encoder<string_writer> e{w};
+    cbor::encoding::encoder<string_writer> e{w};
     REQUIRE(e.head_encode(major, argument).has_value());
     REQUIRE(e.flush().has_value());
     return w.encoded;

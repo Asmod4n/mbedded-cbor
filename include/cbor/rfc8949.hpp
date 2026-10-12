@@ -97,8 +97,7 @@ class rfc8949
 
     friend class jsonpath;
 
-    template <class Writer>
-    friend struct encoder;
+    friend class encoding;
 
     template <class, class, pass>
     friend class walker;
