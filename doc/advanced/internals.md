@@ -57,16 +57,19 @@ constant arrays.
 ## 7. The item tree
 
 `lazy::decode` builds one `cbor::item` for each data item in a
-`std::deque`, so an item keeps its address while the tree grows. The
-children of every array and map stand in one `std::vector` of pointers:
-a container holds the index of its first child and the count, and
-`data_items::span()` computes the view when it is read, so the growth of
-the vector leaves every container valid. A scratch vector holds the
-children of the containers that are open, with a base for each depth. A
-count is checked against the bytes that are left before an element is
-read.
+`std::pmr::monotonic_buffer_resource` that the result owns. The children
+of an array or a map stand by value in one block of that resource, so a
+container holds a `std::span<cbor::item const>`. The first block is sized
+from the length of the input. A count is checked against the bytes that
+are left before an element is read, and the sum of all open counts never
+exceeds the bytes that are left.
 
-Tag 29 holds a `sharedref` with the pointer to the item that its tag 28
-marks. A tag 28 before the start of a lazy is decoded at the depth of its
-own position. `encode` of an item writes each head with its stored
-additional information and does not follow a `sharedref`.
+A tag 29 is a tag item over its index. The resource holds two sorted
+tables: each tag 29 item with the item that its tag 28 marks, and each tag
+24 item with the root of its embedded item. `cbor::shared_value` and
+`cbor::encoded_cbor_data_item` search them. The result is a
+`std::shared_ptr` whose deleter owns the resource, and the two functions
+find the resource through `std::get_deleter`. A tag 28 before the start
+of a lazy is decoded at the depth of its own position. `encode` of an item
+writes each head with its stored additional information and does not
+follow a tag 29.

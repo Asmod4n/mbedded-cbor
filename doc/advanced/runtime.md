@@ -174,34 +174,41 @@ Two iterators of two different maps throw `std::logic_error`.
 
 `lazy::decode()` gives `std::expected<std::shared_ptr<cbor::item const>,
 error>`. It reads the whole item at the lazy, checks every head and builds
-one `cbor::item` for each data item. An item holds the major type, the
-additional information, the argument and the content of one data item. A
-string in it is a view into the bytes.
+one `cbor::item` for each data item. An item is an aggregate of 24 bytes:
+`type` (a `cbor::type`), `additional_information` (RFC 8949 3) and a union
+`via`. The type says which member of `via` holds the value. A string in it
+is a view into the bytes.
 
-| Data item | Content |
+| `type` | Member of `via` |
 |---|---|
-| integer | nothing; the value is the argument |
-| byte string, text string | `std::span<std::byte const>`, `std::string_view` |
-| array, map | `cbor::data_items`; `span()` gives the children, a map key and value one after the other |
-| tag | `cbor::item const *`, the item of the content |
-| tag 24 | `cbor::encoded_cbor_data_item`: `content` is the item of the byte string, `data_item` the root of the embedded item, decoded as a top-level item of its own |
-| tag 29 | `cbor::sharedref`: the item that the tag 28 marks, and the head of the index |
-| float | `std::float16_t` where the compiler has it, `float`, `double` |
-| simple value | `cbor::simple_value` |
+| `unsigned_integer`, `negative_integer` | `u64`, the argument |
+| `byte_string`, `text_string` | `bin` (`std::span<std::byte const>`), `str` (`std::string_view`) |
+| `array` | `array`, a `std::span<cbor::item const>` of the elements |
+| `map` | `map`, a `std::span<cbor::item const>` with each key and its value one after the other |
+| `tag`, `unsigned_bignum`, `negative_bignum`, `typed_array` | `tag`: `number` and `content`, the item of the content |
+| `half_float`, `single_float`, `double_float` | `f64`, the value as a `double` |
+| `false_value`, `true_value`, `null`, `undefined`, `simple_value` | `simple_value` |
 
 ```cpp
 // [1, {"a": 2}]
 auto const i = cbor::lazy::from(bytes)->decode();
-(*i)->major_type;                                        // major_type::array
-std::get<cbor::data_items>((*i)->content).span().size(); // 2
+(*i)->type;               // type::array
+(*i)->via.array.size();   // 2
 // 82 01, an array of two elements with one element
 cbor::lazy::from(bytes)->decode();                       // too_little_data
 ```
 
-A tag 28 stays a tag item, and a tag 29 points to the item that the tag 28
-marks. No read of the library follows that pointer, so a cycle ends. A
-count in a head reserves nothing: an array that claims more elements than
-bytes are left gives `too_little_data` before it reads an element.
+A tag 28 stays a tag item over the value it marks. A tag 29 stays a tag
+item over its index, an unsigned integer item.
+`cbor::shared_value(tree, item)` gives the item that the tag 29 names;
+`tree` is the result of the decode. No read of the library follows a tag
+29 by itself, so a cycle ends. A tag 24 is a tag item over its byte
+string, and `cbor::encoded_cbor_data_item(tree, item)` gives the root of
+the embedded item, decoded as a top-level item of its own. Both throw
+`std::logic_error` for an item that is not a tag 29 or tag 24 of that
+tree. A count in a head reserves nothing: an array that claims more
+elements than bytes are left gives `too_little_data` before it reads an
+element.
 
 `type()` of a lazy and of an item gives `std::expected<cbor::type, error>`:
 the major type, or for a tag 2, 3 or a typed array of RFC 8746 the kind of
