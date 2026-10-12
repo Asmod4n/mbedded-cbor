@@ -1503,3 +1503,28 @@ TEST_CASE("cbor::limits = {} sets the defaults")
     cbor::limits = {};
     CHECK_EQ(cbor::limits.load().nesting_depth, cbor::limit_values{}.nesting_depth);
 }
+
+// Found by fuzz-path on the input d0. RFC 8949 3.4: a tag is followed by its content, so d0 alone ends before
+// its content and is not well-formed. A step of a lazy gave not_indexable, and the typed read gave
+// too_little_data. A step now passes a tag that it does not read, as the typed read and lazy::get do (RFC 8949
+// 6.1), so both read the missing content and give too_little_data.
+TEST_CASE("lazy: a step over a tag with no content gives too_little_data")
+{
+    std::string const doc = "\xd0"s;
+    CHECK_EQ(cbor::at_path<"$[0]", int>(doc).error(), error::too_little_data);
+    CHECK_EQ(lazy_of(doc).at(0).error(), error::too_little_data);
+    CHECK_EQ(lazy_of(doc).at("a").error(), error::too_little_data);
+    CHECK_EQ(lazy_of(doc).at(cbor::key{0}).error(), error::too_little_data);
+    CHECK_EQ(lazy_of(doc).size().error(), error::too_little_data);
+    CHECK_EQ(lazy_of(doc).elements().error(), error::too_little_data);
+    CHECK_EQ(lazy_of(doc).entries().error(), error::too_little_data);
+}
+
+// The same rule on a well-formed item: tag 1000 over [1, 2] is passed by a step as by the typed read.
+TEST_CASE("lazy: a step passes a tag that it does not read")
+{
+    std::string const doc = "\xd9\x03\xe8\x82\x01\x02"s;
+    CHECK_EQ(cbor::at_path<"$[1]", int>(doc), 2);
+    CHECK_EQ(*lazy_of(doc).at(1)->get<int>(), 2);
+    CHECK_EQ(*lazy_of(doc).size(), 2u);
+}
