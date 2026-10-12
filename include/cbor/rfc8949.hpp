@@ -97,6 +97,9 @@ class rfc8949
 
     friend struct lazy;
 
+    template <class Target>
+    friend class encoder;
+
     template <fixed_string Path>
     friend class is_singular_query;
 

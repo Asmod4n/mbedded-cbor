@@ -733,6 +733,21 @@ public:
         return written(out.head_encode(major_type::tag, number));
     }
 
+    std::expected<void, error> shareable()
+    {
+        throw_logic_error_if_unusable();
+        return written(out.head_encode(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable)));
+    }
+
+    std::expected<void, error> sharedref(std::uint64_t const index)
+    {
+        throw_logic_error_if_unusable();
+        if (auto const r = written(out.head_encode(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref)));
+            !r) [[unlikely]]
+            return r;
+        return written(out.head_encode(major_type::unsigned_integer, index));
+    }
+
     std::expected<void, error> simple_value(cbor::simple_value const value)
     {
         throw_logic_error_if_unusable();

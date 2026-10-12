@@ -207,6 +207,22 @@ TEST_CASE("doc advanced runtime: encode")
     string_writer w;
     REQUIRE(test::encode(w, v).has_value());
     CHECK_EQ(w.encoded, "\x82"s + native_unsigned(1) + native_unsigned(2));
+    std::string shared;
+    {
+        cbor::encoder e(shared);
+        REQUIRE(e.array(2).has_value());
+        REQUIRE(e.shareable().has_value());
+        REQUIRE(e.text_string("a").has_value());
+        REQUIRE(e.sharedref(0).has_value());
+        CHECK_EQ(e.finish(), 8u);
+    }
+    CHECK_EQ(shared, "\x82\xd8\x1c\x61" "a" "\xd8\x1d\x00"s);
+    std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
+    auto const tagged = *cbor::lazy::from(cycle)->decode();
+    cbor::item const *const six = std::get<cbor::item const *>(tagged->content);
+    CHECK_EQ(six->argument, 6u);
+    cbor::item const *const reference = std::get<cbor::item const *>(six->content);
+    CHECK_EQ(std::get<cbor::sharedref>(reference->content).shareable, six);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string again;
     CHECK_EQ(cbor::encode(**cbor::lazy::from(wire)->decode(), again), wire.size());
