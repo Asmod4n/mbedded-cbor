@@ -1,0 +1,1105 @@
+{
+ "time": "2026-10-12-060219Z",
+ "commit": "f5cb2b0c01f8ac27f501826e8107c4c6afa8107d (bench sources; the bench code is not in a new commit)",
+ "purpose": "After the binding removal. Part 1: packed/structs ops (MB_*) of 491582c (_OLD) against f5cb2b0 at equal work, A/A = f5cb2b0 built twice (_AA). Part 2: mbedded-cbor against FlatBuffers (FB_*) and Cap'n Proto (CP_*) on cars, f5cb2b0.",
+ "flags": "-std=gnu++26 -freflection(g++) -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+ "pie": "-fPIE -pie",
+ "elf_type_count": {
+  "Type: DYN g++-16": 46
+ },
+ "processes": 10,
+ "min_time": "0.2s",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.0",
+  "clang version 23.1.2"
+ ],
+ "packages": [
+  "glibc-2.44-2.1.x86_64",
+  "libstdc++6-16.2.0+git9497-3.1.x86_64",
+  "libstdc++6-devel-gcc16-16.2.0+git9497-3.1.x86_64",
+  "gcc16-c++-16.2.0+git9497-3.1.x86_64",
+  "clang23-23.1.2-1.1.x86_64",
+  "benchmark-devel-1.9.5-2.3.x86_64",
+  "libcapnp-1_5_0-1.5.0-1.3.x86_64",
+  "libcapnp-devel-1.5.0-1.3.x86_64",
+  "capnproto-1.5.0-1.3.x86_64",
+  "flatbuffers-devel-25.2.10-2.5.x86_64"
+ ],
+ "ldd_sample": {},
+ "libc": "ldd (GNU libc) 2.44",
+ "kernel": "6.18.44-fc-v114",
+ "scheduler": "CFS/EEVDF (no sched_ext state)",
+ "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-sid-gb (debian:sid)",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 1000,
+ "priority": "1 (process ID) old priority 0, new priority -10",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; 3 of 4 cpus stay to the rest of the machine",
+ "cold": "each process rotates over copies of the input that hold twice the L3 size",
+ "loadavg_start": "3.70 2.54 1.88 1/135 245",
+ "loadavg_end": "1.22 1.93 1.76 1/129 766",
+ "run": {
+  "rounds": [
+   {
+    "round": 1,
+    "wall_s": 17.567192316055298,
+    "steal_ticks": 40,
+    "steal_percent_of_cpu_time": 0.565690849950502
+   },
+   {
+    "round": 2,
+    "wall_s": 17.051854610443115,
+    "steal_ticks": 43,
+    "steal_percent_of_cpu_time": 0.6260920209668026
+   },
+   {
+    "round": 3,
+    "wall_s": 17.423734188079834,
+    "steal_ticks": 43,
+    "steal_percent_of_cpu_time": 0.612884834663626
+   },
+   {
+    "round": 4,
+    "wall_s": 17.011821746826172,
+    "steal_ticks": 52,
+    "steal_percent_of_cpu_time": 0.7602339181286549
+   },
+   {
+    "round": 5,
+    "wall_s": 17.352627515792847,
+    "steal_ticks": 33,
+    "steal_percent_of_cpu_time": 0.47176554681915656
+   },
+   {
+    "round": 6,
+    "wall_s": 16.838156700134277,
+    "steal_ticks": 45,
+    "steal_percent_of_cpu_time": 0.6626417317037255
+   },
+   {
+    "round": 7,
+    "wall_s": 17.472506523132324,
+    "steal_ticks": 49,
+    "steal_percent_of_cpu_time": 0.6949368883846263
+   },
+   {
+    "round": 8,
+    "wall_s": 17.348612308502197,
+    "steal_ticks": 39,
+    "steal_percent_of_cpu_time": 0.5573817350292982
+   },
+   {
+    "round": 9,
+    "wall_s": 17.53812003135681,
+    "steal_ticks": 55,
+    "steal_percent_of_cpu_time": 0.7794784580498866
+   },
+   {
+    "round": 10,
+    "wall_s": 17.01091432571411,
+    "steal_ticks": 40,
+    "steal_percent_of_cpu_time": 0.5846243788365975
+   }
+  ],
+  "steal_percent_of_cpu_time_max": 0.7794784580498866
+ },
+ "failed": [],
+ "arms": {
+  "g++-16.cars.CP_DECODE": {
+   "repetitions_ns": [
+    255259.4570970789,
+    233205.266796595,
+    230752.94297137792,
+    226750.8130616803,
+    242762.50568700666,
+    216652.31793664693,
+    225767.47977794375,
+    221370.32523557157,
+    309040.1562987204,
+    247126.76818515008
+   ],
+   "median_ns": 231979.10488398647,
+   "spread": 0.42643364835399256,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.CP_ENCODE": {
+   "repetitions_ns": [
+    95771.76556018284,
+    105829.55405398404,
+    112853.1638340569,
+    116151.51061934314,
+    102540.04827594892,
+    105097.07480715054,
+    99012.22705019046,
+    95377.63368780683,
+    112501.28404519825,
+    105943.1361552145
+   ],
+   "median_ns": 105463.31443056729,
+   "spread": 0.21780658764856797,
+   "check": "4",
+   "copies": null
+  },
+  "g++-16.cars.CP_FIELD": {
+   "repetitions_ns": [
+    251.99489021483691,
+    306.0228242095914,
+    318.3057596652123,
+    279.8742165429089,
+    320.03955364686624,
+    274.05072848040027,
+    315.48761093425827,
+    248.6943799208789,
+    276.6840182776355,
+    306.0535940836746
+   ],
+   "median_ns": 292.94852037625014,
+   "spread": 0.28687891438755275,
+   "check": "7008",
+   "copies": null
+  },
+  "g++-16.cars.CP_READ": {
+   "repetitions_ns": [
+    229362.693999974,
+    197960.81103883698,
+    210589.0734661721,
+    201640.875487522,
+    210195.46799163395,
+    212397.805999899,
+    200668.04881275317,
+    190451.53267975396,
+    192546.24560237967,
+    207193.77900059044
+   ],
+   "median_ns": 204417.3272440562,
+   "spread": 0.20431004556760124,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.FB_DECODE": {
+   "repetitions_ns": [
+    257193.92207691557,
+    247694.3322118836,
+    234471.81438177265,
+    238351.0909855609,
+    244874.3347210365,
+    267777.7904456502,
+    232832.5652536297,
+    275601.8720688606,
+    282466.0144435261,
+    284187.28571375535
+   ],
+   "median_ns": 252444.12714439956,
+   "spread": 0.22056502450240933,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.FB_ENCODE": {
+   "repetitions_ns": [
+    293553.1536141537,
+    297927.3132277066,
+    265589.3544432747,
+    283714.57900087966,
+    278952.80669468327,
+    312015.1346162234,
+    289411.23558177677,
+    304939.3968715881,
+    272462.8661639586,
+    330875.594069389
+   ],
+   "median_ns": 291482.1945979652,
+   "spread": 0.24581647770847814,
+   "check": "134312",
+   "copies": null
+  },
+  "g++-16.cars.FB_FIELD": {
+   "repetitions_ns": [
+    3.9153869247064432,
+    3.3060758222557007,
+    2.888904845912677,
+    3.24024586824135,
+    3.0745993391090747,
+    3.241247647071426,
+    2.9760771559080923,
+    3.2345461305410694,
+    2.949977095346828,
+    3.24908885518945
+   ],
+   "median_ns": 3.23739599939121,
+   "spread": 0.35531875694904547,
+   "check": "7008",
+   "copies": null
+  },
+  "g++-16.cars.FB_FIELD_V": {
+   "repetitions_ns": [
+    80276.0200804552,
+    74854.31598280105,
+    80167.647119208,
+    85381.62554113867,
+    79449.91538029118,
+    78544.45681674994,
+    83643.5322947347,
+    77026.04745075446,
+    78022.41735326432,
+    72137.76053142105
+   ],
+   "median_ns": 78997.18609852056,
+   "spread": 0.18359129687632847,
+   "check": "7008",
+   "copies": null
+  },
+  "g++-16.cars.FB_READ": {
+   "repetitions_ns": [
+    31905.24217120576,
+    32765.640359294066,
+    30408.29266494559,
+    33039.953372843134,
+    26799.03622240358,
+    30391.897181740747,
+    29890.930779017493,
+    27285.157416679507,
+    31116.221775667243,
+    26891.159246448216
+   ],
+   "median_ns": 30400.094923343167,
+   "spread": 0.23287841766571593,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.FB_READ_V": {
+   "repetitions_ns": [
+    108100.19372572651,
+    106739.81923217858,
+    110486.61339258135,
+    121708.05833813478,
+    103611.84319156595,
+    106646.07231553199,
+    110347.55832013015,
+    107690.62099611762,
+    105766.89465405818,
+    126349.16586930021
+   ],
+   "median_ns": 107895.40736092206,
+   "spread": 0.21944714018546763,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.MB_DECODE": {
+   "repetitions_ns": [
+    102938.11037182207,
+    122091.34449392422,
+    109817.10327012702,
+    116403.37002205054,
+    115363.4148005666,
+    105821.02776778916,
+    110833.41655455544,
+    117492.39265009589,
+    104838.49519576537,
+    115680.6534035121
+   ],
+   "median_ns": 113098.41567756102,
+   "spread": 0.18606553056898822,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.MB_DECODE_AA": {
+   "repetitions_ns": [
+    117185.19086839397,
+    103681.1367697879,
+    121968.8799551222,
+    103227.65032689043,
+    108374.57969468366,
+    107720.52849373552,
+    107334.5003698662,
+    117834.90163941907,
+    106633.66749735242,
+    100647.08177230808
+   ],
+   "median_ns": 107527.51443180087,
+   "spread": 0.21184715748689076,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.MB_DECODE_OLD": {
+   "repetitions_ns": [
+    109914.99408051238,
+    98766.12464474667,
+    104835.318826293,
+    106884.60999267934,
+    113958.44976293248,
+    101065.28795799527,
+    101514.90915565097,
+    111126.29139992553,
+    102582.12723215365,
+    122119.96848358995
+   ],
+   "median_ns": 105859.96440948617,
+   "spread": 0.23645601083210543,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.MB_ENCODE": {
+   "repetitions_ns": [
+    31476.45249833097,
+    35021.63062941128,
+    32256.00684453029,
+    31146.248899645685,
+    32168.069583714172,
+    36863.84095605299,
+    29803.38407750467,
+    31796.249086593714,
+    30811.90571028339,
+    33535.45904766568
+   ],
+   "median_ns": 31982.15933515394,
+   "spread": 0.23690118075811029,
+   "check": "198805",
+   "copies": null
+  },
+  "g++-16.cars.MB_ENCODE_AA": {
+   "repetitions_ns": [
+    31138.386228417865,
+    31914.715417249026,
+    32160.850777542964,
+    32389.73380587673,
+    37723.883473267946,
+    31237.547480656678,
+    32078.779188572753,
+    30092.51996480443,
+    34554.07681382214,
+    31208.005988604007
+   ],
+   "median_ns": 31996.747302910888,
+   "spread": 0.2535966917157153,
+   "check": "198805",
+   "copies": null
+  },
+  "g++-16.cars.MB_ENCODE_OLD": {
+   "repetitions_ns": [
+    30709.37222954775,
+    30700.142795131414,
+    30882.68673290222,
+    35221.60478850007,
+    30911.9452405847,
+    31008.12082671065,
+    31346.31513392732,
+    30649.67640595625,
+    40096.154870288534,
+    32904.60826714326
+   ],
+   "median_ns": 30960.033033647676,
+   "spread": 0.30820809783481184,
+   "check": "198805",
+   "copies": null
+  },
+  "g++-16.cars.MB_FIELD": {
+   "repetitions_ns": [
+    20.852904149690577,
+    22.30220539995571,
+    21.377861195776653,
+    19.217296476507688,
+    21.948385009833302,
+    20.217488693867647,
+    18.538698291788094,
+    20.716184314098705,
+    20.873194100022374,
+    21.60803915983365
+   ],
+   "median_ns": 20.863049124856474,
+   "spread": 0.20300816426980206,
+   "check": "7008",
+   "copies": null
+  },
+  "g++-16.cars.MB_FIELD_AA": {
+   "repetitions_ns": [
+    28.0256336089785,
+    24.64571289029166,
+    22.521612546321826,
+    24.817895616334482,
+    20.517343689666514,
+    19.15403388399189,
+    18.564383705047334,
+    21.501811699999962,
+    21.59179446503079,
+    23.76330803246068
+   ],
+   "median_ns": 22.05670350567631,
+   "spread": 0.5096452462011338,
+   "check": "7008",
+   "copies": null
+  },
+  "g++-16.cars.MB_FIELD_OLD": {
+   "repetitions_ns": [
+    23.114382325129032,
+    17.827944177263088,
+    26.97404532797851,
+    20.731004354278582,
+    19.04383157350886,
+    22.584084727888435,
+    26.96097389998613,
+    20.27343462562532,
+    22.029835381101716,
+    20.60423200000514
+   ],
+   "median_ns": 21.38041986769015,
+   "spread": 0.5130205176646179,
+   "check": "7008",
+   "copies": null
+  },
+  "g++-16.cars.MB_READ": {
+   "repetitions_ns": [
+    280485.9363397963,
+    218687.20221431687,
+    235295.556645711,
+    227007.34401206116,
+    241098.07433557918,
+    211419.27465870779,
+    226441.87490536188,
+    259421.5544551777,
+    214616.32110063185,
+    217456.2906801484
+   ],
+   "median_ns": 226724.60945871152,
+   "spread": 0.3266810076450324,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.MB_READ_AA": {
+   "repetitions_ns": [
+    216448.59908201708,
+    266155.5230061136,
+    219983.21456563828,
+    214256.75116938655,
+    225569.45568687143,
+    209860.91788837948,
+    213529.49476881794,
+    277981.9947406185,
+    217721.1167940922,
+    212712.79694618352
+   ],
+   "median_ns": 217084.85793805466,
+   "spread": 0.32460106215903983,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.cars.MB_READ_OLD": {
+   "repetitions_ns": [
+    231918.72000055344,
+    282548.4565018605,
+    225868.00526727102,
+    267990.63943905494,
+    276242.12509823823,
+    211428.78241414955,
+    253363.15084243787,
+    230523.02825290165,
+    219127.721242686,
+    223328.6760244519
+   ],
+   "median_ns": 231220.87412672755,
+   "spread": 0.33637650122962337,
+   "check": "33191310.687370282",
+   "copies": null
+  },
+  "g++-16.floats.MB_DECODE": {
+   "repetitions_ns": [
+    26562.43711408124,
+    24798.71448762321,
+    24614.32841924745,
+    25515.82452611567,
+    26218.669012144,
+    25319.02998744227,
+    25389.863295930405,
+    24969.125250399964,
+    24896.48673554531,
+    26461.901163319388
+   ],
+   "median_ns": 25354.446641686336,
+   "spread": 0.0791453116921299,
+   "check": "3361922545318.1553",
+   "copies": null
+  },
+  "g++-16.floats.MB_DECODE_AA": {
+   "repetitions_ns": [
+    23706.354252740075,
+    25752.28739225131,
+    24997.465621830735,
+    24752.05465197107,
+    26541.386839336777,
+    24887.025387084857,
+    24208.9947939173,
+    26582.808469421372,
+    25434.687650282878,
+    25610.872573381108
+   ],
+   "median_ns": 25216.07663605681,
+   "spread": 0.12133684437575742,
+   "check": "3361922545318.1553",
+   "copies": null
+  },
+  "g++-16.floats.MB_DECODE_OLD": {
+   "repetitions_ns": [
+    23920.857377339227,
+    24378.368169779696,
+    25390.266758457758,
+    27631.879661871633,
+    25511.883633115882,
+    25488.325096071443,
+    25118.911689353066,
+    24574.16020851618,
+    26394.635041574656,
+    24024.23749004659
+   ],
+   "median_ns": 25254.589223905412,
+   "spread": 0.15513751141913268,
+   "check": "3361922545318.1553",
+   "copies": null
+  },
+  "g++-16.floats.MB_ENCODE": {
+   "repetitions_ns": [
+    13431.61001601604,
+    13148.646003789261,
+    13493.481491099756,
+    13643.387378523334,
+    13209.558247005449,
+    13320.379550823489,
+    13977.956345994744,
+    14425.083498535965,
+    13228.812824029977,
+    13045.107263885806
+   ],
+   "median_ns": 13375.994783419765,
+   "spread": 0.1057849664809194,
+   "check": "480064",
+   "copies": null
+  },
+  "g++-16.floats.MB_ENCODE_AA": {
+   "repetitions_ns": [
+    13225.481210963437,
+    13326.895102578228,
+    13528.080714292759,
+    13428.020490812816,
+    15803.550277257456,
+    14558.195354655365,
+    13101.081082385097,
+    13828.646911350794,
+    13091.050357751523,
+    14930.093603980637
+   ],
+   "median_ns": 13478.050602552787,
+   "spread": 0.2072026189938072,
+   "check": "480064",
+   "copies": null
+  },
+  "g++-16.floats.MB_ENCODE_OLD": {
+   "repetitions_ns": [
+    13369.169926576045,
+    13321.953949826064,
+    13462.375048184085,
+    13071.191890032125,
+    13412.808191252267,
+    13623.937227577022,
+    13525.784062961466,
+    13622.7942421368,
+    13319.04935241381,
+    12987.53292302961
+   ],
+   "median_ns": 13390.989058914156,
+   "spread": 0.04900116968473167,
+   "check": "480064",
+   "copies": null
+  },
+  "g++-16.floats.MB_FIELD": {
+   "repetitions_ns": [
+    12.438287724916963,
+    8.254873500875268,
+    8.515012074026062,
+    8.357848534418736,
+    9.694553792904975,
+    8.532723864898875,
+    9.387918149819548,
+    9.988120827764957,
+    8.70737358052049,
+    9.007413993879936
+   ],
+   "median_ns": 8.857393787200213,
+   "spread": 0.5067811425091038,
+   "check": "-189",
+   "copies": null
+  },
+  "g++-16.floats.MB_FIELD_AA": {
+   "repetitions_ns": [
+    8.785231665386496,
+    10.233879751445626,
+    8.784766209964026,
+    10.617298595663343,
+    9.693966631898498,
+    8.743851820042282,
+    8.649749635792174,
+    8.457215428077383,
+    8.680602607359367,
+    9.282910151196557
+   ],
+   "median_ns": 8.784998937675262,
+   "spread": 0.2554130477053511,
+   "check": "-189",
+   "copies": null
+  },
+  "g++-16.floats.MB_FIELD_OLD": {
+   "repetitions_ns": [
+    13.14422273513881,
+    9.973403891251996,
+    8.25709015257236,
+    8.869109449236639,
+    11.505688837115276,
+    13.892753774798269,
+    8.678681860904595,
+    9.422725137169717,
+    11.95829659182047,
+    8.655740945061332
+   ],
+   "median_ns": 9.698064514210856,
+   "spread": 0.6825241723284579,
+   "check": "-189",
+   "copies": null
+  },
+  "g++-16.floats.MB_READ": {
+   "repetitions_ns": [
+    44520.26659245539,
+    44294.40290895192,
+    44227.65988053084,
+    43717.26571383728,
+    45684.279289028535,
+    46589.43422934196,
+    47821.07230228467,
+    43505.41152001824,
+    43988.777566183046,
+    43570.68964442148
+   ],
+   "median_ns": 44261.03139474138,
+   "spread": 0.09919825215951938,
+   "check": "3361922545318.1553",
+   "copies": null
+  },
+  "g++-16.floats.MB_READ_AA": {
+   "repetitions_ns": [
+    47577.57092639327,
+    44239.49681432747,
+    44134.65894406428,
+    44100.39456392241,
+    44317.260717714846,
+    43435.88047612728,
+    44185.88189105904,
+    46172.03328543307,
+    45615.86651999419,
+    42960.752040154985
+   ],
+   "median_ns": 44212.689352693254,
+   "spread": 0.10746596991419044,
+   "check": "3361922545318.1553",
+   "copies": null
+  },
+  "g++-16.floats.MB_READ_OLD": {
+   "repetitions_ns": [
+    44670.381304020666,
+    43007.62926669384,
+    44935.93019535458,
+    43327.9755114874,
+    45172.80819574845,
+    43997.239037984094,
+    44502.09187004949,
+    43277.748539792425,
+    43174.98531878504,
+    43009.31112130564
+   ],
+   "median_ns": 43662.60727473575,
+   "spread": 0.05034406606391051,
+   "check": "3361922545318.1553",
+   "copies": null
+  },
+  "g++-16.records.MB_DECODE": {
+   "repetitions_ns": [
+    271485.4051799944,
+    256858.72367101244,
+    272043.1632101211,
+    264165.2016422895,
+    271715.6644292248,
+    268567.41945582395,
+    271751.6265294072,
+    286833.24809854664,
+    294938.81072166655,
+    282038.2289018319
+   ],
+   "median_ns": 271733.645479316,
+   "spread": 0.1482530416192036,
+   "check": "15874369319.428572",
+   "copies": null
+  },
+  "g++-16.records.MB_DECODE_AA": {
+   "repetitions_ns": [
+    287582.38589155354,
+    288405.3550722957,
+    277590.0057194103,
+    280447.7696785251,
+    282193.00097959116,
+    270407.30510005075,
+    270116.70146495465,
+    270037.31384045264,
+    296136.8546509622,
+    256796.9467350511
+   ],
+   "median_ns": 279018.8876989677,
+   "spread": 0.1531946092665184,
+   "check": "15874369319.428572",
+   "copies": null
+  },
+  "g++-16.records.MB_DECODE_OLD": {
+   "repetitions_ns": [
+    272876.7239431205,
+    268132.3108869889,
+    317742.8331771009,
+    268904.45380069636,
+    277631.0959412123,
+    311909.7036649796,
+    290015.4830592001,
+    286654.5241700995,
+    286009.77777774737,
+    275424.25592418073
+   ],
+   "median_ns": 281820.4368594799,
+   "spread": 0.1850225440044846,
+   "check": "15874369319.428572",
+   "copies": null
+  },
+  "g++-16.records.MB_ENCODE": {
+   "repetitions_ns": [
+    79763.63619520568,
+    77442.17058025095,
+    85669.00857157617,
+    79953.74410406548,
+    82852.50284014111,
+    81360.43808927709,
+    79688.76430794284,
+    83205.01469777181,
+    80069.30420096868,
+    81967.80000022336
+   ],
+   "median_ns": 80714.87114512289,
+   "spread": 0.1062320171256046,
+   "check": "479588",
+   "copies": null
+  },
+  "g++-16.records.MB_ENCODE_AA": {
+   "repetitions_ns": [
+    76732.02845369362,
+    85154.56148675762,
+    79704.52633203502,
+    78253.25599754429,
+    82120.03458748388,
+    83238.57239521279,
+    77858.5697058629,
+    79385.51027317865,
+    79643.52056913194,
+    87239.55931717926
+   ],
+   "median_ns": 79674.02345058348,
+   "spread": 0.13693800457558258,
+   "check": "479588",
+   "copies": null
+  },
+  "g++-16.records.MB_ENCODE_OLD": {
+   "repetitions_ns": [
+    81483.83690103213,
+    83215.88418757742,
+    80532.13649100348,
+    77977.80360000118,
+    105140.43415497955,
+    90407.6154770416,
+    77363.20205307576,
+    79049.73520684906,
+    85717.39760051723,
+    97467.08660834262
+   ],
+   "median_ns": 82349.86054430477,
+   "spread": 0.3590496691546836,
+   "check": "479588",
+   "copies": null
+  },
+  "g++-16.records.MB_FIELD": {
+   "repetitions_ns": [
+    32.51836011444473,
+    32.51413587409639,
+    32.95370496291279,
+    36.936492242412825,
+    54.61175323499341,
+    41.004674405822286,
+    44.2412308909686,
+    39.085141166329045,
+    36.162219916585336,
+    38.9914558474414
+   ],
+   "median_ns": 37.96397404492711,
+   "spread": 0.6796310825071601,
+   "check": "640",
+   "copies": null
+  },
+  "g++-16.records.MB_FIELD_AA": {
+   "repetitions_ns": [
+    35.248399276909424,
+    41.01675232097941,
+    42.88920118752291,
+    37.87800272750637,
+    34.677972194169485,
+    34.250561295070284,
+    47.79168178195809,
+    34.75095604556669,
+    36.69869322902107,
+    33.452773058120556
+   ],
+   "median_ns": 35.97354625296525,
+   "spread": 0.4286313932457928,
+   "check": "640",
+   "copies": null
+  },
+  "g++-16.records.MB_FIELD_OLD": {
+   "repetitions_ns": [
+    41.294270228072705,
+    32.61270738010878,
+    36.79037347841181,
+    30.64935141128951,
+    47.410046424603465,
+    33.249749896294695,
+    31.365105651963283,
+    33.32820455707751,
+    30.161825926966593,
+    41.54619544134114
+   ],
+   "median_ns": 33.2889772266861,
+   "spread": 0.571855979124124,
+   "check": "640",
+   "copies": null
+  },
+  "g++-16.records.MB_READ": {
+   "repetitions_ns": [
+    250315.03468685228,
+    238207.79553147597,
+    279903.4287262447,
+    244122.46996483966,
+    256472.5602098365,
+    245456.95030013678,
+    251390.69594609502,
+    270745.99910287716,
+    280108.40358734893,
+    286730.99878573144
+   ],
+   "median_ns": 253931.62807796575,
+   "spread": 0.20370115573251169,
+   "check": "15874369319.428572",
+   "copies": null
+  },
+  "g++-16.records.MB_READ_AA": {
+   "repetitions_ns": [
+    255699.28133125926,
+    242023.73878514158,
+    254431.34122267147,
+    251654.14214055857,
+    244818.02402208222,
+    250992.32086928247,
+    264498.30882397154,
+    254604.29465309723,
+    266371.07522114966,
+    262454.9019405637
+   ],
+   "median_ns": 254517.81793788436,
+   "spread": 0.10059896007813762,
+   "check": "15874369319.428572",
+   "copies": null
+  },
+  "g++-16.records.MB_READ_OLD": {
+   "repetitions_ns": [
+    245009.26976341958,
+    241630.74041804977,
+    244668.9889455872,
+    244092.15896541654,
+    265522.2351327881,
+    258386.80280513986,
+    253452.17383257358,
+    266635.95262278087,
+    259362.738847559,
+    255305.83187937102
+   ],
+   "median_ns": 254379.0028559723,
+   "spread": 0.10348522775483415,
+   "check": "15874369319.428572",
+   "copies": null
+  }
+ },
+ "image": "localhost/mbedded-cbor-tw-compare (openSUSE Tumbleweed), podman, --network none, --cap-add=SYS_NICE, --user 1000:1000",
+ "bench_code": "bench/compare.cpp of f5cb2b0 for both commits; only include/ differs (-I of the worktree of each commit). Schemas and data of f5cb2b0.",
+ "cells": {
+  "MB_ENCODE": "cbor::packed<T>::encode of the struct",
+  "MB_DECODE": "packed decode to the struct (reflection), then sum",
+  "MB_FIELD": "path() then one at_path field",
+  "MB_READ": "path() then read every field lazily and sum",
+  "FB_*/CP_*": "the same work in FlatBuffers / Cap n Proto; _V verifies first"
+ },
+ "commits": {
+  "new": "f5cb2b0c01f8ac27f501826e8107c4c6afa8107d",
+  "old": "491582c3e6cc204cde8402741a11304b6b78db01",
+  "aa": "f5cb2b0 built a second time"
+ },
+ "build_errors": {
+  "capnp-clang++-23": "",
+  "capnp-g++-16": "",
+  "clang++-23.cars.CP_DECODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.CP_ENCODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.CP_FIELD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.CP_READ": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.FB_DECODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.FB_ENCODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.FB_FIELD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.FB_FIELD_V": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.FB_READ": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.FB_READ_V": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_DECODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_DECODE_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_DECODE_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_ENCODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_ENCODE_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_ENCODE_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_FIELD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_FIELD_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_FIELD_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_READ": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_READ_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.cars.MB_READ_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_DECODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_DECODE_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_DECODE_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_ENCODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_ENCODE_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_ENCODE_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_FIELD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_FIELD_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_FIELD_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_READ": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_READ_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.floats.MB_READ_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_DECODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_DECODE_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_DECODE_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_ENCODE": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_ENCODE_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_ENCODE_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_FIELD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_FIELD_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_FIELD_OLD": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_READ": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_READ_AA": "error: no matching function for call to 'construct_at'",
+  "clang++-23.records.MB_READ_OLD": "error: no matching function for call to 'construct_at'"
+ },
+ "compile_commands": [
+  "/b/err /b/bin/g++-16.cars.MB_ENCODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_ENCODE_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_ENCODE_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_DECODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_DECODE_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_DECODE_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_FIELD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_FIELD_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_FIELD_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_READ g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_READ_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.MB_READ_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.FB_ENCODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.CP_ENCODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_CP_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.FB_DECODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.CP_DECODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_CP_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.FB_FIELD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.FB_FIELD_V g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_FIELD_V -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.CP_FIELD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_CP_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.FB_READ g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.FB_READ_V g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_READ_V -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.cars.CP_READ g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_CP_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_ENCODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_ENCODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_ENCODE_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_ENCODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_ENCODE_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_ENCODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_DECODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_DECODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_DECODE_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_DECODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_DECODE_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_DECODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_FIELD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_FIELD -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_FIELD_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_FIELD -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_FIELD_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_FIELD -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_READ g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_READ -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_READ_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_READ -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.records.MB_READ_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_READ -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_ENCODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_ENCODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_ENCODE_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_ENCODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_ENCODE_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_ENCODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_DECODE g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_DECODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_DECODE_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_DECODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_DECODE_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_DECODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_FIELD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_FIELD -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_FIELD_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_FIELD -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_FIELD_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_FIELD -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_READ g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_READ -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_READ_AA g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_READ -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/g++-16.floats.MB_READ_OLD g++-16 -std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_READ -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.g++-16.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_ENCODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_ENCODE_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_ENCODE_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_DECODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_DECODE_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_DECODE_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_FIELD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_FIELD_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_FIELD_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_READ clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_READ_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.MB_READ_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_MB_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.FB_ENCODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.CP_ENCODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_CP_ENCODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.FB_DECODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.CP_DECODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_CP_DECODE -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.FB_FIELD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.FB_FIELD_V clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_FIELD_V -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.CP_FIELD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_CP_FIELD -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.FB_READ clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.FB_READ_V clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_FB_READ_V -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.cars.CP_READ clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_CARS -DOP_CP_READ -DOP_FIRST=cars '-DCARS_JSON=\"/src/new/bench/cars.json\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/carsales.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_ENCODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_ENCODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_ENCODE_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_ENCODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_ENCODE_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_ENCODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_DECODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_DECODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_DECODE_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_DECODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_DECODE_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_DECODE -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_FIELD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_FIELD -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_FIELD_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_FIELD -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_FIELD_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_FIELD -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_READ clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_READ -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_READ_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_READ -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.records.MB_READ_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_RECORDS -DOP_MB_READ -DOP_FIRST=records '-DDOC_PATH=\"/src/new/bench/docs/records.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/records.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_ENCODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_ENCODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_ENCODE_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_ENCODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_ENCODE_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_ENCODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_DECODE clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_DECODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_DECODE_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_DECODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_DECODE_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_DECODE -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_FIELD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_FIELD -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_FIELD_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_FIELD -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_FIELD_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_FIELD -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_READ clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_READ -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_READ_AA clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_READ -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/new/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread",
+  "/b/err /b/bin/clang++-23.floats.MB_READ_OLD clang++-23 -std=gnu++26  -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDS_FLOATS -DOP_MB_READ -DOP_FIRST=values '-DDOC_PATH=\"/src/new/bench/docs/floats.cbor\"' -I/src/old/include -I/b/gen /src/new/bench/compare.cpp /b/gen/floats.clang++-23.capnp.o -pthread -lcapnp -lkj -pthread -lflatbuffers -lbenchmark -lpthread"
+ ],
+ "gate": "Mon Oct 12 06:02:15 UTC 2026\nprocs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------\n r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu\n 0  0      0 8827200 187500 6456728    0    0   202  1256  966    1 45  5 47  2  1  0\n 0  0      0 8854924 187500 6456496    0    0     0     0  409  528  1  0 99  0  0  0\n 0  0      0 8879116 187500 6456496    0    0     0     0  237  254  0  0 100  0  0  0\n 0  0      0 8903308 187500 6456496    0    0     0     0  348  479  1  0 99  0  0  0\n 0  0      0 8928004 187500 6456496    0    0     0     0  232  265  0  0 99  0  0  0\n%CPU USER     COMMAND\n 3.4 root     claude\n 0.0 root     environment-man\n 0.0 root     process_api\n 0.0 root     bash\n 0.0 root     bash\n 0.0 root     rcu_preempt\n 0.0 root     kworker/2:2-mm_percpu_wq\nidle of the last second 99\n",
+ "method": "10 rounds; each round runs every binary once in a shuffled order; median of 10 real_time values per binary; spread = max/min - 1. B/A = new/old; A/A = _AA/new.",
+ "lock": "the run held the build lock of the session from build to end"
+}
