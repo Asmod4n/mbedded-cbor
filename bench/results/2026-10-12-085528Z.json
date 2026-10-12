@@ -1,0 +1,652 @@
+{
+ "context": {
+  "stamp": "20261012T085528Z",
+  "measured": "decode+walk (sum of integer arguments, total string bytes) of one whole document in ns per operation; operator new calls, malloc calls and peak live heap bytes (malloc_usable_size; malloc/free/realloc/aligned_alloc wrapped) of one decode+walk",
+  "method": "each arm its own binary, 10 rounds, order shuffled per round, 0.2 s per measurement, median of 10; noise floor = B vs Btwin (same source, two binaries)",
+  "tree_commit": "fc1a610 (branch decode-zone, clean) against f5cb2b0 (main)",
+  "code": "not in tree; scratch tree.cpp sha256 6037b6bacf0579564fd5ceaefe8548edc9e5b37fb55703268b4da1d00107d6d8, run.sh sha256 b839c502b70f8418f7885058ddd8bc4377285fcbe670628a1f12f05caddff4c2",
+  "flags": "-Wl,--wrap=malloc,--wrap=free,--wrap=realloc,--wrap=aligned_alloc -std=c++23 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDOCTEST_CONFIG_DISABLE",
+  "image": "localhost/mbedded-cbor-sid-gb",
+  "compilers": "g++-16 16.2.0 (Debian 16.2.0-3); clang++-23 23.1.2 (Debian); both libstdc++",
+  "libraries_and_march": "ii  libc6:amd64              2.43-7   amd64        GNU C Library: Shared libraries\nii  libmsgpack-cxx-dev:amd64 8.0.0-1  amd64        binary-based efficient object serializa\nii  libstdc++6:amd64         16.2.0-3 amd64        GNU Standard C++ Library v3\n  -march=                     \t\tsapphirerapids",
+  "kernel": "6.18.44-fc-v114",
+  "scheduler": "autogroup=1",
+  "virt": "docker",
+  "container": "podman --cap-add SYS_NICE --user 1000:1000",
+  "cpu": "model name\t: Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags_sha256": "116882d2d04a45dfab9f74f9555f3b35b58da49c1a4f13ccbeb2aac3cf258c9d",
+  "user": "uid=1000(ubuntu) gid=1000(1000) groups=1000(1000)",
+  "nice": "-10",
+  "threads": 1,
+  "nproc": 4,
+  "notes": "The noise floor of each cell is zone_twin/zone. One arm per binary, binaries alternate in shuffled order, 10 rounds, 0.2 s each.",
+  "glibc_tunables": "glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456",
+  "arms": "main = cbor::lazy::from(keep,in)->decode() at f5cb2b0; zone = the same call at fc1a610; zone_twin = zone built a second time (noise floor); MP = msgpack::unpack with the same walk over the same document converted to MessagePack"
+ },
+ "results": [
+  {
+   "binary": "clang++-23.MP",
+   "doc": "floats",
+   "ns_per_op": [
+    418197.5,
+    527736.5,
+    435573.9,
+    556259.2,
+    509849.0,
+    476303.3,
+    423068.2,
+    556353.9,
+    679708.7,
+    424557.7
+   ],
+   "median_ns": 493076.15,
+   "spread_ns": [
+    418197.5,
+    679708.7
+   ],
+   "operator_new_calls": 2,
+   "malloc_calls": 5,
+   "peak_heap_bytes": 2105944,
+   "sum_ints": 0,
+   "string_bytes": 0
+  },
+  {
+   "binary": "clang++-23.MP",
+   "doc": "records",
+   "ns_per_op": [
+    586661.6,
+    523561.7,
+    666710.1,
+    522261.3,
+    562028.1,
+    493550.2,
+    497598.5,
+    584264.5,
+    564490.2,
+    524606.0
+   ],
+   "median_ns": 543317.05,
+   "spread_ns": [
+    493550.2,
+    666710.1
+   ],
+   "operator_new_calls": 2,
+   "malloc_calls": 117,
+   "peak_heap_bytes": 992728,
+   "sum_ints": 15858067000,
+   "string_bytes": 257478
+  },
+  {
+   "binary": "clang++-23.MP",
+   "doc": "twitter",
+   "ns_per_op": [
+    394303.4,
+    421633.3,
+    425110.3,
+    366445.0,
+    440673.9,
+    360223.5,
+    421461.1,
+    407313.8,
+    378659.9,
+    363702.7
+   ],
+   "median_ns": 400808.6,
+   "spread_ns": [
+    360223.5,
+    440673.9
+   ],
+   "operator_new_calls": 2,
+   "malloc_calls": 92,
+   "peak_heap_bytes": 730384,
+   "sum_ints": 7152497860071944580,
+   "string_bytes": 367917
+  },
+  {
+   "binary": "clang++-23.main",
+   "doc": "floats",
+   "ns_per_op": [
+    1254249.5,
+    1525776.3,
+    1430555.9,
+    1687893.9,
+    1693123.5,
+    1367286.2,
+    1773856.6,
+    1729034.0,
+    1296634.4,
+    1446065.4
+   ],
+   "median_ns": 1485920.85,
+   "spread_ns": [
+    1254249.5,
+    1773856.6
+   ],
+   "operator_new_calls": 7533,
+   "malloc_calls": 7533,
+   "peak_heap_bytes": 5069024,
+   "sum_ints": 0,
+   "string_bytes": 0
+  },
+  {
+   "binary": "clang++-23.main",
+   "doc": "records",
+   "ns_per_op": [
+    883326.1,
+    1031818.9,
+    954592.0,
+    977190.2,
+    931705.2,
+    990299.4,
+    1024669.9,
+    935365.1,
+    890938.2,
+    1194913.0
+   ],
+   "median_ns": 965891.1,
+   "spread_ns": [
+    883326.1,
+    1194913.0
+   ],
+   "operator_new_calls": 5041,
+   "malloc_calls": 5041,
+   "peak_heap_bytes": 3618488,
+   "sum_ints": 15858067000,
+   "string_bytes": 257478
+  },
+  {
+   "binary": "clang++-23.main",
+   "doc": "twitter",
+   "ns_per_op": [
+    607645.4,
+    659643.3,
+    644378.7,
+    831160.6,
+    682254.8,
+    586798.0,
+    880441.0,
+    842377.6,
+    617642.4,
+    609265.4
+   ],
+   "median_ns": 652011.0,
+   "spread_ns": [
+    586798.0,
+    880441.0
+   ],
+   "operator_new_calls": 3441,
+   "malloc_calls": 3441,
+   "peak_heap_bytes": 2095592,
+   "sum_ints": 7152497860071944580,
+   "string_bytes": 367917
+  },
+  {
+   "binary": "clang++-23.zone",
+   "doc": "floats",
+   "ns_per_op": [
+    824506.4,
+    711412.8,
+    717613.4,
+    835212.8,
+    718592.0,
+    643173.1,
+    647120.7,
+    772017.7,
+    994319.9,
+    640849.2
+   ],
+   "median_ns": 718102.7,
+   "spread_ns": [
+    640849.2,
+    994319.9
+   ],
+   "operator_new_calls": 4,
+   "malloc_calls": 4,
+   "peak_heap_bytes": 4888976,
+   "sum_ints": 0,
+   "string_bytes": 0
+  },
+  {
+   "binary": "clang++-23.zone",
+   "doc": "records",
+   "ns_per_op": [
+    596141.8,
+    602727.4,
+    511925.1,
+    573307.8,
+    718077.8,
+    531707.5,
+    613936.4,
+    702618.2,
+    600590.7,
+    487081.5
+   ],
+   "median_ns": 598366.25,
+   "spread_ns": [
+    487081.5,
+    718077.8
+   ],
+   "operator_new_calls": 5,
+   "malloc_calls": 5,
+   "peak_heap_bytes": 4981208,
+   "sum_ints": 15858067000,
+   "string_bytes": 257478
+  },
+  {
+   "binary": "clang++-23.zone",
+   "doc": "twitter",
+   "ns_per_op": [
+    347104.9,
+    435842.5,
+    514213.2,
+    413361.1,
+    360541.4,
+    378046.6,
+    413425.5,
+    357544.3,
+    335857.2,
+    367059.3
+   ],
+   "median_ns": 372552.94999999995,
+   "spread_ns": [
+    335857.2,
+    514213.2
+   ],
+   "operator_new_calls": 4,
+   "malloc_calls": 4,
+   "peak_heap_bytes": 2621840,
+   "sum_ints": 7152497860071944580,
+   "string_bytes": 367917
+  },
+  {
+   "binary": "clang++-23.zone_twin",
+   "doc": "floats",
+   "ns_per_op": [
+    863293.3,
+    927492.0,
+    677986.6,
+    633746.4,
+    779794.4,
+    659678.3,
+    662677.1,
+    670574.6,
+    660097.7,
+    646322.4
+   ],
+   "median_ns": 666625.85,
+   "spread_ns": [
+    633746.4,
+    927492.0
+   ],
+   "operator_new_calls": 4,
+   "malloc_calls": 4,
+   "peak_heap_bytes": 4888976,
+   "sum_ints": 0,
+   "string_bytes": 0
+  },
+  {
+   "binary": "clang++-23.zone_twin",
+   "doc": "records",
+   "ns_per_op": [
+    742582.8,
+    721228.4,
+    512176.0,
+    580393.7,
+    681204.1,
+    619353.6,
+    672132.9,
+    556278.7,
+    504475.1,
+    504947.8
+   ],
+   "median_ns": 599873.6499999999,
+   "spread_ns": [
+    504475.1,
+    742582.8
+   ],
+   "operator_new_calls": 5,
+   "malloc_calls": 5,
+   "peak_heap_bytes": 4981208,
+   "sum_ints": 15858067000,
+   "string_bytes": 257478
+  },
+  {
+   "binary": "clang++-23.zone_twin",
+   "doc": "twitter",
+   "ns_per_op": [
+    436930.3,
+    353633.3,
+    343482.1,
+    630398.7,
+    391444.9,
+    357298.7,
+    337900.7,
+    513774.4,
+    373637.4,
+    362831.7
+   ],
+   "median_ns": 368234.55000000005,
+   "spread_ns": [
+    337900.7,
+    630398.7
+   ],
+   "operator_new_calls": 4,
+   "malloc_calls": 4,
+   "peak_heap_bytes": 2621840,
+   "sum_ints": 7152497860071944580,
+   "string_bytes": 367917
+  },
+  {
+   "binary": "g++-16.MP",
+   "doc": "floats",
+   "ns_per_op": [
+    404329.2,
+    512060.4,
+    395736.5,
+    428779.5,
+    397639.1,
+    365239.9,
+    414532.5,
+    666476.0,
+    375346.4,
+    412533.5
+   ],
+   "median_ns": 408431.35,
+   "spread_ns": [
+    365239.9,
+    666476.0
+   ],
+   "operator_new_calls": 2,
+   "malloc_calls": 5,
+   "peak_heap_bytes": 2105944,
+   "sum_ints": 0,
+   "string_bytes": 0
+  },
+  {
+   "binary": "g++-16.MP",
+   "doc": "records",
+   "ns_per_op": [
+    557964.2,
+    505889.4,
+    431398.9,
+    444600.8,
+    425568.7,
+    477932.3,
+    439703.0,
+    480500.2,
+    508076.5,
+    429289.3
+   ],
+   "median_ns": 461266.55,
+   "spread_ns": [
+    425568.7,
+    557964.2
+   ],
+   "operator_new_calls": 2,
+   "malloc_calls": 117,
+   "peak_heap_bytes": 992728,
+   "sum_ints": 15858067000,
+   "string_bytes": 257478
+  },
+  {
+   "binary": "g++-16.MP",
+   "doc": "twitter",
+   "ns_per_op": [
+    415727.4,
+    332627.0,
+    342213.8,
+    335727.9,
+    336344.2,
+    342683.9,
+    350535.3,
+    319719.6,
+    310895.9,
+    339278.9
+   ],
+   "median_ns": 337811.55000000005,
+   "spread_ns": [
+    310895.9,
+    415727.4
+   ],
+   "operator_new_calls": 2,
+   "malloc_calls": 92,
+   "peak_heap_bytes": 730384,
+   "sum_ints": 7152497860071944580,
+   "string_bytes": 367917
+  },
+  {
+   "binary": "g++-16.main",
+   "doc": "floats",
+   "ns_per_op": [
+    2015225.8,
+    1550607.0,
+    1505472.5,
+    1718388.7,
+    1479450.8,
+    2124268.6,
+    1570476.1,
+    1640198.9,
+    1637054.3,
+    1536900.3
+   ],
+   "median_ns": 1603765.2000000002,
+   "spread_ns": [
+    1479450.8,
+    2124268.6
+   ],
+   "operator_new_calls": 7533,
+   "malloc_calls": 7533,
+   "peak_heap_bytes": 5069024,
+   "sum_ints": 0,
+   "string_bytes": 0
+  },
+  {
+   "binary": "g++-16.main",
+   "doc": "records",
+   "ns_per_op": [
+    1276791.0,
+    1349360.3,
+    1081893.2,
+    1022413.7,
+    1602022.6,
+    1191812.5,
+    1183595.7,
+    1060622.2,
+    992398.3,
+    1171726.6
+   ],
+   "median_ns": 1177661.15,
+   "spread_ns": [
+    992398.3,
+    1602022.6
+   ],
+   "operator_new_calls": 5041,
+   "malloc_calls": 5041,
+   "peak_heap_bytes": 3618488,
+   "sum_ints": 15858067000,
+   "string_bytes": 257478
+  },
+  {
+   "binary": "g++-16.main",
+   "doc": "twitter",
+   "ns_per_op": [
+    970225.9,
+    773930.1,
+    678485.1,
+    670699.4,
+    642323.1,
+    720886.0,
+    673898.3,
+    684084.9,
+    787855.5,
+    878532.3
+   ],
+   "median_ns": 702485.45,
+   "spread_ns": [
+    642323.1,
+    970225.9
+   ],
+   "operator_new_calls": 3441,
+   "malloc_calls": 3441,
+   "peak_heap_bytes": 2095592,
+   "sum_ints": 7152497860071944580,
+   "string_bytes": 367917
+  },
+  {
+   "binary": "g++-16.zone",
+   "doc": "floats",
+   "ns_per_op": [
+    858700.9,
+    729661.3,
+    747560.8,
+    909183.5,
+    818816.9,
+    759348.0,
+    747066.1,
+    768516.4,
+    1054083.1,
+    769885.1
+   ],
+   "median_ns": 769200.75,
+   "spread_ns": [
+    729661.3,
+    1054083.1
+   ],
+   "operator_new_calls": 4,
+   "malloc_calls": 4,
+   "peak_heap_bytes": 4888976,
+   "sum_ints": 0,
+   "string_bytes": 0
+  },
+  {
+   "binary": "g++-16.zone",
+   "doc": "records",
+   "ns_per_op": [
+    731716.5,
+    611323.8,
+    573901.9,
+    587625.1,
+    672853.0,
+    592479.5,
+    588263.4,
+    596479.5,
+    617768.1,
+    783075.4
+   ],
+   "median_ns": 603901.65,
+   "spread_ns": [
+    573901.9,
+    783075.4
+   ],
+   "operator_new_calls": 5,
+   "malloc_calls": 5,
+   "peak_heap_bytes": 4981208,
+   "sum_ints": 15858067000,
+   "string_bytes": 257478
+  },
+  {
+   "binary": "g++-16.zone",
+   "doc": "twitter",
+   "ns_per_op": [
+    381965.0,
+    385158.4,
+    431690.7,
+    463190.9,
+    464068.6,
+    384693.0,
+    515470.6,
+    589616.9,
+    490453.4,
+    568423.5
+   ],
+   "median_ns": 463629.75,
+   "spread_ns": [
+    381965.0,
+    589616.9
+   ],
+   "operator_new_calls": 4,
+   "malloc_calls": 4,
+   "peak_heap_bytes": 2621840,
+   "sum_ints": 7152497860071944580,
+   "string_bytes": 367917
+  },
+  {
+   "binary": "g++-16.zone_twin",
+   "doc": "floats",
+   "ns_per_op": [
+    852048.3,
+    1101113.8,
+    742461.3,
+    979964.8,
+    771269.2,
+    719058.4,
+    776463.9,
+    992753.8,
+    914008.6,
+    818378.3
+   ],
+   "median_ns": 835213.3,
+   "spread_ns": [
+    719058.4,
+    1101113.8
+   ],
+   "operator_new_calls": 4,
+   "malloc_calls": 4,
+   "peak_heap_bytes": 4888976,
+   "sum_ints": 0,
+   "string_bytes": 0
+  },
+  {
+   "binary": "g++-16.zone_twin",
+   "doc": "records",
+   "ns_per_op": [
+    551181.3,
+    580407.4,
+    604439.1,
+    595691.3,
+    539135.8,
+    595150.0,
+    607959.2,
+    840469.8,
+    573981.7,
+    689757.4
+   ],
+   "median_ns": 595420.65,
+   "spread_ns": [
+    539135.8,
+    840469.8
+   ],
+   "operator_new_calls": 5,
+   "malloc_calls": 5,
+   "peak_heap_bytes": 4981208,
+   "sum_ints": 15858067000,
+   "string_bytes": 257478
+  },
+  {
+   "binary": "g++-16.zone_twin",
+   "doc": "twitter",
+   "ns_per_op": [
+    402889.5,
+    407790.7,
+    375596.4,
+    489422.4,
+    358939.6,
+    435990.7,
+    370037.9,
+    429906.0,
+    564890.2,
+    561688.8
+   ],
+   "median_ns": 418848.35,
+   "spread_ns": [
+    358939.6,
+    564890.2
+   ],
+   "operator_new_calls": 4,
+   "malloc_calls": 4,
+   "peak_heap_bytes": 2621840,
+   "sum_ints": 7152497860071944580,
+   "string_bytes": 367917
+  }
+ ]
+}
