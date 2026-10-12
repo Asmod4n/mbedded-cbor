@@ -38,6 +38,27 @@ std::size_t allocated_bytes = 0;
     std::free(p);
 }
 
+// A memory resource of the C++ library may take its blocks through the aligned form, so that form counts too.
+[[gnu::noinline]] void *operator new(std::size_t const size, std::align_val_t const alignment)
+{
+    ++allocations;
+    allocated_bytes += size;
+    auto const step = static_cast<std::size_t>(alignment);
+    if (void *const p = std::aligned_alloc(step, (size + step - 1) / step * step))
+        return p;
+    throw std::bad_alloc();
+}
+
+[[gnu::noinline]] void operator delete(void *const p, std::align_val_t) noexcept
+{
+    std::free(p);
+}
+
+[[gnu::noinline]] void operator delete(void *const p, std::size_t, std::align_val_t) noexcept
+{
+    std::free(p);
+}
+
 [[gnu::noinline]] void operator delete(void *const p, std::size_t) noexcept
 {
     std::free(p);
@@ -76,9 +97,10 @@ TEST_CASE("path: a second read of a top-level item with shared values allocates 
     CHECK_EQ(found->get<std::uint64_t>(), 1u);
 }
 
-// The count in the head of an array is not trusted. The decode keeps room only for the elements it has read, so a
-// head that claims many elements makes decode take no room for them. Here the array claims 4096 elements and its
-// first element is not well-formed, so decode fails before it builds anything but the array.
+// The count in the head of an array is not trusted. The decode takes memory in proportion to the bytes of the input:
+// at most one item and one pointer for each byte, in at most two blocks. Here the array claims 4096 elements and its
+// first element is not well-formed, so decode fails after it reserved room for the claimed elements, which the
+// bytes left allow.
 TEST_CASE("decode: the room kept for the elements of an array is bounded by the bytes left")
 {
     std::string bytes = "\x99\x10\x00\xff"s;
@@ -89,7 +111,7 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
     std::size_t const after = allocated_bytes;
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::syntax_error);
-    CHECK_LE(after - before, 2 * bytes.size());
+    CHECK_LE(after - before, 4 * (sizeof(cbor::item) + sizeof(cbor::item const *)) * bytes.size());
 }
 
 // An array that claims 2^63 elements with one byte after its head is refused with too_little_data, and the
@@ -155,7 +177,7 @@ TEST_CASE("decode: nested arrays that each claim a large count do not multiply t
     std::size_t const after = allocated_bytes;
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::too_little_data);
-    CHECK_LE(after - before, 2 * (sizeof(cbor::item) + sizeof(cbor::item const *)) * bytes.size());
+    CHECK_LE(after - before, 4 * (sizeof(cbor::item) + sizeof(cbor::item const *)) * bytes.size());
 }
 
 // A wide array of small arrays fills many blocks of the memory resource. Under the address sanitizer the walk
