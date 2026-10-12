@@ -31,8 +31,6 @@ __extension__ typedef __int128 int128;
 __extension__ typedef unsigned __int128 uint128;
 #endif
 
-enum class pass;
-
 struct lazy;
 
 std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
@@ -671,8 +669,6 @@ class heads
 
     friend class validity;
 
-    friend class decoding;
-
     friend class encoding;
 
     friend class well_formedness;
@@ -685,9 +681,6 @@ class heads
 
     template <class>
     friend class encoder;
-
-    template <class, class, pass>
-    friend class walker;
 
     friend struct lazy;
 
@@ -702,13 +695,6 @@ class heads
     friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
 
     friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
-
-    template <class Binding>
-    friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
-
-    template <class Binding>
-    friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l,
-                                                                     limit_values loaded);
 
 #ifdef __cpp_impl_reflection
     friend class reflection;

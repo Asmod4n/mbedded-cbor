@@ -101,7 +101,6 @@ class value_sharing
 
     friend struct lazy_entries;
 
-    friend class decoding;
 
     friend class jsonpath;
 

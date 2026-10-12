@@ -21,7 +21,6 @@
 
 #include "rfc8746.hpp"
 #include "rfc9535.hpp"
-#include "decode.hpp"
 #include "item_size.hpp"
 #include "error.hpp"
 #include "validity.hpp"
@@ -363,6 +362,7 @@ inline std::expected<bool, error> lazy::empty() const
 
 inline std::expected<cbor::type, error> lazy::type() const
 {
+    validity::throw_logic_error_if_null(top_level, "cbor::lazy::type: the lazy holds no top-level item");
     return limits_apply(limits.load(),
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<cbor::type, error> {
@@ -874,29 +874,6 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
             if (!built) [[unlikely]]
                 return std::unexpected(built.error());
             return std::shared_ptr<item const>(std::move(decoded), *built);
-        });
-}
-
-template <class Binding>
-std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l)
-{
-    return lazy_decode(binding, l, limits.load());
-}
-
-template <class Binding>
-std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l,
-                                                          limit_values const loaded)
-{
-    validity::throw_logic_error_if_null(l.top_level, "cbor::lazy_decode: the lazy holds no top-level item");
-    return validity::limits_apply(
-        loaded, [&]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks) {
-            decoding::prefix before{*l.top_level, {}, {}};
-            decoding::value_decoder<Binding, Checked> v{
-                {std::string_view(std::span(l.top_level->encoded).subspan(l.offset)), checks},
-                binding,
-                {},
-                &before};
-            return v.value_decode(0, std::nullopt, depth_max);
         });
 }
 

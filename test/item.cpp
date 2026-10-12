@@ -11,6 +11,7 @@
 #include <functional>
 #include <limits>
 #include <span>
+#include <stdexcept>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -630,6 +631,13 @@ TEST_CASE("type: lazy reads through tags 28 and 29, the item keeps them")
     auto const elements = children_of(*tree);
     CHECK_EQ(*elements[0]->type(), cbor::type::tag);
     CHECK_EQ(*elements[1]->type(), cbor::type::tag);
+}
+
+// A lazy that holds no top-level item is a wrong use, as for every other read of lazy.
+TEST_CASE("type: an empty lazy throws")
+{
+    CHECK_THROWS_AS((void)cbor::lazy{}.type(), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::lazy{}.decode(), std::logic_error);
 }
 
 }

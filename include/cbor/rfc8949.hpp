@@ -6,8 +6,6 @@
 namespace cbor
 {
 
-enum class pass;
-
 template <std::size_t N>
 struct fixed_string;
 
@@ -87,8 +85,6 @@ class rfc8949
 
     friend class heads;
 
-    friend class decoding;
-
     friend class well_formedness;
 
     friend class value_sharing;
@@ -98,9 +94,6 @@ class rfc8949
     friend class jsonpath;
 
     friend class encoding;
-
-    template <class, class, pass>
-    friend class walker;
 
     friend struct lazy;
 
