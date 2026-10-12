@@ -233,11 +233,11 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     auto const typed = [&owner] {
         if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                       std::is_same_v<T, cbor::typed_array>)
-            return cbor::at_path<Path, T>(owner, *owner);
+            return cbor::at_path<Path, T>(owner);
         else
             return cbor::at_path<Path, T>(std::string_view(*owner));
     }();
-    auto const root = cbor::lazy::from(std::string(document));
+    auto const root = cbor::lazy::copy(std::string(document));
     require(root.has_value());
     std::expected<cbor::lazy, cbor::error> node = *root;
     for (step const &s : steps)
@@ -286,7 +286,7 @@ inline void path_target(std::string_view const input)
     typed_reads_check<"$[1][0]">(whole, {std::int64_t{1}, std::int64_t{0}});
     typed_reads_check<"$['a'][-1]['b']">(whole, {"a", std::int64_t{-1}, "b"});
 
-    if (auto const any = cbor::lazy::from(std::string(1, '\0'))) {
+    if (auto const any = cbor::lazy::copy(std::string(1, '\0'))) {
         (void)test::at_path(input, *any);
         (void)test::query(input, *any);
     }
@@ -303,7 +303,7 @@ inline void path_target(std::string_view const input)
     text_keys(*eager, keys, 0);
     source pin{path_bytes};
     query const q = query_from(pin, keys);
-    auto const root = cbor::lazy::from(std::string{document});
+    auto const root = cbor::lazy::copy(std::string{document});
     require(root.has_value());
     auto found = test::at_path(q.text, *root);
     if (!found && found.error() == cbor::error::invalid_path)

@@ -20,6 +20,7 @@
 #include <system_error>
 #include <thread>
 #include <tuple>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -32,7 +33,7 @@ namespace
 
 cbor::lazy lazy_of(std::string const &document)
 {
-    auto const l = cbor::lazy::from(document);
+    auto const l = cbor::lazy::copy(document);
     REQUIRE(l.has_value());
     return *l;
 }
@@ -527,7 +528,7 @@ TEST_CASE("lazy: find from an iterator outlives the lazy that gave it")
     std::optional<cbor::lazy_entries::iterator> kept;
     {
         std::string message = encoded(M("a"s, 1, "b"s, 2, "c"s, 3));
-        auto const l = cbor::lazy::from(std::move(message));
+        auto const l = cbor::lazy::copy(std::move(message));
         REQUIRE(l.has_value());
         auto const a = l->find("a");
         REQUIRE(a.has_value());
@@ -863,15 +864,16 @@ struct buffer_owner {
 
 } // namespace
 
-// lazy::from with an owner reads bytes that someone else holds, as the page of a read transaction of LMDB. Each
-// lazy that a step gives holds the owner too, so the bytes live until the last lazy of the top-level item ends.
-TEST_CASE("lazy: from an owner holds the owner until the last lazy ends")
+// lazy::view reads bytes that a larger object holds, through a std::shared_ptr that aliases the bytes and shares the
+// object. Each lazy that a step gives holds the object too, so the bytes live until the last lazy of the top-level
+// item ends.
+TEST_CASE("lazy: view of an aliasing owner holds the owner until the last lazy ends")
 {
     bool released = false;
     std::optional<cbor::lazy> name;
     {
         auto const owner = std::make_shared<buffer_owner>(encoded(M("user"s, M("name"s, "ann"s))), &released);
-        auto const doc = cbor::lazy::from(owner, owner->bytes);
+        auto const doc = cbor::lazy::view(std::shared_ptr<std::string const>(owner, &owner->bytes));
         REQUIRE(doc.has_value());
         name.emplace(*doc->at("user").and_then([](cbor::lazy const &u) { return u.at("name"); }));
     }
@@ -885,13 +887,13 @@ TEST_CASE("lazy: from an owner holds the owner until the last lazy ends")
     CHECK(released);
 }
 
-// lazy::from takes the bytes by move and copies nothing. Each step gives a std::expected, and_then gives it to the
+// lazy::copy takes an rvalue std::string by move and copies nothing. Each step gives a std::expected, and_then gives it to the
 // next step, so an error anywhere reaches the end of the chain.
-TEST_CASE("lazy: from, at and get as a chain")
+TEST_CASE("lazy: copy, at and get as a chain")
 {
     std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
     char const *const data = bytes.data();
-    cbor::lazy const doc = *cbor::lazy::from(std::move(bytes));
+    cbor::lazy const doc = *cbor::lazy::copy(std::move(bytes));
     auto const name = doc.at("statuses")
                           .and_then([](cbor::lazy const &s) { return s.at(1); })
                           .and_then([](cbor::lazy const &s) { return s.at("user"); })
@@ -949,7 +951,7 @@ TEST_CASE("lazy: a view holds the top-level item")
     std::optional<cbor::owning_ref<std::string_view>> view;
     {
         auto const owner = std::make_shared<buffer_owner>(encoded(M("name"s, "ann"s)), &released);
-        auto const name = cbor::lazy::from(owner, owner->bytes)
+        auto const name = cbor::lazy::view(std::shared_ptr<std::string const>(owner, &owner->bytes))
                               .and_then([](cbor::lazy const &d) { return d.at("name"); })
                               .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
         REQUIRE(name.has_value());
@@ -960,22 +962,23 @@ TEST_CASE("lazy: a view holds the top-level item")
     view.reset();
     CHECK(released);
     CHECK_FALSE(read_from_temporary<std::expected<cbor::owning_ref<std::string_view>, cbor::error>>);
-    CHECK_THROWS_AS((void)cbor::lazy::from(std::shared_ptr<void const>{}, "\x00"sv), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::lazy::view(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
-// An owner is empty when it holds no object, whatever pointer it stores. A temporary or a moved std::string beside an
-// owner does not compile, because the owner does not hold it. The test exists because each of these let a view
-// outlive its bytes, and a check of the stored pointer refused an owner that holds the bytes.
-TEST_CASE("lazy: from checks that the owner holds an object")
+// An owner is empty when it holds no object, whatever pointer it stores. A std::string alone does not compile with
+// view, because view takes no bytes that it does not hold. The test exists because each of these let a view outlive
+// its bytes, and a check of the stored pointer refused an owner that holds the bytes.
+TEST_CASE("lazy: view checks that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::lazy::from(o, std::string(*o)); }; }(bytes)));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::lazy::from(o, std::move(s)); }; }(bytes)));
-    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::lazy::from(o, *o); }; }(bytes)));
-    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes->data());
-    CHECK_THROWS_AS((void)cbor::lazy::from(holds_nothing, *bytes), std::logic_error);
-    std::shared_ptr<void const> const holds_bytes(bytes, nullptr);
-    auto const name = cbor::lazy::from(holds_bytes, *bytes)
+    auto const viewable = []<class S>(S &&) { return requires(S &&t) { cbor::lazy::view(std::forward<S>(t)); }; };
+    CHECK_FALSE(viewable(std::string(*bytes)));
+    CHECK_FALSE(viewable(*bytes));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::lazy::view(o); }; }(bytes)));
+    std::shared_ptr<std::string const> const holds_nothing(std::shared_ptr<std::string const>{}, bytes.get());
+    CHECK_THROWS_AS((void)cbor::lazy::view(holds_nothing), std::logic_error);
+    std::shared_ptr<std::string const> const holds_bytes(std::shared_ptr<void const>(bytes), bytes.get());
+    auto const name = cbor::lazy::view(holds_bytes)
                           .and_then([](cbor::lazy const &d) { return d.at("a"); })
                           .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
     REQUIRE(name.has_value());
@@ -984,15 +987,13 @@ TEST_CASE("lazy: from checks that the owner holds an object")
 
 // The forms that take the bytes in a std::shared_ptr<std::string const> read through it. A null pointer was read
 // before this test existed, and an empty pointer was kept as the owner of a view.
-TEST_CASE("lazy: from and decode refuse a null or empty std::shared_ptr<std::string const>")
+TEST_CASE("lazy: view refuses a null or empty std::shared_ptr<std::string const>")
 {
     std::shared_ptr<std::string const> const null_bytes;
-    CHECK_THROWS_AS((void)cbor::lazy::from(null_bytes), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::lazy::from(null_bytes), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::lazy::view(null_bytes), std::logic_error);
     std::string const bytes = "\x00"s;
     std::shared_ptr<std::string const> const holds_nothing(std::shared_ptr<std::string const>{}, &bytes);
-    CHECK_THROWS_AS((void)cbor::lazy::from(holds_nothing), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::lazy::from(holds_nothing), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::lazy::view(holds_nothing), std::logic_error);
 }
 
 // cbor::lazy is an aggregate, so cbor::lazy{} holds no top-level item, and so does the lazy inside a cache
@@ -1022,10 +1023,10 @@ TEST_CASE("lazy: get follows a shared reference in the content of a tag")
     CHECK_EQ((*typed)->bytes.size(), 1u);
 }
 
-// The value category of the bytes says what cbor::decode and lazy::from do. A moved std::string becomes the owner and
+// The value category of the bytes says what lazy::copy does. A moved std::string becomes the owner and
 // is not copied; an lvalue, a const rvalue and a literal are copied once. The top-level item stays valid after the caller
 // reuses or destroys its buffer.
-TEST_CASE("lazy: decode and from move an rvalue string and copy everything else")
+TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
 {
     auto text_of = [](cbor::lazy const &l) {
         auto const r = l.get<std::string_view>();
@@ -1036,7 +1037,7 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     std::string const message = encoded(M("k"s, text));
     auto buffer = std::make_unique<std::string>(message);
     char const *const data = buffer->data();
-    auto const moved = cbor::lazy::from(std::move(*buffer));
+    auto const moved = cbor::lazy::copy(std::move(*buffer));
     REQUIRE(moved.has_value());
     CHECK_EQ(static_cast<void const *>(moved->top_level->encoded.data()), static_cast<void const *>(data));
     buffer->assign(message.size(), '\0');
@@ -1044,7 +1045,7 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     CHECK_EQ(text_of(*moved->at("k")), text);
 
     std::string lvalue = message;
-    auto const copied = cbor::lazy::from(lvalue);
+    auto const copied = cbor::lazy::copy(lvalue);
     REQUIRE(copied.has_value());
     CHECK_NE(static_cast<void const *>(copied->top_level->encoded.data()), static_cast<void const *>(lvalue.data()));
     CHECK_EQ(lvalue, message);
@@ -1052,22 +1053,22 @@ TEST_CASE("lazy: decode and from move an rvalue string and copy everything else"
     CHECK_EQ(text_of(*copied->at("k")), text);
 
     std::string const constant = message;
-    auto const from_const = cbor::lazy::from(std::move(constant));
+    auto const from_const = cbor::lazy::copy(std::move(constant));
     REQUIRE(from_const.has_value());
     CHECK_NE(static_cast<void const *>(from_const->top_level->encoded.data()), static_cast<void const *>(constant.data()));
     CHECK_EQ(constant, message);
 
     std::string again = message;
     char const *const again_data = again.data();
-    auto const from_moved = cbor::lazy::from(std::move(again));
+    auto const from_moved = cbor::lazy::copy(std::move(again));
     CHECK_EQ(static_cast<void const *>(from_moved->top_level->encoded.data()), static_cast<void const *>(again_data));
-    auto const from_lvalue = cbor::lazy::from(message);
+    auto const from_lvalue = cbor::lazy::copy(message);
     CHECK_NE(static_cast<void const *>(from_lvalue->top_level->encoded.data()), static_cast<void const *>(message.data()));
 
-    CHECK_EQ(text_of(*cbor::lazy::from("\x63" "abc")), "abc");
+    CHECK_EQ(text_of(*cbor::lazy::copy("\x63" "abc")), "abc");
     char const *const pointer = "\x62" "ab";
-    CHECK_EQ(text_of(*cbor::lazy::from(pointer)), "ab");
-    CHECK_EQ(text_of(*cbor::lazy::from("\x61" "a"sv)), "a");
+    CHECK_EQ(text_of(*cbor::lazy::copy(pointer)), "ab");
+    CHECK_EQ(text_of(*cbor::lazy::copy("\x61" "a"sv)), "a");
 }
 
 // RFC 8949 5.6.1 says when two keys are equal. Each pair is written from the text of 5.6.1. keys_equivalent
@@ -1324,7 +1325,7 @@ TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
         std::vector<std::jthread> workers;
         for (std::size_t t = 0; t < threads; ++t)
             workers.emplace_back([&s, &right, t] {
-                cbor::lazy const l = *cbor::lazy::from(s);
+                cbor::lazy const l = *cbor::lazy::copy(s);
                 auto const text = l.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
                 auto const named = l.at(std::size_t{2})
                                        .and_then([](cbor::lazy const &m) { return m.at("k"); })
@@ -1400,7 +1401,7 @@ static_assert(cbor::is_sendable_v<std::string>);
 TEST_CASE("lazy: transfer hands a lazy to another thread")
 {
     std::string const s("\x82\xd8\x1c\x01\xd8\x1d\x00", 7);
-    cbor::lazy l = *cbor::lazy::from(s);
+    cbor::lazy l = *cbor::lazy::copy(s);
     {
         cbor::lazy const copy = l;
         CHECK_THROWS_AS(std::ignore = cbor::transfer(std::move(l)), std::logic_error);
@@ -1419,7 +1420,7 @@ TEST_CASE("lazy: transfer hands a lazy to another thread")
 TEST_CASE("lazy: a debug build refuses a lazy in a thread that does not own it")
 {
     std::string const s("\x82\xd8\x1c\x01\xd8\x1d\x00", 7);
-    cbor::lazy const l = *cbor::lazy::from(s);
+    cbor::lazy const l = *cbor::lazy::copy(s);
     bool refused = false;
     std::jthread([&] {
         try {
@@ -1439,10 +1440,10 @@ TEST_CASE("lazy: a debug build refuses a lazy in a thread that does not own it")
 TEST_CASE("lazy: a tag 28 that holds a tag 29 resolves in one step")
 {
     std::string const small("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01", 12);
-    auto const l = *cbor::lazy::from(small);
+    auto const l = *cbor::lazy::copy(small);
     for (std::size_t i = 0; i < 3; ++i)
         CHECK_EQ(*l.at(i).and_then([](cbor::lazy const &e) { return e.get<std::int64_t>(); }), 1);
-    CHECK_EQ(cbor::lazy::from(std::string("\xd8\x1c\xd8\x1d\x00", 5))
+    CHECK_EQ(cbor::lazy::copy(std::string("\xd8\x1c\xd8\x1d\x00", 5))
                  ->get<std::int64_t>()
                  .error(),
              error::sharedref_not_complete);
@@ -1457,7 +1458,7 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 resolves in one step")
         for (int b = 3; b >= 0; --b)
             chain += static_cast<char>(((k - 1) >> (8 * b)) & 0xff);
     }
-    auto const all = cbor::lazy::from(chain)->elements();
+    auto const all = cbor::lazy::copy(chain)->elements();
     REQUIRE(all.has_value());
     std::size_t ones = 0;
     for (auto const e : *all)
@@ -1471,10 +1472,10 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 resolves in one step")
 // step now reads the head of its target and gives too_little_data.
 TEST_CASE("lazy: a step to an element past the end of the input fails at once")
 {
-    CHECK_EQ(cbor::lazy::from(std::string("\x82\x01", 2))->at(std::size_t{1}).error(), error::too_little_data);
-    CHECK_EQ(cbor::lazy::from(std::string("\xa1\x61k", 3))->at("k").error(), error::too_little_data);
-    CHECK_EQ(cbor::lazy::from(std::string("\xa1\x01", 2))->at(cbor::key{1}).error(), error::too_little_data);
-    CHECK_EQ(cbor::lazy::from(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1}).error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::copy(std::string("\x82\x01", 2))->at(std::size_t{1}).error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::copy(std::string("\xa1\x61k", 3))->at("k").error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::copy(std::string("\xa1\x01", 2))->at(cbor::key{1}).error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::copy(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1}).error(), error::too_little_data);
 }
 
 // size() returned the count of the head, also when the bytes after the
@@ -1486,11 +1487,11 @@ TEST_CASE("lazy size refuses a count that the bytes cannot hold")
     using namespace std::string_literals;
     for (std::string const &bytes : {"\x82\x01"s, "\x98\xff"s, "\x9b\x7f\xff\xff\xff\xff\xff\xff\xff\x01"s, "\xa1\x01"s,
                                     "\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s}) {
-        auto const doc = cbor::lazy::from(bytes);
+        auto const doc = cbor::lazy::copy(bytes);
         REQUIRE(doc.has_value());
         CHECK_EQ(doc->size().error(), cbor::error::too_little_data);
     }
-    auto const pair = cbor::lazy::from("\x82\x01\x02"s);
+    auto const pair = cbor::lazy::copy("\x82\x01\x02"s);
     REQUIRE(pair.has_value());
     CHECK_EQ(pair->size().value(), 2);
 }
@@ -1528,4 +1529,88 @@ TEST_CASE("lazy: a step passes a tag that it does not read")
     CHECK_EQ(cbor::at_path<"$[1]", int>(doc), 2);
     CHECK_EQ(*lazy_of(doc).at(1)->get<int>(), 2);
     CHECK_EQ(*lazy_of(doc).size(), 2u);
+}
+
+namespace two_forms
+{
+
+// A text of 100 bytes, longer than any small-string buffer, so a moved std::string keeps its heap bytes.
+std::string long_text()
+{
+    return "\x78\x64"s + std::string(100, 'a');
+}
+
+char const *text_data(std::expected<cbor::lazy, error> const &l)
+{
+    auto const text = l->get<std::string_view>();
+    return (**text).data();
+}
+
+} // namespace two_forms
+
+// Owner decision: bytes enter the library in two forms only. An lvalue std::string goes to copy(std::string_view)
+// and is copied; the caller's string stays as it was.
+TEST_CASE("lazy::copy: an lvalue std::string is copied")
+{
+    std::string const bytes = two_forms::long_text();
+    auto const l = cbor::lazy::copy(bytes);
+    REQUIRE(l.has_value());
+    CHECK_NE(two_forms::text_data(l), bytes.data() + 2);
+    CHECK_EQ(bytes, two_forms::long_text());
+}
+
+// An rvalue std::string goes to copy(std::string&&) and is moved: the lazy reads the same heap bytes.
+TEST_CASE("lazy::copy: an rvalue std::string is moved")
+{
+    std::string bytes = two_forms::long_text();
+    char const *const data = bytes.data();
+    auto const l = cbor::lazy::copy(std::move(bytes));
+    REQUIRE(l.has_value());
+    CHECK_EQ(two_forms::text_data(l), data + 2);
+}
+
+// The overloads are chosen at compile time: a std::string_view and a literal of characters are copied, and a
+// std::shared_ptr goes to view.
+TEST_CASE("lazy::copy and lazy::view: overload resolution")
+{
+    std::string_view const view = "\x01"sv;
+    CHECK(cbor::lazy::copy(view).has_value());
+    CHECK(cbor::lazy::copy("\x01").has_value());
+    auto const viewable = []<class S>(S &&) { return requires(S &&t) { cbor::lazy::view(std::forward<S>(t)); }; };
+    CHECK_FALSE(viewable(std::string()));
+    CHECK_FALSE(viewable(std::string_view()));
+    CHECK(viewable(std::make_shared<std::string const>()));
+}
+
+// view copies nothing and keeps the owner alive after the caller drops it.
+TEST_CASE("lazy::view: the lazy reads the bytes of the owner and keeps it")
+{
+    auto owner = std::make_shared<std::string const>(two_forms::long_text());
+    char const *const data = owner->data();
+    auto const l = cbor::lazy::view(owner);
+    REQUIRE(l.has_value());
+    CHECK_EQ(two_forms::text_data(l), data + 2);
+    CHECK_GT(owner.use_count(), 1);
+    owner.reset();
+    auto const text = l->get<std::string_view>();
+    CHECK_EQ((**text).size(), 100u);
+    CHECK_THROWS_AS((void)cbor::lazy::view(nullptr), std::logic_error);
+}
+
+// The typed read of a path has the same two forms for a type that views the bytes.
+TEST_CASE("at_path: the copy form and the view form of a text")
+{
+    auto const owner = std::make_shared<std::string const>("\x81"s + two_forms::long_text());
+    auto const viewed = cbor::at_path<"$[0]", std::string_view>(owner);
+    REQUIRE(viewed.has_value());
+    CHECK_EQ((**viewed).data(), owner->data() + 3);
+    auto const copied = cbor::at_path<"$[0]", std::string_view>(std::string_view(*owner));
+    REQUIRE(copied.has_value());
+    CHECK_NE((**copied).data(), owner->data() + 3);
+    CHECK_EQ(**copied, **viewed);
+    std::string moved = *owner;
+    char const *const data = moved.data();
+    auto const taken = cbor::at_path<"$[0]", std::string_view>(std::move(moved));
+    REQUIRE(taken.has_value());
+    CHECK_EQ((**taken).data(), data + 3);
 }

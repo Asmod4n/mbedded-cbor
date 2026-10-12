@@ -124,7 +124,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
         std::string const wire = bytes_of_hex(c.hex);
-        auto const top_level = cbor::lazy::from(wire);
+        auto const top_level = cbor::lazy::copy(wire);
         REQUIRE(top_level.has_value());
         auto const decoded_item = top_level->decode();
         auto const initial = static_cast<std::uint8_t>(wire.front());
@@ -244,7 +244,7 @@ std::string member_bytes(cbor::lazy const &object, std::string_view const key)
 std::vector<wg_vector> wg_vectors_of(std::string const &path)
 {
     std::string const file = file_read(path);
-    auto const top = cbor::lazy::from(std::string_view(file));
+    auto const top = cbor::lazy::copy(std::string_view(file));
     REQUIRE(top.has_value());
     bool const file_fail = member_bool(*top, "fail", false);
     auto const tests = top->at("tests");
@@ -436,7 +436,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
 
 std::expected<value, error> lazy_value_of(std::string_view const wire)
 {
-    auto const top = cbor::lazy::from(wire);
+    auto const top = cbor::lazy::copy(wire);
     REQUIRE(top.has_value());
     return lazy_value(*top);
 }
@@ -512,7 +512,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
 
     // encode of the decoded tree writes each head with the additional information of the wire, so every vector,
     // also one that is not in preferred form, comes back byte for byte.
-    auto const top_level = cbor::lazy::from(std::string(v.encoded));
+    auto const top_level = cbor::lazy::copy(std::string(v.encoded));
     REQUIRE(top_level.has_value());
     auto const tree = top_level->decode();
     REQUIRE(tree.has_value());
@@ -607,7 +607,7 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
-    auto const top = cbor::lazy::from(std::string_view(file));
+    auto const top = cbor::lazy::copy(std::string_view(file));
     REQUIRE(top.has_value());
     auto const tests = top->at("tests");
     REQUIRE(tests.has_value());

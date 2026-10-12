@@ -2119,31 +2119,13 @@ public:
         }
     };
 
-    static std::expected<accessor<>, error> path(std::shared_ptr<void const> owner, std::string_view const encoded)
+    static std::expected<accessor<>, error> path(std::shared_ptr<std::string const> encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        validity::throw_logic_error_if_empty(owner,
-                                             "cbor::packed::path: the owner of the encoded data item is empty");
-        limit_values const loaded = limits.load();
-        if (auto const r = validity::limits_apply(
-                loaded,
-                [encoded]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-                    return validity::check_input_bytes(encoded.size(), checks);
-                });
-            !r) [[unlikely]]
-            return std::unexpected(r.error());
-        auto const dir = reflection::directory_read<T>(encoded);
-        if (!dir) [[unlikely]]
-            return std::unexpected(dir.error());
-        auto const root = std::span<char const>(encoded).subspan(encoded.size() - fixed_size()).template first<fixed_size()>();
-        if (!reflection::class_tag_valid<T, T>(root)) [[unlikely]]
-            return std::unexpected(error::incorrect_type);
-        return accessor<>(std::move(owner), encoded, root, *dir);
+        validity::throw_logic_error_if_null(encoded, "cbor::packed::path: the encoded data item is null");
+        std::string_view const bytes = *encoded;
+        return path(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
-
-    template <class Encoded>
-        requires std::same_as<std::remove_const_t<Encoded>, std::string>
-    static std::expected<accessor<>, error> path(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
 
     template <fixed_string Path, std::convertible_to<std::size_t>... Index>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && Path.view().starts_with('$') &&
@@ -2174,18 +2156,14 @@ public:
     static std::expected<accessor<>, error> path(std::string_view const encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        auto copy = std::make_shared<std::string const>(encoded);
-        std::string_view const view = *copy;
-        return path(std::move(copy), view);
+        return path(std::make_shared<std::string const>(encoded));
     }
 
     template <std::same_as<std::string> Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static std::expected<accessor<>, error> path(Encoded &&encoded)
     {
-        auto owner = std::make_shared<std::string const>(std::move(encoded));
-        std::string_view const view = *owner;
-        return path(std::move(owner), view);
+        return path(std::make_shared<std::string const>(std::move(encoded)));
     }
 
     static std::expected<owning_ref<T>, error> decode(std::string_view const encoded)
@@ -2213,9 +2191,7 @@ public:
 #if defined(__cpp_exceptions)
         try {
 #endif
-            auto owner = std::make_shared<std::string const>(std::move(encoded));
-            std::string_view const view = *owner;
-            return decode(std::move(owner), view);
+            return decode(std::make_shared<std::string const>(std::move(encoded)));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
             return std::unexpected(error::not_enough_memory);
@@ -2223,39 +2199,19 @@ public:
 #endif
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, std::string_view const encoded)
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        return decode(std::move(owner), encoded, T{});
+        return decode(std::move(encoded), T{});
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner,
-                                                      std::string_view const encoded, T target)
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded, T target)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        validity::throw_logic_error_if_empty(owner,
-                                             "cbor::packed::decode: the owner of the encoded data item is empty");
-#if defined(__cpp_exceptions)
-        try {
-#endif
-            if (auto const r = reflection::root_read<T>(target, encoded, limits.load()); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            return owning_ref<T>(std::move(owner), std::move(target));
-#if defined(__cpp_exceptions)
-        } catch (std::bad_alloc const &) {
-            return std::unexpected(error::not_enough_memory);
-        }
-#endif
+        validity::throw_logic_error_if_null(encoded, "cbor::packed::decode: the encoded data item is null");
+        std::string_view const bytes = *encoded;
+        return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
-
-    template <class Encoded>
-        requires std::same_as<std::remove_const_t<Encoded>, std::string>
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded) = delete;
-
-    template <class Encoded>
-        requires std::same_as<std::remove_const_t<Encoded>, std::string>
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded &&encoded,
-                                                      T target) = delete;
 
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
@@ -2335,6 +2291,48 @@ public:
                 return std::unexpected(validity::writer_error(r.error()));
             return encoded.size();
         }
+    }
+
+private:
+    static std::expected<accessor<>, error> path(std::shared_ptr<void const> owner, std::string_view const encoded)
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    {
+        validity::throw_logic_error_if_empty(owner,
+                                             "cbor::packed::path: the owner of the encoded data item is empty");
+        limit_values const loaded = limits.load();
+        if (auto const r = validity::limits_apply(
+                loaded,
+                [encoded]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
+                    return validity::check_input_bytes(encoded.size(), checks);
+                });
+            !r) [[unlikely]]
+            return std::unexpected(r.error());
+        auto const dir = reflection::directory_read<T>(encoded);
+        if (!dir) [[unlikely]]
+            return std::unexpected(dir.error());
+        auto const root = std::span<char const>(encoded).subspan(encoded.size() - fixed_size()).template first<fixed_size()>();
+        if (!reflection::class_tag_valid<T, T>(root)) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        return accessor<>(std::move(owner), encoded, root, *dir);
+    }
+
+    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner,
+                                                      std::string_view const encoded, T target)
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    {
+        validity::throw_logic_error_if_empty(owner,
+                                             "cbor::packed::decode: the owner of the encoded data item is empty");
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            if (auto const r = reflection::root_read<T>(target, encoded, limits.load()); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return owning_ref<T>(std::move(owner), std::move(target));
+#if defined(__cpp_exceptions)
+        } catch (std::bad_alloc const &) {
+            return std::unexpected(error::not_enough_memory);
+        }
+#endif
     }
 };
 #endif

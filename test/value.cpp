@@ -105,8 +105,8 @@ TEST_CASE("depth: encode past the limit")
     value deep = V(0);
     for (int i = 0; i < 16; ++i)
         deep = A(deep);
-    auto const fits = cbor::lazy::from(preferred(deep))->decode();
-    auto const past = cbor::lazy::from(preferred(A(deep)))->decode();
+    auto const fits = cbor::lazy::copy(preferred(deep))->decode();
+    auto const past = cbor::lazy::copy(preferred(A(deep)))->decode();
     REQUIRE(fits.has_value());
     REQUIRE(past.has_value());
     test::limits_guard const depth{{.nesting_depth = 16}};

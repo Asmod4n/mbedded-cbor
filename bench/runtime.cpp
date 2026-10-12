@@ -472,7 +472,7 @@ static std::uint64_t jc_text(jc_cursor const &c)
 
 static std::string doc;
 static std::string_view in;
-static std::shared_ptr<void const> const keep = std::make_shared<int const>(0);
+static std::shared_ptr<std::string const> const *held = nullptr;
 
 #if defined(ARM_MB_DECODE)
 static std::uint64_t value_sum(bench::value const &x)
@@ -516,7 +516,7 @@ static std::uint64_t item_sum(cbor_item_t const *i)
 #if defined(ARM_MB_PATH)
 static std::uint64_t mb_path()
 {
-    auto const l = cbor::lazy::from(keep, in);
+    auto const l = cbor::lazy::view(*held);
 #if defined(DOC_twitter)
     auto const v = l.and_then([](cbor::lazy const &d) { return d.at("statuses"); })
                        .and_then([](cbor::lazy const &s) { return s.at(50); })
@@ -545,7 +545,7 @@ static std::uint64_t mb_path()
 static std::uint64_t mb_at_path()
 {
 #if defined(DOC_twitter)
-    auto const v = cbor::at_path<"$.statuses[50].user.screen_name", std::string_view>(keep, in);
+    auto const v = cbor::at_path<"$.statuses[50].user.screen_name", std::string_view>(*held);
     if (!v) [[unlikely]] std::abort();
     return bytes_sum(**v);
 #elif defined(DOC_floats)
@@ -553,7 +553,7 @@ static std::uint64_t mb_at_path()
     if (!v) [[unlikely]] std::abort();
     return std::bit_cast<std::uint64_t>(*v);
 #elif defined(DOC_records)
-    auto const v = cbor::at_path<"$[1000].user.name", std::string_view>(keep, in);
+    auto const v = cbor::at_path<"$[1000].user.name", std::string_view>(*held);
     if (!v) [[unlikely]] std::abort();
     return bytes_sum(**v);
 #endif
@@ -643,7 +643,7 @@ static vg_out vo;
 static void setup()
 {
 #if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
-    auto t = bench::value_of(*cbor::lazy::from(std::string_view(doc)));
+    auto t = bench::value_of(*cbor::lazy::copy(std::string_view(doc)));
     if (!t)
         std::abort();
     tree = std::move(*t);
@@ -739,12 +739,12 @@ static std::uint64_t op()
     benchmark::ClobberMemory();
     return buf.size();
 #elif defined(ARM_READ)
-    auto const r = cbor::lazy::from(keep, in)->decode();
+    auto const r = cbor::lazy::view(*held)->decode();
     if (!r)
         std::abort();
     return item_tree_sum(**r);
 #elif defined(ARM_MB_DECODE)
-    auto r = bench::value_of(*cbor::lazy::from(keep, in));
+    auto r = bench::value_of(*cbor::lazy::view(*held));
     if (!r) [[unlikely]]
         std::abort();
     benchmark::DoNotOptimize(&*r);
@@ -763,7 +763,7 @@ static std::uint64_t op()
 #elif defined(ARM_MB_AT_PATH)
     return mb_at_path();
 #elif defined(ARM_MB_PATH_ALL)
-    auto const r = cbor::query<"$..*">(*cbor::lazy::from(keep, in));
+    auto const r = cbor::query<"$..*">(*cbor::lazy::view(*held));
     if (!r) [[unlikely]]
         std::abort();
     return r->size();
@@ -957,7 +957,7 @@ static std::uint64_t op()
 #endif
 }
 
-static std::vector<std::string> copies;
+static std::vector<std::shared_ptr<std::string const>> copies;
 
 static std::size_t l3_bytes()
 {
@@ -973,7 +973,8 @@ static void run(benchmark::State &state)
 {
     std::size_t i = 0;
     for (auto _ : state) {
-        in = copies[i];
+        held = &copies[i];
+        in = **held;
         i = i + 1 == copies.size() ? 0 : i + 1;
         benchmark::DoNotOptimize(op());
         benchmark::ClobberMemory();
@@ -988,10 +989,15 @@ int main(int argc, char **argv)
     if (doc.empty())
         std::abort();
     setup();
-    in = *bytes;
+    copies.resize(2 * l3_bytes() / bytes->size() + 1);
+    for (std::shared_ptr<std::string const> &c : copies)
+        c = std::make_shared<std::string const>(*bytes);
+    benchmark::AddCustomContext("copies", std::to_string(copies.size()));
+    held = &copies.front();
+    in = **held;
 #if defined(ARM_MB_DECODE)
     {
-        auto const r = bench::value_of(*cbor::lazy::from(keep, std::string_view(doc)));
+        auto const r = bench::value_of(*cbor::lazy::copy(doc));
         benchmark::AddCustomContext("check", std::to_string(value_sum(*r)));
     }
 #elif defined(ARM_LC_DECODE)
@@ -1006,8 +1012,6 @@ int main(int argc, char **argv)
 #else
     benchmark::AddCustomContext("check", std::to_string(op()));
 #endif
-    copies.assign(2 * l3_bytes() / bytes->size() + 1, *bytes);
-    benchmark::AddCustomContext("copies", std::to_string(copies.size()));
     benchmark::AddCustomContext("document", DOC_PATH);
     benchmark::RegisterBenchmark(ARM_NAME, run);
     benchmark::Initialize(&argc, argv);

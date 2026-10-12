@@ -4,11 +4,13 @@
 #include <cstddef>
 #include <expected>
 #include <iterator>
+#include <memory>
 #include <span>
 #include <string>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 #include "error.hpp"
 #include "item_size.hpp"
@@ -19,16 +21,16 @@ namespace cbor
 
 class sequence
 {
+    std::shared_ptr<std::string const> owner;
     std::string_view encoded;
 
 public:
-    explicit sequence(std::string_view const e) : encoded(e)
+    explicit sequence(std::shared_ptr<std::string const> e) : owner(std::move(e))
     {
+        validity::throw_logic_error_if_null(owner, "cbor::sequence: the encoded data items are null");
+        encoded = *owner;
     }
 
-    template <class Encoded>
-        requires(!std::is_lvalue_reference_v<Encoded> && !std::ranges::borrowed_range<Encoded>)
-    explicit sequence(Encoded &&) = delete;
 
     struct iterator {
         using value_type = std::expected<std::string_view, error>;

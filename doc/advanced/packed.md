@@ -98,7 +98,7 @@ such as a `std::vector` of structs, does not compile.
 |---|---|
 | `path(std::string)` with an rvalue | the library moves the string |
 | `path(std::string_view)` | the library copies the bytes |
-| `path(owner, encoded)` | the caller |
+| `path(std::shared_ptr<std::string const>)` | the caller, no copy |
 
 An accessor holds the owner. Every value and every accessor that it gives
 holds the same owner, so an accessor of a list outlives the temporary
@@ -199,7 +199,7 @@ cbor::packed<tire>::decode(bytes);                                   // incorrec
 
 | Call | Time | Memory |
 |---|---|---|
-| `path(owner, encoded)` | independent of the size of the message | none |
+| `path(std::shared_ptr<std::string const>)` | independent of the size of the message | none |
 | `path(std::string_view)` | the copy of the message | the copy |
 | `accessor::at_path`, `view` | one step for each part of the path | none |
 | `packed<T>::at_path` | the directory and one step for each part of the path | none |
