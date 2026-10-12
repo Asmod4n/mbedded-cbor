@@ -45,12 +45,17 @@ struct sharedref {
     std::uint64_t argument;
 };
 
+struct encoded_cbor_data_item {
+    item const *content;
+    item const *data_item;
+};
+
 struct item {
     cbor::major_type major_type;
     std::uint8_t additional_information;
     std::uint64_t argument;
     std::variant<std::monostate, std::span<std::byte const>, std::string_view, item const *, data_items, sharedref,
-                 record, simple_value,
+                 record, simple_value, encoded_cbor_data_item,
 #if defined(__STDCPP_FLOAT16_T__)
                  std::float16_t,
 #endif

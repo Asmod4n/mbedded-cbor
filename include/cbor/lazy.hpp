@@ -829,7 +829,30 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(s
                     .error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
-        node.content = static_cast<item const *>(*content);
+        if (h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item)) {
+            node.content = static_cast<item const *>(*content);
+            return &node;
+        }
+        item const *bytes = *content;
+        for (;;) {
+            if (auto const *const r = std::get_if<sharedref>(&bytes->content))
+                bytes = r->shareable;
+            else if (bytes->major_type == major_type::tag)
+                bytes = std::get<item const *>(bytes->content);
+            else
+                break;
+        }
+        std::span<std::byte const> const encoded = std::get<std::span<std::byte const>>(bytes->content);
+        decoded_items &nested = decoded.embedded.emplace_back(std::make_shared<top_level_item>(
+            decoded.top_level->owner,
+            std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()), std::vector<lazy>{}, 0));
+        tree_decoder inner{nested, {nested.top_level->encoded, d.checks}, 0, depth_max, 0, 0};
+        auto const data_item = inner.item_decode(depth + 2, std::nullopt);
+        if (!data_item) [[unlikely]]
+            return data_item;
+        if (auto const one = validity::check_one_data_item(inner.d.encoded); !one) [[unlikely]]
+            return std::unexpected(one.error());
+        node.content = encoded_cbor_data_item{*content, *data_item};
         return &node;
     }
     case major_type::simple_float:

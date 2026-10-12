@@ -184,6 +184,7 @@ string in it is a view into the bytes.
 | byte string, text string | `std::span<std::byte const>`, `std::string_view` |
 | array, map | `cbor::data_items`; `span()` gives the children, a map key and value one after the other |
 | tag | `cbor::item const *`, the item of the content |
+| tag 24 | `cbor::encoded_cbor_data_item`: `content` is the item of the byte string, `data_item` the root of the embedded item, decoded as a top-level item of its own |
 | tag 29 | `cbor::sharedref`: the item that the tag 28 marks, and the head of the index |
 | float | `std::float16_t` where the compiler has it, `float`, `double` |
 | simple value | `cbor::simple_value` |
