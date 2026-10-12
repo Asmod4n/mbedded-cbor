@@ -622,6 +622,62 @@ TEST_CASE("structs decode keeps the resource of a moved pmr target")
     CHECK_EQ(decoded.error(), error::not_enough_memory);
 }
 
+// A resource that counts the allocations it gives, so that a test sees which resource a member took.
+class counting_resource : public std::pmr::memory_resource
+{
+    void *do_allocate(std::size_t const bytes, std::size_t const alignment) override
+    {
+        ++allocations;
+        return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+    }
+
+    void do_deallocate(void *const p, std::size_t const bytes, std::size_t const alignment) override
+    {
+        std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+    }
+
+    bool do_is_equal(std::pmr::memory_resource const &other) const noexcept override
+    {
+        return this == &other;
+    }
+
+public:
+    std::size_t allocations = 0;
+};
+
+struct pmr_person {
+    std::pmr::string name;
+    std::uint64_t age;
+    bool operator==(pmr_person const &) const = default;
+};
+
+// The caller bounds the memory of a decode with the resource of the target. A plain struct has no allocator, so
+// the vector cannot give its resource to the struct, but it can give it to each member that takes an allocator,
+// as uses-allocator construction ([allocator.uses.construction]) does for one object. The test puts a counting
+// resource as the default resource, so that a member that took the default resource shows as a count above zero.
+// Each name is longer than any short string buffer, so each one allocates.
+TEST_CASE("structs: a plain struct in a std::pmr::vector takes the resource of the vector for its members")
+{
+    using people = std::pmr::vector<pmr_person>;
+    std::string const long_name(40, 'n');
+    auto const encoded = cbor::structs<people>::encode(people{{std::pmr::string(long_name), 1}, {std::pmr::string(long_name), 2}});
+    REQUIRE(encoded.has_value());
+    counting_resource fallback;
+    counting_resource target;
+    std::pmr::memory_resource *const was = std::pmr::set_default_resource(&fallback);
+    auto const decoded =
+        cbor::structs<people>::decode(std::make_shared<std::string const>(*encoded), *encoded, people(&target));
+    std::pmr::set_default_resource(was);
+    REQUIRE(decoded.has_value());
+    REQUIRE_EQ((**decoded).size(), 2u);
+    for (pmr_person const &p : **decoded) {
+        CHECK_EQ(p.name, long_name);
+        CHECK_EQ(p.name.get_allocator().resource(), &target);
+    }
+    CHECK_EQ(fallback.allocations, 0u);
+    CHECK_GT(target.allocations, 0u);
+}
+
 // RFC 8949 4.2.1: deterministic encoding orders the keys of a map by the bytewise lexicographic order
 // of their encoded forms. A shorter text key has a shorter head, so "b" (61 62) comes before "aa"
 // (62 61 61); an unsigned integer comes before a negative one, 1 (01) and 24 (18 18) before -1 (20).

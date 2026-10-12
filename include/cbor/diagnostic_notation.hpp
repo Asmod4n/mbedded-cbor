@@ -947,8 +947,8 @@ class extended_diagnostic_notation
     template <bool Checked>
     static std::expected<diagnostic_head, error> diagnostic_head_decode(heads::decoder<Checked> &d)
     {
-        if (d.encoded.empty()) [[unlikely]]
-            return std::unexpected(error::too_little_data);
+        if (auto const r = validity::check_pending_items(heads::initial_byte_size, d.encoded.size()); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto const initial = static_cast<std::uint8_t>(d.encoded.front());
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
         std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
@@ -1013,8 +1013,8 @@ class extended_diagnostic_notation
             for (bool first = true; !break_found(d); first = false) {
                 if (!first)
                     out += ", ";
-                if (d.encoded.empty()) [[unlikely]]
-                    return std::unexpected(error::too_little_data);
+                if (auto const r = validity::check_pending_items(heads::initial_byte_size, d.encoded.size()); !r) [[unlikely]]
+                    return std::unexpected(r.error());
                 auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                 if (error const c =
                         validity::check_chunk(h->major, static_cast<major_type>(initial >> rfc8949::additional_information_bits), initial & ((1 << rfc8949::additional_information_bits) - 1))

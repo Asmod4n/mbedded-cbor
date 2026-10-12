@@ -139,13 +139,52 @@ class reflection
         });
     }
 
+    template <class E, class Alloc>
+    static consteval bool uses_allocator_aggregate()
+    {
+        if constexpr (std::uses_allocator_v<E, Alloc> || !std::is_class_v<E> || !std::is_aggregate_v<E>) {
+            return false;
+        } else {
+            if (!std::meta::bases_of(^^E, std::meta::access_context::unchecked()).empty())
+                return false;
+            bool reached = false;
+            template for (constexpr std::meta::info m :
+                          std::define_static_array(std::meta::nonstatic_data_members_of(^^E, std::meta::access_context::unchecked()))) {
+                using M = typename[:std::meta::type_of(m):];
+                if constexpr (std::is_array_v<M> || std::is_reference_v<M>)
+                    return false;
+                else
+                    reached = reached || std::uses_allocator_v<M, Alloc> || uses_allocator_aggregate<M, Alloc>();
+            }
+            return reached;
+        }
+    }
+
+    template <class E, class Alloc>
+    static constexpr E element_make(Alloc const &alloc, E &&from)
+    {
+        if constexpr (uses_allocator_aggregate<E, Alloc>()) {
+            static constexpr auto members =
+                std::define_static_array(std::meta::nonstatic_data_members_of(^^E, std::meta::access_context::unchecked()));
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return E{element_make<typename[:std::meta::type_of(members[I]):]>(alloc, std::move(from.[:members[I]:]))...};
+            }(std::make_index_sequence<members.size()>());
+        } else {
+            return std::make_obj_using_allocator<E>(alloc, std::move(from));
+        }
+    }
+
     template <class E, class Container>
     static constexpr E element_make(Container const &container)
     {
-        if constexpr (requires { container.get_allocator(); })
-            return std::make_obj_using_allocator<E>(container.get_allocator());
-        else
+        if constexpr (requires { container.get_allocator(); }) {
+            if constexpr (uses_allocator_aggregate<E, decltype(container.get_allocator())>())
+                return element_make<E>(container.get_allocator(), E{});
+            else
+                return std::make_obj_using_allocator<E>(container.get_allocator());
+        } else {
             return E{};
+        }
     }
 
     template <class U>
@@ -917,7 +956,7 @@ class reflection
         if constexpr (is_typed_array_element<E>) {
             static_assert(validity::typed_array_element_size(typed_array_tag<E>()) == sizeof(E),
                           "The elements of the typed array tag of E are sizeof(E) bytes.");
-            if (end < item + typed_array_head) [[unlikely]]
+            if (!validity::pending_items_fit(item + typed_array_head, end)) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             static constexpr std::array head{
                 heads::initial_byte(major_type::tag,
@@ -929,7 +968,7 @@ class reflection
                 return std::unexpected(error::incorrect_type);
             std::size_t const size =
                 heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + head.size()).template first<sizeof(std::uint32_t)>());
-            if (size > end - item - typed_array_head) [[unlikely]]
+            if (!validity::pending_items_fit(size, end - item - typed_array_head)) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             if (!validity::typed_array_check(typed_array_tag<E>(), size)) [[unlikely]]
                 return std::unexpected(error::inadmissible_type_for_tag_content);
@@ -939,7 +978,7 @@ class reflection
                 return std::unexpected(r);
             return reference{item + typed_array_head, size / sizeof(E)};
         } else {
-            if (end < item + item_head) [[unlikely]]
+            if (!validity::pending_items_fit(item + item_head, end)) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             if (encoded[item] !=
                 heads::initial_byte(Major,
@@ -949,7 +988,7 @@ class reflection
             std::size_t const length =
                 heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded).subspan(item + 1).template first<sizeof(std::uint32_t)>());
             auto const size = validity::checked_mul(length, element);
-            if (!size || *size > end - item - item_head) [[unlikely]]
+            if (!size || !validity::pending_items_fit(*size, end - item - item_head)) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             if (error const r = validity::check_argument(Major, length, checks).error_or(error{});
                 r != error{}) [[unlikely]]
@@ -1004,7 +1043,7 @@ class reflection
         });
         static_assert(least_size.has_value(), "The least size of an encoded item must fit in std::size_t.");
         constexpr std::size_t least = *least_size;
-        if (encoded.size() < least) [[unlikely]]
+        if (!validity::pending_items_fit(least, encoded.size())) [[unlikely]]
             return std::unexpected(error::too_little_data);
         if (!std::ranges::equal(std::span(encoded).template first<4>(),
                                 std::span(prefix).template first<4>()) ||
@@ -1026,7 +1065,7 @@ class reflection
                                                     .template first<sizeof(std::uint32_t)>()) !=
                 shared_first_of<T>() + count) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        if (length > encoded.size() - least) [[unlikely]]
+        if (!validity::pending_items_fit(length, encoded.size() - least)) [[unlikely]]
             return std::unexpected(error::too_little_data);
         static constexpr auto undefined = [] {
             std::array<char, fillers> a{};
