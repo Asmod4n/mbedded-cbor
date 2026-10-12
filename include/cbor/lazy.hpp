@@ -736,6 +736,40 @@ std::expected<void, error> value_sharing::tree_decoder<Checked>::marks_before_de
 }
 
 template <bool Checked>
+std::expected<void, error> value_sharing::tree_decoder<Checked>::scalar_decode(item &node, heads::head const h)
+{
+    switch (h.major) {
+    case major_type::byte_string:
+    case major_type::text_string: {
+        auto const string = d.byte_string_decode(h.argument);
+        if (!string) [[unlikely]]
+            return std::unexpected(string.error());
+        if (h.major == major_type::text_string)
+            node.via.str = *string;
+        else
+            node.via.bin = std::as_bytes(std::span(*string));
+        return {};
+    }
+    case major_type::simple_float:
+        switch (static_cast<rfc8949::simple_float_information>(h.info)) {
+        case rfc8949::simple_float_information::half_precision_float:
+        case rfc8949::simple_float_information::single_precision_float:
+        case rfc8949::simple_float_information::double_precision_float:
+            node.via.f64 = heads::float_decode(h.info, h.argument);
+            return {};
+        default:
+            if (error const r = validity::check_simple_value(h.info, h.argument).error_or(error{});
+                r != error{}) [[unlikely]]
+                return std::unexpected(r);
+            node.via.simple_value = static_cast<simple_value>(h.argument);
+            return {};
+        }
+    default:
+        return {};
+    }
+}
+
+template <bool Checked>
 std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(item *const storage,
                                                                                std::size_t const depth,
                                                                                std::optional<std::size_t> const mark)
@@ -745,30 +779,34 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
     auto const h = d.head_decode();
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    item &node = *::new (storage) item{heads::type_of(h->major, h->info, h->argument), h->info, {.u64 = h->argument}};
+    return content_decode(storage, *h, depth, mark);
+}
+
+template <bool Checked>
+std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decode(item *const storage,
+                                                                                  heads::head const head,
+                                                                                  std::size_t const depth,
+                                                                                  std::optional<std::size_t> const mark)
+{
+    item &node = *::new (storage) item{heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}};
     if (root == nullptr)
         root = &node;
     if (mark && shareables[*mark] == nullptr)
         shareables[*mark] = &node;
-    switch (h->major) {
+    switch (head.major) {
     case major_type::unsigned_integer:
     case major_type::negative_integer:
         return &node;
     case major_type::byte_string:
-    case major_type::text_string: {
-        auto const string = d.byte_string_decode(h->argument);
-        if (!string) [[unlikely]]
-            return std::unexpected(string.error());
-        if (h->major == major_type::text_string)
-            node.via.str = *string;
-        else
-            node.via.bin = std::as_bytes(std::span(*string));
+    case major_type::text_string:
+    case major_type::simple_float:
+        if (auto const r = scalar_decode(node, head); !r) [[unlikely]]
+            return std::unexpected(r.error());
         return &node;
-    }
     case major_type::array:
     case major_type::map: {
         auto const count = validity::checked_mul(
-            h->argument, h->major == major_type::map ? rfc8949::data_items_per_pair : std::size_t{1});
+            head.argument, head.major == major_type::map ? rfc8949::data_items_per_pair : std::size_t{1});
         if (!count) [[unlikely]]
             return std::unexpected(error::too_little_data);
         auto const reserved = validity::checked_add(open, *count);
@@ -779,19 +817,31 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
         std::size_t const n = static_cast<std::size_t>(*count);
         std::span<item> const nodes(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(n), n);
         open = *reserved;
+        if (n != 0)
+            if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
+                return std::unexpected(r.error());
         for (item &child : nodes) {
             --open;
-            if (auto const decoded_child = item_decode(&child, depth + 1, std::nullopt); !decoded_child) [[unlikely]]
-                return decoded_child;
+            auto const c = d.head_decode();
+            if (!c) [[unlikely]]
+                return std::unexpected(c.error());
+            if (c->major == major_type::array || c->major == major_type::map || c->major == major_type::tag) {
+                if (auto const r = content_decode(&child, *c, depth + 1, std::nullopt); !r) [[unlikely]]
+                    return r;
+                continue;
+            }
+            ::new (&child) item{heads::type_of(c->major, c->info, c->argument), c->info, {.u64 = c->argument}};
+            if (auto const r = scalar_decode(child, *c); !r) [[unlikely]]
+                return std::unexpected(r.error());
         }
-        if (h->major == major_type::map)
+        if (head.major == major_type::map)
             node.via.map = nodes;
         else
             node.via.array = nodes;
         return &node;
     }
     case major_type::tag: {
-        if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
+        if (head.argument == std::to_underlying(rfc8949::tag_number::shareable)) {
             std::size_t const number = marks_counted();
             mark_next = number + 1;
             if (shareables.size() <= number)
@@ -800,16 +850,16 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
                 item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, number);
             if (!content) [[unlikely]]
                 return content;
-            node.via.tag = {h->argument, *content};
+            node.via.tag = {head.argument, *content};
             return &node;
         }
-        if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
+        if (head.argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
             if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
             auto const n = d.head_decode();
             if (!n) [[unlikely]]
                 return std::unexpected(n.error());
-            if (error const c = validity::check_tag_content(h->argument, n->major, n->info).error_or(error{});
+            if (error const c = validity::check_tag_content(head.argument, n->major, n->info).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const index = validity::check_sharedref_index(n->argument, marks_counted());
@@ -823,7 +873,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
                 return std::unexpected(error::sharedref_not_complete);
             item const *const number = ::new (std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1))
                 item{heads::type_of(n->major, n->info, n->argument), n->info, {.u64 = n->argument}};
-            node.via.tag = {h->argument, number};
+            node.via.tag = {head.argument, number};
             decoded.sharedrefs.emplace_back(&node, shareable);
             return &node;
         }
@@ -831,13 +881,13 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
             item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, std::nullopt);
         if (!content) [[unlikely]]
             return content;
-        if (error const c = validity::check_tag_content(h->argument, static_cast<item const *>(*content),
+        if (error const c = validity::check_tag_content(head.argument, static_cast<item const *>(*content),
                                                         std::span<item const *const>(shareables))
                                 .error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
-        node.via.tag = {h->argument, *content};
-        if (h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
+        node.via.tag = {head.argument, *content};
+        if (head.argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
             return &node;
         item const *bytes = *content;
         while (bytes->type == cbor::type::tag) {
@@ -865,21 +915,6 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
         decoded.encoded_cbor_data_items.emplace_back(&node, *data_item);
         return &node;
     }
-    case major_type::simple_float:
-        switch (static_cast<rfc8949::simple_float_information>(h->info)) {
-        case rfc8949::simple_float_information::half_precision_float:
-        case rfc8949::simple_float_information::single_precision_float:
-        case rfc8949::simple_float_information::double_precision_float:
-            node.via.f64 = heads::float_decode(h->info, h->argument);
-            break;
-        default:
-            if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
-                r != error{}) [[unlikely]]
-                return std::unexpected(r);
-            node.via.simple_value = static_cast<simple_value>(h->argument);
-            break;
-        }
-        return &node;
     }
     std::unreachable();
 }
