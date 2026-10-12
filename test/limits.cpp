@@ -91,7 +91,7 @@ TEST_CASE("limits: string_length on each string head")
             for (std::string const &encoded : {text_of_length(n), "\x82"s + text_of_length(n) + "\x00"s}) {
                 bool const passes = n <= limit;
                 auto const size = cbor::item_size(encoded);
-                auto const decoded = test::value_of(*cbor::lazy::from(encoded));
+                auto const decoded = test::value_of(*cbor::lazy::copy(encoded));
                 auto const notation = cbor::diagnostic_notation(encoded);
                 CHECK_EQ(size.has_value(), passes);
                 CHECK_EQ(decoded.has_value(), passes);
@@ -102,7 +102,7 @@ TEST_CASE("limits: string_length on each string head")
                     CHECK_EQ(notation.error(), error::string_length_exceeded);
                 }
             }
-            auto const text = cbor::lazy::from(text_of_length(n))->get<std::string_view>();
+            auto const text = cbor::lazy::copy(text_of_length(n))->get<std::string_view>();
             CHECK_EQ(text.has_value(), n <= limit);
         }
     }
@@ -120,7 +120,7 @@ TEST_CASE("limits: container_elements on each array and map head")
         bool const passes = n <= 2;
         for (std::string const &encoded : {array_of(n), map_of(n), "\x81"s + array_of(n)}) {
             auto const size = cbor::item_size(encoded);
-            auto const decoded = test::value_of(*cbor::lazy::from(encoded));
+            auto const decoded = test::value_of(*cbor::lazy::copy(encoded));
             auto const notation = cbor::diagnostic_notation(encoded);
             CHECK_EQ(size.has_value(), passes);
             CHECK_EQ(decoded.has_value(), passes);
@@ -131,8 +131,8 @@ TEST_CASE("limits: container_elements on each array and map head")
                 CHECK_EQ(notation.error(), error::container_elements_exceeded);
             }
         }
-        CHECK_EQ(cbor::lazy::from(array_of(n))->elements().has_value(), passes);
-        CHECK_EQ(cbor::lazy::from(map_of(n))->entries().has_value(), passes);
+        CHECK_EQ(cbor::lazy::copy(array_of(n))->elements().has_value(), passes);
+        CHECK_EQ(cbor::lazy::copy(map_of(n))->entries().has_value(), passes);
     }
 }
 
@@ -144,7 +144,7 @@ TEST_CASE("limits: input_bytes on entry")
         CAPTURE(encoded.size());
         bool const passes = encoded.size() <= 3;
         auto const size = cbor::item_size(encoded);
-        auto const lazy = cbor::lazy::from(encoded);
+        auto const lazy = cbor::lazy::copy(encoded);
         auto const notation = cbor::diagnostic_notation(encoded);
         auto const first = cbor::at_path<"$[0]", std::int64_t>(encoded);
         CHECK_EQ(size.has_value(), passes);
@@ -238,7 +238,7 @@ TEST_CASE("limits: nesting_depth is checked in the unchecked and in the checked 
         for (std::size_t const depth : {2uz, 3uz, 4uz}) {
             CAPTURE(depth);
             test::limits_guard const guard{{.nesting_depth = depth, .string_length = string_length}};
-            auto const decoded = cbor::lazy::from(tags)->decode();
+            auto const decoded = cbor::lazy::copy(tags)->decode();
             auto const notation = cbor::diagnostic_notation(tags);
             CHECK_EQ(decoded.has_value(), depth >= 3);
             CHECK_EQ(notation.has_value(), depth >= 3);
@@ -259,8 +259,8 @@ TEST_CASE("limits: the iterators of elements() and entries() skip without counti
                                 "ab\x01"s;
     std::string const map = "\xa2\x62"
                             "ab\x01\x02\x03"s;
-    auto const l = cbor::lazy::from(encoded);
-    auto const m = cbor::lazy::from(map);
+    auto const l = cbor::lazy::copy(encoded);
+    auto const m = cbor::lazy::copy(map);
     REQUIRE(l.has_value());
     REQUIRE(m.has_value());
     test::limits_guard const guard{{.string_length = 1}};
@@ -293,7 +293,7 @@ TEST_CASE("limits: an item that a path or a lazy only skips does not count")
          {std::tuple{cbor::limit_values{.string_length = 2}, strings, error::string_length_exceeded},
           std::tuple{cbor::limit_values{.container_elements = 2}, arrays, error::container_elements_exceeded}}) {
         test::limits_guard const guard{limits};
-        auto const l = *cbor::lazy::from(doc);
+        auto const l = *cbor::lazy::copy(doc);
         CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
         CHECK_EQ(cbor::at_path<"$.n", int>(l), 1);
         CHECK_EQ(l.at("n")->get<int>(), 1);
@@ -304,7 +304,7 @@ TEST_CASE("limits: an item that a path or a lazy only skips does not count")
     }
     test::limits_guard const guard{{.string_length = 2, .container_elements = 2}};
     std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;
-    auto const l = *cbor::lazy::from("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
+    auto const l = *cbor::lazy::copy("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
     CHECK_EQ(cbor::at_path<"$[1]", int>(l), 5);
     CHECK_EQ(l.at(1)->get<int>(), 5);
     CHECK_EQ(cbor::at_path<"$[0][1]", int>(l).error(), error::container_elements_exceeded);
@@ -387,7 +387,7 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
         std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(),
                                                    std::pmr::null_memory_resource());
         auto const decoded = cbor::structs<texts>::decode(std::make_shared<std::string const>(encoded),
-                                                           encoded, texts(&budget));
+                                                           texts(&budget));
         REQUIRE(decoded.has_value());
         CHECK_EQ((**decoded).size(), 3u);
         CHECK_EQ((**decoded).get_allocator().resource(), &budget);
@@ -403,7 +403,7 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
         auto const decoded = cbor::structs<texts>::decode(std::make_shared<std::string const>(encoded),
-                                                           encoded, texts(&budget));
+                                                           texts(&budget));
         REQUIRE_FALSE(decoded.has_value());
         CHECK_EQ(decoded.error(), error::not_enough_memory);
     }
@@ -420,7 +420,7 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
                                                std::pmr::null_memory_resource());
     auto const owner = std::make_shared<std::string const>(*encoded);
     auto const decoded = cbor::packed<pmr_names>::decode(
-        owner, *owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
+        owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
     REQUIRE(decoded.has_value());
     CHECK_EQ((**decoded).text, long_text);
     CHECK_EQ((**decoded).text.get_allocator().resource(), &budget);
@@ -446,7 +446,7 @@ TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enoug
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
         auto const decoded = cbor::packed<pmr_names>::decode(
-            owner, *owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
+            owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
         REQUIRE_FALSE(decoded.has_value());
         CHECK_EQ(decoded.error(), error::not_enough_memory);
     }

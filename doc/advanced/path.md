@@ -13,7 +13,8 @@ Every function is in the namespace `cbor`. A comment shows the CBOR in
 | Form | Path | Result |
 |---|---|---|
 | `at_path<Path, T>(encoded)` | compile time, singular | `std::expected<T, error>`, T a scalar |
-| `at_path<Path, T>(owner, encoded)` | compile time, singular | `std::expected<owning_ref<T>, error>`, T a view |
+| `at_path<Path, T>(owner)` | compile time, singular | `std::expected<owning_ref<T>, error>`, T a view, `owner` a `std::shared_ptr<std::string const>`, no copy |
+| `at_path<Path, T>(encoded)` | compile time, singular | `std::expected<owning_ref<T>, error>`, T a view; the bytes are copied, an rvalue `std::string` is moved |
 | `at_path<Path, T>(lazy)` | compile time, singular | T a scalar: `std::expected<T, error>`. T a view: `std::expected<owning_ref<T>, error>` |
 | `at_path<Path>(lazy)` | compile time, singular | `std::expected<lazy, error>`, the node |
 | `at_path(path, lazy)` | run time, singular | `std::expected<lazy, error>`, the node |
@@ -29,7 +30,7 @@ a packed message ([packed.md](packed.md)).
 
 A wrong use that the compiler cannot see throws `std::logic_error`:
 
-- an empty owner in `at_path<Path, T>(owner, encoded)`;
+- a null or empty owner in `at_path<Path, T>(owner)`;
 - a `cbor::lazy{}` that holds no item, in every form that takes a lazy.
 
 ### A view and its owner
@@ -370,7 +371,7 @@ after the target. So these faults are not found:
 | `01 02`, a byte after the item | `at_path<"$", int>` | `1` |
 | `82 01` | `at_path<"$[1]", int>` | `too_little_data` |
 
-`lazy::from` does not read the whole item either: it accepts `82 01` and
+`lazy::copy` does not read the whole item either: it accepts `82 01` and
 `01 02`. `item_size` and a decode check a whole item.
 
 ## 12. Limits
@@ -383,7 +384,7 @@ the macros. A path reads the limits once at each call.
 | `nesting_depth` | See below. |
 | `string_length` | Every string that the walk reads is checked: a key it compares and the target. A string that it only skips does not count. |
 | `container_elements` | Every array and map that the walk reads is checked: the containers on the way and the target. A container that it only skips does not count. |
-| `input_bytes` | The typed forms over bytes and `lazy::from` check the size of the bytes they get. A read from a lazy that exists does not check it again. |
+| `input_bytes` | The typed forms over bytes, `lazy::copy` and `lazy::view` check the size of the bytes they get. A read from a lazy that exists does not check it again. |
 
 `nesting_depth_exceeded` comes when:
 
@@ -404,7 +405,7 @@ cbor::limits = {.string_length = 2};
 cbor::at_path<"$.n", int>(bytes);                       // string_length_exceeded, the key "long" is read
 // {"a": "xyz", "n": 1}
 cbor::at_path<"$.n", int>(bytes);                       // 1, "xyz" is only skipped
-cbor::at_path<"$.a", std::string_view>(owner, bytes);   // string_length_exceeded
+cbor::at_path<"$.a", std::string_view>(bytes);          // string_length_exceeded
 ```
 
 The limits count only what a path or a lazy reads or decodes. This holds

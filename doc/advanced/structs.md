@@ -32,8 +32,8 @@ holds its own copy of every value.
 |---|---|
 | `decode(std::string)` with an rvalue | the library moves the string into a new `std::shared_ptr<std::string const>` |
 | `decode(std::string_view)` | the library copies the bytes into a new `std::shared_ptr<std::string const>` |
-| `decode(owner, encoded)` | the caller: `owner` holds the bytes of `encoded` |
-| `decode(owner, encoded, target)` | the caller, and `decode` reads into `target` (section 8) |
+| `decode(std::shared_ptr<std::string const>)` | the caller, no copy |
+| `decode(std::shared_ptr<std::string const>, target)` | the caller, and `decode` reads into `target` (section 8) |
 
 A `std::string` lvalue and a `char const *` take the copying form.
 
@@ -41,12 +41,13 @@ A `std::string` lvalue and a `char const *` take the copying form.
 // bytes: "abc"
 cbor::structs<std::string_view>::decode(bytes);                 // a copy of bytes
 auto const owner = std::make_shared<std::string const>(bytes);
-cbor::structs<std::string_view>::decode(owner, *owner);         // a view into *owner
+cbor::structs<std::string_view>::decode(owner);         // a view into *owner
 cbor::structs<std::string_view>::decode(std::move(bytes));      // no copy
 ```
 
-An empty owner throws `std::logic_error`. A temporary `std::string` beside
-an owner does not compile ([basics.md](basics.md), section 8).
+An empty owner throws `std::logic_error`. A `std::string` or a
+`std::string_view` beside an owner does not compile
+([basics.md](basics.md), section 8).
 
 ## 3. Every type
 
@@ -170,7 +171,7 @@ auto const owner = std::make_shared<std::string const>(
     *cbor::structs<std::vector<std::string>>::encode({std::string(40, 'a'), std::string(40, 'b')}));
 std::array<std::byte, 64> small{};
 std::pmr::monotonic_buffer_resource budget(small.data(), small.size(), std::pmr::null_memory_resource());
-cbor::structs<texts>::decode(owner, *owner, texts(&budget));   // not_enough_memory
+cbor::structs<texts>::decode(owner, texts(&budget));   // not_enough_memory
 ```
 
 `decode` does not reserve memory for a count that the input states. Each

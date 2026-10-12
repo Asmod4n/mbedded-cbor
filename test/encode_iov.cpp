@@ -100,7 +100,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             CHECK_EQ(points_into(p, owner->data()), size >= iov_encoder::ref_size && size > 0);
         }
         {
-            auto const read = cbor::lazy::from(expected)->get<std::string_view>();
+            auto const read = cbor::lazy::copy(expected)->get<std::string_view>();
             REQUIRE(read.has_value());
             cbor::iov_writer w;
             iov_encoder e{w};
@@ -141,7 +141,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
                      size >= iov_encoder::ref_size && size > 0);
         }
         {
-            auto const read = cbor::lazy::from(expected)->get<std::span<std::byte const>>();
+            auto const read = cbor::lazy::copy(expected)->get<std::span<std::byte const>>();
             REQUIRE(read.has_value());
             cbor::iov_writer w;
             iov_encoder e{w};
@@ -333,7 +333,7 @@ TEST_CASE("encode_iov: the encoder over views gives the bytes of encode")
 // An error of encode_iov of a tree must come back as the error value, and the writer must free what it holds.
 TEST_CASE("encode_iov: an error of the tree comes back as the error value")
 {
-    auto const tree = cbor::lazy::from(std::string(100, '\x81') + '\x80')->decode();
+    auto const tree = cbor::lazy::copy(std::string(100, '\x81') + '\x80')->decode();
     REQUIRE(tree.has_value());
     test::limits_guard const depth{{.nesting_depth = 16}};
     auto const p = cbor::encode_iov(**tree);

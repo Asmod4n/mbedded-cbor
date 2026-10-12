@@ -40,13 +40,13 @@ the same flags.
 
 `cbor::lazy` reads the bytes in place and builds no tree. Each call
 reads only up to the item that it looks for. No reflection needed.
-`lazy::from(bytes)` copies the bytes once. `std::move` or a
+`lazy::copy(bytes)` copies the bytes once. `std::move` or a
 `std::shared_ptr` avoids the copy
 ([doc/advanced/basics.md](doc/advanced/basics.md#8-owners)).
 
 ```cpp
 // bytes holds the CBOR of {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
-auto const doc = cbor::lazy::from(bytes).value();
+auto const doc = cbor::lazy::copy(bytes).value();
 
 bool const has_samples = doc.contains("samples").value();  // true
 std::uint64_t const pairs = doc.size().value();            // 3
@@ -64,7 +64,7 @@ The read side needs only C++23. It works with g++ 16 and with clang 23.
 
 ```cpp
 // bytes is a std::string with the CBOR of {"user": {"id": 42, "name": "ann"}}
-auto const doc = cbor::lazy::from(bytes).value();
+auto const doc = cbor::lazy::copy(bytes).value();
 
 auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);         // *id == 42
 auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);  // **name == "ann"
@@ -81,7 +81,7 @@ copy. The owning_ref keeps the bytes alive, so the view stays valid.
 ```cpp
 std::string const cut = bytes.substr(0, bytes.size() - 1);  // the last byte is missing
 
-auto const doc = cbor::lazy::from(cut).value();
+auto const doc = cbor::lazy::copy(cut).value();
 auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
 // name.error() == cbor::error::too_little_data
 
@@ -99,7 +99,7 @@ it converts to `std::error_code`.
 cbor::limits = {.nesting_depth = 16, .string_length = 4096, .container_elements = 100};
 
 // bytes holds a CBOR array of 101 elements
-auto const n = cbor::lazy::from(bytes).value().size();
+auto const n = cbor::lazy::copy(bytes).value().size();
 // n.error() == cbor::error::container_elements_exceeded
 ```
 
@@ -114,7 +114,7 @@ A CBOR sequence (RFC 8742) is items one after the other, for example a
 log.
 
 ```cpp
-// log holds three CBOR items, one after the other: 1, "a", [1, 2]
+// log is a std::shared_ptr<std::string const> with three CBOR items: 1, "a", [1, 2]
 for (auto const &item : cbor::sequence{log})
     if (item)
         std::println("{}", cbor::diagnostic_notation(*item).value());

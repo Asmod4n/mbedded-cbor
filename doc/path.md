@@ -35,7 +35,7 @@ the bytes, a `std::shared_ptr`, and the result holds it
 
 ```cpp
 auto const owner = std::make_shared<std::string const>(bytes);
-auto const name = cbor::at_path<"$.user.name", std::string_view>(owner, *owner);
+auto const name = cbor::at_path<"$.user.name", std::string_view>(owner);
 if (name)
     use(**name);   // "ann"
 ```
@@ -50,7 +50,7 @@ the lazy holds the bytes.
 
 ```cpp
 // bytes: {"cars": [{"hp": 5}, {"hp": 7, "make": "kia"}]}
-auto const cars = cbor::lazy::from(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
+auto const cars = cbor::lazy::copy(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
 if (cars) {
     cbor::at_path<"$[1].hp", std::int64_t>(*cars);          // 7
     cbor::at_path<"$[1].make", std::string_view>(*cars);    // "kia"

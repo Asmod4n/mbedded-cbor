@@ -9,7 +9,7 @@ stays valid.
 
 ```cpp
 // bytes: {"cars": [{"hp": 5}, {"hp": 7}]}
-auto const hp = cbor::lazy::from(bytes)
+auto const hp = cbor::lazy::copy(bytes)
                     .and_then([](cbor::lazy const &doc) { return doc.at("cars"); })
                     .and_then([](cbor::lazy const &cars) { return cars.at(1); })
                     .and_then([](cbor::lazy const &car) { return car.at("hp"); })
@@ -18,9 +18,18 @@ if (hp)
     use(*hp);   // 7
 ```
 
-`cbor::lazy::from(bytes)` makes a lazy, a position in the bytes. It
-copies the bytes once. `cbor::lazy::from(std::move(bytes))` takes a
-`std::string` with no copy.
+`cbor::lazy::copy(bytes)` makes a lazy, a position in the bytes. Bytes
+go into the library in two forms only:
+
+| Form | The bytes |
+|---|---|
+| `lazy::copy(bytes)` | copied once into storage that the lazy owns; `lazy::copy(std::move(bytes))` moves a `std::string` there with no copy |
+| `lazy::view(owner)` | `owner` is a `std::shared_ptr<std::string const>`; no copy, and every result keeps `owner` alive |
+
+```cpp
+auto const owner = std::make_shared<std::string const>(std::move(bytes));
+auto const doc = cbor::lazy::view(owner);   // reads *owner in place
+```
 
 | Step | Goes to |
 |---|---|
@@ -57,7 +66,7 @@ Another kind of value gives `incorrect_type`. A number that does not fit
 
 ```cpp
 // bytes: {"name": "ann", "age": 300}
-auto const doc = cbor::lazy::from(bytes);
+auto const doc = cbor::lazy::copy(bytes);
 auto const name = doc->at("name")->get<std::string_view>();   // **name == "ann"
 doc->at("age")->get<std::int64_t>();                          // 300
 doc->at("age")->get<std::uint8_t>().error();                  // number_out_of_range
@@ -73,7 +82,7 @@ pairs of a map. Each element is a `std::expected` of its own.
 // bytes: [1, 2, 3]
 std::expected<std::int64_t, cbor::error> sum(std::string_view bytes)
 {
-    auto const array = cbor::lazy::from(bytes);
+    auto const array = cbor::lazy::copy(bytes);
     if (!array)
         return std::unexpected(array.error());
     auto const elements = array->elements();
@@ -96,7 +105,7 @@ A pair of a map has the key in `first` and the value in `second`:
 
 ```cpp
 // bytes: {"a": 1, "b": 2}
-auto const map = cbor::lazy::from(bytes);
+auto const map = cbor::lazy::copy(bytes);
 for (auto const pair : *map->entries())
     if (pair)
         use(pair->first.get<std::string_view>(), pair->second.get<std::int64_t>());   // "a" 1, then "b" 2
@@ -106,7 +115,7 @@ for (auto const pair : *map->entries())
 
 ```cpp
 // bytes: {"a": 1, "b": 2}
-auto const map = cbor::lazy::from(bytes);
+auto const map = cbor::lazy::copy(bytes);
 map->size();          // 2, the pairs of a map or the elements of an array
 map->contains("a");   // true
 ```
@@ -142,7 +151,7 @@ e.unsigned_integer(std::uint8_t{5});
 e.finish();   // out holds {"a": 5}
 ```
 
-More: the other forms of `lazy::from`, `find` and `count`, a search
+More: `find` and `count`, a search
 between two iterators, `decode`, the encoder, CBOR sequences,
 `item_size`, shared values and tag 55799 are in
 [advanced/runtime.md](advanced/runtime.md).

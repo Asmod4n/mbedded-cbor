@@ -217,7 +217,7 @@ for (int const x : v)
 elements() gives a forward range. Each element is a std::expected<cbor::lazy, cbor::error>.
 
 ```cpp
-auto const doc = cbor::lazy::from(bytes); // [1, 2, 3]
+auto const doc = cbor::lazy::copy(bytes); // [1, 2, 3]
 std::int64_t sum = 0;
 for (auto const e : *doc->elements())
     sum += e->get<std::int64_t>().value_or(0);
@@ -280,7 +280,7 @@ A lazy and structs read tag 29 as the value that tag 28 marks. `decode` keeps ta
 
 ```cpp
 // bytes: [28("x"), 29(0)]
-auto const second = cbor::lazy::from(bytes)->at(1)->get<std::string_view>();
+auto const second = cbor::lazy::copy(bytes)->at(1)->get<std::string_view>();
 // **second is "x"
 
 auto const v = cbor::structs<std::vector<std::string>>::decode(bytes);
