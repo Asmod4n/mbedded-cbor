@@ -17,7 +17,8 @@ namespace fuzz
 // cbor::sequence over the whole buffer. Two differences are allowed, and each is checked for what it is:
 // cbor::sequence gives too_little_data when an array or a map announces more items than bytes remain, where
 // the reader reads the malformed byte after the head; and the reader refuses an item nested deeper than the
-// limit, which cbor::sequence does not check.
+// limit, which cbor::sequence does not check. A decode of that item also fails, with nesting_depth_exceeded or
+// with an error that it finds first on its way down.
 inline void sequence_reader_target(std::string_view const input)
 {
     if (input.empty())
@@ -42,7 +43,7 @@ inline void sequence_reader_target(std::string_view const input)
     if (read.last == cbor::error::nesting_depth_exceeded) {
         if (whole.items.size() > n) {
             auto const deep = test::decoded(whole.items[n]);
-            require(!deep.has_value() && deep.error() == cbor::error::nesting_depth_exceeded);
+            require(!deep.has_value());
         }
         return;
     }
