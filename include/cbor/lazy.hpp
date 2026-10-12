@@ -123,11 +123,6 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
     return *this;
 }
 
-inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner, std::string_view const encoded)
-{
-    return from(std::move(owner), encoded, limits.load());
-}
-
 inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner,
                                              std::string_view const encoded, limit_values const loaded)
 {
@@ -150,24 +145,6 @@ decltype(auto) lazy::limits_apply(limit_values const loaded, F &&f) const
 {
     validity::throw_logic_error_if_null(top_level, "cbor::lazy: the lazy holds no top-level item");
     return validity::limits_apply(loaded, std::forward<F>(f));
-}
-
-inline std::expected<lazy, error> lazy::from(std::shared_ptr<std::string const> encoded)
-{
-    validity::throw_logic_error_if_null(encoded, "cbor::lazy::from: the encoded data item is null");
-    std::string_view const view = *encoded;
-    return from(std::move(encoded), view);
-}
-
-template <std::same_as<std::string> Encoded>
-std::expected<lazy, error> lazy::from(Encoded &&encoded)
-{
-    return from(std::make_shared<std::string const>(std::move(encoded)));
-}
-
-inline std::expected<lazy, error> lazy::from(std::string_view const encoded)
-{
-    return from(std::make_shared<std::string const>(encoded));
 }
 
 inline std::expected<lazy, error> lazy::view(std::shared_ptr<std::string const> encoded)

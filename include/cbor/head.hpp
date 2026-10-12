@@ -695,8 +695,6 @@ class heads
 
     friend std::expected<std::size_t, error> item_size(std::string_view encoded);
 
-    friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
-
     friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
 #ifdef __cpp_impl_reflection
