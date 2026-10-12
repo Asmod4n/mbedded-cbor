@@ -27,17 +27,28 @@
 // adds its index and is not followed.
 static std::uint64_t item_tree_sum(cbor::item const &it)
 {
-    std::uint64_t s = it.argument;
-    if (auto const *t = std::get_if<std::string_view>(&it.content))
-        s += bytes_sum(*t);
-    else if (auto const *b = std::get_if<std::span<std::byte const>>(&it.content))
-        s += bytes_sum(std::string_view(reinterpret_cast<char const *>(b->data()), b->size()));
-    else if (auto const *c = std::get_if<cbor::data_items>(&it.content))
-        for (cbor::item const *const child : c->span())
-            s += item_tree_sum(*child);
-    else if (auto const *inner = std::get_if<cbor::item const *>(&it.content))
-        s += item_tree_sum(**inner);
-    return s;
+    switch (it.type) {
+    case cbor::type::text_string:
+        return it.via.str.size() + bytes_sum(it.via.str);
+    case cbor::type::byte_string:
+        return it.via.bin.size() +
+               bytes_sum(std::string_view(reinterpret_cast<char const *>(it.via.bin.data()), it.via.bin.size()));
+    case cbor::type::array:
+    case cbor::type::map: {
+        std::span<cbor::item const> const children = it.type == cbor::type::array ? it.via.array : it.via.map;
+        std::uint64_t s = it.type == cbor::type::array ? children.size() : children.size() / 2;
+        for (cbor::item const &child : children)
+            s += item_tree_sum(child);
+        return s;
+    }
+    case cbor::type::tag:
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum:
+    case cbor::type::typed_array:
+        return it.via.tag.number + item_tree_sum(*it.via.tag.content);
+    default:
+        return it.via.u64;
+    }
 }
 #endif
 
