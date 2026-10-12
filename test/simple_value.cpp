@@ -170,7 +170,7 @@ TEST_CASE("simple value: simple_value_encode writes every simple value 0 to 255"
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         string_writer w;
-        cbor::encoder<string_writer> e{w};
+        cbor::encoding::encoder<string_writer> e{w};
         auto const r = e.simple_value_encode(static_cast<cbor::simple_value>(v));
         if (reserved(v)) {
             CHECK_EQ(r.error(), std::errc::invalid_argument);

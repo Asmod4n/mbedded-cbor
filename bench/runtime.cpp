@@ -566,7 +566,7 @@ static std::uint64_t fb_path(flexbuffers::Reference const root)
 #endif
 
 #if defined(ARM_S_PUSH_IOV)
-static std::expected<void, std::errc> push_walk(cbor::encoder<cbor::iov_writer> &e, bench::value const &x)
+static std::expected<void, std::errc> push_walk(cbor::encoding::encoder<cbor::iov_writer> &e, bench::value const &x)
 {
     bench::binding b;
     switch (b.kind_of(x)) {
@@ -687,7 +687,7 @@ static std::uint64_t op()
     return std::ranges::fold_left(pieces | std::views::transform(&std::string_view::size), std::size_t{0}, std::plus<>{});
 #elif defined(ARM_S_PUSH_IOV)
     cbor::iov_writer w;
-    cbor::encoder<cbor::iov_writer> e{w};
+    cbor::encoding::encoder<cbor::iov_writer> e{w};
     if (!push_walk(e, tree))
         std::abort();
     auto const r = e.release();

@@ -1,5 +1,6 @@
 #include "binding.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -181,4 +182,22 @@ TEST_CASE("path: a filter with a literal allocates for each child")
     (void)cbor::query(binding, "$[?@ == 1]", six);
     std::size_t const after = allocations;
     CHECK_GT(after - middle, middle - before);
+}
+
+// The public encoder over a span of the caller writes into that memory only: a whole data item of every kind of
+// head, a string and a float allocates nothing.
+TEST_CASE("encoder: the span target allocates nothing")
+{
+    std::array<char, 64> buffer{};
+    std::array<std::byte, 2> const bytes{std::byte{1}, std::byte{2}};
+    std::size_t const before = allocations;
+    cbor::encoder e{std::span<char>(buffer)};
+    bool const all = e.array(5).has_value() && e.unsigned_integer(std::uint32_t{7}).has_value() &&
+                     e.text_string("abc"sv).has_value() && e.byte_string(std::span<std::byte const>(bytes)).has_value() &&
+                     e.floating_point(1.5).has_value() && e.typed_array(cbor::typed_array{64, bytes}).has_value();
+    auto const size = e.finish();
+    std::size_t const after = allocations;
+    CHECK(all);
+    REQUIRE(size.has_value());
+    CHECK_EQ(after, before);
 }

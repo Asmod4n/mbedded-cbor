@@ -50,7 +50,7 @@ inline void encoder_target(std::string_view const input)
     string_writer w;
     std::vector<written> items;
     {
-        cbor::encoder<string_writer> out{w};
+        cbor::encoding::encoder<string_writer> out{w};
         for (std::size_t n = in.byte() % 24; n > 0; --n) {
             switch (in.byte() % 9) {
             case 0: {
