@@ -214,6 +214,11 @@ TEST_CASE("sequence_reader: a count larger than the bytes left waits before its 
         CAPTURE(at);
         CHECK_EQ(test::reader_outcome_split_at("\x82\xff\x00"s, at).last, error::syntax_error);
     }
+    // An empty array inside a container counts too: after 80 the outer array still waits for two items and
+    // one byte follows. Found by the fuzz target.
+    std::string const empty_inside = "\x84\x1a\x00\x00\x00\x00\x80\xfe"s;
+    CHECK_EQ(test::reader_outcome_split_at(empty_inside, 0), test::sequence_outcome_of(empty_inside));
+    CHECK_EQ(test::reader_outcome_split_at(empty_inside, 0).last, error::too_little_data);
 }
 
 // empty() says whether the reader holds a byte that no item has taken yet, as std::ranges::empty says whether

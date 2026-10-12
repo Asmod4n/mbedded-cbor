@@ -128,6 +128,8 @@ class sequence_reader
             }
             if (item_completed())
                 return {};
+            if (h->major == major_type::array || h->major == major_type::map)
+                at = phase::elements;
         }
     }
 
