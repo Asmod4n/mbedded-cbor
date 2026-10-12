@@ -552,3 +552,30 @@ bench/results has no measurement of nlohmann/json, libcbor, the plain
 at_path form, the lazy elements form, structs, shared values or broken
 input against another library in this image. This document gives no
 number for them.
+
+## 10. Other decoders read what mbedded-cbor writes
+
+`test/interop/run.sh` writes values with every public writer:
+`cbor::encoder`, `cbor::encode(item)`, `structs<T>::encode` and
+`packed<T>::encode`. The values are the examples of RFC 8949 Appendix A,
+the cbor-wg test vectors, the bench corpora, every integer and float
+width, tags 28 and 29, and typed arrays. Each decoder below reads the
+output. The script then compares the value with the value that was
+written. `test/run.sh full` runs it. The decoders are the packages of
+Debian sid.
+
+| Decoder | Version | Reads all output | Does not support |
+|---|---|---|---|
+| TinyCBOR | 7.0 | yes | |
+| cbor2 (Python) | 6.1.2 | yes | |
+| jsoncons | 1.5.0 | no | simple values other than 20 to 23 |
+| CBOR::XS (Perl) | 1.87 | no | simple values other than 20 to 23; undefined as a map key |
+| libcbor | 0.10.2 | no | tags 6 to 20, so no Packed CBOR; simple values other than 20 to 23 |
+| nlohmann/json | 3.11.3 | no | a tag on an item that is not a byte string; undefined and simple values other than 20 to 22, so no Packed CBOR; map keys that are not text |
+
+RFC 8949 section 5.2 lets a decoder refuse a value that it does not
+support. Where a decoder supports a value, it reads the same value that
+mbedded-cbor wrote. libcbor 0.14.0 reads tag 6 and so reads Packed CBOR.
+A decoder that does not know a tag gives the tag number and its content
+(RFC 8949 section 3.4). jsoncons gives the content without the tag
+number.
