@@ -460,91 +460,83 @@ inline std::string magnitude_plus_one(std::string_view const m)
     return sum;
 }
 
-// RFC 8949 3.3 and Appendix D: a float of 16 or 32 bits as a double. A NaN keeps its sign and its payload, which
-// RFC 8949 4.1 extends with zeros at the right; a conversion of the processor would set the quiet bit.
-inline double double_of(std::uint8_t const info, std::uint64_t const bits)
-{
-    if (info == 27)
-        return std::bit_cast<double>(bits);
-    bool const half = info == 25;
-    int const exponent_bits = half ? 5 : 8;
-    int const significand_bits = half ? 10 : 23;
-    std::uint64_t const sign = bits >> (exponent_bits + significand_bits) & 1;
-    std::uint64_t const exponent = bits >> significand_bits & ((1u << exponent_bits) - 1);
-    std::uint64_t const significand = bits & ((std::uint64_t{1} << significand_bits) - 1);
-    if (exponent == (1u << exponent_bits) - 1)
-        return std::bit_cast<double>(sign << 63 | std::uint64_t{0x7ff} << 52 | significand << (52 - significand_bits));
-    if (!half)
-        return static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(bits)));
-    double const magnitude = exponent == 0 ? std::ldexp(static_cast<double>(significand), -24)
-                                           : std::ldexp(static_cast<double>(1024 + significand),
-                                                        static_cast<int>(exponent) - 25);
-    return sign != 0 ? -magnitude : magnitude;
-}
-
-inline std::expected<value, error> value_of(cbor::item const &it, std::vector<cbor::item const *> &open);
+inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it,
+                                            std::vector<cbor::item const *> &open);
 
 // The reference model of a decoded item tree. Tag 28 is the value it marks, and tag 29 is the value it points to,
 // as an application without identity reads them. A bignum that fits 64 bits is an integer. A reference to an item
-// whose read is not complete is sharedref_not_complete, as a cycle has no value in this model.
-inline std::expected<value, error> value_of(cbor::item const &it, std::vector<cbor::item const *> &open)
+// whose read is not complete is sharedref_not_complete, as a cycle has no value in this model. Tag 24 is a tag
+// over its byte string. The tree is passed to find the item that a tag 29 points to.
+inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it,
+                                            std::vector<cbor::item const *> &open)
 {
-    if (auto const *t = std::get_if<std::string_view>(&it.content))
-        return value{std::string(*t)};
-    if (auto const *b = std::get_if<std::span<std::byte const>>(&it.content))
-        return value{bytes{std::string(reinterpret_cast<char const *>(b->data()), b->size())}};
-    if (it.major_type == cbor::major_type::simple_float && it.additional_information >= 25 &&
-        it.additional_information <= 27)
-        return value{double_of(it.additional_information, it.argument)};
-    if (auto const *v = std::get_if<cbor::simple_value>(&it.content))
-        return value{simple{std::to_underlying(*v)}};
-    if (auto const *r = std::get_if<cbor::sharedref>(&it.content)) {
-        if (std::ranges::find(open, r->shareable) != open.end())
+    switch (it.type) {
+    case cbor::type::text_string:
+        return value{std::string(it.via.str)};
+    case cbor::type::byte_string:
+        return value{bytes{std::string(reinterpret_cast<char const *>(it.via.bin.data()), it.via.bin.size())}};
+    case cbor::type::half_float:
+    case cbor::type::single_float:
+    case cbor::type::double_float:
+        return value{it.via.f64};
+    case cbor::type::false_value:
+    case cbor::type::true_value:
+    case cbor::type::null:
+    case cbor::type::undefined:
+    case cbor::type::simple_value:
+        return value{simple{std::to_underlying(it.via.simple_value)}};
+    case cbor::type::unsigned_integer:
+        return value{it.via.u64};
+    case cbor::type::negative_integer:
+        return value{negative{it.via.u64}};
+    default:
+        break;
+    }
+    if (it.type == cbor::type::tag && it.via.tag.number == 29) {
+        cbor::item const &shared = cbor::shared_value(tree, it);
+        if (std::ranges::find(open, &shared) != open.end())
             return std::unexpected(error::sharedref_not_complete);
         open.push_back(&it);
-        auto shared = value_of(*r->shareable, open);
+        auto made = value_of(tree, shared, open);
         open.pop_back();
-        return shared;
+        return made;
     }
     open.push_back(&it);
     std::expected<value, error> made = value{};
-    if (auto const *container = std::get_if<cbor::data_items>(&it.content)) {
-        auto const children = container->span();
-        if (it.major_type == cbor::major_type::array) {
-            array a;
-            for (cbor::item const *const child : children) {
-                auto e = value_of(*child, open);
-                if (!e) {
-                    made = std::unexpected(e.error());
-                    break;
-                }
-                a.push_back(std::move(*e));
+    if (it.type == cbor::type::array) {
+        array a;
+        for (cbor::item const &child : it.via.array) {
+            auto e = value_of(tree, child, open);
+            if (!e) {
+                made = std::unexpected(e.error());
+                break;
             }
-            if (made)
-                made = value{std::move(a)};
-        } else {
-            map m;
-            for (std::size_t i = 0; i + 1 < children.size(); i += 2) {
-                auto k = value_of(*children[i], open);
-                auto v = k ? value_of(*children[i + 1], open) : std::expected<value, error>(std::unexpected(k.error()));
-                if (!v) {
-                    made = std::unexpected(v.error());
-                    break;
-                }
-                m.push_back(entry{std::move(*k), std::move(*v)});
-            }
-            if (made)
-                made = value{std::move(m)};
+            a.push_back(std::move(*e));
         }
-    } else if (auto const *content = std::get_if<cbor::item const *>(&it.content)) {
-        cbor::item const &inner = **content;
-        auto const *magnitude = std::get_if<std::span<std::byte const>>(&inner.content);
-        if (it.argument == 28) {
-            made = value_of(inner, open);
-        } else if ((it.argument == 2 || it.argument == 3) && magnitude != nullptr) {
-            bool const negative_value = it.argument == 3;
+        if (made)
+            made = value{std::move(a)};
+    } else if (it.type == cbor::type::map) {
+        map m;
+        for (std::size_t i = 0; i + 1 < it.via.map.size(); i += 2) {
+            auto k = value_of(tree, it.via.map[i], open);
+            auto v = k ? value_of(tree, it.via.map[i + 1], open) : std::expected<value, error>(std::unexpected(k.error()));
+            if (!v) {
+                made = std::unexpected(v.error());
+                break;
+            }
+            m.push_back(entry{std::move(*k), std::move(*v)});
+        }
+        if (made)
+            made = value{std::move(m)};
+    } else {
+        std::uint64_t const number = it.via.tag.number;
+        cbor::item const &inner = *it.via.tag.content;
+        if (number == 28) {
+            made = value_of(tree, inner, open);
+        } else if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
+            bool const negative_value = number == 3;
             std::string_view const m = magnitude_without_leading_zeros(
-                std::string_view(reinterpret_cast<char const *>(magnitude->data()), magnitude->size()));
+                std::string_view(reinterpret_cast<char const *>(inner.via.bin.data()), inner.via.bin.size()));
             if (m.size() <= sizeof(std::uint64_t)) {
                 std::uint64_t n = 0;
                 for (char const c : m)
@@ -554,17 +546,9 @@ inline std::expected<value, error> value_of(cbor::item const &it, std::vector<cb
                 made = value{bignum{negative_value, negative_value ? magnitude_plus_one(m) : std::string(m)}};
             }
         } else {
-            auto c = value_of(inner, open);
-            made = c ? std::expected<value, error>(value{tagged{it.argument, std::move(*c)}})
-                     : std::unexpected(c.error());
+            auto c = value_of(tree, inner, open);
+            made = c ? std::expected<value, error>(value{tagged{number, std::move(*c)}}) : std::unexpected(c.error());
         }
-    } else if (auto const *embedded = std::get_if<cbor::encoded_cbor_data_item>(&it.content)) {
-        auto c = value_of(*embedded->content, open);
-        made = c ? std::expected<value, error>(value{tagged{it.argument, std::move(*c)}}) : std::unexpected(c.error());
-    } else if (it.major_type == cbor::major_type::unsigned_integer) {
-        made = value{it.argument};
-    } else {
-        made = value{negative{it.argument}};
     }
     open.pop_back();
     return made;
@@ -576,7 +560,7 @@ inline std::expected<value, error> value_of(cbor::lazy const &l)
     if (!tree)
         return std::unexpected(tree.error());
     std::vector<cbor::item const *> open;
-    return value_of(**tree, open);
+    return value_of(*tree, **tree, open);
 }
 
 template <class E>

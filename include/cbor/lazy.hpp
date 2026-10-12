@@ -664,25 +664,28 @@ inline std::expected<lazy_entries, error> lazy::entries(limit_values const loade
 
 template <class Item>
 std::expected<void, error> validity::check_tag_content(std::uint64_t const tag, Item const *content,
-                                                       std::size_t const marked)
+                                                       std::span<Item const *const> const shareables)
 {
     std::size_t references_followed = 0;
     for (;;) {
-        if (auto const *r = std::get_if<sharedref>(&content->content)) {
-            if (auto const ends = check_sharedref_chain_ends(++references_followed, marked); !ends) [[unlikely]]
-                return ends;
-            content = r->shareable;
+        if (content->type != cbor::type::tag || (content->via.tag.number != std::to_underlying(rfc8949::tag_number::sharedref) &&
+                                                content->via.tag.number != std::to_underlying(rfc8949::tag_number::shareable)))
+            return check_tag_content(tag, heads::major_type_of(content->type), content->additional_information);
+        if (content->via.tag.number == std::to_underlying(rfc8949::tag_number::shareable)) {
+            content = content->via.tag.content;
             continue;
         }
-        if (content->major_type != major_type::tag ||
-            content->argument != std::to_underlying(rfc8949::tag_number::shareable))
-            return check_tag_content(tag, content->major_type, content->additional_information);
-        auto const *const shared = std::get_if<Item const *>(&content->content);
-        if (shared == nullptr) [[unlikely]]
+        if (auto const ends = check_sharedref_chain_ends(++references_followed, shareables.size()); !ends) [[unlikely]]
+            return ends;
+        auto const index = check_sharedref_index(content->via.tag.content->via.u64, shareables.size());
+        if (!index) [[unlikely]]
+            return std::unexpected(index.error());
+        content = shareables[*index];
+        if (content == nullptr) [[unlikely]]
             return std::unexpected(error::sharedref_not_complete);
-        content = *shared;
     }
 }
+
 
 template <bool Checked>
 std::size_t value_sharing::tree_decoder<Checked>::marks_counted()
@@ -747,7 +750,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
     auto const h = d.head_decode();
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    item &node = *::new (storage) item{h->major, h->info, h->argument, std::monostate{}};
+    item &node = *::new (storage) item{heads::type_of(h->major, h->info, h->argument), h->info, {.u64 = h->argument}};
     if (root == nullptr)
         root = &node;
     if (mark && shareables[*mark] == nullptr)
@@ -762,9 +765,9 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
         if (!string) [[unlikely]]
             return std::unexpected(string.error());
         if (h->major == major_type::text_string)
-            node.content = *string;
+            node.via.str = *string;
         else
-            node.content = std::as_bytes(std::span(*string));
+            node.via.bin = std::as_bytes(std::span(*string));
         return &node;
     }
     case major_type::array:
@@ -779,18 +782,17 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
         if (auto const r = validity::check_pending_items(*reserved, d.encoded.size()); !r) [[unlikely]]
             return std::unexpected(r.error());
         std::size_t const n = static_cast<std::size_t>(*count);
-        std::span<item const *> const children(
-            std::pmr::polymorphic_allocator<item const *>(&decoded.memory).allocate(n), n);
         std::span<item> const nodes(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(n), n);
         open = *reserved;
-        for (std::size_t i = 0; i < n; ++i) {
+        for (item &child : nodes) {
             --open;
-            auto const decoded_child = item_decode(&nodes[i], depth + 1, std::nullopt);
-            if (!decoded_child) [[unlikely]]
+            if (auto const decoded_child = item_decode(&child, depth + 1, std::nullopt); !decoded_child) [[unlikely]]
                 return decoded_child;
-            children[i] = *decoded_child;
         }
-        node.content = data_items{children.data(), n};
+        if (h->major == major_type::map)
+            node.via.map = nodes;
+        else
+            node.via.array = nodes;
         return &node;
     }
     case major_type::tag: {
@@ -799,10 +801,11 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
             mark_next = number + 1;
             if (shareables.size() <= number)
                 shareables.resize(number + 1);
-            auto const content = item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, number);
+            auto const content =
+                item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, number);
             if (!content) [[unlikely]]
                 return content;
-            node.content = static_cast<item const *>(*content);
+            node.via.tag = {h->argument, *content};
             return &node;
         }
         if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
@@ -823,64 +826,62 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
             item const *const shareable = shareables[*index];
             if (shareable == nullptr) [[unlikely]]
                 return std::unexpected(error::sharedref_not_complete);
-            node.content = sharedref{shareable, n->info, n->argument};
+            item const *const number = ::new (std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1))
+                item{heads::type_of(n->major, n->info, n->argument), n->info, {.u64 = n->argument}};
+            node.via.tag = {h->argument, number};
+            decoded.sharedrefs.emplace_back(&node, shareable);
             return &node;
         }
-        auto const content = item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, std::nullopt);
+        auto const content =
+            item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, std::nullopt);
         if (!content) [[unlikely]]
             return content;
-        if (error const c =
-                validity::check_tag_content(h->argument, static_cast<item const *>(*content), shareables.size())
-                    .error_or(error{});
+        if (error const c = validity::check_tag_content(h->argument, static_cast<item const *>(*content),
+                                                        std::span<item const *const>(shareables))
+                                .error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
-        if (h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item)) {
-            node.content = static_cast<item const *>(*content);
+        node.via.tag = {h->argument, *content};
+        if (h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
             return &node;
-        }
         item const *bytes = *content;
-        for (;;) {
-            if (auto const *const r = std::get_if<sharedref>(&bytes->content))
-                bytes = r->shareable;
-            else if (bytes->major_type == major_type::tag)
-                bytes = std::get<item const *>(bytes->content);
-            else
-                break;
+        while (bytes->type == cbor::type::tag) {
+            if (bytes->via.tag.number != std::to_underlying(rfc8949::tag_number::sharedref)) {
+                bytes = bytes->via.tag.content;
+                continue;
+            }
+            auto const index = validity::check_sharedref_index(bytes->via.tag.content->via.u64, shareables.size());
+            if (!index) [[unlikely]]
+                return std::unexpected(index.error());
+            bytes = shareables[*index];
         }
-        std::span<std::byte const> const encoded = std::get<std::span<std::byte const>>(bytes->content);
+        std::span<std::byte const> const encoded = bytes->via.bin;
         top_level_item &nested = decoded.embedded.emplace_front(
             top_level.owner, std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()),
             std::vector<lazy>{}, 0);
         std::vector<item const *> nested_shareables;
         tree_decoder inner{decoded, nested, nested_shareables, {nested.encoded, d.checks}, 0, depth_max, 0, 0};
-        auto const data_item = inner.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 2, std::nullopt);
+        auto const data_item = inner.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1),
+                                                 depth + 2, std::nullopt);
         if (!data_item) [[unlikely]]
             return data_item;
         if (auto const one = validity::check_one_data_item(inner.d.encoded); !one) [[unlikely]]
             return std::unexpected(one.error());
-        node.content = encoded_cbor_data_item{*content, *data_item};
+        decoded.encoded_cbor_data_items.emplace_back(&node, *data_item);
         return &node;
     }
     case major_type::simple_float:
         switch (static_cast<rfc8949::simple_float_information>(h->info)) {
         case rfc8949::simple_float_information::half_precision_float:
-#if defined(__STDCPP_FLOAT16_T__)
-            node.content = std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(h->argument));
-#else
-            node.content = heads::float_decode_binary16(static_cast<std::uint16_t>(h->argument));
-#endif
-            break;
         case rfc8949::simple_float_information::single_precision_float:
-            node.content = std::bit_cast<float>(static_cast<std::uint32_t>(h->argument));
-            break;
         case rfc8949::simple_float_information::double_precision_float:
-            node.content = std::bit_cast<double>(h->argument);
+            node.via.f64 = heads::float_decode(h->info, h->argument);
             break;
         default:
             if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
-            node.content = static_cast<simple_value>(h->argument);
+            node.via.simple_value = static_cast<simple_value>(h->argument);
             break;
         }
         return &node;
@@ -896,8 +897,8 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
         [this]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
             -> std::expected<std::shared_ptr<item const>, error> {
             std::string_view const encoded(std::span(top_level->encoded).subspan(offset));
-            auto decoded = std::make_shared<value_sharing::zone>(
-                top_level, validity::checked_mul(encoded.size(), sizeof(item) + sizeof(item const *))
+            auto decoded = std::make_unique<value_sharing::zone>(
+                top_level, validity::checked_mul(encoded.size(), sizeof(item))
                                .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
                                .value_or(validity::initial_size_limit));
             std::vector<item const *> shareables;
@@ -908,7 +909,9 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
                 std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0, std::nullopt);
             if (!built) [[unlikely]]
                 return std::unexpected(built.error());
-            return std::shared_ptr<item const>(std::move(decoded), *built);
+            std::ranges::sort(decoded->sharedrefs, std::less<>{}, &value_sharing::zone::link::first);
+            std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &value_sharing::zone::link::first);
+            return std::shared_ptr<item const>(*built, value_sharing::zone_owner{std::move(decoded)});
         });
 }
 

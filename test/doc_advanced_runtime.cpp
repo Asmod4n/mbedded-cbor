@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "item_head.hpp"
 
 #include <algorithm>
 #include <array>
@@ -169,15 +170,15 @@ TEST_CASE("doc advanced runtime: decode")
 {
     auto const i = cbor::lazy::from(preferred(A(1, M("a"s, 2))))->decode();
     REQUIRE(i.has_value());
-    CHECK_EQ((*i)->major_type, cbor::major_type::array);
-    CHECK_EQ(std::get<cbor::data_items>((*i)->content).span().size(), 2u);
+    CHECK_EQ((*i)->type, cbor::type::array);
+    CHECK_EQ(children_of(*(*i)).size(), 2u);
     CHECK_EQ(cbor::lazy::from("\x82\x01"s)->decode().error(), error::too_little_data);
     CHECK_EQ(cbor::lazy::from("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->decode().error(), error::too_little_data);
     CHECK_EQ(*cbor::lazy::from("\xc2\x41\x05"s)->type(), cbor::type::unsigned_bignum);
     CHECK_EQ(*cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::unsigned_integer);
     auto const tree = cbor::lazy::from("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->decode();
     REQUIRE(tree.has_value());
-    CHECK_EQ(*std::get<cbor::data_items>((*tree)->content).span()[1]->type(), cbor::type::tag);
+    CHECK_EQ(children_of(*(*tree))[1]->type, cbor::type::tag);
 }
 
 // The section "encode" shows the calls of the encoder, each kind of target, and encode of an item.
@@ -219,10 +220,10 @@ TEST_CASE("doc advanced runtime: encode")
     CHECK_EQ(shared, "\x82\xd8\x1c\x61" "a" "\xd8\x1d\x00"s);
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
     auto const tagged = *cbor::lazy::from(cycle)->decode();
-    cbor::item const *const six = std::get<cbor::item const *>(tagged->content);
-    CHECK_EQ(six->argument, 6u);
-    cbor::item const *const reference = std::get<cbor::item const *>(six->content);
-    CHECK_EQ(std::get<cbor::sharedref>(reference->content).shareable, six);
+    cbor::item const *const six = tagged->via.tag.content;
+    CHECK_EQ(argument_of(*six), 6u);
+    cbor::item const *const reference = six->via.tag.content;
+    CHECK_EQ(&cbor::shared_value(tagged, *reference), six);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string again;
     CHECK_EQ(cbor::encode(**cbor::lazy::from(wire)->decode(), again), wire.size());
@@ -287,9 +288,9 @@ TEST_CASE("doc advanced runtime: tag 55799")
     CHECK_EQ(cbor::lazy::from("\xd9\xd9\xf7\x82\x01\x02"s)->at(1)->get<std::int64_t>(), 2);
     auto const tree = cbor::lazy::from("\x81\xd9\xd9\xf7\x01"s)->decode();
     REQUIRE(tree.has_value());
-    cbor::item const *const inner = std::get<cbor::data_items>((*tree)->content).span()[0];
-    CHECK_EQ(*inner->type(), cbor::type::tag);
-    CHECK_EQ(inner->argument, 55799u);
+    cbor::item const *const inner = children_of(*(*tree))[0];
+    CHECK_EQ(inner->type, cbor::type::tag);
+    CHECK_EQ(argument_of(*inner), 55799u);
     std::string out;
     cbor::encoder e(out);
     REQUIRE(e.tag(55799).has_value());

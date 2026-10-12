@@ -101,15 +101,15 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
     case major_type::negative_integer:
         return integer([&](auto const v) { return e.negative_integer(v); });
     case major_type::byte_string:
-        return e.byte_string(std::get<std::span<std::byte const>>(node.content));
+        return e.byte_string(node.via.bin);
     case major_type::text_string:
-        return e.text_string(std::get<std::string_view>(node.content));
+        return e.text_string(node.via.str);
     case major_type::array:
     case major_type::map: {
         auto const r = node.major_type == major_type::array ? e.array(arg) : e.map(arg);
         if (!r)
             return r;
-        for (cbor::item const *const child : std::get<cbor::data_items>(node.content).span())
+        for (cbor::item const *const child : children_of(node))
             if (auto const c = item_walk(e, *child); !c)
                 return c;
         return {};
@@ -121,9 +121,9 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
             cbor::item const number{major_type::unsigned_integer, ref->additional_information, ref->argument, {}};
             return item_walk(e, number);
         }
-        cbor::item const &content = *std::get<cbor::item const *>(node.content);
+        cbor::item const &content = *node.via.tag.content;
         if (arg >= 64 && arg <= 87 && content.major_type == major_type::byte_string)
-            return e.typed_array({arg, std::get<std::span<std::byte const>>(content.content)});
+            return e.typed_array({arg, content.via.bin});
         if (auto const r = e.tag(arg); !r)
             return r;
         return item_walk(e, content);

@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -438,12 +439,15 @@ class heads
         constexpr precision d = double_precision;
         constexpr precision f = single_precision;
         std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
-        if (info == rfc8949::simple_float_information::single_precision_float && is_nan(d, bits)) [[unlikely]]
+        if (info != rfc8949::simple_float_information::double_precision_float && is_nan(d, bits)) [[unlikely]] {
+            precision const p =
+                info == rfc8949::simple_float_information::half_precision_float ? half_precision : f;
             return bits >> (d.significand_bits + std::bit_width(d.exponent_max))
-                               << (f.significand_bits + std::bit_width(f.exponent_max)) |
-                   std::uint64_t{f.exponent_max} << f.significand_bits |
+                               << (p.significand_bits + std::bit_width(p.exponent_max)) |
+                   std::uint64_t{p.exponent_max} << p.significand_bits |
                    (bits & ((std::uint64_t{1} << d.significand_bits) - 1u)) >>
-                       (d.significand_bits - f.significand_bits);
+                       (d.significand_bits - p.significand_bits);
+        }
         switch (info) {
         case rfc8949::simple_float_information::half_precision_float:
             return float_encode_binary16(static_cast<float>(value));
@@ -571,6 +575,39 @@ class heads
         default:
             return cbor::type::simple_value;
         }
+    }
+
+    static constexpr major_type major_type_of(cbor::type const t)
+    {
+        switch (t) {
+        case cbor::type::unsigned_integer:
+            return major_type::unsigned_integer;
+        case cbor::type::negative_integer:
+            return major_type::negative_integer;
+        case cbor::type::byte_string:
+            return major_type::byte_string;
+        case cbor::type::text_string:
+            return major_type::text_string;
+        case cbor::type::array:
+            return major_type::array;
+        case cbor::type::map:
+            return major_type::map;
+        case cbor::type::tag:
+        case cbor::type::unsigned_bignum:
+        case cbor::type::negative_bignum:
+        case cbor::type::typed_array:
+            return major_type::tag;
+        case cbor::type::false_value:
+        case cbor::type::true_value:
+        case cbor::type::null:
+        case cbor::type::undefined:
+        case cbor::type::simple_value:
+        case cbor::type::half_float:
+        case cbor::type::single_float:
+        case cbor::type::double_float:
+            return major_type::simple_float;
+        }
+        throw std::logic_error("cbor::item: the type is not a member of cbor::type");
     }
 
     static constexpr bool is_tag_passed(std::uint64_t const tag)

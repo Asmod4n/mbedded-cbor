@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "item_head.hpp"
 
 #include <array>
 #include <cstddef>
@@ -98,7 +99,7 @@ TEST_CASE("path: a second read of a top-level item with shared values allocates 
 }
 
 // The count in the head of an array is not trusted. The decode takes memory in proportion to the bytes of the input:
-// at most one item and one pointer for each byte, in at most two blocks. Here the array claims 4096 elements and its
+// at most one item for each byte, in at most two blocks. Here the array claims 4096 elements and its
 // first element is not well-formed, so decode fails after it reserved room for the claimed elements, which the
 // bytes left allow.
 TEST_CASE("decode: the room kept for the elements of an array is bounded by the bytes left")
@@ -111,7 +112,7 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
     std::size_t const after = allocated_bytes;
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::syntax_error);
-    CHECK_LE(after - before, 4 * (sizeof(cbor::item) + sizeof(cbor::item const *)) * bytes.size());
+    CHECK_LE(after - before, 4 * sizeof(cbor::item) * bytes.size());
 }
 
 // An array that claims 2^63 elements with one byte after its head is refused with too_little_data, and the
@@ -177,7 +178,7 @@ TEST_CASE("decode: nested arrays that each claim a large count do not multiply t
     std::size_t const after = allocated_bytes;
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::too_little_data);
-    CHECK_LE(after - before, 4 * (sizeof(cbor::item) + sizeof(cbor::item const *)) * bytes.size());
+    CHECK_LE(after - before, 4 * sizeof(cbor::item) * bytes.size());
 }
 
 // A wide array of small arrays fills many blocks of the memory resource. Under the address sanitizer the walk
@@ -192,12 +193,12 @@ TEST_CASE("decode: a wide array of nested arrays is read whole after the decode"
         bytes += "\x82\x01\x02"s;
     auto r = cbor::lazy::from(std::string(bytes))->decode();
     REQUIRE(r.has_value());
-    auto const outer = std::get<cbor::data_items>((*r)->content).span();
+    auto const outer = children_of(*(*r));
     REQUIRE_EQ(outer.size(), count);
     std::uint64_t sum = 0;
     for (cbor::item const *const inner : outer)
-        for (cbor::item const *const leaf : std::get<cbor::data_items>(inner->content).span())
-            sum += leaf->argument;
+        for (cbor::item const *const leaf : children_of(*inner))
+            sum += argument_of(*leaf);
     CHECK_EQ(sum, 3 * count);
 }
 

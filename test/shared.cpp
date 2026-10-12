@@ -14,6 +14,7 @@
 #include <variant>
 #include <vector>
 
+#include "item_head.hpp"
 #include "reference.hpp"
 
 #include <span>
@@ -29,25 +30,41 @@ namespace shared_test
 // The decoded item tree of a top-level item, as lazy::decode gives it.
 using tree = std::shared_ptr<cbor::item const>;
 
+// An item of a decoded tree together with the tree, which cbor::shared_value needs to follow a tag 29.
+struct place {
+    tree t;
+    cbor::item const *i;
+
+    cbor::item const &operator*() const
+    {
+        return *i;
+    }
+
+    cbor::item const *operator->() const
+    {
+        return i;
+    }
+};
+
 // The item that a mark of tag 28 or a reference of tag 29 stands for. Two places that stand for the same item are
 // one value with identity, as RFC 8949 3.4 and the value-sharing registration describe it.
-cbor::item const *target(cbor::item const *i)
+place target(place n)
 {
     for (int steps = 0; steps < 1000; ++steps) {
-        if (auto const *r = std::get_if<cbor::sharedref>(&i->content))
-            i = r->shareable;
-        else if (i->major_type == cbor::major_type::tag && i->argument == 28)
-            i = std::get<cbor::item const *>(i->content);
+        if (n.i->type == cbor::type::tag && n.i->via.tag.number == 29)
+            n.i = &cbor::shared_value(n.t, *n.i);
+        else if (n.i->type == cbor::type::tag && n.i->via.tag.number == 28)
+            n.i = n.i->via.tag.content;
         else
-            return i;
+            return n;
     }
     FAIL("a chain of marks without an end");
-    return i;
+    return n;
 }
 
-cbor::item const *target(tree const &t)
+place target(tree const &t)
 {
-    return target(t.get());
+    return target(place{t, t.get()});
 }
 
 tree decoded_ref(std::string_view const wire)
@@ -69,34 +86,50 @@ error ref_decode_error(std::string_view const wire)
 }
 
 template <class P>
-std::span<cbor::item const *const> children(P const &container)
+std::vector<place> children(P const &container)
 {
-    return std::get<cbor::data_items>(target(container)->content).span();
+    place const c = target(container);
+    std::vector<place> out;
+    for (cbor::item const *const child : children_of(*c))
+        out.push_back(place{c.t, child});
+    return out;
 }
 
 template <class P>
-cbor::item const *element(P const &array, std::size_t const i)
+place element(P const &array, std::size_t const i)
 {
     return target(children(array)[i]);
 }
 
 template <class P>
-cbor::item const *map_value(P const &map, std::size_t const i)
+place map_value(P const &map, std::size_t const i)
 {
     return target(children(map)[2 * i + 1]);
 }
 
+template <class P>
+place at(P const &map, std::string_view const key)
+{
+    auto const c = children(map);
+    for (std::size_t i = 0; i + 1 < c.size(); i += 2)
+        if (place const k = target(c[i]); k->type == cbor::type::text_string && k->via.str == key)
+            return target(c[i + 1]);
+    FAIL("no such key");
+    return c.front();
+}
+
 // The content of a tag that is no mark, as the item of an application object holds it.
 template <class P>
-cbor::item const *content(P const &tagged)
+place content(P const &tagged)
 {
-    return target(std::get<cbor::item const *>(target(tagged)->content));
+    place const t = target(tagged);
+    return target(place{t.t, t->via.tag.content});
 }
 
 template <class A, class B>
 bool same(A const &a, B const &b)
 {
-    return target(a) == target(b);
+    return target(a).i == target(b).i;
 }
 
 } // namespace shared_test
@@ -108,7 +141,7 @@ TEST_CASE("tag 28/29: scalar shareable")
 {
     auto const r = decoded_ref("\x82\xd8\x1c\x18\x2a\xd8\x1d\x00"sv);
     CHECK(same(element(r, 0), element(r, 1)));
-    CHECK_EQ(element(r, 0)->argument, 42u);
+    CHECK_EQ(argument_of(*element(r, 0)), 42u);
 }
 
 // Ported from test.rb: 'tag 29: invalid index raises IndexError, non-uint payload raises TypeError'
@@ -181,7 +214,7 @@ TEST_CASE("tag 28/29: two groups keep their own index")
 TEST_CASE("tag 29: a reference to a tag that holds itself")
 {
     auto const r = decoded_ref("\xd8\x1c\xc6\xd8\x1d\x00"sv);
-    CHECK_EQ(target(r)->argument, 6u);
+    CHECK_EQ(argument_of(*target(r)), 6u);
     CHECK(same(content(r), r));
     CHECK_EQ(decode_error("\xd8\x1c\xc6\xd8\x1d\x00"sv), error::sharedref_not_complete);
 }
@@ -371,17 +404,6 @@ std::string encoded_shared(handle const &v, bool const sharing = true)
 tree round_trip(handle const &v)
 {
     return decoded_ref(encoded_shared(v));
-}
-
-template <class P>
-cbor::item const *at(P const &map, std::string_view const key)
-{
-    auto const c = children(map);
-    for (std::size_t i = 0; i + 1 < c.size(); i += 2)
-        if (auto const *k = std::get_if<std::string_view>(&target(c[i])->content); k != nullptr && *k == key)
-            return target(c[i + 1]);
-    FAIL("no such key");
-    return nullptr;
 }
 
 } // namespace shared_test
@@ -603,7 +625,7 @@ TEST_CASE("application tag: distinct objects with equal content do not share")
 TEST_CASE("application tag: a reference inside the content names the object")
 {
     auto const r = decoded_ref("\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv);
-    CHECK_EQ(target(r)->argument, 5000u);
+    CHECK_EQ(argument_of(*target(r)), 5000u);
     CHECK(same(element(content(r), 0), r));
 }
 
@@ -611,7 +633,7 @@ TEST_CASE("application tag: a reference inside the content names the object")
 TEST_CASE("application tag: a reference after the object names the object")
 {
     auto const r = decoded_ref("\x82\xd8\x1c\xd9\x13\x88\x81\x01\xd8\x1d\x00"sv);
-    CHECK_EQ(element(r, 0)->argument, 5000u);
+    CHECK_EQ(argument_of(*element(r, 0)), 5000u);
     CHECK(same(element(r, 0), element(r, 1)));
 }
 
@@ -620,8 +642,8 @@ TEST_CASE("application tag: two objects that name each other")
 {
     // 28 5000([28 5000([29 0])])
     auto const r = decoded_ref("\xd8\x1c\xd9\x13\x88\x81\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv);
-    auto const *const peer = element(content(r), 0);
-    CHECK_EQ(peer->argument, 5000u);
+    place const peer = element(content(r), 0);
+    CHECK_EQ(argument_of(*peer), 5000u);
     CHECK(same(element(content(peer), 0), r));
 }
 
@@ -629,8 +651,8 @@ TEST_CASE("application tag: two objects that name each other")
 TEST_CASE("application tag: a tag without meaning is a tag item")
 {
     auto const r = decoded_ref("\xc1\x01"sv);
-    CHECK_EQ(target(r)->argument, 1u);
-    CHECK_EQ(content(r)->argument, 1u);
+    CHECK_EQ(argument_of(*target(r)), 1u);
+    CHECK_EQ(argument_of(*content(r)), 1u);
 }
 
 // Ported from test.rb: 'tag 28/29: shared value preserved via lazy.value'.
@@ -652,12 +674,12 @@ TEST_CASE("lazy: a reference to a mark before the target")
     REQUIRE(ref.has_value());
     auto const r = ref->decode();
     REQUIRE(r.has_value());
-    CHECK_EQ(element(*r, 1)->argument, 2u);
+    CHECK_EQ(argument_of(*element(*r, 1)), 2u);
     auto const inside = ref->at(1);
     REQUIRE(inside.has_value());
     auto const two = inside->decode();
     REQUIRE(two.has_value());
-    CHECK_EQ(target(*two)->argument, 2u);
+    CHECK_EQ(argument_of(*target(*two)), 2u);
 }
 
 // Ported from test.rb: 'tag 28/29: cyclic array materializes via lazy'.
@@ -721,7 +743,7 @@ TEST_CASE("lazy: a value shared by two map values keeps its identity")
 TEST_CASE("tag 28: inside tag 28 without a reference")
 {
     auto const r = decoded_ref("\xd8\x1c\xd8\x1c\x18\x2a"sv);
-    CHECK_EQ(target(r)->argument, 42u);
+    CHECK_EQ(argument_of(*target(r)), 42u);
 }
 
 // Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved'. The
@@ -791,11 +813,11 @@ TEST_CASE("lazy: a reference decodes to the plain value after a read of its mark
     REQUIRE(ref.has_value());
     auto const r = ref->decode();
     REQUIRE(r.has_value());
-    REQUIRE_EQ(target(*r)->major_type, cbor::major_type::array);
+    REQUIRE_EQ(target(*r)->type, cbor::type::array);
     CHECK_EQ(children(*r).size(), 3u);
-    CHECK_EQ(element(*r, 0)->argument, 10u);
-    CHECK_EQ(element(*r, 1)->argument, 20u);
-    CHECK_EQ(element(*r, 2)->argument, 30u);
+    CHECK_EQ(argument_of(*element(*r, 0)), 10u);
+    CHECK_EQ(argument_of(*element(*r, 1)), 20u);
+    CHECK_EQ(argument_of(*element(*r, 2)), 30u);
 }
 
 
@@ -885,10 +907,10 @@ TEST_CASE("tag 29: a chain of marks before the start of a lazy keeps the stack b
         auto const v = last->decode();
         CAPTURE(v.has_value() ? error{} : v.error());
         REQUIRE(v.has_value());
-        cbor::item const *at_mark = target(*v);
+        place at_mark = target(*v);
         for (std::size_t i = 1; i < n; ++i)
             at_mark = element(at_mark, 0);
-        CHECK_EQ(element(at_mark, 0)->argument, 0u);
+        CHECK_EQ(argument_of(*element(at_mark, 0)), 0u);
         CHECK(test::at_path("$[" + std::to_string(n) + "]", *cbor::lazy::from(doc)).has_value());
     }
 }
@@ -954,6 +976,6 @@ TEST_CASE("encoder: a cycle through tag 6 decodes into a tree with a cycle")
     REQUIRE(e.finish().has_value());
     CHECK_EQ(out, "\xd8\x1c\xc6\xd8\x1d\x00"s);
     auto const r = decoded_ref(out);
-    CHECK_EQ(target(r)->argument, 6u);
+    CHECK_EQ(argument_of(*target(r)), 6u);
     CHECK(same(content(r), r));
 }

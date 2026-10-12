@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "item_head.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1328,11 +1329,11 @@ TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
                 auto const named = l.at(std::size_t{2})
                                        .and_then([](cbor::lazy const &m) { return m.at("k"); })
                                        .and_then([](cbor::lazy const &r) { return r.decode(); });
-                auto const *const reference =
-                    named.has_value() ? std::get_if<cbor::sharedref>(&(*named)->content) : nullptr;
-                auto const *const shared =
-                    reference != nullptr ? std::get_if<std::string_view>(&reference->shareable->content) : nullptr;
-                right[t] = text.has_value() && **text == "hello" && shared != nullptr && *shared == "hello";
+                bool const reference = named.has_value() && (*named)->type == cbor::type::tag &&
+                                       (*named)->via.tag.number == 29;
+                cbor::item const *const shared = reference ? &cbor::shared_value(*named, **named) : nullptr;
+                right[t] = text.has_value() && **text == "hello" && shared != nullptr &&
+                           shared->type == cbor::type::text_string && shared->via.str == "hello";
             });
     }
     CHECK(std::ranges::all_of(right, std::identity{}));

@@ -49,6 +49,8 @@ class value_sharing
 
     struct zone;
 
+    struct zone_owner;
+
     template <bool Checked>
     struct sharing_decoder;
 
@@ -95,6 +97,10 @@ class value_sharing
     static std::expected<std::size_t, error> key_count(std::expected<typename Entries::iterator, error> found, Key key);
 
     friend class validity;
+
+    friend item const &shared_value(std::shared_ptr<item const> const &tree, item const &reference);
+
+    friend item const &encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged);
 
     friend struct lazy;
 
@@ -477,15 +483,50 @@ struct value_sharing::top_level_item {
 };
 
 struct value_sharing::zone {
+    using link = std::pair<item const *, item const *>;
+
     std::shared_ptr<top_level_item> top_level;
     std::pmr::monotonic_buffer_resource memory;
     std::pmr::forward_list<top_level_item> embedded{&memory};
+    std::vector<link> sharedrefs;
+    std::vector<link> encoded_cbor_data_items;
 
     zone(std::shared_ptr<top_level_item> top, std::size_t const initial_size)
         : top_level(std::move(top)), memory(initial_size)
     {
     }
 };
+
+struct value_sharing::zone_owner {
+    std::unique_ptr<zone> owned;
+
+    void operator()(item const *) const noexcept
+    {
+    }
+
+    static item const &link_found(std::shared_ptr<item const> const &tree, std::vector<zone::link> zone::*const table,
+                              item const &from, char const *const what)
+    {
+        zone_owner const *const owner = std::get_deleter<zone_owner>(tree);
+        validity::throw_logic_error_if(owner == nullptr || owner->owned == nullptr, what);
+        std::vector<zone::link> const &links = (*owner->owned).*table;
+        auto const found = std::ranges::lower_bound(links, &from, std::less<>{}, &zone::link::first);
+        validity::throw_logic_error_if(found == links.end() || found->first != &from, what);
+        return *found->second;
+    }
+};
+
+inline item const &shared_value(std::shared_ptr<item const> const &tree, item const &reference)
+{
+    return value_sharing::zone_owner::link_found(tree, &value_sharing::zone::sharedrefs, reference,
+                                             "cbor::shared_value: the item is not a tag 29 of this decoded tree");
+}
+
+inline item const &encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged)
+{
+    return value_sharing::zone_owner::link_found(tree, &value_sharing::zone::encoded_cbor_data_items, tagged,
+                                             "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree");
+}
 
 static_assert(std::is_trivially_destructible_v<item>,
               "The zone runs no destructor of an item, so an item must have no destructor to run.");
