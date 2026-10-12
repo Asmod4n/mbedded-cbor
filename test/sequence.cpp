@@ -169,3 +169,16 @@ TEST_CASE("sequence: a temporary of any string type does not compile")
     CHECK(std::is_constructible_v<cbor::sequence, std::pmr::string &>);
     CHECK(std::is_constructible_v<cbor::sequence, char const (&)[3]>);
 }
+
+// RFC 8742 2 and RFC 8949 3: each data item of a CBOR Sequence has at least its initial byte. An element whose count is
+// larger than the bytes left is too_little_data before its elements are read, by owner decision.
+TEST_CASE("sequence: a count larger than the bytes left is too_little_data before the elements")
+{
+    for (std::string_view const wire : {"\x8c\xff"sv, "\x95\xf8\x04"sv, "\x95\xbf"sv, "\x88\x00\x7f"sv,
+                                        "\x87\xd8\x1c\x1f"sv, "\x85\xd8\x1c\xd8\x1c"sv, "\xa2\xff\x00\x00"sv}) {
+        CAPTURE(wire);
+        auto const elements = elements_of(wire);
+        REQUIRE_EQ(elements.size(), 1);
+        CHECK_EQ(elements.front().error(), error::too_little_data);
+    }
+}

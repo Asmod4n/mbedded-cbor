@@ -58,3 +58,14 @@ TEST_CASE("item_size: the nesting depth is not bounded, and the count of items i
     CHECK_EQ(cbor::item_size("\x82\x00\x00"sv).value(), 3u);
     CHECK_EQ(cbor::item_size("\xa1\x00\x00"sv).value(), 3u);
 }
+
+// RFC 8949 3: each data item has at least its initial byte. item_size refuses a count larger than the bytes left with
+// too_little_data before it skips an element, by owner decision.
+TEST_CASE("item_size: a count larger than the bytes left is too_little_data before the elements")
+{
+    for (std::string_view const wire : {"\x8c\xff"sv, "\x95\xf8\x04"sv, "\x95\xbf"sv, "\x88\x00\x7f"sv,
+                                        "\x87\xd8\x1c\x1f"sv, "\x85\xd8\x1c\xd8\x1c"sv, "\xa2\xff\x00\x00"sv}) {
+        CAPTURE(wire);
+        CHECK_EQ(cbor::item_size(wire).error(), error::too_little_data);
+    }
+}

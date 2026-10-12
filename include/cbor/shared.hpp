@@ -611,8 +611,13 @@ value_sharing::tag_content_resolve(std::shared_ptr<top_level_item> source, std::
         auto found = container_resolve(std::move(source), offset, checks);
         if (!found) [[unlikely]]
             return found;
-        if (found->h.major != major_type::tag || !heads::is_tag_passed(found->h.argument)) [[likely]]
+        if (found->h.major != major_type::tag || !heads::is_tag_passed(found->h.argument)) [[likely]] {
+            if (auto const r = validity::check_pending_items(found->h.major, found->h.info, found->h.argument,
+                                                             found->d.encoded.size());
+                !r) [[unlikely]]
+                return std::unexpected(r.error());
             return found;
+        }
         source = std::move(found->source);
         offset = source->encoded.size() - found->d.encoded.size();
     }

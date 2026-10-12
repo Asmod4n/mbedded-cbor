@@ -20,7 +20,8 @@ runs the JSONPath Compliance Test Suite.
 is called: the heads from the start of its map or array to the target,
 and the head of the target. It reads no byte after the head of the
 target. So a target that the input does not hold gives `too_little_data`
-at the step.
+at the step. A map or an array that claims more items than the bytes
+left gives `too_little_data` before the step reads an element.
 
 ## 3. A skip keeps a count
 

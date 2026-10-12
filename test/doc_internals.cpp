@@ -31,7 +31,7 @@ TEST_CASE("doc internals: a lazy reads heads when a step needs them")
     CHECK_EQ(broken->get<std::int64_t>().error(), error::syntax_error);
     auto const cut = cbor::lazy::from("\x82\x01"s);
     REQUIRE(cut.has_value());
-    CHECK_EQ(cut->at(0)->get<std::int64_t>(), 1);
+    CHECK_EQ(cut->at(0).error(), error::too_little_data);
     CHECK_EQ(cut->at(1).error(), error::too_little_data);
 }
 

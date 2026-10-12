@@ -193,21 +193,19 @@ TEST_CASE("lazy: a reference to its own enclosing mark ends")
     CHECK_FALSE(test::value_of(lazy_of(doc)).has_value());
 }
 
-// Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. A lookup stops at the first key that
-// matches, so it does not go on through the claimed pairs after it reached the target.
+// Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. The count is larger than the bytes left, so
+// the lookup gives too_little_data before it reads a key, by owner decision.
 TEST_CASE("lazy: a value inside a huge claimed map")
 {
     std::string const doc = "\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s;
-    auto const a = lazy_of(doc).at("a");
-    REQUIRE(a.has_value());
-    CHECK(value_at(*a) == V(0));
+    CHECK_EQ(lazy_of(doc).at("a").error(), error::too_little_data);
 }
 
 // Found by the fuzzer: [28(28(29(0))), ...] leads from the reference through two marks back to the
 // same reference. A reference that the walk meets a second time ends it.
 TEST_CASE("lazy: a chain of marks back to the same reference ends")
 {
-    std::string const doc = "\x92\xd8\x1c\xd8\x1c\xd8\x1d\x00"s;
+    std::string const doc = "\x82\xd8\x1c\xd8\x1c\xd8\x1d\x00\x00"s;
     auto const element = lazy_of(doc).at(0);
     REQUIRE(element.has_value());
     CHECK_EQ(element->at(0).error(), error::sharedref_not_complete);
@@ -1275,12 +1273,8 @@ TEST_CASE("lazy: a head that claims more items than bytes is too little data")
 {
     CHECK_EQ(lazy_of("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"s).elements().error(), error::too_little_data);
     CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s).entries().error(), error::too_little_data);
-    auto const l = lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x61" "a\x01"s);
-    auto it = *l.find("a");
-    REQUIRE(it != std::default_sentinel);
-    CHECK(++it != std::default_sentinel);
-    CHECK_FALSE((*it).has_value());
-    CHECK(std::ranges::distance(it, std::default_sentinel) <= 3);
+    CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x61" "a\x01"s).find("a").error(),
+             error::too_little_data);
 }
 
 // Fault p14: each resolve of tag 24 makes a new top-level item, and the
@@ -1362,7 +1356,7 @@ TEST_CASE("lazy: a lookup in a map that ends early is too_little_data")
     CHECK_EQ(cut.at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
     CHECK_EQ(cut.contains("a").error(), error::too_little_data);
     CHECK_EQ(lazy_of("\xa2\x61\x61\x01"s).at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
-    CHECK(lazy_of("\xa2\x61\x61\x01"s).at("a").has_value());
+    CHECK_EQ(lazy_of("\xa2\x61\x61\x01"s).at("a").error(), error::too_little_data);
     CHECK_EQ(lazy_of("\xa1\x61\x62\x01"s).at("a").error(), error::key_not_found);
 }
 
@@ -1527,4 +1521,20 @@ TEST_CASE("lazy: a step passes a tag that it does not read")
     CHECK_EQ(cbor::at_path<"$[1]", int>(doc), 2);
     CHECK_EQ(*lazy_of(doc).at(1)->get<int>(), 2);
     CHECK_EQ(*lazy_of(doc).size(), 2u);
+}
+
+// RFC 8949 3: each data item has at least its initial byte. A step into an array or a map whose count is larger than
+// the bytes left is too_little_data before any element is read, by owner decision, as size() gives.
+TEST_CASE("lazy: a count larger than the bytes left is too_little_data before the elements")
+{
+    for (std::string const &wire : {"\x8c\xff"s, "\x95\xf8\x04"s, "\x95\xbf"s, "\x88\x00\x7f"s, "\x87\xd8\x1c\x1f"s,
+                                   "\x85\xd8\x1c\xd8\x1c"s}) {
+        CAPTURE(wire);
+        CHECK_EQ(lazy_of(wire).size().error(), error::too_little_data);
+        CHECK_EQ(lazy_of(wire).at(0).error(), error::too_little_data);
+        CHECK_EQ(lazy_of(wire).elements().error(), error::too_little_data);
+    }
+    CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).at("a").error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).entries().error(), error::too_little_data);
 }

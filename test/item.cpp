@@ -823,7 +823,7 @@ TEST_CASE("decode: the limits and the nesting depth count inside tag 24")
 }
 
 // RFC 8949 3.4.5.1: the byte string of tag 24 holds one encoded data item. decode reads everything and refuses
-// bytes after that item with syntax_error; the error is a provisional form that the owner has not decided yet.
+// bytes after that item with syntax_error; the owner decided on this error.
 // A lazy step and a typed read read only up to their target, by owner decision, so they do not see those bytes.
 TEST_CASE("tag 24 with bytes after its data item is refused by decode and not seen by a step")
 {
@@ -840,4 +840,19 @@ TEST_CASE("tag 24 with bytes after its data item is refused by decode and not se
     CHECK_EQ(*cbor::at_path<"$[0]", int>(std::string_view(in_array)), 1);
 }
 
+}
+
+// RFC 8949 3: each data item has at least its initial byte. decode refuses a count larger than the bytes left with
+// too_little_data before it reads an element, by owner decision; the malformed element after the head is not reached.
+TEST_CASE("decode: a count larger than the bytes left is too_little_data before the elements")
+{
+    for (std::string const &wire : {"\x8c\xff"s, "\x95\xf8\x04"s, "\x95\xbf"s, "\x88\x00\x7f"s, "\x87\xd8\x1c\x1f"s,
+                                   "\x85\xd8\x1c\xd8\x1c"s, "\xa2\xff\x00\x00"s}) {
+        CAPTURE(wire);
+        auto const top_level = cbor::lazy::from(std::string(wire));
+        REQUIRE(top_level.has_value());
+        auto const r = top_level->decode();
+        REQUIRE_FALSE(r.has_value());
+        CHECK_EQ(r.error(), cbor::error::too_little_data);
+    }
 }

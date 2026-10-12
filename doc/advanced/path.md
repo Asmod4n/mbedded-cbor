@@ -360,18 +360,20 @@ the same path many times, use a compile-time path.
 ## 11. What the form over bytes checks
 
 A path reads the heads from the start of the item to the target, and the
-heads and strings that it skips on the way. It does not read the bytes
-after the target. So these faults are not found:
+heads and strings that it skips on the way. Each data item has at least
+one byte, so an array or a map that claims more items than the bytes left
+gives `too_little_data` before any element is read. A path does not read
+the bytes after the target. So these faults are not found:
 
 | bytes | Call | Result |
 |---|---|---|
-| `82 01`, the second element is missing | `at_path<"$[0]", int>` | `1` |
+| `82 01`, the second element is missing | `at_path<"$[0]", int>` | `too_little_data` |
 | `82 01 ff` | `at_path<"$[0]", int>` | `1` |
 | `01 02`, a byte after the item | `at_path<"$", int>` | `1` |
 | `82 01` | `at_path<"$[1]", int>` | `too_little_data` |
 
 `lazy::from` does not read the whole item either: it accepts `82 01` and
-`01 02`. `item_size` and a decode check a whole item.
+`01 02`. A step into `82 01` gives `too_little_data`. `item_size` and a decode check a whole item.
 
 ## 12. Limits
 

@@ -401,7 +401,7 @@ TEST_CASE("doc advanced path: tags in detail")
 // The section "What the form over bytes checks" states that a read stops at the target, so bytes after it are not read.
 TEST_CASE("doc advanced path: bytes after the target are not read")
 {
-    CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01"s), 1);
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01"s).error(), error::too_little_data);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01\xff"s), 1);
     CHECK_EQ(cbor::at_path<"$", int>("\x01\x02"s), 1);
     CHECK(cbor::lazy::from("\x82\x01"s).has_value());
