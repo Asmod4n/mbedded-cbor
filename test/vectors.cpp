@@ -415,6 +415,11 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         return value{std::move(m)};
     }
     case cbor::major_type::tag: {
+        // The decode only stores a tag 29. The check of the content of the enclosing tag runs when the reference
+        // is resolved, so the read of the content resolves it first.
+        if (cbor::item const &inner = *it.via.tag.content; inner.type == cbor::type::tag && inner.via.tag.number == 29)
+            if (auto const r = cbor::shared_value_resolve(*decoded_item, inner); !r)
+                return std::unexpected(r.error());
         // RFC 8949 3: the content follows the head, whose argument takes 1 << (ai - 24) bytes from ai 24 on.
         std::size_t const argument_bytes =
             it.additional_information < 24 ? 0 : std::size_t{1} << (it.additional_information - 24);

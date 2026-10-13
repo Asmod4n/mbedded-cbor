@@ -381,8 +381,9 @@ TEST_CASE("decode: a shared reference points to the item of the shared value")
     CHECK_EQ(elements[1]->via.tag.content->via.u64, 0u);
 }
 
-// A shared reference from inside a lazy to a mark before it: the decode starts at the element and reads the
-// mark before the element, so the reference points to an item with the shared value.
+// A shared reference from inside a lazy to a mark before it: the decode starts at the element and does not
+// decode the mark. shared_value_resolve gives the mark as a lazy, and shared_value, which gives a node of the
+// tree, refuses it as a wrong use.
 TEST_CASE("decode: a shared reference to a mark before the decoded node is read")
 {
     auto const top_level = cbor::lazy::copy(std::string("\x82\xd8\x1c\x62hi\x81\xd8\x1d\x00"sv));
@@ -390,7 +391,13 @@ TEST_CASE("decode: a shared reference to a mark before the decoded node is read"
     auto const element = top_level->at(1);
     REQUIRE(element.has_value());
     auto const inner = item_of(element->decode());
-    CHECK_EQ(cbor::shared_value(inner, *children_of(*inner)[0]).via.str, "hi");
+    cbor::item const &reference = *children_of(*inner)[0];
+    auto const resolved = cbor::shared_value_resolve(inner, reference);
+    REQUIRE(resolved.has_value());
+    auto const *const before = std::get_if<cbor::lazy>(&*resolved);
+    REQUIRE(before != nullptr);
+    CHECK(before->get<std::string_view>() == "hi");
+    CHECK_THROWS_AS((void)cbor::shared_value(inner, reference), std::logic_error);
 }
 
 // A cycle comes from the wire: 28([29(0)]) is an array that holds
@@ -430,8 +437,9 @@ TEST_CASE("decode: a forward shared reference is refused")
 // one before it. The decode of the last element walked the chain once for
 // each step and recursed once for each step at the same depth, so a long chain
 // took time in the square of its length and overflowed the stack. The decode
-// reads the marks before the element in one loop, and the chain of pointers
-// ends at the integer at its start.
+// now only stores the tag 29. The mark lies before the decoded element, so
+// shared_value_resolve gives it as a lazy, and the lazy follows the chain in
+// one loop to the integer at its start.
 TEST_CASE("decode: a long chain of shared references resolves without recursion")
 {
     constexpr std::uint16_t chain_length = 50000;
@@ -456,15 +464,12 @@ TEST_CASE("decode: a long chain of shared references resolves without recursion"
     auto const last = top_level->at(chain_length - 1);
     REQUIRE(last.has_value());
     auto const decoded = item_of(last->decode());
-    cbor::item const *at = decoded->via.tag.content;
-    std::size_t steps = 0;
-    while (at->type == cbor::type::tag && at->via.tag.number == 29) {
-        at = &cbor::shared_value(decoded, *at);
-        if (++steps > chain_length)
-            break;
-    }
-    CHECK_EQ(steps, chain_length - 1u);
-    CHECK_EQ(at->type, cbor::type::unsigned_integer);
+    REQUIRE_EQ(decoded->via.tag.content->type, cbor::type::tag);
+    auto const resolved = cbor::shared_value_resolve(decoded, *decoded->via.tag.content);
+    REQUIRE(resolved.has_value());
+    auto const *const before = std::get_if<cbor::lazy>(&*resolved);
+    REQUIRE(before != nullptr);
+    CHECK(before->get<std::uint64_t>() == 0u);
 }
 
 // The nesting depth is checked where the decode recurses: 100(100(100(0))) holds an

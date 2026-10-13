@@ -463,6 +463,8 @@ inline std::string magnitude_plus_one(std::string_view const m)
 inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it,
                                             std::vector<cbor::item const *> &open);
 
+inline std::expected<value, error> value_of(cbor::lazy const &l);
+
 // The reference model of a decoded item tree. Tag 28 is the value it marks, and tag 29 is the value it points to,
 // as an application without identity reads them. A bignum that fits 64 bits is an integer. A reference to an item
 // whose read is not complete is sharedref_not_complete, as a cycle has no value in this model. Tag 24 is a tag
@@ -493,7 +495,12 @@ inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> co
         break;
     }
     if (it.type == cbor::type::tag && it.via.tag.number == 29) {
-        cbor::item const &shared = cbor::shared_value(tree, it);
+        auto const resolved = cbor::shared_value_resolve(tree, it);
+        if (!resolved)
+            return std::unexpected(resolved.error());
+        if (auto const *const before = std::get_if<cbor::lazy>(&*resolved))
+            return value_of(*before);
+        cbor::item const &shared = std::get<std::reference_wrapper<cbor::item const>>(*resolved).get();
         if (std::ranges::find(open, &shared) != open.end())
             return std::unexpected(error::sharedref_not_complete);
         open.push_back(&it);

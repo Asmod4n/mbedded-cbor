@@ -1310,6 +1310,8 @@ TEST_CASE("lazy: elements and entries refuse indefinite length")
 // application moves a value from one thread to another. This test gives
 // each thread its own lazy of the same bytes, the form the library
 // supports, and a thread sanitizer build reports any state they share.
+// The tag 29 names a mark before the decoded map, so the tree does not
+// hold it, and shared_value_resolve gives it as a lazy.
 TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
 {
     constexpr std::size_t threads = 4;
@@ -1326,9 +1328,13 @@ TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
                                        .and_then([](cbor::lazy const &r) { return r.decode(); });
                 bool const reference = named.has_value() && (*named)->type == cbor::type::tag &&
                                        (*named)->via.tag.number == 29;
-                cbor::item const *const shared = reference ? &cbor::shared_value(*named, **named) : nullptr;
-                right[t] = text.has_value() && **text == "hello" && shared != nullptr &&
-                           shared->type == cbor::type::text_string && shared->via.str == "hello";
+                bool found = false;
+                if (reference)
+                    if (auto const shared = cbor::shared_value_resolve(*named, **named); shared)
+                        if (auto const *const before = std::get_if<cbor::lazy>(&*shared))
+                            if (auto const value = before->get<std::string_view>(); value)
+                                found = *value == "hello";
+                right[t] = text.has_value() && **text == "hello" && found;
             });
     }
     CHECK(std::ranges::all_of(right, std::identity{}));
