@@ -781,44 +781,4 @@ class heads
 #endif
 };
 
-template <std::invocable MarksRead, class Projection, bool Checked>
-std::expected<void, error>
-validity::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
-                            offset const content_at, MarksRead const marks_read,
-                            Projection const offset_of, limit_checks<Checked> const checks)
-{
-    offset at = content_at;
-    std::size_t references_followed = 0;
-    for (;;) {
-        auto const c = heads::raw_head_read(encoded, at, checks);
-        if (!c) [[unlikely]]
-            return std::unexpected(c.error());
-        if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-            at = c->at;
-            continue;
-        }
-        if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
-            return check_tag_content(tag, c->major, c->info);
-        auto const n = heads::raw_head_read(encoded, c->at, checks);
-        if (!n) [[unlikely]]
-            return std::unexpected(n.error());
-        if (error const e = check_tag_content(c->argument, n->major, n->info).error_or(error{}); e != error{})
-            [[unlikely]]
-            return std::unexpected(e);
-        auto const &marks = std::invoke(marks_read);
-        auto const i = check_sharedref_index(
-            n->argument, static_cast<std::size_t>(std::ranges::distance(
-                             std::ranges::begin(marks), std::ranges::upper_bound(marks, at, {}, offset_of))));
-        if (!i) [[unlikely]]
-            return std::unexpected(i.error());
-        if (auto const ends = check_sharedref_chain_ends(++references_followed, std::ranges::size(marks)); !ends)
-            [[unlikely]]
-            return std::unexpected(ends.error());
-        offset const marked = std::invoke(offset_of, marks[*i]);
-        if (marked >= at) [[unlikely]]
-            return std::unexpected(error::sharedref_not_complete);
-        at = marked;
-    }
-}
-
 }

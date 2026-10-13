@@ -275,15 +275,6 @@ public:
                                                       offset second_at, std::size_t depth,
                                                       std::size_t depth_max, limit_checks<Checked> checks);
 
-    template <std::invocable MarksRead, class Projection, bool Checked>
-    static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
-                                                        offset content_at, MarksRead marks_read,
-                                                        Projection offset_of, limit_checks<Checked> checks);
-
-    template <class Item>
-    static std::expected<void, error> check_tag_content(std::uint64_t tag, Item const *content,
-                                                        std::span<Item const *const> shareables);
-
     static constexpr error writer_error(std::errc const e) noexcept
     {
         if (e == std::errc::no_buffer_space)
@@ -397,24 +388,6 @@ public:
             return std::unexpected(error::incorrect_type);
         if (size % typed_array_element_size(tag) != 0) [[unlikely]]
             return std::unexpected(error::inadmissible_type_for_tag_content);
-        return {};
-    }
-
-    CBOR_ALWAYS_INLINE static constexpr std::expected<std::size_t, error>
-    check_sharedref_index(std::uint64_t const argument, std::size_t const marked)
-    {
-        if (!std::in_range<std::size_t>(argument)) [[unlikely]]
-            return std::unexpected(error::sharedref_index_out_of_range);
-        if (argument >= marked) [[unlikely]]
-            return std::unexpected(error::sharedref_index_not_marked);
-        return static_cast<std::size_t>(argument);
-    }
-
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_sharedref_chain_ends(std::size_t const references_followed, std::size_t const marked)
-    {
-        if (references_followed > marked) [[unlikely]]
-            return std::unexpected(error::sharedref_not_complete);
         return {};
     }
 

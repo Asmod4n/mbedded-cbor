@@ -48,6 +48,37 @@ struct lazy_entries;
 
 class value_sharing
 {
+public:
+    enum class index : std::size_t {};
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<index, error>
+    check_sharedref_index(std::uint64_t const argument, std::size_t const marked)
+    {
+        if (!std::in_range<std::size_t>(argument)) [[unlikely]]
+            return std::unexpected(error::sharedref_index_out_of_range);
+        if (argument >= marked) [[unlikely]]
+            return std::unexpected(error::sharedref_index_not_marked);
+        return index{static_cast<std::size_t>(argument)};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_sharedref_chain_ends(std::size_t const references_followed, std::size_t const marked)
+    {
+        if (references_followed > marked) [[unlikely]]
+            return std::unexpected(error::sharedref_not_complete);
+        return {};
+    }
+
+    template <std::invocable MarksRead, class Projection, bool Checked>
+    static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
+                                                        validity::offset content_at, MarksRead marks_read,
+                                                        Projection offset_of, validity::limit_checks<Checked> checks);
+
+    template <class Item>
+    static std::expected<void, error> check_tag_content(std::uint64_t tag, Item const *content,
+                                                        std::span<Item const *const> shareables);
+
+private:
     struct top_level_item;
 
     struct zone;
@@ -93,7 +124,7 @@ class value_sharing
     static std::expected<resolved<Checked>, error> lazy_resolve(lazy const &node, validity::limit_checks<Checked> checks);
 
     template <bool Checked, std::integral Index>
-    static std::expected<lazy, error> index_select(resolved<Checked> const &found, Index index);
+    static std::expected<lazy, error> index_select(resolved<Checked> const &found, Index i);
 
     template <class Key, class Entries = lazy_entries, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
@@ -399,6 +430,46 @@ inline constexpr bool std::ranges::enable_borrowed_range<cbor::lazy_entries> = t
 namespace cbor
 {
 
+template <std::invocable MarksRead, class Projection, bool Checked>
+std::expected<void, error>
+value_sharing::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
+                                 validity::offset const content_at, MarksRead const marks_read,
+                                 Projection const offset_of, validity::limit_checks<Checked> const checks)
+{
+    validity::offset at = content_at;
+    std::size_t references_followed = 0;
+    for (;;) {
+        auto const c = heads::raw_head_read(encoded, at, checks);
+        if (!c) [[unlikely]]
+            return std::unexpected(c.error());
+        if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
+            at = c->at;
+            continue;
+        }
+        if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
+            return validity::check_tag_content(tag, c->major, c->info);
+        auto const n = heads::raw_head_read(encoded, c->at, checks);
+        if (!n) [[unlikely]]
+            return std::unexpected(n.error());
+        if (error const e = validity::check_tag_content(c->argument, n->major, n->info).error_or(error{}); e != error{})
+            [[unlikely]]
+            return std::unexpected(e);
+        auto const &marks = std::invoke(marks_read);
+        auto const marked = check_sharedref_index(
+            n->argument, static_cast<std::size_t>(std::ranges::distance(
+                             std::ranges::begin(marks), std::ranges::upper_bound(marks, at, {}, offset_of))));
+        if (!marked) [[unlikely]]
+            return std::unexpected(marked.error());
+        if (auto const ends = check_sharedref_chain_ends(++references_followed, std::ranges::size(marks)); !ends)
+            [[unlikely]]
+            return std::unexpected(ends.error());
+        validity::offset const shared = std::invoke(offset_of, marks[std::to_underlying(*marked)]);
+        if (shared >= at) [[unlikely]]
+            return std::unexpected(error::sharedref_not_complete);
+        at = shared;
+    }
+}
+
 struct value_sharing::top_level_item {
     std::shared_ptr<void const> owner;
     std::string_view encoded;
@@ -489,11 +560,11 @@ struct value_sharing::top_level_item {
             c != error{}) [[unlikely]]
             return std::unexpected(c);
         auto const before = std::ranges::upper_bound(marks, reference_at, {}, &lazy::offset);
-        auto const index = validity::check_sharedref_index(
+        auto const marked = check_sharedref_index(
             n->argument, static_cast<std::size_t>(std::ranges::distance(marks.begin(), before)));
-        if (!index) [[unlikely]]
-            return std::unexpected(index.error());
-        lazy const &found = marks[*index];
+        if (!marked) [[unlikely]]
+            return std::unexpected(marked.error());
+        lazy const &found = marks[std::to_underlying(*marked)];
         if (found.offset >= item_at) [[unlikely]]
             return std::unexpected(error::sharedref_not_complete);
         return found;
@@ -631,17 +702,17 @@ std::expected<validity::offset, error> value_sharing::shared_resolve(top_level_i
         auto const found = top_level_item::sharedref_decode(d, at, item_at, marks);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
-        auto const index = static_cast<std::size_t>(std::ranges::distance(
+        auto const position = static_cast<std::size_t>(std::ranges::distance(
             marks.begin(), std::ranges::lower_bound(marks, found->offset, {}, &lazy::offset)));
         if (top_level.sharedrefs_resolved.size() < marks.size())
             top_level.sharedrefs_resolved.resize(marks.size(), validity::npos);
-        if (top_level.sharedrefs_resolved[index] != validity::npos) {
+        if (top_level.sharedrefs_resolved[position] != validity::npos) {
             if (first < top_level.sharedrefs_resolved.size())
-                top_level.sharedrefs_resolved[first] = top_level.sharedrefs_resolved[index];
-            return top_level.sharedrefs_resolved[index];
+                top_level.sharedrefs_resolved[first] = top_level.sharedrefs_resolved[position];
+            return top_level.sharedrefs_resolved[position];
         }
         if (first == std::numeric_limits<std::size_t>::max())
-            first = index;
+            first = position;
         at = found->offset;
         item_at = at;
     }
