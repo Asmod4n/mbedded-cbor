@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -480,8 +481,14 @@ inline std::expected<void, error> named_content_check(std::uint64_t const number
     return {};
 }
 
-// The offsets of the marked values whose read is not complete.
-using open_marks = std::vector<decltype(cbor::lazy::offset)>;
+// The value of each tag 28 in stream order, empty while its content is read, so that a tag 29 takes the value and
+// decodes nothing again. A tree that does not start at the first byte of its top-level item does not know the index
+// of its first mark; it follows each tag 29 and keeps the offsets of the marked values whose read is not complete.
+struct open_marks {
+    bool by_index;
+    std::vector<std::optional<value>> marked;
+    std::vector<decltype(cbor::lazy::offset)> following;
+};
 
 inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it,
                                             open_marks &open);
@@ -519,15 +526,25 @@ inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> co
     default:
         break;
     }
+    if (it.type == cbor::type::tag && it.via.tag.number == 29 && open.by_index &&
+        it.via.tag.content->type == cbor::type::unsigned_integer) {
+        auto const index = cbor::value_sharing::check_sharedref_index(it.via.tag.content->via.u64, open.marked.size());
+        if (!index)
+            return std::unexpected(index.error());
+        auto const &found = open.marked[std::to_underlying(*index)];
+        if (!found)
+            return std::unexpected(error::sharedref_not_complete);
+        return *found;
+    }
     if (it.type == cbor::type::tag && it.via.tag.number == 29) {
         auto const resolved = cbor::shared_value_resolve(tree, it);
         if (!resolved)
             return std::unexpected(resolved.error());
-        if (std::ranges::find(open, resolved->offset) != open.end())
+        if (std::ranges::find(open.following, resolved->offset) != open.following.end())
             return std::unexpected(error::sharedref_not_complete);
-        open.push_back(resolved->offset);
+        open.following.push_back(resolved->offset);
         auto made = value_of(*resolved, open);
-        open.pop_back();
+        open.following.pop_back();
         return made;
     }
     std::expected<value, error> made = value{};
@@ -562,7 +579,13 @@ inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> co
         if (inner.type == cbor::type::tag && inner.via.tag.number == 29)
             if (auto const r = named_content_check(number, cbor::shared_value_resolve(tree, inner)); !r)
                 return std::unexpected(r.error());
-        if (number == 28) {
+        if (number == 28 && open.by_index) {
+            std::size_t const index = open.marked.size();
+            open.marked.emplace_back();
+            made = value_of(tree, inner, open);
+            if (made)
+                open.marked[index] = *made;
+        } else if (number == 28) {
             made = value_of(tree, inner, open);
         } else if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
             bool const negative_value = number == 3;
@@ -594,7 +617,7 @@ inline std::expected<value, error> value_of(cbor::lazy const &l, open_marks &ope
 
 inline std::expected<value, error> value_of(cbor::lazy const &l)
 {
-    open_marks open;
+    open_marks open{l.offset == decltype(l.offset){}, {}, {}};
     return value_of(l, open);
 }
 

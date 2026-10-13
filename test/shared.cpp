@@ -1169,3 +1169,19 @@ TEST_CASE("encoder: a cycle through tag 6 decodes into a tree with a cycle")
     CHECK_EQ(argument_of(*target(r)), 6u);
     CHECK(same(content(r), r));
 }
+
+// The reference model takes, for a tag 29, the value that it kept for its mark, and decodes nothing again. The
+// order of the specification holds: the mark is recorded before its content is read, so a tag 29 inside that
+// content names a value under construction, which a model without identity cannot hold.
+TEST_CASE("tag 28/29: the reference model reads each marked value once")
+{
+    auto const of = [](std::string_view const wire) { return test::value_of(*cbor::lazy::copy(wire)); };
+    CHECK_EQ(of("\xd8\x1c\x81\xd8\x1d\x00"sv).error(), error::sharedref_not_complete);
+    CHECK_EQ(of("\xd8\x1c\xa1\x01\xd8\x1d\x00"sv).error(), error::sharedref_not_complete);
+    CHECK_EQ(of("\xd8\x1c\x81\xd8\x1c\x82\xd8\x1d\x00\xd8\x1d\x01"sv).error(), error::sharedref_not_complete);
+    CHECK_EQ(of("\xd8\x1c\xd8\x1d\x00"sv).error(), error::sharedref_not_complete);
+    CHECK_EQ(of("\x82\xd8\x1d\x00\xd8\x1c\x01"sv).error(), error::sharedref_index_not_marked);
+    auto const dag = of("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"sv);
+    REQUIRE(dag.has_value());
+    CHECK(*dag == *of("\x83\x82\x01\x02\x82\x01\x02\x82\x01\x02"sv));
+}

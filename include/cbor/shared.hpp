@@ -1,5 +1,6 @@
 #pragma once
 
+#include <any>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -682,7 +683,13 @@ struct value_sharing::tree_decoder {
 
 template <bool Checked>
 struct value_sharing::sharing_decoder : heads::decoder<Checked> {
+    struct marked_value {
+        std::any value;
+        bool open;
+    };
+
     top_level_item message;
+    std::vector<marked_value> marked_values;
 };
 
 template <bool Checked>

@@ -211,6 +211,8 @@ class generic
     static std::expected<void, error> generic_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                    std::size_t const depth, std::size_t const depth_max)
     {
+        std::size_t first_mark = 0;
+        std::size_t marks = 0;
         for (;;) {
             heads::decoder<Checked> look = d;
             auto const h = look.head_decode();
@@ -220,11 +222,40 @@ class generic
                 break;
             if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
                 d.encoded = look.encoded;
-                d.message.mark(d);
+                std::size_t const index = d.message.mark(d);
+                if (marks == 0)
+                    first_mark = index;
+                ++marks;
+                if (d.marked_values.size() <= index)
+                    d.marked_values.resize(index + 1);
+                d.marked_values[index].open = true;
                 continue;
             }
             if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
                 break;
+            if constexpr (std::copy_constructible<U>) {
+                heads::decoder<Checked> number = look;
+                auto const n = number.head_decode();
+                if (!n) [[unlikely]]
+                    return std::unexpected(n.error());
+                if (error const e = validity::check_tag_content(h->argument, n->major, n->info).error_or(error{});
+                    e != error{}) [[unlikely]]
+                    return std::unexpected(e);
+                auto const index = value_sharing::check_sharedref_index(n->argument, d.message.sharedrefs.size());
+                if (!index) [[unlikely]]
+                    return std::unexpected(index.error());
+                std::size_t const i = std::to_underlying(*index);
+                if (i < d.marked_values.size()) {
+                    auto const &slot = d.marked_values[i];
+                    if (slot.open) [[unlikely]]
+                        return std::unexpected(error::sharedref_not_complete);
+                    if (U const *const decoded = std::any_cast<U>(&slot.value)) {
+                        out = *decoded;
+                        d.encoded = number.encoded;
+                        return marked_values_store(d, out, first_mark, marks);
+                    }
+                }
+            }
             auto const target = value_sharing::sharedref_follow(
                 d.message.encoded, validity::distance(d.message.encoded, d.encoded),
                 [&d](validity::offset) -> auto const & { return d.message.sharedrefs; }, &lazy::offset, false,
@@ -238,9 +269,25 @@ class generic
             d.encoded = validity::subspan(d.message.encoded, *target);
             auto const r = generic_value_read(d, out, depth + 1, depth_max);
             d.encoded = rest;
-            return r;
+            if (!r) [[unlikely]]
+                return r;
+            return marked_values_store(d, out, first_mark, marks);
         }
-        return generic_value_read(d, out, depth, depth_max);
+        if (auto const r = generic_value_read(d, out, depth, depth_max); !r) [[unlikely]]
+            return r;
+        return marked_values_store(d, out, first_mark, marks);
+    }
+
+    template <class U, bool Checked>
+    static std::expected<void, error> marked_values_store(value_sharing::sharing_decoder<Checked> &d, U const &decoded,
+                                                          std::size_t const first_mark, std::size_t const marks)
+    {
+        for (auto &slot : std::span(d.marked_values).subspan(first_mark, marks)) {
+            if constexpr (std::copy_constructible<U>)
+                slot.value = decoded;
+            slot.open = false;
+        }
+        return {};
     }
 
     template <class U, bool Checked>
