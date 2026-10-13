@@ -1697,13 +1697,26 @@ TEST_CASE("lazy: an index reads an element of each typed array")
         CHECK_EQ(*l.at(1)->get<double>(), 1.5);
         CHECK_EQ(l.at(1)->get<std::int64_t>().error(), error::incorrect_type);
     }
-    // A float of 128 bits has no C++ type that the library reads, so its element is incorrect_type, as at_path gives.
+    // A float of 128 bits has no C++ type that the library reads. The index selects the element, and the read
+    // of its value is incorrect_type.
     for (int const tag : {83, 87}) {
         CAPTURE(tag);
         auto const l = lazy_of(typed_array_of(tag, std::string(32, '\0')));
         CHECK_EQ(*l.size(), 2u);
-        CHECK_EQ(l.at(1).error(), error::incorrect_type);
+        auto const element = l.at(1);
+        REQUIRE(element.has_value());
+        CHECK_EQ(element->get<double>().error(), error::incorrect_type);
+        CHECK_EQ(element->get<std::int64_t>().error(), error::incorrect_type);
     }
+    // An element is a number and no container, and its type and its decoded item are those of the number.
+    auto const element = lazy_of(typed_array_of(81, "\x00\x00\x00\x00\x3f\xc0\x00\x00"sv)).at(1);
+    REQUIRE(element.has_value());
+    CHECK_EQ(*element->type(), cbor::type::single_float);
+    CHECK_EQ(element->at(0).error(), error::not_indexable);
+    CHECK_EQ((*element->decode())->type, cbor::type::single_float);
+    auto const negative = lazy_of(typed_array_of(72, "\x00\xff"sv)).at(1);
+    REQUIRE(negative.has_value());
+    CHECK_EQ(*negative->type(), cbor::type::negative_integer);
     // Tag 76 is reserved in RFC 8746 2.1, so it is no typed array.
     CHECK_EQ(lazy_of(typed_array_of(76, "\x00\x00"sv)).at(0).error(), error::not_indexable);
 }

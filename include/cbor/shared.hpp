@@ -79,11 +79,11 @@ class value_sharing
     template <bool Checked>
     static std::expected<std::string_view, error> typed_array_bytes_read(resolved<Checked> const &found);
 
-    static std::expected<std::vector<lazy>, error> elements_encode(std::uint64_t tag, std::string_view bytes,
-                                                                   std::uint64_t first, std::uint64_t count);
+    template <bool Checked>
+    static std::expected<resolved<Checked>, error> lazy_resolve(lazy const &node, validity::limit_checks<Checked> checks);
 
     template <bool Checked, std::integral Index>
-    static std::expected<lazy, error> typed_array_index_select(resolved<Checked> const &found, Index index);
+    static std::expected<lazy, error> index_select(resolved<Checked> const &found, Index index);
 
     template <class Key, class Entries = lazy_entries, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
@@ -153,8 +153,8 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
 
     private:
         iterator(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const l,
-                 limit_values const v)
-            : top_level(std::move(t)), offset(o), left(l), loaded(v)
+                 limit_values const v, std::uint64_t const tag)
+            : top_level(std::move(t)), offset(o), left(l), loaded(v), typed_array_tag(tag)
         {
         }
 
@@ -163,13 +163,14 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         std::uint64_t left{};
         error failure{};
         limit_values loaded{};
+        std::uint64_t typed_array_tag{};
 
         friend struct lazy_elements;
     };
 
     iterator begin() const
     {
-        return iterator{top_level, offset, count, loaded};
+        return iterator{top_level, offset, count, loaded, typed_array_tag};
     }
 
     std::default_sentinel_t end() const
@@ -186,8 +187,8 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
 
 private:
     lazy_elements(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o,
-                  std::uint64_t const c, limit_values const v)
-        : top_level(std::move(t)), offset(o), count(c), loaded(v)
+                  std::uint64_t const c, limit_values const v, std::uint64_t const tag)
+        : top_level(std::move(t)), offset(o), count(c), loaded(v), typed_array_tag(tag)
     {
     }
 
@@ -195,6 +196,7 @@ private:
     std::size_t offset;
     std::uint64_t count;
     limit_values loaded;
+    std::uint64_t typed_array_tag;
 
     friend struct lazy;
 };
@@ -284,6 +286,7 @@ private:
 struct lazy {
     std::shared_ptr<value_sharing::top_level_item> top_level;
     std::size_t offset;
+    std::uint64_t typed_array_tag{};
 
     static std::expected<lazy, error> copy(std::string_view encoded);
     template <std::same_as<std::string> Encoded>
@@ -451,7 +454,7 @@ struct value_sharing::top_level_item {
     {
         std::size_t const offset = encoded.size() - at.encoded.size();
         if (offset > high_water_mark) {
-            sharedrefs.push_back(lazy{{}, offset});
+            sharedrefs.push_back(lazy{{}, offset, {}});
             high_water_mark = offset;
             return sharedrefs.size() - 1;
         }
