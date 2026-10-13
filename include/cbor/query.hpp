@@ -695,6 +695,9 @@ class jsonpath
                     return std::unexpected(embedded.error());
                 d = heads::decoder<Checked>{*embedded, checks};
             }
+            if (auto const r = validity::check_pending_items(h.major, h.info, h.argument, d.encoded.size()); !r)
+                [[unlikely]]
+                return std::unexpected(r.error());
             if (step == top.segment_count)
                 break;
             selector const &each = v.selectors[v.segments[top.segment_at + step].selector_at];

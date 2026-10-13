@@ -274,3 +274,14 @@ TEST_CASE("diagnostic_notation: a tag encloses an indefinite-length item")
     CHECK_EQ(inspected("d81c9f01ff"), "28([_ 1])");
     CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("c09fff")).error(), error::inadmissible_type_for_tag_content);
 }
+
+// RFC 8949 3: each data item has at least its initial byte. diagnostic_notation refuses a count larger than the bytes
+// left with too_little_data before it writes an element, by owner decision.
+TEST_CASE("diagnostic_notation: a count larger than the bytes left is too_little_data before the elements")
+{
+    for (std::string_view const wire : {"\x8c\xff"sv, "\x95\xf8\x04"sv, "\x95\xbf"sv, "\x88\x00\x7f"sv,
+                                        "\x87\xd8\x1c\x1f"sv, "\x85\xd8\x1c\xd8\x1c"sv, "\xa2\xff\x00\x00"sv}) {
+        CAPTURE(wire);
+        CHECK_EQ(cbor::diagnostic_notation(wire).error(), error::too_little_data);
+    }
+}

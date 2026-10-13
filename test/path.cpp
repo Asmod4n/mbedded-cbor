@@ -952,8 +952,9 @@ TEST_CASE("path: a typed read through tag 29")
 TEST_CASE("path: a typed read of the fuzzer findings of lazy")
 {
     check_path<"$[0]", std::uint64_t>("\xd8\x1c\xd8\x1d\x00"s, {std::int64_t{0}}, std::unexpected(error::sharedref_not_complete));
-    check_path<"$.a", std::uint64_t>("\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s, {"a"sv}, 0u);
-    check_path<"$[0][0]", std::uint64_t>("\x92\xd8\x1c\xd8\x1c\xd8\x1d\x00"s, {std::int64_t{0}, std::int64_t{0}},
+    check_path<"$.a", std::uint64_t>("\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s, {"a"sv},
+                                     std::unexpected(error::too_little_data));
+    check_path<"$[0][0]", std::uint64_t>("\x82\xd8\x1c\xd8\x1c\xd8\x1d\x00\x00"s, {std::int64_t{0}, std::int64_t{0}},
                                          std::unexpected(error::sharedref_not_complete));
     std::string const forward = "\x82\xd8\x1d\x00\xd8\x1c\x05"s;
     check_path<"$[1]", std::uint64_t>(forward, {std::int64_t{1}}, 5u);
@@ -1258,4 +1259,21 @@ TEST_CASE("a compile-time path with a long name compiles with every sanitizer")
     auto const first = cbor::at_path<"$.average_prices_in_euro[0]", int>(bytes);
     REQUIRE(first.has_value());
     CHECK_EQ(*first, 42);
+}
+
+// RFC 8949 3: each data item has at least its initial byte, so an array of n items needs n bytes after its head and a
+// map of n pairs needs 2n. A count larger than the bytes left is too_little_data before any element is read, by owner
+// decision; the malformed element after the head (ff, f8 04, bf, 7f, 1f) is not reached.
+TEST_CASE("path: a count larger than the bytes left is too_little_data before the elements")
+{
+    check_path<"$[-1]", std::int64_t>("\x8c\xff"s, {std::int64_t{-1}}, std::unexpected(error::too_little_data));
+    check_path<"$[0]", std::int64_t>("\x95\xf8\x04"s, {std::int64_t{0}}, std::unexpected(error::too_little_data));
+    check_path<"$[0]", std::int64_t>("\x95\xbf"s, {std::int64_t{0}}, std::unexpected(error::too_little_data));
+    check_path<"$[1]", std::int64_t>("\x88\x00\x7f"s, {std::int64_t{1}}, std::unexpected(error::too_little_data));
+    check_path<"$[1]", std::int64_t>("\x87\xd8\x1c\x1f"s, {std::int64_t{1}}, std::unexpected(error::too_little_data));
+    check_path<"$[1]", std::int64_t>("\x85\xd8\x1c\xd8\x1c"s, {std::int64_t{1}}, std::unexpected(error::too_little_data));
+    check_path<"$[0][0]", std::int64_t>("\x81\x8c\xff"s, {std::int64_t{0}, std::int64_t{0}},
+                                        std::unexpected(error::too_little_data));
+    check_path<"$.a", std::int64_t>("\xa2\xff\x00\x00"s, {"a"sv}, std::unexpected(error::too_little_data));
+    check_path<"$", std::int64_t>("\x8c\xff"s, {}, std::unexpected(error::too_little_data));
 }

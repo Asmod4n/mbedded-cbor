@@ -151,6 +151,23 @@ public:
         return {};
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_pending_items(major_type const major, std::uint8_t const info, std::uint64_t const argument,
+                        std::size_t const bytes_left)
+    {
+        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
+            return {};
+        if (major == major_type::array)
+            return check_pending_items(argument, bytes_left);
+        if (major == major_type::map) {
+            auto const items = checked_mul(argument, std::uint64_t{rfc8949::data_items_per_pair});
+            if (!items) [[unlikely]]
+                return std::unexpected(error::too_little_data);
+            return check_pending_items(*items, bytes_left);
+        }
+        return {};
+    }
+
     [[noreturn]] static void throw_logic_error(char const *const what)
     {
 #if defined(__cpp_exceptions)

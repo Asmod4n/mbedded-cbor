@@ -754,6 +754,9 @@ class extended_diagnostic_notation
         case major_type::array:
         case major_type::map: {
             bool const map = h->major == major_type::map;
+            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, encoded.size() - next); !r)
+                [[unlikely]]
+                return std::unexpected(r.error());
             std::vector<std::pair<std::string, std::string>> items;
             for (std::uint64_t i = 0; indefinite ? !heads::break_at(encoded, next) : i < h->argument; ++i) {
                 std::pair<std::string, std::string> item;
@@ -1030,6 +1033,9 @@ class extended_diagnostic_notation
         case major_type::array:
         case major_type::map: {
             bool const map = h->major == major_type::map;
+            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
+                [[unlikely]]
+                return r;
             out += map ? "{" : "[";
             std::string const indicator = indefinite ? std::string("_") : encoding_indicator(h->info, h->argument);
             if (!indicator.empty())

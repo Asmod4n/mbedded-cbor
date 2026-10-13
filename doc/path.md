@@ -111,7 +111,9 @@ if (!id) {
 ```
 
 A path reads the bytes up to its value and no further, so it does not
-find a fault after the value. `cbor::item_size(bytes)` checks the whole
+find a fault after the value. A list or a map that claims more items than
+the bytes left gives `too_little_data` before the path reads an element.
+`cbor::item_size(bytes)` checks the whole
 value and gives its size in bytes.
 
 ## 6. What is not supported
