@@ -140,11 +140,13 @@ TEST_CASE("doc path: tell a missing field from broken input")
     CHECK(read(whole.substr(0, 5)) == std::pair{std::int64_t{-1}, std::optional<error>{error::too_little_data}});
 }
 
-// The section "Errors" states that a path reads up to its value, and that item_size checks the whole value.
+// The section "Errors" states that a path reads up to its value, that a count larger than the bytes left is
+// too_little_data, and that item_size checks the whole value.
 TEST_CASE("doc path: a path does not read past its value")
 {
     std::string const cut = "\x82\x01"s;
-    CHECK_EQ(cbor::at_path<"$[0]", int>(cut), 1);
+    CHECK_EQ(cbor::at_path<"$[0]", int>(cut).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01\xff"s), 1);
     CHECK_EQ(cbor::item_size(cut).error(), error::too_little_data);
     std::string const whole = preferred(A(1, 2));
     CHECK_EQ(cbor::item_size(whole), whole.size());

@@ -175,6 +175,8 @@ class well_formedness
             }
             if (children == 0)
                 continue;
+            if (auto const r = validity::check_pending_items(children, d.encoded.size()); !r) [[unlikely]]
+                return r;
             if (auto const r = validity::check_nesting_depth(depth + level + 1, depth_max); !r) [[unlikely]]
                 return r;
             left[++level] = children;
