@@ -79,6 +79,12 @@ class value_sharing
     template <bool Checked>
     static std::expected<std::string_view, error> typed_array_bytes_read(resolved<Checked> const &found);
 
+    static std::expected<std::vector<lazy>, error> elements_encode(std::uint64_t tag, std::string_view bytes,
+                                                                   std::uint64_t first, std::uint64_t count);
+
+    template <bool Checked, std::integral Index>
+    static std::expected<lazy, error> typed_array_index_select(resolved<Checked> const &found, Index index);
+
     template <class Key, class Entries = lazy_entries, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
     static std::expected<typename Entries::iterator, error> key_find(resolved<Checked> found, Key key,

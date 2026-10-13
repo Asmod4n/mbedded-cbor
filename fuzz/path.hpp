@@ -240,21 +240,12 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     auto const root = cbor::lazy::copy(std::string(document));
     require(root.has_value());
     std::expected<cbor::lazy, cbor::error> node = *root;
-    bool typed_array_indexed = false;
     for (step const &s : steps)
-        node = node.and_then([&s, &typed_array_indexed](cbor::lazy const &l) {
-            if (!std::holds_alternative<std::int64_t>(s))
-                return l.at(std::get<std::string_view>(s));
-            if (auto const a = l.get<cbor::typed_array>(); a || a.error() != cbor::error::incorrect_type)
-                typed_array_indexed = true;
-            return test::index_select(l, std::get<std::int64_t>(s));
+        node = node.and_then([&s](cbor::lazy const &l) {
+            return std::holds_alternative<std::int64_t>(s) ? test::index_select(l, std::get<std::int64_t>(s))
+                                                           : l.at(std::get<std::string_view>(s));
         });
     auto const chained = node.and_then([](cbor::lazy const &l) { return l.get<T>(); });
-    // doc/advanced/path.md 7: an index of the typed read reads one element of an RFC 8746 typed array. A lazy step has
-    // no such index and gives not_indexable, so the two forms are not compared there. This is a provisional form until
-    // the owner decides whether a lazy step reads an element of a typed array.
-    if (typed_array_indexed && !chained && chained.error() == cbor::error::not_indexable)
-        return;
     require(typed.has_value() == chained.has_value());
     if (!typed) {
         require(typed.error() == chained.error());

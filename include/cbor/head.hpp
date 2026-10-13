@@ -339,6 +339,11 @@ class heads
         }
     };
 
+    static constexpr bool is_typed_array(head const h)
+    {
+        return h.major == major_type::tag && validity::typed_array_check(h.argument, 0).has_value();
+    }
+
     static constexpr bool is_bignum(major_type const major, std::uint64_t const argument)
     {
         return major == major_type::tag &&

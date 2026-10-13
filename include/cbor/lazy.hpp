@@ -340,6 +340,45 @@ inline std::expected<std::size_t, error> lazy::count(std::int64_t const key) con
     return value_sharing::key_count(find(key), key);
 }
 
+inline std::expected<std::vector<lazy>, error> value_sharing::elements_encode(std::uint64_t const tag,
+                                                                         std::string_view const bytes,
+                                                                         std::uint64_t const first,
+                                                                         std::uint64_t const count)
+{
+    std::string encoded;
+    std::vector<std::size_t> offsets;
+    for (std::uint64_t i = first; i < first + count; ++i) {
+        auto const element = heads::typed_array_element_decode(tag, bytes, i);
+        if (!element) [[unlikely]]
+            return std::unexpected(element.error());
+        offsets.push_back(encoded.size());
+        heads::head_append(encoded, element->major, element->info, element->argument);
+    }
+    auto const owner = std::make_shared<std::string const>(std::move(encoded));
+    auto const source =
+        std::make_shared<value_sharing::top_level_item>(owner, std::string_view(*owner), std::vector<lazy>{}, 0);
+    std::vector<lazy> elements;
+    elements.reserve(offsets.size());
+    for (std::size_t const offset : offsets)
+        elements.push_back(lazy{source, offset});
+    return elements;
+}
+
+template <bool Checked, std::integral Index>
+std::expected<lazy, error> value_sharing::typed_array_index_select(resolved<Checked> const &found, Index const index)
+{
+    auto const bytes = typed_array_bytes_read(found);
+    if (!bytes) [[unlikely]]
+        return std::unexpected(bytes.error());
+    auto const position = validity::check_index(index, bytes->size() / validity::typed_array_element_size(found.h.argument));
+    if (!position) [[unlikely]]
+        return std::unexpected(position.error());
+    auto const element = elements_encode(found.h.argument, *bytes, *position, 1);
+    if (!element) [[unlikely]]
+        return std::unexpected(element.error());
+    return element->front();
+}
+
 inline std::expected<std::uint64_t, error> lazy::size() const
 {
     return limits_apply(limits.load(),
@@ -348,6 +387,11 @@ inline std::expected<std::uint64_t, error> lazy::size() const
                             auto const found = value_sharing::tag_content_resolve(top_level, offset, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
+                            if (heads::is_typed_array(found->h))
+                                return value_sharing::typed_array_bytes_read(*found).transform(
+                                    [&](std::string_view const bytes) -> std::uint64_t {
+                                        return bytes.size() / validity::typed_array_element_size(found->h.argument);
+                                    });
                             auto const &[source, h, d, item_at] = *found;
                             if (h.major != major_type::array && h.major != major_type::map) [[unlikely]]
                                 return std::unexpected(error::not_indexable);
@@ -495,6 +539,8 @@ inline std::expected<lazy, error> lazy::at(std::size_t const index) const
                             auto found = value_sharing::tag_content_resolve(top_level, offset, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
+                            if (heads::is_typed_array(found->h))
+                                return value_sharing::typed_array_index_select(*found, index);
                             auto &[source, h, d, item_at] = *found;
                             if (h.major != major_type::array) [[unlikely]]
                                 return std::unexpected(error::not_indexable);
@@ -648,6 +694,18 @@ inline std::expected<lazy_elements, error> lazy::elements(limit_values const loa
             auto const found = value_sharing::tag_content_resolve(top_level, offset, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
+            if (heads::is_typed_array(found->h)) {
+                auto const bytes = value_sharing::typed_array_bytes_read(*found);
+                if (!bytes) [[unlikely]]
+                    return std::unexpected(bytes.error());
+                auto const all = value_sharing::elements_encode(
+                    found->h.argument, *bytes, 0, bytes->size() / validity::typed_array_element_size(found->h.argument));
+                if (!all) [[unlikely]]
+                    return std::unexpected(all.error());
+                if (all->empty())
+                    return lazy_elements(found->source, found->item_at, 0, loaded);
+                return lazy_elements(all->front().top_level, all->front().offset, all->size(), loaded);
+            }
             auto const &[source, h, d, item_at] = *found;
             if (h.major != major_type::array) [[unlikely]]
                 return std::unexpected(error::not_indexable);
