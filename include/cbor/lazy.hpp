@@ -800,6 +800,39 @@ std::expected<void, error> value_sharing::tree_decoder<Checked>::scalar_decode(i
 }
 
 template <bool Checked>
+std::expected<item *, error> value_sharing::tree_decoder<Checked>::bignum_decode(item &node, std::uint64_t const tag,
+                                                                               std::size_t const depth)
+{
+    auto const next = heads::raw_head_read(d.encoded, 0, d.checks);
+    if (!next || next->major != major_type::byte_string)
+        return nullptr;
+    if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    heads::decoder<Checked> const before = d;
+    auto const read = d.bignum_decode(tag);
+    if (!read) [[unlikely]]
+        return std::unexpected(read.error());
+    if (!*read) {
+        d = before;
+        return nullptr;
+    }
+    node = item{tag == std::to_underlying(rfc8949::tag_number::negative_bignum) ? cbor::type::negative_integer
+                                                                              : cbor::type::unsigned_integer,
+                heads::preferred_argument_info(**read),
+                {.u64 = **read}};
+    return &node;
+}
+
+template <bool Checked>
+error value_sharing::tree_decoder<Checked>::bignum_content_check(std::uint64_t const tag)
+{
+    auto const inner = heads::raw_head_read(d.encoded, 0, d.checks);
+    if (!inner || !heads::is_bignum(inner->major, inner->argument)) [[likely]]
+        return error{};
+    return validity::check_tag_content(tag, inner->major, inner->info).error_or(error{});
+}
+
+template <bool Checked>
 std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(item *const storage,
                                                                                std::size_t const depth,
                                                                                std::optional<std::size_t> const mark)
@@ -871,26 +904,9 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
         return &node;
     }
     case major_type::tag: {
-        auto const next = heads::is_bignum(head.major, head.argument)
-                              ? heads::raw_head_read(d.encoded, 0, d.checks)
-                              : std::expected<heads::raw_head, error>(std::unexpect, error{});
-        if (next && next->major == major_type::byte_string) {
-            if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            heads::decoder<Checked> const before = d;
-            auto const read = d.bignum_decode(head.argument);
-            if (!read) [[unlikely]]
-                return std::unexpected(read.error());
-            if (*read) {
-                node = item{head.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
-                                ? cbor::type::negative_integer
-                                : cbor::type::unsigned_integer,
-                            heads::preferred_argument_info(**read),
-                            {.u64 = **read}};
-                return &node;
-            }
-            d = before;
-        }
+        if (heads::is_bignum(head.major, head.argument))
+            if (auto const r = bignum_decode(node, head.argument, depth); !r || *r != nullptr)
+                return r;
         if (head.argument == std::to_underlying(rfc8949::tag_number::shareable)) {
             std::size_t const number = marks_counted();
             mark_next = number + 1;
@@ -927,11 +943,8 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
             decoded.sharedrefs.emplace_back(&node, shareable);
             return &node;
         }
-        if (auto const inner = heads::raw_head_read(d.encoded, 0, d.checks);
-            inner && heads::is_bignum(inner->major, inner->argument)) [[unlikely]]
-            if (error const c = validity::check_tag_content(head.argument, inner->major, inner->info).error_or(error{});
-                c != error{}) [[unlikely]]
-                return std::unexpected(c);
+        if (error const c = bignum_content_check(head.argument); c != error{}) [[unlikely]]
+            return std::unexpected(c);
         auto const content =
             item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, std::nullopt);
         if (!content) [[unlikely]]

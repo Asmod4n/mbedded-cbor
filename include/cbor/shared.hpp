@@ -557,6 +557,10 @@ struct value_sharing::tree_decoder {
 
     CBOR_ALWAYS_INLINE inline std::expected<void, error> scalar_decode(item &node, heads::head h);
 
+    CBOR_NEVER_INLINE std::expected<item *, error> bignum_decode(item &node, std::uint64_t tag, std::size_t depth);
+
+    CBOR_NEVER_INLINE error bignum_content_check(std::uint64_t tag);
+
     std::size_t marks_counted();
 
     std::expected<void, error> marks_before_decode();
