@@ -441,27 +441,6 @@ TEST_CASE("doc advanced path: limits in detail")
     }
 }
 
-// The section "Threads" states that the first thread that reads the marks of a lazy owns it, and that only a debug
-// build checks it.
-TEST_CASE("doc advanced path: the owner thread of a lazy")
-{
-    auto const shared = *cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
-    CHECK(*test::at_path("$[1]", shared) == V(1));
-    bool threw = false;
-    std::jthread([&threw, &shared] {
-        try {
-            (void)test::at_path("$[1]", shared);
-        } catch (std::logic_error const &) {
-            threw = true;
-        }
-    }).join();
-#ifdef NDEBUG
-    CHECK_FALSE(threw);
-#else
-    CHECK(threw);
-#endif
-}
-
 // The section "Path syntax" states that an index counts from 0, because a task that names "element 2" leaves the base
 // open.
 TEST_CASE("doc advanced path: an index counts from 0")

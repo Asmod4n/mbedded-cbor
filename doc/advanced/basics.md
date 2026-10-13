@@ -43,7 +43,6 @@ the compiler cannot see a wrong use, the library throws
 - a `cbor::lazy{}` that holds no item;
 - a limit above its bound (section 4);
 - `cbor::transfer` of a lazy that something else shares (section 7);
-- in a debug build, a lazy in a thread that does not own it (section 7).
 
 ## 3. Every error value
 
@@ -240,13 +239,6 @@ std::jthread([](cbor::sendable<cbor::lazy> const &v) {
     v.value.at(1)->get<std::int64_t>();   // 2
 }, cbor::transfer(std::move(*l)));
 ```
-
-A debug build is a build without the macro `NDEBUG`. A debug build records
-the thread that reads the marks first. A read of the marks in another
-thread then throws `std::logic_error`. A build with `NDEBUG` does not
-check. Only an item with a tag 28 or a tag 29 has marks. A read that does
-not touch the marks is not checked. So a lazy over `{"a": 1}` does not
-throw in another thread, but it is still a wrong use.
 
 ## 8. Owners
 

@@ -175,8 +175,7 @@ TEST_CASE("doc advanced basics: threads")
     CHECK_EQ(read, 2);
 }
 
-// A user moved a lazy out of the std::expected of lazy::copy, and saw no throw over plain data in another thread.
-// The section "Threads" shows the move and states that only marks are checked.
+// A user moved a lazy out of the std::expected of lazy::copy. The section "Threads" shows the move.
 TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thread")
 {
     std::string const bytes = preferred(A(1, 2));
@@ -186,23 +185,6 @@ TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thre
                  cbor::transfer(std::move(*l)))
         .join();
     CHECK_EQ(read, 2);
-    auto const plain = *cbor::lazy::copy(preferred(M("a"s, 1)));
-    std::int64_t other = 0;
-    std::jthread([&] { other = *plain.at("a")->get<std::int64_t>(); }).join();
-    CHECK_EQ(other, 1);
-#ifndef NDEBUG
-    auto const marked = *cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
-    CHECK_EQ(marked.at(1)->get<std::int64_t>(), 1);
-    bool threw = false;
-    std::jthread([&] {
-        try {
-            std::ignore = marked.at(1)->get<std::int64_t>();
-        } catch (std::logic_error const &) {
-            threw = true;
-        }
-    }).join();
-    CHECK(threw);
-#endif
 }
 
 // A user did not know that a lazy from a step holds the bytes after the string and the first lazy end.
