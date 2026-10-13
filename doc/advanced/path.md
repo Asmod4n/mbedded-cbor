@@ -345,7 +345,6 @@ the same path many times, use a compile-time path.
 | `string_length_exceeded`, `container_elements_exceeded`, `input_bytes_exceeded` | A limit is in force and the input goes past it (section 12). |
 | `too_little_data` | The bytes end before the target or before an item that the walk reads. |
 | `syntax_error`, `indefinite_length` | A head that the walk reads is not well-formed, or uses indefinite length. |
-| `sharedref_index_not_marked`, `sharedref_not_complete` | A tag 29 names no tag 28 before it, or names a tag 28 that contains it. |
 | `inadmissible_type_for_tag_content` | A tag on the way has content that its definition does not allow, for example tag 24 over a number. |
 | `nodelist_too_long` | One step of `query` selects more nodes than the top-level item has bytes. Tag 29 makes this possible. |
 
@@ -449,8 +448,7 @@ costs more to compare ([complexity.md](complexity.md)).
 ## 14. Threads
 
 A path from a lazy follows the rules of a lazy ([basics.md](basics.md)):
-a `cbor::lazy` and every `owning_ref` belong to one thread, and
-`cbor::transfer` hands a lazy to another thread.
+several threads read one `cbor::lazy` at the same time.
 `at_path<Path, T>(encoded)` with bytes has no shared state.
 
 ## 15. RFC 9535 and this library

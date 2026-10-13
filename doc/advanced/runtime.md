@@ -61,8 +61,8 @@ doc.at(0).error();                        // not_indexable, a map has no index
 ```
 
 A key is a text key or an integer key. A text key does not match a byte
-string with the same bytes. A key under tag 28 or tag 29 matches the key
-that it marks or names.
+string with the same bytes. A key under tag 28 or tag 29 is a tag, and
+matches no text key and no integer key.
 
 A map with a key twice is no error. `at`, `find` and `contains` give the
 first pair. `count` counts every pair, as `std::multimap::count` does.
@@ -166,7 +166,7 @@ Two iterators of two different maps throw `std::logic_error`.
 | `2(h'05')` | `get<std::int64_t>()` | `5` |
 | `69(h'07000800')` | `get<cbor::typed_array>()` | tag 69 and 4 bytes |
 
-`get` follows a tag 29 to the item that it names, and passes a tag 28.
+`get` passes a tag 28 and a tag 29 to their content, as it passes every tag that it does not interpret.
 
 ## 6. decode
 
@@ -197,31 +197,18 @@ cbor::lazy::copy(bytes)->decode();                       // too_little_data
 ```
 
 A tag 28 stays a tag item over the value it marks. A tag 29 stays a tag
-item over its content. The decode reads no tag 29: it keeps the offset of
-each tag 28 in the order of the input, and checks nothing about a tag 29.
-`cbor::shared_value_resolve(tree, item)` takes the tree and a tag 29 of it
-and gives a `std::expected<cbor::lazy, error>`. The lazy views the input at
-the value that the tag 29 names, after any chain of tags 28, 29 and 55799.
-Nothing is copied and the tree does not change. An index that names no tag
-28 before the tag 29 gives `sharedref_index_not_marked`. A content that is
-not an unsigned integer gives `inadmissible_type_for_tag_content`. A chain
-with no value gives `sharedref_not_complete`. When the tag 29 is the content
-of another tag, the reader of that tag checks the content constraint of that
-tag. `tree` is the result of the decode. No read of the library follows a
-tag 29 by itself, so a cycle ends. A struct reader, a lazy and `at_path`
-resolve a tag 29 when they read it, with the same function. A tag 24 is a
-tag item over its byte string, and `cbor::encoded_cbor_data_item(tree,
-item)` gives a `std::expected` of the root of the embedded item, decoded as
-a top-level item of its own. A tag 29 inside the embedded item names a tag
-28 inside it. For a tag 24 over a tag 29 it gives `incorrect_type`. Both
-functions throw `std::logic_error` for an item that is not a tag 29 or tag
-24 of that tree. A count in a head reserves nothing: an array that claims more
+item over its content. The decode resolves neither tag and checks no index.
+A tag 24 is a tag item over its byte string, and
+`cbor::encoded_cbor_data_item(tree, item)` gives a `std::expected` of the
+root of the embedded item, decoded as a top-level item of its own. It throws
+`std::logic_error` for an item that is not a tag 24 of that tree. For a tag
+24 whose content is no byte string it gives `incorrect_type`. A count in a head reserves nothing: an array that claims more
 elements than bytes are left gives `too_little_data` before it reads an
 element.
 
 `type()` of a lazy and of an item gives `std::expected<cbor::type, error>`:
 the major type, or for a tag 2, 3 or a typed array of RFC 8746 the kind of
-that tag. A lazy reads through tags 28 and 29; an item keeps them as tags.
+that tag. A lazy and an item keep tags 28 and 29 as tags.
 
 A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value
 as a basic integer (RFC 8949 3.4.3). `decode()` makes it an
@@ -271,28 +258,10 @@ e.text_string("a");
 e.finish();   // 5: out holds 82 18 01 61 61
 ```
 
-`shareable()` writes tag 28, and the next item is the shared value.
-`sharedref(n)` writes tag 29 with the index `n` in the shortest head. The
-index counts the tags 28 in the order of the bytes, from 0
-([value-sharing](http://cbor.schmorp.de/value-sharing)).
-
-Tags 28 and 29 exist only to write cycles. An application writes tag 28
-only on a value that a cycle reaches again, and tag 29 only for the
-reference that closes the cycle. A value that two places hold without a
-cycle is written in full at each place.
-
-```cpp
-std::string out;
-cbor::encoder e(out);
-e.shareable();
-e.array(1);
-e.sharedref(0);
-e.finish();   // 6: out holds d8 1c 81 d8 1d 00
-```
-
-A cycle through a tag that is not an array or a map is allowed. For
-example, `28(6(29(0)))` decodes into a tree where the content of tag 6 is
-a reference to that tag 6 item.
+Tags 28 and 29 exist only to write cycles. The encoder writes them only
+for a cycle that it finds itself. A user of the encoder does not write them:
+`shareable()` and `sharedref()` are private. A value that two places hold
+without a cycle is written in full at each place.
 
 `cbor::encode(item, target)` writes an item with the additional
 information that each item keeps. Each integer, length and tag number
@@ -350,24 +319,23 @@ well-formed and allocates nothing. The nesting depth does not limit it.
 ## 11. Tags 28 and 29
 
 Tag 28 marks a value as shared. Tag 29 with the index n stands for the
-value of the n-th tag 28, counted from 0 in the order of the bytes.
+value of the n-th tag 28 ([value-sharing](http://cbor.schmorp.de/value-sharing)).
 
-- A step, `get`, `elements`, `entries` and a path read through a tag 28
-  to its content, and through a tag 29 to the value it names.
-- A tag 29 must come after the tag 28 that it names. A tag 29 that names
-  no tag 28 before it gives `sharedref_index_not_marked`.
-- A tag 29 inside the tag 28 that it names is a cycle. A step and
-  `decode` read it; the tree holds the cycle as a pointer. A tag 29 that is
-  itself the content of the tag 28 that it names names no value, and a step
-  gives `sharedref_not_complete`.
-- `diagnostic_notation` writes the tags as they are.
+- A lazy, `decode`, `at_path`, `query` and `diagnostic_notation` read tag 28
+  as a tag over its content and tag 29 as a tag over its content. They
+  resolve nothing, check no index and give no error of their own. A step
+  and `get` pass both tags, as they pass every tag that they do not
+  interpret.
+- `cbor::structs` decode resolves them, with a table that exists for one
+  call. See doc/advanced/structs.md.
+- A lazy holds only its owner, its bytes and its offset. Several threads
+  read one lazy at the same time.
 
 ```cpp
 // [28(1), 29(0)]
-cbor::lazy::copy(bytes)->at(1)->get<std::int64_t>();        // 1
+cbor::lazy::copy(bytes)->at(1)->type();                     // cbor::type::tag
+cbor::lazy::copy(bytes)->at(1)->get<std::int64_t>();        // 0
 cbor::diagnostic_notation(bytes);                           // "[28(1), 29(0)]"
-// [29(0), 28(5)]
-cbor::lazy::copy(bytes)->decode();                          // sharedref_index_not_marked
 ```
 
 ## 12. Tag 55799

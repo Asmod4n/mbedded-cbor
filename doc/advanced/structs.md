@@ -149,12 +149,16 @@ using id = std::variant<std::uint8_t, std::int64_t, std::string>;
 
 ## 7. Shared values
 
-`decode` reads tag 28 and tag 29 of the value-sharing registration. A
-tag 29 reads as the item that it names.
+`decode` reads tag 28 and tag 29 of the value-sharing registration with
+a table that exists for one call. A tag 28 is allowed on every member and
+keeps the value. A tag 29 needs a member that can share a value; a plain
+member gives `incorrect_type`. A tag 29 that names a tag 28 in a skipped
+member gives `sharedref_not_complete`, and a tag 29 that names no tag 28
+before it gives `sharedref_index_not_marked`. Nothing is decoded twice.
 
 ```cpp
 // [28("x"), 29(0)]
-cbor::structs<std::vector<std::string>>::decode(bytes);   // {"x", "x"}
+cbor::structs<std::vector<std::string>>::decode(bytes);   // incorrect_type
 ```
 
 `encode` writes no shared value.

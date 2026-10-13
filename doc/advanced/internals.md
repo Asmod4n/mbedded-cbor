@@ -38,17 +38,11 @@ Each field holds one `std::atomic<std::size_t>`, read with relaxed
 order. When the three size limits are `SIZE_MAX`, an entry takes the
 form of the code that checks no size.
 
-## 5. The marks of tag 28
+## 5. Tags 28 and 29
 
-The lazy values of one top-level item share one list of the positions of
-its tags 28. The first tag 29 that a top-level item reads finds the tags
-28 before it, once, and keeps their positions. A later tag 29 reuses them.
-The list grows with no lock, so a lazy belongs to one thread. A debug
-build records the thread that reads the list first, and a read of the
-list in another thread throws `std::logic_error`.
-
-A typed read of a path over bytes reads an item again through a lazy
-when it meets a tag 29, so that it finds the marks.
+A lazy keeps no marks of tag 28. It reads tags 28 and 29 as plain tags, so
+a read changes nothing in it and needs no lock. Only `cbor::structs`
+decode resolves them, with a table of the tags 28 of one call.
 
 ## 6. A compile-time path
 
@@ -65,17 +59,11 @@ from the length of the input. A count is checked against the bytes that
 are left before an element is read, and the sum of all open counts never
 exceeds the bytes that are left.
 
-A tag 29 is a tag item over its content. The resource holds the offsets
-of the tags 28 of the input in their order, one list for the input and one
-for each embedded item of a tag 24, and two sorted tables: each tag 29 item
-with the offset of its head, and each tag 24 item with the root of its
-embedded item. For a lazy that does not start the input, the list starts
-with the tags 28 before the lazy. `cbor::shared_value_resolve` and
-`cbor::encoded_cbor_data_item` search the tables. The result is a
-`std::shared_ptr` whose deleter owns the resource, and the two functions
-find the resource through `std::get_deleter`. One function follows a tag
-29 through the bytes for every reader: the tree, a lazy, `at_path` and a
-struct reader. `encode` of an item
+A tag 28 and a tag 29 are tag items over their content. The resource
+holds one sorted table: each tag 24 item with the root of its embedded
+item. `cbor::encoded_cbor_data_item` searches the table. The result is a
+`std::shared_ptr` whose deleter owns the resource, and the function finds
+the resource through `std::get_deleter`. `encode` of an item
 writes each head with the additional information that the item keeps, a
 float at the width of its type,
 and does not follow a tag 29.
