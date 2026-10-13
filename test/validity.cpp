@@ -16,6 +16,7 @@ using namespace std::literals;
 using cbor::error;
 using cbor::major_type;
 using cbor::validity;
+using cbor::value_sharing;
 
 // The owner set the bound of the nesting depth to 512 and its default to 128. Every function that reads the
 // nesting depth reads both from these two constants, so this test is the one place that holds the two numbers.
@@ -404,19 +405,33 @@ TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113, every maj
 // A shared reference names one of the values that were marked before it. The decoder and the lazy reader read
 // the index through this one check, so an index that no mark has reached gives the same error on both paths,
 // and the index is converted to std::size_t only after it is known to fit.
-TEST_CASE("validity: check_sharedref_index for up to three marks")
+TEST_CASE("value_sharing: check_sharedref_index for up to three marks")
 {
     std::array<std::uint64_t, 6> const arguments{0, 1, 2, 3, 4, std::numeric_limits<std::uint64_t>::max()};
     for (std::size_t marked = 0; marked <= 3; ++marked)
         for (std::uint64_t const argument : arguments) {
-            auto const r = validity::check_sharedref_index(argument, marked);
+            auto const r = value_sharing::check_sharedref_index(argument, marked);
             if (argument > std::numeric_limits<std::size_t>::max())
                 CHECK_EQ(r.error(), error::sharedref_index_out_of_range);
             else if (argument >= marked)
                 CHECK_EQ(r.error(), error::sharedref_index_not_marked);
             else
-                CHECK_EQ(*r, argument);
+                CHECK_EQ(std::to_underlying(*r), argument);
         }
+}
+
+template <class Argument>
+constexpr bool sharedref_index_accepts =
+    requires(Argument const argument, void (*const take)(value_sharing::index)) { take(argument); };
+
+// An index into the marks of tags 28 and 29 is a type of its own. A byte offset or an index of an array that
+// stands where a shared reference index is expected does not compile, so the two cannot be mixed up silently.
+TEST_CASE("value_sharing: index takes no byte offset and no other index")
+{
+    CHECK(sharedref_index_accepts<value_sharing::index>);
+    CHECK_FALSE(sharedref_index_accepts<validity::index>);
+    CHECK_FALSE(sharedref_index_accepts<validity::offset>);
+    CHECK_FALSE(sharedref_index_accepts<std::size_t>);
 }
 
 #ifdef __SIZEOF_INT128__
@@ -523,22 +538,22 @@ TEST_CASE("validity: check_magnitude_size for every size up to one past the widt
 // message, as lazy does, can name a mark at or after the reference, and the walk would not end. This test
 // exists so that such a reference ends the walk: a mark at the reference is not complete, and a mark after
 // it is not marked yet, as for a reader that reads the marks in order.
-TEST_CASE("validity: check_tag_content refuses a tag 29 that names a mark at or after it")
+TEST_CASE("value_sharing: check_tag_content refuses a tag 29 that names a mark at or after it")
 {
     std::vector<validity::offset> const self{validity::offset{1}};
-    CHECK_EQ(validity::check_tag_content(
+    CHECK_EQ(value_sharing::check_tag_content(
                  1, "\xc1\xd8\x1d\x00"sv, validity::offset{1}, [&self]() -> auto const & { return self; }, std::identity{},
                  validity::limit_checks<false>{})
                  .error(),
              error::sharedref_not_complete);
     std::vector<validity::offset> const forward{validity::offset{4}};
-    CHECK_EQ(validity::check_tag_content(
+    CHECK_EQ(value_sharing::check_tag_content(
                  1, "\xc1\xd8\x1d\x00\x05"sv, validity::offset{1}, [&forward]() -> auto const & { return forward; },
                  std::identity{}, validity::limit_checks<false>{})
                  .error(),
              error::sharedref_index_not_marked);
     std::vector<validity::offset> const before{validity::offset{}};
-    CHECK(validity::check_tag_content(
+    CHECK(value_sharing::check_tag_content(
               1, "\x05\xc1\xd8\x1d\x00"sv, validity::offset{2}, [&before]() -> auto const & { return before; }, std::identity{},
               validity::limit_checks<false>{})
               .has_value());

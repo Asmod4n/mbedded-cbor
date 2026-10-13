@@ -22,6 +22,7 @@
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
+#include "shared.hpp"
 #include "rfc4648.hpp"
 
 namespace cbor
@@ -1058,7 +1059,7 @@ class extended_diagnostic_notation
         }
         case major_type::tag: {
             validity::offset const content_at = validity::distance(encoded, d.encoded);
-            if (error const e = validity::check_tag_content(
+            if (error const e = value_sharing::check_tag_content(
                                     h->argument, encoded, content_at,
                                     [&marks]() -> auto const & { return marks; }, std::identity{}, d.checks)
                                     .error_or(error{});
@@ -1068,7 +1069,7 @@ class extended_diagnostic_notation
             if (!c) [[unlikely]]
                 return std::unexpected(c.error());
             if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
-                if (auto const index = validity::check_sharedref_index(c->argument, marks.size()); !index) [[unlikely]]
+                if (auto const index = value_sharing::check_sharedref_index(c->argument, marks.size()); !index) [[unlikely]]
                     return std::unexpected(index.error());
             }
             if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
@@ -1076,10 +1077,10 @@ class extended_diagnostic_notation
                     auto const n = heads::raw_head_read(encoded, c->at, d.checks);
                     if (!n) [[unlikely]]
                         return std::unexpected(n.error());
-                    auto const index = validity::check_sharedref_index(n->argument, marks.size());
+                    auto const index = value_sharing::check_sharedref_index(n->argument, marks.size());
                     if (!index) [[unlikely]]
                         return std::unexpected(index.error());
-                    marks.push_back(marks[*index]);
+                    marks.push_back(marks[std::to_underlying(*index)]);
                 } else {
                     marks.push_back(content_at);
                 }
