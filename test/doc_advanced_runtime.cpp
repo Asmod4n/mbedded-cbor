@@ -208,13 +208,12 @@ TEST_CASE("doc advanced runtime: encode")
     std::string shared;
     {
         cbor::encoder e(shared);
-        REQUIRE(e.array(2).has_value());
         REQUIRE(e.shareable().has_value());
-        REQUIRE(e.text_string("a").has_value());
+        REQUIRE(e.array(1).has_value());
         REQUIRE(e.sharedref(0).has_value());
-        CHECK_EQ(e.finish(), 8u);
+        CHECK_EQ(e.finish(), 6u);
     }
-    CHECK_EQ(shared, "\x82\xd8\x1c\x61" "a" "\xd8\x1d\x00"s);
+    CHECK_EQ(shared, "\xd8\x1c\x81\xd8\x1d\x00"s);
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
     auto const tagged = *cbor::lazy::copy(cycle)->decode();
     cbor::item const *const six = tagged->via.tag.content;

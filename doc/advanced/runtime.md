@@ -265,14 +265,18 @@ e.finish();   // 5: out holds 82 18 01 61 61
 index counts the tags 28 in the order of the bytes, from 0
 ([value-sharing](http://cbor.schmorp.de/value-sharing)).
 
+Tags 28 and 29 exist only to write cycles. An application writes tag 28
+only on a value that a cycle reaches again, and tag 29 only for the
+reference that closes the cycle. A value that two places hold without a
+cycle is written in full at each place.
+
 ```cpp
 std::string out;
 cbor::encoder e(out);
-e.array(2);
 e.shareable();
-e.text_string("a");
+e.array(1);
 e.sharedref(0);
-e.finish();   // 8: out holds 82 d8 1c 61 61 d8 1d 00
+e.finish();   // 6: out holds d8 1c 81 d8 1d 00
 ```
 
 A cycle through a tag that is not an array or a map is allowed. For
