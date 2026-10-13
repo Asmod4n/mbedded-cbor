@@ -79,8 +79,13 @@ class value_sharing
                                                                        std::size_t offset,
                                                                        validity::limit_checks<Checked> checks);
 
+    struct tag_content {
+        validity::byte_offset offset;
+        std::string_view bytes;
+    };
+
     template <bool Checked>
-    static std::expected<std::string_view, error> typed_array_bytes_read(resolved<Checked> const &found);
+    static std::expected<tag_content, error> typed_array_bytes_read(resolved<Checked> const &found);
 
     static std::expected<std::string_view, error> typed_array_element_read(lazy const &node);
 
@@ -695,7 +700,7 @@ value_sharing::tag_content_resolve(std::shared_ptr<top_level_item> source, std::
 }
 
 template <bool Checked>
-std::expected<std::string_view, error> value_sharing::typed_array_bytes_read(resolved<Checked> const &found)
+std::expected<value_sharing::tag_content, error> value_sharing::typed_array_bytes_read(resolved<Checked> const &found)
 {
     if (found.h.major != major_type::tag) [[unlikely]]
         return std::unexpected(error::incorrect_type);
@@ -713,13 +718,14 @@ std::expected<std::string_view, error> value_sharing::typed_array_bytes_read(res
     if (error const c = validity::check_tag_content(found.h.argument, r->major, r->info).error_or(error{});
         c != error{}) [[unlikely]]
         return std::unexpected(c);
+    auto const offset = validity::byte_offset{found.source->encoded.size() - d.encoded.size()};
     auto const bytes = d.byte_string_decode(r->argument);
     if (!bytes) [[unlikely]]
         return std::unexpected(bytes.error());
     if (error const c = validity::typed_array_check(found.h.argument, bytes->size()).error_or(error{});
         c != error{}) [[unlikely]]
         return std::unexpected(c);
-    return *bytes;
+    return tag_content{offset, *bytes};
 }
 
 }

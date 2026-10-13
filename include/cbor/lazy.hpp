@@ -380,12 +380,12 @@ std::expected<lazy, error> value_sharing::index_select(resolved<Checked> const &
         if (!bytes) [[unlikely]]
             return std::unexpected(bytes.error());
         std::size_t const size = validity::typed_array_element_size(found.h.argument);
-        auto const position = validity::check_index(index, bytes->size() / size);
+        auto const position = validity::check_index(index, bytes->bytes.size() / size);
         if (!position) [[unlikely]]
             return std::unexpected(position.error());
-        auto const start = static_cast<std::size_t>(
-            std::ranges::distance(std::string_view(found.source->encoded).data(), bytes->data()));
-        return lazy{found.source, start + static_cast<std::size_t>(*position) * size, found.h.argument};
+        auto const at = validity::typed_array_element_offset(bytes->offset, size,
+                                                             validity::element_index{*position});
+        return lazy{found.source, std::to_underlying(at), found.h.argument};
     }
     if (found.h.major != major_type::array) [[unlikely]]
         return std::unexpected(error::not_indexable);
@@ -411,8 +411,8 @@ inline std::expected<std::uint64_t, error> lazy::size() const
                                 return std::unexpected(found.error());
                             if (heads::is_typed_array(found->h))
                                 return value_sharing::typed_array_bytes_read(*found).transform(
-                                    [&](std::string_view const bytes) -> std::uint64_t {
-                                        return bytes.size() / validity::typed_array_element_size(found->h.argument);
+                                    [&](value_sharing::tag_content const &bytes) -> std::uint64_t {
+                                        return bytes.bytes.size() / validity::typed_array_element_size(found->h.argument);
                                     });
                             auto const &[source, h, d, item_at] = *found;
                             if (h.major != major_type::array && h.major != major_type::map) [[unlikely]]
@@ -711,7 +711,7 @@ auto lazy::get(limit_values const loaded) const
                 auto const bytes = value_sharing::typed_array_bytes_read(*found);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
-                return owning_ref<T>(source->owner, typed_array{h.argument, std::as_bytes(std::span(*bytes))});
+                return owning_ref<T>(source->owner, typed_array{h.argument, std::as_bytes(std::span(bytes->bytes))});
             } else {
                 if (h.major != major_type::byte_string) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
@@ -744,10 +744,8 @@ inline std::expected<lazy_elements, error> lazy::elements(limit_values const loa
                 auto const bytes = value_sharing::typed_array_bytes_read(*found);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
-                auto const start = static_cast<std::size_t>(
-                    std::ranges::distance(std::string_view(found->source->encoded).data(), bytes->data()));
-                return lazy_elements(found->source, start,
-                                     bytes->size() / validity::typed_array_element_size(found->h.argument), loaded,
+                return lazy_elements(found->source, std::to_underlying(bytes->offset),
+                                     bytes->bytes.size() / validity::typed_array_element_size(found->h.argument), loaded,
                                      found->h.argument);
             }
             auto const &[source, h, d, item_at] = *found;
