@@ -72,7 +72,7 @@ TEST_CASE("doc advanced runtime: steps and searches")
 TEST_CASE("doc advanced runtime: keys")
 {
     CHECK_EQ(cbor::lazy::copy("\xa1\x41" "a\x01"s)->at("a").error(), error::key_not_found);
-    CHECK_EQ(cbor::lazy::copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a")->get<std::int64_t>(), 1);
+    CHECK_EQ(cbor::lazy::copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a").error(), error::key_not_found);
     auto const twice = *cbor::lazy::copy("\xa2\x61" "a\x01\x61" "a\x02"s);
     CHECK_EQ(twice.at("a")->get<std::int64_t>(), 1);
     CHECK_EQ(*twice.count("a"), 2u);
@@ -157,7 +157,7 @@ TEST_CASE("doc advanced runtime: get")
     CHECK_EQ((*typed)->bytes.size(), 4u);
     CHECK_EQ(cbor::lazy::copy("\x63" "abc"s)->get<bool>().error(), error::incorrect_type);
     CHECK_EQ(cbor::lazy::copy("\xc2\x41\x05"s)->get<std::int64_t>(), 5);
-    CHECK_EQ(cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->get<std::int64_t>(), 1);
+    CHECK_EQ(cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->get<std::int64_t>(), 0);
     CHECK_EQ(cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(0)->get<std::int64_t>(), 1);
 }
 
@@ -172,7 +172,7 @@ TEST_CASE("doc advanced runtime: decode")
     CHECK_EQ(cbor::lazy::copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->decode().error(), error::too_little_data);
     CHECK_EQ(*cbor::lazy::copy("\xc2\x41\x05"s)->type(), cbor::type::unsigned_integer);
     CHECK_EQ(*cbor::lazy::copy("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s)->type(), cbor::type::unsigned_bignum);
-    CHECK_EQ(*cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::unsigned_integer);
+    CHECK_EQ(*cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::tag);
     auto const tree = cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->decode();
     REQUIRE(tree.has_value());
     CHECK_EQ(children_of(*(*tree))[1]->type, cbor::type::tag);
@@ -205,21 +205,12 @@ TEST_CASE("doc advanced runtime: encode")
     string_writer w;
     REQUIRE(test::encode(w, v).has_value());
     CHECK_EQ(w.encoded, "\x82"s + native_unsigned(1) + native_unsigned(2));
-    std::string shared;
-    {
-        cbor::encoder e(shared);
-        REQUIRE(e.shareable().has_value());
-        REQUIRE(e.array(1).has_value());
-        REQUIRE(e.sharedref(0).has_value());
-        CHECK_EQ(e.finish(), 6u);
-    }
-    CHECK_EQ(shared, "\xd8\x1c\x81\xd8\x1d\x00"s);
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
     auto const tagged = *cbor::lazy::copy(cycle)->decode();
     cbor::item const *const six = tagged->via.tag.content;
     CHECK_EQ(argument_of(*six), 6u);
     cbor::item const *const reference = six->via.tag.content;
-    CHECK(shared_value_is(tagged, *reference, *six));
+    CHECK_EQ((*reference).via.tag.number, 29u);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string const own = wire;
     std::string again;
@@ -267,18 +258,18 @@ TEST_CASE("doc advanced runtime: item_size")
     CHECK_EQ(cbor::item_size("\x82\x01"sv).error(), error::too_little_data);
 }
 
-// The section "Tags 28 and 29" shows a reference that is read, written and refused.
+// The section "Tags 28 and 29" shows that a lazy, a tree decode and diagnostic notation read both as plain tags.
 TEST_CASE("doc advanced runtime: tags 28 and 29")
 {
     auto const l = *cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
-    CHECK_EQ(l.at(1)->get<std::int64_t>(), 1);
+    CHECK_EQ(l.at(1)->type(), cbor::type::tag);
+    CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
     auto const forward = cbor::lazy::copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->decode();
     REQUIRE(forward.has_value());
-    CHECK_EQ(cbor::shared_value_resolve(*forward, (*forward)->via.array[0]).error(), error::sharedref_index_not_marked);
+    CHECK_EQ((*forward)->via.array[0].via.tag.number, 29u);
     CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)->decode().has_value());
-    CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)->at(0).has_value());
-    CHECK_EQ(cbor::lazy::copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::sharedref_not_complete);
+    CHECK_EQ(cbor::lazy::copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::not_indexable);
 }
 
 // The section "Tag 55799" shows that only a leading tag 55799 is read as its content.

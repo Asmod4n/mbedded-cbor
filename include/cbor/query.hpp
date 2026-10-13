@@ -639,25 +639,11 @@ class jsonpath
         std::size_t step = 0;
         auto const typed_array_elements = [&d](std::uint64_t const tag)
             -> std::optional<std::expected<std::string_view, error>> {
-            for (;;) {
-                heads::decoder const before = d;
-                auto const t = d.head_decode();
-                if (!t) [[unlikely]]
-                    return std::unexpected(t.error());
-                if (t->major == major_type::tag &&
-                    t->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]]
-                    return std::nullopt;
-                if (t->major != major_type::tag ||
-                    (t->argument != std::to_underlying(rfc8949::tag_number::shareable) &&
-                     t->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))) {
-                    d = before;
-                    break;
-                }
-            }
+            d.encoded = validity::subspan(d.encoded, heads::self_described_cbor_content_at(d.encoded, validity::offset{}));
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (error const c = validity::check_tag_content(tag, r->major, r->info).error_or(error{}); c != error{})
+            if (error const c = validity::check_tag_content(tag, r->major).error_or(error{}); c != error{})
                 [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = d.byte_string_decode(r->argument);
@@ -675,9 +661,6 @@ class jsonpath
                     auto const t = d.head_decode();
                     if (!t) [[unlikely]]
                         return std::unexpected(t.error());
-                    if (t->major == major_type::tag &&
-                        t->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]]
-                        return std::nullopt;
                     if (t->major != major_type::tag || !heads::is_tag_passed(t->argument)) {
                         d = before;
                         break;
@@ -693,7 +676,7 @@ class jsonpath
                 auto const r = d.head_decode();
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (!validity::check_tag_content(h.argument, r->major, r->info).has_value()) [[unlikely]]
+                if (!validity::check_tag_content(h.argument, r->major).has_value()) [[unlikely]]
                     return std::unexpected(error::inadmissible_type_for_tag_content);
                 auto const embedded = d.byte_string_decode(r->argument);
                 if (!embedded) [[unlikely]]
@@ -752,21 +735,7 @@ class jsonpath
             bool found = false;
             for (std::uint64_t i = 0; i < h.argument && !found; ++i) {
                 heads::decoder probe = d;
-                for (;;) {
-                    heads::decoder const before = probe;
-                    auto const t = probe.head_decode();
-                    if (!t) [[unlikely]]
-                        return std::unexpected(t.error());
-                    if (t->major == major_type::tag &&
-                        t->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]]
-                        return std::nullopt;
-                    if (t->major != major_type::tag ||
-                        (t->argument != std::to_underlying(rfc8949::tag_number::shareable) &&
-                         t->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))) {
-                        probe = before;
-                        break;
-                    }
-                }
+                probe.encoded = validity::subspan(probe.encoded, heads::self_described_cbor_content_at(probe.encoded, validity::offset{}));
                 auto const k = probe.head_decode();
                 if (!k) [[unlikely]]
                     return std::unexpected(k.error());
@@ -807,21 +776,7 @@ class jsonpath
             std::uint64_t argument = h.argument;
             if (heads::is_bignum(h.major, h.argument)) {
                 negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
-                for (;;) {
-                    heads::decoder const before = d;
-                    auto const t = d.head_decode();
-                    if (!t) [[unlikely]]
-                        return std::unexpected(t.error());
-                    if (t->major == major_type::tag &&
-                        t->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]]
-                        return std::nullopt;
-                    if (t->major != major_type::tag ||
-                        (t->argument != std::to_underlying(rfc8949::tag_number::shareable) &&
-                         t->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))) {
-                        d = before;
-                        break;
-                    }
-                }
+                d.encoded = validity::subspan(d.encoded, heads::self_described_cbor_content_at(d.encoded, validity::offset{}));
                 auto const read = d.bignum_decode(h.argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
@@ -965,8 +920,7 @@ class jsonpath
                 if (walked) [[likely]]
                     return *walked;
                 return query_walk<T>(v, top,
-                                     lazy{std::make_shared<value_sharing::top_level_item>(
-                                              std::shared_ptr<void const>{}, content, std::vector<lazy>{}, validity::offset{}),
+                                     lazy{std::make_shared<value_sharing::top_level_item>(std::shared_ptr<void const>{}, content),
                                           validity::offset{}, {}},
                                      loaded);
             });

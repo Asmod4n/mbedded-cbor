@@ -330,16 +330,9 @@ inline value text_value(std::string_view const t)
     return {s};
 }
 
-// The value of a decoded item tree. Tag 28 is the value it marks and tag 29 the value it points to; a bignum of at
-// most 8 bytes is an integer, as a dynamic language reads it. A float is a double. The tree is passed to find the
-// item that a tag 29 points to.
-inline std::expected<value, error> value_of(cbor::lazy const &l);
-
-// The value of each tag 28 in stream order, empty while its content is read. A null table follows each tag 29
-// through the tree, for a tree that does not start at the first byte of its top-level item.
-using marked_values = std::vector<std::optional<value>>;
-
-inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it, marked_values *const marked)
+// The value of a decoded item tree. A bignum of at most 8 bytes is an integer, as a dynamic language reads it. A
+// float is a double. Tags 28 and 29 are plain tags.
+inline value value_of(cbor::item const &it)
 {
     switch (it.type) {
     case cbor::type::text_string:
@@ -364,14 +357,14 @@ inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item 
         array a;
         a.reserve(it.via.array.size());
         for (cbor::item const &child : it.via.array)
-            a.push_back(value_of(tree, child, marked));
+            a.push_back(value_of(child));
         return {std::move(a)};
     }
     case cbor::type::map: {
         map m;
         m.reserve(it.via.map.size() / 2);
         for (std::size_t i = 0; i + 1 < it.via.map.size(); i += 2)
-            m.push_back(entry{value_of(tree, it.via.map[i], marked), value_of(tree, it.via.map[i + 1], marked)});
+            m.push_back(entry{value_of(it.via.map[i]), value_of(it.via.map[i + 1])});
         return {std::move(m)};
     }
     default:
@@ -379,27 +372,6 @@ inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item 
     }
     std::uint64_t const number = it.via.tag.number;
     cbor::item const &inner = *it.via.tag.content;
-    if (number == 29 && marked != nullptr && inner.type == cbor::type::unsigned_integer) {
-        auto const index = cbor::value_sharing::check_sharedref_index(inner.via.u64, marked->size());
-        if (!index || !(*marked)[std::to_underlying(*index)]) [[unlikely]]
-            return {};
-        return *(*marked)[std::to_underlying(*index)];
-    }
-    if (number == 29) {
-        auto const resolved = cbor::shared_value_resolve(tree, it);
-        if (!resolved) [[unlikely]]
-            return {};
-        return value_of(*resolved).value_or(value{});
-    }
-    if (number == 28) {
-        if (marked == nullptr)
-            return value_of(tree, inner, marked);
-        std::size_t const index = marked->size();
-        marked->emplace_back();
-        value made = value_of(tree, inner, marked);
-        (*marked)[index] = made;
-        return made;
-    }
     if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
         std::string m(reinterpret_cast<char const *>(inner.via.bin.data()), inner.via.bin.size());
         m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
@@ -411,7 +383,7 @@ inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item 
         }
         return {bignum{number == 3, std::move(m)}};
     }
-    return {tagged{number, value_of(tree, inner, marked)}};
+    return {tagged{number, value_of(inner)}};
 }
 
 inline std::expected<value, error> value_of(cbor::lazy const &l)
@@ -419,10 +391,7 @@ inline std::expected<value, error> value_of(cbor::lazy const &l)
     auto const tree = l.decode();
     if (!tree)
         return std::unexpected(tree.error());
-    if (l.offset != decltype(l.offset){})
-        return value_of(*tree, **tree, nullptr);
-    marked_values marked;
-    return value_of(*tree, **tree, &marked);
+    return value_of(**tree);
 }
 
 // A value written through the public encoder: an integer at 64 bits, a float as a double, a bignum as tag 2 or 3

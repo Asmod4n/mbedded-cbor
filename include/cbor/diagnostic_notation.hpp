@@ -982,7 +982,7 @@ class extended_diagnostic_notation
     template <bool Checked>
     static std::expected<void, error>
     diagnostic_write(std::string &out, heads::decoder<Checked> &d, std::string_view const encoded,
-                     std::vector<validity::offset> &marks, std::size_t const depth, std::size_t const depth_max)
+                     std::size_t const depth, std::size_t const depth_max)
     {
         if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -1027,7 +1027,7 @@ class extended_diagnostic_notation
                             .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
-                if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
+                if (auto const r = diagnostic_write(out, d, encoded, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
             }
             out += ")";
@@ -1046,11 +1046,11 @@ class extended_diagnostic_notation
             for (std::uint64_t i = 0; indefinite ? !break_found(d) : i < h->argument; ++i) {
                 if (i != 0)
                     out += ", ";
-                if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
+                if (auto const r = diagnostic_write(out, d, encoded, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
                 if (map) {
                     out += ": ";
-                    if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
+                    if (auto const r = diagnostic_write(out, d, encoded, depth + 1, depth_max); !r) [[unlikely]]
                         return r;
                 }
             }
@@ -1058,35 +1058,8 @@ class extended_diagnostic_notation
             return {};
         }
         case major_type::tag: {
-            validity::offset const content_at = validity::distance(encoded, d.encoded);
-            if (error const e = value_sharing::check_tag_content(
-                                    h->argument, encoded, content_at,
-                                    [&marks]() -> auto const & { return marks; }, std::identity{}, d.checks)
-                                    .error_or(error{});
-                e != error{}) [[unlikely]]
-                return std::unexpected(e);
-            auto const c = heads::raw_head_read(encoded, content_at, d.checks);
-            if (!c) [[unlikely]]
-                return std::unexpected(c.error());
-            if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
-                if (auto const index = value_sharing::check_sharedref_index(c->argument, marks.size()); !index) [[unlikely]]
-                    return std::unexpected(index.error());
-            }
-            if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-                if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::sharedref)) {
-                    auto const n = heads::raw_head_read(encoded, c->at, d.checks);
-                    if (!n) [[unlikely]]
-                        return std::unexpected(n.error());
-                    auto const index = value_sharing::check_sharedref_index(n->argument, marks.size());
-                    if (!index) [[unlikely]]
-                        return std::unexpected(index.error());
-                    marks.push_back(marks[std::to_underlying(*index)]);
-                } else {
-                    marks.push_back(content_at);
-                }
-            }
             out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument) + "(";
-            if (auto const r = diagnostic_write(out, d, encoded, marks, depth + 1, depth_max); !r) [[unlikely]]
+            if (auto const r = diagnostic_write(out, d, encoded, depth + 1, depth_max); !r) [[unlikely]]
                 return r;
             out += ")";
             return {};
@@ -1141,9 +1114,8 @@ inline std::expected<std::string, error> diagnostic_notation(std::string_view co
                 return std::unexpected(r.error());
             heads::decoder<Checked> d{encoded, checks};
             std::string out;
-            std::vector<validity::offset> marks;
             if (auto const r =
-                    extended_diagnostic_notation::diagnostic_write(out, d, encoded, marks, 0, depth_max);
+                    extended_diagnostic_notation::diagnostic_write(out, d, encoded, 0, depth_max);
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
             if (!d.encoded.empty()) [[unlikely]]

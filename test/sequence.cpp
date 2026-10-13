@@ -138,8 +138,8 @@ TEST_CASE("sequence: lazy, path and decode read each element through a copy")
     CHECK(*decoded == A(1, 2));
 }
 
-// Value sharing (tags 28 and 29) counts within one top-level item. A reference in the second element cannot
-// reach a value that the first element marks.
+// A lazy reads tags 28 and 29 as plain tags, so a reference in the second element is a tag over its index and
+// reaches nothing in the first element.
 TEST_CASE("sequence: shared references do not cross elements")
 {
     auto const owner = std::make_shared<std::string const>("\xd8\x1c\x01\x81\xd8\x1d\x00"s);
@@ -150,8 +150,9 @@ TEST_CASE("sequence: shared references do not cross elements")
     auto const l = cbor::lazy::copy(views[1]);
     REQUIRE(l.has_value());
     auto const element = l->at(0).and_then([](cbor::lazy const &e) { return e.get<std::uint64_t>(); });
-    CHECK_EQ(element.error(), error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]).error(), error::sharedref_index_not_marked);
+    CHECK_EQ(element, 0u);
+    CHECK_EQ(l->at(0)->type(), cbor::type::tag);
+    CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]), 0u);
 }
 
 // Owner decision: a sequence takes its bytes only in the view form, so each element is a view that the sequence

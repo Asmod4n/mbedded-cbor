@@ -362,8 +362,8 @@ TEST_CASE("decode: a child decoded before its parent has the same content after 
     CHECK_EQ(argument_of(*children_of(*later)[1]), argument_of(*children_of(*inner)[1]));
 }
 
-// RFC 8949 3.4 and the value sharing tags 28 and 29: tag 28 stays a tag item over the shared value, and the
-// item of 29(0) points to that value in the same tree. Nothing is copied and nothing is followed.
+// The owner decided that a tree decode reads tags 28 and 29 as plain tags: 28 over the shared value and 29 over
+// its index. Nothing is copied and nothing is followed.
 TEST_CASE("decode: a shared reference points to the item of the shared value")
 {
     auto const top_level = cbor::lazy::copy(std::string("\x82\xd8\x1c\x62hi\xd8\x1d\x00"sv));
@@ -376,14 +376,13 @@ TEST_CASE("decode: a shared reference points to the item of the shared value")
     auto const *const value = elements[0]->via.tag.content;
     CHECK_EQ(value->via.str, "hi");
     CHECK_EQ(argument_of(*elements[1]), 29u);
-    CHECK(shared_value_is(root, *elements[1], *value));
+    CHECK_EQ((*elements[1]).via.tag.number, 29u);
     CHECK_EQ(elements[1]->via.tag.content->type, cbor::type::unsigned_integer);
     CHECK_EQ(elements[1]->via.tag.content->via.u64, 0u);
 }
 
-// A shared reference from inside a lazy to a mark before it: the decode starts at the element and does not
-// decode the mark. shared_value_resolve gives the mark as a lazy over the input.
-TEST_CASE("decode: a shared reference to a mark before the decoded node is read")
+// A tag 29 inside a lazy is a tag over its index, also when its mark lies before the decoded node.
+TEST_CASE("decode: a tag 29 after its mark is a tag over its index")
 {
     auto const top_level = cbor::lazy::copy(std::string("\x82\xd8\x1c\x62hi\x81\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
@@ -391,11 +390,9 @@ TEST_CASE("decode: a shared reference to a mark before the decoded node is read"
     REQUIRE(element.has_value());
     auto const inner = item_of(element->decode());
     cbor::item const &reference = *children_of(*inner)[0];
-    auto const resolved = cbor::shared_value_resolve(inner, reference);
-    REQUIRE(resolved.has_value());
-    CHECK(resolved->get<std::string_view>() == "hi");
+    CHECK_EQ(reference.via.tag.number, 29u);
+    CHECK_EQ(reference.via.tag.content->via.u64, 0u);
 }
-
 // A cycle comes from the wire: 28([29(0)]) is an array that holds
 // itself. The element points to that array, and the decode ends.
 TEST_CASE("decode: a cyclic array is its own element")
@@ -407,27 +404,21 @@ TEST_CASE("decode: a cyclic array is its own element")
     CHECK_EQ(array->type, cbor::type::array);
     auto const elements = children_of(*array);
     REQUIRE_EQ(elements.size(), 1u);
-    CHECK(shared_value_is(root, *elements[0], *array));
+    CHECK_EQ((*elements[0]).via.tag.number, 29u);
 }
 
-// A reference to a value that comes later on the wire is refused, as in
-// every other reader of the shared values. A reference counts only the
-// marks that come before it on the wire, so the mark after it is not
-// marked, as in at_path. The decode only remembers the marks, so the
-// resolution of the tag 29 gives the error, in the whole tree and in the
-// tree of the element.
-TEST_CASE("decode: a forward shared reference is refused")
+// A tag 29 before its mark is a plain tag: the tree decode checks no index.
+TEST_CASE("decode: a forward tag 29 is a plain tag")
 {
     auto const top_level = cbor::lazy::copy(std::string("\x82\xd8\x1d\x00\xd8\x1c\x00"sv));
     REQUIRE(top_level.has_value());
     auto const whole = item_of(top_level->decode());
-    CHECK_EQ(cbor::shared_value_resolve(whole, whole->via.array[0]).error(), cbor::error::sharedref_index_not_marked);
+    CHECK_EQ(whole->via.array[0].via.tag.number, 29u);
     auto const element = top_level->at(0);
     REQUIRE(element.has_value());
     auto const inner = item_of(element->decode());
-    CHECK_EQ(cbor::shared_value_resolve(inner, *inner).error(), cbor::error::sharedref_index_not_marked);
+    CHECK_EQ(inner->via.tag.number, 29u);
 }
-
 // Fault 21: in [28(0), 28(29(0)), 28(29(1)), ...] each element refers to the
 // one before it. The decode of the last element walked the chain once for
 // each step and recursed once for each step at the same depth, so a long chain
@@ -435,7 +426,7 @@ TEST_CASE("decode: a forward shared reference is refused")
 // now only stores the tag 29. The mark lies before the decoded element, so
 // shared_value_resolve gives it as a lazy, and the lazy follows the chain in
 // one loop to the integer at its start.
-TEST_CASE("decode: a long chain of shared references resolves without recursion")
+TEST_CASE("decode: a long chain of shared references is read without recursion")
 {
     constexpr std::uint16_t chain_length = 50000;
     constexpr char array_head_uint16 = '\x99';
@@ -460,9 +451,9 @@ TEST_CASE("decode: a long chain of shared references resolves without recursion"
     REQUIRE(last.has_value());
     auto const decoded = item_of(last->decode());
     REQUIRE_EQ(decoded->via.tag.content->type, cbor::type::tag);
-    auto const resolved = cbor::shared_value_resolve(decoded, *decoded->via.tag.content);
-    REQUIRE(resolved.has_value());
-    CHECK(resolved->get<std::uint64_t>() == 0u);
+    cbor::item const &reference = *decoded->via.tag.content;
+    CHECK_EQ(reference.via.tag.number, 29u);
+    CHECK_EQ(reference.via.tag.content->via.u64, chain_length - 2u);
 }
 
 // The nesting depth is checked where the decode recurses: 100(100(100(0))) holds an
@@ -593,14 +584,13 @@ TEST_CASE("type: every type of an item, through lazy and through the decoded ite
     }
 }
 
-// lazy reads through the value sharing tags 28 and 29, as every other read of lazy does, and gives the type of
-// the shared value. The decoded item keeps tag 28 and tag 29 as tags.
-TEST_CASE("type: lazy reads through tags 28 and 29, the item keeps them")
+// A lazy and the decoded item both read tags 28 and 29 as tags.
+TEST_CASE("type: lazy and the item keep tags 28 and 29")
 {
     auto const root = cbor::lazy::copy(std::string("\x82\xd8\x1c\x01\xd8\x1d\x00"sv));
     REQUIRE(root.has_value());
-    CHECK_EQ(*root->at(0)->type(), cbor::type::unsigned_integer);
-    CHECK_EQ(*root->at(1)->type(), cbor::type::unsigned_integer);
+    CHECK_EQ(*root->at(0)->type(), cbor::type::tag);
+    CHECK_EQ(*root->at(1)->type(), cbor::type::tag);
     auto const tree = item_of(root->decode());
     auto const elements = children_of(*tree);
     CHECK_EQ(elements[0]->type, cbor::type::tag);
@@ -677,16 +667,14 @@ TEST_CASE("encode: a span that is too short")
     CHECK_EQ(r.error(), cbor::error::no_buffer_space);
 }
 
-// A tag 29 that names a mark which comes later on the wire is refused: [29(0), 28(1)] names mark 0 before tag 28
-// stands. The decode only remembers the mark, and the resolution of the tag 29 gives the error.
-TEST_CASE("decode: a reference before its mark is refused")
+// A tag 29 that names a mark which comes later on the wire is a plain tag in a tree decode.
+TEST_CASE("decode: a reference before its mark is a plain tag")
 {
     auto const top_level = cbor::lazy::copy(std::string("\x82\xd8\x1d\x00\xd8\x1c\x01"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->decode());
-    CHECK_EQ(cbor::shared_value_resolve(root, root->via.array[0]).error(), cbor::error::sharedref_index_not_marked);
+    CHECK_EQ(root->via.array[0].via.tag.number, 29u);
 }
-
 // RFC 8949 3.4.5.1: tag 24 holds a byte string with one encoded CBOR data item. The decode gives both the byte
 // string as written and the embedded item as a tree, so a reader takes the item without a second decode, and
 // encode writes the byte string again bit for bit.
@@ -749,18 +737,15 @@ TEST_CASE("decode: the embedded item of a tag 24 lives as long as the result")
     CHECK_EQ(children[1]->via.str, "x");
 }
 
-// RFC 8949 and the value-sharing tags: a tag 29 names the item of its tag 28, so both reach the same node of the
-// tree and not two copies.
-TEST_CASE("decode: a tag 29 reaches the same node as its tag 28")
+// A tree decode keeps a tag 28 over its value and a tag 29 over its index.
+TEST_CASE("decode: a tag 28 and a tag 29 are tag nodes")
 {
     std::string const wire = "\x82\xd8\x1c\x82\x01\x02\xd8\x1d\x00"s;
     auto const root = item_of(cbor::lazy::copy(std::string(wire))->decode());
     auto const children = children_of(*root);
-    cbor::item const *const marked = children[0]->via.tag.content;
-    CHECK(shared_value_is(root, *children[1], *marked));
-    auto const referred = cbor::shared_value_resolve(root, *children[1]);
-    REQUIRE(referred.has_value());
-    CHECK_EQ(referred->at(std::size_t{1}).and_then([](cbor::lazy const &e) { return e.get<std::uint64_t>(); }).value(), 2u);
+    CHECK_EQ(children[0]->via.tag.content->type, cbor::type::array);
+    CHECK_EQ((*children[1]).via.tag.number, 29u);
+    CHECK_EQ(children[1]->via.tag.content->via.u64, 0u);
 }
 
 // Owner decision: the embedded item is a top-level item of its own. A tag 29 inside it refers to a tag 28 inside
@@ -772,7 +757,7 @@ TEST_CASE("decode: a shared reference inside tag 24 refers to a mark inside the 
     auto const root = item_of(top_level->decode());
     auto const elements = children_of(cbor::encoded_cbor_data_item(root, *root).value().get());
     REQUIRE_EQ(elements.size(), 2u);
-    CHECK(shared_value_is(root, *elements[1], *elements[0]->via.tag.content));
+    CHECK_EQ((*elements[1]).via.tag.number, 29u);
 }
 
 // The other direction of the same decision: a mark outside is not visible inside, so 29(0) inside the embedded
@@ -784,7 +769,7 @@ TEST_CASE("decode: a shared reference inside tag 24 does not see a mark outside"
     auto const root = item_of(top_level->decode());
     auto const embedded = cbor::encoded_cbor_data_item(root, root->via.array[1]);
     REQUIRE(embedded.has_value());
-    CHECK_EQ(cbor::shared_value_resolve(root, embedded->get()).error(), cbor::error::sharedref_index_not_marked);
+    CHECK_EQ(embedded->get().via.tag.number, 29u);
 }
 
 // And a mark inside the embedded item does not count outside: the 29(0) after the tag 24 has no mark.
@@ -793,7 +778,7 @@ TEST_CASE("decode: a mark inside tag 24 does not count outside")
     auto const top_level = cbor::lazy::copy(std::string("\x82\xd8\x18\x43\xd8\x1c\x01\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->decode());
-    CHECK_EQ(cbor::shared_value_resolve(root, root->via.array[1]).error(), cbor::error::sharedref_index_not_marked);
+    CHECK_EQ(root->via.array[1].via.tag.number, 29u);
 }
 
 // The embedded bytes are read with the same checks as the outer bytes, so malformed embedded bytes give the
@@ -1013,23 +998,15 @@ TEST_CASE("encode: a bignum that fits is an integer, a larger bignum and a typed
     }
 }
 
-// shared_value_resolve and encoded_cbor_data_item take a tag 29 or a tag 24 of the decoded tree that is passed. Any other
-// item, or a tree that no decode made, is a wrong use and throws, so a caller never reads an item that does not
-// exist.
-TEST_CASE("shared_value_resolve: an item that is not a tag 29 of the tree throws")
+// encoded_cbor_data_item takes a tag 24 of the decoded tree that is passed. Any other item is a wrong use and
+// throws, so a caller never reads an item that does not exist.
+TEST_CASE("encoded_cbor_data_item: an item that is not a tag 24 of the tree throws")
 {
     auto const root = item_of(cbor::lazy::copy(std::string("\x82\xd8\x1c\x01\xd8\x1d\x00"sv))->decode());
-    CHECK_THROWS_AS((void)cbor::shared_value_resolve(root, *root), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::shared_value_resolve(root, root->via.array[0]), std::logic_error);
     CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(root, root->via.array[1]), std::logic_error);
-    auto const other = item_of(cbor::lazy::copy(std::string("\x82\xd8\x1c\x01\xd8\x1d\x00"sv))->decode());
-    CHECK_THROWS_AS((void)cbor::shared_value_resolve(other, root->via.array[1]), std::logic_error);
     auto const made = std::make_shared<cbor::item const>(cbor::item{cbor::type::unsigned_integer, 0, {.u64 = 0}});
-    CHECK_THROWS_AS((void)cbor::shared_value_resolve(made, *made), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::shared_value_resolve(nullptr, *made), std::logic_error);
-    CHECK(shared_value_is(root, root->via.array[1], *root->via.array[0].via.tag.content));
+    CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(made, *made), std::logic_error);
 }
-
 // A map holds a key and a value for each entry. A map item built by hand with an odd count of items is a wrong
 // use, and encode throws before it writes a head with the wrong count.
 TEST_CASE("encode: a map with an odd count of items throws")

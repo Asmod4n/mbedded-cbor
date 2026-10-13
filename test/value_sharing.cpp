@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <expected>
 #include <initializer_list>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <random>
@@ -31,8 +32,8 @@ namespace shared_test
 // The decoded item tree of a top-level item, as lazy::decode gives it.
 using tree = std::shared_ptr<cbor::item const>;
 
-// An item of a decoded tree together with the tree, which cbor::shared_value_resolve needs to follow a tag 29. The
-// resolution gives the marked value as a lazy over the input, and its decode gives a tree of its own.
+// An item of a decoded tree together with the tree. A tree decode reads a tag 29 as a plain tag, so the tests of
+// the encoder find the value that a tag 29 names in the tree itself.
 struct place {
     tree t;
     cbor::item const *i;
@@ -48,17 +49,38 @@ struct place {
     }
 };
 
-// The item that a mark of tag 28 or a reference of tag 29 stands for. Two places that stand for the same item are
-// one value with identity, as RFC 8949 3.4 and the value-sharing registration describe it.
+// The tags 28 of a tree in stream order. RFC 8949 3.4 and the value-sharing registration number the marks in this
+// order, and a tag 29 holds the index of one of them.
+std::vector<cbor::item const *> marks_of(tree const &t)
+{
+    std::vector<cbor::item const *> marks;
+    std::vector<cbor::item const *> pending{t.get()};
+    while (!pending.empty()) {
+        cbor::item const *const i = pending.back();
+        pending.pop_back();
+        if (i->type == cbor::type::tag) {
+            if (i->via.tag.number == 28)
+                marks.push_back(i);
+            pending.push_back(i->via.tag.content);
+        }
+        if (i->type == cbor::type::array || i->type == cbor::type::map) {
+            auto const c = children_of(*i);
+            for (auto it = c.rbegin(); it != c.rend(); ++it)
+                pending.push_back(*it);
+        }
+    }
+    return marks;
+}
+
+// The item that a mark of tag 28 or a reference of tag 29 stands for, read from the tree by the index of the mark.
 place target(place n)
 {
     for (int steps = 0; steps < 1000; ++steps) {
         if (n.i->type == cbor::type::tag && n.i->via.tag.number == 29) {
-            auto const resolved = cbor::shared_value_resolve(n.t, *n.i);
-            REQUIRE(resolved.has_value());
-            auto decoded = resolved->decode();
-            REQUIRE(decoded.has_value());
-            n = place{*decoded, decoded->get()};
+            auto const marks = marks_of(n.t);
+            REQUIRE(n.i->via.tag.content->type == cbor::type::unsigned_integer);
+            REQUIRE(n.i->via.tag.content->via.u64 < marks.size());
+            n.i = marks[n.i->via.tag.content->via.u64];
         } else if (n.i->type == cbor::type::tag && n.i->via.tag.number == 28)
             n.i = n.i->via.tag.content;
         else
@@ -80,38 +102,6 @@ tree decoded_ref(std::string_view const wire)
     auto t = l->decode();
     REQUIRE(t.has_value());
     return *t;
-}
-
-// The decode only stores a tag 29, and its resolution gives the error. This gives the error of the decode, or else
-// the first error of a resolution of a tag 29 of the tree, in the order of the tree.
-error ref_decode_error(std::string_view const wire)
-{
-    auto const l = cbor::lazy::copy(wire);
-    REQUIRE(l.has_value());
-    auto const t = l->decode();
-    if (!t)
-        return t.error();
-    std::vector<cbor::item const *> pending{t->get()};
-    std::vector<cbor::item const *> seen;
-    while (!pending.empty()) {
-        cbor::item const *const i = pending.back();
-        pending.pop_back();
-        if (std::ranges::find(seen, i) != seen.end())
-            continue;
-        seen.push_back(i);
-        if (i->type == cbor::type::tag && i->via.tag.number == 29) {
-            if (auto const r = cbor::shared_value_resolve(*t, *i); !r)
-                return r.error();
-            continue;
-        }
-        if (i->type == cbor::type::tag)
-            pending.push_back(i->via.tag.content);
-        if (i->type == cbor::type::array || i->type == cbor::type::map)
-            for (cbor::item const *const child : children_of(*i))
-                pending.push_back(child);
-    }
-    FAIL("the decode and every resolution succeed");
-    return error{};
 }
 
 template <class P>
@@ -180,204 +170,6 @@ bool same(A const &a, B const &b)
 
 using namespace shared_test;
 
-// Ported from test.rb: 'tag 28/29: scalar shareable (integer) roundtrip via wire'.
-TEST_CASE("tag 28/29: scalar shareable")
-{
-    auto const r = decoded_ref("\x82\xd8\x1c\x18\x2a\xd8\x1d\x00"sv);
-    CHECK(same(element(r, 0), element(r, 1)));
-    CHECK_EQ(argument_of(*element(r, 0)), 42u);
-}
-
-// Ported from test.rb: 'tag 29: invalid index raises IndexError, non-uint payload raises TypeError'
-// and 'tag 29: uint64-max index overflow handled cleanly'. Each case keeps its own error, as each
-// raised its own class in mruby-cbor.
-TEST_CASE("tag 29: an index that no tag 28 marked")
-{
-    CHECK_EQ(ref_decode_error("\xd8\x1d\x18\x63"sv), error::sharedref_index_not_marked);
-    CHECK_EQ(ref_decode_error("\xd8\x1d\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv),
-             sizeof(std::size_t) < sizeof(std::uint64_t) ? error::sharedref_index_out_of_range
-                                                         : error::sharedref_index_not_marked);
-}
-
-TEST_CASE("tag 29: content that is not an unsigned integer")
-{
-    CHECK_EQ(ref_decode_error("\xd8\x1d\x61"
-                              "a"sv),
-             error::inadmissible_type_for_tag_content);
-}
-
-// Ported from test.rb: 'tag 28: decoder accepts Tag 28 in map-value position'.
-TEST_CASE("tag 28: in map-value position")
-{
-    auto const r = decoded_ref("\xa2\x61"
-                               "a\xd8\x1c\x83\x01\x02\x03\x61"
-                               "b\xd8\x1d\x00"sv);
-    CHECK(same(map_value(r, 0), map_value(r, 1)));
-}
-
-// Ported from test.rb: 'tag 28: self-referential Tag 28 inside Tag 28 is safe'.
-// Two marks, index 0 and 1, both on the value 42.
-TEST_CASE("tag 28: inside tag 28")
-{
-    auto const r = decoded_ref("\x83\xd8\x1c\xd8\x1c\x18\x2a\xd8\x1d\x00\xd8\x1d\x01"sv);
-    CHECK(same(element(r, 1), element(r, 0)));
-    CHECK(same(element(r, 2), element(r, 0)));
-}
-
-// Ported from test.rb: 'tag 28/29: cyclic array and cyclic hash (eager)'.
-// value-sharing: "it has to record the reference before decoding the value".
-TEST_CASE("tag 28/29: cyclic array and cyclic map")
-{
-    auto const a = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
-    CHECK(same(a, element(a, 0)));
-    auto const m = decoded_ref("\xd8\x1c\xa1\x64self\xd8\x1d\x00"sv);
-    CHECK(same(m, map_value(m, 0)));
-}
-
-// Ported from test.rb: 'tag 28/29: mutual recursion — hash↔array cycle'.
-TEST_CASE("tag 28/29: mutual recursion between a map and an array")
-{
-    auto const r = decoded_ref("\xd8\x1c\xa1\x64list\x82\xd8\x1d\x00\xd8\x1d\x00"sv);
-    CHECK(same(r, element(map_value(r, 0), 0)));
-    CHECK(same(r, element(map_value(r, 0), 1)));
-}
-
-// Ported from test.rb: 'tag 28/29: distinct shared groups do not conflate'.
-// The index is the order of the marks on the wire, as the encoder wrote them.
-TEST_CASE("tag 28/29: two groups keep their own index")
-{
-    auto const r = decoded_ref("\x84\xd8\x1c\x81\x01\xd8\x1c\x81\x02\xd8\x1d\x01\xd8\x1d\x00"sv);
-    CHECK(same(element(r, 2), element(r, 1)));
-    CHECK(same(element(r, 3), element(r, 0)));
-    CHECK_FALSE(same(element(r, 0), element(r, 1)));
-}
-
-// Every item of the tree exists before its content, a tag too. Tag 6 takes every content, so the check of the tag
-// content (RFC 8949 3.4.1, 3.4.2) does not answer first, and 28(6(29(0))) is a tag that holds itself. The reference
-// model, which has no identity, refuses it.
-TEST_CASE("tag 29: a reference to a tag that holds itself")
-{
-    auto const r = decoded_ref("\xd8\x1c\xc6\xd8\x1d\x00"sv);
-    CHECK_EQ(argument_of(*target(r)), 6u);
-    CHECK(same(content(r), r));
-    CHECK_EQ(decode_error("\xd8\x1c\xc6\xd8\x1d\x00"sv), error::sharedref_not_complete);
-}
-
-// Found by the fuzzer: a mark whose content is a chain of marks and a reference back to the first mark has no
-// end. The check of the content of tag 0 followed the chain without a stop.
-TEST_CASE("tag 29: a chain of marks that refers to its own start ends with an error")
-{
-    CHECK_EQ(decode_error("\xc0\xd8\x1c\xd8\x1c\xd8\x1d\x00"sv), error::sharedref_not_complete);
-    CHECK_EQ(ref_decode_error("\xc0\xd8\x1c\xd8\x1c\xd8\x1d\x00"sv), error::sharedref_not_complete);
-    CHECK_EQ(decode_error("\xc0\xd8\x1c\xd8\x1d\x00"sv), error::sharedref_not_complete);
-    CHECK_EQ(decode_error("\xd8\x24\xd8\x1c\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv), error::sharedref_not_complete);
-    CHECK_EQ(ref_decode_error("\xd8\x24\xd8\x1c\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv), error::sharedref_not_complete);
-}
-
-// The owner decided that a tag 29 is resolved only when it is read. Tag 0 needs a text string (RFC 8949 3.4.1).
-// [28(""), 0(29(0))] resolves to the text string. [28(0), 0(29(0))] decodes, because the decode only stores the
-// tag 29. Its resolution gives the marked integer, and the reader of tag 0 checks the content of tag 0. A forward
-// reference fails at the resolution.
-TEST_CASE("tag 29: the decode stores the reference and its resolution checks the enclosing tag")
-{
-    tree const valid = decoded_ref("\x82\xd8\x1c\x60\xc0\xd8\x1d\x00"sv);
-    cbor::item const &reference = *valid->via.array[1].via.tag.content;
-    auto const resolved = cbor::shared_value_resolve(valid, reference);
-    REQUIRE(resolved.has_value());
-    CHECK_EQ(resolved->get<std::string_view>().value(), ""sv);
-    tree const refused = decoded_ref("\x82\xd8\x1c\x00\xc0\xd8\x1d\x00"sv);
-    cbor::item const &wrong = *refused->via.array[1].via.tag.content;
-    auto const marked = cbor::shared_value_resolve(refused, wrong);
-    REQUIRE(marked.has_value());
-    CHECK_EQ(marked->type().value(), cbor::type::unsigned_integer);
-    CHECK_EQ(ref_decode_error("\x82\xd8\x1d\x00\xd8\x1c\x00"sv), error::sharedref_index_not_marked);
-}
-
-// A tag 29 that names a mark, through marks and other references only, and reaches itself names no value. The tree
-// decoder and every step resolve the reference through the bytes, with a bound on the references they follow.
-TEST_CASE("tag 29: a reference that reaches itself through marks names no value")
-{
-    for (std::string_view const wire :
-         {"\xd8\x1c\xd8\x1d\x00"sv, "\xd8\x1c\xd8\x1c\xd8\x1d\x00"sv, "\xd8\x1c\xd9\xd9\xf7\xd8\x1d\x00"sv}) {
-        CAPTURE(wire);
-        CHECK_EQ(ref_decode_error(wire), error::sharedref_not_complete);
-        CHECK_EQ(decode_error(wire), error::sharedref_not_complete);
-    }
-}
-
-// The tree decoder records a mark before it writes the item of the mark. A check of a tag content that follows a
-// reference reads the bytes, so it never reads an item that is not yet written. 28(0(29(0))) and 28(24(29(0)))
-// name a tag that holds itself, which is an inadmissible content of tag 0 and of tag 24. The reader of the tag
-// checks it, because the decode does not read the tag 29. A step through 28(0(29(0))) passes
-// tag 0 to its content without an end, and the bound on the references ends it.
-TEST_CASE("tag 29: a tag content behind a reference to an incomplete mark")
-{
-    CHECK_EQ(decode_error("\xd8\x1c\xc0\xd8\x1d\x00"sv), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(decode_error("\xd8\x1c\xd8\x18\xd8\x1d\x00"sv), error::inadmissible_type_for_tag_content);
-    auto const step = (*cbor::lazy::copy("\xd8\x1c\xc0\xd8\x1d\x00"sv)).at(0);
-    REQUIRE_FALSE(step.has_value());
-    CHECK_EQ(step.error(), error::sharedref_not_complete);
-    tree const cycle = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
-    CHECK(same(cycle, element(cycle, 0)));
-}
-
-// Found by the fuzzer with clang ASan and UBSan: the decode read an item of a mark before the decoder wrote it, and a
-// path over 28(12(29(0))) did not end.
-TEST_CASE("tag 29: inputs of the fuzzer that read an incomplete mark")
-{
-    for (std::string_view const wire :
-         {"\x87\xd8\x1c\xd8\x1c\xd8\x1c\xda\x18\xd8\x1c\x30\xd8\x1d\x00\x40\x00\xea\xe3"sv,
-          "\xc0\xd8\x1c\xd8\x1c\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd8\x1d\x00"sv,
-          "\x87\xd8\x1c\xd8\x00\x00\x00\x00\x0c\xd8\x1c\xd8\x1c\xda\x18\xd8\x1c\x30\xd8\x1d\x00\xd8\x1c\x30\x17\x32\xd8\x1d\x00\x00"sv,
-          "\xa5\x61\x61\xd8\x1c\xd8\x0c\xd8\x1d\x00\x0e"sv}) {
-        CAPTURE(wire);
-        CHECK_FALSE(cbor::lazy::copy(wire)->decode().has_value());
-        CHECK_FALSE(test::decoded(wire).has_value());
-    }
-    auto const value = (*cbor::lazy::copy("\xa1\x61\x61\xd8\x1c\xcc\xd8\x1d\x00"sv))
-                           .at("a")
-                           .and_then([](cbor::lazy const &a) { return a.at(0); });
-    REQUIRE_FALSE(value.has_value());
-    CHECK_EQ(value.error(), error::sharedref_not_complete);
-}
-
-// value-sharing: a cyclic data structure needs a reference to a value before it is completely decoded. The
-// reference model holds values, not references, so a cycle would come back as a cut copy; it refuses the cycle
-// instead. Sharing without a cycle stays: the model gets a copy.
-TEST_CASE("tag 28/29: a model without identity refuses a cycle")
-{
-    CHECK_EQ(decode_error("\xd8\x1c\x81\xd8\x1d\x00"sv), error::sharedref_not_complete);
-    CHECK_EQ(decode_error("\xd8\x1c\xa1\x61\x61\xd8\x1d\x00"sv), error::sharedref_not_complete);
-    CHECK_EQ(decode_error("\x81\xd8\x1c\x81\xd8\x1d\x00"sv), error::sharedref_not_complete);
-    auto const v = decoded("\x82\xd8\x1c\x80\xd8\x1d\x00"sv);
-    REQUIRE(v.has_value());
-    CHECK(*v == A(A(), A()));
-}
-
-// Found by the fuzzer: a decode that fails inside a cycle returned no value, and the cycle that it had built held
-// itself. The tree owns every item it builds, so a failed decode leaves nothing; LeakSanitizer finds a leak
-// otherwise.
-TEST_CASE("tag 28/29: a cycle that a failed decode leaves behind is freed")
-{
-    CHECK_EQ(ref_decode_error("\xd8\x1c\xa5\x61\x61\xd8\x1d\x00"sv), error::too_little_data);
-}
-
-// A tree that holds a cycle keeps it while the caller holds the tree, after the lazy is gone.
-TEST_CASE("tag 28/29: a held cycle outlives its lazy")
-{
-    tree const a = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
-    CHECK(same(a, element(a, 0)));
-}
-
-// A chain of marks counts as nesting, as a chain of other tags does.
-TEST_CASE("tag 28: a chain past the limit")
-{
-    CHECK_EQ(ref_decode_error(repeat("\xd8\x1c"sv, 129) + '\x00'), error::nesting_depth_exceeded);
-    test::limits_guard const depth{{.nesting_depth = 16}};
-    CHECK_EQ(ref_decode_error(repeat("\xd8\x1c"sv, 17) + '\x00'), error::nesting_depth_exceeded);
-    CHECK(decoded_ref(repeat("\xd8\x1c"sv, 16) + '\x00') != nullptr);
-}
-
 namespace shared_test
 {
 
@@ -427,6 +219,14 @@ handle object_of(std::uint64_t const tag, handle content)
 // that two places hold without a cycle is written in full at each place. The mode repeats_marked writes the input
 // of another writer, which marks every node it meets twice; the decoder reads that input too.
 enum class marks { cycles, repeats_marked, none };
+
+// The public encoder writes an unsigned integer in the width of its type, so the writer writes the index of a tag 29
+// in one byte. The tests hold fewer than 256 marks.
+std::uint8_t index_of(std::size_t const i)
+{
+    REQUIRE(i <= std::numeric_limits<std::uint8_t>::max());
+    return static_cast<std::uint8_t>(i);
+}
 
 struct shared_writer {
     marks mode = marks::cycles;
@@ -487,9 +287,9 @@ struct shared_writer {
         bool opened = false;
         if (id != nullptr && mode == marks::repeats_marked) {
             if (auto const n = numbers.find(id); n != numbers.end())
-                return e.sharedref(n->second);
+                return e.tag(29).and_then([&] { return e.unsigned_integer(index_of(n->second)); });
             if (seen[id] > 1) {
-                if (auto const r = e.shareable(); !r)
+                if (auto const r = e.tag(28); !r)
                     return r;
                 numbers.emplace(id, next++);
             }
@@ -497,10 +297,10 @@ struct shared_writer {
             if (auto const n = open.find(id); n != open.end() && !n->second.empty()) {
                 if (mode == marks::none)
                     return std::unexpected(error::cyclic_data_structure);
-                return e.sharedref(n->second.back());
+                return e.tag(29).and_then([&] { return e.unsigned_integer(index_of(n->second.back())); });
             }
             if (cyclic.contains(id)) {
-                if (auto const r = e.shareable(); !r)
+                if (auto const r = e.tag(28); !r)
                     return r;
                 open[id].push_back(next++);
             } else {
@@ -614,7 +414,7 @@ TEST_CASE("tag 28/29: a cyclic array and a cyclic map")
 {
     auto const a = arr({});
     std::get<std::vector<handle>>(a->kind).push_back(a);
-    CHECK_EQ(encoded_shared(a), "\xd8\x1c\x81\xd8\x1d\x00"sv);
+    CHECK_EQ(encoded_shared(a), "\xd8\x1c\x81\xd8\x1d\x18\x00"sv);
     auto const ra = round_trip(a);
     CHECK(same(ra, element(ra, 0)));
     auto const h = obj({});
@@ -851,23 +651,6 @@ TEST_CASE("lazy: a shared value keeps its identity")
     CHECK(same(element(*r, 0), element(*r, 1)));
 }
 
-// Ported from test.rb: 'tag 28: lazy path through Tag 28 without prior registration'. The reference
-// names a mark before the target, so the core finds it and decodes it on demand.
-TEST_CASE("lazy: a reference to a mark before the target")
-{
-    std::string const doc = "\xa2\x65outer\xd8\x1c\x82\x01\x02\x63ref\xd8\x1d\x00"s;
-    auto const ref = (*cbor::lazy::copy(doc)).at("ref");
-    REQUIRE(ref.has_value());
-    auto const r = ref->decode();
-    REQUIRE(r.has_value());
-    CHECK_EQ(argument_of(*element(*r, 1)), 2u);
-    auto const inside = ref->at(1);
-    REQUIRE(inside.has_value());
-    auto const two = inside->decode();
-    REQUIRE(two.has_value());
-    CHECK_EQ(argument_of(*target(*two)), 2u);
-}
-
 // Ported from test.rb: 'tag 28/29: cyclic array materializes via lazy'.
 TEST_CASE("lazy: a cyclic array")
 {
@@ -875,25 +658,6 @@ TEST_CASE("lazy: a cyclic array")
     auto const r = cbor::lazy::copy(doc)->decode();
     REQUIRE(r.has_value());
     CHECK(same(*r, element(*r, 0)));
-}
-
-// Ported from test.rb: 'path + sharedref: wildcard iterates over Tag 29 target' and 'path + sharedref:
-// wildcard on shared leaf + two wildcards over shared'.
-TEST_CASE("path: a wildcard over a shared array")
-{
-    auto const users = arr({obj({{s("name"), s("alice")}}), obj({{s("name"), s("bob")}})});
-    std::string const doc = encoded_shared(
-        obj({{s("primary"), obj({{s("users"), users}})}, {s("backup"), obj({{s("users"), users}})}}), marks::repeats_marked);
-    auto const r = test::query("$.backup.users[*].name", *cbor::lazy::copy(doc));
-    REQUIRE(r.has_value());
-    CHECK(*r == A("alice"s, "bob"s));
-    auto const shared_leaf = arr({u(1), u(2), u(3)});
-    std::string const leaf = encoded_shared(obj({{s("a"), shared_leaf}, {s("b"), shared_leaf}}), marks::repeats_marked);
-    for (std::string_view const p : {"$.a[*]"sv, "$.b[*]"sv}) {
-        auto const v = test::query(p, *cbor::lazy::copy(leaf));
-        REQUIRE(v.has_value());
-        CHECK(*v == A(1, 2, 3));
-    }
 }
 
 // An application as mruby gives the content of an object by value, as a temporary that only its writer holds. The
@@ -972,216 +736,89 @@ TEST_CASE("lazy: a registered object keeps its identity")
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
 
-// Ported from test.rb: 'path + sharedref: wildcard on shared leaf + two wildcards over shared'. The
-// second half: two wildcards, and the outer one goes through a reference. RFC 9535 gives one flat
-// nodelist, as path.cpp expects, where mruby-cbor gave one array for each team.
-TEST_CASE("path: two wildcards over a shared array")
-{
-    auto const teams = arr({obj({{s("members"), arr({obj({{s("n"), s("a")}}), obj({{s("n"), s("b")}})})}}),
-                            obj({{s("members"), arr({obj({{s("n"), s("c")}})})}})});
-    std::string const doc =
-        encoded_shared(obj({{s("p"), obj({{s("teams"), teams}})}, {s("b"), obj({{s("teams"), teams}})}}), marks::repeats_marked);
-    auto const r = test::query("$.b.teams[*].members[*].n", *cbor::lazy::copy(doc));
-    REQUIRE(r.has_value());
-    CHECK(*r == A("a"s, "b"s, "c"s));
-}
+// The owner decided that a user of the public encoder never writes tags 28 and 29. The encoder writes them
+// only for a cycle that it finds itself.
+template <class E>
+concept writes_shareable = requires(E e) { e.shareable(); };
 
-// Ported from what.rb: 'regression #3'. A lazy read of the first path must not change what a later
-// decode of the second path gives: the plain array, with its values.
-TEST_CASE("lazy: a reference decodes to the plain value after a read of its mark")
-{
-    auto const shared = arr({u(10), u(20), u(30)});
-    std::string const doc = encoded_shared(
-        obj({{s("path_a"), obj({{s("ref"), shared}})}, {s("path_b"), obj({{s("ref"), shared}})}}), marks::repeats_marked);
-    auto const root = *cbor::lazy::copy(doc);
-    REQUIRE(root.at("path_a").and_then([](cbor::lazy const &a) { return a.at("ref"); }).has_value());
-    auto const ref = root.at("path_b").and_then([](cbor::lazy const &b) { return b.at("ref"); });
-    REQUIRE(ref.has_value());
-    auto const r = ref->decode();
-    REQUIRE(r.has_value());
-    REQUIRE_EQ(target(*r)->type, cbor::type::array);
-    CHECK_EQ(children(*r).size(), 3u);
-    CHECK_EQ(argument_of(*element(*r, 0)), 10u);
-    CHECK_EQ(argument_of(*element(*r, 1)), 20u);
-    CHECK_EQ(argument_of(*element(*r, 2)), 30u);
-}
+template <class E>
+concept writes_sharedref = requires(E e) { e.sharedref(std::uint64_t{0}); };
 
+TEST_CASE("encoder: shareable and sharedref are not public")
+{
+    CHECK_FALSE(writes_shareable<cbor::encoder<std::string>>);
+    CHECK_FALSE(writes_sharedref<cbor::encoder<std::string>>);
+}
 
 namespace shared_test
 {
 
-std::string unsigned_head(std::uint64_t const major, std::uint64_t const n)
+// The head of a tag or an unsigned integer with its argument in 1, 2, 4 and 8 bytes (RFC 8949 3).
+std::string head_of(std::uint8_t const major, std::uint64_t const argument, std::size_t const bytes)
 {
-    std::string h;
-    if (n < 24) {
-        h += static_cast<char>(major << 5 | n);
-    } else if (n < 256) {
-        h += static_cast<char>(major << 5 | 24);
-        h += static_cast<char>(n);
-    } else {
-        h += static_cast<char>(major << 5 | 25);
-        h += static_cast<char>(n >> 8);
-        h += static_cast<char>(n & 0xff);
-    }
+    std::string h(1, static_cast<char>(major << 5 | (bytes == 1 ? 24 : bytes == 2 ? 25 : bytes == 4 ? 26 : 27)));
+    for (std::size_t i = bytes; i-- > 0;)
+        h += static_cast<char>(argument >> (8 * i));
     return h;
 }
 
 } // namespace shared_test
 
-// The fuzz target path found this: [28([[...[0]...]]), [[...[29(0)]...]]] with h arrays in the mark and r
-// arrays around the reference. The decode of the whole item needs a depth of h + 2 and r + 2 only. A lazy
-// that starts at the second element meets the reference before the mark is built. The mark is then built
-// at the depth of its own position, as the decode of the whole item builds it, and not below the
-// reference, so at_path and decode accept every item that the decode of the whole item accepts. The decode
-// of the second element does not decode the mark, and a resolution gives the mark as a lazy. So the depth of
-// the reference in the whole item does not limit the second element, and at_path may accept more.
-TEST_CASE("tag 29: a mark before the start of a lazy is built at the depth of its own position")
+// The owner decided on 2026-10-13 that every reader but an eager struct decode reads tags 28 and 29 as plain tags:
+// 28 over its content and 29 over its content, with no index check and no error of its own. RFC 8949 3 lets the
+// argument of a head take 1, 2, 4 or 8 bytes, and each form is read the same.
+TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tags 28 and 29 as tags")
 {
-    test::limits_guard const depth{{.nesting_depth = 16}};
-    for (std::size_t h = 0; h <= 15; ++h) {
-        for (std::size_t r = 0; r <= 15; ++r) {
-            CAPTURE(h);
-            CAPTURE(r);
-            std::string const doc = "\x82\xd8\x1c"s + repeat("\x81"sv, h) + '\x00' + repeat("\x81"sv, r) + "\xd8\x1d\x00"s;
-            std::string const target = repeat("\x81"sv, h) + '\x00';
-            auto const whole = test::value_of(*cbor::lazy::copy(doc));
-            auto const found = test::at_path("$[1]", *cbor::lazy::copy(doc));
-            if (whole)
-                CHECK(found.has_value());
-            if (!found || !whole)
-                continue;
-            auto const second = cbor::lazy::copy(doc)->at(1);
-            REQUIRE(second.has_value());
-            auto const lazy = test::value_of(*second);
-            REQUIRE(lazy.has_value());
-            auto const expected = [&] {
-                test::limits_guard const wide{{.nesting_depth = 32}};
-                return test::value_of(*cbor::lazy::copy(repeat("\x81"sv, r) + target));
-            }();
-            REQUIRE(expected.has_value());
-            CHECK_EQ(*found, *expected);
-            CHECK_EQ(*lazy, *expected);
-        }
+    for (std::size_t const bytes : {1uz, 2uz, 4uz, 8uz}) {
+        CAPTURE(bytes);
+        std::string const doc = "\x83"s + head_of(6, 28, bytes) + "\x05"s + head_of(6, 29, bytes) +
+                                head_of(0, 0, bytes) + head_of(6, 29, bytes) + head_of(0, 7, bytes);
+        auto const l = *cbor::lazy::copy(doc);
+        CHECK_EQ(l.at(0)->type(), cbor::type::tag);
+        CHECK_EQ(l.at(1)->type(), cbor::type::tag);
+        CHECK_EQ(l.at(0)->get<std::uint64_t>(), 5u);
+        CHECK_EQ(l.at(1)->get<std::uint64_t>(), 0u);
+        CHECK_EQ(l.at(2)->get<std::uint64_t>(), 7u);
+        CHECK_EQ(cbor::at_path<"$[1]", std::uint64_t>(l), 0u);
+        CHECK_EQ(cbor::at_path<"$[2]", std::uint64_t>(doc), 7u);
+        std::vector<cbor::type> types;
+        for (auto const e : *l.elements())
+            types.push_back(*e->type());
+        CHECK(types == std::vector<cbor::type>(3, cbor::type::tag));
+        auto const tree = l.decode();
+        REQUIRE(tree.has_value());
+        auto const elements = children_of(**tree);
+        REQUIRE_EQ(elements.size(), 3u);
+        CHECK_EQ(elements[0]->via.tag.number, 28u);
+        CHECK_EQ(elements[0]->via.tag.content->via.u64, 5u);
+        CHECK_EQ(elements[1]->via.tag.number, 29u);
+        CHECK_EQ(elements[1]->via.tag.content->via.u64, 0u);
+        CHECK_EQ(elements[2]->via.tag.number, 29u);
+        CHECK_EQ(elements[2]->via.tag.content->via.u64, 7u);
+        auto const text = cbor::diagnostic_notation(doc);
+        REQUIRE(text.has_value());
+        CHECK_EQ(text->contains("28_"), bytes > 1);
+        CHECK_EQ(text->contains("29_"), bytes > 1);
+    }
+    CHECK_EQ(cbor::diagnostic_notation("\x83\xd8\x1c\x05\xd8\x1d\x00\xd8\x1d\x07"sv), "[28(5), 29(0), 29(7)]");
+}
+
+#ifdef __cpp_impl_reflection
+// The eager table of one struct decode, for each form of the head of tag 29 and of its index: a forward index is
+// sharedref_index_not_marked, and a tag 29 into a plain member is incorrect_type.
+TEST_CASE("value sharing: an eager decode reads every form of a tag 29")
+{
+    for (std::size_t const bytes : {1uz, 2uz, 4uz, 8uz}) {
+        CAPTURE(bytes);
+        std::string const reference = head_of(6, 29, bytes) + head_of(0, 0, bytes);
+        CHECK_EQ(cbor::structs<std::vector<std::uint64_t>>::decode("\x81"s + reference).error(),
+                 error::sharedref_index_not_marked);
+        CHECK_EQ(cbor::structs<std::vector<std::uint64_t>>::decode("\x82"s + head_of(6, 28, bytes) + "\x05"s + reference)
+                     .error(),
+                 error::incorrect_type);
+        auto const marked = cbor::structs<std::vector<std::uint64_t>>::decode("\x81"s + head_of(6, 28, bytes) + "\x05"s);
+        REQUIRE(marked.has_value());
+        CHECK_EQ(**marked, std::vector<std::uint64_t>{5});
     }
 }
-
-// [28([29(0)]), 29(0)]: the array holds itself. A lazy at the second element builds the mark at its own
-// depth. The reference inside the mark meets the mark while it is built and gives the same array.
-TEST_CASE("tag 29: a self-referencing array before the start of a lazy")
-{
-    std::string const doc = "\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1d\x00"s;
-    auto const second = cbor::lazy::copy(doc)->at(1);
-    REQUIRE(second.has_value());
-    auto const v = second->decode();
-    REQUIRE(v.has_value());
-    place const array = target(*v);
-    CHECK(same(element(array, 0), array));
-    CHECK_EQ(test::value_of(*second).error(), error::sharedref_not_complete);
-}
-
-// [28([0]), 28([29(0)]), ..., 28([29(n - 2)]), 29(n - 1)]: each mark names the one before it. A lazy at the
-// last element builds every mark that is not built and stands before the target, in the order of the
-// marks. Each mark is built at the depth of its own position, and each reference inside it finds its mark
-// built. So no mark is built below another mark, and the stack holds the frames down to the reference
-// plus the frames of one mark, whatever n is; a chain built mark below mark at n = 300 passes the nesting depth.
-TEST_CASE("tag 29: a chain of marks before the start of a lazy keeps the stack bounded")
-{
-    for (std::size_t const n : {1uz, 2uz, 17uz, 300uz}) {
-        CAPTURE(n);
-        std::string doc = unsigned_head(4, n + 1) + "\xd8\x1c\x81\x00"s;
-        for (std::size_t i = 1; i < n; ++i)
-            doc += "\xd8\x1c\x81\xd8\x1d"s + unsigned_head(0, i - 1);
-        doc += "\xd8\x1d"s + unsigned_head(0, n - 1);
-        auto const last = cbor::lazy::copy(doc)->at(n);
-        REQUIRE(last.has_value());
-        auto const v = last->decode();
-        CAPTURE(v.has_value() ? error{} : v.error());
-        REQUIRE(v.has_value());
-        place at_mark = target(*v);
-        for (std::size_t i = 1; i < n; ++i)
-            at_mark = element(at_mark, 0);
-        CHECK_EQ(argument_of(*element(at_mark, 0)), 0u);
-        CHECK(test::at_path("$[" + std::to_string(n) + "]", *cbor::lazy::copy(doc)).has_value());
-    }
-}
-
-// The bytes come from the value-sharing specification: tag 28 is d8 1c before the value, and tag 29 is d8 1d before
-// the index as an unsigned integer in its shortest head. An index of 24 or more takes a longer head.
-TEST_CASE("encoder: shareable and sharedref write the bytes of the specification")
-{
-    std::string out;
-    cbor::encoder e(out);
-    REQUIRE(e.array(4).has_value());
-    REQUIRE(e.shareable().has_value());
-    REQUIRE(e.text_string("a").has_value());
-    REQUIRE(e.sharedref(0).has_value());
-    REQUIRE(e.sharedref(23).has_value());
-    REQUIRE(e.sharedref(24).has_value());
-    REQUIRE(e.finish().has_value());
-    CHECK_EQ(out, "\x84\xd8\x1c\x61" "a" "\xd8\x1d\x00\xd8\x1d\x17\xd8\x1d\x18\x18"s);
-    std::string const larger = [] {
-        std::string o;
-        cbor::encoder f(o);
-        REQUIRE(f.sharedref(256).has_value());
-        REQUIRE(f.finish().has_value());
-        return o;
-    }();
-    CHECK_EQ(larger, "\xd8\x1d\x19\x01\x00"s);
-}
-
-// The contract of every call: an error of the target is a value, and a call after it throws.
-TEST_CASE("encoder: sharedref after an error throws")
-{
-    std::array<char, 3> fixed{};
-    cbor::encoder e{std::span<char>(fixed)};
-    REQUIRE(e.shareable().has_value());
-    CHECK_EQ(e.sharedref(0).error(), error::no_buffer_space);
-    CHECK_THROWS_AS((void)e.shareable(), std::logic_error);
-}
-
-// The encoder writes 28(["a", 29(0)]); decode gives the reference as the marked array itself.
-TEST_CASE("encoder: shareable and sharedref keep the identity through decode")
-{
-    std::string out;
-    cbor::encoder e(out);
-    REQUIRE(e.array(2).has_value());
-    REQUIRE(e.shareable().has_value());
-    REQUIRE(e.array(1).has_value());
-    REQUIRE(e.text_string("a").has_value());
-    REQUIRE(e.sharedref(0).has_value());
-    REQUIRE(e.finish().has_value());
-    auto const r = decoded_ref(out);
-    CHECK(same(element(r, 0), element(r, 1)));
-}
-
-// The owner allows a cycle through a tag that is not an array or a map. The encoder writes 28(6(29(0))), and decode
-// gives a tree where the content of tag 6 is the marked tag itself.
-TEST_CASE("encoder: a cycle through tag 6 decodes into a tree with a cycle")
-{
-    std::string out;
-    cbor::encoder e(out);
-    REQUIRE(e.shareable().has_value());
-    REQUIRE(e.tag(6).has_value());
-    REQUIRE(e.sharedref(0).has_value());
-    REQUIRE(e.finish().has_value());
-    CHECK_EQ(out, "\xd8\x1c\xc6\xd8\x1d\x00"s);
-    auto const r = decoded_ref(out);
-    CHECK_EQ(argument_of(*target(r)), 6u);
-    CHECK(same(content(r), r));
-}
-
-// The reference model takes, for a tag 29, the value that it kept for its mark, and decodes nothing again. The
-// order of the specification holds: the mark is recorded before its content is read, so a tag 29 inside that
-// content names a value under construction, which a model without identity cannot hold.
-TEST_CASE("tag 28/29: the reference model reads each marked value once")
-{
-    auto const of = [](std::string_view const wire) { return test::value_of(*cbor::lazy::copy(wire)); };
-    CHECK_EQ(of("\xd8\x1c\x81\xd8\x1d\x00"sv).error(), error::sharedref_not_complete);
-    CHECK_EQ(of("\xd8\x1c\xa1\x01\xd8\x1d\x00"sv).error(), error::sharedref_not_complete);
-    CHECK_EQ(of("\xd8\x1c\x81\xd8\x1c\x82\xd8\x1d\x00\xd8\x1d\x01"sv).error(), error::sharedref_not_complete);
-    CHECK_EQ(of("\xd8\x1c\xd8\x1d\x00"sv).error(), error::sharedref_not_complete);
-    CHECK_EQ(of("\x82\xd8\x1d\x00\xd8\x1c\x01"sv).error(), error::sharedref_index_not_marked);
-    auto const dag = of("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"sv);
-    REQUIRE(dag.has_value());
-    CHECK(*dag == *of("\x83\x82\x01\x02\x82\x01\x02\x82\x01\x02"sv));
-}
+#endif

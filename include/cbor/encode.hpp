@@ -733,6 +733,7 @@ public:
         return written(out.head_encode(major_type::tag, number));
     }
 
+private:
     std::expected<void, error> shareable()
     {
         throw_logic_error_if_unusable();
@@ -747,6 +748,8 @@ public:
             return r;
         return written(out.head_encode(major_type::unsigned_integer, index));
     }
+
+public:
 
     std::expected<void, error> simple_value(cbor::simple_value const value)
     {

@@ -366,14 +366,12 @@ TEST_CASE("validity: typed_array_check for the tags around 64 to 87 and the leng
         }
 }
 
-// RFC 8949 5.3.2 calls a tag content of the wrong type "inadmissible type for tag content". The content of
-// tags 2 and 3 (RFC 8949 3.4.3), of tag 24 (RFC 8949 3.4.5.1) and of tags 64 to 87 (RFC 8746 2) is a byte
-// string; the content of tag 29 is an unsigned integer (value-sharing). The content of tag 0 is a text string
-// (RFC 8949 3.4.1). The content of tag 1 is an unsigned or negative integer, or a float with additional
-// information 25, 26 or 27 (RFC 8949 3.4.2). Every other tag takes every major type. This test exists
-// so that no content that these sections forbid passes a reader. Tag 1 admits major type 7 only with three
-// additional informations, so every additional information 0 to 31 is checked.
-TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113, every major type and additional information")
+// The rule table holds a row only for a tag that the library interprets (owner, 2026-10-13). The content of tags
+// 2 and 3 (RFC 8949 3.4.3), of tag 24 (RFC 8949 3.4.5.1) and of tags 64 to 87 (RFC 8746 2) is a byte string; the
+// content of tag 29 is an unsigned integer (value-sharing). Tags 0 and 1 and every other tag take every major
+// type. This test exists so that no content that these sections forbid passes a reader that interprets the tag,
+// and so that no row refuses a tag that the library does not interpret.
+TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113 and every major type")
 {
     std::vector<std::uint64_t> tags;
     for (std::uint64_t tag = 0; tag <= 100; ++tag)
@@ -381,25 +379,19 @@ TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113, every maj
     tags.push_back(1113);
     tags.push_back(std::numeric_limits<std::uint64_t>::max());
     for (std::uint64_t const tag : tags)
-        for (major_type const major : major_types)
-            for (std::uint8_t info = 0; info < 32; ++info) {
-                auto const r = validity::check_tag_content(tag, major, info);
-                bool const byte_string = tag == 2 || tag == 3 || tag == 24 || (tag >= 64 && tag <= 87);
-                bool admitted = true;
-                if (byte_string)
-                    admitted = major == major_type::byte_string;
-                else if (tag == 29)
-                    admitted = major == major_type::unsigned_integer;
-                else if (tag == 0)
-                    admitted = major == major_type::text_string;
-                else if (tag == 1)
-                    admitted = major == major_type::unsigned_integer || major == major_type::negative_integer ||
-                               (major == major_type::simple_float && info >= 25 && info <= 27);
-                if (admitted)
-                    CHECK(r.has_value());
-                else
-                    CHECK_EQ(r.error(), error::inadmissible_type_for_tag_content);
-            }
+        for (major_type const major : major_types) {
+            auto const r = validity::check_tag_content(tag, major);
+            bool const byte_string = tag == 2 || tag == 3 || tag == 24 || (tag >= 64 && tag <= 87);
+            bool admitted = true;
+            if (byte_string)
+                admitted = major == major_type::byte_string;
+            else if (tag == 29)
+                admitted = major == major_type::unsigned_integer;
+            if (admitted)
+                CHECK(r.has_value());
+            else
+                CHECK_EQ(r.error(), error::inadmissible_type_for_tag_content);
+        }
 }
 
 // A shared reference names one of the values that were marked before it. The decoder and the lazy reader read
@@ -532,31 +524,6 @@ TEST_CASE("validity: check_magnitude_size for every size up to one past the widt
             else
                 CHECK_EQ(r.error(), error::number_out_of_range);
         }
-}
-
-// The check of a tag content follows each tag 29 back to its mark. A reader that knows every mark of the
-// message, as lazy does, can name a mark at or after the reference, and the walk would not end. This test
-// exists so that such a reference ends the walk: a mark at the reference is not complete, and a mark after
-// it is not marked yet, as for a reader that reads the marks in order.
-TEST_CASE("value_sharing: check_tag_content refuses a tag 29 that names a mark at or after it")
-{
-    std::vector<validity::offset> const self{validity::offset{1}};
-    CHECK_EQ(value_sharing::check_tag_content(
-                 1, "\xc1\xd8\x1d\x00"sv, validity::offset{1}, [&self]() -> auto const & { return self; }, std::identity{},
-                 validity::limit_checks<false>{})
-                 .error(),
-             error::sharedref_not_complete);
-    std::vector<validity::offset> const forward{validity::offset{4}};
-    CHECK_EQ(value_sharing::check_tag_content(
-                 1, "\xc1\xd8\x1d\x00\x05"sv, validity::offset{1}, [&forward]() -> auto const & { return forward; },
-                 std::identity{}, validity::limit_checks<false>{})
-                 .error(),
-             error::sharedref_index_not_marked);
-    std::vector<validity::offset> const before{validity::offset{}};
-    CHECK(value_sharing::check_tag_content(
-              1, "\x05\xc1\xd8\x1d\x00"sv, validity::offset{2}, [&before]() -> auto const & { return before; }, std::identity{},
-              validity::limit_checks<false>{})
-              .has_value());
 }
 
 // RFC 8949 5.6 lets a map repeat a key outside a deterministic profile. Two maps are equal only when each pair

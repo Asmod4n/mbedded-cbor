@@ -336,21 +336,10 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_tag_content(std::uint64_t const tag, major_type const content, std::uint8_t const info)
+    check_tag_content(std::uint64_t const tag, major_type const content)
     {
         major_type admitted;
         switch (tag) {
-        case std::to_underlying(rfc8949::tag_number::standard_date_time_string):
-            admitted = major_type::text_string;
-            break;
-        case std::to_underlying(rfc8949::tag_number::epoch_based_date_time):
-            if (content != major_type::unsigned_integer && content != major_type::negative_integer &&
-                (content != major_type::simple_float ||
-                 info < std::to_underlying(rfc8949::simple_float_information::half_precision_float) ||
-                 info > std::to_underlying(rfc8949::simple_float_information::double_precision_float)))
-                [[unlikely]]
-                return std::unexpected(error::inadmissible_type_for_tag_content);
-            return {};
         case std::to_underlying(rfc8949::tag_number::unsigned_bignum):
         case std::to_underlying(rfc8949::tag_number::negative_bignum):
         case std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item):

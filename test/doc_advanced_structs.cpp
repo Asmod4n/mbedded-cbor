@@ -168,12 +168,15 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
     CHECK_EQ(std::get<std::uint8_t>(**back), 42u);
 }
 
-// The section "Shared values" says that decode reads tag 28 and tag 29 of the value-sharing registration.
-TEST_CASE("doc advanced structs: a shared value reads as the item it names")
+// The section "Shared values" says that decode accepts a tag 28 on any member, and a tag 29 only where a member can
+// share a value; a plain member gives incorrect_type.
+TEST_CASE("doc advanced structs: a tag 29 into a plain member is incorrect_type")
 {
-    auto const back = cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
-    REQUIRE(back.has_value());
-    CHECK_EQ(**back, std::vector<std::string>{"x", "x"});
+    auto const marked = cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\x61y"s);
+    REQUIRE(marked.has_value());
+    CHECK_EQ(**marked, std::vector<std::string>{"x", "y"});
+    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s).error(),
+             error::incorrect_type);
 }
 
 // The section "A memory budget" shows a std::pmr target, and that a refused allocation is the error

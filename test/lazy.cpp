@@ -186,13 +186,13 @@ TEST_CASE("lazy: a huge index")
     CHECK_EQ(lazy_of(doc).at(0x7fffffff).error(), error::index_out_of_bounds);
 }
 
-// Found by the fuzz corpus: a reference inside the mark it names, d8 1c d8 1d 00, led the navigation
-// back to itself without end. A reference must name a mark that ends before it.
-TEST_CASE("lazy: a reference to its own enclosing mark ends")
+// Found by the fuzz corpus: a reference inside the mark it names, d8 1c d8 1d 00, once led the navigation back to
+// itself without end. A lazy now reads both as plain tags, so the step reaches the integer 0, which has no element.
+TEST_CASE("lazy: a reference inside its own mark is a plain tag")
 {
     std::string const doc = "\xd8\x1c\xd8\x1d\x00"s;
-    CHECK_EQ(lazy_of(doc).at(0).error(), error::sharedref_not_complete);
-    CHECK_FALSE(test::value_of(lazy_of(doc)).has_value());
+    CHECK_EQ(lazy_of(doc).at(0).error(), error::not_indexable);
+    CHECK(test::value_of(lazy_of(doc)) == V(tagged{28, V(tagged{29, V(0)})}));
 }
 
 // Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. The count is larger than the bytes left, so
@@ -203,14 +203,14 @@ TEST_CASE("lazy: a value inside a huge claimed map")
     CHECK_EQ(lazy_of(doc).at("a").error(), error::too_little_data);
 }
 
-// Found by the fuzzer: [28(28(29(0))), ...] leads from the reference through two marks back to the
-// same reference. A reference that the walk meets a second time ends it.
-TEST_CASE("lazy: a chain of marks back to the same reference ends")
+// Found by the fuzzer: [28(28(29(0))), ...] once led from the reference through two marks back to the same
+// reference. A lazy now passes the three tags to the integer 0, which has no element.
+TEST_CASE("lazy: a chain of marks over a reference is a chain of plain tags")
 {
     std::string const doc = "\x82\xd8\x1c\xd8\x1c\xd8\x1d\x00\x00"s;
     auto const element = lazy_of(doc).at(0);
     REQUIRE(element.has_value());
-    CHECK_EQ(element->at(0).error(), error::sharedref_not_complete);
+    CHECK_EQ(element->at(0).error(), error::not_indexable);
 }
 
 namespace
@@ -438,15 +438,14 @@ TEST_CASE("lazy: find in an item that is not a map")
     CHECK_EQ(lazy_of(encoded(V(1))).find("a").error(), error::not_indexable);
 }
 
-// A key behind a shared reference (tag 29) is compared by its content, in find as in at.
-TEST_CASE("lazy: find resolves a shared key")
+// A key under tag 29 is a tag and no text key, in find as in at.
+TEST_CASE("lazy: find does not resolve a tag 29 key")
 {
     cbor::lazy const l = lazy_of("\xa2\x61" "a\xd8\x1c\x61k\xd8\x1d\x00\x02"s);
     auto const shared = l.find("k");
     REQUIRE(shared.has_value());
-    REQUIRE(*shared != std::default_sentinel);
-    CHECK(value_at((**shared)->second) == V(2));
-    CHECK(value_at(at(l, "k")) == V(2));
+    CHECK(*shared == std::default_sentinel);
+    CHECK_EQ(l.at("k").error(), error::key_not_found);
 }
 
 // A truncated map gives its error from find and from at.
@@ -583,9 +582,8 @@ TEST_CASE("lazy: equal_range stops at the first greater key for a missing key")
     CHECK_EQ(truncated.find("e").error(), error::too_little_data);
 }
 
-// A key under tag 28 sorts by its tagged bytes, after every text key, but a key under tag 29 is compared by
-// the content it refers to. After a tagged key the search reads to b and does not stop early. Here the key
-// 28("z") sorts after "q" by its bytes, and the key 29(0) after it refers to "q".
+// A key under tag 28 or tag 29 sorts by its tagged bytes, after every text key, and is no text key. After a tagged
+// key the search reads to b and does not stop early, and finds no key "q".
 TEST_CASE("lazy: equal_range reads past a tagged key")
 {
     cbor::lazy const l = lazy_of("\xa3\x61" "a\xd8\x1c\x61q\xd8\x1c\x61z\x03\xd8\x1d\x00\x02"s);
@@ -593,8 +591,7 @@ TEST_CASE("lazy: equal_range reads past a tagged key")
     REQUIRE(entries.has_value());
     auto const q = cbor::lazy::equal_range(entries->begin(), std::default_sentinel, "q");
     REQUIRE(q.has_value());
-    REQUIRE(std::ranges::distance(*q) == 1);
-    CHECK(value_at((*q->begin())->second) == V(2));
+    CHECK_EQ(std::ranges::distance(*q), 0);
 }
 
 // a and b of two different maps hold no range. The scan from a reaches the end of its map without b, and
@@ -788,16 +785,15 @@ TEST_CASE("tag 24: an embedded item written by the application is read through")
     CHECK_EQ(get<std::uint64_t>("\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
 }
 
-// The marks of an embedded data item are its own: the 29(0) inside names the 28 inside, not the one
-// outside before it.
-TEST_CASE("tag 24: an embedded data item has marks of its own")
+// A 29(0) inside an embedded data item is a plain tag over its index.
+TEST_CASE("tag 24: a tag 29 inside an embedded data item is a plain tag")
 {
     std::string const doc = "\x82\xd8\x1c\x07\xd8\x18\x47\x82\xd8\x1c\x09\xd8\x1d\x00"s;
     auto const embedded = lazy_of(doc).at(1);
     REQUIRE(embedded.has_value());
     auto const second = embedded->at(1);
     REQUIRE(second.has_value());
-    CHECK_EQ(*second->get<std::uint64_t>(), 9u);
+    CHECK_EQ(*second->get<std::uint64_t>(), 0u);
 }
 
 // Every integer width reads its own edges. A CBOR integer has a 64-bit magnitude and a sign in the major type
@@ -834,9 +830,8 @@ TEST_CASE("lazy: a byte string key is not the text key with the same bytes")
     CHECK_EQ(*a->get<std::uint64_t>(), 2u);
 }
 
-// A tag 29 reference names a mark that lies before it. A mark later in the top-level item is no target: the
-// reference counts only the marks before it, as the full decoder and at_path do, whatever navigation read first.
-TEST_CASE("lazy: a reference forward to a mark that navigation read is not marked")
+// A tag 29 before its mark is a plain tag, whatever navigation read first.
+TEST_CASE("lazy: a reference forward to a mark is a plain tag")
 {
     auto const root = lazy_of("\x82\xd8\x1d\x00\xd8\x1c\x05"s);
     auto const second = root.at(1);
@@ -844,7 +839,7 @@ TEST_CASE("lazy: a reference forward to a mark that navigation read is not marke
     CHECK_EQ(*second->get<std::uint64_t>(), 5u);
     auto const first = root.at(0);
     REQUIRE(first.has_value());
-    CHECK_EQ(test::value_of(*first).error(), error::sharedref_index_not_marked);
+    CHECK(test::value_of(*first) == V(tagged{29, V(0)}));
 }
 
 namespace
@@ -915,22 +910,16 @@ TEST_CASE("lazy: copy, at and get as a chain")
     CHECK_EQ(count, 2u);
 }
 
-// RFC 8949 3.4 and the registration of tags 28 and 29: a tag 28 marks a value as shared and leaves the value as
-// it is, and a tag 29 stands for the marked value. A key under either tag is the key it marks or names, as the
-// full decoder reads it. The path fuzzer found a key under tag 28 that lazy::at did not match.
-TEST_CASE("lazy: a key under tag 28 or tag 29 is the key it marks or names")
+// The owner decided that a lazy reads tags 28 and 29 as plain tags. A key under either tag is a tag and matches no
+// text key and no integer key; a tag 55799 before a key is still passed.
+TEST_CASE("lazy: a key under tag 28 or tag 29 is a tag")
 {
-    auto const marked = lazy_of("\xa1\xd8\x1c\x61\x61\x01"s).at("a");
-    REQUIRE(marked.has_value());
-    CHECK_EQ(*marked->get<std::uint64_t>(), 1u);
-    auto const number = lazy_of("\xa1\xd8\x1c\x07\x03"s).at(cbor::key{7});
-    REQUIRE(number.has_value());
-    CHECK_EQ(*number->get<std::uint64_t>(), 3u);
+    CHECK_EQ(lazy_of("\xa1\xd8\x1c\x61\x61\x01"s).at("a").error(), error::key_not_found);
+    CHECK_EQ(lazy_of("\xa1\xd8\x1c\x07\x03"s).at(cbor::key{7}).error(), error::key_not_found);
     auto const root = lazy_of("\x82\xd8\x1c\x61\x61\xa1\xd8\x1d\x00\x02"s);
     REQUIRE(root.at(0).has_value());
-    auto const named = root.at(1)->at("a");
-    REQUIRE(named.has_value());
-    CHECK_EQ(*named->get<std::uint64_t>(), 2u);
+    CHECK_EQ(root.at(1)->at("a").error(), error::key_not_found);
+    CHECK_EQ(*lazy_of("\xa1\xd9\xd9\xf7\x61\x61\x01"s).at("a")->get<std::uint64_t>(), 1u);
 }
 
 namespace
@@ -1011,14 +1000,13 @@ TEST_CASE("lazy: every member refuses a lazy that holds no top-level item")
     CHECK_THROWS_AS((void)test::value_of(none), std::logic_error);
 }
 
-// A shared reference may stand for the content of a tag: the magnitude of a bignum, the bytes of a typed array.
-TEST_CASE("lazy: get follows a shared reference in the content of a tag")
+// A tag 29 in the content of a bignum or a typed array is no byte string, so the get that interprets the tag
+// refuses it.
+TEST_CASE("lazy: get does not follow a tag 29 in the content of a tag")
 {
     auto const root = lazy_of("\x83\xd8\x1c\x41\x05\xc2\xd8\x1d\x00\xd8\x40\xd8\x1d\x00"s);
-    CHECK_EQ(*root.at(1)->get<std::uint64_t>(), 5u);
-    auto const typed = root.at(2)->get<cbor::typed_array>();
-    REQUIRE(typed.has_value());
-    CHECK_EQ((*typed)->bytes.size(), 1u);
+    CHECK_EQ(root.at(1)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(root.at(2)->get<cbor::typed_array>().error(), error::inadmissible_type_for_tag_content);
 }
 
 // The value category of the bytes says what lazy::copy does. A moved std::string becomes the owner and
@@ -1305,147 +1293,58 @@ TEST_CASE("lazy: elements and entries refuse indefinite length")
     CHECK_EQ(lazy_of("\xbf\x61" "a\x01\xff"s).entries().error(), error::indefinite_length);
 }
 
-// The owner decided on 2026-10-10 that a lazy belongs to one thread at a
-// time: the library keeps no lock, no call_once and no atomic, and the
-// application moves a value from one thread to another. This test gives
-// each thread its own lazy of the same bytes, the form the library
-// supports, and a thread sanitizer build reports any state they share.
-// The tag 29 names a mark before the decoded map, so the tree does not
-// hold it, and shared_value_resolve gives it as a lazy.
-TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
+// The owner decided on 2026-10-13 that a lazy holds only its bytes and its offset, so several threads read one
+// lazy at the same time. Two threads read one root lazy through every reader; a thread sanitizer build reports
+// any state that they share. The document holds tags 28 and 29, which a lazy reads as plain tags, and a typed
+// array, whose element is a lazy of its own kind.
+TEST_CASE("lazy: two threads read one root lazy")
 {
-    constexpr std::size_t threads = 4;
-    std::string const s("\x83\xd8\x1c\x65hello\xd8\x1d\x00\xa1\x61k\xd8\x1d\x00", 18);
-    std::array<bool, threads> right{};
+    constexpr std::size_t threads = 2;
+    std::string const s("\x84\xd8\x1c\x65hello\xd8\x1d\x00\xa1\x61k\xd8\x1d\x00\xd8\x40\x42\x01\x02", 23);
+    cbor::lazy const l = *cbor::lazy::copy(s);
+    std::array<std::array<bool, 6>, threads> right{};
     {
         std::vector<std::jthread> workers;
         for (std::size_t t = 0; t < threads; ++t)
-            workers.emplace_back([&s, &right, t] {
-                cbor::lazy const l = *cbor::lazy::copy(s);
-                auto const text = l.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
+            workers.emplace_back([&l, &right, t] {
+                auto const text = l.at(std::size_t{0}).and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
+                auto const index = cbor::at_path<"$[1]", std::uint64_t>(l);
                 auto const named = l.at(std::size_t{2})
                                        .and_then([](cbor::lazy const &m) { return m.at("k"); })
                                        .and_then([](cbor::lazy const &r) { return r.decode(); });
+                auto const count = l.elements().transform([](cbor::lazy_elements const &e) {
+                    return std::ranges::distance(e.begin(), e.end());
+                });
+                auto const pairs = l.at(std::size_t{2})
+                                       .and_then([](cbor::lazy const &m) { return m.entries(); })
+                                       .transform([](cbor::lazy_entries const &e) {
+                                           return std::ranges::distance(e.begin(), e.end());
+                                       });
+                auto const element = cbor::at_path<"$[3][1]", std::uint64_t>(l);
                 bool const reference = named.has_value() && (*named)->type == cbor::type::tag &&
-                                       (*named)->via.tag.number == 29;
-                bool found = false;
-                if (reference)
-                    if (auto const shared = cbor::shared_value_resolve(*named, **named); shared)
-                        if (auto const value = shared->get<std::string_view>(); value)
-                            found = *value == "hello";
-                right[t] = text.has_value() && **text == "hello" && found;
+                                       (*named)->via.tag.number == 29 && (*named)->via.tag.content->via.u64 == 0;
+                right[t] = {text.has_value() && **text == "hello", index == 0u, reference, count == 4, pairs == 1,
+                            element == 2u};
             });
     }
-    CHECK(std::ranges::all_of(right, std::identity{}));
-}
-
-// Fault 2 for an array: in 82 82 01 02 the first element is the whole rest
-// of the input, and the second element is missing. The walk gives the first
-// element and then too_little_data, not a value past the end.
-TEST_CASE("lazy: an element past the end of the input is too_little_data")
-{
-    auto const e = lazy_of("\x82\x82\x01\x02"s).elements();
-    REQUIRE(e.has_value());
-    std::vector<std::expected<cbor::lazy, error>> steps;
-    for (auto const step : *e)
-        steps.push_back(step);
-    REQUIRE(steps.size() == 2);
-    CHECK(steps.at(0).has_value());
-    CHECK_EQ(steps.at(1).error(), error::too_little_data);
-}
-
-// Found by the fuzzer: b0 claims 16 pairs and holds none. A lookup of a key that is not there reads to the end
-// of the data and gives too_little_data, as the typed read of a path does; it does not give key_not_found.
-TEST_CASE("lazy: a lookup in a map that ends early is too_little_data")
-{
-    auto const cut = lazy_of("\xb0"s);
-    CHECK_EQ(cut.at("a").error(), error::too_little_data);
-    CHECK_EQ(cut.at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
-    CHECK_EQ(cut.contains("a").error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xa2\x61\x61\x01"s).at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xa2\x61\x61\x01"s).at("a").error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xa1\x61\x62\x01"s).at("a").error(), error::key_not_found);
-}
-
-// A map of n pairs holds 2n data items, and each takes one byte at least.
-// a1 61 holds one byte for two data items, so entries() refuses it as
-// elements() refuses 81. In a1 61 61 the key fills the input, and the walk
-// gives too_little_data for the value, not a value past the end.
-TEST_CASE("lazy: a map counts two data items for each pair")
-{
-    CHECK_EQ(lazy_of("\xa1\x61"s).entries().error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\x81"s).elements().error(), error::too_little_data);
-    auto const m = lazy_of("\xa1\x61\x61"s).entries();
-    REQUIRE(m.has_value());
-    std::vector<std::expected<std::pair<cbor::lazy, cbor::lazy>, error>> steps;
-    for (auto const step : *m)
-        steps.push_back(step);
-    REQUIRE(steps.size() == 1);
-    CHECK_EQ(steps.at(0).error(), error::too_little_data);
-}
-
-// The owner decided on 2026-10-10 that the types say which value belongs to
-// one thread. A lazy and everything that shares its marks of tag 28 is
-// thread bound; cbor::transfer hands a lazy that nothing else shares to
-// another thread, and a debug build refuses a use from a thread that does
-// not own it. The check sits where a read changes the shared marks, the
-// resolution of a tag 29, so a read that changes nothing is not refused.
-static_assert(cbor::is_thread_bound_v<cbor::lazy>);
-static_assert(cbor::is_thread_bound_v<cbor::lazy_entries::iterator>);
-static_assert(cbor::is_thread_bound_v<cbor::owning_ref<std::string_view>>);
-static_assert(!cbor::is_sendable_v<cbor::lazy>);
-static_assert(cbor::is_sendable_v<cbor::sendable<cbor::lazy>>);
-static_assert(cbor::is_sendable_v<std::string>);
-
-TEST_CASE("lazy: transfer hands a lazy to another thread")
-{
-    std::string const s("\x82\xd8\x1c\x01\xd8\x1d\x00", 7);
-    cbor::lazy l = *cbor::lazy::copy(s);
-    {
-        cbor::lazy const copy = l;
-        CHECK_THROWS_AS(std::ignore = cbor::transfer(std::move(l)), std::logic_error);
-    }
-    std::int64_t read = 0;
-    std::jthread(
-        [&read](cbor::sendable<cbor::lazy> v) {
-            read = *v.value.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::int64_t>(); });
-        },
-        cbor::transfer(std::move(l)))
-        .join();
-    CHECK_EQ(read, 1);
-}
-
-#ifndef NDEBUG
-TEST_CASE("lazy: a debug build refuses a lazy in a thread that does not own it")
-{
-    std::string const s("\x82\xd8\x1c\x01\xd8\x1d\x00", 7);
-    cbor::lazy const l = *cbor::lazy::copy(s);
-    bool refused = false;
-    std::jthread([&] {
-        try {
-            std::ignore = l.at(std::size_t{1}).and_then([](cbor::lazy const &r) { return r.get<std::int64_t>(); });
-        } catch (std::logic_error const &) {
-            refused = true;
+    for (auto const &r : right)
+        for (std::size_t i = 0; i < r.size(); ++i) {
+            CAPTURE(i);
+            CHECK(r[i]);
         }
-    }).join();
-    CHECK(refused);
 }
-#endif
 
-// A tag 28 may hold a tag 29, as CBOR::XS, cbor2 and cbor-x accept: in
-// [28(1), 28(29(0)), 29(1)] every element reads 1. A chain of such values,
-// 28(1) then 28(29(k - 1)) for each k, resolves each reference in one step
-// once the reference before it is known, so reading all of them is linear.
-TEST_CASE("lazy: a tag 28 that holds a tag 29 resolves in one step")
+// A tag 28 may hold a tag 29, as CBOR::XS, cbor2 and cbor-x accept. A lazy passes both tags and reads the index:
+// in [28(1), 28(29(0)), 29(1)] the elements read 1, 0 and 1. A chain of such values, 28(1) then 28(29(k - 1)) for
+// each k, reads k - 1 at element k, and reading all of them is linear.
+TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
 {
     std::string const small("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01", 12);
     auto const l = *cbor::lazy::copy(small);
+    std::array<std::int64_t, 3> const expected{1, 0, 1};
     for (std::size_t i = 0; i < 3; ++i)
-        CHECK_EQ(*l.at(i).and_then([](cbor::lazy const &e) { return e.get<std::int64_t>(); }), 1);
-    CHECK_EQ(cbor::lazy::copy(std::string("\xd8\x1c\xd8\x1d\x00", 5))
-                 ->get<std::int64_t>()
-                 .error(),
-             error::sharedref_not_complete);
+        CHECK_EQ(*l.at(i).and_then([](cbor::lazy const &e) { return e.get<std::int64_t>(); }), expected[i]);
+    CHECK_EQ(cbor::lazy::copy(std::string("\xd8\x1c\xd8\x1d\x00", 5))->get<std::int64_t>(), 0);
 
     constexpr std::size_t n = 20000;
     std::string chain("\x9a", 1);
@@ -1459,10 +1358,13 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 resolves in one step")
     }
     auto const all = cbor::lazy::copy(chain)->elements();
     REQUIRE(all.has_value());
-    std::size_t ones = 0;
-    for (auto const e : *all)
-        ones += e.and_then([](cbor::lazy const &x) { return x.get<std::int64_t>(); }).value_or(0) == 1;
-    CHECK_EQ(ones, n);
+    std::size_t right = 0;
+    std::int64_t k = 0;
+    for (auto const e : *all) {
+        right += e.and_then([](cbor::lazy const &x) { return x.get<std::int64_t>(); }).value_or(-1) == (k == 0 ? 1 : k - 1);
+        ++k;
+    }
+    CHECK_EQ(right, n);
 }
 
 // A step into an element that is not in the input gave a lazy with no
@@ -1835,12 +1737,15 @@ TEST_CASE("lazy: a cut typed array is too_little_data")
     CHECK_EQ(lazy_of("\xd8\x41\x43\x00\x01\x02"s).at(0).error(), error::inadmissible_type_for_tag_content);
 }
 
-// A typed array inside tag 24 and a typed array that tag 29 references are indexed like a typed array in place.
-TEST_CASE("lazy: an index reads a typed array through tag 24 and tag 29")
+// A typed array inside tag 24 and a typed array under tag 28 are indexed like a typed array in place. A tag 29 is
+// a plain tag over its index, so it has no element.
+TEST_CASE("lazy: an index reads a typed array through tag 24 and tag 28")
 {
     CHECK_EQ(*lazy_of("\xd8\x18\x45\xd8\x40\x42\x01\x02"s).at(1)->get<int>(), 2);
-    auto const referenced = lazy_of("\x82\xd8\x1c\xd8\x40\x42\x01\x02\xd8\x1d\x00"s).at(1);
-    REQUIRE(referenced.has_value());
-    CHECK_EQ(*referenced->at(1)->get<int>(), 2);
-    CHECK_EQ(*referenced->size(), 2u);
+    auto const doc = lazy_of("\x82\xd8\x1c\xd8\x40\x42\x01\x02\xd8\x1d\x00"s);
+    auto const marked = doc.at(0);
+    REQUIRE(marked.has_value());
+    CHECK_EQ(*marked->at(1)->get<int>(), 2);
+    CHECK_EQ(*marked->size(), 2u);
+    CHECK_EQ(doc.at(1)->at(1).error(), error::not_indexable);
 }

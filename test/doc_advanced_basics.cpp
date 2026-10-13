@@ -153,26 +153,18 @@ TEST_CASE("doc advanced basics: a std::pmr target")
 }
 #endif
 
-// The section "Threads" states the two traits and that cbor::transfer refuses a lazy that something else shares.
+// The section "Threads" states that a lazy holds only its bytes and its offset, so several threads read one lazy.
 TEST_CASE("doc advanced basics: threads")
 {
-    static_assert(cbor::is_thread_bound_v<cbor::lazy>);
-    static_assert(cbor::is_thread_bound_v<cbor::lazy_elements>);
-    static_assert(cbor::is_thread_bound_v<cbor::lazy_entries::iterator>);
-    static_assert(cbor::is_thread_bound_v<cbor::owning_ref<std::string_view>>);
-    static_assert(cbor::is_sendable_v<std::string>);
-    static_assert(!cbor::is_sendable_v<cbor::lazy>);
-    static_assert(cbor::is_sendable_v<cbor::sendable<cbor::lazy>>);
-    cbor::lazy l = *cbor::lazy::copy(preferred(A(1, 2)));
+    cbor::lazy const l = *cbor::lazy::copy(preferred(A(1, 2)));
+    std::int64_t first = 0;
+    std::int64_t second = 0;
     {
-        cbor::lazy const copy = l;
-        CHECK_THROWS_AS(std::ignore = cbor::transfer(std::move(l)), std::logic_error);
+        std::jthread const a([&] { first = *l.at(1)->get<std::int64_t>(); });
+        std::jthread const b([&] { second = *l.at(1)->get<std::int64_t>(); });
     }
-    std::int64_t read = 0;
-    std::jthread([&read](cbor::sendable<cbor::lazy> const &v) { read = *v.value.at(1)->get<std::int64_t>(); },
-                 cbor::transfer(std::move(l)))
-        .join();
-    CHECK_EQ(read, 2);
+    CHECK_EQ(first, 2);
+    CHECK_EQ(second, 2);
 }
 
 // A user moved a lazy out of the std::expected of lazy::copy. The section "Threads" shows the move.
@@ -181,10 +173,16 @@ TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thre
     std::string const bytes = preferred(A(1, 2));
     auto l = cbor::lazy::copy(bytes);
     std::int64_t read = 0;
-    std::jthread([&read](cbor::sendable<cbor::lazy> const &v) { read = *v.value.at(1)->get<std::int64_t>(); },
-                 cbor::transfer(std::move(*l)))
-        .join();
+    std::jthread([&read](cbor::lazy const &v) { read = *v.at(1)->get<std::int64_t>(); }, std::move(*l)).join();
     CHECK_EQ(read, 2);
+    auto const plain = *cbor::lazy::copy(preferred(M("a"s, 1)));
+    std::int64_t other = 0;
+    std::jthread([&] { other = *plain.at("a")->get<std::int64_t>(); }).join();
+    CHECK_EQ(other, 1);
+    auto const tagged = *cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
+    std::int64_t content = -1;
+    std::jthread([&] { content = *tagged.at(1)->get<std::int64_t>(); }).join();
+    CHECK_EQ(content, 0);
 }
 
 // A user did not know that a lazy from a step holds the bytes after the string and the first lazy end.
