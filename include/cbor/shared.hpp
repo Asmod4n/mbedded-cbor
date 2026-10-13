@@ -74,10 +74,6 @@ public:
                                                         validity::offset content_at, MarksRead marks_read,
                                                         Projection offset_of, validity::limit_checks<Checked> checks);
 
-    template <class Item>
-    static std::expected<void, error> check_tag_content(std::uint64_t tag, Item const *content,
-                                                        std::span<Item const *const> shareables);
-
 private:
     struct top_level_item;
 
@@ -678,6 +674,7 @@ std::expected<validity::offset, error> value_sharing::shared_resolve(top_level_i
 {
     validity::offset item_at = at;
     std::size_t first = std::numeric_limits<std::size_t>::max();
+    std::size_t references_followed = 0;
     for (;;) {
         auto const h = heads::raw_head_read(top_level.encoded, at, checks);
         if (!h) [[unlikely]]
@@ -702,6 +699,8 @@ std::expected<validity::offset, error> value_sharing::shared_resolve(top_level_i
         auto const found = top_level_item::sharedref_decode(d, at, item_at, marks);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
+        if (auto const ends = check_sharedref_chain_ends(++references_followed, marks.size()); !ends) [[unlikely]]
+            return std::unexpected(ends.error());
         auto const position = static_cast<std::size_t>(std::ranges::distance(
             marks.begin(), std::ranges::lower_bound(marks, found->offset, {}, &lazy::offset)));
         if (top_level.sharedrefs_resolved.size() < marks.size())
@@ -754,10 +753,18 @@ std::expected<value_sharing::resolved<Checked>, error>
 value_sharing::tag_content_resolve(std::shared_ptr<top_level_item> source, validity::offset offset,
                                    validity::limit_checks<Checked> const checks)
 {
+    std::size_t references_followed = 0;
     for (;;) {
+        top_level_item const *const before = source.get();
         auto found = container_resolve(std::move(source), offset, checks);
         if (!found) [[unlikely]]
             return found;
+        if (found->source.get() != before)
+            references_followed = 0;
+        else if (found->item_at < offset)
+            if (auto const ends = check_sharedref_chain_ends(++references_followed, found->source->sharedrefs.size());
+                !ends) [[unlikely]]
+                return std::unexpected(ends.error());
         if (found->h.major != major_type::tag || !heads::is_tag_passed(found->h.argument)) [[likely]] {
             if (auto const r = validity::check_pending_items(found->h.major, found->h.info, found->h.argument,
                                                              found->d.encoded.size());

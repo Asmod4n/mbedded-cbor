@@ -783,30 +783,6 @@ inline std::expected<lazy_entries, error> lazy::entries(limit_values const loade
         });
 }
 
-template <class Item>
-std::expected<void, error> value_sharing::check_tag_content(std::uint64_t const tag, Item const *content,
-                                                            std::span<Item const *const> const shareables)
-{
-    std::size_t references_followed = 0;
-    for (;;) {
-        if (content->type != cbor::type::tag || (content->via.tag.number != std::to_underlying(rfc8949::tag_number::sharedref) &&
-                                                content->via.tag.number != std::to_underlying(rfc8949::tag_number::shareable)))
-            return validity::check_tag_content(tag, heads::major_type_of(content->type), content->additional_information);
-        if (content->via.tag.number == std::to_underlying(rfc8949::tag_number::shareable)) {
-            content = content->via.tag.content;
-            continue;
-        }
-        if (auto const ends = check_sharedref_chain_ends(++references_followed, shareables.size()); !ends) [[unlikely]]
-            return ends;
-        auto const marked = check_sharedref_index(content->via.tag.content->via.u64, shareables.size());
-        if (!marked) [[unlikely]]
-            return std::unexpected(marked.error());
-        content = shareables[std::to_underlying(*marked)];
-        if (content == nullptr) [[unlikely]]
-            return std::unexpected(error::sharedref_not_complete);
-    }
-}
-
 
 template <bool Checked>
 std::size_t value_sharing::tree_decoder<Checked>::marks_counted()
@@ -1027,6 +1003,10 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
             auto const marked = check_sharedref_index(n->argument, marks_counted());
             if (!marked) [[unlikely]]
                 return std::unexpected(marked.error());
+            validity::offset const mark_at =
+                top_level.sharedrefs_read(validity::distance(top_level.encoded, d.encoded))[std::to_underlying(*marked)].offset;
+            if (auto const r = shared_resolve(top_level, mark_at, d.checks); !r) [[unlikely]]
+                return std::unexpected(r.error());
             if (shareables[std::to_underlying(*marked)] == nullptr)
                 if (auto const r = marks_before_decode(); !r) [[unlikely]]
                     return std::unexpected(r.error());
@@ -1041,30 +1021,34 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
         }
         if (error const c = bignum_content_check(head.argument); c != error{}) [[unlikely]]
             return std::unexpected(c);
+        validity::offset const content_at = validity::distance(top_level.encoded, d.encoded);
+        if (error const c = check_tag_content(
+                                head.argument, top_level.encoded, content_at,
+                                [this]() -> auto const & { return top_level.sharedrefs_read(); }, &lazy::offset, d.checks)
+                                .error_or(error{});
+            c != error{}) [[unlikely]]
+            return std::unexpected(c);
         auto const content =
             item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1, std::nullopt);
         if (!content) [[unlikely]]
             return content;
-        if (error const c = check_tag_content(head.argument, static_cast<item const *>(*content),
-                                                        std::span<item const *const>(shareables))
-                                .error_or(error{});
-            c != error{}) [[unlikely]]
-            return std::unexpected(c);
         node.via.tag = {head.argument, *content};
         if (head.argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
             return &node;
-        item const *bytes = *content;
-        while (bytes->type == cbor::type::tag) {
-            if (bytes->via.tag.number != std::to_underlying(rfc8949::tag_number::sharedref)) {
-                bytes = bytes->via.tag.content;
-                continue;
-            }
-            auto const marked = check_sharedref_index(bytes->via.tag.content->via.u64, shareables.size());
-            if (!marked) [[unlikely]]
-                return std::unexpected(marked.error());
-            bytes = shareables[std::to_underlying(*marked)];
-        }
-        std::span<std::byte const> const encoded = bytes->via.bin;
+        auto const bytes_at = shared_resolve(top_level, content_at, d.checks);
+        if (!bytes_at) [[unlikely]]
+            return std::unexpected(bytes_at.error());
+        heads::decoder<Checked> b{validity::subspan(top_level.encoded, *bytes_at), d.checks};
+        auto const bytes_head = b.head_decode();
+        if (!bytes_head) [[unlikely]]
+            return std::unexpected(bytes_head.error());
+        if (error const c = validity::check_tag_content(head.argument, bytes_head->major, bytes_head->info).error_or(error{});
+            c != error{}) [[unlikely]]
+            return std::unexpected(c);
+        auto const bytes = b.byte_string_decode(bytes_head->argument);
+        if (!bytes) [[unlikely]]
+            return std::unexpected(bytes.error());
+        std::span<std::byte const> const encoded = std::as_bytes(std::span(*bytes));
         top_level_item &nested = decoded.embedded.emplace_front(
             top_level.owner, std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()),
             std::vector<lazy>{}, validity::offset{});

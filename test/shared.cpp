@@ -19,6 +19,7 @@
 
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -230,6 +231,53 @@ TEST_CASE("tag 29: a chain of marks that refers to its own start ends with an er
     CHECK_EQ(ref_decode_error("\xd8\x24\xd8\x1c\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv), error::sharedref_not_complete);
 }
 
+// A tag 29 that names a mark, through marks and other references only, and reaches itself names no value. The tree
+// decoder and every step resolve the reference through the bytes, with a bound on the references they follow.
+TEST_CASE("tag 29: a reference that reaches itself through marks names no value")
+{
+    for (std::string_view const wire :
+         {"\xd8\x1c\xd8\x1d\x00"sv, "\xd8\x1c\xd8\x1c\xd8\x1d\x00"sv, "\xd8\x1c\xd9\xd9\xf7\xd8\x1d\x00"sv}) {
+        CAPTURE(wire);
+        CHECK_EQ(ref_decode_error(wire), error::sharedref_not_complete);
+        CHECK_EQ(decode_error(wire), error::sharedref_not_complete);
+    }
+}
+
+// The tree decoder records a mark before it writes the item of the mark. A check of a tag content that follows a
+// reference reads the bytes, so it never reads an item that is not yet written. 28(0(29(0))) and 28(24(29(0)))
+// name a tag that holds itself, which is an inadmissible content of tag 0 and of tag 24. A step through 28(0(29(0))) passes
+// tag 0 to its content without an end, and the bound on the references ends it.
+TEST_CASE("tag 29: a tag content behind a reference to an incomplete mark")
+{
+    CHECK_EQ(ref_decode_error("\xd8\x1c\xc0\xd8\x1d\x00"sv), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(ref_decode_error("\xd8\x1c\xd8\x18\xd8\x1d\x00"sv), error::inadmissible_type_for_tag_content);
+    auto const step = (*cbor::lazy::copy("\xd8\x1c\xc0\xd8\x1d\x00"sv)).at(0);
+    REQUIRE_FALSE(step.has_value());
+    CHECK_EQ(step.error(), error::sharedref_not_complete);
+    tree const cycle = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
+    CHECK(same(cycle, element(cycle, 0)));
+}
+
+// Found by the fuzzer with clang ASan and UBSan: the decode read an item of a mark before the decoder wrote it, and a
+// path over 28(12(29(0))) did not end.
+TEST_CASE("tag 29: inputs of the fuzzer that read an incomplete mark")
+{
+    for (std::string_view const wire :
+         {"\x87\xd8\x1c\xd8\x1c\xd8\x1c\xda\x18\xd8\x1c\x30\xd8\x1d\x00\x40\x00\xea\xe3"sv,
+          "\xc0\xd8\x1c\xd8\x1c\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd6\xd8\x1d\x00"sv,
+          "\x87\xd8\x1c\xd8\x00\x00\x00\x00\x0c\xd8\x1c\xd8\x1c\xda\x18\xd8\x1c\x30\xd8\x1d\x00\xd8\x1c\x30\x17\x32\xd8\x1d\x00\x00"sv,
+          "\xa5\x61\x61\xd8\x1c\xd8\x0c\xd8\x1d\x00\x0e"sv}) {
+        CAPTURE(wire);
+        CHECK_FALSE(cbor::lazy::copy(wire)->decode().has_value());
+        CHECK_FALSE(test::decoded(wire).has_value());
+    }
+    auto const value = (*cbor::lazy::copy("\xa1\x61\x61\xd8\x1c\xcc\xd8\x1d\x00"sv))
+                           .at("a")
+                           .and_then([](cbor::lazy const &a) { return a.at(0); });
+    REQUIRE_FALSE(value.has_value());
+    CHECK_EQ(value.error(), error::sharedref_not_complete);
+}
+
 // value-sharing: a cyclic data structure needs a reference to a value before it is completely decoded. The
 // reference model holds values, not references, so a cycle would come back as a cut copy; it refuses the cycle
 // instead. Sharing without a cycle stays: the model gets a copy.
@@ -310,12 +358,18 @@ handle object_of(std::uint64_t const tag, handle content)
 }
 
 // The writer of the application. It decides what has identity: an integer has none, and a string key has none, as
-// mruby copies an unfrozen String key. A first pass counts each node; the second pass writes tag 28 before the
-// first place of a node met more than once and tag 29 with its index at every later place, through the public
-// encoder. A cycle is met twice, so it gets a mark.
+// mruby copies an unfrozen String key. The encoder writes tags 28 and 29 only for a cycle: a first pass walks the
+// value as the write walks it and finds each node that a cycle reaches again. The second pass writes tag 28 before
+// such a node and tag 29 with its index where the cycle reaches the node again, through the public encoder. A node
+// that two places hold without a cycle is written in full at each place. The mode repeats_marked writes the input
+// of another writer, which marks every node it meets twice; the decoder reads that input too.
+enum class marks { cycles, repeats_marked, none };
+
 struct shared_writer {
-    bool sharing = true;
+    marks mode = marks::cycles;
     std::unordered_map<node const *, std::size_t> seen;
+    std::unordered_set<node const *> cyclic;
+    std::unordered_map<node const *, std::vector<std::uint64_t>> open;
     std::unordered_map<node const *, std::uint64_t> numbers;
     std::uint64_t next = 0;
     int content_reads = 0;
@@ -327,38 +381,79 @@ struct shared_writer {
         return v.get();
     }
 
-    void count(handle const &v, bool const key)
+    template <class F>
+    static void children_visit(handle const &v, F const &f)
     {
-        if (node const *const id = identity(v, key); id != nullptr && ++seen[id] > 1)
-            return;
         if (auto const *a = std::get_if<std::vector<handle>>(&v->kind)) {
             for (handle const &e : *a)
-                count(e, false);
+                f(e, false);
         } else if (auto const *m = std::get_if<std::vector<std::pair<handle, handle>>>(&v->kind)) {
             for (auto const &[k, x] : *m) {
-                count(k, true);
-                count(x, false);
+                f(k, true);
+                f(x, false);
             }
         } else if (auto const *o = std::get_if<object>(&v->kind)) {
-            ++content_reads;
-            count(o->content, false);
+            f(o->content, false);
         }
+    }
+
+    void count(handle const &v, bool const key)
+    {
+        node const *const id = identity(v, key);
+        if (mode == marks::repeats_marked) {
+            if (id != nullptr && ++seen[id] > 1)
+                return;
+        } else if (id != nullptr) {
+            if (open.contains(id)) {
+                cyclic.insert(id);
+                return;
+            }
+            open[id];
+        }
+        if (std::holds_alternative<object>(v->kind))
+            ++content_reads;
+        children_visit(v, [this](handle const &c, bool const k) { count(c, k); });
+        if (mode != marks::repeats_marked && id != nullptr)
+            open.erase(id);
     }
 
     template <class Target>
     std::expected<void, error> write(cbor::encoder<Target> &e, handle const &v, bool const key)
     {
-        node const *const id = sharing ? identity(v, key) : nullptr;
-        if (id != nullptr) {
-            if (auto const n = numbers.find(id); n != numbers.end()) {
+        node const *const id = identity(v, key);
+        bool opened = false;
+        if (id != nullptr && mode == marks::repeats_marked) {
+            if (auto const n = numbers.find(id); n != numbers.end())
                 return e.sharedref(n->second);
-            }
             if (seen[id] > 1) {
                 if (auto const r = e.shareable(); !r)
                     return r;
                 numbers.emplace(id, next++);
             }
+        } else if (id != nullptr) {
+            if (auto const n = open.find(id); n != open.end() && !n->second.empty()) {
+                if (mode == marks::none)
+                    return std::unexpected(error::cyclic_data_structure);
+                return e.sharedref(n->second.back());
+            }
+            if (cyclic.contains(id)) {
+                if (auto const r = e.shareable(); !r)
+                    return r;
+                open[id].push_back(next++);
+            } else {
+                open[id].push_back(0);
+            }
+            opened = true;
         }
+        auto const r = content_write(e, v);
+        if (opened)
+            open[id].pop_back();
+        return r;
+    }
+
+    template <class Target>
+    std::expected<void, error> content_write(cbor::encoder<Target> &e, handle const &v)
+    {
         if (auto const *n = std::get_if<std::uint64_t>(&v->kind))
             return e.unsigned_integer(*n);
         if (auto const *t = std::get_if<std::string>(&v->kind))
@@ -389,10 +484,10 @@ struct shared_writer {
     }
 };
 
-std::string encoded_shared(handle const &v, bool const sharing = true)
+std::string encoded_shared(handle const &v, marks const mode = marks::cycles)
 {
     shared_writer w;
-    w.sharing = sharing;
+    w.mode = mode;
     w.count(v, false);
     std::string out;
     cbor::encoder e(out);
@@ -401,19 +496,31 @@ std::string encoded_shared(handle const &v, bool const sharing = true)
     return out;
 }
 
-tree round_trip(handle const &v)
+tree round_trip(handle const &v, marks const mode = marks::cycles)
 {
-    return decoded_ref(encoded_shared(v));
+    return decoded_ref(encoded_shared(v, mode));
 }
 
 } // namespace shared_test
 
-// Ported from test.rb: 'tag 28/29: repeated value → identity preserved (eager)'.
-TEST_CASE("tag 28/29: a repeated value keeps its identity")
+// The owner decided that tags 28 and 29 exist only to write cycles. A value that two places hold without a cycle is
+// written in full at each place, with no tag 28, and decodes to two equal values.
+TEST_CASE("tag 28/29: a repeated value without a cycle is written twice")
 {
     auto const a = arr({u(1), u(2)});
-    CHECK_EQ(encoded_shared(arr({a, a})), "\x82\xd8\x1c\x82"s + test::native_unsigned(1) + test::native_unsigned(2) + "\xd8\x1d\x00"s);
+    std::string const one = "\x82"s + test::native_unsigned(1) + test::native_unsigned(2);
+    CHECK_EQ(encoded_shared(arr({a, a})), "\x82"s + one + one);
     auto const r = round_trip(arr({a, a}));
+    CHECK_FALSE(same(element(r, 0), element(r, 1)));
+    CHECK_EQ(argument_of(*element(element(r, 1), 1)), 2u);
+}
+
+// Ported from test.rb: 'tag 28/29: repeated value → identity preserved (eager)'. The input comes from a writer that
+// marks every repeated value; the decoder keeps its identity.
+TEST_CASE("tag 28/29: a repeated value that another writer marked keeps its identity")
+{
+    auto const a = arr({u(1), u(2)});
+    auto const r = round_trip(arr({a, a}), marks::repeats_marked);
     CHECK(same(element(r, 0), element(r, 1)));
 }
 
@@ -421,7 +528,7 @@ TEST_CASE("tag 28/29: a repeated value keeps its identity")
 TEST_CASE("tag 28/29: three-way sharing")
 {
     auto const v = arr({u(1), u(2), u(3)});
-    auto const r = round_trip(obj({{s("a"), v}, {s("b"), v}, {s("c"), v}}));
+    auto const r = round_trip(obj({{s("a"), v}, {s("b"), v}, {s("c"), v}}), marks::repeats_marked);
     CHECK(same(at(r, "a"), at(r, "b")));
     CHECK(same(at(r, "b"), at(r, "c")));
 }
@@ -430,11 +537,11 @@ TEST_CASE("tag 28/29: three-way sharing")
 TEST_CASE("tag 28/29: shared map and shared string")
 {
     auto const h = obj({{s("k"), s("v")}, {s("n"), u(42)}});
-    auto const rh = round_trip(arr({h, h, h}));
+    auto const rh = round_trip(arr({h, h, h}), marks::repeats_marked);
     CHECK(same(element(rh, 0), element(rh, 1)));
     CHECK(same(element(rh, 1), element(rh, 2)));
     auto const str = s("shared_string");
-    auto const rs = round_trip(arr({str, str, obj({{s("key"), str}})}));
+    auto const rs = round_trip(arr({str, str, obj({{s("key"), str}})}), marks::repeats_marked);
     CHECK(same(element(rs, 0), element(rs, 1)));
     CHECK(same(element(rs, 1), at(element(rs, 2), "key")));
 }
@@ -485,6 +592,21 @@ TEST_CASE("tag 28/29: mutual recursion between a map and an array")
     std::get<std::vector<handle>>(list->kind).clear();
 }
 
+// An application that writes no marks cannot write a cycle, and its writer gives cyclic_data_structure.
+TEST_CASE("without marks: a cycle is cyclic_data_structure")
+{
+    auto const a = arr({});
+    std::get<std::vector<handle>>(a->kind).push_back(a);
+    shared_writer w;
+    w.mode = marks::none;
+    std::string out;
+    cbor::encoder e(out);
+    auto const r = w.write(e, a, false);
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::cyclic_data_structure);
+    std::get<std::vector<handle>>(a->kind).clear();
+}
+
 // Ported from test.rb: 'tag 28/29: cyclic map round-trip — full cycle navigable'.
 TEST_CASE("tag 28/29: a full cycle through two maps")
 {
@@ -504,7 +626,7 @@ TEST_CASE("tag 28/29: a shared leaf through a deep path")
     auto const deep = obj({{s("e"), leaf}});
     auto const root =
         obj({{s("a"), obj({{s("b"), obj({{s("c"), obj({{s("d"), deep}})}})}})}, {s("x"), leaf}});
-    auto const r = round_trip(root);
+    auto const r = round_trip(root, marks::repeats_marked);
     CHECK(same(at(at(at(at(at(r, "a"), "b"), "c"), "d"), "e"), at(r, "x")));
 }
 
@@ -515,7 +637,7 @@ TEST_CASE("tag 28/29: a diamond")
     auto const root = obj({{s("left"), obj({{s("child"), bottom}})},
                            {s("right"), obj({{s("child"), bottom}})},
                            {s("direct"), bottom}});
-    auto const r = round_trip(root);
+    auto const r = round_trip(root, marks::repeats_marked);
     CHECK(same(at(at(r, "left"), "child"), at(at(r, "right"), "child")));
     CHECK(same(at(at(r, "left"), "child"), at(r, "direct")));
 }
@@ -525,7 +647,7 @@ TEST_CASE("tag 28/29: outer and inner both share")
 {
     auto const inner = arr({u(1), u(2), u(3)});
     auto const outer = arr({inner, inner});
-    auto const r = round_trip(arr({outer, outer}));
+    auto const r = round_trip(arr({outer, outer}), marks::repeats_marked);
     CHECK(same(element(r, 0), element(r, 1)));
     CHECK(same(element(element(r, 0), 0), element(element(r, 0), 1)));
     CHECK(same(element(element(r, 0), 0), element(element(r, 1), 0)));
@@ -543,7 +665,7 @@ TEST_CASE("tag 28/29: distinct groups do not conflate")
                                    {s("b2"), b},
                                    {s("c1"), c},
                                    {s("c2"), c},
-                                   {s("nested"), obj({{s("a"), a}, {s("b"), b}, {s("c"), c}})}}));
+                                   {s("nested"), obj({{s("a"), a}, {s("b"), b}, {s("c"), c}})}}), marks::repeats_marked);
     CHECK(same(at(r, "a1"), at(at(r, "nested"), "a")));
     CHECK(same(at(r, "b1"), at(at(r, "nested"), "b")));
     CHECK(same(at(r, "c1"), at(at(r, "nested"), "c")));
@@ -565,7 +687,7 @@ TEST_CASE("tag 28/29: a string key without identity is written each time")
 TEST_CASE("tag 28/29: an array key with identity shares with the values")
 {
     auto const a = arr({u(1), u(2), u(3)});
-    auto const r = round_trip(obj({{s("v1"), a}, {s("v2"), a}, {s("as_key_map"), obj({{a, s("payload")}})}}));
+    auto const r = round_trip(obj({{s("v1"), a}, {s("v2"), a}, {s("as_key_map"), obj({{a, s("payload")}})}}), marks::repeats_marked);
     CHECK(same(at(r, "v1"), at(r, "v2")));
     auto const key = target(children(at(r, "as_key_map"))[0]);
     CHECK(same(key, at(r, "v1")));
@@ -576,19 +698,20 @@ TEST_CASE("tag 28/29: an array key with identity shares with the values")
 TEST_CASE("without marks: values are written each time")
 {
     auto const shared = arr({u(1), u(2), u(3)});
-    auto const r = decoded_ref(encoded_shared(obj({{s("a"), shared}, {s("b"), shared}}), false));
+    auto const r = decoded_ref(encoded_shared(obj({{s("a"), shared}, {s("b"), shared}}), marks::none));
     CHECK_FALSE(same(at(r, "a"), at(r, "b")));
 }
 
-// Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved'. The object is
-// its own tag over its content; the writer reads the content once, though it meets the object three times.
-TEST_CASE("application tag: one object three times is one mark and two references")
+// Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved'. The owner decided
+// that only a cycle is shared, so one object three times is written three times in full, with no tag 28.
+TEST_CASE("application tag: one object three times is written three times")
 {
     auto const p = object_of(5000, arr({u(3), u(7)}));
     shared_writer w;
     w.count(arr({p, p, p}), false);
-    CHECK_EQ(w.content_reads, 1);
-    CHECK_EQ(encoded_shared(arr({p, p, p})), "\x83\xd8\x1c\xd9\x13\x88\x82"s + test::native_unsigned(3) + test::native_unsigned(7) + "\xd8\x1d\x00\xd8\x1d\x00"s);
+    CHECK_EQ(w.content_reads, 3);
+    std::string const one = "\xd9\x13\x88\x82"s + test::native_unsigned(3) + test::native_unsigned(7);
+    CHECK_EQ(encoded_shared(arr({p, p, p})), "\x83"s + one + one + one);
 }
 
 // The iov target of the encoder gives the bytes of the string target, the marks and a long string included.
@@ -659,7 +782,7 @@ TEST_CASE("application tag: a tag without meaning is a tag item")
 TEST_CASE("lazy: a shared value keeps its identity")
 {
     auto const a = arr({u(1), u(2)});
-    std::string const doc = encoded_shared(arr({a, a}));
+    std::string const doc = encoded_shared(arr({a, a}), marks::repeats_marked);
     auto const r = cbor::lazy::copy(doc)->decode();
     REQUIRE(r.has_value());
     CHECK(same(element(*r, 0), element(*r, 1)));
@@ -697,12 +820,12 @@ TEST_CASE("path: a wildcard over a shared array")
 {
     auto const users = arr({obj({{s("name"), s("alice")}}), obj({{s("name"), s("bob")}})});
     std::string const doc = encoded_shared(
-        obj({{s("primary"), obj({{s("users"), users}})}, {s("backup"), obj({{s("users"), users}})}}));
+        obj({{s("primary"), obj({{s("users"), users}})}, {s("backup"), obj({{s("users"), users}})}}), marks::repeats_marked);
     auto const r = test::query("$.backup.users[*].name", *cbor::lazy::copy(doc));
     REQUIRE(r.has_value());
     CHECK(*r == A("alice"s, "bob"s));
     auto const shared_leaf = arr({u(1), u(2), u(3)});
-    std::string const leaf = encoded_shared(obj({{s("a"), shared_leaf}, {s("b"), shared_leaf}}));
+    std::string const leaf = encoded_shared(obj({{s("a"), shared_leaf}, {s("b"), shared_leaf}}), marks::repeats_marked);
     for (std::string_view const p : {"$.a[*]"sv, "$.b[*]"sv}) {
         auto const v = test::query(p, *cbor::lazy::copy(leaf));
         REQUIRE(v.has_value());
@@ -732,7 +855,7 @@ TEST_CASE("application tag: a content made at the time of the write")
 TEST_CASE("lazy: a value shared by two map values keeps its identity")
 {
     auto const v = arr({u(1), u(2), u(3)});
-    std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}));
+    std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}), marks::repeats_marked);
     auto const r = cbor::lazy::copy(doc)->decode();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
@@ -751,7 +874,7 @@ TEST_CASE("tag 28: inside tag 28 without a reference")
 TEST_CASE("application tag: the same object three times keeps its identity")
 {
     auto const p = object_of(5000, arr({u(3), u(7)}));
-    auto const r = round_trip(arr({p, p, p}));
+    auto const r = round_trip(arr({p, p, p}), marks::repeats_marked);
     CHECK(same(element(r, 0), element(r, 1)));
     CHECK(same(element(r, 1), element(r, 2)));
 }
@@ -771,7 +894,7 @@ TEST_CASE("application tag: distinct objects with equal content decode to two ob
 TEST_CASE("application tag: an object whose content holds a string keeps its identity")
 {
     auto const cfg = object_of(5001, arr({u(30), s("default")}));
-    auto const r = round_trip(obj({{s("p"), cfg}, {s("b"), cfg}, {s("f"), cfg}}));
+    auto const r = round_trip(obj({{s("p"), cfg}, {s("b"), cfg}, {s("f"), cfg}}), marks::repeats_marked);
     CHECK(same(at(r, "p"), at(r, "b")));
     CHECK(same(at(r, "b"), at(r, "f")));
 }
@@ -780,7 +903,7 @@ TEST_CASE("application tag: an object whose content holds a string keeps its ide
 TEST_CASE("lazy: a registered object keeps its identity")
 {
     auto const l = object_of(5003, arr({u(99)}));
-    std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}));
+    std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}), marks::repeats_marked);
     auto const r = cbor::lazy::copy(doc)->decode();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
@@ -794,7 +917,7 @@ TEST_CASE("path: two wildcards over a shared array")
     auto const teams = arr({obj({{s("members"), arr({obj({{s("n"), s("a")}}), obj({{s("n"), s("b")}})})}}),
                             obj({{s("members"), arr({obj({{s("n"), s("c")}})})}})});
     std::string const doc =
-        encoded_shared(obj({{s("p"), obj({{s("teams"), teams}})}, {s("b"), obj({{s("teams"), teams}})}}));
+        encoded_shared(obj({{s("p"), obj({{s("teams"), teams}})}, {s("b"), obj({{s("teams"), teams}})}}), marks::repeats_marked);
     auto const r = test::query("$.b.teams[*].members[*].n", *cbor::lazy::copy(doc));
     REQUIRE(r.has_value());
     CHECK(*r == A("a"s, "b"s, "c"s));
@@ -806,7 +929,7 @@ TEST_CASE("lazy: a reference decodes to the plain value after a read of its mark
 {
     auto const shared = arr({u(10), u(20), u(30)});
     std::string const doc = encoded_shared(
-        obj({{s("path_a"), obj({{s("ref"), shared}})}, {s("path_b"), obj({{s("ref"), shared}})}}));
+        obj({{s("path_a"), obj({{s("ref"), shared}})}, {s("path_b"), obj({{s("ref"), shared}})}}), marks::repeats_marked);
     auto const root = *cbor::lazy::copy(doc);
     REQUIRE(root.at("path_a").and_then([](cbor::lazy const &a) { return a.at("ref"); }).has_value());
     auto const ref = root.at("path_b").and_then([](cbor::lazy const &b) { return b.at("ref"); });
