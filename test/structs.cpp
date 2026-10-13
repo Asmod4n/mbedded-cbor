@@ -718,4 +718,29 @@ TEST_CASE("structs: an integer key written as a bignum that fits")
 }
 
 
+
+// The owner decided that an eager decode decodes each marked value once and that a tag 29 takes the value of its
+// mark. A tag 29 inside the value that its mark is still reading names a value under construction: no type without a
+// pointer can hold it, so the decode ends with sharedref_not_complete. A forward index names no mark.
+TEST_CASE("structs: a tag 29 takes the value of its mark and never the value under construction")
+{
+    using numbers = std::vector<std::uint64_t>;
+    CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\xd8\x1c\x81\xd8\x1d\x00"s).error(),
+             error::sharedref_not_complete);
+    CHECK_EQ(cbor::structs<std::map<std::uint64_t, numbers>>::decode("\xd8\x1c\xa1\x01\xd8\x1d\x00"s).error(),
+             error::sharedref_not_complete);
+    CHECK_EQ(cbor::structs<std::vector<std::vector<numbers>>>::decode(
+                 "\xd8\x1c\x81\xd8\x1c\x82\xd8\x1d\x00\xd8\x1d\x01"s)
+                 .error(),
+             error::sharedref_not_complete);
+    CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c\xd8\x1d\x00"s).error(), error::sharedref_not_complete);
+    CHECK_EQ(cbor::structs<numbers>::decode("\x82\xd8\x1d\x00\xd8\x1c\x01"s).error(), error::sharedref_index_not_marked);
+    auto const dag = cbor::structs<std::vector<numbers>>::decode("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"s);
+    REQUIRE(dag.has_value());
+    CHECK(**dag == std::vector<numbers>{{1, 2}, {1, 2}, {1, 2}});
+    auto const chained = cbor::structs<numbers>::decode("\x83\xd8\x1c\x05\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01"s);
+    REQUIRE(chained.has_value());
+    CHECK(**chained == numbers{5, 5, 5});
+}
+
 #endif
