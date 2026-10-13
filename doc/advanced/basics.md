@@ -42,7 +42,6 @@ the compiler cannot see a wrong use, the library throws
 - an empty owner, or a null `std::shared_ptr<std::string const>`;
 - a `cbor::lazy{}` that holds no item;
 - a limit above its bound (section 4);
-- `cbor::transfer` of a lazy that something else shares (section 7);
 
 ## 3. Every error value
 
@@ -53,9 +52,9 @@ the compiler cannot see a wrong use, the library throws
 | `indefinite_length` | A head uses indefinite length. The library does not read indefinite length. `diagnostic_notation` prints it. |
 | `nesting_depth_exceeded` | The item is deeper than the nesting depth (section 5). |
 | `inadmissible_type_for_tag_content` | A tag has content that its definition does not allow. |
-| `sharedref_index_not_marked` | A tag 29 names no tag 28 before it. |
-| `sharedref_index_out_of_range` | The index of a tag 29 does not fit `std::size_t`. |
-| `sharedref_not_complete` | A step or a path meets a tag 29 inside the tag 28 that it names, or a chain of marks that refers to its own start. |
+| `sharedref_index_not_marked` | `structs` decode meets a tag 29 that names no tag 28 before it. |
+| `sharedref_index_out_of_range` | `structs` decode meets a tag 29 whose index does not fit `std::size_t`. |
+| `sharedref_not_complete` | `structs` decode meets a tag 29 that names a tag 28 in a skipped member. |
 | `reserved_simple_value` | An encode meets a simple value from 24 to 31. |
 | `unsupported_value` | The encoder meets a typed array with a reserved tag or a tag outside RFC 8746. `structs` gives it for a map key that is an array, a map or a tag. |
 | `not_indexable` | A key or an index meets an item that is not a map or an array. |
@@ -194,9 +193,8 @@ members use the default resource.
 |---|---|
 | `at_path<Path, T>(encoded)` for a scalar T | nothing |
 | `item_size`, the iterator of `cbor::sequence` | nothing |
-| a step of a lazy (`at`, `find`, `get`) that meets no tag 29 | nothing |
+| a step of a lazy (`at`, `find`, `get`) | nothing |
 | `lazy::copy`, `lazy::view` | the shared state of the top-level item, once; `lazy::copy` also the `std::shared_ptr<std::string const>` that holds the bytes |
-| the first tag 29 of a top-level item | the marks of the tags 28 before it |
 | `lazy::decode` | its items |
 | `diagnostic_notation`, the encoder into a `std::string` | the string |
 | the encoder into a span | nothing |
@@ -213,31 +211,17 @@ A call over bytes, for example `at_path<Path, T>(encoded)` and
 `item_size`, has no shared state. Two lazy values from two calls of
 `lazy::copy` or `lazy::view` share nothing, also over the same bytes.
 
-The lazy values of one top-level item share their marks of tag 28, and a
-read of a tag 29 adds marks with no lock. So a `cbor::lazy` belongs to one
-thread. `cbor::is_thread_bound_v<T>` is true for `lazy`, `lazy_elements`,
-`lazy_entries`, their iterators and every `owning_ref`.
-`cbor::is_sendable_v<T>` is its opposite, and true for `cbor::sendable<T>`.
-An application queue can check `is_sendable_v` at compile time.
-
-```cpp
-static_assert(cbor::is_thread_bound_v<cbor::lazy>);
-static_assert(cbor::is_sendable_v<std::string>);
-static_assert(cbor::is_sendable_v<cbor::sendable<cbor::lazy>>);
-```
-
-`cbor::transfer(std::move(l))` gives a `cbor::sendable<cbor::lazy>`. It
-throws `std::logic_error` when another lazy, iterator or view shares the
-top-level item of `l`. The thread that receives it reads `.value`.
-`lazy::copy` gives a `std::expected`, and `std::move(*l)` moves the lazy
-out of it:
+A lazy holds only its owner, its bytes and its offset, and a read changes
+nothing in it. So several threads read one lazy, and the lazy values of
+one top-level item, at the same time. `lazy::copy` gives a `std::expected`,
+and `std::move(*l)` moves the lazy out of it:
 
 ```cpp
 // [1, 2]
 auto l = cbor::lazy::copy(bytes);
-std::jthread([](cbor::sendable<cbor::lazy> const &v) {
-    v.value.at(1)->get<std::int64_t>();   // 2
-}, cbor::transfer(std::move(*l)));
+std::jthread([](cbor::lazy const &v) {
+    v.at(1)->get<std::int64_t>();   // 2
+}, std::move(*l));
 ```
 
 ## 8. Owners
