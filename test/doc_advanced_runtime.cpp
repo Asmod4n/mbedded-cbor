@@ -222,7 +222,7 @@ TEST_CASE("doc advanced runtime: encode")
     cbor::item const *const reference = six->via.tag.content;
     CHECK_EQ(&cbor::shared_value(tagged, *reference), six);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
-    std::string const own = "\x82\xd8\x1c\x01\xd8\x1d\x00"s;
+    std::string const own = wire;
     std::string again;
     CHECK_EQ(cbor::encode(**cbor::lazy::copy(wire)->decode(), again), own.size());
     CHECK_EQ(again, own);

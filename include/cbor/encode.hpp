@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <expected>
 #include <iterator>
-#include <optional>
 #include <memory>
 #include <limits>
 #include <ranges>
@@ -813,7 +812,7 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
         return r;
     major_type const major = heads::major_type_of(node.type);
     std::uint64_t argument = node.via.u64;
-    std::optional<rfc8949::simple_float_information> width;
+    std::uint8_t info = node.additional_information;
     switch (node.type) {
     case cbor::type::byte_string:
         argument = node.via.bin.size();
@@ -858,23 +857,22 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
         argument = std::to_underlying(node.via.simple_value);
         break;
     case cbor::type::half_float:
-        width = rfc8949::simple_float_information::half_precision_float;
-        argument = heads::float_encode(*width, node.via.f64);
+        info = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+        argument = heads::float_encode(rfc8949::simple_float_information::half_precision_float, node.via.f64);
         break;
     case cbor::type::single_float:
-        width = rfc8949::simple_float_information::single_precision_float;
-        argument = heads::float_encode(*width, node.via.f64);
+        info = std::to_underlying(rfc8949::simple_float_information::single_precision_float);
+        argument = heads::float_encode(rfc8949::simple_float_information::single_precision_float, node.via.f64);
         break;
     case cbor::type::double_float:
-        width = rfc8949::simple_float_information::double_precision_float;
-        argument = heads::float_encode(*width, node.via.f64);
+        info = std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+        argument = heads::float_encode(rfc8949::simple_float_information::double_precision_float, node.via.f64);
         break;
     case cbor::type::unsigned_integer:
     case cbor::type::negative_integer:
         break;
     }
-    std::expected<void, std::errc> written = out.head_encode(
-        major, width ? std::to_underlying(*width) : heads::preferred_argument_info(argument), argument);
+    std::expected<void, std::errc> written = out.head_encode(major, info, argument);
     if (!written) [[unlikely]]
         return std::unexpected(validity::writer_error(written.error()));
     switch (major) {
