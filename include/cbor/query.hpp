@@ -951,7 +951,7 @@ class jsonpath
                 return query_walk<T>(v, top,
                                      lazy{std::make_shared<value_sharing::top_level_item>(
                                               std::shared_ptr<void const>{}, content, std::vector<lazy>{}, 0),
-                                          0},
+                                          0, {}},
                                      loaded);
             });
     }
@@ -985,6 +985,8 @@ class jsonpath
                 if (auto const r = validity::check_nesting_depth(top.segment_count, depth_max); !r)
                     [[unlikely]]
                     return std::unexpected(r.error());
+                if (root.typed_array_tag != 0) [[unlikely]]
+                    return query_walk<T>(v, top, root, loaded);
                 auto const walked =
                     query_walk<T>(v, top, std::string_view(std::span(root.top_level->encoded).subspan(root.offset)), checks);
                 if (walked) [[likely]]
@@ -1070,22 +1072,12 @@ inline std::expected<lazy, error> jsonpath::index_select(lazy const &node, std::
         loaded,
         [&]<bool Checked>(std::size_t,
                           validity::limit_checks<Checked> const checks) -> std::expected<lazy, error> {
-            auto found = value_sharing::tag_content_resolve(node.top_level, node.offset, checks);
+            auto found = value_sharing::lazy_resolve(node, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
-            if (heads::is_typed_array(found->h)) {
-                return value_sharing::typed_array_index_select(*found, index);
-            }
-            if (found->h.major != major_type::array)
+            if (found->h.major != major_type::array && !heads::is_typed_array(found->h))
                 return value_sharing::value_of(value_sharing::key_find(std::move(*found), index, loaded));
-            auto &[source, h, d, item_at] = *found;
-            auto const position = validity::check_index(index, h.argument);
-            if (!position) [[unlikely]]
-                return std::unexpected(position.error());
-            if (auto const r = well_formedness::items_skip(d, *position); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            std::size_t const element = source->encoded.size() - d.encoded.size();
-            return lazy{source, element};
+            return value_sharing::index_select(*found, index);
         });
 }
 
@@ -1098,7 +1090,7 @@ inline std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::stri
         loaded,
         [&]<bool Checked>(std::size_t,
                           validity::limit_checks<Checked> const checks) -> std::expected<lazy, error> {
-            auto found = value_sharing::tag_content_resolve(node.top_level, node.offset, checks);
+            auto found = value_sharing::lazy_resolve(node, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
             if (literal && literal->major == major_type::text_string)
@@ -1115,7 +1107,7 @@ inline std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::stri
                 if (!match) [[unlikely]]
                     return std::unexpected(match.error());
                 if (*match)
-                    return lazy{source, source->encoded.size() - d.encoded.size()};
+                    return lazy{source, source->encoded.size() - d.encoded.size(), {}};
                 if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
             }
@@ -1132,10 +1124,12 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
         loaded,
         [&]<bool Checked>(std::size_t,
                           validity::limit_checks<Checked> const checks) -> std::expected<bool, error> {
-            auto const x = value_sharing::container_resolve(a.top_level, a.offset, checks);
+            auto const x = a.typed_array_tag != 0 ? value_sharing::lazy_resolve(a, checks)
+                                                     : value_sharing::container_resolve(a.top_level, a.offset, checks);
             if (!x) [[unlikely]]
                 return std::unexpected(x.error());
-            auto const y = value_sharing::container_resolve(b.top_level, b.offset, checks);
+            auto const y = b.typed_array_tag != 0 ? value_sharing::lazy_resolve(b, checks)
+                                                     : value_sharing::container_resolve(b.top_level, b.offset, checks);
             if (!y) [[unlikely]]
                 return std::unexpected(y.error());
             heads::head const &h = x->h;
@@ -1245,7 +1239,7 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
             case major_type::tag:
                 if (h.argument != k.argument)
                     return false;
-                return value_equal(lazy{x->source, x_content}, lazy{y->source, y_content}, depth + 1, loaded);
+                return value_equal(lazy{x->source, x_content, {}}, lazy{y->source, y_content, {}}, depth + 1, loaded);
             default:
                 return h.info == k.info && h.argument == k.argument;
             }
@@ -1259,10 +1253,12 @@ inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const
         loaded,
         [&]<bool Checked>(std::size_t,
                           validity::limit_checks<Checked> const checks) -> std::expected<bool, error> {
-            auto const x = value_sharing::container_resolve(a.top_level, a.offset, checks);
+            auto const x = a.typed_array_tag != 0 ? value_sharing::lazy_resolve(a, checks)
+                                                     : value_sharing::container_resolve(a.top_level, a.offset, checks);
             if (!x) [[unlikely]]
                 return std::unexpected(x.error());
-            auto const y = value_sharing::container_resolve(b.top_level, b.offset, checks);
+            auto const y = b.typed_array_tag != 0 ? value_sharing::lazy_resolve(b, checks)
+                                                     : value_sharing::container_resolve(b.top_level, b.offset, checks);
             if (!y) [[unlikely]]
                 return std::unexpected(y.error());
             heads::head const &h = x->h;
@@ -1358,7 +1354,9 @@ jsonpath::comparable_value(query_view const &v, std::size_t const index, lazy co
             [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                 -> std::expected<std::optional<lazy>, error> {
                 auto const found =
-                    value_sharing::container_resolve((*argument)->top_level, (*argument)->offset, checks);
+                    (*argument)->typed_array_tag != 0
+                        ? value_sharing::lazy_resolve(**argument, checks)
+                        : value_sharing::container_resolve((*argument)->top_level, (*argument)->offset, checks);
                 if (!found) [[unlikely]]
                     return std::unexpected(found.error());
                 if (found->h.major == major_type::array || found->h.major == major_type::map)
@@ -1483,21 +1481,12 @@ inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, 
         loaded,
         [&]<bool Checked>(std::size_t,
                           validity::limit_checks<Checked> const checks) -> std::expected<void, error> {
-            auto const found = value_sharing::tag_content_resolve(node.top_level, node.offset, checks);
+            auto const found = value_sharing::lazy_resolve(node, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
-            lazy const content{found->source, found->item_at};
+            lazy const content{found->source, found->item_at, {}};
             std::vector<lazy> children;
-            if (heads::is_typed_array(found->h)) {
-                auto const bytes = value_sharing::typed_array_bytes_read(*found);
-                if (!bytes) [[unlikely]]
-                    return std::unexpected(bytes.error());
-                auto elements = value_sharing::elements_encode(found->h.argument, *bytes, 0,
-                                                bytes->size() / validity::typed_array_element_size(found->h.argument));
-                if (!elements) [[unlikely]]
-                    return std::unexpected(elements.error());
-                children = std::move(*elements);
-            } else if (found->h.major == major_type::array) {
+            if (found->h.major == major_type::array || heads::is_typed_array(found->h)) {
                 auto const elements = content.elements(loaded);
                 if (!elements) [[unlikely]]
                     return std::unexpected(elements.error());
