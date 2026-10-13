@@ -653,7 +653,7 @@ class heads
 
     static constexpr std::expected<head, error> typed_array_element_decode(std::uint64_t const tag,
                                                                            std::string_view const elements,
-                                                                           std::uint64_t const position)
+                                                                           validity::index const position)
     {
         std::size_t const size = validity::typed_array_element_size(tag);
         bool const floating = (tag >> std::to_underlying(rfc8746::bit_field::f) & 1) != 0;
@@ -661,7 +661,7 @@ class heads
         bool const little_endian = (tag >> std::to_underlying(rfc8746::bit_field::e) & 1) != 0;
         if (size > sizeof(std::uint64_t)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        auto const element = std::span(elements).subspan(static_cast<std::size_t>(position) * size, size);
+        auto const element = validity::element_span(elements, position, size);
         std::uint64_t bits = 0;
         for (std::size_t i = 0; i < size; ++i)
             bits = bits << std::numeric_limits<std::uint8_t>::digits |
@@ -686,55 +686,57 @@ class heads
         major_type major;
         std::uint8_t info;
         std::uint64_t argument;
-        std::size_t at;
+        validity::offset at;
     };
 
     template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<raw_head, error>
-    raw_head_read(std::string_view const encoded, std::size_t const at,
+    raw_head_read(std::string_view const encoded, validity::offset const at,
                   validity::limit_checks<Checked> const checks)
     {
-        if (at >= encoded.size()) [[unlikely]]
+        std::string_view const rest = validity::subspan(encoded, at);
+        if (rest.empty()) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        auto const initial = static_cast<std::uint8_t>(encoded[at]);
+        auto const initial = static_cast<std::uint8_t>(rest.front());
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
         std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
             if (error const r = validity::check_argument(major, info, checks).error_or(error{}); r != error{})
                 [[unlikely]]
                 return std::unexpected(r);
-            return raw_head{major, info, info, at + initial_byte_size};
+            return raw_head{major, info, info, validity::next(at, initial_byte_size)};
         }
         if (error const r = validity::check_additional_information(major, info).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
         if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
-            return raw_head{major, info, info, at + initial_byte_size};
+            return raw_head{major, info, info, validity::next(at, initial_byte_size)};
         std::size_t const size = argument_size(info);
-        if (!validity::pending_items_fit(size, encoded.size() - at - initial_byte_size)) [[unlikely]]
+        if (!validity::pending_items_fit(size, rest.size() - initial_byte_size)) [[unlikely]]
             return std::unexpected(error::too_little_data);
         std::uint64_t argument = 0;
-        for (char const c : std::span(encoded).subspan(at + initial_byte_size, size))
+        for (char const c : validity::subspan(encoded, validity::next(at, initial_byte_size)).substr(0, size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
         if (error const r = validity::check_argument(major, argument, checks).error_or(error{}); r != error{})
             [[unlikely]]
             return std::unexpected(r);
-        return raw_head{major, info, argument, at + initial_byte_size + size};
+        return raw_head{major, info, argument, validity::next(at, initial_byte_size + size)};
     }
 
     static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
-        auto const h = raw_head_read(encoded, 0, validity::limit_checks<false>{});
+        auto const h = raw_head_read(encoded, validity::offset{}, validity::limit_checks<false>{});
         if (h && h->major == major_type::tag &&
             h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))
-            return std::string_view(std::span(encoded).subspan(h->at));
+            return validity::subspan(encoded, h->at);
         return encoded;
     }
 
-    static constexpr bool break_at(std::string_view const encoded, std::size_t const at)
+    static constexpr bool break_at(std::string_view const encoded, validity::offset const at)
     {
-        return at < encoded.size() &&
-               encoded[at] ==
+        std::string_view const rest = validity::subspan(encoded, at);
+        return !rest.empty() &&
+               rest.front() ==
                    initial_byte(major_type::simple_float,
                                 std::to_underlying(rfc8949::simple_float_information::break_stop_code));
     }
@@ -782,10 +784,10 @@ class heads
 template <std::invocable MarksRead, class Projection, bool Checked>
 std::expected<void, error>
 validity::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
-                            std::size_t const content_at, MarksRead const marks_read,
+                            offset const content_at, MarksRead const marks_read,
                             Projection const offset_of, limit_checks<Checked> const checks)
 {
-    std::size_t at = content_at;
+    offset at = content_at;
     std::size_t references_followed = 0;
     for (;;) {
         auto const c = heads::raw_head_read(encoded, at, checks);
@@ -804,15 +806,15 @@ validity::check_tag_content(std::uint64_t const tag, std::string_view const enco
             [[unlikely]]
             return std::unexpected(e);
         auto const &marks = std::invoke(marks_read);
-        auto const index = check_sharedref_index(
+        auto const i = check_sharedref_index(
             n->argument, static_cast<std::size_t>(std::ranges::distance(
                              std::ranges::begin(marks), std::ranges::upper_bound(marks, at, {}, offset_of))));
-        if (!index) [[unlikely]]
-            return std::unexpected(index.error());
+        if (!i) [[unlikely]]
+            return std::unexpected(i.error());
         if (auto const ends = check_sharedref_chain_ends(++references_followed, std::ranges::size(marks)); !ends)
             [[unlikely]]
             return std::unexpected(ends.error());
-        std::size_t const marked = std::invoke(offset_of, marks[*index]);
+        offset const marked = std::invoke(offset_of, marks[*i]);
         if (marked >= at) [[unlikely]]
             return std::unexpected(error::sharedref_not_complete);
         at = marked;

@@ -205,7 +205,7 @@ class jsonpath
             auto const next = extended_diagnostic_notation::literal_parse({text, at}, literal, {0, depth_max});
             if (!next) [[unlikely]]
                 return next;
-            if (auto const r = extended_diagnostic_notation::canonical_append(keys, {literal, 0}, {0, depth_max}); !r) [[unlikely]]
+            if (auto const r = extended_diagnostic_notation::canonical_append(keys, literal, validity::offset{}, {0, depth_max}); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
         }
@@ -703,7 +703,7 @@ class jsonpath
                 auto const position = validity::check_index(each.index, h.argument);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
-                if (auto const r = well_formedness::items_skip(d, *position); !r) [[unlikely]]
+                if (auto const r = well_formedness::items_skip(d, std::to_underlying(*position)); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 continue;
             }
@@ -950,8 +950,8 @@ class jsonpath
                     return *walked;
                 return query_walk<T>(v, top,
                                      lazy{std::make_shared<value_sharing::top_level_item>(
-                                              std::shared_ptr<void const>{}, content, std::vector<lazy>{}, 0),
-                                          0, {}},
+                                              std::shared_ptr<void const>{}, content, std::vector<lazy>{}, validity::offset{}),
+                                          validity::offset{}, {}},
                                      loaded);
             });
     }
@@ -988,7 +988,7 @@ class jsonpath
                 if (root.typed_array_tag != 0) [[unlikely]]
                     return query_walk<T>(v, top, root, loaded);
                 auto const walked =
-                    query_walk<T>(v, top, std::string_view(std::span(root.top_level->encoded).subspan(root.offset)), checks);
+                    query_walk<T>(v, top, validity::subspan(root.top_level->encoded, root.offset), checks);
                 if (walked) [[likely]]
                     return *walked;
                 return query_walk<T>(v, top, root, loaded);
@@ -1099,15 +1099,15 @@ inline std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::stri
             if (h.major != major_type::map) [[unlikely]]
                 return std::unexpected(error::not_indexable);
             for (std::uint64_t i = 0; i < h.argument; ++i) {
-                std::size_t const start = source->encoded.size() - d.encoded.size();
+                validity::offset const start = validity::distance(source->encoded, d.encoded);
                 if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 auto const match =
-                    validity::keys_equivalent(*source, start, key, 0, 0, loaded.nesting_depth, checks);
+                    validity::keys_equivalent(*source, start, key, validity::offset{}, 0, loaded.nesting_depth, checks);
                 if (!match) [[unlikely]]
                     return std::unexpected(match.error());
                 if (*match)
-                    return lazy{source, source->encoded.size() - d.encoded.size(), {}};
+                    return lazy{source, validity::distance(source->encoded, d.encoded), {}};
                 if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
             }
@@ -1156,8 +1156,8 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
                 return number(h) == number(k);
             if (h.major != k.major || floating(h) || floating(k))
                 return false;
-            std::size_t const x_content = x->source->encoded.size() - x->d.encoded.size();
-            std::size_t const y_content = y->source->encoded.size() - y->d.encoded.size();
+            validity::offset const x_content = validity::distance(x->source->encoded, x->d.encoded);
+            validity::offset const y_content = validity::distance(y->source->encoded, y->d.encoded);
             switch (h.major) {
             case major_type::byte_string:
             case major_type::text_string: {

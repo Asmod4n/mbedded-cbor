@@ -211,7 +211,7 @@ class generic
     static std::expected<void, error> generic_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                    std::size_t const depth, std::size_t const depth_max)
     {
-        std::size_t const item_at = d.message.encoded.size() - d.encoded.size();
+        validity::offset const item_at = validity::distance(d.message.encoded, d.encoded);
         for (;;) {
             heads::decoder<Checked> look = d;
             auto const h = look.head_decode();
@@ -227,11 +227,11 @@ class generic
             if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
                 break;
             d.encoded = look.encoded;
-            auto const target = value_sharing::top_level_item::sharedref_decode(d, d.message.encoded.size() - d.encoded.size(), item_at, d.message.sharedrefs);
+            auto const target = value_sharing::top_level_item::sharedref_decode(d, validity::distance(d.message.encoded, d.encoded), item_at, d.message.sharedrefs);
             if (!target) [[unlikely]]
                 return std::unexpected(target.error());
             std::string_view const rest = d.encoded;
-            d.encoded = std::string_view(std::span(d.message.encoded).subspan(target->offset));
+            d.encoded = validity::subspan(d.message.encoded, target->offset);
             auto const r = generic_value_read(d, out, depth + 1, depth_max);
             d.encoded = rest;
             return r;
@@ -460,7 +460,7 @@ class generic
             return std::unexpected(error::incorrect_type);
         std::bitset<count> found;
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
-            std::size_t const key_at = d.message.encoded.size() - d.encoded.size();
+            validity::offset const key_at = validity::distance(d.message.encoded, d.encoded);
             auto k = d.head_decode();
             while (k && k->major == major_type::tag &&
                    k->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
@@ -471,11 +471,11 @@ class generic
             bool const indirect = k && k->major == major_type::tag &&
                                   k->argument == std::to_underlying(rfc8949::tag_number::sharedref);
             if (indirect) {
-                auto const target = value_sharing::top_level_item::sharedref_decode(d, d.message.encoded.size() - d.encoded.size(), key_at, d.message.sharedrefs);
+                auto const target = value_sharing::top_level_item::sharedref_decode(d, validity::distance(d.message.encoded, d.encoded), key_at, d.message.sharedrefs);
                 if (!target) [[unlikely]]
                     return std::unexpected(target.error());
                 referenced = heads::decoder<Checked>{
-                    std::string_view(std::span(d.message.encoded).subspan(target->offset)), d.checks};
+                    validity::subspan(d.message.encoded, target->offset), d.checks};
                 k = referenced.head_decode();
             }
             heads::decoder<Checked> &from = indirect ? referenced : d;
@@ -978,7 +978,7 @@ private:
     {
         if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
             return std::unexpected(r.error());
-        value_sharing::sharing_decoder<Checked> d{{encoded, checks}, {{}, encoded, {}, 0, {}}};
+        value_sharing::sharing_decoder<Checked> d{{encoded, checks}, {{}, encoded, {}, validity::offset{}, {}}};
         if (auto const r = generic::generic_read(d, out, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (!d.encoded.empty()) [[unlikely]]

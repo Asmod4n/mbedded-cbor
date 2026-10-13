@@ -445,7 +445,7 @@ TEST_CASE("validity: check_index against Normalize of RFC 9535")
             bool const selects = normalized >= 0 && normalized < static_cast<cbor::int128>(length);
             auto const r = validity::check_index(index, length);
             if (selects)
-                CHECK_EQ(static_cast<cbor::int128>(*r), normalized);
+                CHECK_EQ(*r, validity::index{static_cast<std::uint64_t>(normalized)});
             else
                 CHECK_EQ(r.error(), error::index_out_of_bounds);
             if (index >= 0) {
@@ -525,21 +525,21 @@ TEST_CASE("validity: check_magnitude_size for every size up to one past the widt
 // it is not marked yet, as for a reader that reads the marks in order.
 TEST_CASE("validity: check_tag_content refuses a tag 29 that names a mark at or after it")
 {
-    std::vector<std::size_t> const self{1};
+    std::vector<validity::offset> const self{validity::offset{1}};
     CHECK_EQ(validity::check_tag_content(
-                 1, "\xc1\xd8\x1d\x00"sv, 1, [&self]() -> auto const & { return self; }, std::identity{},
+                 1, "\xc1\xd8\x1d\x00"sv, validity::offset{1}, [&self]() -> auto const & { return self; }, std::identity{},
                  validity::limit_checks<false>{})
                  .error(),
              error::sharedref_not_complete);
-    std::vector<std::size_t> const forward{4};
+    std::vector<validity::offset> const forward{validity::offset{4}};
     CHECK_EQ(validity::check_tag_content(
-                 1, "\xc1\xd8\x1d\x00\x05"sv, 1, [&forward]() -> auto const & { return forward; },
+                 1, "\xc1\xd8\x1d\x00\x05"sv, validity::offset{1}, [&forward]() -> auto const & { return forward; },
                  std::identity{}, validity::limit_checks<false>{})
                  .error(),
              error::sharedref_index_not_marked);
-    std::vector<std::size_t> const before{0};
+    std::vector<validity::offset> const before{validity::offset{}};
     CHECK(validity::check_tag_content(
-              1, "\x05\xc1\xd8\x1d\x00"sv, 2, [&before]() -> auto const & { return before; }, std::identity{},
+              1, "\x05\xc1\xd8\x1d\x00"sv, validity::offset{2}, [&before]() -> auto const & { return before; }, std::identity{},
               validity::limit_checks<false>{})
               .has_value());
 }
@@ -554,29 +554,83 @@ TEST_CASE("validity: keys_equivalent compares the pairs of two maps as multisets
     std::string_view const jkk = "\xa3\x61j\x01\x61k\x01\x61k\x01"sv;
     std::string_view const kk = "\xa2\x61k\x01\x61k\x01"sv;
     std::string_view const kj = "\xa2\x61k\x01\x61j\x01"sv;
-    CHECK_FALSE(*validity::keys_equivalent(kkj, 0, kjj, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK_FALSE(*validity::keys_equivalent(kjj, 0, kkj, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK(*validity::keys_equivalent(kkj, 0, jkk, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK(*validity::keys_equivalent(jkk, 0, kkj, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK_FALSE(*validity::keys_equivalent(kk, 0, kj, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK(*validity::keys_equivalent(kk, 0, kk, 0, 0, 16, validity::limit_checks<false>{}));
+    CHECK_FALSE(*validity::keys_equivalent(kkj, validity::offset{}, kjj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK_FALSE(*validity::keys_equivalent(kjj, validity::offset{}, kkj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK(*validity::keys_equivalent(kkj, validity::offset{}, jkk, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK(*validity::keys_equivalent(jkk, validity::offset{}, kkj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK_FALSE(*validity::keys_equivalent(kk, validity::offset{}, kj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK(*validity::keys_equivalent(kk, validity::offset{}, kk, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
 }
 
 // An offset, an element size and an element index are three kinds of number. Each has its own type, so a call that
 // swaps two of them does not compile. The checks ask the compiler whether each swapped call is well-formed.
-TEST_CASE("validity: typed_array_element_offset refuses a swapped offset, size or index")
+TEST_CASE("validity: element_offset refuses a swapped offset, size or index")
 {
-    using offset = validity::byte_offset;
-    using index = validity::element_index;
+    using offset = validity::offset;
+    using index = validity::index;
     auto const callable = [](auto const a, auto const b, auto const c) {
-        return requires { validity::typed_array_element_offset(a, b, c); };
+        return requires { validity::element_offset(a, b, c); };
     };
     CHECK(callable(offset{}, std::size_t{}, index{}));
     CHECK_FALSE(callable(std::size_t{}, offset{}, index{}));
     CHECK_FALSE(callable(index{}, std::size_t{}, offset{}));
     CHECK_FALSE(callable(offset{}, index{}, std::size_t{}));
+    CHECK_FALSE(callable(index{}, std::size_t{}, index{}));
+    CHECK_FALSE(callable(offset{}, std::size_t{}, offset{}));
     CHECK_FALSE(callable(std::size_t{}, std::size_t{}, std::size_t{}));
     CHECK_FALSE(callable(offset{}, std::size_t{}, std::uint64_t{}));
     // Element 3 of 8 bytes each starts 24 bytes after the first element.
-    CHECK_EQ(std::to_underlying(validity::typed_array_element_offset(offset{5}, 8, index{3})), 29u);
+    CHECK_EQ(validity::element_offset(offset{5}, 8, index{3}), offset{29});
+}
+
+// next, distance, subspan and substr take an offset where an offset is meant and a size where a size is meant. A
+// size, an index or a plain integer in the place of an offset does not compile, and an offset does not convert back
+// to a size. The result of check_index is an index and not an offset.
+TEST_CASE("validity: an offset, a size and an index do not take the place of each other")
+{
+    using offset = validity::offset;
+    using index = validity::index;
+    auto const next_callable = [](auto const a, auto const b) { return requires { validity::next(a, b); }; };
+    CHECK(next_callable(offset{}, std::size_t{}));
+    CHECK_FALSE(next_callable(std::size_t{}, std::size_t{}));
+    CHECK_FALSE(next_callable(index{}, std::size_t{}));
+    CHECK_FALSE(next_callable(std::size_t{}, offset{}));
+    CHECK_FALSE(next_callable(offset{}, offset{}));
+    auto const subspan_callable = [](auto const a) {
+        return requires { validity::subspan(std::string_view{}, a); };
+    };
+    CHECK(subspan_callable(offset{}));
+    CHECK_FALSE(subspan_callable(std::size_t{}));
+    CHECK_FALSE(subspan_callable(index{}));
+    CHECK_FALSE(std::is_convertible_v<offset, std::size_t>);
+    CHECK_FALSE(std::is_convertible_v<std::size_t, offset>);
+    CHECK_FALSE(std::is_convertible_v<index, offset>);
+    CHECK_FALSE(std::is_convertible_v<offset, index>);
+    CHECK(std::same_as<decltype(validity::check_index(0, 1))::value_type, index>);
+    CHECK_FALSE(std::same_as<decltype(cbor::lazy::offset), std::size_t>);
+    CHECK(std::same_as<decltype(cbor::lazy::offset), offset>);
+}
+
+// subspan accepts every offset from the start to the end of its input. An offset at the end gives an empty view, and
+// an offset after the end is a wrong use of the library, so it fails loudly and does not read past the input.
+TEST_CASE("validity: subspan accepts an offset at the end and refuses an offset after it")
+{
+    std::string_view const encoded = "abc";
+    CHECK_EQ(validity::subspan(encoded, validity::offset{}), "abc");
+    CHECK_EQ(validity::subspan(encoded, validity::offset{1}), "bc");
+    CHECK(validity::subspan(encoded, validity::offset{3}).empty());
+    std::array<char const, 3> const bytes{'a', 'b', 'c'};
+    CHECK_EQ(validity::subspan(std::span<char const>(bytes), validity::offset{2}).size(), 1u);
+    CHECK(std::same_as<decltype(validity::subspan(std::span<char const>(bytes), validity::offset{})),
+                       std::span<char const>>);
+#if defined(__cpp_exceptions)
+    CHECK_THROWS_AS(static_cast<void>(validity::subspan(encoded, validity::offset{4})), std::logic_error);
+    CHECK_THROWS_AS(static_cast<void>(validity::subspan(std::span<char const>(bytes), validity::offset{4})),
+                    std::logic_error);
+#endif
+    // substr refuses a piece that ends after the input with an error value, because the size comes from the input.
+    CHECK_EQ(*validity::substr(encoded, validity::offset{1}, 2), "bc");
+    CHECK_EQ(validity::substr(encoded, validity::offset{1}, 3).error(), error::too_little_data);
+    CHECK_EQ(validity::distance(encoded, encoded.substr(2)), validity::offset{2});
+    CHECK_EQ(validity::next(validity::offset{2}, 3), validity::offset{5});
 }
