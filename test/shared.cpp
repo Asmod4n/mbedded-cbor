@@ -31,8 +31,8 @@ namespace shared_test
 // The decoded item tree of a top-level item, as lazy::decode gives it.
 using tree = std::shared_ptr<cbor::item const>;
 
-// An item of a decoded tree together with the tree, which cbor::shared_value_resolve needs to follow a tag 29. A
-// mark before the decoded tree comes back as a lazy, and its decode gives a tree of its own.
+// An item of a decoded tree together with the tree, which cbor::shared_value_resolve needs to follow a tag 29. The
+// resolution gives the marked value as a lazy over the input, and its decode gives a tree of its own.
 struct place {
     tree t;
     cbor::item const *i;
@@ -56,13 +56,9 @@ place target(place n)
         if (n.i->type == cbor::type::tag && n.i->via.tag.number == 29) {
             auto const resolved = cbor::shared_value_resolve(n.t, *n.i);
             REQUIRE(resolved.has_value());
-            if (auto const *const before = std::get_if<cbor::lazy>(&*resolved)) {
-                auto decoded = before->decode();
-                REQUIRE(decoded.has_value());
-                n = place{*decoded, decoded->get()};
-            } else {
-                n.i = &std::get<std::reference_wrapper<cbor::item const>>(*resolved).get();
-            }
+            auto decoded = resolved->decode();
+            REQUIRE(decoded.has_value());
+            n = place{*decoded, decoded->get()};
         } else if (n.i->type == cbor::type::tag && n.i->via.tag.number == 28)
             n.i = n.i->via.tag.content;
         else
@@ -159,10 +155,25 @@ place content(P const &tagged)
     return target(place{t.t, t->via.tag.content});
 }
 
+// A resolved tag 29 gives a tree of its own, so two places are compared by the encoded form of their targets.
+std::string encoded_of(place const &p)
+{
+    std::string out;
+    REQUIRE(cbor::encode(*p.i, out).has_value());
+    return out;
+}
+
+// A tag 29 stands where a value is not written again. A resolved tag 29 has no identity in this test yet, so a test
+// that two values are distinct checks that the second one is written in full.
+inline bool is_reference(place const &p)
+{
+    return p->type == cbor::type::tag && p->via.tag.number == 29;
+}
+
 template <class A, class B>
 bool same(A const &a, B const &b)
 {
-    return target(a).i == target(b).i;
+    return encoded_of(target(a)) == encoded_of(target(b));
 }
 
 } // namespace shared_test
@@ -265,19 +276,20 @@ TEST_CASE("tag 29: a chain of marks that refers to its own start ends with an er
 
 // The owner decided that a tag 29 is resolved only when it is read. Tag 0 needs a text string (RFC 8949 3.4.1).
 // [28(""), 0(29(0))] resolves to the text string. [28(0), 0(29(0))] decodes, because the decode only stores the
-// tag 29, and its resolution gives the error of the content of tag 0. shared_value takes one step and checks
-// nothing. A forward reference still fails at the decode.
+// tag 29. Its resolution gives the marked integer, and the reader of tag 0 checks the content of tag 0. A forward
+// reference fails at the resolution.
 TEST_CASE("tag 29: the decode stores the reference and its resolution checks the enclosing tag")
 {
     tree const valid = decoded_ref("\x82\xd8\x1c\x60\xc0\xd8\x1d\x00"sv);
     cbor::item const &reference = *valid->via.array[1].via.tag.content;
     auto const resolved = cbor::shared_value_resolve(valid, reference);
     REQUIRE(resolved.has_value());
-    CHECK_EQ(&std::get<std::reference_wrapper<cbor::item const>>(*resolved).get(), valid->via.array[0].via.tag.content);
+    CHECK_EQ(resolved->get<std::string_view>().value(), ""sv);
     tree const refused = decoded_ref("\x82\xd8\x1c\x00\xc0\xd8\x1d\x00"sv);
     cbor::item const &wrong = *refused->via.array[1].via.tag.content;
-    CHECK_EQ(cbor::shared_value_resolve(refused, wrong).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(&cbor::shared_value(refused, wrong), refused->via.array[0].via.tag.content);
+    auto const marked = cbor::shared_value_resolve(refused, wrong);
+    REQUIRE(marked.has_value());
+    CHECK_EQ(marked->type().value(), cbor::type::unsigned_integer);
     CHECK_EQ(ref_decode_error("\x82\xd8\x1d\x00\xd8\x1c\x00"sv), error::sharedref_index_not_marked);
 }
 
@@ -295,12 +307,13 @@ TEST_CASE("tag 29: a reference that reaches itself through marks names no value"
 
 // The tree decoder records a mark before it writes the item of the mark. A check of a tag content that follows a
 // reference reads the bytes, so it never reads an item that is not yet written. 28(0(29(0))) and 28(24(29(0)))
-// name a tag that holds itself, which is an inadmissible content of tag 0 and of tag 24. A step through 28(0(29(0))) passes
+// name a tag that holds itself, which is an inadmissible content of tag 0 and of tag 24. The reader of the tag
+// checks it, because the decode does not read the tag 29. A step through 28(0(29(0))) passes
 // tag 0 to its content without an end, and the bound on the references ends it.
 TEST_CASE("tag 29: a tag content behind a reference to an incomplete mark")
 {
-    CHECK_EQ(ref_decode_error("\xd8\x1c\xc0\xd8\x1d\x00"sv), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(ref_decode_error("\xd8\x1c\xd8\x18\xd8\x1d\x00"sv), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(decode_error("\xd8\x1c\xc0\xd8\x1d\x00"sv), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(decode_error("\xd8\x1c\xd8\x18\xd8\x1d\x00"sv), error::inadmissible_type_for_tag_content);
     auto const step = (*cbor::lazy::copy("\xd8\x1c\xc0\xd8\x1d\x00"sv)).at(0);
     REQUIRE_FALSE(step.has_value());
     CHECK_EQ(step.error(), error::sharedref_not_complete);
@@ -561,7 +574,7 @@ TEST_CASE("tag 28/29: a repeated value without a cycle is written twice")
     std::string const one = "\x82"s + test::native_unsigned(1) + test::native_unsigned(2);
     CHECK_EQ(encoded_shared(arr({a, a})), "\x82"s + one + one);
     auto const r = round_trip(arr({a, a}));
-    CHECK_FALSE(same(element(r, 0), element(r, 1)));
+    CHECK_FALSE(is_reference(children(r)[1]));
     CHECK_EQ(argument_of(*element(element(r, 1), 1)), 2u);
 }
 
@@ -749,7 +762,7 @@ TEST_CASE("without marks: values are written each time")
 {
     auto const shared = arr({u(1), u(2), u(3)});
     auto const r = decoded_ref(encoded_shared(obj({{s("a"), shared}, {s("b"), shared}}), marks::none));
-    CHECK_FALSE(same(at(r, "a"), at(r, "b")));
+    CHECK_FALSE(is_reference(children(r)[3]));
 }
 
 // Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved'. The owner decided
@@ -936,7 +949,7 @@ TEST_CASE("application tag: distinct objects with equal content decode to two ob
     auto const p1 = object_of(5000, arr({u(1), u(2)}));
     auto const p2 = object_of(5000, arr({u(1), u(2)}));
     auto const r = round_trip(arr({p1, p2}));
-    CHECK_FALSE(same(element(r, 0), element(r, 1)));
+    CHECK_FALSE(is_reference(children(r)[1]));
 }
 
 // Ported from test.rb: 'registered tag + sharedref: non-immediate ivar (String) shares correctly'. The

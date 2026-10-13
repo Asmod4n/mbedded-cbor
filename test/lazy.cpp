@@ -1331,9 +1331,8 @@ TEST_CASE("lazy: each thread reads its own lazy of the same bytes")
                 bool found = false;
                 if (reference)
                     if (auto const shared = cbor::shared_value_resolve(*named, **named); shared)
-                        if (auto const *const before = std::get_if<cbor::lazy>(&*shared))
-                            if (auto const value = before->get<std::string_view>(); value)
-                                found = *value == "hello";
+                        if (auto const value = shared->get<std::string_view>(); value)
+                            found = *value == "hello";
                 right[t] = text.has_value() && **text == "hello" && found;
             });
     }

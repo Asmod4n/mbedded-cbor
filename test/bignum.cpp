@@ -217,7 +217,7 @@ TEST_CASE("bignum: tag 28 around a bignum that fits marks the integer")
     cbor::item const *const marked = elements[0]->via.tag.content;
     CHECK_EQ(marked->type, cbor::type::unsigned_integer);
     CHECK_EQ(marked->via.u64, 1u);
-    CHECK_EQ(&cbor::shared_value(*tree, *elements[1]), marked);
+    CHECK(shared_value_is(*tree, *elements[1], *marked));
     CHECK_EQ(*l->at(1)->type(), cbor::type::unsigned_integer);
     CHECK_EQ(*l->at(1)->get<std::int64_t>(), 1);
     std::string again;

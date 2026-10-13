@@ -378,9 +378,7 @@ inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item 
         auto const resolved = cbor::shared_value_resolve(tree, it);
         if (!resolved) [[unlikely]]
             return {};
-        if (auto const *const before = std::get_if<cbor::lazy>(&*resolved))
-            return value_of(*before).value_or(value{});
-        return value_of(tree, std::get<std::reference_wrapper<cbor::item const>>(*resolved).get());
+        return value_of(*resolved).value_or(value{});
     }
     if (number == 28)
         return value_of(tree, inner);
