@@ -55,13 +55,13 @@ TEST_CASE("doc internals: a limit is one atomic field")
     CHECK_EQ(seen, 2u);
 }
 
-// The section "The marks of tag 28" states that a later tag 29 reuses the marks that the first one found.
+// The section "Tags 28 and 29" states that a lazy keeps no marks and reads a tag 29 as a tag over its index.
 TEST_CASE("doc internals: two references to one mark")
 {
     auto const l = *cbor::lazy::copy("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s);
-    CHECK_EQ(l.at(1)->get<std::int64_t>(), 1);
-    CHECK_EQ(l.at(2)->get<std::int64_t>(), 1);
-    CHECK_EQ(cbor::at_path<"$[2]", int>("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s), 1);
+    CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);
+    CHECK_EQ(l.at(2)->get<std::int64_t>(), 0);
+    CHECK_EQ(cbor::at_path<"$[2]", int>("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s), 0);
 }
 
 // The section "A compile-time path" states that the compiler parses the path.

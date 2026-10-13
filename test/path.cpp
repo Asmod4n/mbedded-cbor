@@ -314,18 +314,19 @@ TEST_CASE("path: every base64 and base16 character and every radix in a compile-
     CHECK(found(compiled_at<"$['\\ud83d\\ude00']">(doc)) == V(4));
 }
 
-// With value sharing (tags 28 and 29) a few bytes can name many nodes. A nodelist may hold as many nodes as the
-// message has bytes; one more is an error. Each level below shares the level before it twice.
+// A nodelist may hold as many nodes as the message has bytes; one more is an error. Tags 28 and 29 are plain tags
+// and name no node a second time, so the test builds the nodes in full: 2^k nodes cost about 2^k bytes, and an
+// array of byte-sized integers below a wildcard of wildcards stays under the bound.
 TEST_CASE("path: a nodelist is no longer than the message")
 {
-    std::string doc = "\x87\xd8\x1c\x82\x00\x00"s;
-    for (char level = 0; level < 6; ++level)
-        doc += "\xd8\x1c\x82\xd8\x1d"s + level + "\xd8\x1d"s + level;
-    auto const four = test::query("$[2][*][*][*]", *cbor::lazy::copy(doc));
+    std::string doc = "\x82\x83\x00\x00\x00"s;
+    doc += "\x82\x82\x00\x00\x82\x00\x00"s;
+    auto const three = test::query("$[0][*]", *cbor::lazy::copy(doc));
+    REQUIRE(three.has_value());
+    CHECK(*three == A(0, 0, 0));
+    auto const four = test::query("$[1][*][*]", *cbor::lazy::copy(doc));
     REQUIRE(four.has_value());
-    CHECK(*four == A(0, 0, 0, 0, 0, 0, 0, 0));
-    CHECK_EQ(test::query("$[6][*][*][*][*][*][*][*]", *cbor::lazy::copy(doc)).error(),
-             error::nodelist_too_long);
+    CHECK(*four == A(0, 0, 0, 0));
 }
 
 // RFC 8949 5.6.1: keys compare by value. A head that is not preferred, a string in chunks, -0.0 against 0.0, a NaN
@@ -361,17 +362,17 @@ TEST_CASE("path: a key is found by its value, not by its bytes")
     CHECK_EQ(compiled_at<"$[0]">(doc).error(), error::key_not_found);
 }
 
-// RFC 8949 5.6.1 with value sharing: a shared reference anywhere inside a key stands for the item it names, so a
-// key [1, 29(0)] equals [1, "x"] and {"k": 29(0)} equals {"k": "x"} when 28("x") is the first shared item.
-TEST_CASE("path: a shared reference inside a key is followed")
+// RFC 8949 5.6.1: a key [1, 29(0)] is a tag inside an array, and equals only a key with the same tag 29. A path
+// follows no tag 29, and a forward index is no error.
+TEST_CASE("path: a tag 29 inside a key is a plain tag")
 {
     std::string const doc = "\x82\xd8\x1c\x61x\xa2\x82\x01\xd8\x1d\x00\x01\xa1\x61k\xd8\x1d\x00\x02"s;
-    CHECK(found(compiled_at<"$[1][[1, \"x\"]]">(doc)) == V(1));
-    CHECK(found(compiled_at<"$[1][{\"k\": \"x\"}]">(doc)) == V(2));
-    CHECK_EQ(compiled_at<"$[1][[1, \"y\"]]">(doc).error(), error::key_not_found);
-    CHECK_EQ(compiled_at<"$[1][[1, 29(0)]]">(doc).error(), error::key_not_found);
+    CHECK_EQ(compiled_at<"$[1][[1, \"x\"]]">(doc).error(), error::key_not_found);
+    CHECK_EQ(compiled_at<"$[1][{\"k\": \"x\"}]">(doc).error(), error::key_not_found);
+    CHECK(found(compiled_at<"$[1][[1, 29(0)]]">(doc)) == V(1));
+    CHECK(found(compiled_at<"$[1][{\"k\": 29(0)}]">(doc)) == V(2));
     std::string const forward = "\xa1\x82\x01\xd8\x1d\x00\x01"s;
-    CHECK_EQ(compiled_at<"$[[1, \"x\"]]">(forward).error(), error::sharedref_index_not_marked);
+    CHECK(found(compiled_at<"$[[1, 29(0)]]">(forward)) == V(1));
 }
 
 // RFC 8949 5.6: a literal with a duplicate key does not compile. A key map of the top-level item with a
@@ -405,7 +406,7 @@ TEST_CASE("path: every form gives the first entry of a repeated key")
     CHECK_EQ((cbor::at_path<"$[1]", int>(numbers)), 1);
     CHECK(compiled_at<"$[1]">(numbers).has_value());
     std::string const shared = "\xa2\xd8\x1c\x61\x61\x01\xd8\x1d\x00\x02"s;
-    CHECK_EQ((cbor::at_path<"$.a", int>(shared)), 1);
+    CHECK_EQ((cbor::at_path<"$.a", int>(shared)).error(), error::key_not_found);
     std::string const deep = "\xa1\x61\x62\xa2\x61\x61\x01\x61\x61\x02"s;
     CHECK_EQ((cbor::at_path<"$.b.a", int>(deep)), 1);
     CHECK(compiled_at<"$.b.a">(deep).has_value());
@@ -640,7 +641,7 @@ TEST_CASE("path: a typed read gives a view into the bytes of the caller")
     CHECK_EQ(**text, "xyz"sv);
     CHECK(inside(*doc, (*text)->data()));
     auto const shared = std::make_shared<std::string const>("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
-    auto const named = cbor::at_path<"$[1]", std::string_view>(shared);
+    auto const named = cbor::at_path<"$[0]", std::string_view>(shared);
     REQUIRE(named.has_value());
     CHECK_EQ(**named, "x"sv);
     CHECK(inside(*shared, (*named)->data()));
@@ -667,7 +668,7 @@ TEST_CASE("path: a typed read holds the owner of the bytes")
     CHECK_EQ(**text, "xyz"sv);
     auto const tagged = [] {
         auto const owner = std::make_shared<std::string const>("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
-        return cbor::at_path<"$[1]", std::string_view>(owner);
+        return cbor::at_path<"$[0]", std::string_view>(owner);
     }();
     REQUIRE(tagged.has_value());
     CHECK_EQ(**tagged, "x"sv);
@@ -911,39 +912,41 @@ TEST_CASE("path: a typed read through tag 24")
     check_path<"$[0]", std::uint64_t>("\xd8\x18\x42\x81"s, {std::int64_t{0}}, std::unexpected(error::too_little_data));
     check_path<"$[1][1]", std::uint64_t>("\xd8\x18\x48\x82\x01\xd8\x18\x43\x82\x02\x03"s, {std::int64_t{1}, std::int64_t{1}}, 3u);
     check_path<"$[1][1]", std::uint64_t>("\x82\xd8\x1c\x07\xd8\x18\x47\x82\xd8\x1c\x09\xd8\x1d\x00"s,
-                                         {std::int64_t{1}, std::int64_t{1}}, 9u);
+                                         {std::int64_t{1}, std::int64_t{1}}, 0u);
 }
 
-// RFC 8949 3.4 and the registration of tag 28: a mark leaves the value as it is. A mark on the walk, on a key, on the
-// target and on the content of a bignum or a typed array changes nothing.
+// The owner decided that a path reads tags 28 and 29 as plain tags. A path passes a tag on the walk and on the
+// target, as it passes every tag that it does not interpret. A key under the tag is a tag and no text key. The
+// content of a bignum or a typed array must be a byte string, so a tag there is refused by the read that interprets
+// the tag. A tag 29 names nothing, and its index is never checked.
 TEST_CASE("path: a typed read through tag 28")
 {
     check_path<"$.a[1]", std::uint64_t>("\xa1\x61\x61\xd8\x1c\x82\x01\x02"s, {"a"sv, std::int64_t{1}}, 2u);
-    check_path<"$.a", std::uint64_t>("\xa1\xd8\x1c\x61\x61\x01"s, {"a"sv}, 1u);
-    check_path<"$[7]", std::uint64_t>("\xa1\xd8\x1c\x07\x03"s, {std::int64_t{7}}, 3u);
+    check_path<"$.a", std::uint64_t>("\xa1\xd8\x1c\x61\x61\x01"s, {"a"sv}, std::unexpected(error::key_not_found));
+    check_path<"$[7]", std::uint64_t>("\xa1\xd8\x1c\x07\x03"s, {std::int64_t{7}}, std::unexpected(error::key_not_found));
     check_path<"$[0]", std::uint64_t>("\x81\xd8\x1c\x05"s, {std::int64_t{0}}, 5u);
     check_path<"$[0]", std::uint64_t>("\x81\xd8\x1c\xd8\x1c\x05"s, {std::int64_t{0}}, 5u);
-    check_path<"$", std::uint64_t>("\xc2\xd8\x1c\x42\x01\x00"s, {}, std::uint64_t{256});
-    check_path<"$", cbor::typed_array>("\xd8\x48\xd8\x1c\x43\x01\x02\x03"s, {}, std::pair{std::uint64_t{72}, byte_vector("\x01\x02\x03")});
+    check_path<"$", std::uint64_t>("\xc2\xd8\x1c\x42\x01\x00"s, {}, std::unexpected(error::inadmissible_type_for_tag_content));
+    check_path<"$", cbor::typed_array>("\xd8\x48\xd8\x1c\x43\x01\x02\x03"s, {},
+                                       std::unexpected(error::inadmissible_type_for_tag_content));
     check_path<"$", std::uint64_t>("\xd8\x1c"s, {}, std::unexpected(error::too_little_data));
 }
 
-// The registration of tag 29: a reference stands for the value of the mark it names, and the mark lies before it. A
-// reference on the walk, on a key, on the target, in the content of a bignum or of a typed array, and to a mark inside
-// a skipped sibling gives that value. A reference with no mark, to a mark that is not complete, or with content that
-// is no unsigned integer is an error.
 TEST_CASE("path: a typed read through tag 29")
 {
-    check_path<"$[1][0]", std::uint64_t>("\x82\xd8\x1c\x82\x07\x08\xd8\x1d\x00"s, {std::int64_t{1}, std::int64_t{0}}, 7u);
-    check_path<"$[1].a", std::uint64_t>("\x82\xd8\x1c\x61\x61\xa1\xd8\x1d\x00\x02"s, {std::int64_t{1}, "a"sv}, 2u);
-    check_path<"$[1]", std::string_view>("\x82\xd8\x1c\x61x\xd8\x1d\x00"s, {std::int64_t{1}}, "x"sv);
-    check_path<"$[1]", std::uint64_t>("\x82\xd8\x1c\x41\x05\xc2\xd8\x1d\x00"s, {std::int64_t{1}}, 5u);
+    check_path<"$[1][0]", std::uint64_t>("\x82\xd8\x1c\x82\x07\x08\xd8\x1d\x00"s, {std::int64_t{1}, std::int64_t{0}},
+                                         std::unexpected(error::not_indexable));
+    check_path<"$[1].a", std::uint64_t>("\x82\xd8\x1c\x61\x61\xa1\xd8\x1d\x00\x02"s, {std::int64_t{1}, "a"sv},
+                                        std::unexpected(error::key_not_found));
+    check_path<"$[1]", std::string_view>("\x82\xd8\x1c\x61x\xd8\x1d\x00"s, {std::int64_t{1}}, std::unexpected(error::incorrect_type));
+    check_path<"$[1]", std::uint64_t>("\x82\xd8\x1c\x41\x05\xc2\xd8\x1d\x00"s, {std::int64_t{1}},
+                                      std::unexpected(error::inadmissible_type_for_tag_content));
     check_path<"$[2]", cbor::typed_array>("\x83\xd8\x1c\x41\x05\xc2\xd8\x1d\x00\xd8\x40\xd8\x1d\x00"s, {std::int64_t{2}},
-                                          std::pair{std::uint64_t{64}, byte_vector("\x05")});
-    check_path<"$[1]", std::uint64_t>("\x82\x81\xd8\x1c\x09\xd8\x1d\x00"s, {std::int64_t{1}}, 9u);
-    check_path<"$.a", std::uint64_t>("\xa1\x61\x61\xd8\x1d\x05"s, {"a"sv}, std::unexpected(error::sharedref_index_not_marked));
-    check_path<"$[1]", std::uint64_t>("\x82\xd8\x1c\x01\xd8\x1d\x61x"s, {std::int64_t{1}}, std::unexpected(error::inadmissible_type_for_tag_content));
-    check_path<"$", std::uint64_t>("\xd8\x1c\xd8\x1d\x00"s, {}, std::unexpected(error::sharedref_not_complete));
+                                          std::unexpected(error::inadmissible_type_for_tag_content));
+    check_path<"$[1]", std::uint64_t>("\x82\x81\xd8\x1c\x09\xd8\x1d\x00"s, {std::int64_t{1}}, 0u);
+    check_path<"$.a", std::uint64_t>("\xa1\x61\x61\xd8\x1d\x05"s, {"a"sv}, 5u);
+    check_path<"$[1]", std::uint64_t>("\x82\xd8\x1c\x01\xd8\x1d\x61x"s, {std::int64_t{1}}, std::unexpected(error::incorrect_type));
+    check_path<"$", std::uint64_t>("\xd8\x1c\xd8\x1d\x00"s, {}, 0u);
 }
 
 // Ported from test/lazy.cpp: the inputs that the fuzzers found for lazy give the same answer through the typed
@@ -951,14 +954,14 @@ TEST_CASE("path: a typed read through tag 29")
 // had recorded the mark in an earlier step.
 TEST_CASE("path: a typed read of the fuzzer findings of lazy")
 {
-    check_path<"$[0]", std::uint64_t>("\xd8\x1c\xd8\x1d\x00"s, {std::int64_t{0}}, std::unexpected(error::sharedref_not_complete));
+    check_path<"$[0]", std::uint64_t>("\xd8\x1c\xd8\x1d\x00"s, {std::int64_t{0}}, std::unexpected(error::not_indexable));
     check_path<"$.a", std::uint64_t>("\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s, {"a"sv},
                                      std::unexpected(error::too_little_data));
     check_path<"$[0][0]", std::uint64_t>("\x82\xd8\x1c\xd8\x1c\xd8\x1d\x00\x00"s, {std::int64_t{0}, std::int64_t{0}},
-                                         std::unexpected(error::sharedref_not_complete));
+                                         std::unexpected(error::not_indexable));
     std::string const forward = "\x82\xd8\x1d\x00\xd8\x1c\x05"s;
     check_path<"$[1]", std::uint64_t>(forward, {std::int64_t{1}}, 5u);
-    check_path<"$[0]", std::uint64_t>(forward, {std::int64_t{0}}, std::unexpected(error::sharedref_index_not_marked));
+    check_path<"$[0]", std::uint64_t>(forward, {std::int64_t{0}}, 0u);
     check_path<"$.a", std::uint64_t>("\xa2\x41\x61\x01\x61\x61\x02"s, {"a"sv}, 2u);
 }
 
@@ -1141,8 +1144,9 @@ TEST_CASE("path: a tag that the path does not know is passed to its content")
     CHECK_EQ(cbor::at_path<"$.v[1]", int>(l), 2);
     CHECK_EQ(cbor::at_path<"$.m.k", int>(doc), 7);
     CHECK_EQ(cbor::at_path<"$.m.k", int>(l), 7);
-    CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared), 2);
-    CHECK_EQ(cbor::at_path<"$[1][1]", int>(*cbor::lazy::copy(shared)), 2);
+    CHECK_EQ(cbor::at_path<"$[0][1]", int>(shared), 2);
+    CHECK_EQ(cbor::at_path<"$[0][1]", int>(*cbor::lazy::copy(shared)), 2);
+    CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared).error(), error::not_indexable);
     CHECK_EQ(cbor::at_path<"$", int>("\xd9\x03\xe8\x05"s), 5);
     CHECK_EQ(cbor::at_path<"$", int>(*cbor::lazy::copy("\xd9\x03\xe8\x05"s)), 5);
     CHECK_EQ(cbor::lazy::copy("\xd9\x03\xe8\x05"s)->get<int>(), 5);
@@ -1193,17 +1197,17 @@ TEST_CASE("path: an index reads one element of a typed array")
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x51\x44\x3f\xc0\x00\x00"s)).error(), error::incorrect_type);
     CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x53\x50"s + std::string(16, '\0'))).error(), error::incorrect_type);
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\x43\x07\x00\x08"s)).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\xd8\x1c\x42\x07\x00"s)), 7);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\xd8\x1c\x42\x07\x00"s)).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd9\x03\xe8\xd8\x45\x42\x07\x00"s)), 7);
     auto const l = *cbor::lazy::copy(uint16_le);
     CHECK_EQ(cbor::at_path<"$.v[1]", int>(l), 0x108);
     std::string const shared = "\x82\xd8\x1c\xd8\x45\x44\x07\x00\x08\x01\xd8\x1d\x00"s;
-    CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared), 0x108);
-    CHECK_EQ(cbor::at_path<"$[1][-2]", double>(*cbor::lazy::copy(shared)), 7.0);
-    CHECK_EQ(cbor::at_path<"$[1][2]", int>(shared).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::at_path<"$[1][0][0]", int>(shared).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$[0][1]", int>(shared), 0x108);
+    CHECK_EQ(cbor::at_path<"$[0][-2]", double>(*cbor::lazy::copy(shared)), 7.0);
+    CHECK_EQ(cbor::at_path<"$[0][2]", int>(shared).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(shared).error(), error::not_indexable);
     CHECK(found(test::at_path("$.v[1]", l)) == V(0x108));
-    CHECK(found(test::at_path("$[1][0]", *cbor::lazy::copy(shared))) == V(7));
+    CHECK(found(test::at_path("$[0][0]", *cbor::lazy::copy(shared))) == V(7));
     CHECK(found(test::query("$.v[*]", l)) == A(7, 0x108));
     CHECK(found(test::query("$.v[1:]", l)) == A(0x108));
     CHECK(found(test::query("$.v[?@ > 7]", l)) == A(0x108));
@@ -1217,8 +1221,7 @@ TEST_CASE("path: an index reads one element of a typed array")
 }
 
 // A held lazy is a start point: at_path reads a path relative to it, from
-// its bytes, and falls back to the lazy walk when a tag 29 needs the marks
-// of the whole top-level item.
+// its bytes.
 TEST_CASE("at_path: a path from a held lazy")
 {
     std::string const s("\xa2\x63pad\x82\x01\x02\x64" "cars\x82\xa1\x62hp\x05\xa1\x62hp\x07", 24);
@@ -1227,9 +1230,9 @@ TEST_CASE("at_path: a path from a held lazy")
     CHECK_EQ(*cbor::at_path<"$[1].hp", std::int64_t>(*cars), 7);
     CHECK_EQ(cbor::at_path<"$[2].hp", std::int64_t>(*cars).error(), cbor::error::index_out_of_bounds);
     std::string const shared("\x82\xd8\x1c\xa1\x62hp\x05\xd8\x1d\x00", 11);
-    auto const second = cbor::lazy::copy(shared)->at(std::size_t{1});
-    REQUIRE(second.has_value());
-    CHECK_EQ(*cbor::at_path<"$.hp", std::int64_t>(*second), 5);
+    auto const first = cbor::lazy::copy(shared)->at(std::size_t{0});
+    REQUIRE(first.has_value());
+    CHECK_EQ(*cbor::at_path<"$.hp", std::int64_t>(*first), 5);
     std::string const text("\xa1\x61k\x62ok", 6);
     auto const word = cbor::at_path<"$.k", std::string_view>(*cbor::lazy::copy(text));
     REQUIRE(word.has_value());

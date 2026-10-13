@@ -227,25 +227,24 @@ TEST_CASE("diagnostic_notation: a chunk or a tag content with too few bytes is t
     CHECK_EQ(cbor::diagnostic_notation("\xc1\x19\x01"sv).error(), error::too_little_data);
 }
 
-// diagnostic_notation printed a tag 29 whose index names no shareable that came before it, and structs refused
-// the same bytes. A sharedref is now checked against the shareables seen so far, as lazy and structs check it.
-TEST_CASE("diagnostic_notation: a sharedref names a shareable that comes before it")
+// The owner decided that diagnostic notation interprets no tag. It prints 28(...) and 29(n) as plain tags and
+// checks no index and no tag content, also where a lazy or a struct decode would refuse the bytes.
+TEST_CASE("diagnostic_notation: tags 28 and 29 are plain tags")
 {
-    for (std::string_view const hex : {"d81d05"sv, "81d81d00"sv, "82d81c01d81d05"sv, "82d81d00d81c01"sv})
-        CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex(hex)).error(), error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("82d81c01d81d1bffffffffffffffff")).error(),
-             error::sharedref_index_not_marked);
-    CHECK(cbor::diagnostic_notation(bytes_of_hex("82d81c01d81c01")).has_value());
+    CHECK_EQ(inspected("d81d05"), "29(5)");
+    CHECK_EQ(inspected("81d81d00"), "[29(0)]");
+    CHECK_EQ(inspected("82d81d00d81c01"), "[29(0), 28(1)]");
+    CHECK_EQ(inspected("82d81c01d81d1bffffffffffffffff"), "[28(1), 29(18446744073709551615)]");
+    CHECK_EQ(inspected("82d81c01d81c01"), "[28(1), 28(1)]");
     CHECK_EQ(inspected("82d81c01d81d00"), "[28(1), 29(0)]");
-    CHECK_EQ(inspected("83d81c01d81cd81d00d81d01"), "[28(1), 28(29(0)), 29(1)]");
     CHECK_EQ(inspected("83d81c01d81cd81d00c1d81d01"), "[28(1), 28(29(0)), 1(29(1))]");
-    CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("83d81c6161d81cd81d00c1d81d01")).error(),
-             error::inadmissible_type_for_tag_content);
+    CHECK_EQ(inspected("83d81c6161d81cd81d00c1d81d01"), "[28(\"a\"), 28(29(0)), 1(29(1))]");
+    CHECK_EQ(inspected("d81d6178"), "29(\"x\")");
+    CHECK_EQ(inspected("c26474657874"), "2(\"text\")");
 }
 
-// The content check of a tag followed every sharedref of a chain 28(29(k)) back to the first shareable, so a chain
-// of n items cost n^2 steps: 180 KB took seconds. A shareable whose content is a sharedref now marks the content
-// that the sharedref names, so each check takes one step. A test that is quadratic again makes the suite slow.
+// A content check of a tag once followed every sharedref of a chain 28(29(k)) back to the first shareable, so a chain
+// of n items cost n^2 steps: 180 KB took seconds. A test that is quadratic again makes the suite slow.
 TEST_CASE("diagnostic_notation: a chain of shareables that refer to each other is read in linear time")
 {
     std::size_t const n = 5000;
@@ -272,7 +271,7 @@ TEST_CASE("diagnostic_notation: a tag encloses an indefinite-length item")
     CHECK_EQ(inspected("c07f6161ff"), "0((_ \"a\"))");
     CHECK_EQ(inspected("c25f4101ff"), "2((_ h'01'))");
     CHECK_EQ(inspected("d81c9f01ff"), "28([_ 1])");
-    CHECK_EQ(cbor::diagnostic_notation(bytes_of_hex("c09fff")).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(inspected("c09fff"), "0([_ ])");
 }
 
 // RFC 8949 3: each data item has at least its initial byte. diagnostic_notation refuses a count larger than the bytes

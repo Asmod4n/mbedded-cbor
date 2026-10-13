@@ -414,19 +414,28 @@ struct named_pair {
 
 } // namespace
 
-// Value sharing (tags 28 and 29) in a value, in an element and in a key: each reference reads as the item it names.
-TEST_CASE("structs: a shared reference reads as the item it names")
+// The owner decided on 2026-10-13 that an eager decode keeps one table of the tags 28 of one call. A tag 28 on a
+// plain member is allowed and keeps the value. A tag 29 needs a member that can share a value; no plain member
+// can, so it gives incorrect_type. A tag 29 to a mark in a skipped member gives sharedref_not_complete, a forward
+// index sharedref_index_not_marked, and a tag 28 or 29 on a key unsupported_value.
+TEST_CASE("structs: the table of tags 28 and 29 of one decode")
 {
-    auto const pair = cbor::structs<pair_ab>::decode("\xa2\xd8\x1c\x61\x61\xd8\x1c\x01\x61\x62\x82\xd8\x1d\x01\xd8\x1d\x01"s);
-    REQUIRE(pair.has_value());
-    CHECK(**pair == pair_ab{1, {1, 1}});
-    auto const keyed = cbor::structs<named_pair>::decode("\xa2\x61\x62\x81\xd8\x1c\x61\x61\xd8\x1d\x00\x07"s);
-    REQUIRE(keyed.has_value());
-    CHECK(**keyed == named_pair{{"a"}, 7});
+    auto const marked = cbor::structs<pair_ab>::decode("\xa2\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1c\x03"s);
+    REQUIRE(marked.has_value());
+    CHECK(**marked == pair_ab{2, {3}});
+    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa2\xd8\x1c\x61\x61\xd8\x1c\x01\x61\x62\x82\xd8\x1d\x01\xd8\x1d\x01"s).error(),
+             error::unsupported_value);
+    CHECK_EQ(cbor::structs<named_pair>::decode("\xa2\x61\x62\x81\xd8\x1c\x61\x61\xd8\x1d\x00\x07"s).error(),
+             error::unsupported_value);
     CHECK_EQ(cbor::structs<std::vector<std::uint64_t>>::decode("\x81\xd8\x1d\x00"s).error(), error::sharedref_index_not_marked);
-    auto const skipped = cbor::structs<pair_ab>::decode("\xa3\x61\x63\xd8\x1c\x00\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1d\x01"s);
-    REQUIRE(skipped.has_value());
-    CHECK(**skipped == pair_ab{2, {2}});
+    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa3\x61\x63\xd8\x1c\x00\x61\x61\x02\x61\x62\x81\xd8\x1d\x00"s).error(),
+             error::sharedref_not_complete);
+    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa3\x61\x63\xd8\x1c\x00\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1d\x01"s).error(),
+             error::incorrect_type);
+    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x18\x1d"s).error(),
+             error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x61x"s).error(),
+             error::inadmissible_type_for_tag_content);
 }
 
 template <class Encoded>
@@ -719,28 +728,29 @@ TEST_CASE("structs: an integer key written as a bignum that fits")
 
 
 
-// The owner decided that an eager decode decodes each marked value once and that a tag 29 takes the value of its
-// mark. A tag 29 inside the value that its mark is still reading names a value under construction: no type without a
-// pointer can hold it, so the decode ends with sharedref_not_complete. A forward index names no mark.
-TEST_CASE("structs: a tag 29 takes the value of its mark and never the value under construction")
+// A tag 29 into a member that is no shared pointer gives incorrect_type, also inside the value that its mark is still
+// reading. Nothing is decoded twice. A forward index names no mark. A tag 28 counts one level of nesting, as in a
+// tree decode.
+TEST_CASE("structs: a tag 29 into a plain member is incorrect_type")
 {
     using numbers = std::vector<std::uint64_t>;
-    CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\xd8\x1c\x81\xd8\x1d\x00"s).error(),
-             error::sharedref_not_complete);
+    CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\xd8\x1c\x81\xd8\x1d\x00"s).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::map<std::uint64_t, numbers>>::decode("\xd8\x1c\xa1\x01\xd8\x1d\x00"s).error(),
-             error::sharedref_not_complete);
+             error::incorrect_type);
     CHECK_EQ(cbor::structs<std::vector<std::vector<numbers>>>::decode(
                  "\xd8\x1c\x81\xd8\x1c\x82\xd8\x1d\x00\xd8\x1d\x01"s)
                  .error(),
-             error::sharedref_not_complete);
-    CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c\xd8\x1d\x00"s).error(), error::sharedref_not_complete);
+             error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c\xd8\x1d\x00"s).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<numbers>::decode("\x82\xd8\x1d\x00\xd8\x1c\x01"s).error(), error::sharedref_index_not_marked);
-    auto const dag = cbor::structs<std::vector<numbers>>::decode("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"s);
-    REQUIRE(dag.has_value());
-    CHECK(**dag == std::vector<numbers>{{1, 2}, {1, 2}, {1, 2}});
-    auto const chained = cbor::structs<numbers>::decode("\x83\xd8\x1c\x05\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01"s);
-    REQUIRE(chained.has_value());
-    CHECK(**chained == numbers{5, 5, 5});
+    CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"s).error(),
+             error::incorrect_type);
+    test::limits_guard const depth{{.nesting_depth = 16}};
+    std::string chain;
+    for (int i = 0; i < 16; ++i)
+        chain += "\xd8\x1c"s;
+    CHECK_EQ(cbor::structs<std::uint64_t>::decode(chain + "\x05"s), 5u);
+    CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c"s + chain + "\x05"s).error(), error::nesting_depth_exceeded);
 }
 
 #endif

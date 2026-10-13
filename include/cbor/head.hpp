@@ -323,7 +323,7 @@ class heads
             auto const r = head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (error const c = validity::check_tag_content(tag, r->major, r->info).error_or(error{}); c != error{})
+            if (error const c = validity::check_tag_content(tag, r->major).error_or(error{}); c != error{})
                 [[unlikely]]
                 return std::unexpected(c);
             if (error const c = validity::check_definite_length(r->major, r->info).error_or(error{}); c != error{})
@@ -647,7 +647,6 @@ class heads
         return tag != std::to_underlying(rfc8949::tag_number::unsigned_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::negative_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item) &&
-               tag != std::to_underlying(rfc8949::tag_number::sharedref) &&
                !validity::typed_array_check(tag, 0).has_value();
     }
 
@@ -730,6 +729,17 @@ class heads
             h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))
             return validity::subspan(encoded, h->at);
         return encoded;
+    }
+
+    static constexpr validity::offset self_described_cbor_content_at(std::string_view const encoded, validity::offset at)
+    {
+        for (;;) {
+            auto const h = raw_head_read(encoded, at, validity::limit_checks<false>{});
+            if (!h || h->major != major_type::tag ||
+                h->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))
+                return at;
+            at = h->at;
+        }
     }
 
     static constexpr bool break_at(std::string_view const encoded, validity::offset const at)

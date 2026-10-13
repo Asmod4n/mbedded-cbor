@@ -165,7 +165,7 @@ class generic
             auto const b = d.head_decode();
             if (!b) [[unlikely]]
                 return std::unexpected(b.error());
-            if (error const c = validity::check_tag_content(h->argument, b->major, b->info).error_or(error{});
+            if (error const c = validity::check_tag_content(h->argument, b->major).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = d.byte_string_decode(b->argument);
@@ -211,8 +211,8 @@ class generic
     static std::expected<void, error> generic_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                    std::size_t const depth, std::size_t const depth_max)
     {
-        std::size_t first_mark = 0;
-        std::size_t marks = 0;
+        using slot = typename value_sharing::sharing_decoder<Checked>::slot;
+        std::size_t const first_mark = d.slots.size();
         for (;;) {
             heads::decoder<Checked> look = d;
             auto const h = look.head_decode();
@@ -222,71 +222,28 @@ class generic
                 break;
             if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
                 d.encoded = look.encoded;
-                std::size_t const index = d.message.mark(d);
-                if (marks == 0)
-                    first_mark = index;
-                ++marks;
-                if (d.marked_values.size() <= index)
-                    d.marked_values.resize(index + 1);
-                d.marked_values[index].open = true;
+                d.slots.push_back(slot::open);
                 continue;
             }
             if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
                 break;
-            if constexpr (std::copy_constructible<U>) {
-                heads::decoder<Checked> number = look;
-                auto const n = number.head_decode();
-                if (!n) [[unlikely]]
-                    return std::unexpected(n.error());
-                if (error const e = validity::check_tag_content(h->argument, n->major, n->info).error_or(error{});
-                    e != error{}) [[unlikely]]
-                    return std::unexpected(e);
-                auto const index = value_sharing::check_sharedref_index(n->argument, d.message.sharedrefs.size());
-                if (!index) [[unlikely]]
-                    return std::unexpected(index.error());
-                std::size_t const i = std::to_underlying(*index);
-                if (i < d.marked_values.size()) {
-                    auto const &slot = d.marked_values[i];
-                    if (slot.open) [[unlikely]]
-                        return std::unexpected(error::sharedref_not_complete);
-                    if (U const *const decoded = std::any_cast<U>(&slot.value)) {
-                        out = *decoded;
-                        d.encoded = number.encoded;
-                        return marked_values_store(d, out, first_mark, marks);
-                    }
-                }
-            }
-            auto const target = value_sharing::sharedref_follow(
-                d.message.encoded, validity::distance(d.message.encoded, d.encoded),
-                [&d](validity::offset) -> auto const & { return d.message.sharedrefs; }, &lazy::offset, false,
-                d.checks);
-            if (!target) [[unlikely]]
-                return std::unexpected(target.error());
-            d.encoded = look.encoded;
-            if (auto const n = d.head_decode(); !n) [[unlikely]]
+            auto const n = look.head_decode();
+            if (!n) [[unlikely]]
                 return std::unexpected(n.error());
-            std::string_view const rest = d.encoded;
-            d.encoded = validity::subspan(d.message.encoded, *target);
-            auto const r = generic_value_read(d, out, depth + 1, depth_max);
-            d.encoded = rest;
-            if (!r) [[unlikely]]
-                return r;
-            return marked_values_store(d, out, first_mark, marks);
+            if (error const e = validity::check_tag_content(h->argument, n->major).error_or(error{});
+                e != error{}) [[unlikely]]
+                return std::unexpected(e);
+            auto const index = value_sharing::check_sharedref_index(n->argument, d.slots.size());
+            if (!index) [[unlikely]]
+                return std::unexpected(index.error());
+            if (d.slots[std::to_underlying(*index)] == slot::in_skipped_member) [[unlikely]]
+                return std::unexpected(error::sharedref_not_complete);
+            return std::unexpected(error::incorrect_type);
         }
-        if (auto const r = generic_value_read(d, out, depth, depth_max); !r) [[unlikely]]
+        if (auto const r = generic_value_read(d, out, depth + (d.slots.size() - first_mark), depth_max); !r)
+            [[unlikely]]
             return r;
-        return marked_values_store(d, out, first_mark, marks);
-    }
-
-    template <class U, bool Checked>
-    static std::expected<void, error> marked_values_store(value_sharing::sharing_decoder<Checked> &d, U const &decoded,
-                                                          std::size_t const first_mark, std::size_t const marks)
-    {
-        for (auto &slot : std::span(d.marked_values).subspan(first_mark, marks)) {
-            if constexpr (std::copy_constructible<U>)
-                slot.value = decoded;
-            slot.open = false;
-        }
+        std::ranges::fill(std::span(d.slots).subspan(first_mark, d.slots.size() - first_mark), slot::value_member);
         return {};
     }
 
@@ -511,34 +468,12 @@ class generic
             return std::unexpected(error::incorrect_type);
         std::bitset<count> found;
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
-            validity::offset reference_at = validity::distance(d.message.encoded, d.encoded);
             auto k = d.head_decode();
-            while (k && k->major == major_type::tag &&
-                   k->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-                d.message.mark(d);
-                reference_at = validity::distance(d.message.encoded, d.encoded);
-                k = d.head_decode();
-            }
-            heads::decoder<Checked> referenced{};
-            bool const indirect = k && k->major == major_type::tag &&
-                                  k->argument == std::to_underlying(rfc8949::tag_number::sharedref);
-            if (indirect) {
-                auto const target = value_sharing::sharedref_follow(
-                    d.message.encoded, reference_at, [&d](validity::offset) -> auto const & { return d.message.sharedrefs; },
-                    &lazy::offset, false, d.checks);
-                if (!target) [[unlikely]]
-                    return std::unexpected(target.error());
-                if (auto const n = d.head_decode(); !n) [[unlikely]]
-                    return std::unexpected(n.error());
-                referenced = heads::decoder<Checked>{validity::subspan(d.message.encoded, *target), d.checks};
-                k = referenced.head_decode();
-            }
-            heads::decoder<Checked> &from = indirect ? referenced : d;
             if (!k) [[unlikely]]
                 return std::unexpected(k.error());
             std::string_view text;
             if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
-                auto const read = from.bignum_decode(k->argument);
+                auto const read = d.bignum_decode(k->argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
                 if (*read)
@@ -547,13 +482,13 @@ class generic
                                         : major_type::unsigned_integer,
                                     heads::preferred_argument_info(**read), **read};
             } else if (k->major == major_type::text_string) {
-                auto const t = from.byte_string_decode(k->argument);
+                auto const t = d.byte_string_decode(k->argument);
                 if (!t) [[unlikely]]
                     return std::unexpected(t.error());
                 text = *t;
             } else if (k->major != major_type::unsigned_integer && k->major != major_type::negative_integer) {
                 if (k->major == major_type::byte_string) {
-                    if (auto const b = from.byte_string_decode(k->argument); !b) [[unlikely]]
+                    if (auto const b = d.byte_string_decode(k->argument); !b) [[unlikely]]
                         return std::unexpected(b.error());
                 } else if (k->major == major_type::array || k->major == major_type::map ||
                            k->major == major_type::tag) [[unlikely]] {
@@ -570,7 +505,7 @@ class generic
                 if (!matched && key_matches<U, i>(*k, text)) {
                     matched = true;
                     if (found.test(i)) {
-                        r = well_formedness::item_skip(d, d.message);
+                        r = well_formedness::item_skip(d, d);
                     } else {
                         found.set(i);
                         r = generic_read(d, out.[:members[i]:], depth + 1, depth_max);
@@ -578,7 +513,7 @@ class generic
                 }
             }
             if (!matched) {
-                if (auto const s = well_formedness::item_skip(d, d.message); !s) [[unlikely]]
+                if (auto const s = well_formedness::item_skip(d, d); !s) [[unlikely]]
                     return s;
             } else if (!r) [[unlikely]] {
                 return r;
@@ -1033,7 +968,7 @@ private:
     {
         if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
             return std::unexpected(r.error());
-        value_sharing::sharing_decoder<Checked> d{{encoded, checks}, {{}, encoded, {}, validity::offset{}, {}}};
+        value_sharing::sharing_decoder<Checked> d{{encoded, checks}, {}};
         if (auto const r = generic::generic_read(d, out, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (!d.encoded.empty()) [[unlikely]]

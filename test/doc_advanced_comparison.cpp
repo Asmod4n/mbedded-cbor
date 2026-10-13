@@ -39,21 +39,23 @@ TEST_CASE("doc advanced comparison: iterate an array")
     CHECK_EQ(sum, 6);
 }
 
-// The section "Shared values" reads tag 29 as the item that tag 28 marks, through a lazy and through structs.
+// The section "Shared values" shows that a lazy reads tag 29 as a plain tag over its index, and that structs refuses
+// a tag 29 into a member that cannot share.
 TEST_CASE("doc advanced comparison: shared values")
 {
     std::string const bytes = "\x82\xd8\x1c\x61x\xd8\x1d\x00"s;
     // begin shared
-    auto const second = cbor::lazy::copy(bytes)->at(1)->get<std::string_view>();
-    // **second is "x"
+    auto const second = cbor::lazy::copy(bytes)->at(1);
+    // second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0
     // end shared
-    CHECK_EQ(**second, "x"sv);
+    CHECK_EQ(second->type(), cbor::type::tag);
+    CHECK_EQ(second->get<std::uint64_t>(), 0u);
 #ifdef __cpp_impl_reflection
     // begin shared-structs
     auto const v = cbor::structs<std::vector<std::string>>::decode(bytes);
-    // **v is {"x", "x"}
+    // v.error() is cbor::error::incorrect_type
     // end shared-structs
-    CHECK_EQ(**v, std::vector<std::string>{"x", "x"});
+    CHECK_EQ(v.error(), error::incorrect_type);
 #endif
 }
 

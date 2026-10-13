@@ -202,7 +202,8 @@ TEST_CASE("doc advanced path: a typed read of an empty lazy throws")
 TEST_CASE("doc advanced path: tags on the way")
 {
     CHECK_EQ(cbor::at_path<"$.a[1]", int>("\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s), 2);
-    CHECK_EQ(cbor::at_path<"$[1].k", int>("\x82\xd8\x1c\xa1\x61k\x07\xd8\x1d\x00"s), 7);
+    CHECK_EQ(cbor::at_path<"$[0].k", int>("\x82\xd8\x1c\xa1\x61k\x07\xd8\x1d\x00"s), 7);
+    CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\xd8\x1c\xa1\x61k\x07\xd8\x1d\x00"s), 0);
     CHECK_EQ(cbor::at_path<"$.a", int>("\xd9\xd9\xf7\xa1\x61\x61\x05"s), 5);
     std::string const other = preferred(M("v"s, tagged{1000, A(1, 2)}));
     CHECK_EQ(cbor::at_path<"$.v[1]", int>(other), 2);
@@ -248,7 +249,6 @@ TEST_CASE("doc advanced path: the errors")
     CHECK_EQ(cbor::at_path<"$.s[0]", int>(bytes).error(), error::not_indexable);
     CHECK_EQ(cbor::at_path<"$.s", int>(bytes).error(), error::incorrect_type);
     CHECK_EQ(cbor::at_path<"$.a[1]", int>(bytes.substr(0, 5)).error(), error::too_little_data);
-    CHECK_EQ(cbor::at_path<"$.a", int>("\xa1\x61\x61\xd8\x1d\x05"s).error(), error::sharedref_index_not_marked);
     CHECK_THROWS_AS((void)test::at_path("$", cbor::lazy{}), std::logic_error);
 }
 
@@ -281,16 +281,17 @@ TEST_CASE("doc advanced path: the limits")
     }
 }
 
-// The section "Threads" shows that a lazy is bound to one thread and that cbor::transfer hands it on.
+// The section "Threads" shows that a lazy is read from another thread, and that a tag 29 is a plain tag there too.
 TEST_CASE("doc advanced path: a lazy in another thread")
 {
-    static_assert(cbor::is_thread_bound_v<cbor::lazy>);
-    static_assert(cbor::is_thread_bound_v<cbor::owning_ref<std::string_view>>);
+    auto const l = *cbor::lazy::copy(preferred(A(1, 2)));
     std::int64_t read = 0;
-    std::jthread([&read](cbor::sendable<cbor::lazy> const &v) { read = *cbor::at_path<"$[1]", std::int64_t>(v.value); },
-                 cbor::transfer(*cbor::lazy::copy(preferred(A(1, 2)))))
-        .join();
+    std::jthread([&read, &l] { read = *cbor::at_path<"$[1]", std::int64_t>(l); }).join();
     CHECK_EQ(read, 2);
+    auto const shared = *cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
+    std::int64_t content = -1;
+    std::jthread([&content, &shared] { content = *cbor::at_path<"$[1]", std::int64_t>(shared); }).join();
+    CHECK_EQ(content, 0);
 }
 
 
@@ -383,20 +384,20 @@ TEST_CASE("doc advanced path: keys compare by value")
     CHECK(*test::query("$[?@ > 0]", d) == A(1, 2));
 }
 
-// The section "Tags on the way" states that a key behind tag 28 or 55799 is matched, that tag 55799 inside tag 24
-// is passed, and the errors of a tag whose content is wrong.
+// The section "Tags on the way" states that a key behind tag 55799 is matched and a key behind tag 28 is a tag,
+// that tag 55799 inside tag 24 is passed, and the errors of a tag whose content is wrong.
 TEST_CASE("doc advanced path: tags in detail")
 {
-    CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd8\x1c\x61k\x01"s), 1);
+    CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd8\x1c\x61k\x01"s).error(), error::key_not_found);
     CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\xd9\xf7\x61k\x01"s), 1);
-    CHECK(*test::at_path<"$.k">(*cbor::lazy::copy("\xa1\xd8\x1c\x61k\x01"s)) == V(1));
+    CHECK_EQ(test::at_path<"$.k">(*cbor::lazy::copy("\xa1\xd8\x1c\x61k\x01"s)).error(), error::key_not_found);
     std::string const inside = "\xa1\x61\x61\xd8\x18\x46\xd9\xd9\xf7\x82\x01\x02"s;
     CHECK_EQ(cbor::at_path<"$.a[1]", int>(inside), 2);
     CHECK(*test::at_path("$.a[1]", *cbor::lazy::copy(inside)) == V(2));
     CHECK_EQ(cbor::at_path<"$.a", int>("\xa1\x61\x61\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
-    CHECK(cbor::at_path("$[0][0]", *cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)).has_value());
+    CHECK(cbor::at_path("$[0]", *cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)).has_value());
     std::string const many = "\x82\xd8\x1c\x88\x00\x00\x00\x00\x00\x00\x00\x00\xd8\x1d\x00"s;
-    CHECK_EQ(test::query("$[*][*]", *cbor::lazy::copy(many)).error(), error::nodelist_too_long);
+    CHECK(*test::query("$[*][*]", *cbor::lazy::copy(many)) == A(0, 0, 0, 0, 0, 0, 0, 0));
 }
 
 // The section "What the form over bytes checks" states that a read stops at the target, so bytes after it are not read.

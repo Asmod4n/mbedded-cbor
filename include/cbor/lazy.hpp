@@ -144,7 +144,7 @@ inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner,
         return std::unexpected(r.error());
     std::string_view const content = heads::self_described_cbor_content(encoded);
     return lazy{
-        std::make_shared<value_sharing::top_level_item>(std::move(owner), content, std::vector<lazy>{}, validity::offset{}), validity::offset{}, {}};
+        std::make_shared<value_sharing::top_level_item>(std::move(owner), content), validity::offset{}, {}};
 }
 
 template <class F>
@@ -221,10 +221,8 @@ value_sharing::key_find(Iterator it, Last const last, Key const key,
         }
         if (it.failure != error{}) [[unlikely]]
             return std::unexpected(it.failure);
-        auto const key_at = shared_resolve(*it.top_level, it.key, checks);
-        if (!key_at) [[unlikely]]
-            return std::unexpected(key_at.error());
-        heads::decoder<Checked> probe{validity::subspan(it.top_level->encoded, *key_at),
+        validity::offset const key_at = heads::self_described_cbor_content_at(it.top_level->encoded, it.key);
+        heads::decoder<Checked> probe{validity::subspan(it.top_level->encoded, key_at),
                                       checks};
         auto const k = probe.head_decode();
         if (!k) [[unlikely]]
@@ -241,10 +239,9 @@ value_sharing::key_find(Iterator it, Last const last, Key const key,
             equal = (k->major == major_type::unsigned_integer && key >= 0 && k->argument == static_cast<std::uint64_t>(key)) ||
                     (k->major == major_type::negative_integer && key < 0 && k->argument == static_cast<std::uint64_t>(-1 - key));
             if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
-                auto const content = shared_resolve(*it.top_level, validity::distance(it.top_level->encoded, probe.encoded), checks);
-                if (!content) [[unlikely]]
-                    return std::unexpected(content.error());
-                heads::decoder<Checked> d{validity::subspan(it.top_level->encoded, *content), checks};
+                validity::offset const content =
+                    heads::self_described_cbor_content_at(it.top_level->encoded, validity::distance(it.top_level->encoded, probe.encoded));
+                heads::decoder<Checked> d{validity::subspan(it.top_level->encoded, content), checks};
                 auto const read = d.bignum_decode(k->argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
@@ -256,7 +253,7 @@ value_sharing::key_find(Iterator it, Last const last, Key const key,
         if (equal)
             return std::pair{std::move(it), true};
         if constexpr (Sorted) {
-            plain = plain && *key_at == it.key && k->major != major_type::tag;
+            plain = plain && key_at == it.key && k->major != major_type::tag;
             if (plain) {
                 std::string_view read = validity::subspan(it.top_level->encoded, it.key);
                 read.remove_suffix(validity::subspan(it.top_level->encoded, it.value).size());
@@ -441,19 +438,20 @@ inline std::expected<cbor::type, error> lazy::type() const
                                     return std::unexpected(found.error());
                                 return heads::type_of(found->h.major, found->h.info, found->h.argument);
                             }
-                            auto const at = value_sharing::shared_resolve(*top_level, offset, checks);
-                            if (!at) [[unlikely]]
-                                return std::unexpected(at.error());
-                            auto const h = heads::raw_head_read(top_level->encoded, *at, checks);
+                            validity::offset const at = heads::self_described_cbor_content_at(top_level->encoded, offset);
+                            auto const h = heads::raw_head_read(top_level->encoded, at, checks);
                             if (!h) [[unlikely]]
                                 return std::unexpected(h.error());
                             if (!heads::is_bignum(h->major, h->argument)) [[likely]]
                                 return heads::type_of(h->major, h->info, h->argument);
-                            auto const content = value_sharing::shared_resolve(*top_level, h->at, checks);
-                            if (!content) [[unlikely]]
-                                return std::unexpected(content.error());
-                            heads::decoder<Checked> d{validity::subspan(top_level->encoded, *content),
-                                                      checks};
+                            validity::offset const content = heads::self_described_cbor_content_at(top_level->encoded, h->at);
+                            auto const c = heads::raw_head_read(top_level->encoded, content, checks);
+                            if (!c) [[unlikely]]
+                                return std::unexpected(c.error());
+                            if (c->major != major_type::byte_string ||
+                                !validity::check_definite_length(c->major, c->info).has_value())
+                                return heads::type_of(h->major, h->info, h->argument);
+                            heads::decoder<Checked> d{validity::subspan(top_level->encoded, content), checks};
                             auto const read = d.bignum_decode(h->argument);
                             if (!read) [[unlikely]]
                                 return std::unexpected(read.error());
@@ -626,12 +624,10 @@ auto lazy::get(limit_values const loaded) const
                 std::uint64_t argument = h.argument;
                 if (heads::is_bignum(h.major, h.argument)) {
                     negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
-                    auto const content = value_sharing::shared_resolve(
-                        *source, validity::distance(source->encoded, d.encoded), checks);
-                    if (!content) [[unlikely]]
-                        return std::unexpected(content.error());
+                    validity::offset const content =
+                        heads::self_described_cbor_content_at(source->encoded, validity::distance(source->encoded, d.encoded));
                     d = heads::decoder<Checked>{
-                        validity::subspan(source->encoded, *content), checks};
+                        validity::subspan(source->encoded, content), checks};
                     auto const read = d.bignum_decode(h.argument);
                     if (!read) [[unlikely]]
                         return std::unexpected(read.error());
@@ -648,12 +644,10 @@ auto lazy::get(limit_values const loaded) const
                 return static_cast<T>(negative ? ~magnitude : magnitude);
             } else if constexpr (std::is_same_v<T, double>) {
                 if (heads::is_bignum(h.major, h.argument)) [[unlikely]] {
-                    auto const content = value_sharing::shared_resolve(
-                        *source, validity::distance(source->encoded, d.encoded), checks);
-                    if (!content) [[unlikely]]
-                        return std::unexpected(content.error());
+                    validity::offset const content =
+                        heads::self_described_cbor_content_at(source->encoded, validity::distance(source->encoded, d.encoded));
                     d = heads::decoder<Checked>{
-                        validity::subspan(source->encoded, *content), checks};
+                        validity::subspan(source->encoded, content), checks};
                     auto const read = d.bignum_decode(h.argument);
                     if (!read) [[unlikely]]
                         return std::unexpected(read.error());
@@ -823,7 +817,8 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::bignum_decode
                                                                                std::size_t const depth)
 {
     auto const next = heads::raw_head_read(d.encoded, validity::offset{}, d.checks);
-    if (!next || next->major != major_type::byte_string)
+    if (!next || next->major != major_type::byte_string ||
+        !validity::check_definite_length(next->major, next->info).has_value())
         return nullptr;
     if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -840,15 +835,6 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::bignum_decode
                 heads::preferred_argument_info(**read),
                 {.u64 = **read}};
     return &node;
-}
-
-template <bool Checked>
-error value_sharing::tree_decoder<Checked>::bignum_content_check(std::uint64_t const tag)
-{
-    auto const inner = heads::raw_head_read(d.encoded, validity::offset{}, d.checks);
-    if (!inner || !heads::is_bignum(inner->major, inner->argument)) [[likely]]
-        return error{};
-    return validity::check_tag_content(tag, inner->major, inner->info).error_or(error{});
 }
 
 template <bool Checked>
@@ -920,31 +906,6 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
         if (heads::is_bignum(head.major, head.argument))
             if (auto const r = bignum_decode(node, head.argument, depth); !r || *r != nullptr)
                 return r;
-        validity::offset const content_at = validity::distance(top_level.encoded, d.encoded);
-        validity::offset const head_at{std::to_underlying(content_at) - heads::initial_byte_size -
-                                       heads::argument_size(head.info)};
-        if (head.argument == std::to_underlying(rfc8949::tag_number::shareable))
-            marks.push_back(head_at);
-        else if (head.argument == std::to_underlying(rfc8949::tag_number::sharedref))
-            decoded.sharedrefs.push_back({&node, &top_level, &marks, head_at});
-        else if (error const b = bignum_content_check(head.argument); b != error{}) [[unlikely]]
-            return std::unexpected(b);
-        else
-            for (validity::offset at = content_at;;) {
-                auto const c = heads::raw_head_read(top_level.encoded, at, d.checks);
-                if (!c) [[unlikely]]
-                    return std::unexpected(c.error());
-                if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-                    at = c->at;
-                    continue;
-                }
-                if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::sharedref))
-                    break;
-                if (error const e = validity::check_tag_content(head.argument, c->major, c->info).error_or(error{});
-                    e != error{}) [[unlikely]]
-                    return std::unexpected(e);
-                break;
-            }
         auto const content =
             item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1);
         if (!content) [[unlikely]]
@@ -952,20 +913,15 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
         node.via.tag = {head.argument, *content};
         if (head.argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
             return &node;
-        item const *bytes_item = *content;
-        while (bytes_item->type == cbor::type::tag &&
-               bytes_item->via.tag.number == std::to_underlying(rfc8949::tag_number::shareable))
-            bytes_item = bytes_item->via.tag.content;
+        item const *const bytes_item = *content;
         if (bytes_item->type != cbor::type::byte_string) {
             decoded.encoded_cbor_data_items.emplace_back(&node, nullptr);
             return &node;
         }
         std::span<std::byte const> const encoded = bytes_item->via.bin;
         top_level_item &nested = decoded.embedded.emplace_front(
-            top_level.owner, std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()),
-            std::vector<lazy>{}, validity::offset{});
-        std::vector<validity::offset> &nested_marks = decoded.embedded_marks.emplace_front();
-        tree_decoder inner{decoded, nested, nested_marks, {nested.encoded, d.checks}, validity::offset{}, depth_max};
+            top_level.owner, std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()));
+        tree_decoder inner{decoded, nested, {nested.encoded, d.checks}, validity::offset{}, depth_max};
         auto const data_item =
             inner.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 2);
         if (!data_item) [[unlikely]]
@@ -1008,17 +964,11 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
                 top_level, validity::checked_mul(encoded.size(), sizeof(item))
                                .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
                                .value_or(validity::initial_size_limit));
-            if (offset != validity::offset{})
-                std::ranges::copy(top_level->sharedrefs_read(offset) | std::views::transform(&lazy::offset) |
-                                      std::views::take_while([this](validity::offset const at) { return at <= offset; }),
-                                  std::back_inserter(decoded->marks));
-            value_sharing::tree_decoder<Checked> tree{
-                *decoded, *top_level, decoded->marks, {encoded, checks}, offset, depth_max};
+            value_sharing::tree_decoder<Checked> tree{*decoded, *top_level, {encoded, checks}, offset, depth_max};
             auto const built =
                 tree.item_decode(std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0);
             if (!built) [[unlikely]]
                 return std::unexpected(built.error());
-            std::ranges::sort(decoded->sharedrefs, std::less<>{}, &value_sharing::zone::sharedref::reference);
             std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &value_sharing::zone::link::first);
             return std::shared_ptr<item const>(*built, value_sharing::zone_owner{std::move(decoded)});
         });

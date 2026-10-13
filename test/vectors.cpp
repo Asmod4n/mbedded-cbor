@@ -415,10 +415,6 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         return value{std::move(m)};
     }
     case cbor::major_type::tag: {
-        // The decode only stores a tag 29. The reader of the enclosing tag checks the value that the tag 29 names.
-        if (cbor::item const &inner = *it.via.tag.content; inner.type == cbor::type::tag && inner.via.tag.number == 29)
-            if (auto const r = named_content_check(argument_of(it), cbor::shared_value_resolve(*decoded_item, inner)); !r)
-                return std::unexpected(r.error());
         // RFC 8949 3: the content follows the head, whose argument takes 1 << (ai - 24) bytes from ai 24 on.
         std::size_t const argument_bytes =
             it.additional_information < 24 ? 0 : std::size_t{1} << (it.additional_information - 24);
@@ -594,11 +590,11 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
             CHECK(l.has_value());
             CHECK(text.has_value());
         } else if (v.encoded == "\xc1\xa1\x61\x61\x00"sv || v.encoded == "\xc0\xa1\x61\x61\x00"sv) {
-            // RFC 8949 3.4.1 and 3.4.2 make a map invalid as the content of tag 0 or 1, and RFC 8949 5.3.2
-            // names the error.
-            CHECK_EQ(d.error(), error::inadmissible_type_for_tag_content);
-            CHECK_EQ(l.error(), error::inadmissible_type_for_tag_content);
-            CHECK_EQ(text.error(), error::inadmissible_type_for_tag_content);
+            // RFC 8949 3.4.1 and 3.4.2 make a map invalid as the content of tag 0 or 1. The library interprets
+            // no tag 0 or 1 (owner, 2026-10-13), so the tag passes as a plain tag over the map.
+            CHECK(d.has_value());
+            CHECK(l.has_value());
+            CHECK(text.has_value());
         } else {
             CHECK_FALSE(d.has_value());
             CHECK_FALSE(l.has_value());
@@ -641,92 +637,27 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
     CHECK_EQ(checked, 11u);
 }
 
-// RFC 8949 3.4.1: the content of tag 0 is a text string. RFC 8949 3.4.2: the content of tag 1 is an unsigned or
-// negative integer (major types 0 and 1) or a float (major type 7 with additional information 25, 26 or 27).
-// Every other content is invalid. One item of each major type, each float width and two simple values goes
-// into each tag, and decode, lazy and diagnostic_notation give the same answer.
-TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation refuse every content that RFC 8949 3.4.1 and 3.4.2 forbid")
+// RFC 8949 3.4.1 and 3.4.2 name the content of tags 0 and 1, but the library interprets neither tag (owner,
+// 2026-10-13). So every content passes as a plain tag in decode, lazy and diagnostic_notation: one item of each
+// major type, each float width and two simple values, alone and behind a tag 28 or a tag 29.
+TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation pass every content")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    struct content {
-        std::string_view encoded;
-        bool date_time_string;
-        bool epoch_based_date_time;
+    std::array<std::string_view, 12> const contents{
+        "\x00"sv, "\x20"sv, "\x40"sv, "\x60"sv, "\x80"sv, "\xa0"sv, "\xc2\x40"sv, "\xf4"sv, "\xf8\x20"sv,
+        "\xf9\x3c\x00"sv, "\xfa\x3f\x80\x00\x00"sv, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv,
     };
-    std::array<content, 12> const contents{{
-        {"\x00"sv, false, true},
-        {"\x20"sv, false, true},
-        {"\x40"sv, false, false},
-        {"\x60"sv, true, false},
-        {"\x80"sv, false, false},
-        {"\xa0"sv, false, false},
-        {"\xc2\x40"sv, false, false},
-        {"\xf4"sv, false, false},
-        {"\xf8\x20"sv, false, false},
-        {"\xf9\x3c\x00"sv, false, true},
-        {"\xfa\x3f\x80\x00\x00"sv, false, true},
-        {"\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv, false, true},
-    }};
-    for (content const &c : contents)
+    for (std::string_view const c : contents)
         for (char const tag : {'\xc0', '\xc1'}) {
-            std::string const wire = std::string(1, tag) + std::string(c.encoded);
-            CAPTURE(wire);
-            bool const admitted = tag == '\xc0' ? c.date_time_string : c.epoch_based_date_time;
-            auto const d = decoded(wire);
-            auto const l = lazy_value_of(wire);
-            auto const text = cbor::diagnostic_notation(wire);
-            if (admitted) {
-                CHECK(d.has_value());
-                CHECK(l.has_value());
-                CHECK(text.has_value());
-            } else {
-                CHECK_EQ(d.error(), error::inadmissible_type_for_tag_content);
-                CHECK_EQ(l.error(), error::inadmissible_type_for_tag_content);
-                CHECK_EQ(text.error(), error::inadmissible_type_for_tag_content);
+            std::string const plain = std::string(1, tag) + std::string(c);
+            std::string const marked = "\x82\xd8\x1c"s + std::string(c) + tag + "\xd8\x1d\x00"s;
+            std::string const inside = std::string(1, tag) + "\xd8\x1c"s + std::string(c);
+            std::string const forward = std::string(1, tag) + "\xd8\x1d\x00"s;
+            for (std::string const &wire : {plain, marked, inside, forward}) {
+                CAPTURE(wire);
+                CHECK(decoded(wire).has_value());
+                CHECK(lazy_value_of(wire).has_value());
+                CHECK(cbor::diagnostic_notation(wire).has_value());
             }
         }
-}
-
-// A content of tag 0 or 1 may be a tag 28 or a tag 29 (RFC 8949 3.4.1, 3.4.2; value-sharing). The check of the
-// content type must read the value that a tag 29 names. A fuzzer found [28(0), 0(29(0))] accepted by decode,
-// and the encoder wrote 0(0), which no reader accepts. decode, lazy and diagnostic_notation give the same answer for each.
-TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the value it names")
-{
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    struct shared_content {
-        std::string_view encoded;
-        error refused;
-    };
-    std::array<shared_content, 12> const contents{{
-        {"\x82\xd8\x1c\x00\xc0\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\x82\xd8\x1c\x60\xc0\xd8\x1d\x00"sv, error{}},
-        {"\x82\xd8\x1c\x00\xc1\xd8\x1d\x00"sv, error{}},
-        {"\x82\xd8\x1c\x60\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\xc1\xd8\x1c\x00"sv, error{}},
-        {"\xc0\xd8\x1c\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\xc1\xd8\x1d\x00"sv, error::sharedref_index_not_marked},
-        {"\xd8\x1c\x81\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\xd8\x1c\xd8\x1c\xc1\xd8\x1d\x01"sv, error::inadmissible_type_for_tag_content},
-        {"\x83\xd8\x1c\x00\xd8\x1c\xd8\x1d\x00\xc1\xd8\x1d\x01"sv, error{}},
-        {"\xd8\x1c\x82\x00\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\xd8\x1c\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-    }};
-    for (shared_content const &c : contents) {
-        CAPTURE(c.encoded);
-        auto const d = decoded(c.encoded);
-        auto const l = lazy_value_of(c.encoded);
-        auto const text = cbor::diagnostic_notation(c.encoded);
-        if (c.refused == error{}) {
-            CHECK(d.has_value());
-            CHECK(l.has_value());
-            CHECK(text.has_value());
-        } else {
-            REQUIRE_FALSE(d.has_value());
-            REQUIRE_FALSE(l.has_value());
-            REQUIRE_FALSE(text.has_value());
-            CHECK_EQ(d.error(), c.refused);
-            CHECK_EQ(l.error(), c.refused);
-            CHECK_EQ(text.error(), c.refused);
-        }
-    }
 }

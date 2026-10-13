@@ -81,11 +81,13 @@ TEST_CASE("bignum: an empty magnitude is 0 or -1")
     CHECK(*decoded("\xc3\x40"sv) == value{negative{0}});
 }
 
-// Ported from test.rb: 'bignum: non-byte-string payload raises TypeError'.
+// Ported from test.rb: 'bignum: non-byte-string payload raises TypeError'. The owner decided that a tree decode
+// interprets a tag 2 or 3 only over a byte string; any other content leaves a tag over that content.
 TEST_CASE("bignum: content that is not a byte string")
 {
-    CHECK_EQ(decode_error("\xc2\x05"sv), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(decode_error("\xc3\x05"sv), error::inadmissible_type_for_tag_content);
+    CHECK(*decoded("\xc2\x05"sv) == value{tagged{2, value{std::uint64_t{5}}}});
+    CHECK(*decoded("\xc3\x05"sv) == value{tagged{3, value{std::uint64_t{5}}}});
+    CHECK_EQ(cbor::lazy::copy("\xc2\x05"s)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
 }
 
 // Ported from test.rb: 'bignum: mixed with normal integers in array'.
@@ -169,42 +171,43 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
     CHECK_EQ(*cbor::lazy::copy("\xc3\x40"s)->get<std::int64_t>(), -1);
 }
 
-// RFC 8949 3.4.3 admits only a byte string as the content of tag 2 or 3. The fold to an integer reads the
-// content first, so a wrong content keeps its error in decode and in type(), and an indefinite length stays
-// refused. A content that ends early gives too_little_data and reads no byte past the input.
-TEST_CASE("bignum: a wrong content keeps its error in decode and in type()")
+// RFC 8949 3.4.3 admits only a byte string as the content of tag 2 or 3. The owner decided that decode and type()
+// interpret only a definite byte string, and leave a tag over any other content (Q4 a). A content that ends early
+// gives too_little_data and reads no byte past the input.
+TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
 {
     struct row {
-        std::string wire;
+        std::string_view wire;
+        cbor::type type;
+    };
+    for (row const r : {row{"\xc2\x61\x61"sv, cbor::type::unsigned_bignum}, row{"\xc2\x80"sv, cbor::type::unsigned_bignum},
+                        row{"\xc2\x01"sv, cbor::type::unsigned_bignum}, row{"\xc3\x61\x61"sv, cbor::type::negative_bignum}}) {
+        CAPTURE(r.wire);
+        auto const l = cbor::lazy::copy(std::string(r.wire));
+        REQUIRE(l.has_value());
+        CHECK_EQ(l->type(), r.type);
+        auto const tree = l->decode();
+        REQUIRE(tree.has_value());
+        CHECK_EQ((*tree)->type, r.type);
+        CHECK_EQ((*tree)->via.tag.number, r.wire[0] == '\xc2' ? 2u : 3u);
+    }
+    struct failure {
+        std::string_view wire;
         error expected;
     };
-    row const rows[] = {
-        {"\xc2\x61\x61"s, error::inadmissible_type_for_tag_content},
-        {"\xc2\x80"s, error::inadmissible_type_for_tag_content},
-        {"\xc2\x01"s, error::inadmissible_type_for_tag_content},
-        {"\xc3\x61\x61"s, error::inadmissible_type_for_tag_content},
-        {"\xc2\x5f\x41\x01\xff"s, error::indefinite_length},
-        {"\xc2\x5f"s, error::indefinite_length},
-        {"\xc2"s, error::too_little_data},
-        {"\xc2\x41"s, error::too_little_data},
-        {"\xc2\x49\x01"s, error::too_little_data},
-    };
-    for (row const &r : rows) {
-        CAPTURE(r.wire);
-        auto const l = cbor::lazy::copy(r.wire);
+    for (failure const f : {failure{"\xc2\x5f\x41\x01\xff"sv, error::indefinite_length},
+                            failure{"\xc2\x5f"sv, error::indefinite_length}, failure{"\xc2"sv, error::too_little_data},
+                            failure{"\xc2\x41"sv, error::too_little_data}, failure{"\xc2\x49\x01"sv, error::too_little_data}}) {
+        CAPTURE(f.wire);
+        auto const l = cbor::lazy::copy(std::string(f.wire));
         REQUIRE(l.has_value());
-        auto const t = l->type();
-        REQUIRE_FALSE(t.has_value());
-        CHECK_EQ(t.error(), r.expected);
-        auto const tree = l->decode();
-        REQUIRE_FALSE(tree.has_value());
-        CHECK_EQ(tree.error(), r.expected);
+        CHECK_EQ(l->decode().error(), f.expected);
     }
 }
 
-// RFC 8949 3.4.3: the value of a bignum that fits is the integer. A tag 28 around it marks that integer, so the
-// item that tag 29 names is the integer item, and lazy reads the integer through tag 29.
-TEST_CASE("bignum: tag 28 around a bignum that fits marks the integer")
+// RFC 8949 3.4.3: the value of a bignum that fits is the integer. A tag 28 around it is a plain tag over that
+// integer, and a tag 29 is a plain tag over its index.
+TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
 {
     std::string const wire = "\x82\xd8\x1c\xc2\x41\x01\xd8\x1d\x00"s;
     auto const l = cbor::lazy::copy(wire);
@@ -217,9 +220,9 @@ TEST_CASE("bignum: tag 28 around a bignum that fits marks the integer")
     cbor::item const *const marked = elements[0]->via.tag.content;
     CHECK_EQ(marked->type, cbor::type::unsigned_integer);
     CHECK_EQ(marked->via.u64, 1u);
-    CHECK(shared_value_is(*tree, *elements[1], *marked));
-    CHECK_EQ(*l->at(1)->type(), cbor::type::unsigned_integer);
-    CHECK_EQ(*l->at(1)->get<std::int64_t>(), 1);
+    CHECK_EQ((*elements[1]).via.tag.number, 29u);
+    CHECK_EQ(*l->at(1)->type(), cbor::type::tag);
+    CHECK_EQ(*l->at(1)->get<std::int64_t>(), 0);
     std::string again;
     REQUIRE(cbor::encode(**tree, again).has_value());
     CHECK_EQ(again, "\x82\xd8\x1c\x01\xd8\x1d\x00"s);
