@@ -1793,6 +1793,32 @@ TEST_CASE("lazy: an element of a float128 typed array")
 #endif
 }
 
+// at_path gives a float128 element with the same value as lazy::get, both from the encoded bytes and from a
+// lazy. The walk over the encoded bytes reads no element of 128 bits, so this test exists to show that the
+// value still comes back and that every other item stays incorrect_type.
+TEST_CASE("path: at_path reads an element of a float128 typed array")
+{
+#ifdef __STDCPP_FLOAT128_T__
+    using typed_array_index::typed_array_of;
+    std::string const zeros(12, '\0');
+    std::string const one = "\x3f\xff\x00\x00"s + zeros;
+    std::string const minus_two = "\xc0\x00\x00\x00"s + zeros;
+    std::string const little_endian = std::string(one.rbegin(), one.rend()) + std::string(minus_two.rbegin(), minus_two.rend());
+    for (auto const &[tag, bytes] : {std::pair{83, one + minus_two}, std::pair{87, little_endian}}) {
+        CAPTURE(tag);
+        std::string const encoded = typed_array_of(tag, bytes);
+        CHECK_EQ(*cbor::at_path<"$[0]", std::float128_t>(std::string_view(encoded)), std::float128_t{1});
+        CHECK_EQ(*cbor::at_path<"$[1]", std::float128_t>(std::string_view(encoded)), std::float128_t{-2});
+        CHECK_EQ(*cbor::at_path<"$[1]", std::float128_t>(lazy_of(encoded)), std::float128_t{-2});
+        CHECK_EQ(cbor::at_path<"$[2]", std::float128_t>(std::string_view(encoded)).error(),
+                 error::index_out_of_bounds);
+    }
+    std::string const float64 = typed_array_of(82, std::string(8, '\0'));
+    CHECK_EQ(cbor::at_path<"$[0]", std::float128_t>(std::string_view(float64)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$", std::float128_t>("\xf9\x3c\x00"sv).error(), error::incorrect_type);
+#endif
+}
+
 // A typed array whose byte string claims more bytes than the input holds is too_little_data at the step; a length
 // that is not a multiple of the element size is refused as RFC 8746 2 requires.
 TEST_CASE("lazy: a cut typed array is too_little_data")

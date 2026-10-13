@@ -61,7 +61,11 @@ inline constexpr bool is_singular_query_v = is_singular_query<Path>::value;
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+              || std::is_same_v<T, std::float128_t>
+#endif
+              ))
 std::expected<T, error> at_path(std::string_view encoded);
 
 template <fixed_string Path, class T>
@@ -85,7 +89,11 @@ std::expected<owning_ref<T>, error> at_path(Encoded &&encoded);
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+              || std::is_same_v<T, std::float128_t>
+#endif
+              ))
 std::expected<T, error> at_path(lazy const &l);
 
 template <fixed_string Path, class T>
@@ -708,6 +716,10 @@ class jsonpath
                 continue;
             }
             if (each.kind == selector::kind::index && heads::is_typed_array(h)) {
+#ifdef __STDCPP_FLOAT128_T__
+                if constexpr (std::is_same_v<T, std::float128_t>)
+                    return std::nullopt;
+#endif
                 auto const elements = typed_array_elements(h.argument);
                 if (!elements) [[unlikely]]
                     return std::nullopt;
@@ -878,6 +890,10 @@ class jsonpath
             if (!*bytes) [[unlikely]]
                 return std::unexpected(bytes->error());
             return typed_array{h.argument, std::as_bytes(std::span(**bytes))};
+#ifdef __STDCPP_FLOAT128_T__
+        } else if constexpr (std::is_same_v<T, std::float128_t>) {
+            return std::nullopt;
+#endif
         } else {
             if (h.major != major_type::byte_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
@@ -1020,7 +1036,11 @@ class jsonpath
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> &&
                  ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-                  std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+                  std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+              || std::is_same_v<T, std::float128_t>
+#endif
+              ))
     friend std::expected<T, error> at_path(std::string_view encoded);
 
     template <fixed_string Path, class T>
@@ -1032,7 +1052,11 @@ class jsonpath
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> &&
                  ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-                  std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+                  std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+              || std::is_same_v<T, std::float128_t>
+#endif
+              ))
     friend std::expected<T, error> at_path(lazy const &l);
 
     template <fixed_string Path, class T>
@@ -1702,7 +1726,11 @@ class is_singular_query
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+              || std::is_same_v<T, std::float128_t>
+#endif
+              ))
 std::expected<T, error> at_path(std::string_view const encoded)
 {
     return jsonpath::query_walk<Path, T>(encoded);
@@ -1742,7 +1770,11 @@ std::expected<owning_ref<T>, error> at_path(Encoded &&encoded)
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>))
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+              || std::is_same_v<T, std::float128_t>
+#endif
+              ))
 std::expected<T, error> at_path(lazy const &l)
 {
     return jsonpath::query_walk<Path, T>(l);
