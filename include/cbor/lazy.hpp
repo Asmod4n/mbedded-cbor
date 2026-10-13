@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <concepts>
 #include <cstddef>
@@ -346,18 +347,26 @@ inline std::expected<std::size_t, error> lazy::count(std::int64_t const key) con
     return value_sharing::key_count(find(key), key);
 }
 
+inline std::expected<std::string_view, error> value_sharing::typed_array_element_read(lazy const &node)
+{
+    validity::throw_logic_error_if_null(node.top_level, "cbor::lazy: the lazy holds no top-level item");
+    std::size_t const size = validity::typed_array_element_size(node.typed_array_tag);
+    std::string_view const encoded = node.top_level->encoded;
+    if (node.offset > encoded.size() || encoded.size() - node.offset < size) [[unlikely]]
+        return std::unexpected(error::too_little_data);
+    return encoded.substr(node.offset, size);
+}
+
 template <bool Checked>
 std::expected<value_sharing::resolved<Checked>, error>
 value_sharing::lazy_resolve(lazy const &node, validity::limit_checks<Checked> const checks)
 {
     if (node.typed_array_tag == 0) [[likely]]
         return tag_content_resolve(node.top_level, node.offset, checks);
-    validity::throw_logic_error_if_null(node.top_level, "cbor::lazy: the lazy holds no top-level item");
-    std::size_t const size = validity::typed_array_element_size(node.typed_array_tag);
-    std::string_view const encoded = node.top_level->encoded;
-    if (node.offset > encoded.size() || encoded.size() - node.offset < size) [[unlikely]]
-        return std::unexpected(error::too_little_data);
-    auto const h = heads::typed_array_element_decode(node.typed_array_tag, encoded.substr(node.offset, size), 0);
+    auto const element = typed_array_element_read(node);
+    if (!element) [[unlikely]]
+        return std::unexpected(element.error());
+    auto const h = heads::typed_array_element_decode(node.typed_array_tag, *element, 0);
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
     return resolved<Checked>{node.top_level, *h, heads::decoder<Checked>{std::string_view{}, checks}, node.offset};
@@ -567,6 +576,9 @@ template <class T>
              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
                  std::is_same_v<T, std::string_view> ||
              std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
+#ifdef __STDCPP_FLOAT128_T__
+             || std::is_same_v<T, std::float128_t>
+#endif
 std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                std::is_same_v<T, typed_array>,
                            owning_ref<T>, T>, error> lazy::get() const
@@ -584,6 +596,31 @@ auto lazy::get(limit_values const loaded) const
                                  error>;
     return limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) -> result {
+            if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
+                if (typed_array_tag != 0) {
+                    auto const element = value_sharing::typed_array_element_read(*this);
+                    if (!element) [[unlikely]]
+                        return std::unexpected(element.error());
+                    return owning_ref<T>(top_level->owner, std::as_bytes(std::span(*element)));
+                }
+            }
+#ifdef __STDCPP_FLOAT128_T__
+            if constexpr (std::is_same_v<T, std::float128_t>) {
+                if (typed_array_tag != std::to_underlying(rfc8746::tag_number::float128_big_endian) &&
+                    typed_array_tag != std::to_underlying(rfc8746::tag_number::float128_little_endian)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                auto const element = value_sharing::typed_array_element_read(*this);
+                if (!element) [[unlikely]]
+                    return std::unexpected(element.error());
+                std::array<std::byte, sizeof(std::float128_t)> bits{};
+                std::ranges::copy(std::as_bytes(std::span(*element)), bits.begin());
+                bool const little_endian =
+                    typed_array_tag == std::to_underlying(rfc8746::tag_number::float128_little_endian);
+                if (little_endian != (std::endian::native == std::endian::little))
+                    std::ranges::reverse(bits);
+                return std::bit_cast<std::float128_t>(bits);
+            } else {
+#endif
             auto const found = value_sharing::lazy_resolve(*this, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
@@ -683,6 +720,9 @@ auto lazy::get(limit_values const loaded) const
                     return std::unexpected(bytes.error());
                 return owning_ref<T>(source->owner, std::as_bytes(std::span(*bytes)));
             }
+#ifdef __STDCPP_FLOAT128_T__
+            }
+#endif
         });
 }
 

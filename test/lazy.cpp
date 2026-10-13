@@ -1721,6 +1721,78 @@ TEST_CASE("lazy: an index reads an element of each typed array")
     CHECK_EQ(lazy_of(typed_array_of(76, "\x00\x00"sv)).at(0).error(), error::not_indexable);
 }
 
+// The raw bytes of an element are the input bytes in place, for each of the 23 typed array tags of RFC 8746 2.1.
+// They are the only read of a float of 128 bits where C++ has no std::float128_t.
+TEST_CASE("lazy: an element of each typed array gives its raw bytes")
+{
+    using typed_array_index::typed_array_of;
+    for (int tag = 64; tag <= 87; ++tag) {
+        if (tag == 76)
+            continue;
+        CAPTURE(tag);
+        std::size_t const size = std::size_t{1} << ((tag >> 4 & 1) + (tag & 3));
+        std::string bytes(2 * size, '\0');
+        for (std::size_t i = 0; i < bytes.size(); ++i)
+            bytes[i] = static_cast<char>(i + 1);
+        auto const wire = typed_array_of(tag, bytes);
+        auto const l = lazy_of(wire);
+        auto const element = l.at(1);
+        REQUIRE(element.has_value());
+        auto const raw = element->get<std::span<std::byte const>>();
+        REQUIRE(raw.has_value());
+        std::span<std::byte const> const view = **raw;
+        CHECK_EQ(view.size(), size);
+        CHECK(std::ranges::equal(view, std::as_bytes(std::span(bytes).subspan(size))));
+        auto const &encoded = l.top_level->encoded;
+        CHECK(std::ranges::distance(std::as_bytes(std::span(encoded)).data(), view.data()) >= 0);
+        CHECK(std::ranges::distance(view.data(), std::as_bytes(std::span(encoded)).data() + encoded.size()) >= 0);
+    }
+}
+
+// CBOR has no data item of 128 bits for a float (RFC 8949 3.3), so decode() of such an element is incorrect_type.
+// The bit patterns below are IEEE 754 binary128: sign bit, 15 bits of exponent with bias 16383, 112 bits of
+// fraction. 1.0 is 3fff 0..0, -2.0 is c000 0..0, infinity is 7fff 0..0, a quiet NaN is 7fff 8000 0..0.
+TEST_CASE("lazy: an element of a float128 typed array")
+{
+    using typed_array_index::typed_array_of;
+    std::string const zeros(12, '\0');
+    std::string const one = "\x3f\xff\x00\x00"s + zeros;
+    std::string const minus_two = "\xc0\x00\x00\x00"s + zeros;
+    std::string const infinity = "\x7f\xff\x00\x00"s + zeros;
+    std::string const nan = "\x7f\xff\x80\x00"s + zeros;
+    std::string const big_endian = one + minus_two + infinity + nan;
+    std::string little_endian;
+    for (std::string const &v : {one, minus_two, infinity, nan})
+        little_endian += std::string(v.rbegin(), v.rend());
+    for (auto const &[tag, bytes] : {std::pair{83, big_endian}, std::pair{87, little_endian}}) {
+        CAPTURE(tag);
+        auto const l = lazy_of(typed_array_of(tag, bytes));
+        CHECK_EQ(*l.size(), 4u);
+        for (std::size_t i = 0; i < 4; ++i) {
+            auto const element = l.at(i);
+            REQUIRE(element.has_value());
+            CHECK_EQ(element->decode().error(), error::incorrect_type);
+            CHECK_EQ(element->get<double>().error(), error::incorrect_type);
+            auto const raw = element->get<std::span<std::byte const>>();
+            REQUIRE(raw.has_value());
+            CHECK(std::ranges::equal(**raw, std::as_bytes(std::span(bytes).subspan(16 * i, 16))));
+        }
+#ifdef __STDCPP_FLOAT128_T__
+        CHECK_EQ(*l.at(0)->get<std::float128_t>(), std::float128_t{1});
+        CHECK_EQ(*l.at(1)->get<std::float128_t>(), std::float128_t{-2});
+        CHECK_EQ(*l.at(2)->get<std::float128_t>(), std::numeric_limits<std::float128_t>::infinity());
+        auto const n = *l.at(3)->get<std::float128_t>();
+        CHECK(n != n);
+#endif
+    }
+#ifdef __STDCPP_FLOAT128_T__
+    // A float128 is read only from an element of tag 83 or 87; every other item has no such value.
+    CHECK_EQ(lazy_of(typed_array_of(82, std::string(8, '\0'))).at(0)->get<std::float128_t>().error(),
+             error::incorrect_type);
+    CHECK_EQ(lazy_of("\xf9\x3c\x00"s).get<std::float128_t>().error(), error::incorrect_type);
+#endif
+}
+
 // A typed array whose byte string claims more bytes than the input holds is too_little_data at the step; a length
 // that is not a multiple of the element size is refused as RFC 8746 2 requires.
 TEST_CASE("lazy: a cut typed array is too_little_data")

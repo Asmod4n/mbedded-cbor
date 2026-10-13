@@ -16,6 +16,9 @@
 #include <optional>
 #include <ranges>
 #include <span>
+#ifdef __STDCPP_FLOAT128_T__
+#include <stdfloat>
+#endif
 #include <string>
 #include <stdexcept>
 #include <string_view>
@@ -78,6 +81,8 @@ class value_sharing
 
     template <bool Checked>
     static std::expected<std::string_view, error> typed_array_bytes_read(resolved<Checked> const &found);
+
+    static std::expected<std::string_view, error> typed_array_element_read(lazy const &node);
 
     template <bool Checked>
     static std::expected<resolved<Checked>, error> lazy_resolve(lazy const &node, validity::limit_checks<Checked> checks);
@@ -342,6 +347,9 @@ struct lazy {
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
                  std::is_same_v<T, std::string_view> ||
                  std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
+#ifdef __STDCPP_FLOAT128_T__
+                 || std::is_same_v<T, std::float128_t>
+#endif
     std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                    std::is_same_v<T, typed_array>,
                                owning_ref<T>, T>, error> get() const;
