@@ -67,11 +67,14 @@ exceeds the bytes that are left.
 
 A tag 29 is a tag item over its index. The resource holds two sorted
 tables: each tag 29 item with the item that its tag 28 marks, and each tag
-24 item with the root of its embedded item. `cbor::shared_value` and
-`cbor::encoded_cbor_data_item` search them. The result is a
+24 item with the root of its embedded item. A tag 29 entry also holds the
+offset of a tag 28 before the decoded tree, and the number and content
+offset of the tag that encloses the tag 29. `cbor::shared_value`,
+`cbor::shared_value_resolve` and `cbor::encoded_cbor_data_item` search
+them. The result is a
 `std::shared_ptr` whose deleter owns the resource, and the two functions
 find the resource through `std::get_deleter`. A tag 28 before the start
-of a lazy is decoded at the depth of its own position. `encode` of an item
+of a lazy is not decoded; `cbor::shared_value_resolve` gives it as a lazy. `encode` of an item
 writes each head with the additional information that the item keeps, a
 float at the width of its type,
 and does not follow a tag 29.

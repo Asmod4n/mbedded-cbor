@@ -31,7 +31,8 @@ namespace shared_test
 // The decoded item tree of a top-level item, as lazy::decode gives it.
 using tree = std::shared_ptr<cbor::item const>;
 
-// An item of a decoded tree together with the tree, which cbor::shared_value needs to follow a tag 29.
+// An item of a decoded tree together with the tree, which cbor::shared_value_resolve needs to follow a tag 29. A
+// mark before the decoded tree comes back as a lazy, and its decode gives a tree of its own.
 struct place {
     tree t;
     cbor::item const *i;
@@ -52,9 +53,17 @@ struct place {
 place target(place n)
 {
     for (int steps = 0; steps < 1000; ++steps) {
-        if (n.i->type == cbor::type::tag && n.i->via.tag.number == 29)
-            n.i = &cbor::shared_value(n.t, *n.i);
-        else if (n.i->type == cbor::type::tag && n.i->via.tag.number == 28)
+        if (n.i->type == cbor::type::tag && n.i->via.tag.number == 29) {
+            auto const resolved = cbor::shared_value_resolve(n.t, *n.i);
+            REQUIRE(resolved.has_value());
+            if (auto const *const before = std::get_if<cbor::lazy>(&*resolved)) {
+                auto decoded = before->decode();
+                REQUIRE(decoded.has_value());
+                n = place{*decoded, decoded->get()};
+            } else {
+                n.i = &std::get<std::reference_wrapper<cbor::item const>>(*resolved).get();
+            }
+        } else if (n.i->type == cbor::type::tag && n.i->via.tag.number == 28)
             n.i = n.i->via.tag.content;
         else
             return n;
@@ -77,13 +86,36 @@ tree decoded_ref(std::string_view const wire)
     return *t;
 }
 
+// The decode only stores a tag 29, and its resolution gives the error. This gives the error of the decode, or else
+// the first error of a resolution of a tag 29 of the tree, in the order of the tree.
 error ref_decode_error(std::string_view const wire)
 {
     auto const l = cbor::lazy::copy(wire);
     REQUIRE(l.has_value());
     auto const t = l->decode();
-    REQUIRE_FALSE(t.has_value());
-    return t.error();
+    if (!t)
+        return t.error();
+    std::vector<cbor::item const *> pending{t->get()};
+    std::vector<cbor::item const *> seen;
+    while (!pending.empty()) {
+        cbor::item const *const i = pending.back();
+        pending.pop_back();
+        if (std::ranges::find(seen, i) != seen.end())
+            continue;
+        seen.push_back(i);
+        if (i->type == cbor::type::tag && i->via.tag.number == 29) {
+            if (auto const r = cbor::shared_value_resolve(*t, *i); !r)
+                return r.error();
+            continue;
+        }
+        if (i->type == cbor::type::tag)
+            pending.push_back(i->via.tag.content);
+        if (i->type == cbor::type::array || i->type == cbor::type::map)
+            for (cbor::item const *const child : children_of(*i))
+                pending.push_back(child);
+    }
+    FAIL("the decode and every resolution succeed");
+    return error{};
 }
 
 template <class P>
@@ -229,6 +261,24 @@ TEST_CASE("tag 29: a chain of marks that refers to its own start ends with an er
     CHECK_EQ(decode_error("\xc0\xd8\x1c\xd8\x1d\x00"sv), error::sharedref_not_complete);
     CHECK_EQ(decode_error("\xd8\x24\xd8\x1c\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv), error::sharedref_not_complete);
     CHECK_EQ(ref_decode_error("\xd8\x24\xd8\x1c\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv), error::sharedref_not_complete);
+}
+
+// The owner decided that a tag 29 is resolved only when it is read. Tag 0 needs a text string (RFC 8949 3.4.1).
+// [28(""), 0(29(0))] resolves to the text string. [28(0), 0(29(0))] decodes, because the decode only stores the
+// tag 29, and its resolution gives the error of the content of tag 0. shared_value takes one step and checks
+// nothing. A forward reference still fails at the decode.
+TEST_CASE("tag 29: the decode stores the reference and its resolution checks the enclosing tag")
+{
+    tree const valid = decoded_ref("\x82\xd8\x1c\x60\xc0\xd8\x1d\x00"sv);
+    cbor::item const &reference = *valid->via.array[1].via.tag.content;
+    auto const resolved = cbor::shared_value_resolve(valid, reference);
+    REQUIRE(resolved.has_value());
+    CHECK_EQ(&std::get<std::reference_wrapper<cbor::item const>>(*resolved).get(), valid->via.array[0].via.tag.content);
+    tree const refused = decoded_ref("\x82\xd8\x1c\x00\xc0\xd8\x1d\x00"sv);
+    cbor::item const &wrong = *refused->via.array[1].via.tag.content;
+    CHECK_EQ(cbor::shared_value_resolve(refused, wrong).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(&cbor::shared_value(refused, wrong), refused->via.array[0].via.tag.content);
+    CHECK_EQ(ref_decode_error("\x82\xd8\x1d\x00\xd8\x1c\x00"sv), error::sharedref_index_not_marked);
 }
 
 // A tag 29 that names a mark, through marks and other references only, and reaches itself names no value. The tree
@@ -969,7 +1019,9 @@ std::string unsigned_head(std::uint64_t const major, std::uint64_t const n)
 // arrays around the reference. The decode of the whole item needs a depth of h + 2 and r + 2 only. A lazy
 // that starts at the second element meets the reference before the mark is built. The mark is then built
 // at the depth of its own position, as the decode of the whole item builds it, and not below the
-// reference, so at_path and decode accept every item that the decode of the whole item accepts.
+// reference, so at_path and decode accept every item that the decode of the whole item accepts. The decode
+// of the second element does not decode the mark, and a resolution gives the mark as a lazy. So the depth of
+// the reference in the whole item does not limit the second element, and at_path may accept more.
 TEST_CASE("tag 29: a mark before the start of a lazy is built at the depth of its own position")
 {
     test::limits_guard const depth{{.nesting_depth = 16}};
@@ -981,8 +1033,9 @@ TEST_CASE("tag 29: a mark before the start of a lazy is built at the depth of it
             std::string const target = repeat("\x81"sv, h) + '\x00';
             auto const whole = test::value_of(*cbor::lazy::copy(doc));
             auto const found = test::at_path("$[1]", *cbor::lazy::copy(doc));
-            CHECK_EQ(found.has_value(), whole.has_value());
-            if (!found)
+            if (whole)
+                CHECK(found.has_value());
+            if (!found || !whole)
                 continue;
             auto const second = cbor::lazy::copy(doc)->at(1);
             REQUIRE(second.has_value());
@@ -1008,7 +1061,8 @@ TEST_CASE("tag 29: a self-referencing array before the start of a lazy")
     REQUIRE(second.has_value());
     auto const v = second->decode();
     REQUIRE(v.has_value());
-    CHECK(same(element(*v, 0), *v));
+    place const array = target(*v);
+    CHECK(same(element(array, 0), array));
     CHECK_EQ(test::value_of(*second).error(), error::sharedref_not_complete);
 }
 

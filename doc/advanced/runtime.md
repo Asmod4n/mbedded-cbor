@@ -198,13 +198,22 @@ cbor::lazy::copy(bytes)->decode();                       // too_little_data
 
 A tag 28 stays a tag item over the value it marks. A tag 29 stays a tag
 item over its index, an unsigned integer item.
-`cbor::shared_value(tree, item)` gives the item that the tag 29 names;
-`tree` is the result of the decode. No read of the library follows a tag
-29 by itself, so a cycle ends. A tag 24 is a tag item over its byte
+The decode only stores a tag 29. It checks that the index names a tag 28
+that stands before the tag 29, and gives `sharedref_index_not_marked`
+for any other index. `cbor::shared_value(tree, item)` takes one step: it
+gives the item that the index marks, which can itself be a tag 29.
+`cbor::shared_value_resolve(tree, item)` follows the chain and gives a
+`std::expected` of a `std::variant`: the item of the tree, or a
+`cbor::lazy` for a tag 28 that stands before the decoded tree. A chain
+with no value gives `sharedref_not_complete`. When the tag 29 is the
+content of another tag, `shared_value_resolve` checks the content
+constraint of that tag. `tree` is the result of the decode. No read of
+the library follows a tag 29 by itself, so a cycle ends. A tag 24 is a tag item over its byte
 string, and `cbor::encoded_cbor_data_item(tree, item)` gives the root of
-the embedded item, decoded as a top-level item of its own. Both throw
+the embedded item, decoded as a top-level item of its own. All three throw
 `std::logic_error` for an item that is not a tag 29 or tag 24 of that
-tree. A count in a head reserves nothing: an array that claims more
+tree. `shared_value` also throws `std::logic_error` for a tag 29 that
+names a tag 28 before the decoded tree. A count in a head reserves nothing: an array that claims more
 elements than bytes are left gives `too_little_data` before it reads an
 element.
 

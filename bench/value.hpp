@@ -332,6 +332,8 @@ inline value text_value(std::string_view const t)
 // The value of a decoded item tree. Tag 28 is the value it marks and tag 29 the value it points to; a bignum of at
 // most 8 bytes is an integer, as a dynamic language reads it. A float is a double. The tree is passed to find the
 // item that a tag 29 points to.
+inline std::expected<value, error> value_of(cbor::lazy const &l);
+
 inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it)
 {
     switch (it.type) {
@@ -372,8 +374,14 @@ inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item 
     }
     std::uint64_t const number = it.via.tag.number;
     cbor::item const &inner = *it.via.tag.content;
-    if (number == 29)
-        return value_of(tree, cbor::shared_value(tree, it));
+    if (number == 29) {
+        auto const resolved = cbor::shared_value_resolve(tree, it);
+        if (!resolved) [[unlikely]]
+            return {};
+        if (auto const *const before = std::get_if<cbor::lazy>(&*resolved))
+            return value_of(*before).value_or(value{});
+        return value_of(tree, std::get<std::reference_wrapper<cbor::item const>>(*resolved).get());
+    }
     if (number == 28)
         return value_of(tree, inner);
     if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {

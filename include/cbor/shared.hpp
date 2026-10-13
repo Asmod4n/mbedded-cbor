@@ -25,6 +25,7 @@
 #include <thread>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "rfc8746.hpp"
@@ -87,8 +88,6 @@ private:
     template <bool Checked>
     struct tree_decoder;
 
-    struct mark_depths;
-
     template <bool Checked>
     struct resolved;
 
@@ -142,6 +141,9 @@ private:
     friend class validity;
 
     friend item const &shared_value(std::shared_ptr<item const> const &tree, item const &reference);
+
+    friend std::expected<std::variant<std::reference_wrapper<item const>, lazy>, error>
+    shared_value_resolve(std::shared_ptr<item const> const &tree, item const &reference);
 
     friend item const &encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged);
 
@@ -570,11 +572,25 @@ struct value_sharing::top_level_item {
 struct value_sharing::zone {
     using link = std::pair<item const *, item const *>;
 
+    struct enclosing_tag {
+        std::uint64_t number;
+        validity::offset content_at;
+    };
+
+    struct sharedref {
+        item const *reference;
+        item const *shareable;
+        top_level_item *source;
+        validity::offset shared_at;
+        std::optional<enclosing_tag> enclosing;
+    };
+
     std::shared_ptr<top_level_item> top_level;
     std::pmr::monotonic_buffer_resource memory;
     std::pmr::forward_list<top_level_item> embedded{&memory};
-    std::vector<link> sharedrefs;
+    std::vector<sharedref> sharedrefs;
     std::vector<link> encoded_cbor_data_items;
+    std::size_t marked = 0;
 
     zone(std::shared_ptr<top_level_item> top, std::size_t const initial_size)
         : top_level(std::move(top)), memory(initial_size)
@@ -589,42 +605,89 @@ struct value_sharing::zone_owner {
     {
     }
 
-    static item const &link_found(std::shared_ptr<item const> const &tree, std::vector<zone::link> zone::*const table,
-                              item const &from, char const *const what)
+    static zone &zone_found(std::shared_ptr<item const> const &tree, char const *const what)
     {
         zone_owner const *const owner = std::get_deleter<zone_owner>(tree);
         validity::throw_logic_error_if(owner == nullptr || owner->owned == nullptr, what);
-        std::vector<zone::link> const &links = (*owner->owned).*table;
-        auto const found = std::ranges::lower_bound(links, &from, std::less<>{}, &zone::link::first);
-        validity::throw_logic_error_if(found == links.end() || found->first != &from, what);
-        return *found->second;
+        return *owner->owned;
+    }
+
+    template <class Link, class Projection>
+    static Link const &link_found(std::vector<Link> const &links, item const &from, Projection const key,
+                                  char const *const what)
+    {
+        auto const found = std::ranges::lower_bound(links, &from, std::less<>{}, key);
+        validity::throw_logic_error_if(found == links.end() || std::invoke(key, *found) != &from, what);
+        return *found;
+    }
+
+    static std::expected<std::variant<std::reference_wrapper<item const>, lazy>, error>
+    chain_followed(std::shared_ptr<item const> const &tree, item const &reference, char const *const what)
+    {
+        zone const &z = zone_found(tree, what);
+        auto const key = &zone::sharedref::reference;
+        zone::sharedref const &first = link_found(z.sharedrefs, reference, key, what);
+        if (first.enclosing) {
+            auto const content = validity::limits_apply(
+                limits.load(), [&first]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
+                    return check_tag_content(
+                        first.enclosing->number, first.source->encoded, first.enclosing->content_at,
+                        [&first]() -> auto const & { return first.source->sharedrefs_read(); }, &lazy::offset, checks);
+                });
+            if (!content) [[unlikely]]
+                return std::unexpected(content.error());
+        }
+        zone::sharedref const *at = &first;
+        std::size_t references_followed = 0;
+        for (;;) {
+            if (at->shareable == nullptr)
+                return lazy{z.top_level, at->shared_at};
+            item const *passed = at->shareable;
+            while (passed->type == cbor::type::tag &&
+                   (passed->via.tag.number == std::to_underlying(rfc8949::tag_number::shareable) ||
+                    passed->via.tag.number == std::to_underlying(rfc8949::tag_number::self_described_cbor)))
+                passed = passed->via.tag.content;
+            item const &shared = *passed;
+            if (shared.type != cbor::type::tag ||
+                shared.via.tag.number != std::to_underlying(rfc8949::tag_number::sharedref))
+                return std::cref(shared);
+            if (auto const ends = check_sharedref_chain_ends(++references_followed, z.marked); !ends) [[unlikely]]
+                return std::unexpected(ends.error());
+            at = &link_found(z.sharedrefs, shared, key, what);
+        }
     }
 };
 
 inline item const &shared_value(std::shared_ptr<item const> const &tree, item const &reference)
 {
-    return value_sharing::zone_owner::link_found(tree, &value_sharing::zone::sharedrefs, reference,
-                                             "cbor::shared_value: the item is not a tag 29 of this decoded tree");
+    constexpr char const *what = "cbor::shared_value: the item is not a tag 29 of this decoded tree";
+    value_sharing::zone const &z = value_sharing::zone_owner::zone_found(tree, what);
+    auto const &found =
+        value_sharing::zone_owner::link_found(z.sharedrefs, reference, &value_sharing::zone::sharedref::reference, what);
+    validity::throw_logic_error_if(found.shareable == nullptr,
+                                   "cbor::shared_value: the tag 29 names an item before the decoded tree; use "
+                                   "cbor::shared_value_resolve");
+    return *found.shareable;
+}
+
+inline std::expected<std::variant<std::reference_wrapper<item const>, lazy>, error>
+shared_value_resolve(std::shared_ptr<item const> const &tree, item const &reference)
+{
+    return value_sharing::zone_owner::chain_followed(
+        tree, reference, "cbor::shared_value_resolve: the item is not a tag 29 of this decoded tree");
 }
 
 inline item const &encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged)
 {
-    return value_sharing::zone_owner::link_found(tree, &value_sharing::zone::encoded_cbor_data_items, tagged,
-                                             "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree");
+    constexpr char const *what = "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree";
+    value_sharing::zone const &z = value_sharing::zone_owner::zone_found(tree, what);
+    return *value_sharing::zone_owner::link_found(z.encoded_cbor_data_items, tagged,
+                                                  &value_sharing::zone::link::first, what)
+                .second;
 }
 
 static_assert(std::is_trivially_destructible_v<item>,
               "The zone runs no destructor of an item, so an item must have no destructor to run.");
-
-struct value_sharing::mark_depths {
-    std::vector<std::size_t> depths{};
-
-    template <bool Checked>
-    void mark(heads::decoder<Checked> const &, std::size_t const depth)
-    {
-        depths.push_back(depth);
-    }
-};
 
 template <bool Checked>
 struct value_sharing::tree_decoder {
@@ -635,9 +698,9 @@ struct value_sharing::tree_decoder {
     validity::offset start;
     std::size_t depth_max;
     std::optional<std::size_t> mark_next;
-    std::size_t marks_before = 0;
     item *root = nullptr;
     std::size_t open = 0;
+    std::optional<zone::enclosing_tag> sharedref_enclosing{};
 
     std::expected<item *, error> item_decode(item *storage, std::size_t depth, std::optional<std::size_t> mark);
 
@@ -651,8 +714,6 @@ struct value_sharing::tree_decoder {
     CBOR_NEVER_INLINE error bignum_content_check(std::uint64_t tag);
 
     std::size_t marks_counted();
-
-    std::expected<void, error> marks_before_decode();
 };
 
 template <bool Checked>
