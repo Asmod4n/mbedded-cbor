@@ -621,19 +621,19 @@ TEST_CASE("type: an empty lazy throws")
 namespace item_test
 {
 
-// RFC 8949 2: the tree holds values, so encode writes the library's own form: each length, tag number and integer
-// in its shortest head. A head that is not in preferred form comes back shorter, with the same value. 28([29(0)])
+// The tree keeps the additional information of each head, so encode writes each length, tag number and integer
+// at the width it had on the wire. A head that is not in preferred form comes back in the same form. 28([29(0)])
 // is an array that holds itself; encode writes the head of tag 29 and its index and does not follow the pointer.
-// The index of tag 29 is an integer like any other and is written shortest.
-TEST_CASE("encode: a tree is written in its shortest heads, also with a cycle through tag 29")
+// The index of tag 29 is an integer like any other and keeps its width.
+TEST_CASE("encode: a tree is written with the head widths of its input, also with a cycle through tag 29")
 {
     struct row {
         std::string_view wire;
         std::string_view own;
     };
     for (row const r : {row{"\xd8\x1c\x81\xd8\x1d\x00"sv, "\xd8\x1c\x81\xd8\x1d\x00"sv},
-                        row{"\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x18\x00"sv, "\x82\xd8\x1c\x01\xd8\x1d\x00"sv},
-                        row{"\x9a\x00\x00\x00\x01\x7a\x00\x00\x00\x02hi"sv, "\x81\x62hi"sv}}) {
+                        row{"\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x18\x00"sv, "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x18\x00"sv},
+                        row{"\x9a\x00\x00\x00\x01\x7a\x00\x00\x00\x02hi"sv, "\x9a\x00\x00\x00\x01\x7a\x00\x00\x00\x02hi"sv}}) {
         CAPTURE(r.wire);
         auto const top_level = cbor::lazy::copy(std::string(r.wire));
         REQUIRE(top_level.has_value());
@@ -900,8 +900,8 @@ TEST_CASE("encode: a float of each width comes back byte for byte")
 // in preferred form is well-formed, so an argument of 1 stands in every width; a simple value in one extra byte
 // needs 32 or more. Each tag takes a content that RFC 8949 3.4 admits; tag 29 needs a mark and has its own tests.
 // The expected type is written from the tables of RFC 8949 3.1 and 3.3. A tag 2 or 3 over h'05' fits a basic
-// integer and is that integer (RFC 8949 3.4.3). encode writes the same value with the shortest head and a float at
-// its width, which also checks the major type that encode takes from the type.
+// integer and is that integer (RFC 8949 3.4.3). encode writes each head at its input width, a folded bignum in the shortest head, and a float
+// at its width, which also checks the major type that encode takes from the type.
 TEST_CASE("decode: every major type and additional information gives the type of RFC 8949")
 {
     for (unsigned major = 0; major < 8; ++major) {
@@ -972,17 +972,7 @@ TEST_CASE("decode: every major type and additional information gives the type of
             CHECK_EQ((*decoded)->additional_information, bignum ? 5 : info);
             CHECK_EQ(major_of((*decoded)->type), bignum ? static_cast<cbor::major_type>(argument - 2)
                                                         : static_cast<cbor::major_type>(major));
-            std::string own = wire.substr(0, 1);
-            if (bignum)
-                own = argument == 2 ? "\x05"s : "\x25"s;
-            else if (major == 7 && info >= 25)
-                own = wire;
-            else {
-                own[0] = static_cast<char>(major << 5 | (argument < 24 ? argument : 24));
-                if (argument >= 24)
-                    own += static_cast<char>(argument);
-                own += wire.substr(1 + width);
-            }
+            std::string const own = bignum ? (argument == 2 ? "\x05"s : "\x25"s) : wire;
             std::string again;
             REQUIRE(cbor::encode(**decoded, again).has_value());
             CHECK_EQ(again, own);

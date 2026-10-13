@@ -279,11 +279,12 @@ A cycle through a tag that is not an array or a map is allowed. For
 example, `28(6(29(0)))` decodes into a tree where the content of tag 6 is
 a reference to that tag 6 item.
 
-`cbor::encode(item, target)` writes an item in the library's own form.
-It writes the same value, not the same bytes. Each integer, length and
-tag number takes its shortest head, tags 28 and 29 included. A float
+`cbor::encode(item, target)` writes an item with the additional
+information that each item keeps. Each integer, length and tag number
+keeps the width of its head on the wire, tags 28 and 29 included. A float
 keeps the width of its type, and a NaN keeps its bits. A bignum that fits
-in 64 bits is written as a basic integer. It gives the size in bytes.
+in 64 bits is decoded as a basic integer, and is written in its shortest
+head. It gives the size in bytes.
 
 ## 8. cbor::sequence
 

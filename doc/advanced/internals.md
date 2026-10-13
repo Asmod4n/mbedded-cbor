@@ -71,5 +71,6 @@ tables: each tag 29 item with the item that its tag 28 marks, and each tag
 `std::shared_ptr` whose deleter owns the resource, and the two functions
 find the resource through `std::get_deleter`. A tag 28 before the start
 of a lazy is decoded at the depth of its own position. `encode` of an item
-writes each head in its shortest form, a float at the width of its type,
+writes each head with the additional information that the item keeps, a
+float at the width of its type,
 and does not follow a tag 29.
