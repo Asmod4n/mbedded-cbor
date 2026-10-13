@@ -28,9 +28,11 @@
 
 #ifdef _MSC_VER
 #define CBOR_ALWAYS_INLINE [[msvc::forceinline]]
+#define CBOR_NEVER_INLINE [[msvc::noinline]]
 #define CBOR_ASSUME(condition) __assume(condition)
 #else
 #define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
+#define CBOR_NEVER_INLINE [[gnu::noinline]]
 #define CBOR_ASSUME(condition) [[assume(condition)]]
 #endif
 
