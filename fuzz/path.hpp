@@ -138,7 +138,8 @@ struct undecided {};
 // The reference: RFC 9535 2.1.2 over the eager value. Each segment maps the nodelist to the children it selects.
 // A name selects a value under an equal text key; an index counts from the end when negative and selects a
 // value under an equal integer key of a map; a wildcard selects every element or every value. Without a
-// wildcard a missing child is an error; with one it adds no node. Tag 24 is a top-level item of its own when a
+// wildcard a missing child is an error; with one it adds no node. A segment passes every tag that the path does
+// not interpret, tags 28 and 29 included (RFC 8949 6.1). Tag 24 is a top-level item of its own when a
 // segment goes into it. A nodelist longer than the message is an error.
 inline std::optional<test::value> walked(test::value const &start, std::vector<segment> const &segments,
                                          std::size_t const limit)
@@ -150,6 +151,12 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
     for (auto const &s : segments) {
         std::vector<test::value> next;
         for (test::value v : nodes) {
+            while (auto const *t = test::get_if<test::tagged>(v)) {
+                if (t->tag == 2 || t->tag == 3 || t->tag == 24 || (t->tag >= 64 && t->tag <= 87))
+                    break;
+                test::value const content = t->content;
+                v = content;
+            }
             if (auto const *t = test::get_if<test::tagged>(v); t && t->tag == 24) {
                 auto const *b = test::get_if<test::bytes>(t->content);
                 if (!b)
