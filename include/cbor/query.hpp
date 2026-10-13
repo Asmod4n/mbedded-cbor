@@ -584,9 +584,6 @@ class jsonpath
 
     static std::expected<lazy, error> key_find(lazy const &node, std::string_view key, limit_values loaded);
 
-    static std::expected<std::vector<lazy>, error> elements_encode(std::uint64_t tag, std::string_view bytes,
-                                                                   std::uint64_t first, std::uint64_t count);
-
     static std::expected<lazy, error> index_select(lazy const &node, std::int64_t index, limit_values loaded);
 
     static std::expected<bool, error> value_equal(lazy const &a, lazy const &b, std::size_t depth,
@@ -710,8 +707,7 @@ class jsonpath
                     return std::unexpected(r.error());
                 continue;
             }
-            if (each.kind == selector::kind::index && h.major == major_type::tag &&
-                validity::typed_array_check(h.argument, 0).has_value()) {
+            if (each.kind == selector::kind::index && heads::is_typed_array(h)) {
                 auto const elements = typed_array_elements(h.argument);
                 if (!elements) [[unlikely]]
                     return std::nullopt;
@@ -1067,30 +1063,6 @@ class is_valid_path
 {
 };
 
-inline std::expected<std::vector<lazy>, error> jsonpath::elements_encode(std::uint64_t const tag,
-                                                                         std::string_view const bytes,
-                                                                         std::uint64_t const first,
-                                                                         std::uint64_t const count)
-{
-    std::string encoded;
-    std::vector<std::size_t> offsets;
-    for (std::uint64_t i = first; i < first + count; ++i) {
-        auto const element = heads::typed_array_element_decode(tag, bytes, i);
-        if (!element) [[unlikely]]
-            return std::unexpected(element.error());
-        offsets.push_back(encoded.size());
-        heads::head_append(encoded, element->major, element->info, element->argument);
-    }
-    auto const owner = std::make_shared<std::string const>(std::move(encoded));
-    auto const source =
-        std::make_shared<value_sharing::top_level_item>(owner, std::string_view(*owner), std::vector<lazy>{}, 0);
-    std::vector<lazy> elements;
-    elements.reserve(offsets.size());
-    for (std::size_t const offset : offsets)
-        elements.push_back(lazy{source, offset});
-    return elements;
-}
-
 inline std::expected<lazy, error> jsonpath::index_select(lazy const &node, std::int64_t const index,
                                                          limit_values const loaded)
 {
@@ -1101,18 +1073,8 @@ inline std::expected<lazy, error> jsonpath::index_select(lazy const &node, std::
             auto found = value_sharing::tag_content_resolve(node.top_level, node.offset, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
-            if (found->h.major == major_type::tag && validity::typed_array_check(found->h.argument, 0).has_value()) {
-                auto const bytes = value_sharing::typed_array_bytes_read(*found);
-                if (!bytes) [[unlikely]]
-                    return std::unexpected(bytes.error());
-                auto const position =
-                    validity::check_index(index, bytes->size() / validity::typed_array_element_size(found->h.argument));
-                if (!position) [[unlikely]]
-                    return std::unexpected(position.error());
-                auto const element = elements_encode(found->h.argument, *bytes, *position, 1);
-                if (!element) [[unlikely]]
-                    return std::unexpected(element.error());
-                return element->front();
+            if (heads::is_typed_array(found->h)) {
+                return value_sharing::typed_array_index_select(*found, index);
             }
             if (found->h.major != major_type::array)
                 return value_sharing::value_of(value_sharing::key_find(std::move(*found), index, loaded));
@@ -1526,11 +1488,11 @@ inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, 
                 return std::unexpected(found.error());
             lazy const content{found->source, found->item_at};
             std::vector<lazy> children;
-            if (found->h.major == major_type::tag && validity::typed_array_check(found->h.argument, 0).has_value()) {
+            if (heads::is_typed_array(found->h)) {
                 auto const bytes = value_sharing::typed_array_bytes_read(*found);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
-                auto elements = elements_encode(found->h.argument, *bytes, 0,
+                auto elements = value_sharing::elements_encode(found->h.argument, *bytes, 0,
                                                 bytes->size() / validity::typed_array_element_size(found->h.argument));
                 if (!elements) [[unlikely]]
                     return std::unexpected(elements.error());

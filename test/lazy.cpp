@@ -1624,3 +1624,107 @@ TEST_CASE("lazy: a count larger than the bytes left is too_little_data before th
     CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).at(cbor::key{std::int64_t{0}}).error(), error::too_little_data);
     CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).entries().error(), error::too_little_data);
 }
+
+namespace typed_array_index
+{
+
+std::string typed_array_of(int const tag, std::string_view const bytes)
+{
+    std::string wire = "\xd8"s + static_cast<char>(tag);
+    if (bytes.size() < 24)
+        wire += static_cast<char>(0x40 + bytes.size());
+    else
+        wire += "\x58"s + static_cast<char>(bytes.size());
+    return wire + std::string(bytes);
+}
+
+} // namespace typed_array_index
+
+// Owner decision: an array is an array. RFC 8746 2.1 defines tags 64 to 87, except 76, as typed arrays, so a lazy
+// step indexes them as at_path does. Each row holds two elements; the second value is written from the table of
+// RFC 8746 2.1 (endianness, sign and width of the tag).
+TEST_CASE("lazy: an index reads an element of each typed array")
+{
+    using typed_array_index::typed_array_of;
+    struct integer_row {
+        int tag;
+        std::string_view bytes;
+        std::int64_t second;
+    };
+    integer_row const integers[] = {
+        {64, "\x00\xff"sv, 255},
+        {65, "\x00\x00\x01\x02"sv, 258},
+        {66, "\x00\x00\x00\x00\x01\x02\x03\x04"sv, 0x01020304},
+        {67, "\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08"sv, 0x0102030405060708},
+        {68, "\x00\xff"sv, 255},
+        {69, "\x00\x00\x02\x01"sv, 258},
+        {70, "\x00\x00\x00\x00\x04\x03\x02\x01"sv, 0x01020304},
+        {71, "\x00\x00\x00\x00\x00\x00\x00\x00\x08\x07\x06\x05\x04\x03\x02\x01"sv, 0x0102030405060708},
+        {72, "\x00\xff"sv, -1},
+        {73, "\x00\x00\xff\xfe"sv, -2},
+        {74, "\x00\x00\x00\x00\xff\xff\xff\xfd"sv, -3},
+        {75, "\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff\xff\xff\xfc"sv, -4},
+        {77, "\x00\x00\xfe\xff"sv, -2},
+        {78, "\x00\x00\x00\x00\xfd\xff\xff\xff"sv, -3},
+        {79, "\x00\x00\x00\x00\x00\x00\x00\x00\xfc\xff\xff\xff\xff\xff\xff\xff"sv, -4},
+    };
+    for (auto const &[tag, bytes, second] : integers) {
+        CAPTURE(tag);
+        auto const l = lazy_of(typed_array_of(tag, bytes));
+        CHECK_EQ(*l.size(), 2u);
+        CHECK_EQ(*l.at(0)->get<std::int64_t>(), 0);
+        CHECK_EQ(*l.at(1)->get<std::int64_t>(), second);
+        CHECK_EQ(l.at(2).error(), error::index_out_of_bounds);
+        CHECK_EQ(std::ranges::distance(*l.elements()), 2);
+        CHECK_EQ(*(*std::ranges::next(l.elements()->begin()))->get<std::int64_t>(), second);
+    }
+    struct float_row {
+        int tag;
+        std::string_view bytes;
+    };
+    float_row const floats[] = {
+        {80, "\x00\x00\x3e\x00"sv},
+        {81, "\x00\x00\x00\x00\x3f\xc0\x00\x00"sv},
+        {82, "\x00\x00\x00\x00\x00\x00\x00\x00\x3f\xf8\x00\x00\x00\x00\x00\x00"sv},
+        {84, "\x00\x00\x00\x3e"sv},
+        {85, "\x00\x00\x00\x00\x00\x00\xc0\x3f"sv},
+        {86, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf8\x3f"sv},
+    };
+    for (auto const &[tag, bytes] : floats) {
+        CAPTURE(tag);
+        auto const l = lazy_of(typed_array_of(tag, bytes));
+        CHECK_EQ(*l.size(), 2u);
+        CHECK_EQ(*l.at(1)->get<double>(), 1.5);
+        CHECK_EQ(l.at(1)->get<std::int64_t>().error(), error::incorrect_type);
+    }
+    // A float of 128 bits has no C++ type that the library reads, so its element is incorrect_type, as at_path gives.
+    for (int const tag : {83, 87}) {
+        CAPTURE(tag);
+        auto const l = lazy_of(typed_array_of(tag, std::string(32, '\0')));
+        CHECK_EQ(*l.size(), 2u);
+        CHECK_EQ(l.at(1).error(), error::incorrect_type);
+    }
+    // Tag 76 is reserved in RFC 8746 2.1, so it is no typed array.
+    CHECK_EQ(lazy_of(typed_array_of(76, "\x00\x00"sv)).at(0).error(), error::not_indexable);
+}
+
+// A typed array whose byte string claims more bytes than the input holds is too_little_data at the step; a length
+// that is not a multiple of the element size is refused as RFC 8746 2 requires.
+TEST_CASE("lazy: a cut typed array is too_little_data")
+{
+    auto const cut = lazy_of("\xd8\x41\x44\x00\x01"s);
+    CHECK_EQ(cut.at(0).error(), error::too_little_data);
+    CHECK_EQ(cut.size().error(), error::too_little_data);
+    CHECK_EQ(cut.elements().error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\xd8\x41\x43\x00\x01\x02"s).at(0).error(), error::inadmissible_type_for_tag_content);
+}
+
+// A typed array inside tag 24 and a typed array that tag 29 references are indexed like a typed array in place.
+TEST_CASE("lazy: an index reads a typed array through tag 24 and tag 29")
+{
+    CHECK_EQ(*lazy_of("\xd8\x18\x45\xd8\x40\x42\x01\x02"s).at(1)->get<int>(), 2);
+    auto const referenced = lazy_of("\x82\xd8\x1c\xd8\x40\x42\x01\x02\xd8\x1d\x00"s).at(1);
+    REQUIRE(referenced.has_value());
+    CHECK_EQ(*referenced->at(1)->get<int>(), 2);
+    CHECK_EQ(*referenced->size(), 2u);
+}
