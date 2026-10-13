@@ -421,6 +421,16 @@ public:
         return {};
     }
 
+    enum class byte_offset : std::size_t {};
+
+    enum class element_index : std::uint64_t {};
+
+    CBOR_ALWAYS_INLINE static constexpr byte_offset
+    typed_array_element_offset(byte_offset const start, std::size_t const element_size, element_index const index)
+    {
+        return byte_offset{std::to_underlying(start) + static_cast<std::size_t>(std::to_underlying(index)) * element_size};
+    }
+
     template <std::integral I>
     CBOR_ALWAYS_INLINE static constexpr std::expected<std::uint64_t, error>
     check_index(I const index, std::uint64_t const length)

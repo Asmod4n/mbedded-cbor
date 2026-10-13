@@ -561,3 +561,22 @@ TEST_CASE("validity: keys_equivalent compares the pairs of two maps as multisets
     CHECK_FALSE(*validity::keys_equivalent(kk, 0, kj, 0, 0, 16, validity::limit_checks<false>{}));
     CHECK(*validity::keys_equivalent(kk, 0, kk, 0, 0, 16, validity::limit_checks<false>{}));
 }
+
+// An offset, an element size and an element index are three kinds of number. Each has its own type, so a call that
+// swaps two of them does not compile. The checks ask the compiler whether each swapped call is well-formed.
+TEST_CASE("validity: typed_array_element_offset refuses a swapped offset, size or index")
+{
+    using offset = validity::byte_offset;
+    using index = validity::element_index;
+    auto const callable = [](auto const a, auto const b, auto const c) {
+        return requires { validity::typed_array_element_offset(a, b, c); };
+    };
+    CHECK(callable(offset{}, std::size_t{}, index{}));
+    CHECK_FALSE(callable(std::size_t{}, offset{}, index{}));
+    CHECK_FALSE(callable(index{}, std::size_t{}, offset{}));
+    CHECK_FALSE(callable(offset{}, index{}, std::size_t{}));
+    CHECK_FALSE(callable(std::size_t{}, std::size_t{}, std::size_t{}));
+    CHECK_FALSE(callable(offset{}, std::size_t{}, std::uint64_t{}));
+    // Element 3 of 8 bytes each starts 24 bytes after the first element.
+    CHECK_EQ(std::to_underlying(validity::typed_array_element_offset(offset{5}, 8, index{3})), 29u);
+}
