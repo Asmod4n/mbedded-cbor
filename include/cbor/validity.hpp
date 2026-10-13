@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <span>
 #include <type_traits>
 #if defined(__cpp_exceptions)
 #include <stdexcept>
@@ -75,6 +76,12 @@ class validity
     };
 
 public:
+    enum class offset : std::size_t {};
+
+    enum class index : std::uint64_t {};
+
+    static constexpr offset npos{std::numeric_limits<std::size_t>::max()};
+
     static constexpr std::size_t nesting_depth_limit = 512;
 
     static constexpr std::size_t nesting_depth_default = CBOR_NESTING_DEPTH_DEFAULT;
@@ -264,13 +271,13 @@ public:
     }
 
     template <class First, class Second, bool Checked>
-    static std::expected<bool, error> keys_equivalent(First &first, std::size_t first_at, Second &second,
-                                                      std::size_t second_at, std::size_t depth,
+    static std::expected<bool, error> keys_equivalent(First &first, offset first_at, Second &second,
+                                                      offset second_at, std::size_t depth,
                                                       std::size_t depth_max, limit_checks<Checked> checks);
 
     template <std::invocable MarksRead, class Projection, bool Checked>
     static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
-                                                        std::size_t content_at, MarksRead marks_read,
+                                                        offset content_at, MarksRead marks_read,
                                                         Projection offset_of, limit_checks<Checked> checks);
 
     template <class Item>
@@ -421,31 +428,63 @@ public:
         return {};
     }
 
-    enum class byte_offset : std::size_t {};
-
-    enum class element_index : std::uint64_t {};
-
-    CBOR_ALWAYS_INLINE static constexpr byte_offset
-    typed_array_element_offset(byte_offset const start, std::size_t const element_size, element_index const index)
+    CBOR_ALWAYS_INLINE static constexpr offset element_offset(offset const start, std::size_t const element_size,
+                                                              index const i)
     {
-        return byte_offset{std::to_underlying(start) + static_cast<std::size_t>(std::to_underlying(index)) * element_size};
+        return offset{std::to_underlying(start) + static_cast<std::size_t>(std::to_underlying(i)) * element_size};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr offset next(offset const at, std::size_t const size)
+    {
+        return offset{std::to_underlying(at) + size};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr offset distance(std::string_view const whole, std::string_view const rest)
+    {
+        return offset{whole.size() - rest.size()};
+    }
+
+    template <class Bytes>
+        requires std::ranges::contiguous_range<Bytes const> && std::ranges::sized_range<Bytes const>
+    CBOR_ALWAYS_INLINE static constexpr auto subspan(Bytes const &encoded, offset const at)
+    {
+        using view = std::conditional_t<std::is_convertible_v<Bytes const &, std::string_view>, std::string_view,
+                                        std::span<std::ranges::range_value_t<Bytes> const>>;
+        view const whole(encoded);
+        if (std::to_underlying(at) > whole.size()) [[unlikely]]
+            throw_logic_error("cbor::validity: the offset is after the end of its input");
+        return view(std::views::drop(whole, static_cast<std::ranges::range_difference_t<view>>(std::to_underlying(at))));
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::span<char const> element_span(std::string_view const elements,
+                                                                           index const i, std::size_t const size)
+    {
+        return std::span(elements).subspan(static_cast<std::size_t>(std::to_underlying(i)) * size, size);
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<std::string_view, error>
+    substr(std::string_view const encoded, offset const at, std::size_t const size)
+    {
+        if (std::to_underlying(at) > encoded.size() || encoded.size() - std::to_underlying(at) < size) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return encoded.substr(std::to_underlying(at), size);
     }
 
     template <std::integral I>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<std::uint64_t, error>
-    check_index(I const index, std::uint64_t const length)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<index, error>
+    check_index(I const i, std::uint64_t const length)
     {
         if constexpr (std::is_signed_v<I>) {
-            if (index < 0) {
-                std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(index);
+            if (i < 0) {
+                std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(i);
                 if (back > length) [[unlikely]]
                     return std::unexpected(error::index_out_of_bounds);
-                return length - back;
+                return index{length - back};
             }
         }
-        if (static_cast<std::uint64_t>(index) >= length) [[unlikely]]
+        if (static_cast<std::uint64_t>(i) >= length) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
-        return static_cast<std::uint64_t>(index);
+        return index{static_cast<std::uint64_t>(i)};
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_count(std::size_t const count,

@@ -63,7 +63,7 @@ TEST_CASE("nesting depth depth_limit: keys_equivalent")
         std::string const b = arrays_around(n, "\x01"sv);
         std::string_view const first = a;
         std::string_view const second = b;
-        return cbor::validity::keys_equivalent(first, 0, second, 0, 1, depth_limit,
+        return cbor::validity::keys_equivalent(first, cbor::validity::offset{}, second, cbor::validity::offset{}, 1, depth_limit,
                                                cbor::validity::limit_checks<false>{});
     };
     CHECK(checked(depth_limit - 1).has_value());

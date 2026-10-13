@@ -1136,7 +1136,7 @@ TEST_CASE("validity: keys_equivalent follows RFC 8949 5.6.1")
         CAPTURE(p.first);
         CAPTURE(p.second);
         auto const equal =
-            cbor::validity::keys_equivalent(first, 0, second, 0, 1, 16, cbor::validity::limit_checks<false>{});
+            cbor::validity::keys_equivalent(first, cbor::validity::offset{}, second, cbor::validity::offset{}, 1, 16, cbor::validity::limit_checks<false>{});
         REQUIRE(equal.has_value());
         CHECK_EQ(*equal, p.equal);
     }

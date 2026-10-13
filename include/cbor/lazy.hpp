@@ -54,20 +54,20 @@ inline lazy_elements::iterator &lazy_elements::iterator::operator++()
         return *this;
     }
     if (typed_array_tag != 0) {
-        offset += validity::typed_array_element_size(typed_array_tag);
+        offset = validity::next(offset, validity::typed_array_element_size(typed_array_tag));
         --left;
         return *this;
     }
     return validity::limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) -> iterator & {
-            heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(offset)),
+            heads::decoder<Checked> d{validity::subspan(top_level->encoded, offset),
                                       checks};
             if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
                 failure = r.error();
                 --left;
                 return *this;
             }
-            offset = top_level->encoded.size() - d.encoded.size();
+            offset = validity::distance(top_level->encoded, d.encoded);
             --left;
             if (left != 0 && d.encoded.empty()) [[unlikely]]
                 failure = error::too_little_data;
@@ -81,7 +81,7 @@ inline void lazy_entries::iterator::value_find()
         return;
     validity::limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-            heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(key)), checks};
+            heads::decoder<Checked> d{validity::subspan(top_level->encoded, key), checks};
             if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
                 failure = r.error();
                 return;
@@ -90,7 +90,7 @@ inline void lazy_entries::iterator::value_find()
                 failure = error::too_little_data;
                 return;
             }
-            value = top_level->encoded.size() - d.encoded.size();
+            value = validity::distance(top_level->encoded, d.encoded);
         });
 }
 
@@ -116,13 +116,13 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
     }
     validity::limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-            heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(value)), checks};
+            heads::decoder<Checked> d{validity::subspan(top_level->encoded, value), checks};
             if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
                 failure = r.error();
                 --left;
                 return;
             }
-            key = top_level->encoded.size() - d.encoded.size();
+            key = validity::distance(top_level->encoded, d.encoded);
             --left;
         });
     if (failure == error{})
@@ -144,7 +144,7 @@ inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner,
         return std::unexpected(r.error());
     std::string_view const content = heads::self_described_cbor_content(encoded);
     return lazy{
-        std::make_shared<value_sharing::top_level_item>(std::move(owner), content, std::vector<lazy>{}, 0), 0, {}};
+        std::make_shared<value_sharing::top_level_item>(std::move(owner), content, std::vector<lazy>{}, validity::offset{}), validity::offset{}, {}};
 }
 
 template <class F>
@@ -179,7 +179,7 @@ value_sharing::key_find(resolved<Checked> found, Key const key, limit_values con
 {
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    std::size_t const first = found.source->encoded.size() - found.d.encoded.size();
+    validity::offset const first = validity::distance(found.source->encoded, found.d.encoded);
     std::uint64_t const readable = std::min<std::uint64_t>(found.h.argument, found.d.encoded.size());
     typename Entries::iterator it(std::move(found.source), first, readable, loaded);
     auto found_at = key_find<false>(std::move(it), std::default_sentinel, key, found.d.checks);
@@ -224,7 +224,7 @@ value_sharing::key_find(Iterator it, Last const last, Key const key,
         auto const key_at = shared_resolve(*it.top_level, it.key, checks);
         if (!key_at) [[unlikely]]
             return std::unexpected(key_at.error());
-        heads::decoder<Checked> probe{std::string_view(std::span(it.top_level->encoded).subspan(*key_at)),
+        heads::decoder<Checked> probe{validity::subspan(it.top_level->encoded, *key_at),
                                       checks};
         auto const k = probe.head_decode();
         if (!k) [[unlikely]]
@@ -241,10 +241,10 @@ value_sharing::key_find(Iterator it, Last const last, Key const key,
             equal = (k->major == major_type::unsigned_integer && key >= 0 && k->argument == static_cast<std::uint64_t>(key)) ||
                     (k->major == major_type::negative_integer && key < 0 && k->argument == static_cast<std::uint64_t>(-1 - key));
             if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
-                auto const content = shared_resolve(*it.top_level, it.top_level->encoded.size() - probe.encoded.size(), checks);
+                auto const content = shared_resolve(*it.top_level, validity::distance(it.top_level->encoded, probe.encoded), checks);
                 if (!content) [[unlikely]]
                     return std::unexpected(content.error());
-                heads::decoder<Checked> d{std::string_view(std::span(it.top_level->encoded).subspan(*content)), checks};
+                heads::decoder<Checked> d{validity::subspan(it.top_level->encoded, *content), checks};
                 auto const read = d.bignum_decode(k->argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
@@ -258,7 +258,8 @@ value_sharing::key_find(Iterator it, Last const last, Key const key,
         if constexpr (Sorted) {
             plain = plain && *key_at == it.key && k->major != major_type::tag;
             if (plain) {
-                std::string_view const read = std::string_view(std::span(it.top_level->encoded).subspan(it.key, it.value - it.key));
+                std::string_view read = validity::subspan(it.top_level->encoded, it.key);
+                read.remove_suffix(validity::subspan(it.top_level->encoded, it.value).size());
                 auto order = read.substr(0, wanted_head.size()) <=> wanted_head;
                 if (order == 0)
                     order = read.substr(wanted_head.size()) <=> wanted_content;
@@ -350,11 +351,8 @@ inline std::expected<std::size_t, error> lazy::count(std::int64_t const key) con
 inline std::expected<std::string_view, error> value_sharing::typed_array_element_read(lazy const &node)
 {
     validity::throw_logic_error_if_null(node.top_level, "cbor::lazy: the lazy holds no top-level item");
-    std::size_t const size = validity::typed_array_element_size(node.typed_array_tag);
-    std::string_view const encoded = node.top_level->encoded;
-    if (node.offset > encoded.size() || encoded.size() - node.offset < size) [[unlikely]]
-        return std::unexpected(error::too_little_data);
-    return encoded.substr(node.offset, size);
+    return validity::substr(node.top_level->encoded, node.offset,
+                            validity::typed_array_element_size(node.typed_array_tag));
 }
 
 template <bool Checked>
@@ -366,7 +364,7 @@ value_sharing::lazy_resolve(lazy const &node, validity::limit_checks<Checked> co
     auto const element = typed_array_element_read(node);
     if (!element) [[unlikely]]
         return std::unexpected(element.error());
-    auto const h = heads::typed_array_element_decode(node.typed_array_tag, *element, 0);
+    auto const h = heads::typed_array_element_decode(node.typed_array_tag, *element, validity::index{});
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
     return resolved<Checked>{node.top_level, *h, heads::decoder<Checked>{std::string_view{}, checks}, node.offset};
@@ -383,9 +381,7 @@ std::expected<lazy, error> value_sharing::index_select(resolved<Checked> const &
         auto const position = validity::check_index(index, bytes->bytes.size() / size);
         if (!position) [[unlikely]]
             return std::unexpected(position.error());
-        auto const at = validity::typed_array_element_offset(bytes->offset, size,
-                                                             validity::element_index{*position});
-        return lazy{found.source, std::to_underlying(at), found.h.argument};
+        return lazy{found.source, validity::element_offset(bytes->offset, size, *position), found.h.argument};
     }
     if (found.h.major != major_type::array) [[unlikely]]
         return std::unexpected(error::not_indexable);
@@ -393,9 +389,9 @@ std::expected<lazy, error> value_sharing::index_select(resolved<Checked> const &
     if (!position) [[unlikely]]
         return std::unexpected(position.error());
     heads::decoder<Checked> d = found.d;
-    if (auto const r = well_formedness::items_skip(d, *position); !r) [[unlikely]]
+    if (auto const r = well_formedness::items_skip(d, std::to_underlying(*position)); !r) [[unlikely]]
         return std::unexpected(r.error());
-    std::size_t const element = found.source->encoded.size() - d.encoded.size();
+    validity::offset const element = validity::distance(found.source->encoded, d.encoded);
     if (auto const target = heads::decoder<Checked>(d).head_decode(); !target) [[unlikely]]
         return std::unexpected(target.error());
     return lazy{found.source, element, {}};
@@ -456,7 +452,7 @@ inline std::expected<cbor::type, error> lazy::type() const
                             auto const content = value_sharing::shared_resolve(*top_level, h->at, checks);
                             if (!content) [[unlikely]]
                                 return std::unexpected(content.error());
-                            heads::decoder<Checked> d{std::string_view(std::span(top_level->encoded).subspan(*content)),
+                            heads::decoder<Checked> d{validity::subspan(top_level->encoded, *content),
                                                       checks};
                             auto const read = d.bignum_decode(h->argument);
                             if (!read) [[unlikely]]
@@ -631,11 +627,11 @@ auto lazy::get(limit_values const loaded) const
                 if (heads::is_bignum(h.major, h.argument)) {
                     negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
                     auto const content = value_sharing::shared_resolve(
-                        *source, source->encoded.size() - d.encoded.size(), checks);
+                        *source, validity::distance(source->encoded, d.encoded), checks);
                     if (!content) [[unlikely]]
                         return std::unexpected(content.error());
                     d = heads::decoder<Checked>{
-                        std::string_view(std::span(source->encoded).subspan(*content)), checks};
+                        validity::subspan(source->encoded, *content), checks};
                     auto const read = d.bignum_decode(h.argument);
                     if (!read) [[unlikely]]
                         return std::unexpected(read.error());
@@ -653,11 +649,11 @@ auto lazy::get(limit_values const loaded) const
             } else if constexpr (std::is_same_v<T, double>) {
                 if (heads::is_bignum(h.major, h.argument)) [[unlikely]] {
                     auto const content = value_sharing::shared_resolve(
-                        *source, source->encoded.size() - d.encoded.size(), checks);
+                        *source, validity::distance(source->encoded, d.encoded), checks);
                     if (!content) [[unlikely]]
                         return std::unexpected(content.error());
                     d = heads::decoder<Checked>{
-                        std::string_view(std::span(source->encoded).subspan(*content)), checks};
+                        validity::subspan(source->encoded, *content), checks};
                     auto const read = d.bignum_decode(h.argument);
                     if (!read) [[unlikely]]
                         return std::unexpected(read.error());
@@ -744,7 +740,7 @@ inline std::expected<lazy_elements, error> lazy::elements(limit_values const loa
                 auto const bytes = value_sharing::typed_array_bytes_read(*found);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
-                return lazy_elements(found->source, std::to_underlying(bytes->offset),
+                return lazy_elements(found->source, bytes->offset,
                                      bytes->bytes.size() / validity::typed_array_element_size(found->h.argument), loaded,
                                      found->h.argument);
             }
@@ -755,7 +751,7 @@ inline std::expected<lazy_elements, error> lazy::elements(limit_values const loa
                 return std::unexpected(r.error());
             if (auto const r = validity::check_pending_items(h.argument, d.encoded.size()); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            return lazy_elements(source, source->encoded.size() - d.encoded.size(), h.argument, loaded, {});
+            return lazy_elements(source, validity::distance(source->encoded, d.encoded), h.argument, loaded, {});
         });
 }
 
@@ -783,7 +779,7 @@ inline std::expected<lazy_entries, error> lazy::entries(limit_values const loade
                 return std::unexpected(error::too_little_data);
             if (auto const r = validity::check_pending_items(*items, d.encoded.size()); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            return lazy_entries(source, source->encoded.size() - d.encoded.size(), h.argument, loaded);
+            return lazy_entries(source, validity::distance(source->encoded, d.encoded), h.argument, loaded);
         });
 }
 
@@ -818,7 +814,7 @@ std::size_t value_sharing::tree_decoder<Checked>::marks_counted()
     if (mark_next)
         return *mark_next;
     std::size_t before = 0;
-    if (start != 0) {
+    if (start != validity::offset{}) {
         std::vector<lazy> const &marks = top_level.sharedrefs_read(start);
         auto const at = std::ranges::lower_bound(marks, start, {}, &lazy::offset);
         before = static_cast<std::size_t>(std::ranges::distance(marks.begin(), at));
@@ -850,11 +846,11 @@ std::expected<void, error> value_sharing::tree_decoder<Checked>::marks_before_de
         auto const marked = validity::check_sharedref_index(j, found.depths.size());
         if (!marked) [[unlikely]]
             return std::unexpected(marked.error());
-        std::size_t const at = top_level.sharedrefs_read(start)[j].offset;
+        validity::offset const at = top_level.sharedrefs_read(start)[j].offset;
         tree_decoder outside{decoded,
                              top_level,
                              shareables,
-                             {std::string_view(std::span(top_level.encoded).subspan(at)), d.checks},
+                             {validity::subspan(top_level.encoded, at), d.checks},
                              at,
                              depth_max,
                              j + 1,
@@ -903,7 +899,7 @@ template <bool Checked>
 std::expected<item *, error> value_sharing::tree_decoder<Checked>::bignum_decode(item &node, std::uint64_t const tag,
                                                                                std::size_t const depth)
 {
-    auto const next = heads::raw_head_read(d.encoded, 0, d.checks);
+    auto const next = heads::raw_head_read(d.encoded, validity::offset{}, d.checks);
     if (!next || next->major != major_type::byte_string)
         return nullptr;
     if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
@@ -926,7 +922,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::bignum_decode
 template <bool Checked>
 error value_sharing::tree_decoder<Checked>::bignum_content_check(std::uint64_t const tag)
 {
-    auto const inner = heads::raw_head_read(d.encoded, 0, d.checks);
+    auto const inner = heads::raw_head_read(d.encoded, validity::offset{}, d.checks);
     if (!inner || !heads::is_bignum(inner->major, inner->argument)) [[likely]]
         return error{};
     return validity::check_tag_content(tag, inner->major, inner->info).error_or(error{});
@@ -1071,9 +1067,9 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
         std::span<std::byte const> const encoded = bytes->via.bin;
         top_level_item &nested = decoded.embedded.emplace_front(
             top_level.owner, std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()),
-            std::vector<lazy>{}, 0);
+            std::vector<lazy>{}, validity::offset{});
         std::vector<item const *> nested_shareables;
-        tree_decoder inner{decoded, nested, nested_shareables, {nested.encoded, d.checks}, 0, depth_max, 0, 0};
+        tree_decoder inner{decoded, nested, nested_shareables, {nested.encoded, d.checks}, validity::offset{}, depth_max, 0, 0};
         auto const data_item = inner.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1),
                                                  depth + 2, std::nullopt);
         if (!data_item) [[unlikely]]
@@ -1111,7 +1107,7 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
         limits.load(),
         [this]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
             -> std::expected<std::shared_ptr<item const>, error> {
-            std::string_view const encoded(std::span(top_level->encoded).subspan(offset));
+            std::string_view const encoded = validity::subspan(top_level->encoded, offset);
             auto decoded = std::make_unique<value_sharing::zone>(
                 top_level, validity::checked_mul(encoded.size(), sizeof(item))
                                .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
@@ -1119,7 +1115,7 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
             std::vector<item const *> shareables;
             value_sharing::tree_decoder<Checked> tree{
                 *decoded, *top_level, shareables, {encoded, checks}, offset, depth_max,
-                offset == 0 ? std::optional<std::size_t>{0} : std::nullopt, 0};
+                offset == validity::offset{} ? std::optional<std::size_t>{0} : std::nullopt, 0};
             auto const built = tree.item_decode(
                 std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0, std::nullopt);
             if (!built) [[unlikely]]

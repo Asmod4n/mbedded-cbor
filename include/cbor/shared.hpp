@@ -66,21 +66,21 @@ class value_sharing
     struct resolved;
 
     template <bool Checked>
-    static std::expected<std::size_t, error> shared_resolve(top_level_item &top_level, std::size_t at,
+    static std::expected<validity::offset, error> shared_resolve(top_level_item &top_level, validity::offset at,
                                                             validity::limit_checks<Checked> checks);
 
     template <bool Checked>
     static std::expected<resolved<Checked>, error> container_resolve(std::shared_ptr<top_level_item> source,
-                                                                     std::size_t offset,
+                                                                     validity::offset offset,
                                                                      validity::limit_checks<Checked> checks);
 
     template <bool Checked>
     static std::expected<resolved<Checked>, error> tag_content_resolve(std::shared_ptr<top_level_item> source,
-                                                                       std::size_t offset,
+                                                                       validity::offset offset,
                                                                        validity::limit_checks<Checked> checks);
 
     struct tag_content {
-        validity::byte_offset offset;
+        validity::offset offset;
         std::string_view bytes;
     };
 
@@ -162,14 +162,14 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         }
 
     private:
-        iterator(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const l,
+        iterator(std::shared_ptr<value_sharing::top_level_item> t, validity::offset const o, std::uint64_t const l,
                  limit_values const v, std::uint64_t const tag)
             : top_level(std::move(t)), offset(o), left(l), loaded(v), typed_array_tag(tag)
         {
         }
 
         std::shared_ptr<value_sharing::top_level_item> top_level;
-        std::size_t offset{};
+        validity::offset offset{};
         std::uint64_t left{};
         error failure{};
         limit_values loaded{};
@@ -196,14 +196,14 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     void front() const = delete;
 
 private:
-    lazy_elements(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o,
+    lazy_elements(std::shared_ptr<value_sharing::top_level_item> t, validity::offset const o,
                   std::uint64_t const c, limit_values const v, std::uint64_t const tag)
         : top_level(std::move(t)), offset(o), count(c), loaded(v), typed_array_tag(tag)
     {
     }
 
     std::shared_ptr<value_sharing::top_level_item> top_level;
-    std::size_t offset;
+    validity::offset offset;
     std::uint64_t count;
     limit_values loaded;
     std::uint64_t typed_array_tag;
@@ -238,7 +238,7 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         }
 
     private:
-        iterator(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const k, std::uint64_t const l,
+        iterator(std::shared_ptr<value_sharing::top_level_item> t, validity::offset const k, std::uint64_t const l,
                  limit_values const v)
             : top_level(std::move(t)), key(k), value(k), left(l), loaded(v)
         {
@@ -248,8 +248,8 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         void value_find();
 
         std::shared_ptr<value_sharing::top_level_item> top_level;
-        std::size_t key{};
-        std::size_t value{};
+        validity::offset key{};
+        validity::offset value{};
         std::uint64_t left{};
         error failure{};
         limit_values loaded{};
@@ -279,14 +279,14 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     void front() const = delete;
 
 private:
-    lazy_entries(std::shared_ptr<value_sharing::top_level_item> t, std::size_t const o, std::uint64_t const c,
+    lazy_entries(std::shared_ptr<value_sharing::top_level_item> t, validity::offset const o, std::uint64_t const c,
                  limit_values const v)
         : top_level(std::move(t)), offset(o), count(c), loaded(v)
     {
     }
 
     std::shared_ptr<value_sharing::top_level_item> top_level;
-    std::size_t offset;
+    validity::offset offset;
     std::uint64_t count;
     limit_values loaded;
 
@@ -295,7 +295,7 @@ private:
 
 struct lazy {
     std::shared_ptr<value_sharing::top_level_item> top_level;
-    std::size_t offset;
+    validity::offset offset;
     std::uint64_t typed_array_tag{};
 
     static std::expected<lazy, error> copy(std::string_view encoded);
@@ -403,16 +403,16 @@ struct value_sharing::top_level_item {
     std::shared_ptr<void const> owner;
     std::string_view encoded;
     std::vector<lazy> sharedrefs;
-    std::size_t high_water_mark;
+    validity::offset high_water_mark;
 #ifndef NDEBUG
     std::thread::id owner_thread = std::this_thread::get_id();
 #endif
-    std::vector<std::size_t> sharedrefs_resolved;
+    std::vector<validity::offset> sharedrefs_resolved;
     std::string_view sharedrefs_unread;
     std::uint64_t sharedrefs_pending = 1;
     bool sharedrefs_started = false;
 
-    std::vector<lazy> const &sharedrefs_read(std::size_t const up_to = std::numeric_limits<std::size_t>::max())
+    std::vector<lazy> const &sharedrefs_read(validity::offset const up_to = validity::npos)
     {
 #ifndef NDEBUG
         if (owner_thread == std::thread::id{})
@@ -425,7 +425,7 @@ struct value_sharing::top_level_item {
             sharedrefs_started = true;
         }
         heads::decoder<false> all{sharedrefs_unread, validity::limit_checks<false>{}};
-        while (sharedrefs_pending != 0 && encoded.size() - all.encoded.size() <= up_to) {
+        while (sharedrefs_pending != 0 && validity::distance(encoded, all.encoded) <= up_to) {
             --sharedrefs_pending;
             auto const h = all.head_decode();
             if (!h || !validity::check_definite_length(h->major, h->info)) [[unlikely]] {
@@ -465,7 +465,7 @@ struct value_sharing::top_level_item {
     template <bool Checked>
     std::size_t mark(heads::decoder<Checked> const &at)
     {
-        std::size_t const offset = encoded.size() - at.encoded.size();
+        validity::offset const offset = validity::distance(encoded, at.encoded);
         if (offset > high_water_mark) {
             sharedrefs.push_back(lazy{{}, offset, {}});
             high_water_mark = offset;
@@ -477,7 +477,7 @@ struct value_sharing::top_level_item {
 
     template <bool Checked>
     static std::expected<lazy, error>
-    sharedref_decode(heads::decoder<Checked> &d, std::size_t const reference_at, std::size_t const item_at,
+    sharedref_decode(heads::decoder<Checked> &d, validity::offset const reference_at, validity::offset const item_at,
                      std::vector<lazy> const &marks)
     {
         auto const n = d.head_decode();
@@ -565,7 +565,7 @@ struct value_sharing::tree_decoder {
     top_level_item &top_level;
     std::vector<item const *> &shareables;
     heads::decoder<Checked> d;
-    std::size_t start;
+    validity::offset start;
     std::size_t depth_max;
     std::optional<std::size_t> mark_next;
     std::size_t marks_before = 0;
@@ -598,14 +598,14 @@ struct value_sharing::resolved {
     std::shared_ptr<top_level_item> source;
     heads::head h;
     heads::decoder<Checked> d;
-    std::size_t item_at;
+    validity::offset item_at;
 };
 
 template <bool Checked>
-std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &top_level, std::size_t at,
+std::expected<validity::offset, error> value_sharing::shared_resolve(top_level_item &top_level, validity::offset at,
                                                                 validity::limit_checks<Checked> const checks)
 {
-    std::size_t item_at = at;
+    validity::offset item_at = at;
     std::size_t first = std::numeric_limits<std::size_t>::max();
     for (;;) {
         auto const h = heads::raw_head_read(top_level.encoded, at, checks);
@@ -626,7 +626,7 @@ std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &
                 top_level.sharedrefs_resolved[first] = at;
             return at;
         }
-        heads::decoder<Checked> d{std::string_view(std::span(top_level.encoded).subspan(h->at)), checks};
+        heads::decoder<Checked> d{validity::subspan(top_level.encoded, h->at), checks};
         std::vector<lazy> const &marks = top_level.sharedrefs_read(at);
         auto const found = top_level_item::sharedref_decode(d, at, item_at, marks);
         if (!found) [[unlikely]]
@@ -634,8 +634,8 @@ std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &
         auto const index = static_cast<std::size_t>(std::ranges::distance(
             marks.begin(), std::ranges::lower_bound(marks, found->offset, {}, &lazy::offset)));
         if (top_level.sharedrefs_resolved.size() < marks.size())
-            top_level.sharedrefs_resolved.resize(marks.size(), std::numeric_limits<std::size_t>::max());
-        if (top_level.sharedrefs_resolved[index] != std::numeric_limits<std::size_t>::max()) {
+            top_level.sharedrefs_resolved.resize(marks.size(), validity::npos);
+        if (top_level.sharedrefs_resolved[index] != validity::npos) {
             if (first < top_level.sharedrefs_resolved.size())
                 top_level.sharedrefs_resolved[first] = top_level.sharedrefs_resolved[index];
             return top_level.sharedrefs_resolved[index];
@@ -649,7 +649,7 @@ std::expected<std::size_t, error> value_sharing::shared_resolve(top_level_item &
 
 template <bool Checked>
 std::expected<value_sharing::resolved<Checked>, error>
-value_sharing::container_resolve(std::shared_ptr<top_level_item> source, std::size_t offset,
+value_sharing::container_resolve(std::shared_ptr<top_level_item> source, validity::offset offset,
                                  validity::limit_checks<Checked> const checks)
 {
     validity::throw_logic_error_if_null(source, "cbor::lazy: the lazy holds no top-level item");
@@ -657,7 +657,7 @@ value_sharing::container_resolve(std::shared_ptr<top_level_item> source, std::si
         auto const at = shared_resolve(*source, offset, checks);
         if (!at) [[unlikely]]
             return std::unexpected(at.error());
-        heads::decoder<Checked> d{std::string_view(std::span(source->encoded).subspan(*at)), checks};
+        heads::decoder<Checked> d{validity::subspan(source->encoded, *at), checks};
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
@@ -673,14 +673,14 @@ value_sharing::container_resolve(std::shared_ptr<top_level_item> source, std::si
         auto const embedded = d.byte_string_decode(r->argument);
         if (!embedded) [[unlikely]]
             return std::unexpected(embedded.error());
-        source = std::make_shared<top_level_item>(source->owner, *embedded, std::vector<lazy>{}, 0);
-        offset = 0;
+        source = std::make_shared<top_level_item>(source->owner, *embedded, std::vector<lazy>{}, validity::offset{});
+        offset = validity::offset{};
     }
 }
 
 template <bool Checked>
 std::expected<value_sharing::resolved<Checked>, error>
-value_sharing::tag_content_resolve(std::shared_ptr<top_level_item> source, std::size_t offset,
+value_sharing::tag_content_resolve(std::shared_ptr<top_level_item> source, validity::offset offset,
                                    validity::limit_checks<Checked> const checks)
 {
     for (;;) {
@@ -695,7 +695,7 @@ value_sharing::tag_content_resolve(std::shared_ptr<top_level_item> source, std::
             return found;
         }
         source = std::move(found->source);
-        offset = source->encoded.size() - found->d.encoded.size();
+        offset = validity::distance(source->encoded, found->d.encoded);
     }
 }
 
@@ -708,17 +708,17 @@ std::expected<value_sharing::tag_content, error> value_sharing::typed_array_byte
         [[unlikely]]
         return std::unexpected(r);
     auto const content =
-        shared_resolve(*found.source, found.source->encoded.size() - found.d.encoded.size(), found.d.checks);
+        shared_resolve(*found.source, validity::distance(found.source->encoded, found.d.encoded), found.d.checks);
     if (!content) [[unlikely]]
         return std::unexpected(content.error());
-    heads::decoder<Checked> d{std::string_view(std::span(found.source->encoded).subspan(*content)), found.d.checks};
+    heads::decoder<Checked> d{validity::subspan(found.source->encoded, *content), found.d.checks};
     auto const r = d.head_decode();
     if (!r) [[unlikely]]
         return std::unexpected(r.error());
     if (error const c = validity::check_tag_content(found.h.argument, r->major, r->info).error_or(error{});
         c != error{}) [[unlikely]]
         return std::unexpected(c);
-    auto const offset = validity::byte_offset{found.source->encoded.size() - d.encoded.size()};
+    auto const offset = validity::offset{validity::distance(found.source->encoded, d.encoded)};
     auto const bytes = d.byte_string_decode(r->argument);
     if (!bytes) [[unlikely]]
         return std::unexpected(bytes.error());
@@ -734,8 +734,8 @@ namespace cbor
 {
 
 template <class First, class Second, bool Checked>
-std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t const first_at, Second &second,
-                                                     std::size_t const second_at, std::size_t const depth,
+std::expected<bool, error> validity::keys_equivalent(First &first, offset const first_at, Second &second,
+                                                     offset const second_at, std::size_t const depth,
                                                      std::size_t const depth_max,
                                                      limit_checks<Checked> const checks)
 {
@@ -748,7 +748,7 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
             return message.encoded;
     };
     auto const resolve = [checks]<class Message>(Message &message,
-                                                 std::size_t const at) -> std::expected<std::size_t, error> {
+                                                 offset const at) -> std::expected<offset, error> {
         if constexpr (std::same_as<Message, std::string_view const>)
             return at;
         else
@@ -787,7 +787,7 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
             auto const content = resolve(message, n.at);
             if (!content) [[unlikely]]
                 return std::unexpected(content.error());
-            heads::decoder<Checked> d{std::string_view(std::span(encoded).subspan(*content)), checks};
+            heads::decoder<Checked> d{subspan(encoded, *content), checks};
             auto const read = d.bignum_decode(n.argument);
             if (!read) [[unlikely]]
                 return std::unexpected(read.error());
@@ -812,11 +812,11 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
         return h->argument == k->argument;
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder<Checked> d{std::string_view(std::span(a).subspan(h->at)), checks};
+        heads::decoder<Checked> d{subspan(a, h->at), checks};
         auto const s = d.byte_string_decode(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
-        heads::decoder<Checked> e{std::string_view(std::span(b).subspan(k->at)), checks};
+        heads::decoder<Checked> e{subspan(b, k->at), checks};
         auto const t = e.byte_string_decode(k->argument);
         if (!t) [[unlikely]]
             return std::unexpected(t.error());
@@ -825,11 +825,11 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
     case major_type::array: {
         if (h->argument != k->argument)
             return false;
-        heads::decoder<Checked> d{std::string_view(std::span(a).subspan(h->at)), checks};
-        heads::decoder<Checked> e{std::string_view(std::span(b).subspan(k->at)), checks};
+        heads::decoder<Checked> d{subspan(a, h->at), checks};
+        heads::decoder<Checked> e{subspan(b, k->at), checks};
         for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const equal = keys_equivalent(first, a.size() - d.encoded.size(), second,
-                                               b.size() - e.encoded.size(), depth + 1, depth_max, checks);
+            auto const equal = keys_equivalent(first, distance(a, d.encoded), second,
+                                               distance(b, e.encoded), depth + 1, depth_max, checks);
             if (!equal || !*equal)
                 return equal;
             if (auto const r = skip(d); !r) [[unlikely]]
@@ -842,18 +842,18 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
     case major_type::map: {
         if (h->argument != k->argument)
             return false;
-        auto const pairs_counted = [&]<class From, class In>(From &from, std::size_t const key,
-                                                             std::size_t const value, In &in,
+        auto const pairs_counted = [&]<class From, class In>(From &from, offset const key,
+                                                             offset const value, In &in,
                                                              std::string_view const in_encoded,
-                                                             std::size_t const in_at)
+                                                             offset const in_at)
             -> std::expected<std::uint64_t, error> {
             std::uint64_t count = 0;
-            heads::decoder<Checked> e{std::string_view(std::span(in_encoded).subspan(in_at)), checks};
+            heads::decoder<Checked> e{validity::subspan(in_encoded, in_at), checks};
             for (std::uint64_t j = 0; j < h->argument; ++j) {
-                std::size_t const other = in_encoded.size() - e.encoded.size();
+                offset const other = distance(in_encoded, e.encoded);
                 if (auto const r = skip(e); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                std::size_t const other_value = in_encoded.size() - e.encoded.size();
+                offset const other_value = distance(in_encoded, e.encoded);
                 if (auto const r = skip(e); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 auto const key_same = keys_equivalent(from, key, in, other, depth + 1, depth_max, checks);
@@ -869,12 +869,12 @@ std::expected<bool, error> validity::keys_equivalent(First &first, std::size_t c
             }
             return count;
         };
-        heads::decoder<Checked> d{std::string_view(std::span(a).subspan(h->at)), checks};
+        heads::decoder<Checked> d{validity::subspan(a, h->at), checks};
         for (std::uint64_t i = 0; i < h->argument; ++i) {
-            std::size_t const key = a.size() - d.encoded.size();
+            offset const key = distance(a, d.encoded);
             if (auto const r = skip(d); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            std::size_t const value = a.size() - d.encoded.size();
+            offset const value = distance(a, d.encoded);
             if (auto const r = skip(d); !r) [[unlikely]]
                 return std::unexpected(r.error());
             auto const own = pairs_counted(first, key, value, first, a, h->at);
