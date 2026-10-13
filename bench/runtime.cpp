@@ -541,6 +541,32 @@ static std::uint64_t mb_path()
 }
 #endif
 
+#if defined(ARM_MB_STRUCT)
+namespace bench_struct
+{
+struct twitter_user {
+    std::string screen_name;
+};
+struct status {
+    twitter_user user;
+    std::string text;
+};
+struct timeline {
+    std::vector<status> statuses;
+};
+}
+
+static std::uint64_t mb_struct()
+{
+    auto const v = cbor::structs<bench_struct::timeline>::decode(*held);
+    if (!v) [[unlikely]] std::abort();
+    std::uint64_t s = 0;
+    for (bench_struct::status const &x : (**v).statuses)
+        s += bytes_sum(x.user.screen_name) + bytes_sum(x.text);
+    return s;
+}
+#endif
+
 #if defined(ARM_MB_AT_PATH)
 static std::uint64_t mb_at_path()
 {
@@ -762,6 +788,8 @@ static std::uint64_t op()
     return mb_path();
 #elif defined(ARM_MB_AT_PATH)
     return mb_at_path();
+#elif defined(ARM_MB_STRUCT)
+    return mb_struct();
 #elif defined(ARM_MB_PATH_ALL)
     auto const r = cbor::query<"$..*">(*cbor::lazy::view(*held));
     if (!r) [[unlikely]]

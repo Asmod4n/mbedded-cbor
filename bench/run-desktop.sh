@@ -1,7 +1,7 @@
 #!/bin/bash
 # usage: run-desktop.sh <commit-a> <commit-b>
-# Measures READ, the lazy path (MB_PATH) and at_path (MB_AT_PATH) on twitter, floats, records and tag29
-# for two commits, with g++ and clang++. See README.md.
+# Measures READ, the lazy path (MB_PATH), at_path (MB_AT_PATH) and the struct decode (MB_STRUCT, twitter only)
+# on twitter, floats and records for two commits, with g++ and clang++. See README.md.
 set -eu
 [ $# -eq 2 ] || { echo "usage: $0 <commit-a> <commit-b>" >&2; exit 2; }
 [ "$(id -u)" != 0 ] || { echo "never run as root" >&2; exit 2; }
@@ -14,8 +14,8 @@ GXX=${GXX:-$(command -v g++-16 || command -v g++)}
 CLANGXX=${CLANGXX:-$(command -v clang++-23 || command -v clang++)}
 ROUNDS=${ROUNDS:-10}
 MIN_TIME=${MIN_TIME:-0.2s}
-docs=${DOCS:-"twitter floats records tag29"}
-arms=${ARMS:-"READ MB_PATH MB_AT_PATH"}
+docs=${DOCS:-"twitter floats records"}
+arms=${ARMS:-"READ MB_PATH MB_AT_PATH MB_STRUCT"}
 GATE_MAX_BUSY_PERCENT=${GATE_MAX_BUSY_PERCENT:-10}
 GATE_MAX_STEAL_PERCENT=${GATE_MAX_STEAL_PERCENT:-0}
 RESULTS_DIR=${RESULTS_DIR:-$bench/results}
@@ -81,55 +81,17 @@ tree_of "$commit_a" "$build/src/a"
 tree_of "$commit_b" "$build/src/b"
 cp -r "$build/src/a" "$build/src/aa"
 
-# Documents: the repo ones, and the tag-29 input: an array of 2000, 50 x tag 28 then 1950 x tag 29.
+# Documents: the repo ones.
 for d in $docs; do
-	if [ "$d" = tag29 ]; then
-		python3 -I -c '
-import sys
-out = bytearray(b"\x99\x07\xd0")
-for i in range(50):
-    text = ("shared value %02d " % i).encode() + b"x" * 20
-    out += b"\xd8\x1c\x78" + bytes([len(text)]) + text
-for i in range(1950):
-    n = i % 50
-    out += b"\xd8\x1d" + (bytes([n]) if n < 24 else b"\x18" + bytes([n]))
-open(sys.argv[1], "wb").write(out)
-' "$build/docs/tag29.cbor"
-	else
-		cp "$bench/docs/$d.cbor" "$build/docs/$d.cbor"
-	fi
+	cp "$bench/docs/$d.cbor" "$build/docs/$d.cbor"
 done
-
-# runtime.cpp of the repo, with the tag-29 branch added to the two path functions.
-python3 -I -c '
-import re, sys
-src = open(sys.argv[1]).read()
-branch = {
-    "mb_path": """#elif defined(DOC_tag29)
-    auto const v = l.and_then([](cbor::lazy const &d) { return d.at(1999); })
-                       .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
-    if (!v) [[unlikely]] std::abort();
-    return bytes_sum(**v);
-""",
-    "mb_at_path": """#elif defined(DOC_tag29)
-    auto const v = cbor::at_path<"$[1999]", std::string_view>(keep, in);
-    if (!v) [[unlikely]] std::abort();
-    return bytes_sum(**v);
-""",
-}
-for name, text in branch.items():
-    start = src.index("static std::uint64_t %s()" % name)
-    end = src.index("\n}\n", start)
-    body = src[start:end]
-    last = body.rindex("#endif")
-    src = src[:start] + body[:last] + text + body[last:] + src[end:]
-open(sys.argv[2], "w").write(src)
-' "$bench/runtime.cpp" "$build/runtime.cpp"
+cp "$bench/runtime.cpp" "$build/runtime.cpp"
 
 compile() {
 	local cc=$1 variant=$2 tag=$3 doc=$4 arm=$5
-	local name=$variant.$tag.$doc.$arm
-	if "$cc" -std=c++23 $flags -DDOCTEST_CONFIG_DISABLE -DARM_"$arm" -DARM_NAME="\"$arm\"" -DDOC_"$doc" \
+	local name=$variant.$tag.$doc.$arm std=-std=c++23
+	[ "$arm" = MB_STRUCT ] && std="-std=c++26 -freflection"
+	if "$cc" $std $flags -DDOCTEST_CONFIG_DISABLE -DARM_"$arm" -DARM_NAME="\"$arm\"" -DDOC_"$doc" \
 		-DDOC_PATH="\"$build/docs/$doc.cbor\"" -I"$build/src/$variant/include" -I"$bench" \
 		"$build/runtime.cpp" -lbenchmark -lpthread -o "$build/bin/$name" > "$build/log/$name" 2>&1; then
 		rm -f "$build/log/$name"
@@ -152,6 +114,7 @@ for cc_tag in gxx:"$GXX" clang:"$CLANGXX"; do
 	for variant in a aa b; do
 		for doc in $docs; do
 			for arm in $arms; do
+				[ "$arm" = MB_STRUCT ] && [ "$doc" != twitter ] && continue
 				spawn compile "$cc" "$variant" "$tag" "$doc" "$arm"
 			done
 		done
@@ -308,8 +271,8 @@ print(json.dumps({
     "commit_a": {"given": commit_a, "id": ids("a")},
     "commit_b": {"given": commit_b, "id": ids("b")},
     "bench_sources_commit": bench_commit,
-    "what": "READ, lazy path (MB_PATH) and at_path (MB_AT_PATH); a = commit a, aa = commit a built again, b = commit b",
-    "documents": "twitter, floats, records, tag29 (array of 2000: 50 x tag 28, then 1950 x tag 29)",
+    "what": "READ, lazy path (MB_PATH), at_path (MB_AT_PATH) and struct decode (MB_STRUCT); a = commit a, aa = commit a built again, b = commit b",
+    "documents": "twitter, floats, records; MB_STRUCT on twitter only",
     "flags": flags,
     "pie": "-fPIE -pie" if {"-fPIE", "-pie"} <= set(flags.split()) else "default of the compiler",
     "elf_type_count": dict(collections.Counter(l.split(" ", 1)[1] for l in read(os.path.join(build, "out", "elf_type")).splitlines())),

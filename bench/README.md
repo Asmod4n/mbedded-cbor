@@ -11,10 +11,8 @@ Close other programs first. The script does not pin the process.
 
 ## What it measures
 
-- Arms: READ, MB_PATH (the lazy path) and MB_AT_PATH (at_path).
-- Documents: twitter, floats, records and tag29.
-- tag29 is an array of 2000 items: 50 items with tag 28, then 1950 items with tag 29.
-  The path reads item 1999.
+- Arms: READ, MB_PATH (the lazy path), MB_AT_PATH (at_path) and MB_STRUCT (cbor::structs decode).
+- Documents: twitter, floats and records. MB_STRUCT decodes twitter into a struct with C++26 reflection.
 - Compilers: g++-16 and clang++-23. The script takes g++ and clang++ when these names are absent.
 - Flags: -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG.
   The environment variable FLAGS replaces them.
