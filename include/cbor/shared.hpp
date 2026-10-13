@@ -70,6 +70,12 @@ public:
         return {};
     }
 
+    template <class MarksRead, class Projection, bool Checked>
+    static std::expected<validity::offset, error> sharedref_follow(std::string_view encoded, validity::offset at,
+                                                                   MarksRead marks_read, Projection offset_of,
+                                                                   bool self_described_passed,
+                                                                   validity::limit_checks<Checked> checks);
+
     template <std::invocable MarksRead, class Projection, bool Checked>
     static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
                                                         validity::offset content_at, MarksRead marks_read,
@@ -140,12 +146,10 @@ private:
 
     friend class validity;
 
-    friend item const &shared_value(std::shared_ptr<item const> const &tree, item const &reference);
+    friend std::expected<lazy, error> shared_value_resolve(std::shared_ptr<item const> const &tree, item const &reference);
 
-    friend std::expected<std::variant<std::reference_wrapper<item const>, lazy>, error>
-    shared_value_resolve(std::shared_ptr<item const> const &tree, item const &reference);
-
-    friend item const &encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged);
+    friend std::expected<std::reference_wrapper<item const>, error>
+    encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged);
 
     friend struct lazy;
 
@@ -428,31 +432,34 @@ inline constexpr bool std::ranges::enable_borrowed_range<cbor::lazy_entries> = t
 namespace cbor
 {
 
-template <std::invocable MarksRead, class Projection, bool Checked>
-std::expected<void, error>
-value_sharing::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
-                                 validity::offset const content_at, MarksRead const marks_read,
-                                 Projection const offset_of, validity::limit_checks<Checked> const checks)
+template <class MarksRead, class Projection, bool Checked>
+std::expected<validity::offset, error>
+value_sharing::sharedref_follow(std::string_view const encoded, validity::offset at, MarksRead const marks_read,
+                                Projection const offset_of, bool const self_described_passed,
+                                validity::limit_checks<Checked> const checks)
 {
-    validity::offset at = content_at;
     std::size_t references_followed = 0;
     for (;;) {
         auto const c = heads::raw_head_read(encoded, at, checks);
         if (!c) [[unlikely]]
             return std::unexpected(c.error());
-        if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
+        if (c->major != major_type::tag)
+            return at;
+        if (c->argument == std::to_underlying(rfc8949::tag_number::shareable) ||
+            (self_described_passed &&
+             c->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))) {
             at = c->at;
             continue;
         }
-        if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
-            return validity::check_tag_content(tag, c->major, c->info);
+        if (c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
+            return at;
         auto const n = heads::raw_head_read(encoded, c->at, checks);
         if (!n) [[unlikely]]
             return std::unexpected(n.error());
         if (error const e = validity::check_tag_content(c->argument, n->major, n->info).error_or(error{}); e != error{})
             [[unlikely]]
             return std::unexpected(e);
-        auto const &marks = std::invoke(marks_read);
+        auto const &marks = std::invoke(marks_read, at);
         auto const marked = check_sharedref_index(
             n->argument, static_cast<std::size_t>(std::ranges::distance(
                              std::ranges::begin(marks), std::ranges::upper_bound(marks, at, {}, offset_of))));
@@ -468,6 +475,23 @@ value_sharing::check_tag_content(std::uint64_t const tag, std::string_view const
     }
 }
 
+template <std::invocable MarksRead, class Projection, bool Checked>
+std::expected<void, error>
+value_sharing::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
+                                 validity::offset const content_at, MarksRead const marks_read,
+                                 Projection const offset_of, validity::limit_checks<Checked> const checks)
+{
+    auto const at = sharedref_follow(
+        encoded, content_at, [&marks_read](validity::offset) -> auto const & { return std::invoke(marks_read); },
+        offset_of, false, checks);
+    if (!at) [[unlikely]]
+        return std::unexpected(at.error());
+    auto const c = heads::raw_head_read(encoded, *at, checks);
+    if (!c) [[unlikely]]
+        return std::unexpected(c.error());
+    return validity::check_tag_content(tag, c->major, c->info);
+}
+
 struct value_sharing::top_level_item {
     std::shared_ptr<void const> owner;
     std::string_view encoded;
@@ -476,7 +500,6 @@ struct value_sharing::top_level_item {
 #ifndef NDEBUG
     std::thread::id owner_thread = std::this_thread::get_id();
 #endif
-    std::vector<validity::offset> sharedrefs_resolved;
     std::string_view sharedrefs_unread;
     std::uint64_t sharedrefs_pending = 1;
     bool sharedrefs_started = false;
@@ -543,54 +566,25 @@ struct value_sharing::top_level_item {
         auto const known = std::ranges::lower_bound(sharedrefs, offset, {}, &lazy::offset);
         return static_cast<std::size_t>(std::ranges::distance(sharedrefs.begin(), known));
     }
-
-    template <bool Checked>
-    static std::expected<lazy, error>
-    sharedref_decode(heads::decoder<Checked> &d, validity::offset const reference_at, validity::offset const item_at,
-                     std::vector<lazy> const &marks)
-    {
-        auto const n = d.head_decode();
-        if (!n) [[unlikely]]
-            return std::unexpected(n.error());
-        if (error const c =
-                validity::check_tag_content(std::to_underlying(rfc8949::tag_number::sharedref), n->major, n->info)
-                    .error_or(error{});
-            c != error{}) [[unlikely]]
-            return std::unexpected(c);
-        auto const before = std::ranges::upper_bound(marks, reference_at, {}, &lazy::offset);
-        auto const marked = check_sharedref_index(
-            n->argument, static_cast<std::size_t>(std::ranges::distance(marks.begin(), before)));
-        if (!marked) [[unlikely]]
-            return std::unexpected(marked.error());
-        lazy const &found = marks[std::to_underlying(*marked)];
-        if (found.offset >= item_at) [[unlikely]]
-            return std::unexpected(error::sharedref_not_complete);
-        return found;
-    }
 };
 
 struct value_sharing::zone {
     using link = std::pair<item const *, item const *>;
 
-    struct enclosing_tag {
-        std::uint64_t number;
-        validity::offset content_at;
-    };
-
     struct sharedref {
         item const *reference;
-        item const *shareable;
-        top_level_item *source;
-        validity::offset shared_at;
-        std::optional<enclosing_tag> enclosing;
+        top_level_item const *source;
+        std::vector<validity::offset> const *marks;
+        validity::offset reference_at;
     };
 
     std::shared_ptr<top_level_item> top_level;
     std::pmr::monotonic_buffer_resource memory;
     std::pmr::forward_list<top_level_item> embedded{&memory};
+    std::vector<validity::offset> marks;
+    std::forward_list<std::vector<validity::offset>> embedded_marks;
     std::vector<sharedref> sharedrefs;
     std::vector<link> encoded_cbor_data_items;
-    std::size_t marked = 0;
 
     zone(std::shared_ptr<top_level_item> top, std::size_t const initial_size)
         : top_level(std::move(top)), memory(initial_size)
@@ -621,69 +615,45 @@ struct value_sharing::zone_owner {
         return *found;
     }
 
-    static std::expected<std::variant<std::reference_wrapper<item const>, lazy>, error>
-    chain_followed(std::shared_ptr<item const> const &tree, item const &reference, char const *const what)
+    static std::expected<lazy, error> sharedref_resolved(std::shared_ptr<item const> const &tree, item const &reference,
+                                                         char const *const what)
     {
         zone const &z = zone_found(tree, what);
-        auto const key = &zone::sharedref::reference;
-        zone::sharedref const &first = link_found(z.sharedrefs, reference, key, what);
-        if (first.enclosing) {
-            auto const content = validity::limits_apply(
-                limits.load(), [&first]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-                    return check_tag_content(
-                        first.enclosing->number, first.source->encoded, first.enclosing->content_at,
-                        [&first]() -> auto const & { return first.source->sharedrefs_read(); }, &lazy::offset, checks);
-                });
-            if (!content) [[unlikely]]
-                return std::unexpected(content.error());
-        }
-        zone::sharedref const *at = &first;
-        std::size_t references_followed = 0;
-        for (;;) {
-            if (at->shareable == nullptr)
-                return lazy{z.top_level, at->shared_at};
-            item const *passed = at->shareable;
-            while (passed->type == cbor::type::tag &&
-                   (passed->via.tag.number == std::to_underlying(rfc8949::tag_number::shareable) ||
-                    passed->via.tag.number == std::to_underlying(rfc8949::tag_number::self_described_cbor)))
-                passed = passed->via.tag.content;
-            item const &shared = *passed;
-            if (shared.type != cbor::type::tag ||
-                shared.via.tag.number != std::to_underlying(rfc8949::tag_number::sharedref))
-                return std::cref(shared);
-            if (auto const ends = check_sharedref_chain_ends(++references_followed, z.marked); !ends) [[unlikely]]
-                return std::unexpected(ends.error());
-            at = &link_found(z.sharedrefs, shared, key, what);
-        }
+        zone::sharedref const &found = link_found(z.sharedrefs, reference, &zone::sharedref::reference, what);
+        auto const at = validity::limits_apply(
+            limits.load(), [&found]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
+                return sharedref_follow(
+                    found.source->encoded, found.reference_at,
+                    [&found](validity::offset) -> auto const & { return *found.marks; }, std::identity{}, true,
+                    checks);
+            });
+        if (!at) [[unlikely]]
+            return std::unexpected(at.error());
+        if (found.source == z.top_level.get())
+            return lazy{z.top_level, *at};
+        return lazy{std::make_shared<top_level_item>(found.source->owner, found.source->encoded, std::vector<lazy>{},
+                                                     validity::offset{}),
+                    *at};
     }
 };
 
-inline item const &shared_value(std::shared_ptr<item const> const &tree, item const &reference)
+inline std::expected<lazy, error> shared_value_resolve(std::shared_ptr<item const> const &tree, item const &reference)
 {
-    constexpr char const *what = "cbor::shared_value: the item is not a tag 29 of this decoded tree";
-    value_sharing::zone const &z = value_sharing::zone_owner::zone_found(tree, what);
-    auto const &found =
-        value_sharing::zone_owner::link_found(z.sharedrefs, reference, &value_sharing::zone::sharedref::reference, what);
-    validity::throw_logic_error_if(found.shareable == nullptr,
-                                   "cbor::shared_value: the tag 29 names an item before the decoded tree; use "
-                                   "cbor::shared_value_resolve");
-    return *found.shareable;
-}
-
-inline std::expected<std::variant<std::reference_wrapper<item const>, lazy>, error>
-shared_value_resolve(std::shared_ptr<item const> const &tree, item const &reference)
-{
-    return value_sharing::zone_owner::chain_followed(
+    return value_sharing::zone_owner::sharedref_resolved(
         tree, reference, "cbor::shared_value_resolve: the item is not a tag 29 of this decoded tree");
 }
 
-inline item const &encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged)
+inline std::expected<std::reference_wrapper<item const>, error>
+encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged)
 {
     constexpr char const *what = "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree";
     value_sharing::zone const &z = value_sharing::zone_owner::zone_found(tree, what);
-    return *value_sharing::zone_owner::link_found(z.encoded_cbor_data_items, tagged,
-                                                  &value_sharing::zone::link::first, what)
-                .second;
+    item const *const embedded = value_sharing::zone_owner::link_found(z.encoded_cbor_data_items, tagged,
+                                                                       &value_sharing::zone::link::first, what)
+                                     .second;
+    if (embedded == nullptr) [[unlikely]]
+        return std::unexpected(error::incorrect_type);
+    return std::cref(*embedded);
 }
 
 static_assert(std::is_trivially_destructible_v<item>,
@@ -693,27 +663,21 @@ template <bool Checked>
 struct value_sharing::tree_decoder {
     zone &decoded;
     top_level_item &top_level;
-    std::vector<item const *> &shareables;
+    std::vector<validity::offset> &marks;
     heads::decoder<Checked> d;
     validity::offset start;
     std::size_t depth_max;
-    std::optional<std::size_t> mark_next;
-    item *root = nullptr;
     std::size_t open = 0;
-    std::optional<zone::enclosing_tag> sharedref_enclosing{};
 
-    std::expected<item *, error> item_decode(item *storage, std::size_t depth, std::optional<std::size_t> mark);
+    std::expected<item *, error> item_decode(item *storage, std::size_t depth);
 
-    std::expected<item *, error> content_decode(item *storage, heads::head h, std::size_t depth,
-                                                std::optional<std::size_t> mark);
+    std::expected<item *, error> content_decode(item *storage, heads::head h, std::size_t depth);
 
     CBOR_ALWAYS_INLINE inline std::expected<void, error> scalar_decode(item &node, heads::head h);
 
     CBOR_NEVER_INLINE std::expected<item *, error> bignum_decode(item &node, std::uint64_t tag, std::size_t depth);
 
     CBOR_NEVER_INLINE error bignum_content_check(std::uint64_t tag);
-
-    std::size_t marks_counted();
 };
 
 template <bool Checked>
@@ -730,52 +694,13 @@ struct value_sharing::resolved {
 };
 
 template <bool Checked>
-std::expected<validity::offset, error> value_sharing::shared_resolve(top_level_item &top_level, validity::offset at,
+std::expected<validity::offset, error> value_sharing::shared_resolve(top_level_item &top_level, validity::offset const at,
                                                                 validity::limit_checks<Checked> const checks)
 {
-    validity::offset item_at = at;
-    std::size_t first = std::numeric_limits<std::size_t>::max();
-    std::size_t references_followed = 0;
-    for (;;) {
-        auto const h = heads::raw_head_read(top_level.encoded, at, checks);
-        if (!h) [[unlikely]]
-            return std::unexpected(h.error());
-        if (h->major != major_type::tag) {
-            if (first < top_level.sharedrefs_resolved.size())
-                top_level.sharedrefs_resolved[first] = at;
-            return at;
-        }
-        if (h->argument == std::to_underlying(rfc8949::tag_number::shareable) ||
-            h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor)) {
-            at = h->at;
-            continue;
-        }
-        if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref)) {
-            if (first < top_level.sharedrefs_resolved.size())
-                top_level.sharedrefs_resolved[first] = at;
-            return at;
-        }
-        heads::decoder<Checked> d{validity::subspan(top_level.encoded, h->at), checks};
-        std::vector<lazy> const &marks = top_level.sharedrefs_read(at);
-        auto const found = top_level_item::sharedref_decode(d, at, item_at, marks);
-        if (!found) [[unlikely]]
-            return std::unexpected(found.error());
-        if (auto const ends = check_sharedref_chain_ends(++references_followed, marks.size()); !ends) [[unlikely]]
-            return std::unexpected(ends.error());
-        auto const position = static_cast<std::size_t>(std::ranges::distance(
-            marks.begin(), std::ranges::lower_bound(marks, found->offset, {}, &lazy::offset)));
-        if (top_level.sharedrefs_resolved.size() < marks.size())
-            top_level.sharedrefs_resolved.resize(marks.size(), validity::npos);
-        if (top_level.sharedrefs_resolved[position] != validity::npos) {
-            if (first < top_level.sharedrefs_resolved.size())
-                top_level.sharedrefs_resolved[first] = top_level.sharedrefs_resolved[position];
-            return top_level.sharedrefs_resolved[position];
-        }
-        if (first == std::numeric_limits<std::size_t>::max())
-            first = position;
-        at = found->offset;
-        item_at = at;
-    }
+    return sharedref_follow(
+        top_level.encoded, at,
+        [&top_level](validity::offset const up_to) -> auto const & { return top_level.sharedrefs_read(up_to); },
+        &lazy::offset, true, checks);
 }
 
 template <bool Checked>

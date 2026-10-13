@@ -211,7 +211,6 @@ class generic
     static std::expected<void, error> generic_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                    std::size_t const depth, std::size_t const depth_max)
     {
-        validity::offset const item_at = validity::distance(d.message.encoded, d.encoded);
         for (;;) {
             heads::decoder<Checked> look = d;
             auto const h = look.head_decode();
@@ -226,12 +225,17 @@ class generic
             }
             if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
                 break;
-            d.encoded = look.encoded;
-            auto const target = value_sharing::top_level_item::sharedref_decode(d, validity::distance(d.message.encoded, d.encoded), item_at, d.message.sharedrefs);
+            auto const target = value_sharing::sharedref_follow(
+                d.message.encoded, validity::distance(d.message.encoded, d.encoded),
+                [&d](validity::offset) -> auto const & { return d.message.sharedrefs; }, &lazy::offset, false,
+                d.checks);
             if (!target) [[unlikely]]
                 return std::unexpected(target.error());
+            d.encoded = look.encoded;
+            if (auto const n = d.head_decode(); !n) [[unlikely]]
+                return std::unexpected(n.error());
             std::string_view const rest = d.encoded;
-            d.encoded = validity::subspan(d.message.encoded, target->offset);
+            d.encoded = validity::subspan(d.message.encoded, *target);
             auto const r = generic_value_read(d, out, depth + 1, depth_max);
             d.encoded = rest;
             return r;
@@ -460,22 +464,26 @@ class generic
             return std::unexpected(error::incorrect_type);
         std::bitset<count> found;
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
-            validity::offset const key_at = validity::distance(d.message.encoded, d.encoded);
+            validity::offset reference_at = validity::distance(d.message.encoded, d.encoded);
             auto k = d.head_decode();
             while (k && k->major == major_type::tag &&
                    k->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
                 d.message.mark(d);
+                reference_at = validity::distance(d.message.encoded, d.encoded);
                 k = d.head_decode();
             }
             heads::decoder<Checked> referenced{};
             bool const indirect = k && k->major == major_type::tag &&
                                   k->argument == std::to_underlying(rfc8949::tag_number::sharedref);
             if (indirect) {
-                auto const target = value_sharing::top_level_item::sharedref_decode(d, validity::distance(d.message.encoded, d.encoded), key_at, d.message.sharedrefs);
+                auto const target = value_sharing::sharedref_follow(
+                    d.message.encoded, reference_at, [&d](validity::offset) -> auto const & { return d.message.sharedrefs; },
+                    &lazy::offset, false, d.checks);
                 if (!target) [[unlikely]]
                     return std::unexpected(target.error());
-                referenced = heads::decoder<Checked>{
-                    validity::subspan(d.message.encoded, target->offset), d.checks};
+                if (auto const n = d.head_decode(); !n) [[unlikely]]
+                    return std::unexpected(n.error());
+                referenced = heads::decoder<Checked>{validity::subspan(d.message.encoded, *target), d.checks};
                 k = referenced.head_decode();
             }
             heads::decoder<Checked> &from = indirect ? referenced : d;

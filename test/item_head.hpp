@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -136,4 +137,16 @@ inline bool same_value(std::string_view const a, std::string_view const b)
     REQUIRE(p.has_value());
     REQUIRE(q.has_value());
     return item_values_equal(**p, **q);
+}
+
+// A resolved tag 29 is a lazy over the input, and its decode is a tree of its own. So a test compares the value that
+// the tag 29 names with an item of the first tree, and not the address of the item.
+inline bool shared_value_is(std::shared_ptr<cbor::item const> const &tree, cbor::item const &reference,
+                            cbor::item const &expected)
+{
+    auto const resolved = cbor::shared_value_resolve(tree, reference);
+    REQUIRE(resolved.has_value());
+    auto const decoded = resolved->decode();
+    REQUIRE(decoded.has_value());
+    return item_values_equal(**decoded, expected);
 }

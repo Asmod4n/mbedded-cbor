@@ -219,7 +219,7 @@ TEST_CASE("doc advanced runtime: encode")
     cbor::item const *const six = tagged->via.tag.content;
     CHECK_EQ(argument_of(*six), 6u);
     cbor::item const *const reference = six->via.tag.content;
-    CHECK_EQ(&cbor::shared_value(tagged, *reference), six);
+    CHECK(shared_value_is(tagged, *reference, *six));
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string const own = wire;
     std::string again;
@@ -273,8 +273,9 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     auto const l = *cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     CHECK_EQ(l.at(1)->get<std::int64_t>(), 1);
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
-    CHECK_EQ(cbor::lazy::copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->decode().error(),
-             error::sharedref_index_not_marked);
+    auto const forward = cbor::lazy::copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->decode();
+    REQUIRE(forward.has_value());
+    CHECK_EQ(cbor::shared_value_resolve(*forward, (*forward)->via.array[0]).error(), error::sharedref_index_not_marked);
     CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)->decode().has_value());
     CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)->at(0).has_value());
     CHECK_EQ(cbor::lazy::copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::sharedref_not_complete);

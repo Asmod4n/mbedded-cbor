@@ -415,10 +415,9 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         return value{std::move(m)};
     }
     case cbor::major_type::tag: {
-        // The decode only stores a tag 29. The check of the content of the enclosing tag runs when the reference
-        // is resolved, so the read of the content resolves it first.
+        // The decode only stores a tag 29. The reader of the enclosing tag checks the value that the tag 29 names.
         if (cbor::item const &inner = *it.via.tag.content; inner.type == cbor::type::tag && inner.via.tag.number == 29)
-            if (auto const r = cbor::shared_value_resolve(*decoded_item, inner); !r)
+            if (auto const r = named_content_check(argument_of(it), cbor::shared_value_resolve(*decoded_item, inner)); !r)
                 return std::unexpected(r.error());
         // RFC 8949 3: the content follows the head, whose argument takes 1 << (ai - 24) bytes from ai 24 on.
         std::size_t const argument_bytes =
@@ -722,6 +721,9 @@ TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the val
             CHECK(l.has_value());
             CHECK(text.has_value());
         } else {
+            REQUIRE_FALSE(d.has_value());
+            REQUIRE_FALSE(l.has_value());
+            REQUIRE_FALSE(text.has_value());
             CHECK_EQ(d.error(), c.refused);
             CHECK_EQ(l.error(), c.refused);
             CHECK_EQ(text.error(), c.refused);
