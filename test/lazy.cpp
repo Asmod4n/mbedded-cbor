@@ -1582,8 +1582,163 @@ TEST_CASE("lazy: a repeated key gives the first pair")
     cbor::lazy const twice = lazy_of("\xa3\x61" "a\x01\x61" "b\x02\x61" "a\x03"s);
     CHECK(value_at(*twice.at("a")) == V(1));
     CHECK(value_at(*twice["a"]) == V(1));
-    CHECK(value_at(*twice.at_path("$.a")) == V(1));
+    CHECK(value_at(*twice.at_path(*cbor::jsonpath::make_expression<cbor::lazy>("$.a"))) == V(1));
     CHECK_EQ(twice.at_path<"$.a", int>(), 1);
     cbor::lazy const numbers = lazy_of("\xa3\x01\x01\x01\x02\x01\x03"s);
     CHECK(value_at(*numbers[cbor::key{1}]) == V(1));
+}
+
+// RFC 9535 2.3.5.1: a single result needs a singular query. make_expression refuses any other query for every
+// result type that is not cbor::nodelist, and a nodelist takes both.
+TEST_CASE("lazy: make_expression refuses a query that is not singular for a single result")
+{
+    auto const each = []<class T>() {
+        CHECK_EQ(cbor::jsonpath::make_expression<T>("$.a[*]").error(), error::not_singular_query);
+        CHECK_EQ(cbor::jsonpath::make_expression<T>("$..a").error(), error::not_singular_query);
+        CHECK(cbor::jsonpath::make_expression<T>("$.a[0]").has_value());
+    };
+    each.template operator()<int>();
+    each.template operator()<std::uint64_t>();
+    each.template operator()<double>();
+    each.template operator()<bool>();
+    each.template operator()<std::nullptr_t>();
+    each.template operator()<cbor::simple_value>();
+    each.template operator()<std::string_view>();
+    each.template operator()<std::span<std::byte const>>();
+    each.template operator()<cbor::typed_array>();
+    each.template operator()<cbor::lazy>();
+    CHECK(cbor::jsonpath::make_expression<cbor::nodelist>("$.a[*]").has_value());
+    CHECK(cbor::jsonpath::make_expression<cbor::nodelist>("$.a[0]").has_value());
+}
+
+// The first paths a user tries that are not JSONPath give invalid_path, for a single result and for a nodelist.
+TEST_CASE("lazy: make_expression gives invalid_path for a text that is not a query")
+{
+    for (std::string_view const text : {""sv, "$["sv, "a"sv, "$.a["sv}) {
+        CHECK_EQ(cbor::jsonpath::make_expression<cbor::nodelist>(text).error(), error::invalid_path);
+        CHECK_EQ(cbor::jsonpath::make_expression<cbor::lazy>(text).error(), error::invalid_path);
+    }
+}
+
+namespace
+{
+template <class T>
+constexpr bool bytes_at_path_compiles = requires(std::string_view const encoded, cbor::jsonpath::expression<T> const &e) {
+    cbor::at_path(encoded, e);
+};
+}
+
+// A lazy or a nodelist over a bare string_view would read the buffer of the caller with no owner, so that form does
+// not compile; a scalar is copied out, and a view gets an owning_ref with a copy of the bytes.
+TEST_CASE("lazy: at_path over bare bytes compiles for a scalar and a view only")
+{
+    CHECK(bytes_at_path_compiles<int>);
+    CHECK(bytes_at_path_compiles<double>);
+    CHECK(bytes_at_path_compiles<bool>);
+    CHECK(bytes_at_path_compiles<std::nullptr_t>);
+    CHECK(bytes_at_path_compiles<cbor::simple_value>);
+    CHECK(bytes_at_path_compiles<std::string_view>);
+    CHECK(bytes_at_path_compiles<std::span<std::byte const>>);
+    CHECK(bytes_at_path_compiles<cbor::typed_array>);
+    CHECK_FALSE(bytes_at_path_compiles<cbor::lazy>);
+    CHECK_FALSE(bytes_at_path_compiles<cbor::nodelist>);
+}
+
+// An expression is parsed once and applied many times: to two documents, twice to one, and in each form of
+// at_path. The literal form gives the same nodelist.
+TEST_CASE("lazy: one expression applies to many documents")
+{
+    std::string const one = encoded(M("a"s, A(1, 2)));
+    std::string const two = encoded(M("a"s, A(3, 4, 5)));
+    auto const all = *cbor::jsonpath::make_expression<cbor::nodelist>("$.a[*]");
+    auto const first = *cbor::jsonpath::make_expression<int>("$.a[0]");
+    cbor::lazy const l1 = *cbor::lazy::copy(one);
+    cbor::lazy const l2 = *cbor::lazy::copy(two);
+    CHECK_EQ(l1.at_path(all)->size(), 2u);
+    CHECK_EQ(l2.at_path(all)->size(), 3u);
+    CHECK(*test::values_of(l1.at_path(all)) == *test::values_of(l1.at_path(all)));
+    CHECK(*test::values_of(l1.at_path(all)) == *test::values_of(l1.at_path<"$.a[*]", cbor::nodelist>()));
+    CHECK_EQ(*l1.at_path(first), 1);
+    CHECK_EQ(*l2.at_path(first), 3);
+    CHECK_EQ(*cbor::at_path(one, first), 1);
+    CHECK_EQ(*cbor::at_path(two, first), 3);
+    auto const shared = std::make_shared<std::string const>(two);
+    CHECK_EQ(cbor::at_path(shared, all)->size(), 3u);
+    CHECK_EQ(cbor::at_path(std::string(two), all)->size(), 3u);
+    auto const node = cbor::at_path(shared, *cbor::jsonpath::make_expression<cbor::lazy>("$.a[2]"));
+    CHECK(test::value_of(node) == V(5));
+    std::string const text = encoded(M("s"s, "x"s));
+    auto const s = *cbor::jsonpath::make_expression<std::string_view>("$.s");
+    auto const from_view = cbor::at_path(text, s);
+    CHECK_EQ(**from_view, "x"sv);
+    auto const from_string = cbor::at_path(std::string(text), s);
+    CHECK_EQ(**from_string, "x"sv);
+    auto const from_lazy = cbor::lazy::copy(text)->at_path(s);
+    CHECK_EQ(**from_lazy, "x"sv);
+}
+
+// A copy owns its data: it is applied after the original is gone. The run under the address sanitizer shows that
+// no read reaches freed memory.
+TEST_CASE("lazy: a copy of an expression outlives the original")
+{
+    std::string const doc = encoded(M("k"s, A(7)));
+    std::optional<cbor::jsonpath::expression<int>> original = *cbor::jsonpath::make_expression<int>("$['k'][0]");
+    cbor::jsonpath::expression<int> const copy = *original;
+    original.reset();
+    CHECK_EQ(*cbor::at_path(doc, copy), 7);
+}
+
+// A moved-from expression holds no query. Each apply sees that state and throws std::logic_error, as for any
+// other wrong use; the moved-to expression applies as before.
+TEST_CASE("lazy: a moved-from expression is a wrong use")
+{
+    std::string const doc = encoded(M("a"s, "x"s));
+    cbor::lazy const l = *cbor::lazy::copy(doc);
+    auto number = *cbor::jsonpath::make_expression<int>("$.a");
+    auto const moved_number = std::move(number);
+    CHECK_THROWS_AS((void)cbor::at_path(doc, number), std::logic_error);
+    CHECK_THROWS_AS((void)l.at_path(number), std::logic_error);
+    CHECK_EQ(cbor::at_path(doc, moved_number).error(), error::incorrect_type);
+    auto text = *cbor::jsonpath::make_expression<std::string_view>("$.a");
+    auto other = *cbor::jsonpath::make_expression<std::string_view>("$.b");
+    other = std::move(text);
+    CHECK_THROWS_AS((void)cbor::at_path(doc, text), std::logic_error);
+    auto const read = cbor::at_path(doc, other);
+    CHECK_EQ(**read, "x"sv);
+    auto nodes = *cbor::jsonpath::make_expression<cbor::nodelist>("$.*");
+    auto const moved_nodes = std::move(nodes);
+    CHECK_THROWS_AS((void)l.at_path(nodes), std::logic_error);
+    CHECK_EQ(l.at_path(moved_nodes)->size(), 1u);
+}
+
+// The nesting depth limit can change between make_expression and an apply. Each apply checks the deepest
+// recursion of the parse against the limit in force, for the run time and for the literal form.
+TEST_CASE("lazy: an apply checks the depth of the query against the limit in force")
+{
+    std::string const doc = encoded(A(1));
+    cbor::lazy const l = *cbor::lazy::copy(doc);
+    auto const e = *cbor::jsonpath::make_expression<cbor::nodelist>("$[?@[?@[?@.a]]]");
+    {
+        test::limits_guard const low{{.nesting_depth = 3}};
+        CHECK_EQ(l.at_path(e).error(), error::nesting_depth_exceeded);
+        CHECK_EQ((l.at_path<"$[?@[?@[?@.a]]]", cbor::nodelist>().error()), error::nesting_depth_exceeded);
+    }
+    CHECK(l.at_path(e)->empty());
+}
+
+// An expression has no mutable member, so threads apply one const expression at once. The run under the thread
+// sanitizer shows that no access races.
+TEST_CASE("lazy: threads apply one expression at once")
+{
+    std::string const doc = encoded(M("a"s, A(1, 2, 3)));
+    cbor::lazy const l = *cbor::lazy::copy(doc);
+    auto const e = *cbor::jsonpath::make_expression<cbor::nodelist>("$.a[?@ > 1]");
+    std::array<std::size_t, 4> found{};
+    {
+        std::array<std::jthread, 4> threads;
+        for (std::size_t i = 0; i < threads.size(); ++i)
+            threads[i] = std::jthread([&l, &e, &found, i] { found[i] = l.at_path(e)->size(); });
+    }
+    for (std::size_t const n : found)
+        CHECK_EQ(n, 2u);
 }

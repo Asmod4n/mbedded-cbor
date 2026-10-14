@@ -26,15 +26,15 @@ using cbor::error;
 namespace
 {
 
-// at_path reads a singular query and gives the value of its node. Any other query is invalid_path there, and
-// cbor::query gives its nodelist as an array. The helpers below try at_path first, so the expectation of each
+// at_path with a single result reads a singular query and gives the value of its node. Any other query is
+// not_singular_query there, and at_path with cbor::nodelist gives its nodelist as an array. The helpers below try at_path first, so the expectation of each
 // test is the value for a singular query and the nodelist for any other.
 std::expected<value, cbor::error> path_read(std::string_view const path, value const &data)
 {
     std::string const doc = encoded(data);
     auto const l = *cbor::lazy::copy(doc);
     auto const r = test::at_path(path, l);
-    if (r || r.error() != error::invalid_path)
+    if (r || r.error() != error::not_singular_query)
         return r;
     return test::query(path, l);
 }
@@ -1038,9 +1038,10 @@ TEST_CASE("at_path: a compiled path with more segments than the nesting depth in
 }
 
 // RFC 9535 2.3.5.1: a singular query selects at most one node. at_path reads only such a query and gives the value
-// of the node; a run time path that is not singular is invalid_path there, and a compiled one does not compile
-// (a static_assert in the body). lazy::query gives the nodelist of any query as an array, also of a singular one.
-TEST_CASE("path: at_path reads a singular query, lazy::query reads a nodelist")
+// of the node; a run time path that is not singular is not_singular_query there, and a compiled one does not
+// compile (a static_assert in the body). at_path with cbor::nodelist gives the nodelist of any query as an array,
+// also of a singular one.
+TEST_CASE("path: at_path reads a singular query, at_path with a nodelist reads any query")
 {
     std::string const doc = encoded(M("a"s, A(1, 2)));
     cbor::lazy const l = *cbor::lazy::copy(doc);
@@ -1048,8 +1049,8 @@ TEST_CASE("path: at_path reads a singular query, lazy::query reads a nodelist")
     CHECK(*test::query("$.a[1]", l) == A(2));
     CHECK(*test::query("$.a[*]", l) == A(1, 2));
     CHECK(*test::query("$.b", l) == A());
-    CHECK_EQ(test::at_path("$.a[*]", l).error(), error::invalid_path);
-    CHECK_EQ(test::at_path("$..a", l).error(), error::invalid_path);
+    CHECK_EQ(test::at_path("$.a[*]", l).error(), error::not_singular_query);
+    CHECK_EQ(test::at_path("$..a", l).error(), error::not_singular_query);
     CHECK_EQ(test::at_path("$.b", l).error(), error::key_not_found);
     CHECK_EQ(test::query("a", l).error(), error::invalid_path);
     CHECK(*test::at_path<"$.a[0]">(l) == V(1));
@@ -1301,18 +1302,18 @@ TEST_CASE("path: the member at_path starts at the item of the lazy")
 {
     std::string const doc = encoded(M("a"s, M("b"s, A(1, 2, "x"s))));
     cbor::lazy const l = *cbor::lazy::copy(doc);
-    CHECK(*test::at_path("$", *l.at_path("$.a.b[1]")) == V(2));
-    CHECK_EQ(l.at_path("$.a.b[").error(), error::invalid_path);
-    CHECK_EQ(l.at_path("$..b").error(), error::invalid_path);
-    CHECK_EQ(l.at_path("$.a.c").error(), error::key_not_found);
+    CHECK(*test::at_path("$", *l.at_path(*cbor::jsonpath::make_expression<cbor::lazy>("$.a.b[1]"))) == V(2));
+    CHECK_EQ(cbor::jsonpath::make_expression<cbor::lazy>("$.a.b[").error(), error::invalid_path);
+    CHECK_EQ(cbor::jsonpath::make_expression<cbor::lazy>("$..b").error(), error::not_singular_query);
+    CHECK_EQ(l.at_path(*cbor::jsonpath::make_expression<cbor::lazy>("$.a.c")).error(), error::key_not_found);
     cbor::lazy const inner = *l.at("a");
     CHECK_EQ(inner.at_path<"$.b[0]", int>(), 1);
     auto const text = inner.at_path<"$.b[2]", std::string_view>();
     CHECK_EQ(**text, "x"sv);
     CHECK(*test::at_path("$", *inner.at_path<"$.b">()) == A(1, 2, "x"s));
     CHECK(*test::at_path("$", *member_at_path<"$.b[1]">(inner)) == V(2));
-    CHECK_EQ(inner.query("$.b[*]")->size(), 3u);
-    CHECK_EQ(inner.query<"$..*">()->size(), 4u);
+    CHECK_EQ(inner.at_path(*cbor::jsonpath::make_expression<cbor::nodelist>("$.b[*]"))->size(), 3u);
+    CHECK_EQ((inner.at_path<"$..*", cbor::nodelist>()->size()), 4u);
 }
 
 // A typed at_path needs one node, so a path that is not singular (RFC 9535 2.3.5.1) does not compile. A concept

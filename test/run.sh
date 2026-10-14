@@ -52,7 +52,7 @@ one() {
 		cmake --build /b -- -j'"$cpus"' >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
 		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test >/b/test.log 2>&1; r=$?; }
-		[ $r = 0 ] && { ctest --test-dir /b -R "^(cmake|clang_query)_" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
+		[ $r = 0 ] && { ctest --test-dir /b -R "^(cmake|clang_query|compile_fail)_" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
 			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log 2>/dev/null | head -1)"
