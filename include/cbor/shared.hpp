@@ -74,52 +74,6 @@ private:
     template <bool Checked>
     struct tree_decoder;
 
-    template <bool Checked>
-    struct resolved;
-
-    template <bool Checked>
-    static std::expected<resolved<Checked>, error> container_resolve(std::shared_ptr<top_level_item> source,
-                                                                     validity::offset offset,
-                                                                     validity::limit_checks<Checked> checks);
-
-    template <bool Checked>
-    static std::expected<resolved<Checked>, error> tag_content_resolve(std::shared_ptr<top_level_item> source,
-                                                                       validity::offset offset,
-                                                                       validity::limit_checks<Checked> checks);
-
-    struct tag_content {
-        validity::offset offset;
-        std::string_view bytes;
-    };
-
-    template <bool Checked>
-    static std::expected<tag_content, error> typed_array_bytes_read(resolved<Checked> const &found);
-
-    static std::expected<std::string_view, error> typed_array_element_read(lazy const &node);
-
-    template <bool Checked>
-    static std::expected<resolved<Checked>, error> lazy_resolve(lazy const &node, validity::limit_checks<Checked> checks);
-
-    template <bool Checked, std::integral Index>
-    static std::expected<lazy, error> index_select(resolved<Checked> const &found, Index i);
-
-    template <class Key, class Entries = lazy_entries, bool Checked>
-        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<typename Entries::iterator, error> key_find(resolved<Checked> found, Key key,
-                                                                     limit_values loaded);
-
-    template <bool Sorted, class Iterator, class Last, class Key, bool Checked>
-        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<std::pair<Iterator, bool>, error> key_find(Iterator first, Last last, Key key,
-                                                                    validity::limit_checks<Checked> checks);
-
-    template <class Iterator>
-    static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
-
-    template <class Key, class Entries = lazy_entries>
-        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<std::size_t, error> key_count(std::expected<typename Entries::iterator, error> found, Key key);
-
     friend class validity;
 
     friend std::expected<std::reference_wrapper<item const>, error>
@@ -390,6 +344,56 @@ private:
     template <class F>
     decltype(auto) limits_apply(limit_values loaded, F &&f) const;
 
+    template <bool Checked>
+    struct resolved;
+
+    template <bool Checked>
+    static std::expected<resolved<Checked>, error> container_resolve(std::shared_ptr<value_sharing::top_level_item> source,
+                                                                     validity::offset offset,
+                                                                     validity::limit_checks<Checked> checks);
+
+    template <bool Checked>
+    static std::expected<resolved<Checked>, error> tag_content_resolve(std::shared_ptr<value_sharing::top_level_item> source,
+                                                                       validity::offset offset,
+                                                                       validity::limit_checks<Checked> checks);
+
+    struct tag_content {
+        validity::offset offset;
+        std::string_view bytes;
+    };
+
+    template <bool Checked>
+    static std::expected<tag_content, error> typed_array_bytes_read(resolved<Checked> const &found);
+
+    static std::expected<std::string_view, error> typed_array_element_read(lazy const &node);
+
+    template <bool Checked>
+    static std::expected<resolved<Checked>, error> lazy_resolve(lazy const &node, validity::limit_checks<Checked> checks);
+
+    template <bool Checked, std::integral Index>
+    static std::expected<lazy, error> index_select(resolved<Checked> const &found, Index i);
+
+    template <class Key, class Entries = lazy_entries, bool Checked>
+        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+    static std::expected<typename Entries::iterator, error> key_find(resolved<Checked> found, Key key,
+                                                                     limit_values loaded);
+
+    template <bool Sorted, class Iterator, class Last, class Key, bool Checked>
+        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+    static std::expected<std::pair<Iterator, bool>, error> key_find(Iterator first, Last last, Key key,
+                                                                    validity::limit_checks<Checked> checks);
+
+    template <class Iterator>
+    static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
+
+    template <class Key, class Entries = lazy_entries>
+        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+    static std::expected<std::size_t, error> key_count(std::expected<typename Entries::iterator, error> found, Key key);
+
+    friend struct lazy_elements;
+
+    friend struct lazy_entries;
+
     friend class jsonpath;
 };
 
@@ -495,91 +499,6 @@ struct value_sharing::sharing_decoder : heads::decoder<Checked> {
         slots.push_back(slot::in_skipped_member);
     }
 };
-
-template <bool Checked>
-struct value_sharing::resolved {
-    std::shared_ptr<top_level_item> source;
-    heads::head h;
-    heads::decoder<Checked> d;
-    validity::offset item_at;
-};
-
-template <bool Checked>
-std::expected<value_sharing::resolved<Checked>, error>
-value_sharing::container_resolve(std::shared_ptr<top_level_item> source, validity::offset offset,
-                                 validity::limit_checks<Checked> const checks)
-{
-    validity::throw_logic_error_if_null(source, "cbor::lazy: the lazy holds no top-level item");
-    for (;;) {
-        validity::offset const at = heads::self_described_cbor_content_at(source->encoded, offset);
-        heads::decoder<Checked> d{validity::subspan(source->encoded, at), checks};
-        auto const h = d.head_decode();
-        if (!h) [[unlikely]]
-            return std::unexpected(h.error());
-        if (h->major != major_type::tag ||
-            h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
-            return resolved<Checked>{source, *h, d, at};
-        auto const r = d.head_decode();
-        if (!r) [[unlikely]]
-            return std::unexpected(r.error());
-        if (error const c = validity::check_tag_content(h->argument, r->major).error_or(error{});
-            c != error{}) [[unlikely]]
-            return std::unexpected(c);
-        auto const embedded = d.byte_string_decode(r->argument);
-        if (!embedded) [[unlikely]]
-            return std::unexpected(embedded.error());
-        source = std::make_shared<top_level_item>(source->owner, *embedded);
-        offset = validity::offset{};
-    }
-}
-
-template <bool Checked>
-std::expected<value_sharing::resolved<Checked>, error>
-value_sharing::tag_content_resolve(std::shared_ptr<top_level_item> source, validity::offset offset,
-                                   validity::limit_checks<Checked> const checks)
-{
-    for (;;) {
-        auto found = container_resolve(std::move(source), offset, checks);
-        if (!found) [[unlikely]]
-            return found;
-        if (found->h.major != major_type::tag || !heads::is_tag_passed(found->h.argument)) [[likely]] {
-            if (auto const r = validity::check_pending_items(found->h.major, found->h.info, found->h.argument,
-                                                             found->d.encoded.size());
-                !r) [[unlikely]]
-                return std::unexpected(r.error());
-            return found;
-        }
-        source = std::move(found->source);
-        offset = validity::distance(source->encoded, found->d.encoded);
-    }
-}
-
-template <bool Checked>
-std::expected<value_sharing::tag_content, error> value_sharing::typed_array_bytes_read(resolved<Checked> const &found)
-{
-    if (found.h.major != major_type::tag) [[unlikely]]
-        return std::unexpected(error::incorrect_type);
-    if (error const r = validity::typed_array_check(found.h.argument, 0).error_or(error{}); r != error{})
-        [[unlikely]]
-        return std::unexpected(r);
-    validity::offset const content =
-        heads::self_described_cbor_content_at(found.source->encoded, validity::distance(found.source->encoded, found.d.encoded));
-    heads::decoder<Checked> d{validity::subspan(found.source->encoded, content), found.d.checks};
-    auto const r = d.head_decode();
-    if (!r) [[unlikely]]
-        return std::unexpected(r.error());
-    if (error const c = validity::check_tag_content(found.h.argument, r->major).error_or(error{});
-        c != error{}) [[unlikely]]
-        return std::unexpected(c);
-    auto const offset = validity::offset{validity::distance(found.source->encoded, d.encoded)};
-    auto const bytes = d.byte_string_decode(r->argument);
-    if (!bytes) [[unlikely]]
-        return std::unexpected(bytes.error());
-    if (error const c = validity::typed_array_check(found.h.argument, bytes->size()).error_or(error{});
-        c != error{}) [[unlikely]]
-        return std::unexpected(c);
-    return tag_content{offset, *bytes};
-}
 
 }
 
