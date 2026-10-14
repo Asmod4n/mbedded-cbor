@@ -21,7 +21,7 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const port = server.address().port;
-const arms = ["values_cbor", "values_cbor_aa", "values_json", "objects_cbor", "objects_cbor_aa", "objects_eager", "objects_json"];
+const arms = ["values_cbor", "values_cbor_aa", "values_json", "objects_cbor", "objects_cbor_aa", "objects_json", "decode_cbor", "decode_cbor_aa", "decode_json"];
 const browser = await chromium.launch();
 const runs = Object.fromEntries(arms.map((a) => [a, []]));
 for (let r = 0; r < reps; r++) {
@@ -48,7 +48,7 @@ const context = {
   wasm_bytes: readFileSync(join(artifacts_dir, "showcase.wasm")).length,
   inputs: { cbor_bytes: readFileSync(join(artifacts_dir, "twitter.cbor")).length, json_bytes: readFileSync(join(artifacts_dir, "twitter.json")).length },
   json_library: "json-p3 2.2.2 iife",
-  method: "each repetition of each arm is one cold flow in a fresh page, timed once; arms alternate; before the timer the CBOR bytes are a Uint8Array, the JSON text is a string, the wasm module is instantiated and json-p3 is loaded; values_*: load or parse, then the user id and the list of status ids; objects_*: load or parse, then four paths each compiled once and applied once, results as JS objects; objects_eager: load, decode the whole document eagerly into JS objects, then the same four paths with json-p3",
+  method: "each repetition of each arm is one cold flow in a fresh page, timed once; arms alternate; before the timer the CBOR bytes are a Uint8Array, the JSON text is a string, the wasm module is instantiated and json-p3 is loaded; values_*: load or parse, then the user id and the list of status ids; objects_*: load or parse, then four paths each compiled once and applied once, results as JS objects; decode_*: the whole document into one JS object, eager decode against JSON.parse, no path",
   kernel: os.release(), cpu: os.cpus()[0].model, cpus: os.cpus().length, user: os.userInfo().username,
   priority: os.getPriority(), node: process.version, repetitions: reps,
 };
