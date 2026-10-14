@@ -546,7 +546,7 @@ section 6:
 
 The A/A difference of a cell lies between 0.07 and 10.9 percent (field
 `aa_percent` of the file). The mbedded-cbor sum reads each element
-through `at_path<"@[]">(i)`, not through the `view` of section 6.
+through `i.at_path<"@[]">()`, not through the `view` of section 6.
 
 bench/results has no measurement of nlohmann/json, libcbor, the plain
 at_path form, the lazy elements form, structs, shared values or broken

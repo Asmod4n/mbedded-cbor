@@ -295,7 +295,7 @@ TEST_CASE("limits: an item that a path or a lazy only skips does not count")
         test::limits_guard const guard{limits};
         auto const l = *cbor::lazy::copy(doc);
         CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
-        CHECK_EQ(cbor::at_path<"$.n", int>(l), 1);
+        CHECK_EQ(l.at_path<"$.n", int>(), 1);
         CHECK_EQ(l.at("n")->get<int>(), 1);
         CHECK(test::at_path("$.n", l) == V(1));
         CHECK(test::query("$.n", l) == A(1));
@@ -305,10 +305,10 @@ TEST_CASE("limits: an item that a path or a lazy only skips does not count")
     test::limits_guard const guard{{.string_length = 2, .container_elements = 2}};
     std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;
     auto const l = *cbor::lazy::copy("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
-    CHECK_EQ(cbor::at_path<"$[1]", int>(l), 5);
+    CHECK_EQ(l.at_path<"$[1]", int>(), 5);
     CHECK_EQ(l.at(1)->get<int>(), 5);
-    CHECK_EQ(cbor::at_path<"$[0][1]", int>(l).error(), error::container_elements_exceeded);
-    CHECK_EQ(cbor::at_path<"$[0][0]", std::int64_t>(l).error(), error::string_length_exceeded);
+    CHECK_EQ(l.at_path<"$[0][1]", int>().error(), error::container_elements_exceeded);
+    CHECK_EQ(l.at_path<"$[0][0]", std::int64_t>().error(), error::string_length_exceeded);
     CHECK_EQ(cbor::item_size(two).error(), error::string_length_exceeded);
 }
 

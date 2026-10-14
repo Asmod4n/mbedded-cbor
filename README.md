@@ -66,9 +66,9 @@ The read side needs only C++23. It works with g++ 16 and with clang 23.
 // bytes is a std::string with the CBOR of {"user": {"id": 42, "name": "ann"}}
 auto const doc = cbor::lazy::copy(bytes).value();
 
-auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);         // *id == 42
-auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);  // **name == "ann"
-auto const age = cbor::at_path<"$.user.age", int>(doc);
+auto const id = doc.at_path<"$.user.id", std::int64_t>();         // *id == 42
+auto const name = doc.at_path<"$.user.name", std::string_view>();  // **name == "ann"
+auto const age = doc.at_path<"$.user.age", int>();
 // age.error() == cbor::error::key_not_found
 ```
 
@@ -82,7 +82,7 @@ copy. The owning_ref keeps the bytes alive, so the view stays valid.
 std::string const cut = bytes.substr(0, bytes.size() - 1);  // the last byte is missing
 
 auto const doc = cbor::lazy::copy(cut).value();
-auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
+auto const name = doc.at_path<"$.user.name", std::string_view>();
 // name.error() == cbor::error::too_little_data
 
 std::string const why = std::error_code(name.error()).message();  // "too little data"

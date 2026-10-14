@@ -81,8 +81,8 @@ TEST_CASE("doc path: start at a lazy")
     auto const cars = cbor::lazy::copy(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
     REQUIRE(cars.has_value());
     if (cars) {
-        CHECK_EQ(cbor::at_path<"$[1].hp", std::int64_t>(*cars), 7);
-        auto const make = cbor::at_path<"$[1].make", std::string_view>(*cars);
+        CHECK_EQ(cars->at_path<"$[1].hp", std::int64_t>(), 7);
+        auto const make = cars->at_path<"$[1].make", std::string_view>();
         REQUIRE(make.has_value());
         CHECK_EQ(**make, "kia"sv);
     }

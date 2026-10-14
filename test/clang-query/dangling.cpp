@@ -15,3 +15,9 @@ std::size_t dangling(std::shared_ptr<std::string const> const &owner)
     auto const &by_value = cbor::at_path<"$.name", std::string_view>(owner).value();
     return (*by_star).size() + (*by_value).size();
 }
+
+std::size_t dangling_member(cbor::lazy const &l)
+{
+    auto const &by_star = *l.at_path<"$.name", std::string_view>();
+    return (*by_star).size();
+}

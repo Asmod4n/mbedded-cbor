@@ -72,9 +72,9 @@ TEST_CASE("path: a key is compared without an allocation")
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
     auto const root = *cbor::lazy::copy(std::string(bytes));
     auto const map = *root.at(1);
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(map).has_value());
+    REQUIRE(map.at_path<"$[[1, \"x\"]]">().has_value());
     std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]">(map);
+    auto const found = map.at_path<"$[[1, \"x\"]]">();
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
     CHECK_EQ(after, before);
@@ -214,7 +214,7 @@ TEST_CASE("path: a typed read through tag 24 allocates nothing")
     auto const root = *cbor::lazy::copy(std::string(doc));
     std::size_t const before = allocations;
     auto const from_bytes = cbor::at_path<"$.a[1]", int>(std::string_view(doc));
-    auto const from_lazy = cbor::at_path<"$.a[1]", int>(root);
+    auto const from_lazy = root.at_path<"$.a[1]", int>();
     std::size_t const after = allocations;
     CHECK_EQ(after, before);
     CHECK_EQ(from_bytes, 2);
