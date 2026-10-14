@@ -28,7 +28,7 @@ template <cbor::fixed_string Path>
 concept advanced_lazy_path_compiles = requires(cbor::lazy const &l) { l.at_path<Path>(); };
 
 template <cbor::fixed_string Path>
-concept advanced_lazy_query_compiles = requires(cbor::lazy const &l) { l.query<Path>(); };
+concept advanced_lazy_query_compiles = requires(cbor::lazy const &l) { l.at_path<Path, cbor::nodelist>(); };
 
 } // namespace
 
@@ -235,7 +235,7 @@ TEST_CASE("doc advanced path: a singular query")
     CHECK((cbor::is_valid_path_v<"$..a">));
     CHECK((!cbor::is_valid_path_v<"$.a[">));
     CHECK_FALSE((advanced_typed_path_compiles<"$.a[*]", int>));
-    CHECK_EQ(test::at_path("$.a[*]", *cbor::lazy::copy(preferred(M("a"s, A(1))))).error(), error::invalid_path);
+    CHECK_EQ(test::at_path("$.a[*]", *cbor::lazy::copy(preferred(M("a"s, A(1))))).error(), error::not_singular_query);
 }
 
 // The section "Errors" shows each error that a path gives and the input that gives it.
@@ -395,7 +395,7 @@ TEST_CASE("doc advanced path: tags in detail")
     CHECK_EQ(cbor::at_path<"$.a[1]", int>(inside), 2);
     CHECK(*test::at_path("$.a[1]", *cbor::lazy::copy(inside)) == V(2));
     CHECK_EQ(cbor::at_path<"$.a", int>("\xa1\x61\x61\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
-    CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)->at_path("$[0]").has_value());
+    CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)->at_path(*cbor::jsonpath::make_expression<cbor::lazy>("$[0]")).has_value());
     std::string const many = "\x82\xd8\x1c\x88\x00\x00\x00\x00\x00\x00\x00\x00\xd8\x1d\x00"s;
     CHECK(*test::query("$[*][*]", *cbor::lazy::copy(many)) == A(0, 0, 0, 0, 0, 0, 0, 0));
 }

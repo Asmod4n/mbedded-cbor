@@ -313,7 +313,7 @@ inline void path_target(std::string_view const input)
     auto const root = cbor::lazy::copy(std::string{document});
     require(root.has_value());
     auto found = test::at_path(q.text, *root);
-    if (!found && found.error() == cbor::error::invalid_path)
+    if (!found && found.error() == cbor::error::not_singular_query)
         found = test::query(q.text, *root);
     if (!q.valid)
         return;

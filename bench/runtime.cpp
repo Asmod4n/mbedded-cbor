@@ -791,7 +791,7 @@ static std::uint64_t op()
 #elif defined(ARM_MB_STRUCT)
     return mb_struct();
 #elif defined(ARM_MB_PATH_ALL)
-    auto const r = cbor::lazy::view(*held)->query<"$..*">();
+    auto const r = cbor::lazy::view(*held)->at_path<"$..*", cbor::nodelist>();
     if (!r) [[unlikely]]
         std::abort();
     return r->size();

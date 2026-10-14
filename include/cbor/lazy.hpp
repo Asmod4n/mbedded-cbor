@@ -43,6 +43,28 @@ struct lazy_elements;
 
 struct lazy_entries;
 
+struct lazy;
+
+using nodelist = std::vector<lazy>;
+
+template <class T>
+concept scalar_result = (std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
+                        std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+                        || std::is_same_v<T, std::float128_t>
+#endif
+    ;
+
+template <class T>
+concept view_result =
+    std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>;
+
+template <class T>
+concept path_result = scalar_result<T> || view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>;
+
+template <class E>
+inline constexpr bool is_path_expression_v = false;
+
 struct lazy {
 private:
     struct top_level_item;
@@ -69,8 +91,6 @@ public:
 
     std::expected<lazy, error> operator[](std::size_t index) const;
 
-    std::expected<lazy, error> at_path(std::string_view path) const;
-
     template <fixed_string Path>
         requires is_valid_path_v<Path>
     std::expected<lazy, error> at_path() const;
@@ -91,11 +111,13 @@ public:
                   std::is_same_v<T, typed_array>))
     std::expected<owning_ref<T>, error> at_path() const;
 
-    std::expected<std::vector<lazy>, error> query(std::string_view path) const;
-
-    template <fixed_string Path>
+    template <fixed_string Path, std::same_as<nodelist> T>
         requires is_valid_path_v<Path>
-    std::expected<std::vector<lazy>, error> query() const;
+    std::expected<nodelist, error> at_path() const;
+
+    template <class E>
+        requires is_path_expression_v<E>
+    std::expected<typename E::result_type, error> at_path(E const &e) const;
 
     std::expected<std::uint64_t, error> size() const;
 

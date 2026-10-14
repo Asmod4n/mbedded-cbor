@@ -20,3 +20,15 @@ std::size_t safe_member(cbor::lazy const &l)
     auto const &name = *result;
     return (*name).size();
 }
+
+std::size_t safe_expression(std::shared_ptr<std::string const> const &owner)
+{
+    auto const e = cbor::jsonpath::make_expression<std::string_view>("$.name");
+    auto const result = cbor::at_path(owner, *e);
+    auto const &name = *result;
+    auto const one = cbor::jsonpath::make_expression<cbor::lazy>("$.name");
+    auto const node = cbor::at_path(owner, *one);
+    auto const all = cbor::jsonpath::make_expression<cbor::nodelist>("$.*");
+    auto const nodes = cbor::at_path(owner, *all);
+    return (*name).size() + nodes->size() + (node ? 1u : 0u);
+}
