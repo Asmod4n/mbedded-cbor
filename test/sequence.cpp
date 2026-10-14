@@ -45,9 +45,9 @@ bool inside(std::string const &bytes, char const *const p)
 TEST_CASE("sequence: an empty CBOR Sequence has no element")
 {
     CHECK(elements_of(held(""sv)).empty());
-    static_assert(std::ranges::input_range<cbor::sequence>);
-    static_assert(!std::ranges::forward_range<cbor::sequence>);
-    static_assert(!std::ranges::sized_range<cbor::sequence>);
+    CHECK((std::ranges::input_range<cbor::sequence>));
+    CHECK((!std::ranges::forward_range<cbor::sequence>));
+    CHECK((!std::ranges::sized_range<cbor::sequence>));
     CHECK(cbor::sequence{held(""sv)}.empty());
     CHECK(std::ranges::empty(cbor::sequence{held(""sv)}));
     CHECK_FALSE(cbor::sequence{held("\x01"sv)}.empty());

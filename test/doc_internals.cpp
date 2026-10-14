@@ -67,6 +67,6 @@ TEST_CASE("doc internals: two references to one mark")
 // The section "A compile-time path" states that the compiler parses the path.
 TEST_CASE("doc internals: the compiler parses a compile-time path")
 {
-    static_assert(cbor::is_valid_path_v<"$.a[0]">);
-    static_assert(!cbor::is_valid_path_v<"$.a[">);
+    CHECK((cbor::is_valid_path_v<"$.a[0]">));
+    CHECK((!cbor::is_valid_path_v<"$.a[">));
 }

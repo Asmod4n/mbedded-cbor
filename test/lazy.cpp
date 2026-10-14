@@ -272,20 +272,20 @@ TEST_CASE("lazy: elements and entries of the wrong kind")
 // iterators, the ranges are views, sized ranges and borrowed ranges, and an iterator outlives the range.
 TEST_CASE("lazy: entries and elements model the standard concepts they claim")
 {
-    static_assert(std::forward_iterator<cbor::lazy_entries::iterator>);
-    static_assert(std::forward_iterator<cbor::lazy_elements::iterator>);
-    static_assert(std::sentinel_for<std::default_sentinel_t, cbor::lazy_entries::iterator>);
-    static_assert(std::sentinel_for<std::default_sentinel_t, cbor::lazy_elements::iterator>);
-    static_assert(std::ranges::forward_range<cbor::lazy_entries>);
-    static_assert(std::ranges::forward_range<cbor::lazy_elements>);
-    static_assert(std::ranges::view<cbor::lazy_entries>);
-    static_assert(std::ranges::view<cbor::lazy_elements>);
-    static_assert(std::ranges::sized_range<cbor::lazy_entries>);
-    static_assert(std::ranges::sized_range<cbor::lazy_elements>);
-    static_assert(std::ranges::borrowed_range<cbor::lazy_entries>);
-    static_assert(std::ranges::borrowed_range<cbor::lazy_elements>);
-    static_assert(!std::ranges::bidirectional_range<cbor::lazy_entries>);
-    static_assert(!std::ranges::common_range<cbor::lazy_elements>);
+    CHECK((std::forward_iterator<cbor::lazy_entries::iterator>));
+    CHECK((std::forward_iterator<cbor::lazy_elements::iterator>));
+    CHECK((std::sentinel_for<std::default_sentinel_t, cbor::lazy_entries::iterator>));
+    CHECK((std::sentinel_for<std::default_sentinel_t, cbor::lazy_elements::iterator>));
+    CHECK((std::ranges::forward_range<cbor::lazy_entries>));
+    CHECK((std::ranges::forward_range<cbor::lazy_elements>));
+    CHECK((std::ranges::view<cbor::lazy_entries>));
+    CHECK((std::ranges::view<cbor::lazy_elements>));
+    CHECK((std::ranges::sized_range<cbor::lazy_entries>));
+    CHECK((std::ranges::sized_range<cbor::lazy_elements>));
+    CHECK((std::ranges::borrowed_range<cbor::lazy_entries>));
+    CHECK((std::ranges::borrowed_range<cbor::lazy_elements>));
+    CHECK((!std::ranges::bidirectional_range<cbor::lazy_entries>));
+    CHECK((!std::ranges::common_range<cbor::lazy_elements>));
 }
 
 namespace
@@ -312,8 +312,8 @@ TEST_CASE("lazy: size and empty of entries and elements")
     CHECK(none->empty());
     CHECK_FALSE(static_cast<bool>(*none));
     CHECK(none->begin() == none->end());
-    static_assert(!front_reads<cbor::lazy_elements>);
-    static_assert(!front_reads<cbor::lazy_entries>);
+    CHECK((!front_reads<cbor::lazy_elements>));
+    CHECK((!front_reads<cbor::lazy_entries>));
 }
 
 // std::views::take and std::views::drop work on elements and entries as on any forward view, and an

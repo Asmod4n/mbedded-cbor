@@ -796,22 +796,22 @@ TEST_CASE("view: the iterator and the view model the standard concepts")
 {
     using V = cbor::typed_array_view<double>;
     using I = V::iterator;
-    static_assert(std::random_access_iterator<I>);
-    static_assert(std::sized_sentinel_for<I, I>);
-    static_assert(std::same_as<std::iter_value_t<I>, double>);
-    static_assert(std::same_as<std::iter_reference_t<I>, double>);
-    static_assert(std::ranges::random_access_range<V const>);
-    static_assert(std::ranges::sized_range<V const>);
-    static_assert(std::ranges::common_range<V const>);
-    static_assert(std::random_access_iterator<std::ranges::iterator_t<std::ranges::reverse_view<std::ranges::ref_view<V const>>>>);
-    static_assert(std::same_as<decltype(std::declval<V const &>().rbegin()), std::reverse_iterator<I>>);
-    static_assert(std::same_as<decltype(std::declval<V const &>().cbegin()), I>);
-    static_assert(std::same_as<decltype(std::declval<V const &>()[0]), double>);
-    static_assert(std::same_as<decltype(std::declval<V const &>().at(0)), std::expected<double, cbor::error>>);
-    static_assert(std::same_as<decltype(std::declval<V const &>().front()), double>);
-    static_assert(!std::ranges::borrowed_range<V>);
-    static_assert(!std::ranges::contiguous_range<V>);
-    static_assert(!std::output_iterator<I, double>);
+    CHECK((std::random_access_iterator<I>));
+    CHECK((std::sized_sentinel_for<I, I>));
+    CHECK((std::same_as<std::iter_value_t<I>, double>));
+    CHECK((std::same_as<std::iter_reference_t<I>, double>));
+    CHECK((std::ranges::random_access_range<V const>));
+    CHECK((std::ranges::sized_range<V const>));
+    CHECK((std::ranges::common_range<V const>));
+    CHECK((std::random_access_iterator<std::ranges::iterator_t<std::ranges::reverse_view<std::ranges::ref_view<V const>>>>));
+    CHECK((std::same_as<decltype(std::declval<V const &>().rbegin()), std::reverse_iterator<I>>));
+    CHECK((std::same_as<decltype(std::declval<V const &>().cbegin()), I>));
+    CHECK((std::same_as<decltype(std::declval<V const &>()[0]), double>));
+    CHECK((std::same_as<decltype(std::declval<V const &>().at(0)), std::expected<double, cbor::error>>));
+    CHECK((std::same_as<decltype(std::declval<V const &>().front()), double>));
+    CHECK((!std::ranges::borrowed_range<V>));
+    CHECK((!std::ranges::contiguous_range<V>));
+    CHECK((!std::output_iterator<I, double>));
 }
 
 // Each element type of RFC 8746 that the schema writes is read three ways: range-for, the iterator with index and
@@ -914,7 +914,7 @@ TEST_CASE("view: front, back, first and last")
 TEST_CASE("view: crend meets the requirements of a reversible container")
 {
     using V = cbor::typed_array_view<double>;
-    static_assert(std::same_as<decltype(std::declval<V const &>().crend()), std::reverse_iterator<V::iterator>>);
+    CHECK((std::same_as<decltype(std::declval<V const &>().crend()), std::reverse_iterator<V::iterator>>));
     auto const root = cbor::packed<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
