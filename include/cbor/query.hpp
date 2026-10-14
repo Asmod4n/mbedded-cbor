@@ -1069,9 +1069,9 @@ private:
 
     template <class T>
     static std::expected<typename query<T>::result_type, error>
-    expression_apply(query<T> const &e, lazy const &root, limit_values const &loaded)
+    query_apply(query<T> const &e, lazy const &root, limit_values const &loaded)
     {
-        expression_check(e);
+        query_check(e);
         query_view const v{e.segments, e.selectors, e.filters, e.keys, {}};
         if constexpr (std::is_same_v<T, nodelist> || std::is_same_v<T, lazy>) {
             if (auto const r = validity::check_nesting_depth(e.depth_reached, loaded.nesting_depth); !r) [[unlikely]]
@@ -1090,27 +1090,26 @@ private:
     }
 
     template <class T>
-    static std::expected<T, error> expression_apply(query<T> const &e, std::string_view const encoded,
-                                                    limit_values const &loaded)
+    static std::expected<T, error> query_apply(query<T> const &e, std::string_view const encoded,
+                                               limit_values const &loaded)
     {
-        expression_check(e);
+        query_check(e);
         return bytes_walk<T>({e.segments, e.selectors, e.filters, e.keys, {}}, e.top, e.depth_reached, encoded, loaded);
     }
 
     template <view_result T>
-    static std::expected<owning_ref<T>, error> expression_apply(query<T> const &e,
-                                                                std::shared_ptr<std::string const> encoded,
-                                                                limit_values const &loaded)
+    static std::expected<owning_ref<T>, error>
+    query_apply(query<T> const &e, std::shared_ptr<std::string const> encoded, limit_values const &loaded)
     {
         std::string_view const bytes = *encoded;
-        auto const r = expression_apply(e, bytes, loaded);
+        auto const r = query_apply(e, bytes, loaded);
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
         return owning_ref<T>(std::move(encoded), *r);
     }
 
     template <class T>
-    static void expression_check(query<T> const &e)
+    static void query_check(query<T> const &e)
     {
         validity::throw_logic_error_if(e.top.at == 0,
                                        "cbor::jsonpath::query: the query is empty or moved from");
@@ -1130,7 +1129,7 @@ inline constexpr bool is_path_query_v<jsonpath::query<T>> = true;
 template <scalar_result T>
 std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e)
 {
-    return jsonpath::expression_apply(e, encoded, limits.load());
+    return jsonpath::query_apply(e, encoded, limits.load());
 }
 
 template <view_result T>
@@ -1139,7 +1138,7 @@ std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> e
 {
     validity::throw_logic_error_if_null(encoded, "cbor::at_path: the encoded data item is null");
     validity::throw_logic_error_if_empty(encoded, "cbor::at_path: the owner of the encoded data item is empty");
-    return jsonpath::expression_apply(e, std::move(encoded), limits.load());
+    return jsonpath::query_apply(e, std::move(encoded), limits.load());
 }
 
 template <class T>
@@ -1869,7 +1868,7 @@ template <class E>
     requires is_path_query_v<E>
 std::expected<typename E::result_type, error> lazy::at_path(E const &e) const
 {
-    return jsonpath::expression_apply(e, *this, limits.load());
+    return jsonpath::query_apply(e, *this, limits.load());
 }
 
 }
