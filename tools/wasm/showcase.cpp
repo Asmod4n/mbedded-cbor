@@ -31,7 +31,7 @@ namespace {
 
 struct reactor_state {
     std::optional<cbor::lazy> root;
-    std::optional<cbor::jsonpath::expression<cbor::nodelist>> expression;
+    std::optional<cbor::jsonpath::query<cbor::nodelist>> query;
     std::string result;
     std::optional<cbor::owning_ref<std::string_view>> text;
     std::optional<cbor::owning_ref<std::span<std::byte const>>> bytes;
@@ -75,7 +75,7 @@ std::string path_run(std::string_view const path)
 {
     if (!state.root) [[unlikely]]
         return "error: no document loaded";
-    auto const e = cbor::jsonpath::make_expression<cbor::nodelist>(path);
+    auto const e = cbor::jsonpath::compile<cbor::nodelist>(path);
     if (!e) [[unlikely]]
         return error_named(e.error());
     auto const nodes = state.root->at_path(*e);
@@ -145,9 +145,9 @@ std::int32_t js_values_built(std::expected<cbor::nodelist, cbor::error> const &n
 }
 
 template <class T>
-std::expected<typename cbor::jsonpath::expression<T>::result_type, cbor::error> leaf_found(char const *const ptr, std::size_t const len)
+std::expected<typename cbor::jsonpath::query<T>::result_type, cbor::error> leaf_found(char const *const ptr, std::size_t const len)
 {
-    auto const e = cbor::jsonpath::make_expression<T>(std::string_view{ptr, len});
+    auto const e = cbor::jsonpath::compile<T>(std::string_view{ptr, len});
     if (!e) [[unlikely]]
         return std::unexpected(e.error());
     return state.root->at_path(*e);
@@ -200,10 +200,10 @@ __attribute__((export_name("edn"))) std::uint64_t edn(char const *const ptr, std
 
 __attribute__((export_name("compile"))) std::int32_t compile(char const *const path_ptr, std::size_t const path_len)
 {
-    auto e = cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view{path_ptr, path_len});
+    auto e = cbor::jsonpath::compile<cbor::nodelist>(std::string_view{path_ptr, path_len});
     if (!e) [[unlikely]]
         return static_cast<std::int32_t>(e.error());
-    state.expression = std::move(*e);
+    state.query = std::move(*e);
     return 0;
 }
 
@@ -215,7 +215,7 @@ __attribute__((export_name("user_id_literal"))) std::int64_t user_id_literal()
 
 __attribute__((export_name("compiled_first_int"))) std::int64_t compiled_first_int()
 {
-    auto const nodes = state.root->at_path(*state.expression);
+    auto const nodes = state.root->at_path(*state.query);
     if (!nodes || nodes->empty()) [[unlikely]]
         return -1;
     auto const v = nodes->front().get<std::int64_t>();
@@ -224,7 +224,7 @@ __attribute__((export_name("compiled_first_int"))) std::int64_t compiled_first_i
 
 __attribute__((export_name("compiled_int_sum"))) std::int64_t compiled_int_sum()
 {
-    auto const nodes = state.root->at_path(*state.expression);
+    auto const nodes = state.root->at_path(*state.query);
     if (!nodes) [[unlikely]]
         return -1;
     std::int64_t sum = 0;
@@ -248,7 +248,7 @@ __attribute__((export_name("literal_ids_sum"))) std::int64_t literal_ids_sum()
 
 __attribute__((export_name("compiled_js_values"))) std::int32_t compiled_js_values()
 {
-    return js_values_built(state.root->at_path(*state.expression));
+    return js_values_built(state.root->at_path(*state.query));
 }
 
 
