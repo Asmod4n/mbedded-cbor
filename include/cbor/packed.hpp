@@ -1501,7 +1501,7 @@ class reflection
 
     template <class T>
     static std::expected<void, error> root_read(T &out, std::string_view const encoded,
-                                                limit_values const loaded)
+                                                limit_values const &loaded)
     {
         return validity::limits_apply(
             loaded,

@@ -87,8 +87,8 @@ TEST_CASE("doc advanced path: a typed read from a lazy")
     CHECK_EQ(**make, "kia"sv);
 }
 
-// The section "Any value into your own type" shows at_path that gives a lazy node, with the path at compile time and at
-// run time, and cbor::query for a nodelist.
+// The section "Any item as a node" shows at_path that gives a lazy node, at_path with cbor::nodelist for a nodelist,
+// and an expression that make_expression parses once at run time.
 TEST_CASE("doc advanced path: a node at compile time and at run time")
 {
     std::string const bytes = preferred(M("a"s, A(1, 2, 3)));
@@ -99,6 +99,10 @@ TEST_CASE("doc advanced path: a node at compile time and at run time")
     CHECK(*test::query<"$.a[*]">(l) == A(1, 2, 3));
     CHECK(*test::query("$.a[?@ > 1]", l) == A(2, 3));
     CHECK(*test::query("$.b", l) == A());
+    auto const e = cbor::jsonpath::make_expression<cbor::nodelist>("$.a[?@ > 1]");
+    REQUIRE(e.has_value());
+    CHECK(*test::values_of(l.at_path(*e)) == A(2, 3));
+    CHECK(*test::values_of(l.at_path<"$.b", cbor::nodelist>()) == A());
 }
 
 
@@ -159,6 +163,8 @@ TEST_CASE("doc advanced path: the functions")
     CHECK(*test::query("$[?value(@..t) == 5].t", l) == A(5));
     CHECK_EQ(test::query("$[?match(@.t, 'a.c')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?search(@.t, 'b')]", l).error(), error::invalid_path);
+    CHECK(*test::query<"$[?length(@.t) == 3].t">(l) == A("abc"s));
+    CHECK_EQ(cbor::jsonpath::make_expression<cbor::nodelist>("$[?match(@.t, 'a.c')]").error(), error::invalid_path);
     CHECK_FALSE(cbor::is_valid_path_v<"$[?match(@.t, 'a.c')]">);
 }
 
