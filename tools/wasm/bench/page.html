@@ -8,7 +8,7 @@ const target_ms = 200;
 const params = new URLSearchParams(location.search);
 const arm = params.get("arm");
 const [wasm_bytes, cbor_bytes, json_text] = await Promise.all([
-  fetch("showcase.wasm").then((r) => r.arrayBuffer()),
+  fetch(params.get("wasm") ?? "showcase.wasm").then((r) => r.arrayBuffer()),
   fetch("twitter.cbor").then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b)),
   fetch("twitter.json").then((r) => r.text()),
 ]);
