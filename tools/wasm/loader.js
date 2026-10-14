@@ -1,4 +1,3 @@
-const errno_badf = 8;
 const errno_success = 0;
 
 export async function showcase_instantiate(wasm_bytes) {
@@ -6,8 +5,6 @@ export async function showcase_instantiate(wasm_bytes) {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   const wasi_snapshot_preview1 = {
-    fd_close: () => errno_badf,
-    fd_seek: () => errno_badf,
     fd_write: (fd, iovs, iovs_len, nwritten) => {
       const view = new DataView(memory.buffer);
       let text = "";
