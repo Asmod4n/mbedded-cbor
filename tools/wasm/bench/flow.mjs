@@ -27,6 +27,7 @@ const runs = Object.fromEntries(arms.map((a) => [a, []]));
 for (let r = 0; r < reps; r++) {
   for (const arm of arms) {
     const page = await browser.newPage();
+    page.on("pageerror", (e) => console.error(arm, e.message));
     await page.goto(`http://127.0.0.1:${port}/bench/flow.html?arm=${arm}`);
     await page.waitForFunction(() => window.bench_result, null, { timeout: 120000 });
     runs[arm].push(await page.evaluate(() => window.bench_result));
