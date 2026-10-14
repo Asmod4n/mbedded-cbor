@@ -1,0 +1,58 @@
+<!doctype html>
+<meta charset="utf-8">
+<script src="/lib/json-p3.iife.min.js"></script>
+<script type="module">
+const arm = new URLSearchParams(location.search).get("arm").replace(/_aa$/, "");
+const paths = ["$.statuses[0].user.id", "$.statuses[*].user", "$..screen_name", "$.statuses[?@.retweet_count > 0].id"];
+const [cbor, text, module] = await Promise.all([
+  fetch("/art/twitter.cbor").then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b)),
+  fetch("/art/twitter.json").then((r) => r.text()),
+  fetch("/art/showcase.wasm").then((r) => r.arrayBuffer()).then((b) => WebAssembly.compile(b)),
+]);
+let x;
+const dec = new TextDecoder(), enc = new TextEncoder();
+let stack = [], keys = [], out = [], key;
+const str = (p, n) => dec.decode(new Uint8Array(x.memory.buffer, p, n));
+const put = (v) => { if (!stack.length) { out.push(v); return; } const t = stack[stack.length - 1]; if (Array.isArray(t)) t.push(v); else t[key] = v; };
+const js = {
+  value_null: () => put(null), value_bool: (b) => put(!!b), value_number: (v) => put(v), value_string: (p, n) => put(str(p, n)),
+  array_begin: () => { const a = []; put(a); stack.push(a); keys.push(key); },
+  object_begin: () => { const o = {}; put(o); stack.push(o); keys.push(key); },
+  key_string: (p, n) => { key = str(p, n); }, key_number: (v) => { key = String(v); },
+  container_end: () => { stack.pop(); key = keys.pop(); },
+};
+x = (await WebAssembly.instantiate(module, { wasi_snapshot_preview1: { fd_write: () => 0 }, js })).exports;
+const copied = (u8) => { const p = x.alloc(u8.length); new Uint8Array(x.memory.buffer).set(u8, p); return p; };
+const jp = window.json_p3.jsonpath;
+const flows = {
+  values_cbor() {
+    if (x.load(copied(cbor), cbor.length) !== 0) throw new Error("load");
+    return [Number(x.user_id_literal()), Number(x.literal_ids_sum()) > 0];
+  },
+  values_json() {
+    const data = JSON.parse(text);
+    const id = jp.compile(paths[0]).query(data).values()[0];
+    const ids = jp.compile("$.statuses[*].id").query(data).values();
+    return [id, ids.length > 0];
+  },
+  objects_cbor() {
+    if (x.load(copied(cbor), cbor.length) !== 0) throw new Error("load");
+    const all = [];
+    for (const p of paths) {
+      const t = enc.encode(p); const tp = copied(t);
+      if (x.compile(tp, t.length) !== 0) throw new Error("compile");
+      x.release(tp);
+      x.compiled_js_values(); all.push(out); out = [];
+    }
+    return all.map((r) => r.length);
+  },
+  objects_json() {
+    const data = JSON.parse(text);
+    return paths.map((p) => jp.compile(p).query(data).values().length);
+  },
+};
+const t0 = performance.now();
+const check = flows[arm]();
+const ns = (performance.now() - t0) * 1e6;
+window.bench_result = { ns, check: JSON.stringify(check), isolated: crossOriginIsolated };
+</script>
