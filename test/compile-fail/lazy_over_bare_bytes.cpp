@@ -7,6 +7,6 @@
 int main()
 {
     std::string_view const encoded{"\xa1\x61\x61\x01"};
-    auto const e = cbor::jsonpath::make_expression<cbor::lazy>("$.a");
+    auto const e = cbor::jsonpath::compile<cbor::lazy>("$.a");
     return cbor::at_path(encoded, *e).has_value() ? 0 : 1;
 }
