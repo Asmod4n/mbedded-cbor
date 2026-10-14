@@ -117,7 +117,7 @@ for (auto const pair : *map->entries())
 // bytes: {"a": 1, "b": 2}
 auto const map = cbor::lazy::copy(bytes);
 map->size();          // 2, the pairs of a map or the elements of an array
-map->contains("a");   // true
+map->at("z").error(); // key_not_found, the key is not in the map
 ```
 
 Both return a `std::expected`.
@@ -151,7 +151,6 @@ e.unsigned_integer(std::uint8_t{5});
 e.finish();   // out holds {"a": 5}
 ```
 
-More: `find` and `count`, a search
-between two iterators, `decode`, the encoder, CBOR sequences,
+More: `operator[]`, a map with a key twice, `decode`, the encoder, CBOR sequences,
 `item_size`, shared values and tag 55799 are in
 [advanced/runtime.md](advanced/runtime.md).

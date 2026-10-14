@@ -53,29 +53,25 @@ TEST_CASE("doc advanced runtime: steps and searches")
     auto const doc = *cbor::lazy::copy(preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7)), 7, "seven"s)));
     auto const seven = doc.at(cbor::key{7})->get<std::string_view>();
     CHECK_EQ(**seven, "seven"sv);
-    CHECK(*doc.contains("cars"));
-    CHECK_EQ(*doc.count(std::int64_t{7}), 1u);
     CHECK_EQ(*doc.size(), 2u);
     CHECK_FALSE(*doc.empty());
-    auto const found = doc.find("cars");
-    REQUIRE(found.has_value());
-    REQUIRE(*found != std::default_sentinel);
-    CHECK_EQ(*(**found)->second.size(), 2u);
-    CHECK(*doc.find("bus") == std::default_sentinel);
+    CHECK_EQ(*doc["cars"]->size(), 2u);
+    CHECK_EQ(doc["cars"]->at(1)->at("hp")->get<std::int64_t>(), 7);
     CHECK_EQ(doc.at("cars")->at(5).error(), error::index_out_of_bounds);
     CHECK_EQ(doc.at("bus").error(), error::key_not_found);
     CHECK_EQ(doc.at(0).error(), error::not_indexable);
 }
 
 // The section "Steps and searches in a map or an array" states that a byte string is not a text key, and that a
-// repeated key gives the first pair and counts every pair.
+// repeated key gives the first pair.
 TEST_CASE("doc advanced runtime: keys")
 {
     CHECK_EQ(cbor::lazy::copy("\xa1\x41" "a\x01"s)->at("a").error(), error::key_not_found);
     CHECK_EQ(cbor::lazy::copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a").error(), error::key_not_found);
     auto const twice = *cbor::lazy::copy("\xa2\x61" "a\x01\x61" "a\x02"s);
     CHECK_EQ(twice.at("a")->get<std::int64_t>(), 1);
-    CHECK_EQ(*twice.count("a"), 2u);
+    CHECK_EQ(twice["a"]->get<std::int64_t>(), 1);
+    CHECK_EQ(twice.at_path<"$.a", std::int64_t>(), 1);
 }
 
 // The section "elements and entries" shows both views with a loop and with a standard view.
@@ -112,29 +108,6 @@ TEST_CASE("doc advanced runtime: an algorithm over elements")
                  return age && age->get<std::int64_t>().value_or(0) > 30;
              }),
              2);
-}
-
-// The section "A search between two iterators" shows find and equal_range over a part of a sorted map.
-TEST_CASE("doc advanced runtime: a search between two iterators")
-{
-    auto const m = *cbor::lazy::copy(preferred(M("b"s, 2, "d"s, 4, "f"s, 6, "h"s, 8)));
-    auto const e = *m.entries();
-    auto const h = *m.find("h");
-    auto const d = cbor::lazy::find(e.begin(), h, "d");
-    REQUIRE(d.has_value());
-    CHECK_EQ((**d)->second.get<std::int64_t>(), 4);
-    CHECK(*cbor::lazy::find(h, std::default_sentinel, "d") == std::default_sentinel);
-    auto const f = cbor::lazy::equal_range(e.begin(), h, "f");
-    REQUIRE(f.has_value());
-    REQUIRE_EQ(std::ranges::distance(*f), 1);
-    CHECK_EQ((*f->begin())->second.get<std::int64_t>(), 6);
-    auto const miss = cbor::lazy::equal_range(e.begin(), h, "e");
-    REQUIRE(miss.has_value());
-    CHECK(miss->empty());
-    auto const at = (*miss->begin())->first.get<std::string_view>();
-    CHECK_EQ(**at, "f"sv);
-    auto const other = *cbor::lazy::copy(preferred(M("x"s, 1)));
-    CHECK_THROWS_AS(std::ignore = cbor::lazy::equal_range(e.begin(), *other.find("x"), "x"), std::logic_error);
 }
 
 // The section "get" shows a read of each kind.

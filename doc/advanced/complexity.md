@@ -181,17 +181,14 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy::decode()` | as item_decode | as item_decode, plus one make_shared | |
 | `lazy::type()` | O(1) | O(1) | |
 | `lazy::key_find<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
-| `lazy::key_find<Sorted, Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to last); Sorted stops at the first plain key with greater encoded bytes | O(1) | No allocation. Throws std::logic_error when the end of the map comes before last. |
-| `lazy::find(string_view)`, `find(int64_t)` :373, :383 | container_resolve + O(n_map) | O(1) | |
-| `lazy::find(iterator first, Last last, key)` two forms | O(bytes in [first, the pair]) | O(1) | No container_resolve. |
-| `lazy::equal_range(iterator first, Last last, key)` two forms | as find; a miss in a sorted map stops at the first greater key; a hit adds one item_skip | O(1) | |
+| `lazy::key_find<Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to the end) | O(1) | No allocation. |
+| `lazy::find(string_view, limit_values)`, `find(int64_t, limit_values)` (private) | container_resolve + O(n_map) | O(1) | |
 | `lazy::value_of(expected<...>)` | O(1) | O(1) | |
-| `lazy::contains(string_view)`, `contains(int64_t)` | as find | O(1) | |
-| `lazy::count(string_view)`, `count(int64_t)` | O(n_map): reads every pair after the first match | O(1) | Counts every pair with the key. |
 | `lazy::size()`, `empty()` | container_resolve | O(1) | The count of the head of an array or a map. |
 | `lazy::at(string_view)` :425 | as find | O(1) | |
 | `lazy::at(size_t)` | O(n_array) worst | O(1) | Array only; check_index. A map gives not_indexable. |
 | `lazy::at(key)` | as find | O(1) | Map only. A key with text reads as at(string_view). |
+| `lazy::operator[]` three forms | as the at of the same argument | O(1) | Calls at. |
 | `jsonpath::index_select(lazy const&, int64_t)` (private) | array O(n_array) worst; map linear key_find | O(1) | The index selector of a path: negative counts from the end; on a map the integer key. |
 | `lazy::get<T>() const` :476 | container_resolve + O(1); bignum + O(len) | O(1) | |
 | `lazy::elements()`, `entries()` :583, :595 | container_resolve | O(1) | |
@@ -245,6 +242,10 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `is_singular_query<Path>`, `is_singular_query_v<Path>` :1506 | O(t + c) compile time | none at run time | |
 | `at_path<Path, T>(string_view)` :1525 | O(n); fallback O(n·p) | O(1); fallback allocates | |
 | `at_path<Path, T>(shared_ptr<string const>)` | as :1525 | as :1525 | |
+| `lazy::at_path(string_view path)` | query_parse + singular_query_walk | O(t) | Allocates the parsed path. |
+| `lazy::at_path<Path>()` | singular_query_walk | O(1) | The path is compiled. |
+| `lazy::at_path<Path, T>()` | as `query_walk<T>(..., lazy const&)` | as `query_walk<T>(..., lazy const&)` | |
+| `lazy::query(string_view path)`, `lazy::query<Path>()` | query_parse (run-time form) + query_walk | O(N) nodelist | Allocates the nodelist. |
 | local lambdas :171, :446, :1322, :1364, :1036-1045 | O(digits) or O(1) amortized | O(1) | Included in the rows above. |
 
 ## encode.hpp
@@ -425,6 +426,6 @@ Allocation on a success path:
 
 - `value_sharing::sharing_decoder::mark`, `lazy::tree_decoder::item_decode`.
 - `lazy::copy`, `lazy::view`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::decode`.
-- jsonpath: every parser, `at_path(string_view path)`, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
+- jsonpath: every parser, `lazy::at_path(string_view path)`, `lazy::query`, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `string_sink`, `container_message`.
 - diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.

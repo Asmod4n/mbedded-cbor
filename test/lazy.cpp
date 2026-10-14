@@ -390,114 +390,36 @@ TEST_CASE("lazy: std::ranges algorithms over entries and elements")
     CHECK(value_at(**next) == V(3));
 }
 
-// find gives the iterator at the pair with the key, as std::map::find does, and at gives its value.
-TEST_CASE("lazy: find gives the pair of a present key")
+// at gives the value of the pair with the key, for a text key and for an integer key of either sign.
+TEST_CASE("lazy: at gives the value of a present key")
 {
     cbor::lazy const l = lazy_of("\xa4\x61" "a\x01\x21\x65" "minus\x07\x65" "seven\x61" "b\x02"s);
-    auto const a = l.find("b");
-    REQUIRE(a.has_value());
-    REQUIRE(*a != std::default_sentinel);
-    CHECK(value_at((**a)->first) == V("b"s));
-    CHECK(value_at((**a)->second) == V(2));
-    auto const seven = l.find(7);
-    REQUIRE(seven.has_value());
-    REQUIRE(*seven != std::default_sentinel);
-    CHECK(value_at((**seven)->second) == V("seven"s));
-    auto const minus = l.find(-2);
-    REQUIRE(minus.has_value());
-    REQUIRE(*minus != std::default_sentinel);
-    CHECK(value_at((**minus)->second) == V("minus"s));
-    auto next = *minus;
-    ++next;
-    CHECK(value_at((*next)->first) == V(7));
+    CHECK(value_at(*l.at("b")) == V(2));
+    CHECK(value_at(*l.at(cbor::key{7})) == V("seven"s));
+    CHECK(value_at(*l.at(cbor::key{-2})) == V("minus"s));
+    CHECK_EQ(lazy_of(encoded(M())).at("a").error(), error::key_not_found);
 }
 
-// A missing key gives the end, as std::map::find does. The end that find gives is equal to the end
-// of a walk over all pairs.
-TEST_CASE("lazy: find gives the end for a missing key")
+// at is a lookup in a map. An array or a scalar has no keys.
+TEST_CASE("lazy: a key in an item that is not a map")
 {
-    cbor::lazy const l = lazy_of(encoded(M("a"s, 1, 2, "b"s)));
-    auto const missing = l.find("z");
-    REQUIRE(missing.has_value());
-    CHECK(*missing == std::default_sentinel);
-    auto const entries = l.entries();
-    REQUIRE(entries.has_value());
-    CHECK(*missing == std::ranges::next(entries->begin(), entries->end()));
-    auto const number = l.find(1);
-    REQUIRE(number.has_value());
-    CHECK(*number == std::default_sentinel);
-    auto const empty = lazy_of(encoded(M())).find("a");
-    REQUIRE(empty.has_value());
-    CHECK(*empty == std::default_sentinel);
+    CHECK_EQ(lazy_of(encoded(A(1))).at(cbor::key{0}).error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encoded(V(1))).at("a").error(), error::not_indexable);
 }
 
-// find is a lookup in a map. An array or a scalar has no keys.
-TEST_CASE("lazy: find in an item that is not a map")
-{
-    CHECK_EQ(lazy_of(encoded(A(1))).find(0).error(), error::not_indexable);
-    CHECK_EQ(lazy_of(encoded(V(1))).find("a").error(), error::not_indexable);
-}
-
-// A key under tag 29 is a tag and no text key, in find as in at.
-TEST_CASE("lazy: find does not resolve a tag 29 key")
+// A key under tag 29 is a tag and no text key.
+TEST_CASE("lazy: at does not resolve a tag 29 key")
 {
     cbor::lazy const l = lazy_of("\xa2\x61" "a\xd8\x1c\x61k\xd8\x1d\x00\x02"s);
-    auto const shared = l.find("k");
-    REQUIRE(shared.has_value());
-    CHECK(*shared == std::default_sentinel);
     CHECK_EQ(l.at("k").error(), error::key_not_found);
 }
 
-// A truncated map gives its error from find and from at.
-TEST_CASE("lazy: find in a truncated map gives the error")
+// A truncated map gives its error from at for a key after the cut, and the value for a key before it.
+TEST_CASE("lazy: at in a truncated map gives the error")
 {
     cbor::lazy const l = lazy_of("\xa2\x61" "a\x01\x61"s);
-    CHECK_EQ(l.find("z").error(), error::too_little_data);
     CHECK_EQ(l.at("z").error(), error::too_little_data);
     CHECK(value_at(at(l, "a")) == V(1));
-}
-
-// The owner wants a search that starts at a position the caller already has. find from first to the
-// end reads the pairs from first on, so a key after first is found.
-TEST_CASE("lazy: find from an iterator to the end finds a later key")
-{
-    cbor::lazy const l = lazy_of(encoded(M("a"s, 1, "b"s, 2, 3, "c"s, "d"s, 4)));
-    auto const b = l.find("b");
-    REQUIRE(b.has_value());
-    auto const d = cbor::lazy::find(*b, std::default_sentinel, "d");
-    REQUIRE(d.has_value());
-    REQUIRE(*d != std::default_sentinel);
-    CHECK(value_at((**d)->second) == V(4));
-    auto const three = cbor::lazy::find(*b, std::default_sentinel, 3);
-    REQUIRE(three.has_value());
-    CHECK(value_at((**three)->second) == V("c"s));
-    auto const self = cbor::lazy::find(*b, std::default_sentinel, "b");
-    REQUIRE(self.has_value());
-    CHECK(*self == *b);
-}
-
-// A key before first is outside [first, end), so the search gives the end. The search over [begin, first)
-// is the backward search: it reads forward from begin and stops at first, and finds the key.
-TEST_CASE("lazy: a key before the iterator is found only over the part before it")
-{
-    cbor::lazy const l = lazy_of(encoded(M("a"s, 1, "b"s, 2, 3, "c"s, "d"s, 4)));
-    auto const entries = l.entries();
-    REQUIRE(entries.has_value());
-    auto const three = l.find(3);
-    REQUIRE(three.has_value());
-    auto const forward = cbor::lazy::find(*three, std::default_sentinel, "a");
-    REQUIRE(forward.has_value());
-    CHECK(*forward == std::default_sentinel);
-    auto const backward = cbor::lazy::find(entries->begin(), *three, "a");
-    REQUIRE(backward.has_value());
-    REQUIRE(*backward != *three);
-    CHECK(value_at((**backward)->second) == V(1));
-    auto const after = cbor::lazy::find(entries->begin(), *three, "d");
-    REQUIRE(after.has_value());
-    CHECK(*after == *three);
-    auto const whole = cbor::lazy::find(entries->begin(), std::default_sentinel, "a");
-    REQUIRE(whole.has_value());
-    CHECK(*whole == *backward);
 }
 
 // An element iterator holds its position too. std::ranges::next with the end as bound steps n elements
@@ -518,97 +440,20 @@ TEST_CASE("lazy: an element iterator steps on and searches back with std::ranges
     CHECK(missing == two);
 }
 
-// The iterator holds the owner of the encoded item. A search from it after the lazy and the string are
-// gone reads memory that is alive; ASan checks it.
-TEST_CASE("lazy: find from an iterator outlives the lazy that gave it")
+// The iterator holds the owner of the encoded item. A step from it after the lazy and the string are gone
+// reads memory that is alive; ASan checks it.
+TEST_CASE("lazy: an entry iterator outlives the lazy that gave it")
 {
     std::optional<cbor::lazy_entries::iterator> kept;
     {
         std::string message = encoded(M("a"s, 1, "b"s, 2, "c"s, 3));
         auto const l = cbor::lazy::copy(std::move(message));
         REQUIRE(l.has_value());
-        auto const a = l->find("a");
-        REQUIRE(a.has_value());
-        kept = *a;
+        kept = l->entries()->begin();
     }
-    auto const c = cbor::lazy::find(*kept, std::default_sentinel, "c");
-    REQUIRE(c.has_value());
-    REQUIRE(*c != std::default_sentinel);
-    CHECK(value_at((**c)->second) == V(3));
-}
-
-// With two known positions a and b, a search reads only [a, b). In a map whose keys are sorted by their
-// encoded bytes (RFC 8949 4.2.1), equal_range gives the pair of the key, as std::ranges::equal_range does
-// over a sorted range.
-TEST_CASE("lazy: equal_range between two iterators finds a key between them")
-{
-    cbor::lazy const l = lazy_of(encoded(M(1, 1, "b"s, 2, "d"s, 4, "f"s, 6, "h"s, 8)));
-    auto const a = l.find("b");
-    auto const b = l.find("h");
-    REQUIRE(a.has_value());
-    REQUIRE(b.has_value());
-    auto const hit = cbor::lazy::equal_range(*a, *b, "f");
-    REQUIRE(hit.has_value());
-    REQUIRE(std::ranges::distance(*hit) == 1);
-    CHECK(value_at((*hit->begin())->second) == V(6));
-    auto const number = cbor::lazy::equal_range(l.entries()->begin(), *b, 1);
-    REQUIRE(number.has_value());
-    REQUIRE(std::ranges::distance(*number) == 1);
-    CHECK(value_at((*number->begin())->second) == V(1));
-}
-
-// A missing key in a sorted map stops at the first key whose encoded bytes are greater. The empty range
-// stands there, where the key would be, as std::ranges::equal_range gives it. Nothing after it is read.
-TEST_CASE("lazy: equal_range stops at the first greater key for a missing key")
-{
-    cbor::lazy const l = lazy_of(encoded(M("b"s, 2, "d"s, 4, "f"s, 6, "h"s, 8)));
-    auto const entries = l.entries();
-    REQUIRE(entries.has_value());
-    auto const h = l.find("h");
-    REQUIRE(h.has_value());
-    auto const miss = cbor::lazy::equal_range(entries->begin(), *h, "e");
-    REQUIRE(miss.has_value());
-    CHECK(miss->empty());
-    CHECK(value_at((*miss->begin())->first) == V("f"s));
-    auto const after = cbor::lazy::equal_range(entries->begin(), *h, "z");
-    REQUIRE(after.has_value());
-    CHECK(after->empty());
-    CHECK(after->begin() == *h);
-
-    cbor::lazy const truncated = lazy_of("\xa3\x61" "b\x02\x61" "f\x06\x61"s);
-    auto const early = cbor::lazy::equal_range(truncated.entries()->begin(), std::default_sentinel, "e");
-    REQUIRE(early.has_value());
-    CHECK(value_at((*early->begin())->first) == V("f"s));
-    CHECK_EQ(truncated.find("e").error(), error::too_little_data);
-}
-
-// A key under tag 28 or tag 29 sorts by its tagged bytes, after every text key, and is no text key. After a tagged
-// key the search reads to b and does not stop early, and finds no key "q".
-TEST_CASE("lazy: equal_range reads past a tagged key")
-{
-    cbor::lazy const l = lazy_of("\xa3\x61" "a\xd8\x1c\x61q\xd8\x1c\x61z\x03\xd8\x1d\x00\x02"s);
-    auto const entries = l.entries();
-    REQUIRE(entries.has_value());
-    auto const q = cbor::lazy::equal_range(entries->begin(), std::default_sentinel, "q");
-    REQUIRE(q.has_value());
-    CHECK_EQ(std::ranges::distance(*q), 0);
-}
-
-// a and b of two different maps hold no range. The scan from a reaches the end of its map without b, and
-// that is a wrong use of the library.
-TEST_CASE("lazy: a range over two maps is a logic error")
-{
-    cbor::lazy const one = lazy_of(encoded(M("a"s, 1, "b"s, 2)));
-    cbor::lazy const two = lazy_of(encoded(M("a"s, 1, "b"s, 2)));
-    auto const a = one.find("a");
-    auto const b = two.find("b");
-    REQUIRE(a.has_value());
-    REQUIRE(b.has_value());
-    CHECK_THROWS_AS(std::ignore = cbor::lazy::equal_range(*a, *b, "x"), std::logic_error);
-    CHECK_THROWS_AS(std::ignore = cbor::lazy::find(*a, *b, "x"), std::logic_error);
-    auto const b_one = one.find("b");
-    REQUIRE(b_one.has_value());
-    CHECK_THROWS_AS(std::ignore = cbor::lazy::find(*b_one, *a, "x"), std::logic_error);
+    auto const c = std::ranges::next(*kept, 2, std::default_sentinel);
+    REQUIRE(c != std::default_sentinel);
+    CHECK(value_at((*c)->second) == V(3));
 }
 
 // decode reads nothing ahead, so a step finds a truncated element. The step gives the error once and
@@ -1180,18 +1025,11 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
     CHECK_EQ(*lazy_of(doc).at(63)->at("a")->get<std::uint64_t>(), 1u);
 }
 
-// contains and count answer as std::map::contains and std::map::count do, and size and empty as the size and
-// empty of a container. Each comes in std::expected, because the bytes are not checked before the call.
-TEST_CASE("lazy: contains, count, size and empty")
+// size and empty answer as the size and empty of a container. Each comes in std::expected, because the bytes
+// are not checked before the call.
+TEST_CASE("lazy: size and empty")
 {
     cbor::lazy const map = lazy_of(encoded(M("a"s, 1, 2, "b"s)));
-    CHECK(map.contains("a").value());
-    CHECK_FALSE(map.contains("z").value());
-    CHECK(map.contains(std::int64_t{2}).value());
-    CHECK_FALSE(map.contains(std::int64_t{3}).value());
-    CHECK_EQ(map.count("a").value(), 1u);
-    CHECK_EQ(map.count("z").value(), 0u);
-    CHECK_EQ(map.count(std::int64_t{2}).value(), 1u);
     CHECK_EQ(map.size().value(), 2u);
     CHECK_FALSE(map.empty().value());
 
@@ -1200,33 +1038,9 @@ TEST_CASE("lazy: contains, count, size and empty")
     CHECK_FALSE(array.empty().value());
     CHECK(lazy_of(encoded(A())).empty().value());
     CHECK(lazy_of("\xa0"s).empty().value());
-    CHECK_EQ(array.contains("a").error(), error::not_indexable);
-    CHECK_EQ(array.count("a").error(), error::not_indexable);
     CHECK_EQ(lazy_of(encoded(V(1))).size().error(), error::not_indexable);
     CHECK_EQ(lazy_of(encoded(V("a"s))).empty().error(), error::not_indexable);
     CHECK_EQ(lazy_of("\xd8\x1c\x82\x01\x02"s).size().value(), 2u);
-}
-
-// lazy does not reject a map with a repeated key (RFC 8949 5.6 leaves that to the decoder), so count is not
-// limited to 0 or 1: it counts every pair with the key, as std::multimap::count does. contains and find see
-// the first pair.
-TEST_CASE("lazy: count counts every pair of a repeated key")
-{
-    cbor::lazy const twice = lazy_of("\xa3\x61" "a\x01\x61" "b\x02\x61" "a\x03"s);
-    CHECK(twice.entries().has_value());
-    CHECK_EQ(twice.count("a").value(), 2u);
-    CHECK_EQ(twice.count("b").value(), 1u);
-    CHECK(twice.contains("a").value());
-    CHECK(value_at(twice.at("a").value()) == V(1));
-    CHECK_EQ(lazy_of("\xa3\x01\x01\x01\x02\x01\x03"s).count(std::int64_t{1}).value(), 3u);
-}
-
-// count reads every pair after the first match, so a pair that is cut off after a match is an error, and a cut
-// before the match is the error of find.
-TEST_CASE("lazy: count of a map that is cut off")
-{
-    CHECK_EQ(lazy_of("\xa2\x61" "a\x01\x61"s).count("a").error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xa2\x61"s).count("a").error(), error::too_little_data);
 }
 
 // Fault p30: a truncated array or map gave one value more than size(),
@@ -1263,26 +1077,19 @@ TEST_CASE("lazy: a head that claims more items than bytes is too little data")
 {
     CHECK_EQ(lazy_of("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"s).elements().error(), error::too_little_data);
     CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s).entries().error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x61" "a\x01"s).find("a").error(),
+    CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x61" "a\x01"s).at("a").error(),
              error::too_little_data);
 }
 
 // Fault p14: each resolve of tag 24 makes a new top-level item, and the
-// iterators compared that pointer, so two finds of one pair differed.
+// iterators compared that pointer, so two walks to one pair differed.
 TEST_CASE("lazy: iterators into a map inside tag 24 compare equal at the same pair")
 {
     auto const l = lazy_of("\xd8\x18\x47\xa2\x61" "a\x01\x61" "b\x02"s);
-    auto const f1 = *l.find("b");
-    auto const f2 = *l.find("b");
+    auto const f1 = std::ranges::next(l.entries()->begin());
+    auto const f2 = std::ranges::next(l.entries()->begin());
     CHECK(f1 == f2);
-    auto it = l.entries()->begin();
-    ++it;
-    CHECK(it == f1);
-    CHECK(it != l.entries()->begin());
-    auto const a = *l.find("a");
-    auto const found = cbor::lazy::find(a, f1, "b");
-    REQUIRE(found.has_value());
-    CHECK(*found == f1);
+    CHECK(f1 != l.entries()->begin());
 }
 
 // The count check of elements() and entries() reads the argument of the

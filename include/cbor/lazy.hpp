@@ -97,45 +97,11 @@ public:
         requires is_valid_path_v<Path>
     std::expected<std::vector<lazy>, error> query() const;
 
-    template <class Entries = lazy_entries>
-    std::expected<typename Entries::iterator, error> find(std::string_view key) const;
-
-    template <class Entries = lazy_entries>
-    std::expected<typename Entries::iterator, error> find(std::int64_t key) const;
-
-    std::expected<bool, error> contains(std::string_view key) const;
-
-    std::expected<bool, error> contains(std::int64_t key) const;
-
-    std::expected<std::size_t, error> count(std::string_view key) const;
-
-    std::expected<std::size_t, error> count(std::int64_t key) const;
-
     std::expected<std::uint64_t, error> size() const;
 
     std::expected<bool, error> empty() const;
 
     std::expected<cbor::type, error> type() const;
-
-    template <class Last, class Entries = lazy_entries>
-        requires(std::same_as<Last, typename Entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
-    static std::expected<typename Entries::iterator, error>
-    find(typename Entries::iterator first, Last last, std::string_view key);
-
-    template <class Last, class Entries = lazy_entries>
-        requires(std::same_as<Last, typename Entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
-    static std::expected<typename Entries::iterator, error>
-    find(typename Entries::iterator first, Last last, std::int64_t key);
-
-    template <class Last, class Entries = lazy_entries>
-        requires(std::same_as<Last, typename Entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
-    static std::expected<std::ranges::subrange<typename Entries::iterator>, error>
-    equal_range(typename Entries::iterator first, Last last, std::string_view key);
-
-    template <class Last, class Entries = lazy_entries>
-        requires(std::same_as<Last, typename Entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
-    static std::expected<std::ranges::subrange<typename Entries::iterator>, error>
-    equal_range(typename Entries::iterator first, Last last, std::int64_t key);
 
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
@@ -216,17 +182,13 @@ private:
     static std::expected<typename Entries::iterator, error> key_find(resolved<Checked> found, Key key,
                                                                      limit_values loaded);
 
-    template <bool Sorted, class Iterator, class Last, class Key, bool Checked>
+    template <class Iterator, class Last, class Key, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
     static std::expected<std::pair<Iterator, bool>, error> key_find(Iterator first, Last last, Key key,
                                                                     validity::limit_checks<Checked> checks);
 
     template <class Iterator>
     static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
-
-    template <class Key, class Entries = lazy_entries>
-        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<std::size_t, error> key_count(std::expected<typename Entries::iterator, error> found, Key key);
 
     friend struct lazy_elements;
 
@@ -889,7 +851,7 @@ lazy::key_find(resolved<Checked> found, Key const key, limit_values const loaded
     validity::offset const first = validity::distance(found.source->encoded, found.d.encoded);
     std::uint64_t const readable = std::min<std::uint64_t>(found.h.argument, found.d.encoded.size());
     typename Entries::iterator it(std::move(found.source), first, readable, loaded);
-    auto found_at = key_find<false>(std::move(it), std::default_sentinel, key, found.d.checks);
+    auto found_at = key_find(std::move(it), std::default_sentinel, key, found.d.checks);
     if (!found_at) [[unlikely]]
         return std::unexpected(found_at.error());
     if (found_at->first == std::default_sentinel)
@@ -899,27 +861,12 @@ lazy::key_find(resolved<Checked> found, Key const key, limit_values const loaded
     return std::move(found_at->first);
 }
 
-template <bool Sorted, class Iterator, class Last, class Key, bool Checked>
+template <class Iterator, class Last, class Key, bool Checked>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
 std::expected<std::pair<Iterator, bool>, error>
 lazy::key_find(Iterator it, Last const last, Key const key,
                         validity::limit_checks<Checked> const checks)
 {
-    std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> head{};
-    std::string_view wanted_head;
-    std::string_view wanted_content;
-    bool plain = Sorted;
-    if constexpr (Sorted) {
-        std::size_t size = 0;
-        if constexpr (std::same_as<Key, std::string_view>) {
-            size = heads::head_write(head, 0, major_type::text_string, key.size());
-            wanted_content = key;
-        } else {
-            size = heads::head_write(head, 0, key < 0 ? major_type::negative_integer : major_type::unsigned_integer,
-                                     key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key));
-        }
-        wanted_head = std::string_view(head.data(), size);
-    }
     for (; it != last; ++it) {
         if (it == std::default_sentinel) [[unlikely]] {
             if constexpr (!std::same_as<Last, std::default_sentinel_t>)
@@ -959,26 +906,8 @@ lazy::key_find(Iterator it, Last const last, Key const key,
         }
         if (equal)
             return std::pair{std::move(it), true};
-        if constexpr (Sorted) {
-            plain = plain && key_at == it.key && k->major != major_type::tag;
-            if (plain) {
-                std::string_view read = validity::subspan(it.top_level->encoded, it.key);
-                read.remove_suffix(validity::subspan(it.top_level->encoded, it.value).size());
-                auto order = read.substr(0, wanted_head.size()) <=> wanted_head;
-                if (order == 0)
-                    order = read.substr(wanted_head.size()) <=> wanted_content;
-                if (order > 0)
-                    return std::pair{std::move(it), false};
-            }
-        }
     }
     return std::pair{std::move(it), false};
-}
-
-template <class Entries>
-std::expected<typename Entries::iterator, error> lazy::find(std::string_view const key) const
-{
-    return find(key, limits.load());
 }
 
 template <class Entries>
@@ -996,12 +925,6 @@ std::expected<typename Entries::iterator, error> lazy::find(std::string_view con
 }
 
 template <class Entries>
-std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const key) const
-{
-    return find(key, limits.load());
-}
-
-template <class Entries>
 std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const key,
                                                                          limit_values const loaded) const
 {
@@ -1013,47 +936,6 @@ std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const k
                                 return std::unexpected(found.error());
                             return key_find(std::move(*found), key, loaded);
                         });
-}
-
-inline std::expected<bool, error> lazy::contains(std::string_view const key) const
-{
-    return find(key).transform([](lazy_entries::iterator const &it) { return it != std::default_sentinel; });
-}
-
-inline std::expected<bool, error> lazy::contains(std::int64_t const key) const
-{
-    return find(key).transform([](lazy_entries::iterator const &it) { return it != std::default_sentinel; });
-}
-
-template <class Key, class Entries>
-    requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-std::expected<std::size_t, error> lazy::key_count(std::expected<typename Entries::iterator, error> found, Key const key)
-{
-    std::size_t n = 0;
-    while (found && *found != std::default_sentinel) {
-        ++n;
-        auto next = validity::limits_apply(
-            found->loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-                return key_find<false>(std::ranges::next(std::move(*found)), std::default_sentinel, key,
-                                       checks);
-            });
-        if (!next) [[unlikely]]
-            return std::unexpected(next.error());
-        found = std::move(next->first);
-    }
-    if (!found) [[unlikely]]
-        return std::unexpected(found.error());
-    return n;
-}
-
-inline std::expected<std::size_t, error> lazy::count(std::string_view const key) const
-{
-    return key_count(find(key), key);
-}
-
-inline std::expected<std::size_t, error> lazy::count(std::int64_t const key) const
-{
-    return key_count(find(key), key);
 }
 
 inline std::expected<std::string_view, error> lazy::typed_array_element_read(lazy const &node)
@@ -1174,74 +1056,6 @@ inline std::expected<cbor::type, error> lazy::type() const
                         });
 }
 
-template <class Last, class Entries>
-    requires(std::same_as<Last, typename Entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
-std::expected<typename Entries::iterator, error>
-lazy::find(typename Entries::iterator first, Last const last, std::string_view const key)
-{
-    auto found = validity::limits_apply(
-        first.loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-            return key_find<false>(std::move(first), last, key, checks);
-        });
-    if (!found) [[unlikely]]
-        return std::unexpected(found.error());
-    return std::move(found->first);
-}
-
-template <class Last, class Entries>
-    requires(std::same_as<Last, typename Entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
-std::expected<typename Entries::iterator, error>
-lazy::find(typename Entries::iterator first, Last const last, std::int64_t const key)
-{
-    auto found = validity::limits_apply(
-        first.loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-            return key_find<false>(std::move(first), last, key, checks);
-        });
-    if (!found) [[unlikely]]
-        return std::unexpected(found.error());
-    return std::move(found->first);
-}
-
-template <class Last, class Entries>
-    requires(std::same_as<Last, typename Entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
-std::expected<std::ranges::subrange<typename Entries::iterator>, error>
-lazy::equal_range(typename Entries::iterator first, Last const last, std::string_view const key)
-{
-    auto found = validity::limits_apply(
-        first.loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-            return key_find<true>(std::move(first), last, key, checks);
-        });
-    if (!found) [[unlikely]]
-        return std::unexpected(found.error());
-    auto &[at, equal] = *found;
-    if (!equal)
-        return std::ranges::subrange{at, at};
-    auto after = std::ranges::next(at);
-    if (after.failure != error{}) [[unlikely]]
-        return std::unexpected(after.failure);
-    return std::ranges::subrange{std::move(at), std::move(after)};
-}
-
-template <class Last, class Entries>
-    requires(std::same_as<Last, typename Entries::iterator> || std::same_as<Last, std::default_sentinel_t>)
-std::expected<std::ranges::subrange<typename Entries::iterator>, error>
-lazy::equal_range(typename Entries::iterator first, Last const last, std::int64_t const key)
-{
-    auto found = validity::limits_apply(
-        first.loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) {
-            return key_find<true>(std::move(first), last, key, checks);
-        });
-    if (!found) [[unlikely]]
-        return std::unexpected(found.error());
-    auto &[at, equal] = *found;
-    if (!equal)
-        return std::ranges::subrange{at, at};
-    auto after = std::ranges::next(at);
-    if (after.failure != error{}) [[unlikely]]
-        return std::unexpected(after.failure);
-    return std::ranges::subrange{std::move(at), std::move(after)};
-}
-
 template <class Iterator>
 std::expected<lazy, error> lazy::value_of(std::expected<Iterator, error> found)
 {
@@ -1254,14 +1068,14 @@ std::expected<lazy, error> lazy::value_of(std::expected<Iterator, error> found)
 
 inline std::expected<lazy, error> lazy::at(std::string_view const key) const
 {
-    return value_of(find(key));
+    return value_of(find(key, limits.load()));
 }
 
 inline std::expected<lazy, error> lazy::at(key const k) const
 {
     if (k.text != nullptr)
         return at(std::string_view(k.text));
-    return value_of(find(k.number));
+    return value_of(find(k.number, limits.load()));
 }
 
 inline std::expected<lazy, error> lazy::at(std::size_t const index) const

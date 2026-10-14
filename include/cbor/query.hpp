@@ -33,18 +33,6 @@ namespace cbor
 
 struct lazy;
 
-std::expected<lazy, error> at_path(std::string_view path, lazy const &l);
-
-std::expected<std::vector<lazy>, error> query(std::string_view path, lazy const &l);
-
-template <fixed_string Path>
-    requires is_valid_path_v<Path>
-std::expected<lazy, error> at_path(lazy const &l);
-
-template <fixed_string Path>
-    requires is_valid_path_v<Path>
-std::expected<std::vector<lazy>, error> query(lazy const &l);
-
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
@@ -72,22 +60,6 @@ template <fixed_string Path, class T, std::same_as<std::string> Encoded>
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<owning_ref<T>, error> at_path(Encoded &&encoded);
-
-template <fixed_string Path, class T>
-    requires(is_singular_query_v<Path> &&
-             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-              || std::is_same_v<T, std::float128_t>
-#endif
-              ))
-std::expected<T, error> at_path(lazy const &l);
-
-template <fixed_string Path, class T>
-    requires(is_singular_query_v<Path> &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
-std::expected<owning_ref<T>, error> at_path(lazy const &l);
 
 class jsonpath
 {
@@ -990,38 +962,10 @@ class jsonpath
                   std::is_same_v<T, typed_array>))
     friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded);
 
-    template <fixed_string Path, class T>
-        requires(is_singular_query_v<Path> &&
-                 ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-                  std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-              || std::is_same_v<T, std::float128_t>
-#endif
-              ))
-    friend std::expected<T, error> at_path(lazy const &l);
-
-    template <fixed_string Path, class T>
-        requires(is_singular_query_v<Path> &&
-                 (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-                  std::is_same_v<T, typed_array>))
-    friend std::expected<owning_ref<T>, error> at_path(lazy const &l);
-
     template <fixed_string>
     friend class is_valid_path;
 
     friend struct lazy;
-
-    friend std::expected<lazy, error> at_path(std::string_view path, lazy const &l);
-
-    friend std::expected<std::vector<lazy>, error> query(std::string_view path, lazy const &l);
-
-    template <fixed_string Path>
-        requires is_valid_path_v<Path>
-    friend std::expected<lazy, error> at_path(lazy const &l);
-
-    template <fixed_string Path>
-        requires is_valid_path_v<Path>
-    friend std::expected<std::vector<lazy>, error> query(lazy const &l);
 
 };
 
@@ -1611,50 +1555,6 @@ auto jsonpath::compiled_apply(Walk const &walk, limit_values const loaded)
                 top, loaded);
 }
 
-inline std::expected<lazy, error> at_path(std::string_view const path, lazy const &l)
-{
-    limit_values const loaded = limits.load();
-    auto const q = jsonpath::query_parse(path, loaded.nesting_depth);
-    if (!q) [[unlikely]]
-        return std::unexpected(q.error());
-    if (!q->top.singular) [[unlikely]]
-        return std::unexpected(error::invalid_path);
-    return jsonpath::singular_query_walk({q->segments, q->selectors, q->expressions, q->keys, {}}, q->top, l, loaded);
-}
-
-inline std::expected<std::vector<lazy>, error> query(std::string_view const path, lazy const &l)
-{
-    limit_values const loaded = limits.load();
-    auto const q = jsonpath::query_parse(path, loaded.nesting_depth);
-    if (!q) [[unlikely]]
-        return std::unexpected(q.error());
-    return jsonpath::query_walk({q->segments, q->selectors, q->expressions, q->keys, {}}, q->top, l, loaded);
-}
-
-template <fixed_string Path>
-    requires is_valid_path_v<Path>
-std::expected<lazy, error> at_path(lazy const &l)
-{
-    static_assert(jsonpath::query_parse(Path.view(), validity::nesting_depth_default)->top.singular,
-                  "cbor::at_path: the path is not a singular query (RFC 9535 2.3.5.1); cbor::query reads its nodelist");
-    return jsonpath::compiled_apply<Path>(
-        [&l](jsonpath::query_view const &v, jsonpath::parsed_query const &top, limit_values const loaded) {
-            return jsonpath::singular_query_walk(v, top, l, loaded);
-        },
-        limits.load());
-}
-
-template <fixed_string Path>
-    requires is_valid_path_v<Path>
-std::expected<std::vector<lazy>, error> query(lazy const &l)
-{
-    return jsonpath::compiled_apply<Path>(
-        [&l](jsonpath::query_view const &v, jsonpath::parsed_query const &top, limit_values const loaded) {
-            return jsonpath::query_walk(v, top, l, loaded);
-        },
-        limits.load());
-}
-
 template <fixed_string Path>
 class is_singular_query
     : public std::bool_constant<
@@ -1707,29 +1607,6 @@ template <fixed_string Path, class T, std::same_as<std::string> Encoded>
 std::expected<owning_ref<T>, error> at_path(Encoded &&encoded)
 {
     return at_path<Path, T>(std::make_shared<std::string const>(std::move(encoded)));
-}
-
-
-template <fixed_string Path, class T>
-    requires(is_singular_query_v<Path> &&
-             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-              || std::is_same_v<T, std::float128_t>
-#endif
-              ))
-std::expected<T, error> at_path(lazy const &l)
-{
-    return jsonpath::query_walk<Path, T>(l);
-}
-
-template <fixed_string Path, class T>
-    requires(is_singular_query_v<Path> &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
-std::expected<owning_ref<T>, error> at_path(lazy const &l)
-{
-    return jsonpath::owned_query_walk<Path, T>(l);
 }
 
 inline std::expected<lazy, error> lazy::operator[](std::string_view const key) const
