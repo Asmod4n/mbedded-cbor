@@ -12,6 +12,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "value.hpp"
@@ -586,6 +587,78 @@ static std::uint64_t mb_at_path()
 }
 #endif
 
+#if defined(ARM_AP_SA) || defined(ARM_AP_LM) || defined(ARM_AP_LQ) || defined(ARM_AP_RL) || defined(ARM_AP_RQ)
+#if defined(DOC_twitter) && AP_PATH == 1
+#define AP_TEXT "$.search_metadata.count"
+using ap_type = std::int64_t;
+#elif defined(DOC_twitter) && AP_PATH == 2
+#define AP_TEXT "$.statuses[0].id"
+using ap_type = std::uint64_t;
+#elif defined(DOC_twitter) && AP_PATH == 3
+#define AP_TEXT "$.statuses[50].user.screen_name"
+using ap_type = std::string_view;
+#elif defined(DOC_records) && AP_PATH == 1
+#define AP_TEXT "$[0].id"
+using ap_type = std::int64_t;
+#elif defined(DOC_records) && AP_PATH == 2
+#define AP_TEXT "$[1000].ratio"
+using ap_type = double;
+#elif defined(DOC_records) && AP_PATH == 3
+#define AP_TEXT "$[1000].user.name"
+using ap_type = std::string_view;
+#endif
+
+template <class R>
+static std::uint64_t ap_value(R const &r)
+{
+    if (!r) [[unlikely]]
+        std::abort();
+    if constexpr (std::is_same_v<ap_type, std::string_view>)
+        return bytes_sum(**r);
+    else if constexpr (std::is_same_v<ap_type, double>)
+        return std::bit_cast<std::uint64_t>(*r);
+    else
+        return std::uint64_t(*r);
+}
+
+template <class T>
+static std::uint64_t ap_standalone()
+{
+    if constexpr (std::is_same_v<T, std::string_view>)
+        return ap_value(cbor::at_path<AP_TEXT, T>(*held));
+    else
+        return ap_value(cbor::at_path<AP_TEXT, T>(in));
+}
+
+static std::uint64_t ap()
+{
+#if defined(ARM_AP_SA)
+    return ap_standalone<ap_type>();
+#else
+    auto const l = cbor::lazy::view(*held);
+    if (!l) [[unlikely]]
+        std::abort();
+#if defined(ARM_AP_LM)
+    return ap_value(l->at_path<AP_TEXT, ap_type>());
+#elif defined(ARM_AP_RL)
+    auto const n = l->at_path(std::string_view(AP_TEXT));
+    if (!n) [[unlikely]]
+        std::abort();
+    return ap_value(n->get<ap_type>());
+#else
+#if defined(ARM_AP_LQ)
+    auto const list = l->query<AP_TEXT>();
+#else
+    auto const list = l->query(std::string_view(AP_TEXT));
+#endif
+    if (!list || list->empty()) [[unlikely]]
+        std::abort();
+    return ap_value(list->front().get<ap_type>());
+#endif
+#endif
+}
+#endif
+
 #if defined(ARM_FB_PATH) || defined(ARM_FB_PATH_V)
 static std::uint64_t fb_path(flexbuffers::Reference const root)
 {
@@ -788,6 +861,8 @@ static std::uint64_t op()
     return mb_path();
 #elif defined(ARM_MB_AT_PATH)
     return mb_at_path();
+#elif defined(ARM_AP_SA) || defined(ARM_AP_LM) || defined(ARM_AP_LQ) || defined(ARM_AP_RL) || defined(ARM_AP_RQ)
+    return ap();
 #elif defined(ARM_MB_STRUCT)
     return mb_struct();
 #elif defined(ARM_MB_PATH_ALL)

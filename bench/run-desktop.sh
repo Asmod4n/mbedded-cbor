@@ -90,8 +90,12 @@ cp "$bench/runtime.cpp" "$build/runtime.cpp"
 compile() {
 	local cc=$1 variant=$2 tag=$3 doc=$4 arm=$5
 	local name=$variant.$tag.$doc.$arm std=-std=c++23
+	local defs=-DARM_"$arm"
 	[ "$arm" = MB_STRUCT ] && std="-std=c++26 -freflection"
-	if "$cc" $std $flags -DDOCTEST_CONFIG_DISABLE -DARM_"$arm" -DARM_NAME="\"$arm\"" -DDOC_"$doc" \
+	case $arm in
+	AP_*_[0-9]) defs="-DARM_${arm%_*} -DAP_PATH=${arm##*_}" ;;
+	esac
+	if "$cc" $std $flags -DDOCTEST_CONFIG_DISABLE $defs -DARM_NAME="\"$arm\"" -DDOC_"$doc" \
 		-DDOC_PATH="\"$build/docs/$doc.cbor\"" -I"$build/src/$variant/include" -I"$bench" \
 		"$build/runtime.cpp" -lbenchmark -lpthread -o "$build/bin/$name" > "$build/log/$name" 2>&1; then
 		rm -f "$build/log/$name"
@@ -179,7 +183,7 @@ done
 mkdir -p "$RESULTS_DIR"
 stamp=$(date -u +%Y-%m-%d-%H%M%SZ)
 dirty=$(git -C "$repo" status --porcelain -- bench 2> /dev/null | head -n 1 || true)
-bench_commit=$(git -C "$repo" rev-parse HEAD 2> /dev/null || echo unknown)
+bench_commit=$(git -C "$repo" rev-parse HEAD 2> /dev/null || echo "${BENCH_COMMIT:-unknown}")
 [ -z "$dirty" ] || bench_commit="$bench_commit-dirty"
 python3 -I - "$build" "$stamp" "$commit_a" "$commit_b" "$bench_commit" "$flags" "$ROUNDS" "$MIN_TIME" "$GXX" "$CLANGXX" \
 	"$priority" "$cpus" "$jobs" "$gate_out" "$bench" > "$RESULTS_DIR/$stamp.json.part" <<'PY'
@@ -271,8 +275,8 @@ print(json.dumps({
     "commit_a": {"given": commit_a, "id": ids("a")},
     "commit_b": {"given": commit_b, "id": ids("b")},
     "bench_sources_commit": bench_commit,
-    "what": "READ, lazy path (MB_PATH), at_path (MB_AT_PATH) and struct decode (MB_STRUCT); a = commit a, aa = commit a built again, b = commit b",
-    "documents": "twitter, floats, records; MB_STRUCT on twitter only",
+    "what": os.environ.get("WHAT", "READ, lazy path (MB_PATH), at_path (MB_AT_PATH) and struct decode (MB_STRUCT)") + "; a = commit a, aa = commit a built again, b = commit b",
+    "documents": os.environ.get("DOCS", "twitter floats records") + "; MB_STRUCT on twitter only",
     "flags": flags,
     "pie": "-fPIE -pie" if {"-fPIE", "-pie"} <= set(flags.split()) else "default of the compiler",
     "elf_type_count": dict(collections.Counter(l.split(" ", 1)[1] for l in read(os.path.join(build, "out", "elf_type")).splitlines())),
