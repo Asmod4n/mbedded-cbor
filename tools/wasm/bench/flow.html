@@ -1,7 +1,9 @@
 <!doctype html>
 <meta charset="utf-8">
 <script src="/lib/json-p3.iife.min.js"></script>
+<script src="/lib/cbor-x.min.js"></script>
 <script type="module">
+import { tape_values_built } from "/art/tape.js";
 const arm = new URLSearchParams(location.search).get("arm").replace(/_aa$/, "");
 const paths = ["$.statuses[0].user.id", "$.statuses[*].user", "$..screen_name", "$.statuses[?@.retweet_count > 0].id"];
 const [cbor, text, module] = await Promise.all([
@@ -51,6 +53,28 @@ const flows = {
     if (x.eager_js_value() !== 1) throw new Error("decode");
     const data = out[0]; out = [];
     return data.statuses.length;
+  },
+  decode_tape() {
+    if (x.load(copied(cbor), cbor.length) !== 0) throw new Error("load");
+    return tape_values_built(x.memory, x.eager_tape(), x.tape_numbers(), false)[0].statuses.length;
+  },
+  decode_tape_shapes() {
+    if (x.load(copied(cbor), cbor.length) !== 0) throw new Error("load");
+    return tape_values_built(x.memory, x.eager_tape(), x.tape_numbers(), true)[0].statuses.length;
+  },
+  decode_cborx() {
+    return window.CBOR.decode(cbor).statuses.length;
+  },
+  objects_tape() {
+    if (x.load(copied(cbor), cbor.length) !== 0) throw new Error("load");
+    const all = [];
+    for (const p of paths) {
+      const t = enc.encode(p); const tp = copied(t);
+      if (x.compile(tp, t.length) !== 0) throw new Error("compile");
+      x.release(tp);
+      all.push(tape_values_built(x.memory, x.compiled_tape(), x.tape_numbers(), false));
+    }
+    return all.map((r) => r.length);
   },
   decode_json() {
     return JSON.parse(text).statuses.length;
