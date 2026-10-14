@@ -331,8 +331,6 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         friend struct lazy_entries;
 
         friend struct lazy;
-
-        friend class value_sharing;
     };
 
     iterator begin() const

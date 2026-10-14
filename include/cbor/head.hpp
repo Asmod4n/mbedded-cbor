@@ -757,8 +757,6 @@ class heads
 
     friend class well_formedness;
 
-    friend class value_sharing;
-
     friend class extended_diagnostic_notation;
 
     friend class jsonpath;

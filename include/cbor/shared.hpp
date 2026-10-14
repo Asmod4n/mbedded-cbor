@@ -32,17 +32,6 @@ private:
     template <bool Checked>
     struct sharing_decoder;
 
-    friend class validity;
-
-    friend struct lazy;
-
-    friend struct lazy_elements;
-
-    friend struct lazy_entries;
-
-
-    friend class jsonpath;
-
 #ifdef __cpp_impl_reflection
     friend class generic;
 
