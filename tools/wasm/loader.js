@@ -20,7 +20,22 @@ export async function showcase_instantiate(wasm_bytes) {
       return errno_success;
     },
   };
-  const { instance } = await WebAssembly.instantiate(wasm_bytes, { wasi_snapshot_preview1 });
+  let stack = [], keys = [], built = [], key;
+  const text_at = (ptr, len) => decoder.decode(new Uint8Array(memory.buffer, ptr, len));
+  const put = (v) => {
+    if (!stack.length) { built.push(v); return; }
+    const top = stack[stack.length - 1];
+    if (Array.isArray(top)) top.push(v); else top[key] = v;
+  };
+  const js = {
+    value_null: () => put(null), value_bool: (b) => put(!!b), value_number: (v) => put(v),
+    value_string: (ptr, len) => put(text_at(ptr, len)),
+    array_begin: () => { const a = []; put(a); stack.push(a); keys.push(key); },
+    object_begin: () => { const o = {}; put(o); stack.push(o); keys.push(key); },
+    key_string: (ptr, len) => { key = text_at(ptr, len); }, key_number: (v) => { key = String(v); },
+    container_end: () => { stack.pop(); key = keys.pop(); },
+  };
+  const { instance } = await WebAssembly.instantiate(wasm_bytes, { wasi_snapshot_preview1, js });
   const e = instance.exports;
   memory = e.memory;
   e._initialize();
@@ -43,5 +58,14 @@ export async function showcase_instantiate(wasm_bytes) {
     run: (path) => text_of(called(e.run, encoder.encode(path))),
     edn: (bytes) => text_of(called(e.edn, bytes)),
     compile: (path) => called(e.compile, encoder.encode(path)),
+    js_values: (path) => {
+      const c = called(e.compile, encoder.encode(path));
+      if (c !== 0) return c;
+      built = [];
+      const n = e.compiled_js_values();
+      const r = built;
+      built = [];
+      return n < 0 ? -n : r;
+    },
   };
 }
