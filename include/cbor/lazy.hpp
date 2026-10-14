@@ -32,6 +32,79 @@
 namespace cbor
 {
 
+struct lazy::zone {
+    using link = std::pair<item const *, item const *>;
+
+    std::shared_ptr<value_sharing::top_level_item> top_level;
+    std::pmr::monotonic_buffer_resource memory;
+    std::pmr::forward_list<value_sharing::top_level_item> embedded{&memory};
+    std::vector<link> encoded_cbor_data_items;
+
+    zone(std::shared_ptr<value_sharing::top_level_item> top, std::size_t const initial_size)
+        : top_level(std::move(top)), memory(initial_size)
+    {
+    }
+};
+
+struct lazy::zone_owner {
+    std::unique_ptr<zone> owned;
+
+    void operator()(item const *) const noexcept
+    {
+    }
+
+    static zone &zone_found(std::shared_ptr<item const> const &tree, char const *const what)
+    {
+        zone_owner const *const owner = std::get_deleter<zone_owner>(tree);
+        validity::throw_logic_error_if(owner == nullptr || owner->owned == nullptr, what);
+        return *owner->owned;
+    }
+
+    template <class Link, class Projection>
+    static Link const &link_found(std::vector<Link> const &links, item const &from, Projection const key,
+                                  char const *const what)
+    {
+        auto const found = std::ranges::lower_bound(links, &from, std::less<>{}, key);
+        validity::throw_logic_error_if(found == links.end() || std::invoke(key, *found) != &from, what);
+        return *found;
+    }
+
+};
+
+inline std::expected<std::reference_wrapper<item const>, error>
+encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged)
+{
+    constexpr char const *what = "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree";
+    lazy::zone const &z = lazy::zone_owner::zone_found(tree, what);
+    item const *const embedded = lazy::zone_owner::link_found(z.encoded_cbor_data_items, tagged,
+                                                              &lazy::zone::link::first, what)
+                                     .second;
+    if (embedded == nullptr) [[unlikely]]
+        return std::unexpected(error::incorrect_type);
+    return std::cref(*embedded);
+}
+
+static_assert(std::is_trivially_destructible_v<item>,
+              "The zone runs no destructor of an item, so an item must have no destructor to run.");
+
+template <bool Checked>
+struct lazy::tree_decoder {
+    zone &decoded;
+    value_sharing::top_level_item &top_level;
+    heads::decoder<Checked> d;
+    validity::offset start;
+    std::size_t depth_max;
+    std::size_t open = 0;
+
+    std::expected<item *, error> item_decode(item *storage, std::size_t depth);
+
+    std::expected<item *, error> content_decode(item *storage, heads::head h, std::size_t depth);
+
+    CBOR_ALWAYS_INLINE inline std::expected<void, error> scalar_decode(item &node, heads::head h);
+
+    CBOR_NEVER_INLINE std::expected<item *, error> bignum_decode(item &node, std::uint64_t tag, std::size_t depth);
+};
+
 template <bool Checked>
 struct lazy::resolved {
     std::shared_ptr<value_sharing::top_level_item> source;
@@ -43,7 +116,7 @@ struct lazy::resolved {
 template <bool Checked>
 std::expected<lazy::resolved<Checked>, error>
 lazy::container_resolve(std::shared_ptr<value_sharing::top_level_item> source, validity::offset offset,
-                                 validity::limit_checks<Checked> const checks)
+                        validity::limit_checks<Checked> const checks)
 {
     validity::throw_logic_error_if_null(source, "cbor::lazy: the lazy holds no top-level item");
     for (;;) {
@@ -72,7 +145,7 @@ lazy::container_resolve(std::shared_ptr<value_sharing::top_level_item> source, v
 template <bool Checked>
 std::expected<lazy::resolved<Checked>, error>
 lazy::tag_content_resolve(std::shared_ptr<value_sharing::top_level_item> source, validity::offset offset,
-                                   validity::limit_checks<Checked> const checks)
+                          validity::limit_checks<Checked> const checks)
 {
     for (;;) {
         auto found = container_resolve(std::move(source), offset, checks);
@@ -864,7 +937,7 @@ inline std::expected<lazy_entries, error> lazy::entries(limit_values const loade
 
 
 template <bool Checked>
-std::expected<void, error> value_sharing::tree_decoder<Checked>::scalar_decode(item &node, heads::head const h)
+std::expected<void, error> lazy::tree_decoder<Checked>::scalar_decode(item &node, heads::head const h)
 {
     switch (h.major) {
     case major_type::byte_string:
@@ -898,7 +971,7 @@ std::expected<void, error> value_sharing::tree_decoder<Checked>::scalar_decode(i
 }
 
 template <bool Checked>
-std::expected<item *, error> value_sharing::tree_decoder<Checked>::bignum_decode(item &node, std::uint64_t const tag,
+std::expected<item *, error> lazy::tree_decoder<Checked>::bignum_decode(item &node, std::uint64_t const tag,
                                                                                std::size_t const depth)
 {
     auto const next = heads::raw_head_read(d.encoded, validity::offset{}, d.checks);
@@ -923,7 +996,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::bignum_decode
 }
 
 template <bool Checked>
-std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(item *const storage,
+std::expected<item *, error> lazy::tree_decoder<Checked>::item_decode(item *const storage,
                                                                                std::size_t const depth)
 {
     if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
@@ -935,7 +1008,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::item_decode(i
 }
 
 template <bool Checked>
-std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decode(item *const storage,
+std::expected<item *, error> lazy::tree_decoder<Checked>::content_decode(item *const storage,
                                                                                   heads::head const head,
                                                                                   std::size_t const depth)
 {
@@ -1004,7 +1077,7 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
             return &node;
         }
         std::span<std::byte const> const encoded = bytes_item->via.bin;
-        top_level_item &nested = decoded.embedded.emplace_front(
+        value_sharing::top_level_item &nested = decoded.embedded.emplace_front(
             top_level.owner, std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()));
         tree_decoder inner{decoded, nested, {nested.encoded, d.checks}, validity::offset{}, depth_max};
         auto const data_item =
@@ -1045,17 +1118,17 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
         [this]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
             -> std::expected<std::shared_ptr<item const>, error> {
             std::string_view const encoded = validity::subspan(top_level->encoded, offset);
-            auto decoded = std::make_unique<value_sharing::zone>(
+            auto decoded = std::make_unique<zone>(
                 top_level, validity::checked_mul(encoded.size(), sizeof(item))
                                .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
                                .value_or(validity::initial_size_limit));
-            value_sharing::tree_decoder<Checked> tree{*decoded, *top_level, {encoded, checks}, offset, depth_max};
+            tree_decoder<Checked> tree{*decoded, *top_level, {encoded, checks}, offset, depth_max};
             auto const built =
                 tree.item_decode(std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0);
             if (!built) [[unlikely]]
                 return std::unexpected(built.error());
-            std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &value_sharing::zone::link::first);
-            return std::shared_ptr<item const>(*built, value_sharing::zone_owner{std::move(decoded)});
+            std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &zone::link::first);
+            return std::shared_ptr<item const>(*built, zone_owner{std::move(decoded)});
         });
 }
 
