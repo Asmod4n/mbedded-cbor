@@ -33,12 +33,6 @@ namespace cbor
 
 struct lazy;
 
-template <fixed_string Path>
-class is_valid_path;
-
-template <fixed_string Path>
-inline constexpr bool is_valid_path_v = is_valid_path<Path>::value;
-
 std::expected<lazy, error> at_path(std::string_view path, lazy const &l);
 
 std::expected<std::vector<lazy>, error> query(std::string_view path, lazy const &l);
@@ -50,12 +44,6 @@ std::expected<lazy, error> at_path(lazy const &l);
 template <fixed_string Path>
     requires is_valid_path_v<Path>
 std::expected<std::vector<lazy>, error> query(lazy const &l);
-
-template <fixed_string Path>
-class is_singular_query;
-
-template <fixed_string Path>
-inline constexpr bool is_singular_query_v = is_singular_query<Path>::value;
 
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
@@ -945,7 +933,7 @@ class jsonpath
             return c;
         }();
         query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys), {}};
-        validity::throw_logic_error_if_empty(root.top_level, "cbor::at_path: the lazy holds no top-level item");
+        validity::throw_logic_error_if_empty(root.top_level, "cbor::lazy::at_path: the lazy holds no top-level item");
         limit_values const loaded = limits.load();
         return validity::limits_apply(
             loaded,
@@ -1020,6 +1008,8 @@ class jsonpath
 
     template <fixed_string>
     friend class is_valid_path;
+
+    friend struct lazy;
 
     friend std::expected<lazy, error> at_path(std::string_view path, lazy const &l);
 
@@ -1560,7 +1550,7 @@ jsonpath::segments_apply(query_view const &v, std::size_t const segment_at, std:
 inline std::expected<lazy, error> jsonpath::singular_query_walk(query_view const &v, parsed_query const &top,
                                                                 lazy const &root, limit_values const loaded)
 {
-    validity::throw_logic_error_if_null(root.top_level, "cbor::at_path: the lazy holds no top-level item");
+    validity::throw_logic_error_if_null(root.top_level, "cbor::lazy::at_path: the lazy holds no top-level item");
     lazy node = root;
     for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
         selector const &each = v.selectors[s.selector_at];
@@ -1579,7 +1569,7 @@ inline std::expected<lazy, error> jsonpath::singular_query_walk(query_view const
 inline std::expected<std::vector<lazy>, error> jsonpath::query_walk(query_view const &v, parsed_query const &top,
                                                                     lazy const &root, limit_values const loaded)
 {
-    validity::throw_logic_error_if_null(root.top_level, "cbor::query: the lazy holds no top-level item");
+    validity::throw_logic_error_if_null(root.top_level, "cbor::lazy::query: the lazy holds no top-level item");
     std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
     query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
     for (std::size_t i = 0; i < v.expressions.size(); ++i)
@@ -1740,6 +1730,88 @@ template <fixed_string Path, class T>
 std::expected<owning_ref<T>, error> at_path(lazy const &l)
 {
     return jsonpath::owned_query_walk<Path, T>(l);
+}
+
+inline std::expected<lazy, error> lazy::operator[](std::string_view const key) const
+{
+    return at(key);
+}
+
+inline std::expected<lazy, error> lazy::operator[](key const k) const
+{
+    return at(k);
+}
+
+inline std::expected<lazy, error> lazy::operator[](std::size_t const index) const
+{
+    return at(index);
+}
+
+inline std::expected<lazy, error> lazy::at_path(std::string_view const path) const
+{
+    limit_values const loaded = limits.load();
+    auto const q = jsonpath::query_parse(path, loaded.nesting_depth);
+    if (!q) [[unlikely]]
+        return std::unexpected(q.error());
+    if (!q->top.singular) [[unlikely]]
+        return std::unexpected(error::invalid_path);
+    return jsonpath::singular_query_walk({q->segments, q->selectors, q->expressions, q->keys, {}}, q->top, *this,
+                                         loaded);
+}
+
+inline std::expected<std::vector<lazy>, error> lazy::query(std::string_view const path) const
+{
+    limit_values const loaded = limits.load();
+    auto const q = jsonpath::query_parse(path, loaded.nesting_depth);
+    if (!q) [[unlikely]]
+        return std::unexpected(q.error());
+    return jsonpath::query_walk({q->segments, q->selectors, q->expressions, q->keys, {}}, q->top, *this, loaded);
+}
+
+template <fixed_string Path>
+    requires is_valid_path_v<Path>
+std::expected<lazy, error> lazy::at_path() const
+{
+    static_assert(jsonpath::query_parse(Path.view(), validity::nesting_depth_default)->top.singular,
+                  "cbor::lazy::at_path: the path is not a singular query (RFC 9535 2.3.5.1); cbor::lazy::query reads its nodelist");
+    return jsonpath::compiled_apply<Path>(
+        [this](jsonpath::query_view const &v, jsonpath::parsed_query const &top, limit_values const loaded) {
+            return jsonpath::singular_query_walk(v, top, *this, loaded);
+        },
+        limits.load());
+}
+
+template <fixed_string Path>
+    requires is_valid_path_v<Path>
+std::expected<std::vector<lazy>, error> lazy::query() const
+{
+    return jsonpath::compiled_apply<Path>(
+        [this](jsonpath::query_view const &v, jsonpath::parsed_query const &top, limit_values const loaded) {
+            return jsonpath::query_walk(v, top, *this, loaded);
+        },
+        limits.load());
+}
+
+template <fixed_string Path, class T>
+    requires(is_singular_query_v<Path> &&
+             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
+              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+              || std::is_same_v<T, std::float128_t>
+#endif
+              ))
+std::expected<T, error> lazy::at_path() const
+{
+    return jsonpath::query_walk<Path, T>(*this);
+}
+
+template <fixed_string Path, class T>
+    requires(is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<owning_ref<T>, error> lazy::at_path() const
+{
+    return jsonpath::owned_query_walk<Path, T>(*this);
 }
 
 }
