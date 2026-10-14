@@ -364,7 +364,7 @@ inline std::expected<lazy_entries::iterator, error> lazy::find(std::string_view 
     return limits_apply(loaded,
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<lazy_entries::iterator, error> {
-                            auto found = lazy_resolve(*this, checks);
+                            auto found = resolve(*this, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
                             return key_find(std::move(*found), key, loaded);
@@ -382,7 +382,7 @@ inline std::expected<lazy_entries::iterator, error> lazy::find(std::int64_t cons
     return limits_apply(loaded,
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<lazy_entries::iterator, error> {
-                            auto found = lazy_resolve(*this, checks);
+                            auto found = resolve(*this, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
                             return key_find(std::move(*found), key, loaded);
@@ -439,7 +439,7 @@ inline std::expected<std::string_view, error> lazy::typed_array_element_read(laz
 
 template <bool Checked>
 std::expected<lazy::resolved<Checked>, error>
-lazy::lazy_resolve(lazy const &node, validity::limit_checks<Checked> const checks)
+lazy::resolve(lazy const &node, validity::limit_checks<Checked> const checks)
 {
     if (node.typed_array_tag == 0) [[likely]]
         return tag_content_resolve(node.top_level, node.offset, checks);
@@ -484,7 +484,7 @@ inline std::expected<std::uint64_t, error> lazy::size() const
     return limits_apply(limits.load(),
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<std::uint64_t, error> {
-                            auto const found = lazy_resolve(*this, checks);
+                            auto const found = resolve(*this, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
                             if (heads::is_typed_array(found->h))
@@ -518,7 +518,7 @@ inline std::expected<cbor::type, error> lazy::type() const
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<cbor::type, error> {
                             if (typed_array_tag != 0) [[unlikely]] {
-                                auto const found = lazy_resolve(*this, checks);
+                                auto const found = resolve(*this, checks);
                                 if (!found) [[unlikely]]
                                     return std::unexpected(found.error());
                                 return heads::type_of(found->h.major, found->h.info, found->h.argument);
@@ -643,7 +643,7 @@ inline std::expected<lazy, error> lazy::at(std::size_t const index) const
     return limits_apply(limits.load(),
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                             -> std::expected<lazy, error> {
-                            auto const found = lazy_resolve(*this, checks);
+                            auto const found = resolve(*this, checks);
                             if (!found) [[unlikely]]
                                 return std::unexpected(found.error());
                             return index_select(*found, index);
@@ -700,7 +700,7 @@ auto lazy::get(limit_values const loaded) const
                 return std::bit_cast<std::float128_t>(bits);
             } else {
 #endif
-            auto const found = lazy_resolve(*this, checks);
+            auto const found = resolve(*this, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
             auto [source, h, d, item_at] = *found;
@@ -812,7 +812,7 @@ inline std::expected<lazy_elements, error> lazy::elements(limit_values const loa
         loaded,
         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
             -> std::expected<lazy_elements, error> {
-            auto const found = lazy_resolve(*this, checks);
+            auto const found = resolve(*this, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
             if (heads::is_typed_array(found->h)) {
@@ -845,7 +845,7 @@ inline std::expected<lazy_entries, error> lazy::entries(limit_values const loade
         loaded,
         [&]<bool Checked>(
             std::size_t, validity::limit_checks<Checked> const checks) -> std::expected<lazy_entries, error> {
-            auto const found = lazy_resolve(*this, checks);
+            auto const found = resolve(*this, checks);
             if (!found) [[unlikely]]
                 return std::unexpected(found.error());
             auto const &[source, h, d, item_at] = *found;
@@ -1028,7 +1028,7 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
             limits.load(),
             [this]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
                 -> std::expected<heads::head, error> {
-                return lazy_resolve(*this, checks).transform(
+                return resolve(*this, checks).transform(
                     [](resolved<Checked> const &found) { return found.h; });
             });
         if (!h) [[unlikely]]
