@@ -22,7 +22,6 @@
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
-#include "shared.hpp"
 #include "rfc4648.hpp"
 
 namespace cbor
