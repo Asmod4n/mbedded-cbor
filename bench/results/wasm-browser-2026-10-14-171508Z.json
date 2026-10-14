@@ -1,0 +1,712 @@
+{
+ "context": {
+  "commit": "e5f3d497ff7afaf102db20ff4faf7cbd70206fe0",
+  "dirty": false,
+  "browser": "chromium 141.0.7390.37 headless shell, playwright 1.56.1, default launch flags",
+  "isolated": true,
+  "wasm_flags": "clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -fno-exceptions",
+  "wasm_bytes": 831389,
+  "inputs": {
+   "cbor_bytes": 402814,
+   "json_bytes": 492596
+  },
+  "method": "each repetition of each arm runs in a fresh page; arms alternate; a loop arm doubles its iteration count until one batch takes at least 200 ms; a first_* arm times one call in a fresh page; the CBOR bytes are in wasm memory and the JSON text is a JS string before the timer starts",
+  "kernel": "6.18.44-fc-v114",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpus": 4,
+  "user": "ubuntu",
+  "priority": 0,
+  "node": "v22.22.0",
+  "repetitions": 7,
+  "compiler": "clang 23 from the Debian sid image mbedded-cbor-wasm; libc++ and wasi-libc from Debian wasm32 packages",
+  "container": "host; Chromium runs outside podman"
+ },
+ "summary": {
+  "json_parse": {
+   "median_ns_per_op": 973203.1250005093,
+   "min": 888847.656249709,
+   "max": 1341640.6249998545,
+   "check": "[object Object]"
+  },
+  "json_parse_aa": {
+   "median_ns_per_op": 934941.4062498908,
+   "min": 810273.4374997453,
+   "max": 1098554.6874999274,
+   "check": "[object Object]"
+  },
+  "json_value": {
+   "median_ns_per_op": 939941.40625,
+   "min": 812363.2812503274,
+   "max": 1212734.3749998545,
+   "check": "1186275104"
+  },
+  "json_ids": {
+   "median_ns_per_op": 976074.21875,
+   "min": 835976.5625000363,
+   "max": 1616230.4687504729,
+   "check": "50623067142"
+  },
+  "cbor_value_literal": {
+   "median_ns_per_op": 385.21766662569235,
+   "min": 343.3084487916016,
+   "max": 432.93952941914074,
+   "check": "1186275104"
+  },
+  "cbor_value_literal_aa": {
+   "median_ns_per_op": 410.6044769289774,
+   "min": 344.7532653808594,
+   "max": 482.47337341322805,
+   "check": "1186275104"
+  },
+  "cbor_value_runtime": {
+   "median_ns_per_op": 915.5845642094818,
+   "min": 696.6304779054689,
+   "max": 1139.5263671873934,
+   "check": "1186275104"
+  },
+  "cbor_ids_literal": {
+   "median_ns_per_op": 164333.49609371816,
+   "min": 144421.38671881822,
+   "max": 193039.55078123635,
+   "check": "50623067168"
+  },
+  "cbor_ids_runtime": {
+   "median_ns_per_op": 156291.5039062318,
+   "min": 142102.05078131822,
+   "max": 197700.1953123363,
+   "check": "50623067168"
+  },
+  "empty_call": {
+   "median_ns_per_op": 4.065483808515097,
+   "min": 3.547891974448741,
+   "max": 4.74706292152155,
+   "check": "undefined"
+  },
+  "first_json": {
+   "median_ns_per_op": 1449999.9999534339,
+   "min": 1214999.9998509884,
+   "max": 2574999.999953434,
+   "check": "1186275104"
+  },
+  "first_cbor": {
+   "median_ns_per_op": 630000.0001210719,
+   "min": 479999.99998137355,
+   "max": 844999.9999720603,
+   "check": "1186275104"
+  }
+ },
+ "runs": {
+  "json_parse": [
+   {
+    "arm": "json_parse",
+    "ns_per_op": 1341640.6249998545,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse",
+    "ns_per_op": 888847.656249709,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse",
+    "ns_per_op": 897871.0937499272,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse",
+    "ns_per_op": 1041582.0312500728,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse",
+    "ns_per_op": 1041445.3125004002,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse",
+    "ns_per_op": 973203.1250005093,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse",
+    "ns_per_op": 901718.7499994179,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   }
+  ],
+  "json_parse_aa": [
+   {
+    "arm": "json_parse_aa",
+    "ns_per_op": 945761.7187499637,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse_aa",
+    "ns_per_op": 934941.4062498908,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse_aa",
+    "ns_per_op": 931015.6249994179,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse_aa",
+    "ns_per_op": 938027.3437500363,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse_aa",
+    "ns_per_op": 891367.1875006913,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse_aa",
+    "ns_per_op": 810273.4374997453,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   },
+   {
+    "arm": "json_parse_aa",
+    "ns_per_op": 1098554.6874999274,
+    "iterations": 256,
+    "check": "[object Object]",
+    "isolated": true
+   }
+  ],
+  "json_value": [
+   {
+    "arm": "json_value",
+    "ns_per_op": 1088105.4687497453,
+    "iterations": 256,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "json_value",
+    "ns_per_op": 812363.2812503274,
+    "iterations": 256,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "json_value",
+    "ns_per_op": 1212734.3749998545,
+    "iterations": 256,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "json_value",
+    "ns_per_op": 873222.656249709,
+    "iterations": 256,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "json_value",
+    "ns_per_op": 939941.40625,
+    "iterations": 256,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "json_value",
+    "ns_per_op": 950761.7187491632,
+    "iterations": 256,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "json_value",
+    "ns_per_op": 872070.3125,
+    "iterations": 256,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "json_ids": [
+   {
+    "arm": "json_ids",
+    "ns_per_op": 1616230.4687504729,
+    "iterations": 256,
+    "check": "50623067142",
+    "isolated": true
+   },
+   {
+    "arm": "json_ids",
+    "ns_per_op": 976074.21875,
+    "iterations": 256,
+    "check": "50623067142",
+    "isolated": true
+   },
+   {
+    "arm": "json_ids",
+    "ns_per_op": 852011.7187508731,
+    "iterations": 256,
+    "check": "50623067142",
+    "isolated": true
+   },
+   {
+    "arm": "json_ids",
+    "ns_per_op": 835976.5625000363,
+    "iterations": 256,
+    "check": "50623067142",
+    "isolated": true
+   },
+   {
+    "arm": "json_ids",
+    "ns_per_op": 971972.6562507276,
+    "iterations": 256,
+    "check": "50623067142",
+    "isolated": true
+   },
+   {
+    "arm": "json_ids",
+    "ns_per_op": 1041210.9375001818,
+    "iterations": 256,
+    "check": "50623067142",
+    "isolated": true
+   },
+   {
+    "arm": "json_ids",
+    "ns_per_op": 1089492.187500582,
+    "iterations": 256,
+    "check": "50623067142",
+    "isolated": true
+   }
+  ],
+  "cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 422.53017425553094,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 343.3084487916016,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 422.2011566161754,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 377.53105163584877,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 385.21766662569235,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 376.93500518809486,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 432.93952941914074,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "cbor_value_literal_aa": [
+   {
+    "arm": "cbor_value_literal_aa",
+    "ns_per_op": 405.7025909425249,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal_aa",
+    "ns_per_op": 344.7532653808594,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal_aa",
+    "ns_per_op": 482.47337341322805,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal_aa",
+    "ns_per_op": 410.6044769289774,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal_aa",
+    "ns_per_op": 443.68267059335943,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal_aa",
+    "ns_per_op": 411.3101959228871,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal_aa",
+    "ns_per_op": 405.98869323726916,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 696.6304779054689,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 710.7448577881037,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1106.605529785476,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 922.7561950684304,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1139.5263671873934,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 830.9650421143289,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 915.5845642094818,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 144421.38671881822,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 148747.55859375454,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 175056.15234381368,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 164333.49609371816,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 167526.85546873635,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 149020.99609366816,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 193039.55078123635,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "cbor_ids_runtime": [
+   {
+    "arm": "cbor_ids_runtime",
+    "ns_per_op": 170024.4140624818,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_runtime",
+    "ns_per_op": 151791.9921874409,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_runtime",
+    "ns_per_op": 165236.81640614994,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_runtime",
+    "ns_per_op": 154362.79296875454,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_runtime",
+    "ns_per_op": 156291.5039062318,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_runtime",
+    "ns_per_op": 142102.05078131822,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_runtime",
+    "ns_per_op": 197700.1953123363,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "empty_call": [
+   {
+    "arm": "empty_call",
+    "ns_per_op": 4.065483808515097,
+    "iterations": 67108864,
+    "check": "undefined",
+    "isolated": true
+   },
+   {
+    "arm": "empty_call",
+    "ns_per_op": 4.084780812263489,
+    "iterations": 67108864,
+    "check": "undefined",
+    "isolated": true
+   },
+   {
+    "arm": "empty_call",
+    "ns_per_op": 3.8020312786088417,
+    "iterations": 67108864,
+    "check": "undefined",
+    "isolated": true
+   },
+   {
+    "arm": "empty_call",
+    "ns_per_op": 3.6108493804941357,
+    "iterations": 67108864,
+    "check": "undefined",
+    "isolated": true
+   },
+   {
+    "arm": "empty_call",
+    "ns_per_op": 3.547891974448741,
+    "iterations": 67108864,
+    "check": "undefined",
+    "isolated": true
+   },
+   {
+    "arm": "empty_call",
+    "ns_per_op": 4.366710782049976,
+    "iterations": 67108864,
+    "check": "undefined",
+    "isolated": true
+   },
+   {
+    "arm": "empty_call",
+    "ns_per_op": 4.74706292152155,
+    "iterations": 67108864,
+    "check": "undefined",
+    "isolated": true
+   }
+  ],
+  "first_json": [
+   {
+    "arm": "first_json",
+    "ns_per_op": 1229999.9999813735,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_json",
+    "ns_per_op": 1449999.9999534339,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_json",
+    "ns_per_op": 1429999.9999348074,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_json",
+    "ns_per_op": 2574999.999953434,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_json",
+    "ns_per_op": 1214999.9998509884,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_json",
+    "ns_per_op": 2194999.999832362,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_json",
+    "ns_per_op": 1985000.0001024455,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 844999.9999720603,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 574999.9999534339,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 810000.0000558794,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 479999.99998137355,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 750000,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 609999.9998696148,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 630000.0001210719,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ]
+ }
+}
