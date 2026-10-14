@@ -242,11 +242,11 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `is_singular_query<Path>`, `is_singular_query_v<Path>` :1506 | O(t + c) compile time | none at run time | |
 | `at_path<Path, T>(string_view)` :1525 | O(n); fallback O(n·p) | O(1); fallback allocates | |
 | `at_path<Path, T>(shared_ptr<string const>)` | as :1525 | as :1525 | |
-| `jsonpath::make_expression<T>(string_view path)` | query_parse | O(t) | Allocates the parsed path. Once for many applies. |
-| `lazy::at_path(expression<T> const&)`, `at_path(string_view, expression<T> const&)`, `at_path(shared_ptr<string const>, expression<T> const&)` | as the compiled form with the same T | as the compiled form with the same T | No parse. |
+| `jsonpath::compile<T>(string_view path)` | query_parse | O(t) | Allocates the parsed path. Once for many applies. |
+| `lazy::at_path(query<T> const&)`, `at_path(string_view, query<T> const&)`, `at_path(shared_ptr<string const>, query<T> const&)` | as the compiled form with the same T | as the compiled form with the same T | No parse. |
 | `lazy::at_path<Path>()` | singular_query_walk | O(1) | The path is compiled. |
 | `lazy::at_path<Path, T>()` | as `query_walk<T>(..., lazy const&)` | as `query_walk<T>(..., lazy const&)` | |
-| `lazy::at_path<Path, nodelist>()`, `lazy::at_path(expression<nodelist> const&)` | query_walk | O(N) nodelist | Allocates the nodelist. |
+| `lazy::at_path<Path, nodelist>()`, `lazy::at_path(query<nodelist> const&)` | query_walk | O(N) nodelist | Allocates the nodelist. |
 | local lambdas :171, :446, :1322, :1364, :1036-1045 | O(digits) or O(1) amortized | O(1) | Included in the rows above. |
 
 ## encode.hpp
@@ -427,6 +427,6 @@ Allocation on a success path:
 
 - `value_sharing::sharing_decoder::mark`, `lazy::tree_decoder::item_decode`.
 - `lazy::copy`, `lazy::view`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::decode`.
-- jsonpath: every parser, `make_expression`, a `nodelist` read, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
+- jsonpath: every parser, `compile`, a `nodelist` read, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `string_sink`, `container_message`.
 - diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.
