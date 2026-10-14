@@ -87,8 +87,8 @@ TEST_CASE("doc advanced path: a typed read from a lazy")
     CHECK_EQ(**make, "kia"sv);
 }
 
-// The section "Any item as a node" shows at_path that gives a lazy node, at_path with cbor::nodelist for a nodelist,
-// and an expression that make_expression parses once at run time.
+// The section "Any item as a node" shows at_path that gives a lazy node, at_path with cbor::nodelist for a
+// nodelist, and a query that compile parses once at run time.
 TEST_CASE("doc advanced path: a node at compile time and at run time")
 {
     std::string const bytes = preferred(M("a"s, A(1, 2, 3)));
@@ -99,7 +99,7 @@ TEST_CASE("doc advanced path: a node at compile time and at run time")
     CHECK(*test::query<"$.a[*]">(l) == A(1, 2, 3));
     CHECK(*test::query("$.a[?@ > 1]", l) == A(2, 3));
     CHECK(*test::query("$.b", l) == A());
-    auto const e = cbor::jsonpath::make_expression<cbor::nodelist>("$.a[?@ > 1]");
+    auto const e = cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]");
     REQUIRE(e.has_value());
     CHECK(*test::values_of(l.at_path(*e)) == A(2, 3));
     CHECK(*test::values_of(l.at_path<"$.b", cbor::nodelist>()) == A());
@@ -164,7 +164,7 @@ TEST_CASE("doc advanced path: the functions")
     CHECK_EQ(test::query("$[?match(@.t, 'a.c')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?search(@.t, 'b')]", l).error(), error::invalid_path);
     CHECK(*test::query<"$[?length(@.t) == 3].t">(l) == A("abc"s));
-    CHECK_EQ(cbor::jsonpath::make_expression<cbor::nodelist>("$[?match(@.t, 'a.c')]").error(), error::invalid_path);
+    CHECK_EQ(cbor::jsonpath::compile<cbor::nodelist>("$[?match(@.t, 'a.c')]").error(), error::invalid_path);
     CHECK_FALSE(cbor::is_valid_path_v<"$[?match(@.t, 'a.c')]">);
 }
 
@@ -401,7 +401,9 @@ TEST_CASE("doc advanced path: tags in detail")
     CHECK_EQ(cbor::at_path<"$.a[1]", int>(inside), 2);
     CHECK(*test::at_path("$.a[1]", *cbor::lazy::copy(inside)) == V(2));
     CHECK_EQ(cbor::at_path<"$.a", int>("\xa1\x61\x61\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
-    CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)->at_path(*cbor::jsonpath::make_expression<cbor::lazy>("$[0]")).has_value());
+    CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)
+              ->at_path(*cbor::jsonpath::compile<cbor::lazy>("$[0]"))
+              .has_value());
     std::string const many = "\x82\xd8\x1c\x88\x00\x00\x00\x00\x00\x00\x00\x00\xd8\x1d\x00"s;
     CHECK(*test::query("$[*][*]", *cbor::lazy::copy(many)) == A(0, 0, 0, 0, 0, 0, 0, 0));
 }

@@ -661,13 +661,13 @@ static auto ap_literal_nodelist(L const &l)
 #if defined(ARM_AP_XS) || defined(ARM_AP_XL) || defined(ARM_AP_MK)
 static auto ap_make()
 {
-    return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));
+    return cbor::jsonpath::compile<ap_type>(std::string_view(AP_TEXT));
 }
 #endif
 #if defined(ARM_AP_NX)
 static auto ap_make()
 {
-    return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));
+    return cbor::jsonpath::compile<cbor::nodelist>(std::string_view(AP_TEXT));
 }
 #endif
 #if defined(ARM_AP_XS) || defined(ARM_AP_XL) || defined(ARM_AP_NX)
