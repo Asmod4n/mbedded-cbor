@@ -3,7 +3,8 @@
 #include "common.hpp"
 
 #include <bit>
-#include <stdfloat>
+#include <cmath>
+#include <limits>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -60,6 +61,25 @@ struct segment {
 };
 
 // A name selector in single quotes, with the escapes of RFC 9535 2.3.1.1 where a character needs one.
+inline double binary16_decode(std::uint16_t const half)
+{
+    constexpr unsigned exponent_bits = 0x1f;
+    constexpr unsigned mantissa_bits = 0x3ff;
+    constexpr unsigned sign_bit = 0x8000;
+    constexpr int subnormal_scale = -24;
+    constexpr int normal_bias = 25;
+    constexpr unsigned implicit_one = 1024;
+    constexpr unsigned exponent_shift = 10;
+    unsigned const exponent = (half >> exponent_shift) & exponent_bits;
+    unsigned const mantissa = half & mantissa_bits;
+    double const magnitude = exponent == 0 ? std::ldexp(mantissa, subnormal_scale)
+                             : exponent != exponent_bits
+                                 ? std::ldexp(mantissa + implicit_one, static_cast<int>(exponent) - normal_bias)
+                             : mantissa == 0 ? std::numeric_limits<double>::infinity()
+                                             : std::numeric_limits<double>::quiet_NaN();
+    return half & sign_bit ? -magnitude : magnitude;
+}
+
 inline std::string quoted(std::string_view const key)
 {
     std::string text = "'";
@@ -160,7 +180,7 @@ inline std::optional<std::vector<test::value>> typed_array_elements(std::uint64_
         for (std::size_t i = 0; i < length; ++i)
             bits = bits << bits_per_byte | static_cast<unsigned char>(bytes[at + (little_endian ? length - 1 - i : i)]);
         if (floating && length == 2)
-            elements.push_back(test::value{static_cast<double>(std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(bits)))});
+            elements.push_back(test::value{binary16_decode(static_cast<std::uint16_t>(bits))});
         else if (floating && length == 4)
             elements.push_back(test::value{static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(bits)))});
         else if (floating)
