@@ -87,8 +87,6 @@ class rfc8949
 
     friend class well_formedness;
 
-    friend class value_sharing;
-
     friend class extended_diagnostic_notation;
 
     friend class jsonpath;

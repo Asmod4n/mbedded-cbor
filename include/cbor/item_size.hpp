@@ -196,8 +196,6 @@ class well_formedness
 
     friend class jsonpath;
 
-    friend class value_sharing;
-
 #ifdef __cpp_impl_reflection
     friend class generic;
 #endif
