@@ -83,7 +83,17 @@ class jsonpath
     enum class comparison_op { equal, not_equal, less, less_equal, greater, greater_equal };
 
     struct logical_expr {
-        enum class kind { logical_or, logical_and, logical_not, comparison, query, literal, length, count, value } kind;
+        enum class kind {
+            logical_or,
+            logical_and,
+            logical_not,
+            comparison,
+            filter_query,
+            literal,
+            length,
+            count,
+            value
+        } kind;
         std::size_t first;
         std::size_t second;
         comparison_op op;
@@ -327,7 +337,7 @@ class jsonpath
             logical_expr const &e = expressions[index];
             return e.kind == logical_expr::kind::literal || e.kind == logical_expr::kind::length ||
                    e.kind == logical_expr::kind::count || e.kind == logical_expr::kind::value ||
-                   (e.kind == logical_expr::kind::query && e.singular);
+                   (e.kind == logical_expr::kind::filter_query && e.singular);
         }
 
         constexpr std::size_t expression_add(logical_expr const e)
@@ -362,7 +372,7 @@ class jsonpath
             auto const function = name == "length" ? logical_expr::kind::length
                                           : name == "count" ? logical_expr::kind::count
                                                             : logical_expr::kind::value;
-            bool const nodes = expressions[argument].kind == logical_expr::kind::query;
+            bool const nodes = expressions[argument].kind == logical_expr::kind::filter_query;
             if (function == logical_expr::kind::length ? !comparable(argument) : !nodes) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             return parsed_expression{next, expression_add({function, argument, 0, comparison_op::equal, false, false})};
@@ -381,8 +391,9 @@ class jsonpath
                 auto const q = segments_parse(text, at + 1, depth + 1);
                 if (!q) [[unlikely]]
                     return std::unexpected(q.error());
-                return parsed_expression{q->at, expression_add({logical_expr::kind::query, q->segment_at, q->segment_count,
-                                                                comparison_op::equal, c == '@', q->singular})};
+                return parsed_expression{
+                    q->at, expression_add({logical_expr::kind::filter_query, q->segment_at, q->segment_count,
+                                           comparison_op::equal, c == '@', q->singular})};
             }
             std::size_t const key_at = keys.size();
             auto const literal = [&](std::size_t const next) {
@@ -448,7 +459,8 @@ class jsonpath
                 auto const operand = paren ? paren_parse(text, next, depth) : primary_parse(text, next, depth);
                 if (!operand) [[unlikely]]
                     return operand;
-                if (!paren && expressions[operand->index].kind != logical_expr::kind::query) [[unlikely]]
+                if (!paren && expressions[operand->index].kind != logical_expr::kind::filter_query)
+                    [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 return parsed_expression{operand->at, expression_add({logical_expr::kind::logical_not, operand->index, 0,
                                                                       comparison_op::equal, false, false})};
@@ -461,7 +473,7 @@ class jsonpath
             std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
             auto const op = comparison_op_read(text, next);
             if (!op) {
-                if (expressions[left->index].kind != logical_expr::kind::query) [[unlikely]]
+                if (expressions[left->index].kind != logical_expr::kind::filter_query) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 return left;
             }
@@ -986,7 +998,7 @@ class jsonpath
 public:
     template <class T>
         requires path_result<T>
-    class expression
+    class query
     {
         std::vector<segment> segments;
         std::vector<selector> selectors;
@@ -995,24 +1007,24 @@ public:
         parsed_query top{};
         std::size_t depth_reached{};
 
-        expression() = default;
+        query() = default;
 
     public:
         using value_type = T;
         using result_type = std::conditional_t<view_result<T>, owning_ref<T>, T>;
 
-        expression(expression const &) = default;
+        query(query const &) = default;
 
-        expression &operator=(expression const &) = default;
+        query &operator=(query const &) = default;
 
-        expression(expression &&other) noexcept
+        query(query &&other) noexcept
             : segments(std::move(other.segments)), selectors(std::move(other.selectors)),
               filters(std::move(other.filters)), keys(std::move(other.keys)),
               top(std::exchange(other.top, parsed_query{})), depth_reached(other.depth_reached)
         {
         }
 
-        expression &operator=(expression &&other) noexcept
+        query &operator=(query &&other) noexcept
         {
             segments = std::move(other.segments);
             selectors = std::move(other.selectors);
@@ -1023,29 +1035,29 @@ public:
             return *this;
         }
 
-        ~expression() = default;
+        ~query() = default;
 
         friend class jsonpath;
     };
 
     template <class T>
         requires path_result<T>
-    static std::expected<expression<T>, error> make_expression(std::string_view const path)
+    static std::expected<query<T>, error> compile(std::string_view const path)
     {
-        return expression_make<T>(path, limits.load());
+        return query_compile<T>(path, limits.load());
     }
 
 private:
     template <class T>
-    static std::expected<expression<T>, error> expression_make(std::string_view const path,
-                                                                limit_values const &loaded)
+    static std::expected<query<T>, error> query_compile(std::string_view const path,
+                                                        limit_values const &loaded)
     {
         auto q = query_parse(path, loaded.nesting_depth);
         if (!q) [[unlikely]]
             return std::unexpected(q.error());
         if (!std::is_same_v<T, nodelist> && !q->top.singular) [[unlikely]]
             return std::unexpected(error::not_singular_query);
-        expression<T> e;
+        query<T> e;
         e.segments = std::move(q->segments);
         e.selectors = std::move(q->selectors);
         e.filters = std::move(q->expressions);
@@ -1056,9 +1068,8 @@ private:
     }
 
     template <class T>
-    static std::expected<typename expression<T>::result_type, error> expression_apply(expression<T> const &e,
-                                                                                        lazy const &root,
-                                                                                        limit_values const &loaded)
+    static std::expected<typename query<T>::result_type, error>
+    expression_apply(query<T> const &e, lazy const &root, limit_values const &loaded)
     {
         expression_check(e);
         query_view const v{e.segments, e.selectors, e.filters, e.keys, {}};
@@ -1079,7 +1090,7 @@ private:
     }
 
     template <class T>
-    static std::expected<T, error> expression_apply(expression<T> const &e, std::string_view const encoded,
+    static std::expected<T, error> expression_apply(query<T> const &e, std::string_view const encoded,
                                                     limit_values const &loaded)
     {
         expression_check(e);
@@ -1087,7 +1098,7 @@ private:
     }
 
     template <view_result T>
-    static std::expected<owning_ref<T>, error> expression_apply(expression<T> const &e,
+    static std::expected<owning_ref<T>, error> expression_apply(query<T> const &e,
                                                                 std::shared_ptr<std::string const> encoded,
                                                                 limit_values const &loaded)
     {
@@ -1099,30 +1110,32 @@ private:
     }
 
     template <class T>
-    static void expression_check(expression<T> const &e)
+    static void expression_check(query<T> const &e)
     {
-        validity::throw_logic_error_if(e.top.at == 0, "cbor::jsonpath::expression: the expression is empty or moved from");
+        validity::throw_logic_error_if(e.top.at == 0,
+                                       "cbor::jsonpath::query: the query is empty or moved from");
     }
 
     template <scalar_result T>
-    friend std::expected<T, error> at_path(std::string_view encoded, expression<T> const &e);
+    friend std::expected<T, error> at_path(std::string_view encoded, query<T> const &e);
 
     template <view_result T>
     friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded,
-                                                       expression<T> const &e);
+                                                       query<T> const &e);
 };
 
 template <class T>
-inline constexpr bool is_path_expression_v<jsonpath::expression<T>> = true;
+inline constexpr bool is_path_query_v<jsonpath::query<T>> = true;
 
 template <scalar_result T>
-std::expected<T, error> at_path(std::string_view const encoded, jsonpath::expression<T> const &e)
+std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e)
 {
     return jsonpath::expression_apply(e, encoded, limits.load());
 }
 
 template <view_result T>
-std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded, jsonpath::expression<T> const &e)
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded,
+                                            jsonpath::query<T> const &e)
 {
     validity::throw_logic_error_if_null(encoded, "cbor::at_path: the encoded data item is null");
     validity::throw_logic_error_if_empty(encoded, "cbor::at_path: the owner of the encoded data item is empty");
@@ -1131,21 +1144,21 @@ std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> e
 
 template <class T>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<T, error> at_path(std::shared_ptr<std::string const> encoded, jsonpath::expression<T> const &e)
+std::expected<T, error> at_path(std::shared_ptr<std::string const> encoded, jsonpath::query<T> const &e)
 {
     return lazy::view(std::move(encoded)).and_then([&e](lazy const &root) { return root.at_path(e); });
 }
 
 template <view_result T>
-std::expected<owning_ref<T>, error> at_path(std::string_view const encoded, jsonpath::expression<T> const &e)
+std::expected<owning_ref<T>, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e)
 {
     return at_path(std::make_shared<std::string const>(encoded), e);
 }
 
 template <class T, std::same_as<std::string> Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<typename jsonpath::expression<T>::result_type, error> at_path(Encoded &&encoded,
-                                                                            jsonpath::expression<T> const &e)
+std::expected<typename jsonpath::query<T>::result_type, error> at_path(Encoded &&encoded,
+                                                                       jsonpath::query<T> const &e)
 {
     return at_path(std::make_shared<std::string const>(std::move(encoded)), e);
 }
@@ -1420,10 +1433,10 @@ jsonpath::comparable_value(query_view const &v, std::size_t const index, lazy co
             return std::unexpected(l.error());
         return *l;
     }
-    case logical_expr::kind::query:
+    case logical_expr::kind::filter_query:
     case logical_expr::kind::count:
     case logical_expr::kind::value: {
-        std::size_t const at = e.kind == logical_expr::kind::query ? index : e.first;
+        std::size_t const at = e.kind == logical_expr::kind::filter_query ? index : e.first;
         logical_expr const &q = v.expressions[at];
         std::expected<std::vector<lazy>, error> relative;
         if (q.relative)
@@ -1488,7 +1501,7 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
             return operand;
         return !*operand;
     }
-    case logical_expr::kind::query: {
+    case logical_expr::kind::filter_query: {
         std::expected<std::vector<lazy>, error> relative;
         if (e.relative)
             relative = segments_apply(v, e.first, e.second, current, root, loaded);
@@ -1698,7 +1711,7 @@ inline std::expected<std::vector<lazy>, error> jsonpath::query_walk(query_view c
     std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
     query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
     for (std::size_t i = 0; i < v.expressions.size(); ++i)
-        if (v.expressions[i].kind == logical_expr::kind::query && !v.expressions[i].relative)
+        if (v.expressions[i].kind == logical_expr::kind::filter_query && !v.expressions[i].relative)
             absolute_nodelists[i] = segments_apply(with_nodelists, v.expressions[i].first,
                                                    v.expressions[i].second, root, root, loaded);
     return segments_apply(with_nodelists, top.segment_at, top.segment_count, root, root, loaded);
@@ -1853,7 +1866,7 @@ std::expected<owning_ref<T>, error> lazy::at_path() const
 }
 
 template <class E>
-    requires is_path_expression_v<E>
+    requires is_path_query_v<E>
 std::expected<typename E::result_type, error> lazy::at_path(E const &e) const
 {
     return jsonpath::expression_apply(e, *this, limits.load());

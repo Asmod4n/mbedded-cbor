@@ -63,7 +63,7 @@ template <class T>
 concept path_result = scalar_result<T> || view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>;
 
 template <class E>
-inline constexpr bool is_path_expression_v = false;
+inline constexpr bool is_path_query_v = false;
 
 struct lazy {
 private:
@@ -116,7 +116,7 @@ public:
     std::expected<nodelist, error> at_path() const;
 
     template <class E>
-        requires is_path_expression_v<E>
+        requires is_path_query_v<E>
     std::expected<typename E::result_type, error> at_path(E const &e) const;
 
     std::expected<std::uint64_t, error> size() const;

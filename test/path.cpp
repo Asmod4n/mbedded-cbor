@@ -1315,17 +1315,17 @@ TEST_CASE("path: the member at_path starts at the item of the lazy")
 {
     std::string const doc = encoded(M("a"s, M("b"s, A(1, 2, "x"s))));
     cbor::lazy const l = *cbor::lazy::copy(doc);
-    CHECK(*test::at_path("$", *l.at_path(*cbor::jsonpath::make_expression<cbor::lazy>("$.a.b[1]"))) == V(2));
-    CHECK_EQ(cbor::jsonpath::make_expression<cbor::lazy>("$.a.b[").error(), error::invalid_path);
-    CHECK_EQ(cbor::jsonpath::make_expression<cbor::lazy>("$..b").error(), error::not_singular_query);
-    CHECK_EQ(l.at_path(*cbor::jsonpath::make_expression<cbor::lazy>("$.a.c")).error(), error::key_not_found);
+    CHECK(*test::at_path("$", *l.at_path(*cbor::jsonpath::compile<cbor::lazy>("$.a.b[1]"))) == V(2));
+    CHECK_EQ(cbor::jsonpath::compile<cbor::lazy>("$.a.b[").error(), error::invalid_path);
+    CHECK_EQ(cbor::jsonpath::compile<cbor::lazy>("$..b").error(), error::not_singular_query);
+    CHECK_EQ(l.at_path(*cbor::jsonpath::compile<cbor::lazy>("$.a.c")).error(), error::key_not_found);
     cbor::lazy const inner = *l.at("a");
     CHECK_EQ(inner.at_path<"$.b[0]", int>(), 1);
     auto const text = inner.at_path<"$.b[2]", std::string_view>();
     CHECK_EQ(**text, "x"sv);
     CHECK(*test::at_path("$", *inner.at_path<"$.b">()) == A(1, 2, "x"s));
     CHECK(*test::at_path("$", *member_at_path<"$.b[1]">(inner)) == V(2));
-    CHECK_EQ(inner.at_path(*cbor::jsonpath::make_expression<cbor::nodelist>("$.b[*]"))->size(), 3u);
+    CHECK_EQ(inner.at_path(*cbor::jsonpath::compile<cbor::nodelist>("$.b[*]"))->size(), 3u);
     CHECK_EQ((inner.at_path<"$..*", cbor::nodelist>()->size()), 4u);
 }
 

@@ -18,15 +18,15 @@ Every function is in the namespace `cbor`. A comment shows the CBOR in
 | `at_path<Path, T>(lazy)` | compile time, singular | T a scalar: `std::expected<T, error>`. T a view: `std::expected<owning_ref<T>, error>` |
 | `lazy.at_path<Path>()` | compile time, singular | `std::expected<lazy, error>`, the node |
 | `lazy.at_path<Path, nodelist>()` | compile time, any | `std::expected<nodelist, error>`, the nodelist |
-| `jsonpath::make_expression<T>(path)` | run time | `std::expected<jsonpath::expression<T>, error>`, the parsed path |
-| `lazy.at_path(e)` | run time, `e` an expression | T `lazy`: the node. T `nodelist`: the nodelist. Else as `at_path<Path, T>(lazy)` |
-| `at_path(encoded, e)`, `at_path(owner, e)` | run time, `e` an expression | as `at_path<Path, T>(encoded)` and `at_path<Path, T>(owner)` |
+| `jsonpath::compile<T>(path)` | run time | `std::expected<jsonpath::query<T>, error>`, the parsed path |
+| `lazy.at_path(e)` | run time, `e` a query | T `lazy`: the node. T `nodelist`: the nodelist. Else as `at_path<Path, T>(lazy)` |
+| `at_path(encoded, e)`, `at_path(owner, e)` | run time, `e` a query | as `at_path<Path, T>(encoded)` and `at_path<Path, T>(owner)` |
 
 `encoded` is a `std::string_view`, so a `std::string` or one element of a
 `cbor::sequence` goes in directly. A path is a string literal for the
 compile-time forms. A run-time path is a `std::string_view` that
-`jsonpath::make_expression<T>` parses once. The expression owns its data
-and is applied to any number of items. `T` of a `make_expression` that is
+`jsonpath::compile<T>` parses once. The query owns its data
+and is applied to any number of items. `T` of a `compile` that is
 not `nodelist` needs a singular path, else the result is
 `not_singular_query`. `nodelist` is `std::vector<lazy>`. A
 compile-time path that is not valid leaves no form to call: the compiler
@@ -62,7 +62,7 @@ any CBOR item: a map, an array, a tag. Read it on with a step, `get`,
 // {"a": [1, 2, 3]}
 l.at_path<"$.a">();          // the node of [1, 2, 3]
 l.at_path<"$.a[*]", cbor::nodelist>();   // the nodes of 1, 2 and 3
-auto const e = cbor::jsonpath::make_expression<cbor::nodelist>("$.a[?@ > 1]");
+auto const e = cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]");
 l.at_path(*e);               // the nodes of 2 and 3, path at run time
 l.at_path<"$.b", cbor::nodelist>();      // no node, no error
 ```
@@ -205,7 +205,7 @@ its `length` is Nothing.
 l.at_path<"$[?length(@.t) == 3].t", cbor::nodelist>();    // the node of "abc"
 l.at_path<"$[?count(@.t[*]) == 2].t", cbor::nodelist>();  // the node of [1, 2]
 l.at_path<"$[?value(@..t) == 5].t", cbor::nodelist>();    // the node of 5
-cbor::jsonpath::make_expression<cbor::nodelist>("$[?match(@.t, 'a.c')]");  // invalid_path
+cbor::jsonpath::compile<cbor::nodelist>("$[?match(@.t, 'a.c')]");  // invalid_path
 ```
 
 A compile-time path with `match` or `search` does not compile:
@@ -231,7 +231,7 @@ l.at_path<"$[1]">();                   // the node of "x"
 l.at_path<"$[-2]">();                  // the node of "y"
 l.at_path<"$[h'01']">();               // the node of "z"
 l.at_path<"$[[1, 2]]">();              // the node of "w"
-l.at_path(*cbor::jsonpath::make_expression<cbor::lazy>("$[h'01']"));  // the node of "z", path at run time
+l.at_path(*cbor::jsonpath::compile<cbor::lazy>("$[h'01']"));  // the node of "z", path at run time
 l.at_path<"$[h'01']", std::string_view>();      // owning_ref, "z"
 ```
 
@@ -320,28 +320,28 @@ static_assert(!cbor::is_valid_path_v<"$.a[">);
 
 `at_path<Path, T>` with a path that is not singular does not compile.
 `lazy.at_path<Path>()` with such a path stops at a `static_assert` that
-names `cbor::nodelist`. `make_expression<T>(path)` with such a path and a
+names `cbor::nodelist`. `compile<T>(path)` with such a path and a
 `T` that is not `nodelist` gives `not_singular_query`.
 
 ## 9. Compile time and run time
 
 | Check | Compile-time path | Run-time path |
 |---|---|---|
-| Grammar of RFC 9535 with EDN literals | at compile time | once, in `make_expression`: `invalid_path` |
-| Singular path for a result that is not `nodelist` | at compile time | once, in `make_expression`: `not_singular_query` |
+| Grammar of RFC 9535 with EDN literals | at compile time | once, in `compile`: `invalid_path` |
+| Singular path for a result that is not `nodelist` | at compile time | once, in `compile`: `not_singular_query` |
 | Segments against the nesting depth | default depth at compile time; depth in force at each call | depth in force at each call |
-| Type T of a typed read | at compile time | at compile time, the `T` of the expression |
+| Type T of a typed read | at compile time | at compile time, the `T` of the query |
 | Everything about the data | at each call | at each call |
 
-`make_expression` parses a run-time path once, and the parse allocates.
-An apply of the expression does not parse again.
+`compile` parses a run-time path once, and the parse allocates.
+An apply of the query does not parse again.
 
 ## 10. Errors
 
 | Error | When |
 |---|---|
 | `invalid_path` | The path text is not valid. `match` or `search`. A comparison with a side that is not singular. An index of 16 digits or less outside ±(2^53 - 1). |
-| `not_singular_query` | `make_expression<T>` with a path that is not singular and a `T` that is not `nodelist`. |
+| `not_singular_query` | `compile<T>` with a path that is not singular and a `T` that is not `nodelist`. |
 | `key_not_found` | A name or a key is not in the map. |
 | `index_out_of_bounds` | The index is outside the array. |
 | `not_indexable` | A name, an index or a key meets a value that is not a map or an array, for example a text, a number, a bignum or an element of a typed array. A name or a key meets an array or a typed array. |
@@ -356,7 +356,7 @@ An apply of the expression does not parse again.
 
 | bytes | Call | Result |
 |---|---|---|
-| `{"a": [1, 2], "s": "x"}` | `make_expression<cbor::lazy>("$.a[")` | `invalid_path` |
+| `{"a": [1, 2], "s": "x"}` | `compile<cbor::lazy>("$.a[")` | `invalid_path` |
 | the same | `at_path<"$.s[0]", int>(bytes)` | `not_indexable` |
 | the first 5 bytes of the same | `at_path<"$.a[1]", int>` | `too_little_data` |
 | `{"a": 29(5)}` | `at_path<"$.a", int>` | `sharedref_index_not_marked` |
@@ -459,7 +459,7 @@ several threads read one `cbor::lazy` at the same time.
 
 ## 15. RFC 9535 and this library
 
-A run-time `nodelist` expression gives the result of the JSONPath Compliance Test Suite
+A run-time `nodelist` query gives the result of the JSONPath Compliance Test Suite
 in 694 of 706 cases. 50 of these are valid paths with `match()` or
 `search()`, and the library refuses them as `invalid_path`.
 
