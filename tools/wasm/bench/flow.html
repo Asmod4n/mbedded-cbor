@@ -61,6 +61,29 @@ const flows = {
     }
     return all.map((r) => r.length);
   },
+  objects_json() {
+    const data = JSON.parse(text);
+    return paths.map((p) => jp.compile(p).query(data).values().length);
+  },
+  leaves_cbor() {
+    if (x.load(copied(cbor), cbor.length) !== 0) throw new Error("load");
+    const counts = leaf.numbers("$.statuses[*].retweet_count");
+    return [Number(leaf.integer("$.statuses[0].user.id")), leaf.string("$.statuses[0].user.screen_name"), counts.length];
+  },
+  leaves_json() {
+    const data = JSON.parse(text);
+    const counts = Float64Array.from(jp.compile("$.statuses[*].retweet_count").query(data).values());
+    return [jp.compile("$.statuses[0].user.id").query(data).values()[0], jp.compile("$.statuses[0].user.screen_name").query(data).values()[0], counts.length];
+  },
+  samples_cbor() {
+    if (x.load(copied(samples_cbor), samples_cbor.length) !== 0) throw new Error("load");
+    const a = leaf.typed_array("$.samples");
+    return [a.length, a[12345]];
+  },
+  samples_json() {
+    const a = Float64Array.from(jp.compile("$.samples").query(JSON.parse(samples_json)).values()[0]);
+    return [a.length, a[12345]];
+  },
 };
 const t0 = performance.now();
 const check = flows[arm]();
