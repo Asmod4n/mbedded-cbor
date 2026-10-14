@@ -3,12 +3,13 @@
 <script src="/lib/json-p3.iife.min.js"></script>
 <script type="module">
 import { leaf_reader } from "/art/leaf.js";
-const arm = new URLSearchParams(location.search).get("arm").replace(/_aa$/, "");
+const params = new URLSearchParams(location.search);
+const arm = params.get("arm").replace(/_aa$/, "");
 const paths = ["$.statuses[0].user.id", "$.statuses[*].user", "$..screen_name", "$.statuses[?@.retweet_count > 0].id"];
 const [cbor, text, module] = await Promise.all([
   fetch("/art/twitter.cbor").then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b)),
   fetch("/art/twitter.json").then((r) => r.text()),
-  fetch("/art/showcase.wasm").then((r) => r.arrayBuffer()).then((b) => WebAssembly.compile(b)),
+  fetch("/art/" + (params.get("wasm") ?? "showcase.wasm")).then((r) => r.arrayBuffer()).then((b) => WebAssembly.compile(b)),
 ]);
 let x;
 const dec = new TextDecoder(), enc = new TextEncoder();
