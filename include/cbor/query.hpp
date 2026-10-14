@@ -82,7 +82,7 @@ class jsonpath
 
     enum class comparison_op { equal, not_equal, less, less_equal, greater, greater_equal };
 
-    struct expression {
+    struct logical_expr {
         enum class kind { logical_or, logical_and, logical_not, comparison, query, literal, length, count, value } kind;
         std::size_t first;
         std::size_t second;
@@ -111,7 +111,7 @@ class jsonpath
     struct query_view {
         std::span<segment const> segments;
         std::span<selector const> selectors;
-        std::span<expression const> expressions;
+        std::span<logical_expr const> expressions;
         std::string_view keys;
         std::span<std::expected<std::vector<lazy>, error> const> absolute_nodelists;
     };
@@ -149,7 +149,7 @@ class jsonpath
     struct syntax_tree {
         std::vector<segment> segments;
         std::vector<selector> selectors;
-        std::vector<expression> expressions;
+        std::vector<logical_expr> expressions;
         std::string keys;
         std::size_t depth_max;
         parsed_query top;
@@ -322,13 +322,13 @@ class jsonpath
 
         constexpr bool comparable(std::size_t const index) const
         {
-            expression const &e = expressions[index];
-            return e.kind == expression::kind::literal || e.kind == expression::kind::length ||
-                   e.kind == expression::kind::count || e.kind == expression::kind::value ||
-                   (e.kind == expression::kind::query && e.singular);
+            logical_expr const &e = expressions[index];
+            return e.kind == logical_expr::kind::literal || e.kind == logical_expr::kind::length ||
+                   e.kind == logical_expr::kind::count || e.kind == logical_expr::kind::value ||
+                   (e.kind == logical_expr::kind::query && e.singular);
         }
 
-        constexpr std::size_t expression_add(expression const e)
+        constexpr std::size_t expression_add(logical_expr const e)
         {
             expressions.push_back(e);
             return expressions.size() - 1;
@@ -357,11 +357,11 @@ class jsonpath
             if (arguments.size() != 1) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             std::size_t const argument = arguments.front();
-            auto const function = name == "length" ? expression::kind::length
-                                          : name == "count" ? expression::kind::count
-                                                            : expression::kind::value;
-            bool const nodes = expressions[argument].kind == expression::kind::query;
-            if (function == expression::kind::length ? !comparable(argument) : !nodes) [[unlikely]]
+            auto const function = name == "length" ? logical_expr::kind::length
+                                          : name == "count" ? logical_expr::kind::count
+                                                            : logical_expr::kind::value;
+            bool const nodes = expressions[argument].kind == logical_expr::kind::query;
+            if (function == logical_expr::kind::length ? !comparable(argument) : !nodes) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             return parsed_expression{next, expression_add({function, argument, 0, comparison_op::equal, false, false})};
         }
@@ -378,12 +378,12 @@ class jsonpath
                 auto const q = segments_parse(text, at + 1, depth + 1);
                 if (!q) [[unlikely]]
                     return std::unexpected(q.error());
-                return parsed_expression{q->at, expression_add({expression::kind::query, q->segment_at, q->segment_count,
+                return parsed_expression{q->at, expression_add({logical_expr::kind::query, q->segment_at, q->segment_count,
                                                                 comparison_op::equal, c == '@', q->singular})};
             }
             std::size_t const key_at = keys.size();
             auto const literal = [&](std::size_t const next) {
-                return parsed_expression{next, expression_add({expression::kind::literal, key_at, keys.size() - key_at,
+                return parsed_expression{next, expression_add({logical_expr::kind::literal, key_at, keys.size() - key_at,
                                                                comparison_op::equal, false, false})};
             };
             if (c >= 'a' && c <= 'z') {
@@ -445,9 +445,9 @@ class jsonpath
                 auto const operand = paren ? paren_parse(text, next, depth) : primary_parse(text, next, depth);
                 if (!operand) [[unlikely]]
                     return operand;
-                if (!paren && expressions[operand->index].kind != expression::kind::query) [[unlikely]]
+                if (!paren && expressions[operand->index].kind != logical_expr::kind::query) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                return parsed_expression{operand->at, expression_add({expression::kind::logical_not, operand->index, 0,
+                return parsed_expression{operand->at, expression_add({logical_expr::kind::logical_not, operand->index, 0,
                                                                       comparison_op::equal, false, false})};
             }
             if (text[at] == '(')
@@ -458,7 +458,7 @@ class jsonpath
             std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
             auto const op = comparison_op_read(text, next);
             if (!op) {
-                if (expressions[left->index].kind != expression::kind::query) [[unlikely]]
+                if (expressions[left->index].kind != logical_expr::kind::query) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 return left;
             }
@@ -467,7 +467,7 @@ class jsonpath
                 return right;
             if (!comparable(left->index) || !comparable(right->index)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            return parsed_expression{right->at, expression_add({expression::kind::comparison, left->index, right->index,
+            return parsed_expression{right->at, expression_add({logical_expr::kind::comparison, left->index, right->index,
                                                                 op->first, false, false})};
         }
 
@@ -489,7 +489,7 @@ class jsonpath
                 if (!right) [[unlikely]]
                     return right;
                 std::size_t const left = last ? expressions[*last].second : chain.index;
-                std::size_t const node = expression_add({expression::kind::logical_and, left, right->index,
+                std::size_t const node = expression_add({logical_expr::kind::logical_and, left, right->index,
                                                          comparison_op::equal, false, false});
                 if (last)
                     expressions[*last].second = node;
@@ -520,7 +520,7 @@ class jsonpath
                 if (!right) [[unlikely]]
                     return right;
                 std::size_t const left = last ? expressions[*last].second : chain.index;
-                std::size_t const node = expression_add({expression::kind::logical_or, left, right->index,
+                std::size_t const node = expression_add({logical_expr::kind::logical_or, left, right->index,
                                                          comparison_op::equal, false, false});
                 if (last)
                     expressions[*last].second = node;
@@ -1218,7 +1218,7 @@ inline std::expected<std::optional<lazy>, error>
 jsonpath::comparable_value(query_view const &v, std::size_t const index, lazy const &current,
                            lazy const &root, limit_values const loaded)
 {
-    expression const &e = v.expressions[index];
+    logical_expr const &e = v.expressions[index];
     auto const unsigned_integer =
         [loaded](std::uint64_t const n) -> std::expected<std::optional<lazy>, error> {
         std::string encoded;
@@ -1231,7 +1231,7 @@ jsonpath::comparable_value(query_view const &v, std::size_t const index, lazy co
         return *l;
     };
     switch (e.kind) {
-    case expression::kind::literal: {
+    case logical_expr::kind::literal: {
         auto const owner = std::make_shared<std::string const>(
             std::string_view(std::span(v.keys).subspan(e.first, e.second)));
         auto const l = lazy::from(owner, *owner, loaded);
@@ -1239,24 +1239,24 @@ jsonpath::comparable_value(query_view const &v, std::size_t const index, lazy co
             return std::unexpected(l.error());
         return *l;
     }
-    case expression::kind::query:
-    case expression::kind::count:
-    case expression::kind::value: {
-        std::size_t const at = e.kind == expression::kind::query ? index : e.first;
-        expression const &q = v.expressions[at];
+    case logical_expr::kind::query:
+    case logical_expr::kind::count:
+    case logical_expr::kind::value: {
+        std::size_t const at = e.kind == logical_expr::kind::query ? index : e.first;
+        logical_expr const &q = v.expressions[at];
         std::expected<std::vector<lazy>, error> relative;
         if (q.relative)
             relative = segments_apply(v, q.first, q.second, current, root, loaded);
         auto const &nodes = q.relative ? relative : v.absolute_nodelists[at];
         if (!nodes) [[unlikely]]
             return std::unexpected(nodes.error());
-        if (e.kind == expression::kind::count)
+        if (e.kind == logical_expr::kind::count)
             return unsigned_integer(nodes->size());
         if (nodes->size() != 1)
             return std::nullopt;
         return nodes->front();
     }
-    case expression::kind::length: {
+    case logical_expr::kind::length: {
         auto const argument = comparable_value(v, e.first, current, root, loaded);
         if (!argument || !*argument) [[unlikely]]
             return argument;
@@ -1292,22 +1292,22 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
                                                             limit_values const loaded)
 {
     std::size_t at = index;
-    while (v.expressions[at].kind == expression::kind::logical_or || v.expressions[at].kind == expression::kind::logical_and) {
-        expression const &chain = v.expressions[at];
+    while (v.expressions[at].kind == logical_expr::kind::logical_or || v.expressions[at].kind == logical_expr::kind::logical_and) {
+        logical_expr const &chain = v.expressions[at];
         auto const left = expression_test(v, chain.first, current, root, loaded);
-        if (!left || *left == (chain.kind == expression::kind::logical_or))
+        if (!left || *left == (chain.kind == logical_expr::kind::logical_or))
             return left;
         at = chain.second;
     }
-    expression const &e = v.expressions[at];
+    logical_expr const &e = v.expressions[at];
     switch (e.kind) {
-    case expression::kind::logical_not: {
+    case logical_expr::kind::logical_not: {
         auto const operand = expression_test(v, e.first, current, root, loaded);
         if (!operand) [[unlikely]]
             return operand;
         return !*operand;
     }
-    case expression::kind::query: {
+    case logical_expr::kind::query: {
         std::expected<std::vector<lazy>, error> relative;
         if (e.relative)
             relative = segments_apply(v, e.first, e.second, current, root, loaded);
@@ -1316,7 +1316,7 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
             return std::unexpected(nodes.error());
         return !nodes->empty();
     }
-    case expression::kind::comparison:
+    case logical_expr::kind::comparison:
         break;
     [[unlikely]] default:
         return std::unexpected(error::invalid_path);
@@ -1517,7 +1517,7 @@ inline std::expected<std::vector<lazy>, error> jsonpath::query_walk(query_view c
     std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
     query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
     for (std::size_t i = 0; i < v.expressions.size(); ++i)
-        if (v.expressions[i].kind == expression::kind::query && !v.expressions[i].relative)
+        if (v.expressions[i].kind == logical_expr::kind::query && !v.expressions[i].relative)
             absolute_nodelists[i] = segments_apply(with_nodelists, v.expressions[i].first,
                                                    v.expressions[i].second, root, root, loaded);
     return segments_apply(with_nodelists, top.segment_at, top.segment_count, root, root, loaded);
@@ -1535,7 +1535,7 @@ auto jsonpath::compiled_apply(Walk const &walk, limit_values const loaded)
     constexpr auto compiled = [q] {
         auto const parsed = q();
         std::tuple<std::array<segment, segments>, std::array<selector, selectors>,
-                   std::array<expression, expressions>, std::array<char, keys>>
+                   std::array<logical_expr, expressions>, std::array<char, keys>>
             c{};
         std::ranges::copy(parsed.segments, std::get<0>(c).begin());
         std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
