@@ -1,5 +1,3 @@
-#include "shared.hpp"
-
 #ifndef CBOR_ITEM_HPP
 #define CBOR_ITEM_HPP
 

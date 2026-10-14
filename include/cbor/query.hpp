@@ -27,7 +27,6 @@
 #include "lazy.hpp"
 #include "owning_ref.hpp"
 #include "rfc9535.hpp"
-#include "shared.hpp"
 
 namespace cbor
 {
@@ -920,7 +919,7 @@ class jsonpath
                 if (walked) [[likely]]
                     return *walked;
                 return query_walk<T>(v, top,
-                                     lazy{std::make_shared<value_sharing::top_level_item>(std::shared_ptr<void const>{}, content),
+                                     lazy{std::make_shared<lazy::top_level_item>(std::shared_ptr<void const>{}, content),
                                           validity::offset{}, {}},
                                      loaded);
             });
