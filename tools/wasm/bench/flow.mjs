@@ -21,7 +21,7 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const port = server.address().port;
-const arms = ["objects_cbor", "objects_tape", "objects_json", "decode_cbor", "decode_tape", "decode_tape_aa", "decode_tape_shapes", "decode_cborx", "decode_json"];
+const arms = ["values_cbor", "values_cbor_aa", "values_json", "objects_cbor", "objects_cbor_aa", "objects_json"];
 const browser = await chromium.launch();
 const runs = Object.fromEntries(arms.map((a) => [a, []]));
 for (let r = 0; r < reps; r++) {
@@ -47,8 +47,8 @@ const context = {
   wasm_flags: "clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -flto -fno-exceptions -Wl,--strip-all,--gc-sections",
   wasm_bytes: readFileSync(join(artifacts_dir, "showcase.wasm")).length,
   inputs: { cbor_bytes: readFileSync(join(artifacts_dir, "twitter.cbor")).length, json_bytes: readFileSync(join(artifacts_dir, "twitter.json")).length },
-  json_library: "json-p3 2.2.2 iife, cbor-x 1.6.0 dist/index.min.js",
-  method: "each repetition of each arm is one cold flow in a fresh page, timed once; arms alternate; before the timer the CBOR bytes are a Uint8Array, the JSON text is a string, the wasm module is instantiated and json-p3 is loaded; values_*: load or parse, then the user id and the list of status ids; objects_*: load or parse, then four paths each compiled once and applied once, results as JS objects; decode_*: the whole document into one JS object, eager decode against JSON.parse, no path; *_tape: one call gives a tape in linear memory, a JS loop builds the objects with a key cache and its own decoding of short ASCII strings; decode_tape_shapes: the same with one generated constructor per object shape; decode_cborx: cbor-x 1.6.0 decodes the whole buffer in JS",
+  json_library: "json-p3 2.2.2 iife",
+  method: "each repetition of each arm is one cold flow in a fresh page, timed once; arms alternate; before the timer the CBOR bytes are a Uint8Array, the JSON text is a string, the wasm module is instantiated and json-p3 is loaded; values_*: load or parse, then the user id and the list of status ids; objects_*: load or parse, then four paths each compiled once and applied once, results as JS objects",
   kernel: os.release(), cpu: os.cpus()[0].model, cpus: os.cpus().length, user: os.userInfo().username,
   priority: os.getPriority(), node: process.version, repetitions: reps,
 };
