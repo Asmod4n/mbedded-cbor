@@ -1221,6 +1221,19 @@ TEST_CASE("path: an index reads one element of a typed array")
     CHECK(found(test::query("$.v[*]", *cbor::lazy::copy(in("\xd8\x45\x40"s)))) == A());
 }
 
+// Found by the path fuzz target: 28(81([0])) under a wildcard. A wildcard reads a typed array as the array of its
+// numbers, and RFC 8746 2 puts those numbers in a byte string. An array under tag 81 is an inadmissible type for tag
+// content (RFC 8949 5.3.2), so the query is an error and not an empty nodelist. The reference walk of the fuzz target
+// once took every tag from 64 to 87 as a leaf and gave an empty nodelist.
+TEST_CASE("path: a wildcard over a typed array whose content is no byte string")
+{
+    auto const l = *cbor::lazy::copy("\xd8\x1c\xd8\x51\x81\x00"s);
+    CHECK_EQ(test::query("$[*]", l).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(test::query("$[*].*", l).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(test::at_path("$[0]", l).error(), error::inadmissible_type_for_tag_content);
+    CHECK(found(test::query("$[*]", *cbor::lazy::copy("\xd8\x1c\xd8\x51\x44\x3f\xc0\x00\x00"s))) == A(1.5));
+}
+
 // A held lazy is a start point: at_path reads a path relative to it, from
 // its bytes.
 TEST_CASE("at_path: a path from a held lazy")
