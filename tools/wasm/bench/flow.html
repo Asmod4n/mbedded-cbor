@@ -32,8 +32,12 @@ const samples_json = JSON.stringify({ samples: Array.from(samples) });
 const samples_cbor = (() => {
   const b = new Uint8Array(samples.buffer);
   const key = new TextEncoder().encode("samples");
-  return new Uint8Array([0xa1, 0x60 + key.length, ...key, 0xd8, 86, 0x5a,
-    (b.length >>> 24) & 255, (b.length >>> 16) & 255, (b.length >>> 8) & 255, b.length & 255, ...b]);
+  const head = [0xa1, 0x60 + key.length, ...key, 0xd8, 86, 0x5a,
+    (b.length >>> 24) & 255, (b.length >>> 16) & 255, (b.length >>> 8) & 255, b.length & 255];
+  const out = new Uint8Array(head.length + b.length);
+  out.set(head);
+  out.set(b, head.length);
+  return out;
 })();
 const flows = {
   values_cbor() {
