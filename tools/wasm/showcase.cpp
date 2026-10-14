@@ -1,5 +1,6 @@
 #include "cbor/diagnostic_notation.hpp"
 #include "cbor/encode.hpp"
+#include "cbor/item.hpp"
 #include "cbor/lazy.hpp"
 #include "cbor/query.hpp"
 
@@ -10,6 +11,19 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
+
+extern "C" {
+__attribute__((import_module("js"), import_name("value_null"))) void value_null();
+__attribute__((import_module("js"), import_name("value_bool"))) void value_bool(std::int32_t);
+__attribute__((import_module("js"), import_name("value_number"))) void value_number(double);
+__attribute__((import_module("js"), import_name("value_string"))) void value_string(char const *, std::size_t);
+__attribute__((import_module("js"), import_name("array_begin"))) void array_begin();
+__attribute__((import_module("js"), import_name("object_begin"))) void object_begin();
+__attribute__((import_module("js"), import_name("key_string"))) void key_string(char const *, std::size_t);
+__attribute__((import_module("js"), import_name("key_number"))) void key_number(double);
+__attribute__((import_module("js"), import_name("container_end"))) void container_end();
+}
 
 namespace {
 
@@ -17,6 +31,7 @@ struct reactor_state {
     std::optional<cbor::lazy> root;
     std::optional<cbor::jsonpath::expression<cbor::nodelist>> expression;
     std::string result;
+    std::vector<std::uint32_t> offsets;
 };
 
 reactor_state state;
@@ -67,6 +82,70 @@ std::uint64_t result_packed(std::string text)
     state.result = std::move(text);
     return (static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(state.result.data())) << 32) |
            state.result.size();
+}
+
+std::uint64_t offsets_packed(std::expected<cbor::nodelist, cbor::error> const &nodes)
+{
+    state.offsets.clear();
+    if (!nodes) [[unlikely]]
+        return 0;
+    for (auto const &n : *nodes)
+        state.offsets.push_back(static_cast<std::uint32_t>(n.offset));
+    return (static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(state.offsets.data())) << 32) |
+           state.offsets.size();
+}
+
+void js_value_built(cbor::item const &i)
+{
+    switch (i.type) {
+    case cbor::type::unsigned_integer:
+        return value_number(static_cast<double>(i.via.u64));
+    case cbor::type::negative_integer:
+        return value_number(-1.0 - static_cast<double>(i.via.u64));
+    case cbor::type::text_string:
+        return value_string(i.via.str.data(), i.via.str.size());
+    case cbor::type::array:
+        array_begin();
+        for (auto const &e : i.via.array)
+            js_value_built(e);
+        return container_end();
+    case cbor::type::map:
+        object_begin();
+        for (std::size_t k = 0; k < i.via.map.size(); k += 2) {
+            auto const &key = i.via.map[k];
+            if (key.type == cbor::type::text_string)
+                key_string(key.via.str.data(), key.via.str.size());
+            else
+                key_number(static_cast<double>(key.via.u64));
+            js_value_built(i.via.map[k + 1]);
+        }
+        return container_end();
+    case cbor::type::tag:
+        return js_value_built(*i.via.tag.content);
+    case cbor::type::false_value:
+        return value_bool(0);
+    case cbor::type::true_value:
+        return value_bool(1);
+    case cbor::type::half_float:
+    case cbor::type::single_float:
+    case cbor::type::double_float:
+        return value_number(i.via.f64);
+    default:
+        return value_null();
+    }
+}
+
+std::int32_t js_values_built(std::expected<cbor::nodelist, cbor::error> const &nodes)
+{
+    if (!nodes) [[unlikely]]
+        return -static_cast<std::int32_t>(nodes.error());
+    for (auto const &n : *nodes) {
+        auto const d = n.decode();
+        if (!d) [[unlikely]]
+            return -static_cast<std::int32_t>(d.error());
+        js_value_built(**d);
+    }
+    return static_cast<std::int32_t>(nodes->size());
 }
 
 } // namespace
@@ -149,5 +228,23 @@ __attribute__((export_name("literal_ids_sum"))) std::int64_t literal_ids_sum()
         if (auto const v = n.get<std::int64_t>(); v)
             sum += *v % ids_summed_modulus;
     return sum;
+}
+
+__attribute__((export_name("offsets"))) std::uint64_t offsets(char const *const path_ptr, std::size_t const path_len)
+{
+    auto const e = cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view{path_ptr, path_len});
+    if (!e) [[unlikely]]
+        return 0;
+    return offsets_packed(state.root->at_path(*e));
+}
+
+__attribute__((export_name("compiled_offsets"))) std::uint64_t compiled_offsets()
+{
+    return offsets_packed(state.root->at_path(*state.expression));
+}
+
+__attribute__((export_name("compiled_js_values"))) std::int32_t compiled_js_values()
+{
+    return js_values_built(state.root->at_path(*state.expression));
 }
 }
