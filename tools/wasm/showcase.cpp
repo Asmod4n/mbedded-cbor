@@ -21,6 +21,8 @@ struct reactor_state {
 
 reactor_state state;
 
+constexpr std::int64_t ids_summed_modulus = 1000000007;
+
 std::string error_named(cbor::error const e)
 {
     return "error: " + cbor::make_error_code(e).message();
@@ -125,27 +127,27 @@ __attribute__((export_name("compiled_first_int"))) std::int64_t compiled_first_i
     return v ? *v : -1;
 }
 
-__attribute__((export_name("compiled_int_sum"))) double compiled_int_sum()
+__attribute__((export_name("compiled_int_sum"))) std::int64_t compiled_int_sum()
 {
     auto const nodes = state.root->at_path(*state.expression);
     if (!nodes) [[unlikely]]
         return -1;
-    double sum = 0;
+    std::int64_t sum = 0;
     for (auto const &n : *nodes)
-        if (auto const v = n.get<double>(); v)
-            sum += *v;
+        if (auto const v = n.get<std::int64_t>(); v)
+            sum += *v % ids_summed_modulus;
     return sum;
 }
 
-__attribute__((export_name("literal_ids_sum"))) double literal_ids_sum()
+__attribute__((export_name("literal_ids_sum"))) std::int64_t literal_ids_sum()
 {
     auto const nodes = state.root->at_path<"$.statuses[*].id", cbor::nodelist>();
     if (!nodes) [[unlikely]]
         return -1;
-    double sum = 0;
+    std::int64_t sum = 0;
     for (auto const &n : *nodes)
-        if (auto const v = n.get<double>(); v)
-            sum += *v;
+        if (auto const v = n.get<std::int64_t>(); v)
+            sum += *v % ids_summed_modulus;
     return sum;
 }
 }

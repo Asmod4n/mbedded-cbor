@@ -18,12 +18,12 @@ const loops = {
   json_parse: () => JSON.parse(json_text),
   json_parse_aa: () => JSON.parse(json_text),
   json_value: () => JSON.parse(json_text).statuses[0].user.id,
-  json_ids: () => JSON.parse(json_text).statuses.map((x) => x.id).reduce((a, b) => a + b, 0),
+  json_ids: () => JSON.parse(json_text).statuses.map((x) => x.id % 1000000007).reduce((a, b) => a + b, 0),
   cbor_value_literal: () => s.exports.user_id_literal(),
   cbor_value_literal_aa: () => s.exports.user_id_literal(),
   cbor_value_runtime: () => s.exports.compiled_first_int(),
-  cbor_ids_literal: () => s.exports.literal_ids_sum(),
-  cbor_ids_runtime: () => s.exports.compiled_int_sum(),
+  cbor_ids_literal: () => Number(s.exports.literal_ids_sum()),
+  cbor_ids_runtime: () => Number(s.exports.compiled_int_sum()),
   empty_call: () => s.exports.release(0),
 };
 
