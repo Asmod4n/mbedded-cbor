@@ -368,7 +368,7 @@ private:
     static std::expected<std::string_view, error> typed_array_element_read(lazy const &node);
 
     template <bool Checked>
-    static std::expected<resolved<Checked>, error> lazy_resolve(lazy const &node, validity::limit_checks<Checked> checks);
+    static std::expected<resolved<Checked>, error> resolve(lazy const &node, validity::limit_checks<Checked> checks);
 
     template <bool Checked, std::integral Index>
     static std::expected<lazy, error> index_select(resolved<Checked> const &found, Index i);
