@@ -17,15 +17,15 @@ using namespace std::string_literals;
 // Each test in this file is one example of README.md. The tests exist so that every example in the README
 // compiles and gives the result that the README states.
 
-// Step 2 reads a message in place: contains, size, and a loop over the elements of an array.
+// Step 2 reads a message in place: size, a missing key, and a loop over the elements of an array.
 TEST_CASE("doc readme: read a message")
 {
     std::string const bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
     auto const doc = cbor::lazy::copy(bytes).value();
 
-    bool const has_samples = doc.contains("samples").value();
     std::uint64_t const pairs = doc.size().value();
-    CHECK(has_samples);
+    auto const missing = doc.at("unit");
+    CHECK_EQ(missing.error(), cbor::error::key_not_found);
     CHECK_EQ(pairs, 3u);
 
     int sum = 0;

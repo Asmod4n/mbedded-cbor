@@ -264,12 +264,11 @@ TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
         REQUIRE(equal.has_value());
         CHECK_EQ(*equal, p.equal);
     }
-    CHECK_EQ(*cbor::lazy::copy("\xa2\x01\x00\xc2\x41\x01\x00"s)->count(1), 2u);
-    CHECK_EQ(*cbor::lazy::copy("\xa2\x20\x00\xc3\x41\x00\x00"s)->count(-1), 2u);
-    CHECK(*cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)->contains(1));
-    CHECK_FALSE(*cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)->contains(-2));
-    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)->count(1).has_value(), true);
-    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x61\x61\x61\x61"s)->count(1).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::lazy::copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(cbor::key{1})->get<int>(), 0);
+    CHECK_EQ(cbor::lazy::copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(cbor::key{-1})->get<int>(), 0);
+    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{1})->get<std::string_view>().has_value(), true);
+    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{-2}).error(), error::key_not_found);
+    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x61\x61\x61\x61"s)->at(cbor::key{1}).error(), error::inadmissible_type_for_tag_content);
     CHECK(test::query("$[1]", *cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
           test::query("$[1]", *cbor::lazy::copy("\xa1\x01\x61\x61"s)));
     CHECK(test::query("$[-1]", *cbor::lazy::copy("\xa1\xc3\x40\x61\x61"s)) ==

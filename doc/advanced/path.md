@@ -315,7 +315,7 @@ static_assert(!cbor::is_valid_path_v<"$.a[">);
 
 `at_path<Path, T>` with a path that is not singular does not compile.
 `lazy.at_path<Path>()` with such a path stops at a `static_assert` that
-names `cbor::query`. `lazy.at_path(path)` with such a path gives
+names `cbor::lazy::query`. `lazy.at_path(path)` with such a path gives
 `invalid_path`.
 
 ## 9. Compile time and run time

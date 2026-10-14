@@ -48,8 +48,9 @@ reads only up to the item that it looks for. No reflection needed.
 // bytes holds the CBOR of {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
 auto const doc = cbor::lazy::copy(bytes).value();
 
-bool const has_samples = doc.contains("samples").value();  // true
 std::uint64_t const pairs = doc.size().value();            // 3
+auto const missing = doc.at("unit");
+// missing.error() == cbor::error::key_not_found
 
 int sum = 0;
 if (auto const samples = doc.at("samples"))
