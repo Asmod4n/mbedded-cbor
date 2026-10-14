@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <expected>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -37,6 +38,7 @@ struct reactor_state {
     std::optional<cbor::owning_ref<cbor::typed_array>> array;
     std::vector<double> numbers;
     cbor::error last{};
+    std::shared_ptr<std::string> buffer;
 };
 
 reactor_state state;
@@ -327,5 +329,20 @@ __attribute__((export_name("path_doubles"))) std::uint64_t path_doubles(char con
     }
     state.last = {};
     return view_packed(state.numbers.data(), state.numbers.size());
+}
+
+__attribute__((export_name("buffer_reserve"))) char *buffer_reserve(std::size_t const size)
+{
+    state.buffer = std::make_shared<std::string>(size, '\0');
+    return state.buffer->data();
+}
+
+__attribute__((export_name("buffer_view"))) std::int32_t buffer_view()
+{
+    auto l = cbor::lazy::view(std::move(state.buffer));
+    if (!l) [[unlikely]]
+        return static_cast<std::int32_t>(l.error());
+    state.root = std::move(*l);
+    return 0;
 }
 }
