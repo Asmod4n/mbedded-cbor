@@ -12,6 +12,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "value.hpp"
@@ -586,6 +587,141 @@ static std::uint64_t mb_at_path()
 }
 #endif
 
+#if defined(AP_PATH)
+#if defined(DOC_twitter) && AP_PATH == 1
+#define AP_TEXT "$.search_metadata.count"
+using ap_type = std::int64_t;
+#elif defined(DOC_twitter) && AP_PATH == 2
+#define AP_TEXT "$.statuses[0].id"
+using ap_type = std::uint64_t;
+#elif defined(DOC_twitter) && AP_PATH == 3
+#define AP_TEXT "$.statuses[50].user.screen_name"
+using ap_type = std::string_view;
+#elif defined(DOC_twitter) && AP_PATH == 4
+#define AP_TEXT "$.statuses[0].user.id"
+using ap_type = std::uint64_t;
+#elif defined(DOC_twitter) && AP_PATH == 5
+#define AP_TEXT "$.statuses[*].id"
+using ap_type = std::uint64_t;
+#elif defined(DOC_records) && AP_PATH == 1
+#define AP_TEXT "$[0].id"
+using ap_type = std::int64_t;
+#elif defined(DOC_records) && AP_PATH == 2
+#define AP_TEXT "$[1000].ratio"
+using ap_type = double;
+#elif defined(DOC_records) && AP_PATH == 3
+#define AP_TEXT "$[1000].user.name"
+using ap_type = std::string_view;
+#endif
+
+template <class R>
+static std::uint64_t ap_value(R const &r)
+{
+    if (!r) [[unlikely]]
+        std::abort();
+    if constexpr (std::is_same_v<ap_type, std::string_view>)
+        return bytes_sum(**r);
+    else if constexpr (std::is_same_v<ap_type, double>)
+        return std::bit_cast<std::uint64_t>(*r);
+    else
+        return std::uint64_t(*r);
+}
+
+template <class T>
+static std::uint64_t ap_standalone()
+{
+    if constexpr (std::is_same_v<T, std::string_view>)
+        return ap_value(cbor::at_path<AP_TEXT, T>(*held));
+    else
+        return ap_value(cbor::at_path<AP_TEXT, T>(in));
+}
+
+#if defined(ARM_AP_NL) || defined(ARM_AP_NX)
+template <class List>
+static std::uint64_t ap_list_sum(List const &list)
+{
+    if (!list || list->empty()) [[unlikely]]
+        std::abort();
+    std::uint64_t s = list->size();
+    for (auto const &n : *list)
+        s += ap_value(n.template get<ap_type>());
+    return s;
+}
+
+template <class L>
+static auto ap_literal_nodelist(L const &l)
+{
+    if constexpr (requires { l.template query<AP_TEXT>(); })
+        return l.template query<AP_TEXT>();
+    else
+        return l.template at_path<AP_TEXT, std::vector<L>>();
+}
+#endif
+
+#if defined(ARM_AP_XS) || defined(ARM_AP_XL) || defined(ARM_AP_MK)
+static auto ap_make()
+{
+    return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));
+}
+#endif
+#if defined(ARM_AP_NX)
+static auto ap_make()
+{
+    return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));
+}
+#endif
+#if defined(ARM_AP_XS) || defined(ARM_AP_XL) || defined(ARM_AP_NX)
+static auto const ap_expression = []() {
+    auto e = ap_make();
+    if (!e) [[unlikely]]
+        std::abort();
+    return std::move(*e);
+}();
+#endif
+
+static std::uint64_t ap()
+{
+#if defined(ARM_AP_SA)
+    return ap_standalone<ap_type>();
+#elif defined(ARM_AP_XS)
+    return ap_value(cbor::at_path(in, ap_expression));
+#elif defined(ARM_AP_MK)
+    auto const e = ap_make();
+    if (!e) [[unlikely]]
+        std::abort();
+    benchmark::DoNotOptimize(e);
+    return 1;
+#else
+    auto const l = cbor::lazy::view(*held);
+    if (!l) [[unlikely]]
+        std::abort();
+#if defined(ARM_AP_LM)
+    return ap_value(l->at_path<AP_TEXT, ap_type>());
+#elif defined(ARM_AP_XL)
+    return ap_value(l->at_path(ap_expression));
+#elif defined(ARM_AP_RL)
+    auto const n = l->at_path(std::string_view(AP_TEXT));
+    if (!n) [[unlikely]]
+        std::abort();
+    return ap_value(n->get<ap_type>());
+#elif defined(ARM_AP_NL)
+    return ap_list_sum(ap_literal_nodelist(*l));
+#elif defined(ARM_AP_NX)
+    return ap_list_sum(l->at_path(ap_expression));
+#else
+#if defined(ARM_AP_LQ)
+    auto const list = l->query<AP_TEXT>();
+#else
+    auto const list = l->query(std::string_view(AP_TEXT));
+#endif
+    if (!list || list->empty()) [[unlikely]]
+        std::abort();
+    return ap_value(list->front().get<ap_type>());
+#endif
+#endif
+}
+#endif
+
 #if defined(ARM_FB_PATH) || defined(ARM_FB_PATH_V)
 static std::uint64_t fb_path(flexbuffers::Reference const root)
 {
@@ -788,6 +924,8 @@ static std::uint64_t op()
     return mb_path();
 #elif defined(ARM_MB_AT_PATH)
     return mb_at_path();
+#elif defined(AP_PATH)
+    return ap();
 #elif defined(ARM_MB_STRUCT)
     return mb_struct();
 #elif defined(ARM_MB_PATH_ALL)
