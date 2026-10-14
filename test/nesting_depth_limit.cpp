@@ -42,7 +42,7 @@ TEST_CASE("nesting depth depth_limit: decode of the item tree")
              error::nesting_depth_exceeded);
 }
 
-// value_sharing::item_decode counts one level for each tag, and none for an array or a map.
+// lazy::tree_decoder::item_decode counts one level for each tag, and none for an array or a map.
 TEST_CASE("nesting depth depth_limit: lazy::decode")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};

@@ -122,8 +122,8 @@ Enums and constants only. No function found by grep.
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `well_formedness::no_marks::mark(decoder const&)` :30 | O(1) | O(1) | Empty body. Confirmed. |
-| `well_formedness::item_skip<Marks>(decoder&, Marks&)` | O(i) heads, so O(n) | O(1): one count of the items still to read. No allocation. | Iterative. No depth check: nothing recurses. Each add to the count goes through checked_add, and a count larger than the bytes left is too_little_data at once (check_pending_items). Used with no_marks and with top_level_item. |
-| `well_formedness::item_skip<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n) | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 1 counts of 8 bytes, about 4 KiB. No allocation. | Iterative. Only for marks that record a depth (value_sharing::mark_depths). check_nesting_depth on every item. |
+| `well_formedness::item_skip<Marks>(decoder&, Marks&)` | O(i) heads, so O(n) | O(1): one count of the items still to read. No allocation. | Iterative. No depth check: nothing recurses. Each add to the count goes through checked_add, and a count larger than the bytes left is too_little_data at once (check_pending_items). Used with no_marks and with value_sharing::sharing_decoder. |
+| `well_formedness::item_skip<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n) | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 1 counts of 8 bytes, about 4 KiB. No allocation. | Iterative. Only for marks that record a depth. check_nesting_depth on every item. |
 | `item_size(string_view)` | O(i), bounded by O(n) | O(1). No allocation. | One item_skip with no_marks. No depth check. |
 
 ## item.hpp
@@ -151,7 +151,7 @@ Enums and constants only. No function found by grep.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `value_sharing::container_resolve(shared_ptr<top_level_item>, size_t)` :341 | Common O(1); worst O(t), t = tag 24 levels <= n/2 | Common O(1); one top_level_item per tag 24 level | make_shared per tag 24 level. The nesting depth does not bound tag 24 nesting. |
+| `lazy::container_resolve(shared_ptr<lazy::top_level_item>, size_t)` | Common O(1); worst O(t), t = tag 24 levels <= n/2 | Common O(1); one top_level_item per tag 24 level | make_shared per tag 24 level. The nesting depth does not bound tag 24 nesting. |
 | `validity::keys_equivalent<First, Second>` :376 | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | check_nesting_depth bounds d. No heap except marks. |
 
 ## lazy.hpp
@@ -174,18 +174,18 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy_entries::begin()` :171 | O(bytes of the first key) | O(1) | |
 | `lazy_entries::end()` :178 | O(1) | O(1) | |
 | `lazy_entries::size()`, `empty()` (view_interface) | O(1) | O(1) | The count of the head. |
-| `lazy::view(shared_ptr<string const>)` | O(1) | O(1) | One top_level_item. |
+| `lazy::view(shared_ptr<string const>)` | O(1) | O(1) | One lazy::top_level_item. |
 | `lazy::copy<Encoded>(Encoded&&)` | O(1) | O(1) | Moves; two allocations. |
 | `lazy::copy(string_view)` :231 | O(n) | O(n) | Copies the input. |
-| `value_sharing::tree_decoder::item_decode(size_t depth, optional<size_t> mark)` | O(n) heads and string views; a tag 29 that names a mark before the start of the lazy adds one item_skip over the top-level item, O(N_top), once | one item per data item in a deque; one pointer per child in one vector; a scratch vector of pointers for the open containers; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. An empty container allocates nothing. |
+| `lazy::tree_decoder::item_decode(size_t depth, optional<size_t> mark)` | O(n) heads and string views; a tag 29 that names a mark before the start of the lazy adds one item_skip over the top-level item, O(N_top), once | one item per data item in a deque; one pointer per child in one vector; a scratch vector of pointers for the open containers; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. An empty container allocates nothing. |
 | `lazy::decode()` | as item_decode | as item_decode, plus one make_shared | |
 | `lazy::type()` | O(1) | O(1) | |
-| `value_sharing::key_find<Key>(resolved, Key)` :238 | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
-| `value_sharing::key_find<Sorted, Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to last); Sorted stops at the first plain key with greater encoded bytes | O(1) | No allocation. Throws std::logic_error when the end of the map comes before last. |
+| `lazy::key_find<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
+| `lazy::key_find<Sorted, Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to last); Sorted stops at the first plain key with greater encoded bytes | O(1) | No allocation. Throws std::logic_error when the end of the map comes before last. |
 | `lazy::find(string_view)`, `find(int64_t)` :373, :383 | container_resolve + O(n_map) | O(1) | |
 | `lazy::find(iterator first, Last last, key)` two forms | O(bytes in [first, the pair]) | O(1) | No container_resolve. |
 | `lazy::equal_range(iterator first, Last last, key)` two forms | as find; a miss in a sorted map stops at the first greater key; a hit adds one item_skip | O(1) | |
-| `value_sharing::value_of(expected<...>)` :414 | O(1) | O(1) | |
+| `lazy::value_of(expected<...>)` | O(1) | O(1) | |
 | `lazy::contains(string_view)`, `contains(int64_t)` | as find | O(1) | |
 | `lazy::count(string_view)`, `count(int64_t)` | O(n_map): reads every pair after the first match | O(1) | Counts every pair with the key. |
 | `lazy::size()`, `empty()` | container_resolve | O(1) | The count of the head of an array or a map. |
@@ -423,7 +423,7 @@ Above linear in the input:
 
 Allocation on a success path:
 
-- `top_level_item::mark`, `tree_decoder::item_decode`.
+- `value_sharing::sharing_decoder::mark`, `lazy::tree_decoder::item_decode`.
 - `lazy::copy`, `lazy::view`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::decode`.
 - jsonpath: every parser, `at_path(string_view path)`, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `string_sink`, `container_message`.
