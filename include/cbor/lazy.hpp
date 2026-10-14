@@ -63,6 +63,40 @@ public:
 
     std::expected<lazy, error> at(std::size_t index) const;
 
+    std::expected<lazy, error> operator[](std::string_view key) const;
+
+    std::expected<lazy, error> operator[](key k) const;
+
+    std::expected<lazy, error> operator[](std::size_t index) const;
+
+    std::expected<lazy, error> at_path(std::string_view path) const;
+
+    template <fixed_string Path>
+        requires is_valid_path_v<Path>
+    std::expected<lazy, error> at_path() const;
+
+    template <fixed_string Path, class T>
+        requires(is_singular_query_v<Path> &&
+                 ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
+                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+                  || std::is_same_v<T, std::float128_t>
+#endif
+                  ))
+    std::expected<T, error> at_path() const;
+
+    template <fixed_string Path, class T>
+        requires(is_singular_query_v<Path> &&
+                 (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                  std::is_same_v<T, typed_array>))
+    std::expected<owning_ref<T>, error> at_path() const;
+
+    std::expected<std::vector<lazy>, error> query(std::string_view path) const;
+
+    template <fixed_string Path>
+        requires is_valid_path_v<Path>
+    std::expected<std::vector<lazy>, error> query() const;
+
     template <class Entries = lazy_entries>
     std::expected<typename Entries::iterator, error> find(std::string_view key) const;
 
@@ -1652,3 +1686,5 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
 }
 
 }
+
+#include "query.hpp"
