@@ -247,4 +247,13 @@ __attribute__((export_name("compiled_js_values"))) std::int32_t compiled_js_valu
 {
     return js_values_built(state.root->at_path(*state.expression));
 }
+
+__attribute__((export_name("eager_js_value"))) std::int32_t eager_js_value()
+{
+    auto const d = state.root->decode();
+    if (!d) [[unlikely]]
+        return -static_cast<std::int32_t>(d.error());
+    js_value_built(**d);
+    return 1;
+}
 }

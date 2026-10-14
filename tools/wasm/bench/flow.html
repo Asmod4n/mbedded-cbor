@@ -46,6 +46,12 @@ const flows = {
     }
     return all.map((r) => r.length);
   },
+  objects_eager() {
+    if (x.load(copied(cbor), cbor.length) !== 0) throw new Error("load");
+    if (x.eager_js_value() !== 1) throw new Error("decode");
+    const data = out[0]; out = [];
+    return paths.map((p) => jp.compile(p).query(data).values().length);
+  },
   objects_json() {
     const data = JSON.parse(text);
     return paths.map((p) => jp.compile(p).query(data).values().length);
