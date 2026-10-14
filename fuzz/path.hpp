@@ -95,7 +95,7 @@ inline query query_from(source &in, std::vector<std::string> const &keys)
         case 0:
         case 1: {
             std::string key = keys.empty() || in.byte() % 4 == 0 ? in.text() : keys.at(in.byte() % keys.size());
-            q.text += identifier_p(key) && in.byte() & 1 ? "." + key : "[" + quoted(key) + "]";
+            q.text += identifier_p(key) && in.byte() & 1 ? "." + key : "[" + fuzz::quoted(key) + "]";
             q.segments.push_back({segment::kind::key, key, 0});
             break;
         }
