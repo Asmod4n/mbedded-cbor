@@ -2,6 +2,7 @@
 <meta charset="utf-8">
 <script src="/lib/json-p3.iife.min.js"></script>
 <script type="module">
+import { leaf_reader } from "/art/leaf.js";
 const arm = new URLSearchParams(location.search).get("arm").replace(/_aa$/, "");
 const paths = ["$.statuses[0].user.id", "$.statuses[*].user", "$..screen_name", "$.statuses[?@.retweet_count > 0].id"];
 const [cbor, text, module] = await Promise.all([
@@ -24,6 +25,16 @@ const js = {
 x = (await WebAssembly.instantiate(module, { wasi_snapshot_preview1: { fd_write: () => 0 }, js })).exports;
 const copied = (u8) => { const p = x.alloc(u8.length); new Uint8Array(x.memory.buffer).set(u8, p); return p; };
 const jp = window.json_p3.jsonpath;
+const leaf = leaf_reader(x);
+const sample_count = 100000;
+const samples = Float64Array.from({ length: sample_count }, (_, k) => Math.sin(k) * 1000);
+const samples_json = JSON.stringify({ samples: Array.from(samples) });
+const samples_cbor = (() => {
+  const b = new Uint8Array(samples.buffer);
+  const key = new TextEncoder().encode("samples");
+  return new Uint8Array([0xa1, 0x60 + key.length, ...key, 0xd8, 86, 0x5a,
+    (b.length >>> 24) & 255, (b.length >>> 16) & 255, (b.length >>> 8) & 255, b.length & 255, ...b]);
+})();
 const flows = {
   values_cbor() {
     if (x.load(copied(cbor), cbor.length) !== 0) throw new Error("load");
