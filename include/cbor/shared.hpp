@@ -64,20 +64,10 @@ public:
 private:
     struct top_level_item;
 
-    struct zone;
-
-    struct zone_owner;
-
     template <bool Checked>
     struct sharing_decoder;
 
-    template <bool Checked>
-    struct tree_decoder;
-
     friend class validity;
-
-    friend std::expected<std::reference_wrapper<item const>, error>
-    encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged);
 
     friend struct lazy;
 
@@ -344,6 +334,13 @@ private:
     template <class F>
     decltype(auto) limits_apply(limit_values loaded, F &&f) const;
 
+    struct zone;
+
+    struct zone_owner;
+
+    template <bool Checked>
+    struct tree_decoder;
+
     template <bool Checked>
     struct resolved;
 
@@ -394,6 +391,9 @@ private:
 
     friend struct lazy_entries;
 
+    friend std::expected<std::reference_wrapper<item const>, error>
+    encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged);
+
     friend class jsonpath;
 };
 
@@ -413,79 +413,6 @@ namespace cbor
 struct value_sharing::top_level_item {
     std::shared_ptr<void const> owner;
     std::string_view encoded;
-};
-
-struct value_sharing::zone {
-    using link = std::pair<item const *, item const *>;
-
-    std::shared_ptr<top_level_item> top_level;
-    std::pmr::monotonic_buffer_resource memory;
-    std::pmr::forward_list<top_level_item> embedded{&memory};
-    std::vector<link> encoded_cbor_data_items;
-
-    zone(std::shared_ptr<top_level_item> top, std::size_t const initial_size)
-        : top_level(std::move(top)), memory(initial_size)
-    {
-    }
-};
-
-struct value_sharing::zone_owner {
-    std::unique_ptr<zone> owned;
-
-    void operator()(item const *) const noexcept
-    {
-    }
-
-    static zone &zone_found(std::shared_ptr<item const> const &tree, char const *const what)
-    {
-        zone_owner const *const owner = std::get_deleter<zone_owner>(tree);
-        validity::throw_logic_error_if(owner == nullptr || owner->owned == nullptr, what);
-        return *owner->owned;
-    }
-
-    template <class Link, class Projection>
-    static Link const &link_found(std::vector<Link> const &links, item const &from, Projection const key,
-                                  char const *const what)
-    {
-        auto const found = std::ranges::lower_bound(links, &from, std::less<>{}, key);
-        validity::throw_logic_error_if(found == links.end() || std::invoke(key, *found) != &from, what);
-        return *found;
-    }
-
-};
-
-inline std::expected<std::reference_wrapper<item const>, error>
-encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged)
-{
-    constexpr char const *what = "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree";
-    value_sharing::zone const &z = value_sharing::zone_owner::zone_found(tree, what);
-    item const *const embedded = value_sharing::zone_owner::link_found(z.encoded_cbor_data_items, tagged,
-                                                                       &value_sharing::zone::link::first, what)
-                                     .second;
-    if (embedded == nullptr) [[unlikely]]
-        return std::unexpected(error::incorrect_type);
-    return std::cref(*embedded);
-}
-
-static_assert(std::is_trivially_destructible_v<item>,
-              "The zone runs no destructor of an item, so an item must have no destructor to run.");
-
-template <bool Checked>
-struct value_sharing::tree_decoder {
-    zone &decoded;
-    top_level_item &top_level;
-    heads::decoder<Checked> d;
-    validity::offset start;
-    std::size_t depth_max;
-    std::size_t open = 0;
-
-    std::expected<item *, error> item_decode(item *storage, std::size_t depth);
-
-    std::expected<item *, error> content_decode(item *storage, heads::head h, std::size_t depth);
-
-    CBOR_ALWAYS_INLINE inline std::expected<void, error> scalar_decode(item &node, heads::head h);
-
-    CBOR_NEVER_INLINE std::expected<item *, error> bignum_decode(item &node, std::uint64_t tag, std::size_t depth);
 };
 
 template <bool Checked>
