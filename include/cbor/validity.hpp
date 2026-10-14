@@ -119,7 +119,7 @@ public:
     };
 
     template <class F>
-    static decltype(auto) limits_apply(limit_values v, F &&f);
+    static decltype(auto) limits_apply(limit_values const &v, F &&f);
 
     template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
@@ -553,7 +553,7 @@ public:
     {
     }
 
-    constexpr explicit resource_limits(limit_values const v) noexcept
+    constexpr explicit resource_limits(limit_values const &v) noexcept
         : nesting_depth(v.nesting_depth), string_length(v.string_length),
           container_elements(v.container_elements), input_bytes(v.input_bytes)
     {
@@ -568,7 +568,7 @@ public:
         return {nesting_depth, string_length, container_elements, input_bytes};
     }
 
-    resource_limits &operator=(limit_values const v)
+    resource_limits &operator=(limit_values const &v)
     {
         nesting_depth = v.nesting_depth;
         string_length = v.string_length;
@@ -595,7 +595,7 @@ static_assert(validity::check_limit(limit_values{}.input_bytes, validity::size_l
 inline constinit resource_limits limits{};
 
 template <class F>
-CBOR_ALWAYS_INLINE inline decltype(auto) validity::limits_apply(limit_values const v, F &&f)
+CBOR_ALWAYS_INLINE inline decltype(auto) validity::limits_apply(limit_values const &v, F &&f)
 {
     if (v.string_length == size_limit && v.container_elements == size_limit && v.input_bytes == size_limit)
         return std::forward<F>(f)(v.nesting_depth, limit_checks<false>{});

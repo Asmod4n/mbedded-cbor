@@ -145,23 +145,23 @@ public:
 
 private:
     static std::expected<lazy, error> from(std::shared_ptr<void const> owner, std::string_view encoded,
-                                           limit_values loaded);
+                                           limit_values const &loaded);
 
     template <class Entries = lazy_entries>
-    std::expected<typename Entries::iterator, error> find(std::string_view key, limit_values loaded) const;
+    std::expected<typename Entries::iterator, error> find(std::string_view key, limit_values const &loaded) const;
 
     template <class Entries = lazy_entries>
-    std::expected<typename Entries::iterator, error> find(std::int64_t key, limit_values loaded) const;
+    std::expected<typename Entries::iterator, error> find(std::int64_t key, limit_values const &loaded) const;
 
     template <class T>
-    auto get(limit_values loaded) const;
+    auto get(limit_values const &loaded) const;
 
-    std::expected<lazy_elements, error> elements(limit_values loaded) const;
+    std::expected<lazy_elements, error> elements(limit_values const &loaded) const;
 
-    std::expected<lazy_entries, error> entries(limit_values loaded) const;
+    std::expected<lazy_entries, error> entries(limit_values const &loaded) const;
 
     template <class F>
-    decltype(auto) limits_apply(limit_values loaded, F &&f) const;
+    decltype(auto) limits_apply(limit_values const &loaded, F &&f) const;
 
     struct zone;
 
@@ -202,7 +202,7 @@ private:
     template <class Key, class Entries = lazy_entries, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
     static std::expected<typename Entries::iterator, error> key_find(resolved<Checked> found, Key key,
-                                                                     limit_values loaded);
+                                                                     limit_values const &loaded);
 
     template <class Iterator, class Last, class Key, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
@@ -255,7 +255,7 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
 
     private:
         iterator(std::shared_ptr<lazy::top_level_item> t, validity::offset const o, std::uint64_t const l,
-                 limit_values const v, std::uint64_t const tag)
+                 limit_values const &v, std::uint64_t const tag)
             : top_level(std::move(t)), offset(o), left(l), loaded(v), typed_array_tag(tag)
         {
         }
@@ -289,7 +289,7 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
 
 private:
     lazy_elements(std::shared_ptr<lazy::top_level_item> t, validity::offset const o,
-                  std::uint64_t const c, limit_values const v, std::uint64_t const tag)
+                  std::uint64_t const c, limit_values const &v, std::uint64_t const tag)
         : top_level(std::move(t)), offset(o), count(c), loaded(v), typed_array_tag(tag)
     {
     }
@@ -331,7 +331,7 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
 
     private:
         iterator(std::shared_ptr<lazy::top_level_item> t, validity::offset const k, std::uint64_t const l,
-                 limit_values const v)
+                 limit_values const &v)
             : top_level(std::move(t)), key(k), value(k), left(l), loaded(v)
         {
             value_find();
@@ -370,7 +370,7 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
 
 private:
     lazy_entries(std::shared_ptr<lazy::top_level_item> t, validity::offset const o, std::uint64_t const c,
-                 limit_values const v)
+                 limit_values const &v)
         : top_level(std::move(t)), offset(o), count(c), loaded(v)
     {
     }
@@ -822,7 +822,7 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
 }
 
 inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner,
-                                             std::string_view const encoded, limit_values const loaded)
+                                             std::string_view const encoded, limit_values const &loaded)
 {
     validity::throw_logic_error_if_empty(owner,
                                          "cbor::lazy::from: the owner of the encoded data item is empty");
@@ -839,7 +839,7 @@ inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner,
 }
 
 template <class F>
-decltype(auto) lazy::limits_apply(limit_values const loaded, F &&f) const
+decltype(auto) lazy::limits_apply(limit_values const &loaded, F &&f) const
 {
     validity::throw_logic_error_if_null(top_level, "cbor::lazy: the lazy holds no top-level item");
     return validity::limits_apply(loaded, std::forward<F>(f));
@@ -866,7 +866,7 @@ inline std::expected<lazy, error> lazy::copy(std::string_view const encoded)
 template <class Key, class Entries, bool Checked>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
 std::expected<typename Entries::iterator, error>
-lazy::key_find(resolved<Checked> found, Key const key, limit_values const loaded)
+lazy::key_find(resolved<Checked> found, Key const key, limit_values const &loaded)
 {
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
@@ -934,7 +934,7 @@ lazy::key_find(Iterator it, Last const last, Key const key,
 
 template <class Entries>
 std::expected<typename Entries::iterator, error> lazy::find(std::string_view const key,
-                                                                         limit_values const loaded) const
+                                                                         limit_values const &loaded) const
 {
     return limits_apply(loaded,
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
@@ -948,7 +948,7 @@ std::expected<typename Entries::iterator, error> lazy::find(std::string_view con
 
 template <class Entries>
 std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const key,
-                                                                         limit_values const loaded) const
+                                                                         limit_values const &loaded) const
 {
     return limits_apply(loaded,
                         [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks)
@@ -1128,7 +1128,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
 }
 
 template <class T>
-auto lazy::get(limit_values const loaded) const
+auto lazy::get(limit_values const &loaded) const
 {
     using result = std::expected<std::conditional_t<std::is_same_v<T, std::string_view> ||
                                                         std::is_same_v<T, std::span<std::byte const>> ||
@@ -1268,7 +1268,7 @@ inline std::expected<lazy_elements, error> lazy::elements() const
     return elements(limits.load());
 }
 
-inline std::expected<lazy_elements, error> lazy::elements(limit_values const loaded) const
+inline std::expected<lazy_elements, error> lazy::elements(limit_values const &loaded) const
 {
     return limits_apply(
         loaded,
@@ -1301,7 +1301,7 @@ inline std::expected<lazy_entries, error> lazy::entries() const
     return entries(limits.load());
 }
 
-inline std::expected<lazy_entries, error> lazy::entries(limit_values const loaded) const
+inline std::expected<lazy_entries, error> lazy::entries(limit_values const &loaded) const
 {
     return limits_apply(
         loaded,
