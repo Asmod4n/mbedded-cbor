@@ -36,6 +36,7 @@ auto const doc = cbor::lazy::view(owner);   // reads *owner in place
 | `at("name")` | the value of a text key in a map |
 | `at(1)` | the element of an array, counted from 0 |
 | `at(cbor::key{7})` | the value of an integer key in a map |
+| `["name"]`, `[1]`, `[cbor::key{7}]` | the same as `at` |
 
 Each step returns a `std::expected<cbor::lazy, cbor::error>`. `and_then`
 passes the lazy to the next step, and the first error reaches the end of

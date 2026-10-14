@@ -41,7 +41,7 @@ TEST_CASE("doc advanced basics: an error is a std::error_code")
 // compile, and that a limit error is equal to no std::errc.
 TEST_CASE("doc advanced basics: a cbor::error and a std::errc do not compare directly")
 {
-    static_assert(!std::equality_comparable_with<cbor::error, std::errc>);
+    CHECK((!std::equality_comparable_with<cbor::error, std::errc>));
     CHECK(std::error_code{error::string_length_exceeded} != std::errc::value_too_large);
     CHECK(std::error_code{error::string_length_exceeded} != std::errc::no_buffer_space);
 }

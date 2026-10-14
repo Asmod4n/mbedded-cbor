@@ -628,7 +628,7 @@ concept decodes_named_target = requires(std::shared_ptr<std::string const> owner
 TEST_CASE("structs decode keeps the resource of a moved pmr target")
 {
     using texts = std::pmr::vector<std::pmr::string>;
-    static_assert(!decodes_named_target<texts>);
+    CHECK((!decodes_named_target<texts>));
 
     std::vector<std::string> const value(3, std::string(40, 'x'));
     auto const encoded = cbor::structs<std::vector<std::string>>::encode(value);

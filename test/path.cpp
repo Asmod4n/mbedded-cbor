@@ -1039,8 +1039,8 @@ TEST_CASE("at_path: a compiled path with more segments than the nesting depth in
 
 // RFC 9535 2.3.5.1: a singular query selects at most one node. at_path reads only such a query and gives the value
 // of the node; a run time path that is not singular is invalid_path there, and a compiled one does not compile
-// (a static_assert in the body). cbor::query gives the nodelist of any query as an array, also of a singular one.
-TEST_CASE("path: at_path reads a singular query, cbor::query reads a nodelist")
+// (a static_assert in the body). lazy::query gives the nodelist of any query as an array, also of a singular one.
+TEST_CASE("path: at_path reads a singular query, lazy::query reads a nodelist")
 {
     std::string const doc = encoded(M("a"s, A(1, 2)));
     cbor::lazy const l = *cbor::lazy::copy(doc);
@@ -1055,10 +1055,10 @@ TEST_CASE("path: at_path reads a singular query, cbor::query reads a nodelist")
     CHECK(*test::at_path<"$.a[0]">(l) == V(1));
     CHECK(*test::query<"$.a[0]">(l) == A(1));
     CHECK(*test::query<"$..[1]">(l) == A(2));
-    static_assert(cbor::is_valid_path_v<"$..a">);
-    static_assert(!cbor::is_valid_path_v<"a">);
-    static_assert(cbor::is_singular_query_v<"$.a[0]">);
-    static_assert(!cbor::is_singular_query_v<"$.a[*]">);
+    CHECK((cbor::is_valid_path_v<"$..a">));
+    CHECK((!cbor::is_valid_path_v<"a">));
+    CHECK((cbor::is_singular_query_v<"$.a[0]">));
+    CHECK((!cbor::is_singular_query_v<"$.a[*]">));
 }
 
 // A filter with a chain of 50000 operands of || or && overflowed the stack: the parser built a left-deep tree and
@@ -1257,7 +1257,7 @@ TEST_CASE("path: a tag literal in a run-time filter")
 // gcc-asan build compiles this test with -fsanitize=undefined.
 TEST_CASE("a compile-time path with a long name compiles with every sanitizer")
 {
-    static_assert(cbor::is_valid_path_v<"$.average_prices_in_euro[*]">);
+    CHECK((cbor::is_valid_path_v<"$.average_prices_in_euro[*]">));
     std::string const bytes = "\xa1\x76" "average_prices_in_euro" "\x81\x18\x2a";  // {"average_prices_in_euro": [42]}
     auto const first = cbor::at_path<"$.average_prices_in_euro[0]", int>(bytes);
     REQUIRE(first.has_value());

@@ -228,12 +228,12 @@ TEST_CASE("doc advanced path: a typed array")
 // The section "Singular queries" shows the compile-time refusal and the run-time error.
 TEST_CASE("doc advanced path: a singular query")
 {
-    static_assert(cbor::is_singular_query_v<"$.a[0]['b']">);
-    static_assert(!cbor::is_singular_query_v<"$.a[*]">);
-    static_assert(!cbor::is_singular_query_v<"$..a">);
-    static_assert(cbor::is_singular_query_v<"$[h'01']">);
-    static_assert(cbor::is_valid_path_v<"$..a">);
-    static_assert(!cbor::is_valid_path_v<"$.a[">);
+    CHECK((cbor::is_singular_query_v<"$.a[0]['b']">));
+    CHECK((!cbor::is_singular_query_v<"$.a[*]">));
+    CHECK((!cbor::is_singular_query_v<"$..a">));
+    CHECK((cbor::is_singular_query_v<"$[h'01']">));
+    CHECK((cbor::is_valid_path_v<"$..a">));
+    CHECK((!cbor::is_valid_path_v<"$.a[">));
     CHECK_FALSE((advanced_typed_path_compiles<"$.a[*]", int>));
     CHECK_EQ(test::at_path("$.a[*]", *cbor::lazy::copy(preferred(M("a"s, A(1))))).error(), error::invalid_path);
 }
@@ -415,10 +415,10 @@ TEST_CASE("doc advanced path: bytes after the target are not read")
 // a lazy that exists, and that cbor::limits is one object for every thread.
 TEST_CASE("doc advanced path: limits in detail")
 {
-    static_assert(cbor::limit_values{}.string_length == SIZE_MAX);
-    static_assert(cbor::limit_values{}.container_elements == SIZE_MAX);
-    static_assert(cbor::limit_values{}.input_bytes == SIZE_MAX);
-    static_assert(cbor::limit_values{}.nesting_depth == CBOR_NESTING_DEPTH_DEFAULT);
+    CHECK((cbor::limit_values{}.string_length == SIZE_MAX));
+    CHECK((cbor::limit_values{}.container_elements == SIZE_MAX));
+    CHECK((cbor::limit_values{}.input_bytes == SIZE_MAX));
+    CHECK((cbor::limit_values{}.nesting_depth == CBOR_NESTING_DEPTH_DEFAULT));
     auto const one = *cbor::lazy::copy(preferred(A(1)));
     auto const big = *cbor::lazy::copy(preferred(M("pad"s, "0123456789"s, "a"s, A(1, 2))));
     auto const a = *big.at("a");
