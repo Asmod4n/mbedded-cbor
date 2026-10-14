@@ -12,7 +12,6 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -639,7 +638,7 @@ class heads
         case cbor::type::double_float:
             return major_type::simple_float;
         }
-        throw std::logic_error("cbor::item: the type is not a member of cbor::type");
+        validity::throw_logic_error("cbor::item: the type is not a member of cbor::type");
     }
 
     static constexpr bool is_tag_passed(std::uint64_t const tag)
