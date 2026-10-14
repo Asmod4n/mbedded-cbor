@@ -3,6 +3,7 @@
 #include "cbor/item.hpp"
 #include "cbor/lazy.hpp"
 #include "cbor/query.hpp"
+#include "cbor/rfc8746.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 extern "C" {
 __attribute__((import_module("js"), import_name("value_null"))) void value_null();
@@ -30,6 +32,11 @@ struct reactor_state {
     std::optional<cbor::lazy> root;
     std::optional<cbor::jsonpath::expression<cbor::nodelist>> expression;
     std::string result;
+    std::optional<cbor::owning_ref<std::string_view>> text;
+    std::optional<cbor::owning_ref<std::span<std::byte const>>> bytes;
+    std::optional<cbor::owning_ref<cbor::typed_array>> array;
+    std::vector<double> numbers;
+    cbor::error last{};
 };
 
 reactor_state state;
@@ -135,6 +142,26 @@ std::int32_t js_values_built(std::expected<cbor::nodelist, cbor::error> const &n
     return static_cast<std::int32_t>(nodes->size());
 }
 
+template <class T>
+std::expected<typename cbor::jsonpath::expression<T>::result_type, cbor::error> leaf_found(char const *const ptr, std::size_t const len)
+{
+    auto const e = cbor::jsonpath::make_expression<T>(std::string_view{ptr, len});
+    if (!e) [[unlikely]]
+        return std::unexpected(e.error());
+    return state.root->at_path(*e);
+}
+
+std::uint64_t view_packed(void const *const data, std::size_t const size)
+{
+    return (static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(data)) << 32) | size;
+}
+
+std::uint64_t error_kept(cbor::error const e)
+{
+    state.last = e;
+    return 0;
+}
+
 } // namespace
 
 extern "C" {
@@ -222,4 +249,83 @@ __attribute__((export_name("compiled_js_values"))) std::int32_t compiled_js_valu
     return js_values_built(state.root->at_path(*state.expression));
 }
 
+
+__attribute__((export_name("last_error"))) std::int32_t last_error()
+{
+    return static_cast<std::int32_t>(state.last);
+}
+
+__attribute__((export_name("path_double"))) double path_double(char const *const ptr, std::size_t const len)
+{
+    auto const v = leaf_found<double>(ptr, len);
+    if (!v) [[unlikely]] {
+        error_kept(v.error());
+        return 0;
+    }
+    state.last = {};
+    return *v;
+}
+
+__attribute__((export_name("path_int"))) std::int64_t path_int(char const *const ptr, std::size_t const len)
+{
+    auto const v = leaf_found<std::int64_t>(ptr, len);
+    if (!v) [[unlikely]] {
+        error_kept(v.error());
+        return 0;
+    }
+    state.last = {};
+    return *v;
+}
+
+__attribute__((export_name("path_string"))) std::uint64_t path_string(char const *const ptr, std::size_t const len)
+{
+    auto v = leaf_found<std::string_view>(ptr, len);
+    if (!v) [[unlikely]]
+        return error_kept(v.error());
+    state.last = {};
+    state.text = std::move(*v);
+    return view_packed((*state.text)->data(), (*state.text)->size());
+}
+
+__attribute__((export_name("path_bytes"))) std::uint64_t path_bytes(char const *const ptr, std::size_t const len)
+{
+    auto v = leaf_found<std::span<std::byte const>>(ptr, len);
+    if (!v) [[unlikely]]
+        return error_kept(v.error());
+    state.last = {};
+    state.bytes = std::move(*v);
+    return view_packed((*state.bytes)->data(), (*state.bytes)->size());
+}
+
+__attribute__((export_name("path_typed_array"))) std::uint64_t path_typed_array(char const *const ptr,
+                                                                                std::size_t const len)
+{
+    auto v = leaf_found<cbor::typed_array>(ptr, len);
+    if (!v) [[unlikely]]
+        return error_kept(v.error());
+    state.last = {};
+    state.array = std::move(*v);
+    return view_packed((*state.array)->bytes.data(), (*state.array)->bytes.size());
+}
+
+__attribute__((export_name("typed_array_tag"))) std::uint32_t typed_array_tag()
+{
+    return static_cast<std::uint32_t>((*state.array)->tag);
+}
+
+__attribute__((export_name("path_doubles"))) std::uint64_t path_doubles(char const *const ptr, std::size_t const len)
+{
+    auto const nodes = leaf_found<cbor::nodelist>(ptr, len);
+    if (!nodes) [[unlikely]]
+        return error_kept(nodes.error());
+    state.numbers.clear();
+    for (auto const &n : *nodes) {
+        auto const v = n.get<double>();
+        if (!v) [[unlikely]]
+            return error_kept(v.error());
+        state.numbers.push_back(*v);
+    }
+    state.last = {};
+    return view_packed(state.numbers.data(), state.numbers.size());
+}
 }
