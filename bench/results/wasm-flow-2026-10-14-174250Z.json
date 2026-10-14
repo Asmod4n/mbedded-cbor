@@ -1,0 +1,1045 @@
+{
+ "context": {
+  "commit": "488b299",
+  "dirty": false,
+  "browser": "chromium 141.0.7390.37 headless shell, playwright 1.56.1, default launch flags",
+  "isolated": true,
+  "wasm_flags": "clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -flto -fno-exceptions -Wl,--strip-all,--gc-sections",
+  "wasm_bytes": 305711,
+  "inputs": {
+   "cbor_bytes": 402814,
+   "json_bytes": 492596
+  },
+  "json_library": "json-p3 2.2.2 iife",
+  "method": "each repetition of each arm is one cold flow in a fresh page, timed once; arms alternate; before the timer the CBOR bytes are a Uint8Array, the JSON text is a string, the wasm module is instantiated and json-p3 is loaded; values_*: load or parse, then the user id and the list of status ids; objects_*: load or parse, then four paths each compiled once and applied once, results as JS objects; decode_*: the whole document into one JS object, eager decode against JSON.parse, no path",
+  "kernel": "6.18.44-fc-v114",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpus": 4,
+  "user": "ubuntu",
+  "priority": 0,
+  "node": "v22.22.0",
+  "repetitions": 21,
+  "note": "commit and dirty mark written by hand: git refused the worktree for user ubuntu; the tree was clean at 488b299"
+ },
+ "summary": {
+  "values_cbor": {
+   "median_ns": 2580000.000074506,
+   "min": 2139999.999664724,
+   "max": 3689999.9999441206,
+   "check": "[1186275104,true]"
+  },
+  "values_cbor_aa": {
+   "median_ns": 2430000.000167638,
+   "min": 2030000.0002607703,
+   "max": 3459999.999962747,
+   "check": "[1186275104,true]"
+  },
+  "values_json": {
+   "median_ns": 2905000.0002607703,
+   "min": 2520000.0000186265,
+   "max": 8925000.000279397,
+   "check": "[1186275104,true]"
+  },
+  "objects_cbor": {
+   "median_ns": 22395000.000018626,
+   "min": 16655000.00026077,
+   "max": 31385000.000242144,
+   "check": "[1,100,264,73]"
+  },
+  "objects_cbor_aa": {
+   "median_ns": 19825000.000186265,
+   "min": 16259999.999776483,
+   "max": 27845000.00020489,
+   "check": "[1,100,264,73]"
+  },
+  "objects_json": {
+   "median_ns": 37459999.99996275,
+   "min": 30719999.99973923,
+   "max": 53619999.9996461,
+   "check": "[1,100,264,73]"
+  },
+  "decode_cbor": {
+   "median_ns": 18009999.999776483,
+   "min": 13280000.00026077,
+   "max": 23655000.00026077,
+   "check": "100"
+  },
+  "decode_cbor_aa": {
+   "median_ns": 16245000.000111759,
+   "min": 13609999.999869615,
+   "max": 22984999.999869615,
+   "check": "100"
+  },
+  "decode_json": {
+   "median_ns": 1509999.9997764826,
+   "min": 1229999.9999813735,
+   "max": 2564999.9999441206,
+   "check": "100"
+  }
+ },
+ "runs": {
+  "values_cbor": [
+   {
+    "ns": 3689999.9999441206,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2379999.9998882413,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2745000.0001117587,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2580000.000074506,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2880000.0003539026,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2139999.999664724,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2444999.999832362,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2674999.9998137355,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2879999.9998882413,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3665000.000037253,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3589999.9998509884,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2515000.000130385,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3294999.999925494,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2175000.000279397,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2545000.0003911555,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2349999.999627471,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2270000.0000186265,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2470000.000204891,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2705000.000074506,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3534999.9996833503,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2199999.999720603,
+    "check": "[1186275104,true]",
+    "isolated": true
+   }
+  ],
+  "values_cbor_aa": [
+   {
+    "ns": 2399999.9999068677,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2540000.000037253,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2379999.9998882413,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2475000.0000931323,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2419999.999925494,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2030000.0002607703,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2399999.9999068677,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2310000.0000558794,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2884999.9997764826,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2544999.999925494,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3350000.0000931323,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2419999.999925494,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2370000.0001117587,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3379999.9998882413,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2725000.0000931323,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2489999.999757856,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2430000.000167638,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3459999.999962747,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2669999.999925494,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2324999.999720603,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2254999.9998882413,
+    "check": "[1186275104,true]",
+    "isolated": true
+   }
+  ],
+  "values_json": [
+   {
+    "ns": 8925000.000279397,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2819999.999832362,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2780000.0002607703,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3104999.9999813735,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2520000.0000186265,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2924999.9998137355,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2790000.000037253,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 5135000.000242144,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2804999.999701977,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3490000.0002235174,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3000000,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3410000.0001490116,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2840000.0003166497,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2820000.000298023,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2850000.0000931323,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 4279999.999795109,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3225000.0000931323,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2905000.0002607703,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2525000.000372529,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 3770000.0000186265,
+    "check": "[1186275104,true]",
+    "isolated": true
+   },
+   {
+    "ns": 2734999.999869615,
+    "check": "[1186275104,true]",
+    "isolated": true
+   }
+  ],
+  "objects_cbor": [
+   {
+    "ns": 19759999.999776483,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 24130000.000353903,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 21185000.00005588,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 16655000.00026077,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 21459999.999962747,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 19575000.000186265,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 31385000.000242144,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 29100000.000093132,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 22395000.000018626,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 18360000.000335276,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 28979999.999981374,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 25049999.999813735,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 24924999.999813735,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 23095000.00020489,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 20604999.999981374,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 21035000.00014901,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 26910000.00014901,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 21879999.99988824,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 22344999.99973923,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 25334999.999962747,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 24450000.000186265,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   }
+  ],
+  "objects_cbor_aa": [
+   {
+    "ns": 17014999.999664724,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 18344999.99973923,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 18689999.99994412,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 21289999.99957159,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 25714999.99985099,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 19825000.000186265,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 20455000.000074506,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 19810000.00005588,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 26175000.000279397,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 21134999.999776483,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 18620000.00011176,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 27845000.00020489,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 24750000,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 16259999.999776483,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 27115000.000223517,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 17419999.999925494,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 18459999.999962747,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 23234999.999869615,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 24395000.000018626,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 16805000.000167638,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 17884999.999776483,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   }
+  ],
+  "objects_json": [
+   {
+    "ns": 34224999.99962747,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36770000.00001863,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 34600000.00009313,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 33190000.000409782,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36339999.99985099,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 37490000.00022352,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 30719999.99973923,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 37459999.99996275,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 39245000.00011176,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36165000.00003725,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 39875000,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 38165000.00003725,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 38475000.00009313,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36995000.00011176,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 52234999.999869615,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36784999.99968335,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 40385000.000242144,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 53619999.9996461,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36290000.00003725,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 42950000.000186265,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 38375000,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   }
+  ],
+  "decode_cbor": [
+   {
+    "ns": 18009999.999776483,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14955000.000074506,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 23655000.00026077,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16339999.999850988,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 21675000.000279397,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 21399999.999906868,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14300000.000279397,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 23569999.999832362,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 17884999.999776483,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20129999.99988824,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 18175000.000279397,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 17729999.999981374,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13794999.999925494,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14709999.999962747,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 21314999.99994412,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 18225000.000093132,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15780000.00026077,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 22450000.000186265,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13280000.00026077,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 19425000.000279397,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16659999.99968335,
+    "check": "100",
+    "isolated": true
+   }
+  ],
+  "decode_cbor_aa": [
+   {
+    "ns": 13609999.999869615,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14754999.999888241,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15885000.000242144,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15139999.999664724,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 22984999.999869615,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14915000.000037253,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15694999.999832362,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16804999.999701977,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16245000.000111759,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16975000.000093132,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15364999.999757856,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14909999.99968335,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 19225000.000093132,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14790000.000037253,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14529999.999795109,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 18544999.999925494,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 21509999.999776483,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20350000.000093132,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20069999.999832362,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 17890000.000130385,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 21725000.000093132,
+    "check": "100",
+    "isolated": true
+   }
+  ],
+  "decode_json": [
+   {
+    "ns": 1524999.9999068677,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1479999.9999813735,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2250000,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1319999.999832362,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1390000.0001303852,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1509999.9997764826,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1530000.0002607703,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2250000,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1540000.000037253,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1365000.0002235174,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1565000.000409782,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1509999.9997764826,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2089999.9998509884,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1359999.9998696148,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1589999.9998509884,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1284999.9996833503,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2564999.9999441206,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2049999.9998137355,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1229999.9999813735,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1450000.0001862645,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1415000.000037253,
+    "check": "100",
+    "isolated": true
+   }
+  ]
+ }
+}
