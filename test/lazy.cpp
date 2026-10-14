@@ -1308,7 +1308,7 @@ TEST_CASE("lazy: two threads read one root lazy")
         for (std::size_t t = 0; t < threads; ++t)
             workers.emplace_back([&l, &right, t] {
                 auto const text = l.at(std::size_t{0}).and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
-                auto const index = cbor::at_path<"$[1]", std::uint64_t>(l);
+                auto const index = l.at_path<"$[1]", std::uint64_t>();
                 auto const named = l.at(std::size_t{2})
                                        .and_then([](cbor::lazy const &m) { return m.at("k"); })
                                        .and_then([](cbor::lazy const &r) { return r.decode(); });
@@ -1320,7 +1320,7 @@ TEST_CASE("lazy: two threads read one root lazy")
                                        .transform([](cbor::lazy_entries const &e) {
                                            return std::ranges::distance(e.begin(), e.end());
                                        });
-                auto const element = cbor::at_path<"$[3][1]", std::uint64_t>(l);
+                auto const element = l.at_path<"$[3][1]", std::uint64_t>();
                 bool const reference = named.has_value() && (*named)->type == cbor::type::tag &&
                                        (*named)->via.tag.number == 29 && (*named)->via.tag.content->via.u64 == 0;
                 right[t] = {text.has_value() && **text == "hello", index == 0u, reference, count == 4, pairs == 1,
@@ -1716,7 +1716,7 @@ TEST_CASE("path: at_path reads an element of a float128 typed array")
         std::string const encoded = typed_array_of(tag, bytes);
         CHECK_EQ(*cbor::at_path<"$[0]", std::float128_t>(std::string_view(encoded)), std::float128_t{1});
         CHECK_EQ(*cbor::at_path<"$[1]", std::float128_t>(std::string_view(encoded)), std::float128_t{-2});
-        CHECK_EQ(*cbor::at_path<"$[1]", std::float128_t>(lazy_of(encoded)), std::float128_t{-2});
+        CHECK_EQ(*lazy_of(encoded).at_path<"$[1]", std::float128_t>(), std::float128_t{-2});
         CHECK_EQ(cbor::at_path<"$[2]", std::float128_t>(std::string_view(encoded)).error(),
                  error::index_out_of_bounds);
     }
@@ -1748,4 +1748,35 @@ TEST_CASE("lazy: an index reads a typed array through tag 24 and tag 28")
     CHECK_EQ(*marked->at(1)->get<int>(), 2);
     CHECK_EQ(*marked->size(), 2u);
     CHECK_EQ(doc.at(1)->at(1).error(), error::not_indexable);
+}
+
+// operator[] is the same call as at, so that a lazy reads as a container. It gives std::expected and does not
+// throw, because the bytes are not checked before the call and a missing key is a value, not a fault of ours.
+TEST_CASE("lazy: operator[] gives what at gives")
+{
+    cbor::lazy const map = lazy_of(encoded(M("a"s, A(1, 2), 2, "two"s)));
+    CHECK(value_at(*map["a"]) == value_at(*map.at("a")));
+    CHECK(value_at(*map[cbor::key{2}]) == V("two"s));
+    CHECK(value_at(*(*map["a"])[std::size_t{1}]) == V(2));
+    CHECK_EQ(map["z"].error(), error::key_not_found);
+    CHECK_EQ(map["z"].error(), map.at("z").error());
+    cbor::lazy const array = lazy_of(encoded(A(1, 2)));
+    CHECK(value_at(*array[std::size_t{0}]) == V(1));
+    CHECK_EQ(array["a"].error(), error::not_indexable);
+    CHECK_EQ(array[std::size_t{2}].error(), array.at(std::size_t{2}).error());
+    cbor::lazy const cut = lazy_of("\xa2\x61" "a\x01\x61"s);
+    CHECK_EQ(cut["b"].error(), cut.at("b").error());
+}
+
+// lazy does not reject a map with a repeated key (RFC 8949 5.6 leaves that to the decoder). Every way to read
+// a key gives the first pair, so that the result does not depend on the form of the call.
+TEST_CASE("lazy: a repeated key gives the first pair")
+{
+    cbor::lazy const twice = lazy_of("\xa3\x61" "a\x01\x61" "b\x02\x61" "a\x03"s);
+    CHECK(value_at(*twice.at("a")) == V(1));
+    CHECK(value_at(*twice["a"]) == V(1));
+    CHECK(value_at(*twice.at_path("$.a")) == V(1));
+    CHECK_EQ(twice.at_path<"$.a", int>(), 1);
+    cbor::lazy const numbers = lazy_of("\xa3\x01\x01\x01\x02\x01\x03"s);
+    CHECK(value_at(*numbers[cbor::key{1}]) == V(1));
 }

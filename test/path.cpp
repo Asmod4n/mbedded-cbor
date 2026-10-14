@@ -73,7 +73,7 @@ value found(std::expected<value, cbor::error> const &r)
 }
 
 template <cbor::fixed_string Path>
-concept path_compiles = requires(cbor::lazy const &l) { cbor::at_path<Path>(l); };
+concept path_compiles = requires(cbor::lazy const &l) { l.at_path<Path>(); };
 
 } // namespace
 
@@ -1141,14 +1141,14 @@ TEST_CASE("path: a tag that the path does not know is passed to its content")
     std::string const shared = "\x82\xd8\x1c\xd9\x03\xe8\x82\x01\x02\xd8\x1d\x00"s;
     auto const l = *cbor::lazy::copy(doc);
     CHECK_EQ(cbor::at_path<"$.v[1]", int>(doc), 2);
-    CHECK_EQ(cbor::at_path<"$.v[1]", int>(l), 2);
+    CHECK_EQ(l.at_path<"$.v[1]", int>(), 2);
     CHECK_EQ(cbor::at_path<"$.m.k", int>(doc), 7);
-    CHECK_EQ(cbor::at_path<"$.m.k", int>(l), 7);
+    CHECK_EQ(l.at_path<"$.m.k", int>(), 7);
     CHECK_EQ(cbor::at_path<"$[0][1]", int>(shared), 2);
-    CHECK_EQ(cbor::at_path<"$[0][1]", int>(*cbor::lazy::copy(shared)), 2);
+    CHECK_EQ(cbor::lazy::copy(shared)->at_path<"$[0][1]", int>(), 2);
     CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared).error(), error::not_indexable);
     CHECK_EQ(cbor::at_path<"$", int>("\xd9\x03\xe8\x05"s), 5);
-    CHECK_EQ(cbor::at_path<"$", int>(*cbor::lazy::copy("\xd9\x03\xe8\x05"s)), 5);
+    CHECK_EQ(cbor::lazy::copy("\xd9\x03\xe8\x05"s)->at_path<"$", int>(), 5);
     CHECK_EQ(cbor::lazy::copy("\xd9\x03\xe8\x05"s)->get<int>(), 5);
     CHECK_EQ(cbor::at_path<"$", std::int64_t>("\xc1\x1a\x5f\x5e\x10\x00"s), 1600000000);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\xc2\x41\x01"s).error(), error::not_indexable);
@@ -1200,10 +1200,10 @@ TEST_CASE("path: an index reads one element of a typed array")
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\xd8\x1c\x42\x07\x00"s)).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd9\x03\xe8\xd8\x45\x42\x07\x00"s)), 7);
     auto const l = *cbor::lazy::copy(uint16_le);
-    CHECK_EQ(cbor::at_path<"$.v[1]", int>(l), 0x108);
+    CHECK_EQ(l.at_path<"$.v[1]", int>(), 0x108);
     std::string const shared = "\x82\xd8\x1c\xd8\x45\x44\x07\x00\x08\x01\xd8\x1d\x00"s;
     CHECK_EQ(cbor::at_path<"$[0][1]", int>(shared), 0x108);
-    CHECK_EQ(cbor::at_path<"$[0][-2]", double>(*cbor::lazy::copy(shared)), 7.0);
+    CHECK_EQ(cbor::lazy::copy(shared)->at_path<"$[0][-2]", double>(), 7.0);
     CHECK_EQ(cbor::at_path<"$[0][2]", int>(shared).error(), error::index_out_of_bounds);
     CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(shared).error(), error::not_indexable);
     CHECK(found(test::at_path("$.v[1]", l)) == V(0x108));
@@ -1227,14 +1227,14 @@ TEST_CASE("at_path: a path from a held lazy")
     std::string const s("\xa2\x63pad\x82\x01\x02\x64" "cars\x82\xa1\x62hp\x05\xa1\x62hp\x07", 24);
     auto const cars = cbor::lazy::copy(s)->at("cars");
     REQUIRE(cars.has_value());
-    CHECK_EQ(*cbor::at_path<"$[1].hp", std::int64_t>(*cars), 7);
-    CHECK_EQ(cbor::at_path<"$[2].hp", std::int64_t>(*cars).error(), cbor::error::index_out_of_bounds);
+    CHECK_EQ(*cars->at_path<"$[1].hp", std::int64_t>(), 7);
+    CHECK_EQ(cars->at_path<"$[2].hp", std::int64_t>().error(), cbor::error::index_out_of_bounds);
     std::string const shared("\x82\xd8\x1c\xa1\x62hp\x05\xd8\x1d\x00", 11);
     auto const first = cbor::lazy::copy(shared)->at(std::size_t{0});
     REQUIRE(first.has_value());
-    CHECK_EQ(*cbor::at_path<"$.hp", std::int64_t>(*first), 5);
+    CHECK_EQ(*first->at_path<"$.hp", std::int64_t>(), 5);
     std::string const text("\xa1\x61k\x62ok", 6);
-    auto const word = cbor::at_path<"$.k", std::string_view>(*cbor::lazy::copy(text));
+    auto const word = cbor::lazy::copy(text)->at_path<"$.k", std::string_view>();
     REQUIRE(word.has_value());
     CHECK_EQ(**word, "ok");
 }
@@ -1279,4 +1279,67 @@ TEST_CASE("path: a count larger than the bytes left is too_little_data before th
                                         std::unexpected(error::too_little_data));
     check_path<"$.a", std::int64_t>("\xa2\xff\x00\x00"s, {"a"sv}, std::unexpected(error::too_little_data));
     check_path<"$", std::int64_t>("\x8c\xff"s, {}, std::unexpected(error::too_little_data));
+}
+
+namespace
+{
+
+template <cbor::fixed_string Path, class T>
+concept lazy_typed_path_compiles = requires(cbor::lazy const &l) { l.template at_path<Path, T>(); };
+
+template <cbor::fixed_string Path, class L>
+auto member_at_path(L const &l)
+{
+    return l.template at_path<Path>();
+}
+
+}
+
+// The member at_path reads from the lazy it is called on. A lazy that at() gave starts the path at its own item,
+// so "$" is that item and not the top-level item.
+TEST_CASE("path: the member at_path starts at the item of the lazy")
+{
+    std::string const doc = encoded(M("a"s, M("b"s, A(1, 2, "x"s))));
+    cbor::lazy const l = *cbor::lazy::copy(doc);
+    CHECK(*test::at_path("$", *l.at_path("$.a.b[1]")) == V(2));
+    CHECK_EQ(l.at_path("$.a.b[").error(), error::invalid_path);
+    CHECK_EQ(l.at_path("$..b").error(), error::invalid_path);
+    CHECK_EQ(l.at_path("$.a.c").error(), error::key_not_found);
+    cbor::lazy const inner = *l.at("a");
+    CHECK_EQ(inner.at_path<"$.b[0]", int>(), 1);
+    auto const text = inner.at_path<"$.b[2]", std::string_view>();
+    CHECK_EQ(**text, "x"sv);
+    CHECK(*test::at_path("$", *inner.at_path<"$.b">()) == A(1, 2, "x"s));
+    CHECK(*test::at_path("$", *member_at_path<"$.b[1]">(inner)) == V(2));
+    CHECK_EQ(inner.query("$.b[*]")->size(), 3u);
+    CHECK_EQ(inner.query<"$..*">()->size(), 4u);
+}
+
+// A typed at_path needs one node, so a path that is not singular (RFC 9535 2.3.5.1) does not compile. A concept
+// checks this, so that the test runs and a static_assert is not needed.
+TEST_CASE("path: a typed at_path with a path that is not singular does not compile")
+{
+    CHECK(lazy_typed_path_compiles<"$.a", int>);
+    CHECK(lazy_typed_path_compiles<"$.a", std::string_view>);
+    CHECK_FALSE(lazy_typed_path_compiles<"$..a", int>);
+    CHECK_FALSE(lazy_typed_path_compiles<"$.a[*]", std::string_view>);
+    CHECK_FALSE(lazy_typed_path_compiles<"$.a[", int>);
+}
+
+// Each standalone form over bytes reads the same node as the member, so the choice of form does not change the
+// result.
+TEST_CASE("path: every standalone at_path gives what the member gives")
+{
+    std::string const doc = encoded(M("a"s, A(7, "x"s)));
+    cbor::lazy const l = *cbor::lazy::copy(doc);
+    CHECK_EQ(cbor::at_path<"$.a[0]", int>(std::string_view(doc)), l.at_path<"$.a[0]", int>());
+    auto const owner = std::make_shared<std::string const>(doc);
+    auto const member = l.at_path<"$.a[1]", std::string_view>();
+    auto const shared = cbor::at_path<"$.a[1]", std::string_view>(owner);
+    auto const copied = cbor::at_path<"$.a[1]", std::string_view>(std::string_view(doc));
+    auto const moved = cbor::at_path<"$.a[1]", std::string_view>(std::string(doc));
+    CHECK_EQ(**member, "x"sv);
+    CHECK_EQ(**shared, **member);
+    CHECK_EQ(**copied, **member);
+    CHECK_EQ(**moved, **member);
 }

@@ -779,7 +779,7 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
         CHECK_EQ(l.at(0)->get<std::uint64_t>(), 5u);
         CHECK_EQ(l.at(1)->get<std::uint64_t>(), 0u);
         CHECK_EQ(l.at(2)->get<std::uint64_t>(), 7u);
-        CHECK_EQ(cbor::at_path<"$[1]", std::uint64_t>(l), 0u);
+        CHECK_EQ(l.at_path<"$[1]", std::uint64_t>(), 0u);
         CHECK_EQ(cbor::at_path<"$[2]", std::uint64_t>(doc), 7u);
         std::vector<cbor::type> types;
         for (auto const e : *l.elements())

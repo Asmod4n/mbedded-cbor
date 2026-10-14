@@ -42,9 +42,9 @@ TEST_CASE("doc readme: read one value by its path")
     std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
     auto const doc = cbor::lazy::copy(bytes).value();
 
-    auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);
-    auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
-    auto const age = cbor::at_path<"$.user.age", int>(doc);
+    auto const id = doc.at_path<"$.user.id", std::int64_t>();
+    auto const name = doc.at_path<"$.user.name", std::string_view>();
+    auto const age = doc.at_path<"$.user.age", int>();
     CHECK_EQ(*id, 42);
     CHECK_EQ(**name, "ann");
     CHECK_EQ(age.error(), cbor::error::key_not_found);
@@ -58,7 +58,7 @@ TEST_CASE("doc readme: handle bad input")
     std::string const cut = bytes.substr(0, bytes.size() - 1);
 
     auto const doc = cbor::lazy::copy(cut).value();
-    auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
+    auto const name = doc.at_path<"$.user.name", std::string_view>();
     REQUIRE_FALSE(name.has_value());
     CHECK_EQ(name.error(), cbor::error::too_little_data);
     std::string const why = std::error_code(name.error()).message();

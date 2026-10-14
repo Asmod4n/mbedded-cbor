@@ -708,13 +708,13 @@ inline void check_both(std::string_view const wire, value const &expected)
 // The value of the node that a singular query selects.
 inline std::expected<value, error> at_path(std::string_view const path, cbor::lazy const &l)
 {
-    return value_of(cbor::at_path(path, l));
+    return value_of(l.at_path(path));
 }
 
 template <cbor::fixed_string Path>
 std::expected<value, error> at_path(cbor::lazy const &l)
 {
-    return value_of(cbor::at_path<Path>(l));
+    return value_of(l.at_path<Path>());
 }
 
 // The nodelist of a query as an array of the values of its nodes.
@@ -734,13 +734,13 @@ inline std::expected<value, error> values_of(std::expected<std::vector<cbor::laz
 
 inline std::expected<value, error> query(std::string_view const path, cbor::lazy const &l)
 {
-    return values_of(cbor::query(path, l));
+    return values_of(l.query(path));
 }
 
 template <cbor::fixed_string Path>
 std::expected<value, error> query(cbor::lazy const &l)
 {
-    return values_of(cbor::query<Path>(l));
+    return values_of(l.query<Path>());
 }
 
 } // namespace test
