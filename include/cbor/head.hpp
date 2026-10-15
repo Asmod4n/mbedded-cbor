@@ -777,9 +777,9 @@ class heads
 
     friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
-#ifdef __cpp_impl_reflection
     friend class reflection;
 
+#ifdef __cpp_impl_reflection
     friend class generic;
 
     template <class>

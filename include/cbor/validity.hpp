@@ -498,9 +498,9 @@ public:
 
     friend class jsonpath;
 
-#ifdef __cpp_impl_reflection
     friend class reflection;
 
+#ifdef __cpp_impl_reflection
     friend class generic;
 
     template <class>

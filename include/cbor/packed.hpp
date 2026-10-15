@@ -41,13 +41,6 @@
 namespace cbor
 {
 
-#ifdef __cpp_impl_reflection
-template <class T>
-consteval std::size_t no_fixed_size()
-{
-    std::unreachable();
-}
-
 struct skip {};
 
 struct allow {};
@@ -56,6 +49,7 @@ struct allowlist {};
 
 struct tag {
     std::uint64_t number;
+    std::uint16_t generation = 0;
 };
 
 template <std::uint64_t Number, class T>
@@ -63,6 +57,13 @@ struct tagged {
     static constexpr std::uint64_t number = Number;
     T content;
 };
+
+#ifdef __cpp_impl_reflection
+template <class T>
+consteval std::size_t no_fixed_size()
+{
+    std::unreachable();
+}
 
 template <class Root>
 consteval bool tags_registered();
@@ -77,6 +78,8 @@ struct directory {
     std::size_t at;
     std::size_t count;
 };
+
+#endif
 
 class reflection
 {
@@ -106,6 +109,119 @@ class reflection
         static constexpr std::size_t value = N;
     };
 
+    template <class U>
+    static constexpr bool is_text_range = requires {
+        requires std::ranges::contiguous_range<U>;
+        requires std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, char> ||
+                     std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, char8_t>;
+    };
+
+    template <class U>
+    static constexpr bool is_byte_range = requires {
+        requires std::ranges::contiguous_range<U>;
+        requires std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, unsigned char> ||
+                     std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>;
+    };
+
+    template <class U>
+    static constexpr bool is_fixed_string = requires {
+        typename fixed_length<U>::element;
+        requires std::same_as<typename fixed_length<U>::element, char> ||
+                     std::same_as<typename fixed_length<U>::element, char8_t> ||
+                     std::same_as<typename fixed_length<U>::element, unsigned char> ||
+                     std::same_as<typename fixed_length<U>::element, std::byte>;
+    };
+
+    template <class U>
+    static constexpr bool has_fixed_underlying_type = std::is_enum_v<U> && requires { U{0}; };
+
+    template <class U>
+    static constexpr bool is_optional = requires(U const &v) {
+        v.has_value();
+        *v;
+        typename U::value_type;
+    } && !requires { typename U::error_type; };
+
+    template <class U>
+    static constexpr bool is_inline_optional = is_optional<U> && requires {
+        requires std::is_class_v<typename U::value_type> && std::is_aggregate_v<typename U::value_type>;
+        requires !requires { fixed_length<typename U::value_type>::value; };
+    };
+
+    template <class U>
+    static constexpr bool is_map = std::ranges::sized_range<U> && requires {
+        typename U::key_type;
+        typename U::mapped_type;
+    };
+
+    template <class U>
+    static constexpr bool is_list = std::ranges::sized_range<U> && !is_text_range<U> && !is_byte_range<U> && !is_optional<U> &&
+                                    !is_map<U> && !requires { fixed_length<U>::value; };
+
+    template <class E>
+    static consteval std::uint64_t typed_array_tag()
+    {
+        constexpr std::uint64_t f = std::is_floating_point_v<E> ? 1 : 0;
+        constexpr std::uint64_t s = std::is_signed_v<E> && !std::is_floating_point_v<E> ? 1 : 0;
+        constexpr std::uint64_t e = sizeof(E) > 1 ? 1 : 0;
+        constexpr std::uint64_t ll = static_cast<std::uint64_t>(std::countr_zero(sizeof(E))) - f;
+        return std::to_underlying(rfc8746::tag_number::typed_array_first) | f << std::to_underlying(rfc8746::bit_field::f) |
+               s << std::to_underlying(rfc8746::bit_field::s) | e << std::to_underlying(rfc8746::bit_field::e) |
+               ll << std::to_underlying(rfc8746::bit_field::ll);
+    }
+
+    template <class E>
+    static constexpr bool is_typed_array_integer = requires {
+        requires std::integral<E> && !std::same_as<E, bool> && !std::same_as<E, char> && !std::same_as<E, wchar_t> &&
+                     !std::same_as<E, char8_t> && !std::same_as<E, char16_t> && !std::same_as<E, char32_t>;
+        requires sizeof(E) <= sizeof(std::uint64_t);
+    };
+
+    template <class E>
+    static constexpr bool is_typed_array_float = requires {
+        requires std::is_floating_point_v<E> && std::numeric_limits<E>::is_iec559;
+        requires(sizeof(E) == sizeof(std::uint16_t) && std::numeric_limits<E>::digits == heads::half_precision.significand_bits + 1) ||
+                    (sizeof(E) == sizeof(float) && std::numeric_limits<E>::digits == std::numeric_limits<float>::digits) ||
+                    (sizeof(E) == sizeof(double) &&
+                     std::numeric_limits<E>::digits == std::numeric_limits<double>::digits);
+    };
+
+    template <class E>
+    static constexpr bool is_typed_array_element = is_typed_array_integer<E> || is_typed_array_float<E>;
+
+    template <class U>
+    static constexpr bool is_typed_array = requires {
+        requires is_list<U>;
+        requires is_typed_array_element<std::remove_cv_t<std::ranges::range_value_t<U>>>;
+    };
+
+    template <class U>
+#ifdef __SIZEOF_INT128__
+    static constexpr bool is_wide_integer = std::same_as<U, int128> || std::same_as<U, uint128>;
+#else
+    static constexpr bool is_wide_integer = false;
+#endif
+
+    static consteval std::vector<unsigned char> key_encoded(major_type const major, std::uint64_t const argument,
+                                                            std::string_view const text)
+    {
+        std::uint8_t const info = heads::preferred_argument_info(argument);
+        std::size_t const bytes = heads::argument_size(info);
+        std::vector<unsigned char> out{static_cast<unsigned char>(heads::initial_byte(major, info))};
+        for (std::size_t k = bytes; k > 0; --k)
+            out.push_back(static_cast<unsigned char>(argument >> (std::numeric_limits<std::uint8_t>::digits * (k - 1))));
+        for (char const c : text)
+            out.push_back(static_cast<unsigned char>(c));
+        return out;
+    }
+
+    static consteval bool keys_unique(std::vector<std::vector<unsigned char>> encoded)
+    {
+        std::ranges::sort(encoded);
+        return validity::keys_unique(encoded);
+    }
+
+#ifdef __cpp_impl_reflection
     static consteval std::string_view key_of(std::meta::info const member)
     {
         for (std::meta::info const a : std::meta::annotations_of(member))
@@ -125,11 +241,12 @@ class reflection
 
     static consteval bool keys_unique(std::span<std::meta::info const> const members)
     {
-        std::vector<std::string_view> keys;
-        for (std::meta::info const m : members)
-            keys.push_back(key_of(m));
-        std::ranges::sort(keys);
-        return validity::keys_unique(keys);
+        std::vector<std::vector<unsigned char>> encoded;
+        for (std::meta::info const m : members) {
+            std::string_view const key = key_of(m);
+            encoded.push_back(key_encoded(major_type::text_string, key.size(), key));
+        }
+        return keys_unique(std::move(encoded));
     }
 
     static consteval bool annotated(std::meta::info const entity, std::meta::info const type)
@@ -208,93 +325,7 @@ class reflection
     template <class T, std::meta::info Member, class Root>
     static consteval std::size_t member_offset();
 
-    template <class U>
-    static constexpr bool is_text_range = requires {
-        requires std::ranges::contiguous_range<U>;
-        requires std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, char> ||
-                     std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, char8_t>;
-    };
-
-    template <class U>
-    static constexpr bool is_byte_range = requires {
-        requires std::ranges::contiguous_range<U>;
-        requires std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, unsigned char> ||
-                     std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>;
-    };
-
-    template <class U>
-    static constexpr bool is_fixed_string = requires {
-        typename fixed_length<U>::element;
-        requires std::same_as<typename fixed_length<U>::element, char> ||
-                     std::same_as<typename fixed_length<U>::element, char8_t> ||
-                     std::same_as<typename fixed_length<U>::element, unsigned char> ||
-                     std::same_as<typename fixed_length<U>::element, std::byte>;
-    };
-
-    template <class U>
-    static constexpr bool has_fixed_underlying_type = std::is_enum_v<U> && requires { U{0}; };
-
-    template <class U>
-    static constexpr bool is_optional = requires(U const &v) {
-        v.has_value();
-        *v;
-        typename U::value_type;
-    } && !requires { typename U::error_type; };
-
-    template <class U>
-    static constexpr bool is_inline_optional = is_optional<U> && requires {
-        requires std::is_class_v<typename U::value_type> && std::is_aggregate_v<typename U::value_type>;
-        requires !requires { fixed_length<typename U::value_type>::value; };
-    };
-
     static constexpr std::size_t inline_optional_head = 2;
-
-    template <class U>
-    static constexpr bool is_map = std::ranges::sized_range<U> && requires {
-        typename U::key_type;
-        typename U::mapped_type;
-    };
-
-    template <class U>
-    static constexpr bool is_list = std::ranges::sized_range<U> && !is_text_range<U> && !is_byte_range<U> && !is_optional<U> &&
-                                    !is_map<U> && !requires { fixed_length<U>::value; };
-
-    template <class E>
-    static consteval std::uint64_t typed_array_tag()
-    {
-        constexpr std::uint64_t f = std::is_floating_point_v<E> ? 1 : 0;
-        constexpr std::uint64_t s = std::is_signed_v<E> && !std::is_floating_point_v<E> ? 1 : 0;
-        constexpr std::uint64_t e = sizeof(E) > 1 ? 1 : 0;
-        constexpr std::uint64_t ll = static_cast<std::uint64_t>(std::countr_zero(sizeof(E))) - f;
-        return std::to_underlying(rfc8746::tag_number::typed_array_first) | f << std::to_underlying(rfc8746::bit_field::f) |
-               s << std::to_underlying(rfc8746::bit_field::s) | e << std::to_underlying(rfc8746::bit_field::e) |
-               ll << std::to_underlying(rfc8746::bit_field::ll);
-    }
-
-    template <class E>
-    static constexpr bool is_typed_array_integer = requires {
-        requires std::integral<E> && !std::same_as<E, bool> && !std::same_as<E, char> && !std::same_as<E, wchar_t> &&
-                     !std::same_as<E, char8_t> && !std::same_as<E, char16_t> && !std::same_as<E, char32_t>;
-        requires sizeof(E) <= sizeof(std::uint64_t);
-    };
-
-    template <class E>
-    static constexpr bool is_typed_array_float = requires {
-        requires std::is_floating_point_v<E> && std::numeric_limits<E>::is_iec559;
-        requires(sizeof(E) == sizeof(std::uint16_t) && std::numeric_limits<E>::digits == heads::half_precision.significand_bits + 1) ||
-                    (sizeof(E) == sizeof(float) && std::numeric_limits<E>::digits == std::numeric_limits<float>::digits) ||
-                    (sizeof(E) == sizeof(double) &&
-                     std::numeric_limits<E>::digits == std::numeric_limits<double>::digits);
-    };
-
-    template <class E>
-    static constexpr bool is_typed_array_element = is_typed_array_integer<E> || is_typed_array_float<E>;
-
-    template <class U>
-    static constexpr bool is_typed_array = requires {
-        requires is_list<U>;
-        requires is_typed_array_element<std::remove_cv_t<std::ranges::range_value_t<U>>>;
-    };
 
     static constexpr std::size_t typed_array_head = heads::initial_byte_size + sizeof(std::uint8_t) + item_head;
 
@@ -1578,13 +1609,6 @@ class reflection
     }
 
     template <class U>
-#ifdef __SIZEOF_INT128__
-    static constexpr bool is_wide_integer = std::same_as<U, int128> || std::same_as<U, uint128>;
-#else
-    static constexpr bool is_wide_integer = false;
-#endif
-
-    template <class U>
     static constexpr bool has_integer_keys = requires { U::keys; };
 
     template <class U>
@@ -1604,11 +1628,14 @@ class reflection
         return members;
     }
 
-    friend class generic;
-
     template <class>
     friend class cbor::typed_array_view;
+#endif
+
+    friend class generic;
 };
+
+#ifdef __cpp_impl_reflection
 
 template <class E>
 class typed_array_view

@@ -101,9 +101,9 @@ class rfc8949
     template <fixed_string Path>
     friend class is_singular_query;
 
-#ifdef __cpp_impl_reflection
     friend class reflection;
 
+#ifdef __cpp_impl_reflection
     friend class generic;
 #endif
 };
