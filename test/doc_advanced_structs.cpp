@@ -156,9 +156,8 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
     auto const extra = cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "z"s, 2)));
     REQUIRE(extra.has_value());
     CHECK_EQ((*extra)->name, "x");
-    auto const twice = cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "age"s, 2)));
-    REQUIRE(twice.has_value());
-    CHECK_EQ((*twice)->age, 1u);
+    CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "age"s, 2))).error(),
+             error::duplicate_key);
     CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s))).error(), error::key_not_found);
     CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, A(), 0))).error(),
              error::unsupported_value);

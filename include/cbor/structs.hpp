@@ -634,8 +634,8 @@ class generic
         std::bitset<count> found;
         auto const member_read =
             [&]<std::size_t I>(std::integral_constant<std::size_t, I>) -> std::expected<void, error> {
-            if (found.test(I))
-                return well_formedness::item_skip(d, d);
+            if (auto const unique = validity::check_key_unique(found.test(I)); !unique) [[unlikely]]
+                return unique;
             found.set(I);
             return generic_read(d, pfr::get<I>(out), depth + 1, depth_max);
         };

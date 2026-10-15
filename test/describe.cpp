@@ -125,6 +125,11 @@ struct car {
 
 struct nothing {};
 
+struct claims {
+    std::string iss;
+    std::int64_t exp;
+};
+
 struct plain {
     std::uint8_t b;
     std::string aa;
@@ -159,6 +164,7 @@ CBOR_DESCRIBE_STRUCT(describe_test::mixed, (160040, 0), (text, "a"), (positive, 
 CBOR_DESCRIBE_STRUCT(describe_test::doors, (160001, 0), (count))
 CBOR_DESCRIBE_STRUCT(describe_test::car, (160002, 0), (doors))
 CBOR_DESCRIBE_STRUCT(describe_test::nothing, (160041, 0))
+CBOR_DESCRIBE_STRUCT(describe_test::claims, (160043, 0), (iss, 1), (exp, 4))
 CBOR_DESCRIBE_STRUCT(describe_test::pair_alias, (160042, 0), (first), (second, "s"))
 
 namespace describe_test
@@ -314,6 +320,32 @@ TEST_CASE("describe: decode of an unknown key, a missing key, a wrong tag and no
                                           "count\x04"s)
                  .error(),
              cbor::error::incorrect_type);
+}
+
+// RFC 8392 3: "all claims that are not understood by implementations MUST be ignored", and mruby-cbor reads
+// only the members it lists (test.rb:624-638). The claims iss (1) and exp (4) of RFC 8392 3.1 are listed; an
+// unknown claim of each kind of key that RFC 8949 allows in a map of a struct - an integer, a negative
+// integer, a text, a byte string and a simple value - is skipped and not read.
+TEST_CASE("describe: a key that no entry has is skipped")
+{
+    auto const read =
+        cbor::structs<describe_test::claims>::decode("\xda\x00\x02\x71\x2b\xa7\x01\x61"
+                                                     "a\x02\x82\x01\x02\x20\xa0\x61x\xf6\x41\x00\x01"
+                                                     "\xf5\x80\x04\x1a\x56\x12\xae\xb0"s);
+    REQUIRE(read.has_value());
+    CHECK_EQ((*read)->iss, "a");
+    CHECK_EQ((*read)->exp, 1444064944);
+}
+
+// RFC 8949 5.6: a repeated key in a map of a described struct gives duplicate_key, as the owner decided on
+// 2026-10-14 for every eager decode.
+TEST_CASE("describe: a repeated key of a member is duplicate_key")
+{
+    CHECK_EQ(cbor::structs<describe_test::doors>::decode("\xda\x00\x02\x71\x01\xa2\x65"
+                                                         "count\x04\x65"
+                                                         "count\x05"s)
+                 .error(),
+             cbor::error::duplicate_key);
 }
 
 // A description with no entry is a tag over an empty map. A type alias names a type whose name holds a comma,

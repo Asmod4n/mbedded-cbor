@@ -94,6 +94,7 @@ older program.
 | Input | Result |
 |---|---|
 | a key that no member has | skipped |
+| a key of a member that comes twice | `duplicate_key` |
 | no key for a `std::optional` member | an empty `std::optional` |
 | no key for any other member | `key_not_found` |
 | a value of another type, for example a text for `int` | `incorrect_type` |
