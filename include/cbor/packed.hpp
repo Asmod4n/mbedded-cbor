@@ -30,13 +30,14 @@
 #include <stdfloat>
 #endif
 
-#include "rfc8746.hpp"
-#include "rfc9535.hpp"
+#include "describe.hpp"
 #include "encode.hpp"
 #include "error.hpp"
-#include "validity.hpp"
 #include "head.hpp"
 #include "owning_ref.hpp"
+#include "rfc8746.hpp"
+#include "rfc9535.hpp"
+#include "validity.hpp"
 
 namespace cbor
 {
@@ -220,6 +221,119 @@ class reflection
         std::ranges::sort(encoded);
         return validity::keys_unique(encoded);
     }
+
+    static consteval std::size_t entries_count(std::string_view const list)
+    {
+        std::size_t depth = 0;
+        std::size_t count = 0;
+        for (std::size_t i = 0; i < list.size(); ++i) {
+            char const c = list[i];
+            if (c == '"' && i > 0 && list[i - 1] == 'R') {
+                std::size_t const open = list.find('(', i);
+                std::string const closing = ")" +
+                                            (list | std::views::drop(i + 1) | std::views::take(open - i - 1) |
+                                             std::ranges::to<std::string>()) +
+                                            "\"";
+                i = list.find(closing, open) + closing.size() - 1;
+            } else if (c == '"' || c == '\'') {
+                for (++i; list[i] != c; ++i)
+                    if (list[i] == '\\')
+                        ++i;
+            } else if (c == '(') {
+                if (depth++ == 0)
+                    ++count;
+            } else if (c == ')') {
+                --depth;
+            }
+        }
+        return count;
+    }
+
+    static consteval map_key key_or(std::string_view const name)
+    {
+        return map_key(name);
+    }
+
+    static consteval map_key key_or(std::string_view, map_key const key)
+    {
+        return key;
+    }
+
+    static consteval auto key_encoding_of(map_key const key)
+    {
+        return std::tuple(heads::initial_byte(key.major, heads::preferred_argument_info(key.argument)),
+                          key.argument, key.text);
+    }
+
+    static consteval bool key_encoding_less(map_key const a, map_key const b)
+    {
+        return key_encoding_of(a) < key_encoding_of(b);
+    }
+
+    template <class... P>
+    static consteval bool names_unique(std::tuple<member_descriptor<P>...> const &members)
+    {
+        std::vector<std::string_view> names;
+        std::apply([&](auto const &...m) { (names.push_back(m.name), ...); }, members);
+        std::ranges::sort(names);
+        return validity::keys_unique(names);
+    }
+
+    template <class... P>
+    static consteval bool keys_unique(std::tuple<member_descriptor<P>...> const &members)
+    {
+        std::vector<map_key> keys;
+        std::apply([&](auto const &...m) { (keys.push_back(m.key), ...); }, members);
+        std::ranges::sort(keys, key_encoding_less);
+        return validity::keys_unique(keys, key_encoding_of);
+    }
+
+    template <class T>
+    static consteval bool annotations_absent()
+    {
+#ifdef __cpp_impl_reflection
+        std::meta::info const type = std::meta::dealias(^^T);
+        if (annotated(type, ^^cbor::tag) || annotated(type, ^^cbor::allowlist))
+            return false;
+        for (std::meta::info const m :
+             std::meta::nonstatic_data_members_of(type, std::meta::access_context::unprivileged()))
+            if (annotated(m, ^^cbor::key) || annotated(m, ^^cbor::skip) || annotated(m, ^^cbor::allow))
+                return false;
+#endif
+        return true;
+    }
+
+#ifdef __cpp_impl_reflection
+    static consteval void public_member_names_add(std::meta::info const type,
+                                                  std::vector<std::string_view> &names)
+    {
+        for (std::meta::info const b : std::meta::bases_of(type, std::meta::access_context::unprivileged()))
+            public_member_names_add(std::meta::type_of(b), names);
+        for (std::meta::info const m :
+             std::meta::nonstatic_data_members_of(type, std::meta::access_context::unprivileged()))
+            names.push_back(std::meta::identifier_of(m));
+    }
+#endif
+
+    template <class T, class... P>
+    static consteval bool
+    reflected_members_listed([[maybe_unused]] std::tuple<member_descriptor<P>...> const &members)
+    {
+#ifdef __cpp_impl_reflection
+        std::vector<std::string_view> reflected;
+        public_member_names_add(std::meta::dealias(^^T), reflected);
+        std::vector<std::string_view> listed;
+        std::apply([&](auto const &...m) { (listed.push_back(m.name), ...); }, members);
+        std::ranges::sort(reflected);
+        std::ranges::sort(listed);
+        return reflected == listed;
+#else
+        return true;
+#endif
+    }
+
+    template <class>
+    friend struct cbor::describe_members;
 
 #ifdef __cpp_impl_reflection
     static consteval std::string_view key_of(std::meta::info const member)
@@ -1633,6 +1747,8 @@ class reflection
 #endif
 
     friend class generic;
+
+    friend class pfr;
 };
 
 #ifdef __cpp_impl_reflection

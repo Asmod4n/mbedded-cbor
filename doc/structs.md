@@ -64,15 +64,22 @@ does not compile.
 
 ## 3. Keys
 
-The key of a member is its name. Two annotations change it:
+The key of a member is its name. A description changes it.
+`CBOR_DESCRIBE_STRUCT` stands after the struct, outside every
+namespace. It gives the tag of the struct, its generation, and one entry
+for each member. The entry `(member, key)` gives the key. A key is a
+text or an integer.
 
 ```cpp
 struct header {
-    [[=cbor::key("content-type")]] std::string content_type;   // the key is "content-type"
-    [[=cbor::skip{}]] std::string cache;                       // not written, not read
+    std::string content_type;
 };
-// header{"text/plain", "x"} is {"content-type": "text/plain"}
+CBOR_DESCRIBE_STRUCT(header, (160060, 0), (content_type, "content-type"))
+// header{"text/plain"} is 160060({"content-type": "text/plain"})
 ```
+
+A described struct carries its tag. `decode` gives `incorrect_type`
+when the tag is missing or is another tag.
 
 `encode` leaves out a `std::optional` member that is empty. `decode`
 gives an empty `std::optional` when its key is not in the map.

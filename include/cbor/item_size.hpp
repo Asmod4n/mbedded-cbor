@@ -196,9 +196,7 @@ class well_formedness
 
     friend class jsonpath;
 
-#ifdef __cpp_impl_reflection
     friend class generic;
-#endif
 };
 
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)

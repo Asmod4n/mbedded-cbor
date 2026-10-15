@@ -9,9 +9,10 @@
 #include <cstdint>
 #include <expected>
 #include <limits>
-#include <numeric>
 #include <memory>
 #include <new>
+#include <numeric>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <string>
@@ -24,6 +25,8 @@
 #include <vector>
 #ifdef __cpp_impl_reflection
 #include <meta>
+#elif __has_include(<boost/pfr.hpp>)
+#include <boost/pfr.hpp>
 #endif
 
 #include "item_size.hpp"
@@ -39,7 +42,168 @@
 namespace cbor
 {
 
+class pfr
+{
+    template <class U>
+    static constexpr bool has_keys = requires { U::keys; };
+
+    template <class U>
+    static consteval bool struct_readable()
+    {
+        if constexpr (has_describe_members<U>) {
+            return true;
 #ifdef __cpp_impl_reflection
+        } else if constexpr (std::is_aggregate_v<U>) {
+            static_assert(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty(),
+                          "cbor::structs reads a class with a base class only through CBOR_DESCRIBE_STRUCT.");
+            static_assert(reflection::annotations_absent<U>(),
+                          "cbor::structs reads an aggregate with no CBOR_DESCRIBE_STRUCT by its member "
+                          "names; it takes no annotation.");
+            return true;
+#elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
+        } else if constexpr (std::is_aggregate_v<U>) {
+            return true;
+#else
+        } else if constexpr (std::is_aggregate_v<U>) {
+            static_assert(false, "cbor::structs reads an aggregate with no CBOR_DESCRIBE_STRUCT through "
+                                 "reflection or Boost.PFR; this build has neither.");
+#endif
+        } else {
+            static_assert(
+                false,
+                "cbor::structs reads a class that is not an aggregate only through CBOR_DESCRIBE_STRUCT.");
+        }
+    }
+
+    template <class U>
+    static consteval std::size_t members_count()
+    {
+        if constexpr (has_describe_members<U>)
+            return std::tuple_size_v<std::remove_const_t<decltype(describe_members<U>::members)>>;
+#ifdef __cpp_impl_reflection
+        else
+            return reflection::members_of<U>().size();
+#elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
+        else
+            return boost::pfr::tuple_size_v<U>;
+#endif
+    }
+
+    template <class U>
+    static constexpr std::size_t tuple_size_v = members_count<U>();
+
+    template <std::size_t I, class U>
+    static constexpr auto &get(U &value)
+    {
+        using V = std::remove_const_t<U>;
+        if constexpr (has_describe_members<V>) {
+            return value.*std::get<I>(describe_members<V>::members).pointer;
+        } else {
+#ifdef __cpp_impl_reflection
+            static constexpr auto members = reflection::members_of<V>();
+            return value.[:members[I]:];
+#elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
+            return boost::pfr::get<I>(value);
+#endif
+        }
+    }
+
+    template <std::size_t I, class U>
+    static consteval map_key key_of()
+    {
+        if constexpr (has_describe_members<U>)
+            return std::get<I>(describe_members<U>::members).key;
+        else if constexpr (has_keys<U>)
+            return map_key(std::get<I>(U::keys));
+#ifdef __cpp_impl_reflection
+        else
+            return map_key(reflection::key_of(reflection::members_of<U>()[I]));
+#elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
+        else
+            return map_key(boost::pfr::get_name<I, U>());
+#endif
+    }
+
+    template <class U>
+    static consteval std::optional<std::uint64_t> tag_of()
+    {
+        if constexpr (has_describe_members<U>)
+            return describe_members<U>::tag;
+        else
+            return std::nullopt;
+    }
+
+    template <class E, class Alloc>
+    static consteval bool uses_allocator_aggregate()
+    {
+#ifdef __cpp_impl_reflection
+        return reflection::uses_allocator_aggregate<E, Alloc>();
+#elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
+        if constexpr (std::uses_allocator_v<E, Alloc> || !std::is_class_v<E> || !std::is_aggregate_v<E> ||
+                      has_describe_members<E> || std::ranges::range<E>) {
+            return false;
+        } else {
+            return []<std::size_t... I>(std::index_sequence<I...>) {
+                return ((!std::is_array_v<boost::pfr::tuple_element_t<I, E>> &&
+                         !std::is_reference_v<boost::pfr::tuple_element_t<I, E>>) &&
+                        ...) &&
+                       (false || ... ||
+                        (std::uses_allocator_v<boost::pfr::tuple_element_t<I, E>, Alloc> ||
+                         uses_allocator_aggregate<boost::pfr::tuple_element_t<I, E>, Alloc>()));
+            }(std::make_index_sequence<boost::pfr::tuple_size_v<E>>());
+        }
+#else
+        return false;
+#endif
+    }
+
+    template <class E, class Alloc>
+    static constexpr E element_make(Alloc const &alloc, E &&from)
+    {
+#ifdef __cpp_impl_reflection
+        return reflection::element_make<E>(alloc, std::move(from));
+#else
+        if constexpr (uses_allocator_aggregate<E, Alloc>()) {
+#if defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return E{element_make<boost::pfr::tuple_element_t<I, E>>(
+                    alloc, std::move(boost::pfr::get<I>(from)))...};
+            }(std::make_index_sequence<boost::pfr::tuple_size_v<E>>());
+#endif
+        } else {
+            return std::make_obj_using_allocator<E>(alloc, std::move(from));
+        }
+#endif
+    }
+
+    template <class E>
+    static consteval void check_default_constructible()
+    {
+        static_assert(
+            std::is_default_constructible_v<E>,
+            "cbor::structs decodes into a default-constructed object; this type has no default constructor.");
+    }
+
+    template <class E, class Container>
+    static constexpr E element_make(Container const &container)
+    {
+        check_default_constructible<E>();
+        if constexpr (requires { container.get_allocator(); }) {
+            if constexpr (uses_allocator_aggregate<E, decltype(container.get_allocator())>())
+                return element_make<E>(container.get_allocator(), E{});
+            else
+                return std::make_obj_using_allocator<E>(container.get_allocator());
+        } else {
+            return E{};
+        }
+    }
+
+    friend class generic;
+
+    template <class>
+    friend class structs;
+};
+
 class generic
 {
     template <class>
@@ -144,6 +308,8 @@ class generic
             return h.major == major_type::map;
         else if constexpr (requires(U const &c) { typename U::value_type; c.size(); })
             return h.major == major_type::array;
+        else if constexpr (pfr::tag_of<U>().has_value())
+            return h.major == major_type::tag && h.argument == *pfr::tag_of<U>();
         else
             return h.major == major_type::map;
     }
@@ -378,10 +544,10 @@ class generic
             if (h->major != major_type::array || h->argument != std::tuple_size_v<U>) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             std::expected<void, error> r;
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, std::tuple_size_v<U>))) {
-                if (r)
-                    r = generic_read(d, std::get<i>(out), depth + 1, depth_max);
-            }
+            [&]<std::size_t... I>(std::index_sequence<I...>) {
+                ((r = r.and_then([&] { return generic_read(d, std::get<I>(out), depth + 1, depth_max); })),
+                 ...);
+            }(std::make_index_sequence<std::tuple_size_v<U>>());
             return r;
         } else if constexpr (reflection::is_map<U>) {
             auto const h = d.head_decode();
@@ -391,10 +557,10 @@ class generic
                 return std::unexpected(error::incorrect_type);
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto key = reflection::element_make<typename U::key_type>(out);
+                auto key = pfr::element_make<typename U::key_type>(out);
                 if (auto const r = generic_read(d, key, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
-                auto value = reflection::element_make<typename U::mapped_type>(out);
+                auto value = pfr::element_make<typename U::mapped_type>(out);
                 if (auto const r = generic_read(d, value, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
                 if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); })
@@ -408,6 +574,7 @@ class generic
                                  out.size();
                              }) {
             using E = typename U::value_type;
+            pfr::check_default_constructible<E>();
             static_assert(
                 requires(E &&e) { out.insert(out.end(), std::move(e)); },
                 "cbor::structs decodes a container with insert(end(), value); this container has none.");
@@ -420,13 +587,13 @@ class generic
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 if constexpr (requires {
                                   { out.emplace_back() } -> std::same_as<E &>;
-                                  requires !reflection::uses_allocator_aggregate<E, decltype(out.get_allocator())>();
+                                  requires !pfr::uses_allocator_aggregate<E, decltype(out.get_allocator())>();
                               }) {
                     if (auto const r = generic_read(d, out.emplace_back(), depth + 1, depth_max); !r)
                         [[unlikely]]
                         return r;
                 } else {
-                    E element = reflection::element_make<E>(out);
+                    E element = pfr::element_make<E>(out);
                     if (auto const r = generic_read(d, element, depth + 1, depth_max); !r) [[unlikely]]
                         return r;
                     out.insert(out.end(), std::move(element));
@@ -441,32 +608,37 @@ class generic
     template <class U, std::size_t I>
     static bool key_matches(heads::head const &k, std::string_view const text)
     {
-        if constexpr (reflection::has_integer_keys<U>) {
-            constexpr std::int64_t key = std::get<I>(U::keys);
-            if constexpr (key >= 0)
-                return k.major == major_type::unsigned_integer && k.argument == static_cast<std::uint64_t>(key);
-            else
-                return k.major == major_type::negative_integer && k.argument == static_cast<std::uint64_t>(-1 - key);
-        } else {
-            constexpr std::string_view name = reflection::key_of(reflection::members_of<U>()[I]);
-            return k.major == major_type::text_string && text == name;
-        }
+        constexpr map_key key = pfr::key_of<I, U>();
+        return k.major == key.major && k.argument == key.argument &&
+               (key.major != major_type::text_string || text == key.text);
     }
 
     template <class U, bool Checked>
     static std::expected<void, error> struct_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                   std::size_t const depth, std::size_t const depth_max)
     {
-        static_assert(!reflection::tag_number_of(^^U),
-                      "cbor::structs writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
-        static constexpr auto members = reflection::members_of<U>();
-        constexpr std::size_t count = members.size();
+        static_assert(pfr::struct_readable<U>());
+        constexpr std::size_t count = pfr::tuple_size_v<U>;
+        if constexpr (constexpr std::optional<std::uint64_t> tag = pfr::tag_of<U>(); tag.has_value()) {
+            auto const t = d.head_decode();
+            if (!t) [[unlikely]]
+                return std::unexpected(t.error());
+            if (t->major != major_type::tag || t->argument != *tag) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+        }
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         if (h->major != major_type::map) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         std::bitset<count> found;
+        auto const member_read =
+            [&]<std::size_t I>(std::integral_constant<std::size_t, I>) -> std::expected<void, error> {
+            if (found.test(I))
+                return well_formedness::item_skip(d, d);
+            found.set(I);
+            return generic_read(d, pfr::get<I>(out), depth + 1, depth_max);
+        };
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
             auto k = d.head_decode();
             if (!k) [[unlikely]]
@@ -499,19 +671,13 @@ class generic
                     return std::unexpected(c);
                 }
             }
-            bool matched = false;
             std::expected<void, error> r;
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, count))) {
-                if (!matched && key_matches<U, i>(*k, text)) {
-                    matched = true;
-                    if (found.test(i)) {
-                        r = well_formedness::item_skip(d, d);
-                    } else {
-                        found.set(i);
-                        r = generic_read(d, out.[:members[i]:], depth + 1, depth_max);
-                    }
-                }
-            }
+            bool const matched = [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return (
+                    false || ... ||
+                    (key_matches<U, I>(*k, text) &&
+                     (static_cast<void>(r = member_read(std::integral_constant<std::size_t, I>{})), true)));
+            }(std::make_index_sequence<count>());
             if (!matched) {
                 if (auto const s = well_formedness::item_skip(d, d); !s) [[unlikely]]
                     return s;
@@ -519,35 +685,31 @@ class generic
                 return r;
             }
         }
-        template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, count))) {
-            using M = std::remove_cvref_t<decltype(out.[:members[i]:])>;
-            if constexpr (!reflection::is_optional<M>)
-                if (!found.test(i)) [[unlikely]]
-                    return std::unexpected(error::key_not_found);
-        }
+        bool const missing = [&]<std::size_t... I>(std::index_sequence<I...>) {
+            return (false || ... ||
+                    (!reflection::is_optional<std::remove_cvref_t<decltype(pfr::get<I>(out))>> &&
+                     !found.test(I)));
+        }(std::make_index_sequence<count>());
+        if (missing) [[unlikely]]
+            return std::unexpected(error::key_not_found);
         return {};
     }
 
     template <class U>
-    static consteval std::array<std::size_t, reflection::members_of<U>().size()> key_order()
+    static consteval std::array<std::size_t, pfr::tuple_size_v<U>> key_order()
     {
-        constexpr auto members = reflection::members_of<U>();
-        std::array<std::vector<unsigned char>, members.size()> encoded;
-        for (std::size_t i = 0; i < members.size(); ++i) {
-            if constexpr (reflection::has_integer_keys<U>) {
-                std::int64_t const key = U::keys[i];
-                encoded[i] = key >= 0 ? reflection::key_encoded(major_type::unsigned_integer, static_cast<std::uint64_t>(key), {})
-                                      : reflection::key_encoded(major_type::negative_integer, static_cast<std::uint64_t>(-1 - key), {});
-            } else {
-                std::string_view const name = reflection::key_of(members[i]);
-                encoded[i] = reflection::key_encoded(major_type::text_string, name.size(), name);
-            }
-        }
-        std::array<std::size_t, members.size()> order;
+        constexpr std::size_t count = pfr::tuple_size_v<U>;
+        std::array<map_key, count> const keys = [&]<std::size_t... I>(std::index_sequence<I...>) {
+            return std::array<map_key, count>{pfr::key_of<I, U>()...};
+        }(std::make_index_sequence<count>());
+        std::array<std::size_t, count> order;
         std::ranges::iota(order, std::size_t{0});
         std::ranges::sort(order, [&](std::size_t const a, std::size_t const b) {
-            return std::ranges::lexicographical_compare(encoded[a], encoded[b]);
+            return reflection::key_encoding_less(keys[a], keys[b]);
         });
+        if (!validity::keys_unique(order,
+                                   [&](std::size_t const i) { return reflection::key_encoding_of(keys[i]); }))
+            std::unreachable();
         return order;
     }
 
@@ -655,40 +817,41 @@ class generic
             }
             return size;
         } else {
-            static_assert(!reflection::tag_number_of(^^U),
-                          "cbor::structs writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
-            static constexpr auto members = reflection::members_of<U>();
-            std::size_t size = 0;
+            static_assert(pfr::struct_readable<U>());
             std::size_t present = 0;
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
-                auto const &m = value.[:members[i]:];
-                if (member_present(m)) {
-                    ++present;
-                    if constexpr (reflection::has_integer_keys<U>) {
-                        constexpr std::int64_t key = std::get<i>(U::keys);
-                        auto const sum = validity::checked_add(size, *generic_size(key));
-                        if (!sum) [[unlikely]]
-                            return sum;
-                        size = *sum;
-                    } else {
-                        constexpr std::string_view name = reflection::key_of(members[i]);
-                        auto const sum = validity::checked_add(size, heads::head_size(name.size()) + name.size());
-                        if (!sum) [[unlikely]]
-                            return sum;
-                        size = *sum;
-                    }
-                    std::expected<std::size_t, std::errc> member;
-                    if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
-                        member = generic_size(*m);
-                    else
-                        member = generic_size(m);
-                    auto const sum = member.and_then([size](std::size_t const n) { return validity::checked_add(size, n); });
-                    if (!sum) [[unlikely]]
-                        return sum;
-                    size = *sum;
-                }
-            }
-            return validity::checked_add(size, heads::head_size(present));
+            auto const member_size =
+                [&]<std::size_t I>(std::integral_constant<std::size_t, I>,
+                                   std::size_t const sum) -> std::expected<std::size_t, std::errc> {
+                auto const &m = pfr::get<I>(value);
+                if (!member_present(m))
+                    return sum;
+                ++present;
+                constexpr map_key key = pfr::key_of<I, U>();
+                auto const keyed =
+                    validity::checked_add(sum, heads::head_size(key.argument) + key.text.size());
+                if (!keyed) [[unlikely]]
+                    return keyed;
+                std::expected<std::size_t, std::errc> member;
+                if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
+                    member = generic_size(*m);
+                else
+                    member = generic_size(m);
+                return member.and_then(
+                    [&keyed](std::size_t const n) { return validity::checked_add(*keyed, n); });
+            };
+            std::expected<std::size_t, std::errc> size = std::size_t{0};
+            [&]<std::size_t... I>(std::index_sequence<I...>) {
+                ((size = size.and_then([&](std::size_t const sum) {
+                     return member_size(std::integral_constant<std::size_t, I>{}, sum);
+                 })),
+                 ...);
+            }(std::make_index_sequence<pfr::tuple_size_v<U>>());
+            if (!size) [[unlikely]]
+                return size;
+            std::size_t head = heads::head_size(present);
+            if constexpr (constexpr std::optional<std::uint64_t> tag = pfr::tag_of<U>(); tag.has_value())
+                head += heads::head_size(*tag);
+            return validity::checked_add(*size, head);
         }
     }
 
@@ -787,34 +950,35 @@ class generic
                 at = generic_write(out, at, e);
             return at;
         } else {
-            static_assert(!reflection::tag_number_of(^^U),
-                          "cbor::structs writes the tag of a struct from cbor::tagged<N, E>; it does not read [[=cbor::tag(n)]].");
-            static constexpr auto members = reflection::members_of<U>();
-            std::size_t present = 0;
-            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(std::size_t{0}, members.size()))) {
-                if (member_present(value.[:members[i]:]))
-                    ++present;
-            }
+            static_assert(pfr::struct_readable<U>());
+            if constexpr (constexpr std::optional<std::uint64_t> tag = pfr::tag_of<U>(); tag.has_value())
+                at += heads::head_write(out, at, major_type::tag, *tag);
+            std::size_t const present = [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return (std::size_t{0} + ... +
+                        (member_present(pfr::get<I>(value)) ? std::size_t{1} : std::size_t{0}));
+            }(std::make_index_sequence<pfr::tuple_size_v<U>>());
             at += heads::head_write(out, at, major_type::map, present);
-            template for (constexpr std::size_t i : std::define_static_array(key_order<U>())) {
-                auto const &m = value.[:members[i]:];
-                if (member_present(m)) {
-                    if constexpr (reflection::has_integer_keys<U>) {
-                        constexpr std::int64_t key = std::get<i>(U::keys);
-                        at = generic_write(out, at, key);
-                    } else {
-                        constexpr std::string_view name = reflection::key_of(members[i]);
-                        at += heads::head_write(out, at, major_type::text_string, name.size());
-                        at = bytes_write(out, at, name);
-                    }
-                    if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
-                        at = generic_write(out, at, *m);
-                    else
-                        at = generic_write(out, at, m);
-                }
-            }
+            static constexpr auto order = key_order<U>();
+            [&]<std::size_t... J>(std::index_sequence<J...>) {
+                ((at = member_write<order[J]>(out, at, value)), ...);
+            }(std::make_index_sequence<order.size()>());
             return at;
         }
+    }
+
+    template <std::size_t I, class U>
+    static std::size_t member_write(std::span<char> const out, std::size_t at, U const &value)
+    {
+        auto const &m = pfr::get<I>(value);
+        if (!member_present(m))
+            return at;
+        constexpr map_key key = pfr::key_of<I, U>();
+        at += heads::head_write(out, at, key.major, key.argument);
+        at = bytes_write(out, at, key.text);
+        if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
+            return generic_write(out, at, *m);
+        else
+            return generic_write(out, at, m);
     }
 };
 
@@ -851,6 +1015,7 @@ public:
 
     static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
     {
+        pfr::check_default_constructible<T>();
         return decode(std::move(encoded), T{});
     }
 
@@ -963,6 +1128,5 @@ private:
         return out;
     }
 };
-#endif
 
 }

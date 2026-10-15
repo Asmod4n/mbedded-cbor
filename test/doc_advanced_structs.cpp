@@ -46,9 +46,23 @@ struct reading {
     bool operator==(reading const &) const = default;
 };
 
-struct [[=cbor::allowlist{}]] account {
-    [[=cbor::allow{}]] std::string user;
+class account
+{
     std::string password;
+
+public:
+    account() = default;
+    account(std::string u, std::uint8_t const l, std::string p)
+        : password(std::move(p)), user(std::move(u)), level(l)
+    {
+    }
+    std::string user;
+    std::uint8_t level = 0;
+
+    std::string const &password_of() const
+    {
+        return password;
+    }
 };
 
 // RFC 8428 6: SenML names the labels n and v with the integers 0 and 2.
@@ -64,6 +78,13 @@ struct tagged_person {
     std::string name;
     std::int64_t age;
 };
+
+} // namespace doc_advanced_structs
+
+CBOR_DESCRIBE_STRUCT(doc_advanced_structs::account, (160061, 0), (user), (level, 1))
+
+namespace doc_advanced_structs
+{
 
 // The section "Encode into a buffer of your own" says that encode with a target appends to the bytes that the
 // target holds.
@@ -119,10 +140,12 @@ TEST_CASE("doc advanced structs: the item of each type")
     CHECK_EQ(cbor::structs<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s).error(), error::number_out_of_range);
 }
 
-// The section "Structs and keys" shows cbor::allowlist with cbor::allow, and integer keys from a static member keys.
+// The section "Structs and keys" shows a description of a class with a private member and an integer key, and
+// integer keys from a static member keys.
 TEST_CASE("doc advanced structs: the key of a member")
 {
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<account>::encode(account{"ann", "secret"})), R"({"user": "ann"})");
+    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<account>::encode(account{"ann", 2, "secret"})),
+             R"(160061({1: 2, "user": "ann"}))");
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<senml>::encode(senml{"t", 1.5})), R"({0: "t", 2: 1.5})");
 }
 

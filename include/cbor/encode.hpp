@@ -148,12 +148,12 @@ private:
     template <class>
     friend class cbor::encoder;
 
+    template <class>
+    friend class structs;
+
 #ifdef __cpp_impl_reflection
     template <class>
     friend class packed;
-
-    template <class>
-    friend class structs;
 #endif
 };
 

@@ -32,12 +32,10 @@ private:
     template <bool Checked>
     struct sharing_decoder;
 
-#ifdef __cpp_impl_reflection
     friend class generic;
 
     template <class>
     friend class structs;
-#endif
 };
 
 template <bool Checked>
