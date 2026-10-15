@@ -25,6 +25,10 @@
 #include <utility>
 #include <variant>
 #include <vector>
+#include <version>
+#if __has_include(<spanstream>)
+#include <spanstream>
+#endif
 #if __has_include(<flat_set>)
 #include <flat_set>
 #endif
@@ -248,6 +252,7 @@ class generic
     static constexpr bool is_sys_time = false;
 
     template <class D>
+        requires std::ratio_less_equal_v<typename D::period, std::ratio<1>>
     static constexpr bool is_sys_time<std::chrono::sys_time<D>> = true;
 
     template <class U>
@@ -289,6 +294,34 @@ class generic
     template <class U>
     static constexpr bool is_tagged_standard_type =
         is_sys_time<U> || std::same_as<U, std::chrono::year_month_day> || is_set<U> || is_typed_array<U>;
+
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+    static constexpr std::array<char const *, 6> date_time_formats{"%FT%TZ", "%FT%Tz", "%FT%T%Ez",
+                                                                   "%Ft%TZ", "%Ft%Tz", "%Ft%T%Ez"};
+
+    static constexpr std::array<char const *, 1> full_date_formats{"%F"};
+#endif
+
+    template <class U>
+    static constexpr bool standard_tag_accepted(std::uint64_t const tag)
+    {
+        if constexpr (is_sys_time<U>) {
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+            if (tag == std::to_underlying(rfc8949::tag_number::standard_date_time_string))
+                return true;
+#endif
+            return std::same_as<typename U::duration, std::chrono::seconds> &&
+                   tag == tag_of_standard_type<U>();
+        } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+            if (tag == std::to_underlying(rfc8943::tag_number::full_date_string))
+                return true;
+#endif
+            return tag == tag_of_standard_type<U>();
+        } else {
+            return tag == tag_of_standard_type<U>();
+        }
+    }
 
     template <class U>
     static constexpr bool is_basic_string = requires {
@@ -339,7 +372,7 @@ class generic
             return (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) &&
                    h.argument <= static_cast<std::uint64_t>(std::numeric_limits<U>::max());
         else if constexpr (is_tagged_standard_type<U>)
-            return h.major == major_type::tag && h.argument == tag_of_standard_type<U>();
+            return h.major == major_type::tag && standard_tag_accepted<U>(h.argument);
         else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>)
             return h.major == major_type::text_string;
         else if constexpr (std::same_as<U, std::span<std::byte const>>)
@@ -651,34 +684,74 @@ class generic
     }
 
     template <class U, bool Checked>
+    static std::expected<void, error> epoch_read(value_sharing::sharing_decoder<Checked> &d, U &out)
+    {
+        using rep = std::chrono::seconds::rep;
+        heads::decoder<Checked> look = d;
+        auto const h = look.head_decode();
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        rep seconds = 0;
+        if (h->major == major_type::simple_float) {
+            if (!head_accepted<double>(*h)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            d.encoded = look.encoded;
+            auto const whole = validity::check_whole_number<rep>(heads::float_decode(h->info, h->argument));
+            if (!whole) [[unlikely]]
+                return std::unexpected(whole.error());
+            seconds = *whole;
+        } else if (auto const r = integer_read<rep>(d, seconds); !r) [[unlikely]] {
+            return r;
+        }
+        out = U{std::chrono::seconds{seconds}};
+        return {};
+    }
+
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+    template <class U, bool Checked, std::size_t N>
+    static std::expected<void, error> text_parse(value_sharing::sharing_decoder<Checked> &d, U &out,
+                                                 std::array<char const *, N> const &formats)
+    {
+        auto const h = d.head_decode();
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        if (h->major != major_type::text_string) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        auto const text = d.byte_string_decode(h->argument);
+        if (!text) [[unlikely]]
+            return std::unexpected(text.error());
+        for (char const *const format : formats) {
+            U value{};
+            std::ispanstream in(*text);
+            in >> std::chrono::parse(format, value);
+            if (!in.fail() && in.peek() == std::ispanstream::traits_type::eof()) {
+                out = value;
+                return {};
+            }
+        }
+        return std::unexpected(error::incorrect_type);
+    }
+#endif
+
+    template <class U, bool Checked>
     static std::expected<void, error> tag_content_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                        heads::head const &tag, std::size_t const depth,
                                                        std::size_t const depth_max)
     {
         if constexpr (is_sys_time<U>) {
-            static_assert(std::same_as<typename U::duration, std::chrono::seconds>,
-                          "cbor::structs reads tag 1 into std::chrono::sys_seconds only.");
-            using rep = std::chrono::seconds::rep;
-            heads::decoder<Checked> look = d;
-            auto const h = look.head_decode();
-            if (!h) [[unlikely]]
-                return std::unexpected(h.error());
-            rep seconds = 0;
-            if (h->major == major_type::simple_float) {
-                if (!head_accepted<double>(*h)) [[unlikely]]
-                    return std::unexpected(error::incorrect_type);
-                d.encoded = look.encoded;
-                auto const whole =
-                    validity::check_whole_number<rep>(heads::float_decode(h->info, h->argument));
-                if (!whole) [[unlikely]]
-                    return std::unexpected(whole.error());
-                seconds = *whole;
-            } else if (auto const r = integer_read<rep>(d, seconds); !r) [[unlikely]] {
-                return r;
-            }
-            out = U{std::chrono::seconds{seconds}};
-            return {};
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+            if (tag.argument == std::to_underlying(rfc8949::tag_number::standard_date_time_string))
+                return text_parse(d, out, date_time_formats);
+#endif
+            if constexpr (std::same_as<typename U::duration, std::chrono::seconds>)
+                return epoch_read(d, out);
+            else
+                return std::unexpected(error::incorrect_type);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+            if (tag.argument == std::to_underlying(rfc8943::tag_number::full_date_string))
+                return text_parse(d, out, full_date_formats);
+#endif
             std::chrono::days::rep days = 0;
             if (auto const r = integer_read<std::chrono::days::rep>(d, days); !r) [[unlikely]]
                 return r;
@@ -983,7 +1056,7 @@ class generic
     static std::expected<std::size_t, std::errc> elements_size(U const &value)
     {
         std::size_t size = heads::head_size(value.size());
-        for (auto const &e : value) {
+        for (typename U::value_type const &e : value) {
             auto const sum = generic_size(e).and_then(
                 [size](std::size_t const n) { return validity::checked_add(size, n); });
             if (!sum) [[unlikely]]
@@ -1125,7 +1198,7 @@ class generic
     static std::size_t elements_write(std::span<char> const out, std::size_t at, U const &value)
     {
         at += heads::head_write(out, at, major_type::array, value.size());
-        for (auto const &e : value)
+        for (typename U::value_type const &e : value)
             at = generic_write(out, at, e);
         return at;
     }
