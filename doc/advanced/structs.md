@@ -68,7 +68,7 @@ An empty owner throws `std::logic_error`. A `std::string` or a
 | `std::map`, `std::unordered_map` and their `std::pmr` forms | a map |
 | `std::vector`, `std::deque`, `std::list`, `std::set` and other containers | an array |
 | `cbor::tagged<N, E>` | tag N on the item of E |
-| an aggregate struct | a map, section 4 |
+| a struct | a map, section 4 |
 
 ```cpp
 cbor::structs<std::set<std::uint8_t>>::encode({3, 1});                          // [1, 3]
@@ -84,22 +84,49 @@ that a `float` cannot hold exactly gives `error::number_out_of_range`.
 
 ## 4. Structs and keys
 
-A struct is a map. Each public data member is one entry. The entries
-follow the order of the members.
+A struct is a map. Each public data member is one entry. The keys
+come in the order of RFC 8949 4.2.1: sorted by their encoded bytes.
 
-| Annotation | Effect |
+An aggregate with no description is read by the names of its members:
+through reflection on a build with `-freflection`, through Boost.PFR on
+other builds. It takes no annotation, so it gives the same bytes on
+every build. An aggregate with a base class needs a description.
+
+`CBOR_DESCRIBE_STRUCT(type, (tag, generation), entries...)` describes a
+struct or a class:
+
+| Entry | Key |
 |---|---|
-| `[[=cbor::key("x")]]` on a member | the key is the text `x` |
-| `[[=cbor::skip{}]]` on a member | the member has no entry |
-| `[[=cbor::allowlist{}]]` on the struct | only the members with `[[=cbor::allow{}]]` have an entry |
-| `static constexpr std::array<std::int64_t, N> keys` | the keys are these integers, one for each member |
+| `(m)` | the text of the name `m` |
+| `(m, "x")` | the text `x` |
+| `(m, 4)`, `(m, -1)` | the integer |
+| `static constexpr std::array<std::int64_t, N> keys` in an aggregate with no description | the keys are these integers, one for each member |
+
+- The macro stands outside every namespace, after the type and after the
+  description of each struct that the type holds.
+- A type whose name holds a comma takes a type alias.
+- An entry names a public data member of the type or of a public base.
+- On a build with `-freflection`, the entries are exactly the public data
+  members of the type and of its public bases. Another list does not
+  compile.
+- The macro takes at most `cbor::describe_entries_max` (342) entries.
+- No C++ literal holds -2^63. The key -2^63 is
+  `std::numeric_limits<std::int64_t>::min()`.
+- A described class needs a default constructor for `decode(bytes)`.
+  A class with no default constructor decodes into an object that the
+  caller gives: `decode(owner, T(...))`.
 
 ```cpp
-struct [[=cbor::allowlist{}]] account {
-    [[=cbor::allow{}]] std::string user;
+class account {
+public:
+    account() = default;
+    std::string user;
+    std::uint8_t level = 0;
+private:
     std::string password;
 };
-// account{"ann", "secret"} is {"user": "ann"}
+CBOR_DESCRIBE_STRUCT(account, (160061, 0), (user), (level, 1))
+// an account with user "ann" and level 2 is 160061({1: 2, "user": "ann"})
 
 struct senml {          // RFC 8428 6: n is 0, v is 2
     std::string n;
@@ -118,10 +145,9 @@ struct senml {          // RFC 8428 6: n is 0, v is 2
 
 ## 5. Tags
 
-`structs` writes a tag on a struct only through `cbor::tagged<N, E>`.
-A struct that carries `[[=cbor::tag(n)]]` does not compile in
-`structs`. Only the packed form reads that annotation
-([packed.md](packed.md)).
+A described struct carries the tag of its description (section 4).
+`cbor::tagged<N, E>` writes tag N on the item of E. A struct that
+carries `[[=cbor::tag(n)]]` does not compile in `structs`.
 
 ```cpp
 struct person { std::string name; std::int64_t age; };

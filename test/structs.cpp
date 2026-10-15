@@ -22,8 +22,6 @@
 #include <variant>
 #include <vector>
 
-#ifdef __cpp_impl_reflection
-
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
@@ -284,24 +282,30 @@ TEST_CASE("structs: a variant takes the alternative that matches the item")
 namespace
 {
 
-struct annotated {
-    [[=cbor::key("x-user-id")]] std::uint8_t m0;
-    [[=cbor::key("EOF")]] bool m1;
+struct renamed {
+    std::uint8_t m0;
+    bool m1;
 };
 
 } // namespace
 
-// A generator gives each member a fixed name and carries the key of the other language as an annotation, so a
-// key need not be a C++ identifier and never meets a macro such as EOF. The map comes from RFC 8949 3.1 by hand.
-TEST_CASE("structs: an annotation gives the key of a member")
+CBOR_DESCRIBE_STRUCT(renamed, (160050, 0), (m0, "x-user-id"), (m1, "EOF"))
+
+// A generator gives each member a fixed name and carries the key of the other language in the description, so
+// a key need not be a C++ identifier and never meets a macro such as EOF. The map comes from RFC 8949 3.1 by
+// hand, under the tag of the description, 160050 = 0x00027132.
+TEST_CASE("structs: the description gives the key of a member")
 {
-    std::string const bytes = "\xa2\x69x-user-id\x07\x63" "EOF\xf5"s;
-    auto const back = cbor::structs<annotated>::decode(std::string(bytes));
+    std::string const bytes = "\xda\x00\x02\x71\x32\xa2\x69x-user-id\x07\x63"
+                              "EOF\xf5"s;
+    auto const back = cbor::structs<renamed>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->m0, 7u);
     CHECK((*back)->m1);
-    CHECK_EQ(*cbor::structs<annotated>::encode(annotated{7, true}), "\xa2\x63" "EOF\xf5\x69x-user-id\x07"s);
-    CHECK_EQ(cbor::structs<annotated>::decode("\xa2\x62m0\x07\x62m1\xf5"s).error(), error::key_not_found);
+    CHECK_EQ(*cbor::structs<renamed>::encode(renamed{7, true}), "\xda\x00\x02\x71\x32\xa2\x63"
+                                                                "EOF\xf5\x69x-user-id\x07"s);
+    CHECK_EQ(cbor::structs<renamed>::decode("\xda\x00\x02\x71\x32\xa2\x62m0\x07\x62m1\xf5"s).error(),
+             error::key_not_found);
 }
 
 namespace
@@ -337,8 +341,11 @@ private:
 
 } // namespace
 
-// A private or protected member is state the class keeps to itself. It never goes on the wire, and a key of its
-// name on the wire is an unknown key, so the bytes of a sender cannot set it.
+CBOR_DESCRIBE_STRUCT(account, (160051, 0), (name), (id))
+
+// A private or protected member is state the class keeps to itself. It never goes on the wire, and a key of
+// its name on the wire is an unknown key, so the bytes of a sender cannot set it. A class with private
+// members is no aggregate, so it is read through its description, under its tag 160051 = 0x00027133.
 TEST_CASE("structs: only public members are written and read")
 {
     account a;
@@ -346,61 +353,15 @@ TEST_CASE("structs: only public members are written and read")
     a.id = 7;
     a.hidden_set(42, 9);
     std::string const bytes = *cbor::structs<account>::encode(a);
-    CHECK_EQ(bytes, "\xa2\x62id\x07\x64name\x63"
+    CHECK_EQ(bytes, "\xda\x00\x02\x71\x33\xa2\x62id\x07\x64name\x63"
                     "ann"s);
-    auto const back = cbor::structs<account>::decode("\xa4\x64name\x63"
+    auto const back = cbor::structs<account>::decode("\xda\x00\x02\x71\x33\xa4\x64name\x63"
                                                      "bob\x62id\x05\x66secret\x18\x2a\x64kept\x09"s);
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->name, "bob");
     CHECK_EQ((*back)->id, 5u);
     CHECK_EQ((*back)->secret_of(), 0u);
     CHECK_EQ((*back)->kept_of(), 0u);
-}
-
-namespace
-{
-
-struct login {
-    std::string name;
-    [[=cbor::skip{}]] std::string password_hash;
-};
-
-struct [[=cbor::allowlist{}]] profile {
-    [[=cbor::allow{}]] std::string name;
-    std::string email;
-    [[=cbor::allow{}]] std::uint8_t age;
-};
-
-} // namespace
-
-// A public member can hold what must not leave the program, as a password hash. cbor::skip leaves it out in both
-// directions: it is never written, and a key of its name on the wire is an unknown key that sets nothing.
-TEST_CASE("structs: cbor::skip leaves a public member out")
-{
-    CHECK_EQ(*cbor::structs<login>::encode(login{"ann", "hash"}), "\xa1\x64name\x63"
-                                                            "ann"s);
-    auto const back = cbor::structs<login>::decode("\xa2\x64name\x63"
-                                                   "bob\x6dpassword_hash\x61x"s);
-    REQUIRE(back.has_value());
-    CHECK_EQ((*back)->name, "bob");
-    CHECK((*back)->password_hash.empty());
-}
-
-// The allowlist model of mruby-cbor: with cbor::allowlist on the type, only a member marked cbor::allow is
-// written and read, so a member added later stays out until someone allows it.
-TEST_CASE("structs: cbor::allowlist takes only the members marked cbor::allow")
-{
-    CHECK_EQ(*cbor::structs<profile>::encode(profile{"ann", "a@b", 30}), "\xa2\x63"
-                                                                 "age\x18\x1e\x64name\x63"
-                                                                 "ann"s);
-    auto const back = cbor::structs<profile>::decode("\xa3\x64name\x63"
-                                                     "bob\x65"
-                                                     "email\x61x\x63"
-                                                     "age\x05"s);
-    REQUIRE(back.has_value());
-    CHECK_EQ((*back)->name, "bob");
-    CHECK((*back)->email.empty());
-    CHECK_EQ((*back)->age, 5u);
 }
 
 namespace
@@ -752,5 +713,3 @@ TEST_CASE("structs: a tag 29 into a plain member is incorrect_type")
     CHECK_EQ(cbor::structs<std::uint64_t>::decode(chain + "\x05"s), 5u);
     CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c"s + chain + "\x05"s).error(), error::nesting_depth_exceeded);
 }
-
-#endif

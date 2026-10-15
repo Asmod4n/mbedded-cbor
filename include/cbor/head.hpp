@@ -779,14 +779,14 @@ class heads
 
     friend class reflection;
 
-#ifdef __cpp_impl_reflection
     friend class generic;
 
     template <class>
-    friend class packed;
-
-    template <class>
     friend class structs;
+
+#ifdef __cpp_impl_reflection
+    template <class>
+    friend class packed;
 #endif
 };
 

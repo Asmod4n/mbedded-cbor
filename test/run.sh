@@ -4,7 +4,10 @@
 # usage: test/run.sh fast|full|<build>...
 #   fast: gcc-release clang-asan
 #   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx
-#   tsan is run by name and not in fast or full.
+#   tsan, gcc-describe and wasm are run by name and not in fast or full.
+#   gcc-describe builds with g++ and no reflection, so the tests take the path of the descriptions and Boost.PFR.
+#   wasm compiles test/describe.cpp for wasm32-wasip1 in the image mbedded-cbor-wasm and does not run it: the
+#   libc++ of Debian for wasm32 has no std::basic_fstream, which the runner of doctest needs.
 #   full also runs test/interop/run.sh, which decodes the output of the library with other decoders.
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
@@ -29,14 +32,27 @@ tsan="-Og -fsanitize=thread -fno-omit-frame-pointer"
 pch_clang="-Xclang -fno-pch-timestamp"
 
 one() {
-	local n=$1 cxx type flags
+	local n=$1 cxx type flags options=
 	case $n in
 	gcc-asan) cxx=g++-16 type=Debug flags=$asan ;;
 	gcc-release) cxx=g++-16 type=Release flags= ;;
+	gcc-describe) cxx=g++-16 type=Release flags= options=-DCBOR_HAS_FREFLECTION=OFF ;;
 	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" ;;
 	clang-release) cxx=clang++-23 type=Release flags=$pch_clang ;;
 	clang-libcxx) cxx=clang++-23 type=Release flags="-stdlib=libc++ $pch_clang" ;;
 	tsan) cxx=clang++-23 type=Debug flags="$tsan $pch_clang" ;;
+	wasm)
+		mkdir -p "$root/$branch/$n"
+		podman run --rm --network none -v "$src":/src:ro -v "$root/$branch/$n":/b mbedded-cbor-wasm bash -c '
+		s=${EPOCHREALTIME/./}
+		clang++-23 --target=wasm32-wasip1 -std=gnu++23 -O2 -flto -fno-exceptions -Wall -Wextra -Werror \
+			-idirafter /usr/include -I/src/include -DDOCTEST_CONFIG_NO_MULTITHREADING -DDOCTEST_CONFIG_NO_POSIX_SIGNALS \
+			-DDOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS -DDOCTEST_COUNTER=__COUNTER__ \
+			-c /src/test/describe.cpp -o /b/describe.o >/b/build.log 2>&1
+		r=$?; b=${EPOCHREALTIME/./}
+		printf "%-14s rc=%s build=%ds compiled, not run\n" wasm $r $(((b - s) / 1000000))
+		exit $r' >"$root/$branch/$n.result" 2>&1
+		return ;;
 	*) echo "unknown build $n" >&2; return 2 ;;
 	esac
 	mkdir -p "$root/$branch/$n" "$cache"
@@ -48,11 +64,11 @@ one() {
 		s=${EPOCHREALTIME/./}
 		cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE='"$type"' \
 			-DCMAKE_CXX_COMPILER='"$cxx"' -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" >/b/configure.log 2>&1 &&
+			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" '"$options"' >/b/configure.log 2>&1 &&
 		cmake --build /b -- -j'"$cpus"' >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
 		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test >/b/test.log 2>&1; r=$?; }
-		[ $r = 0 ] && { ctest --test-dir /b -R "^(cmake|clang_query|compile_fail)_" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
+		[ $r = 0 ] && { ctest --test-dir /b -j'"$cpus"' -R "^(cmake|clang_query|compile_fail)_" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
 			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log 2>/dev/null | head -1)"

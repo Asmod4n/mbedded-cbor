@@ -103,9 +103,7 @@ class rfc8949
 
     friend class reflection;
 
-#ifdef __cpp_impl_reflection
     friend class generic;
-#endif
 };
 
 }

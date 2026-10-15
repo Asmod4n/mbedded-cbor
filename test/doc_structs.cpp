@@ -57,8 +57,7 @@ std::expected<std::string, cbor::error> round_trip()
 enum class color : std::uint8_t { red, green };
 
 struct header {
-    [[=cbor::key("content-type")]] std::string content_type;
-    [[=cbor::skip{}]] std::string cache;
+    std::string content_type;
 };
 
 struct kinds {
@@ -72,6 +71,13 @@ struct kinds {
     std::unordered_map<std::string, int> m;
     color c;
 };
+
+} // namespace doc_structs
+
+CBOR_DESCRIBE_STRUCT(doc_structs::header, (160060, 0), (content_type, "content-type"))
+
+namespace doc_structs
+{
 
 // The section "Write a struct and read it back" gives the text of the bytes and a member of the struct that decode
 // gives back.
@@ -96,12 +102,15 @@ TEST_CASE("doc structs: types")
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::optional<int>>::encode(std::nullopt)), "null");
 }
 
-// The section "Keys" shows the two annotations, and that an empty optional member has no key.
+// The section "Keys" shows a key that a description gives, the tag that the description writes, and that an
+// empty optional member has no key.
 TEST_CASE("doc structs: keys")
 {
-    auto const bytes = cbor::structs<header>::encode(header{"text/plain", "x"});
+    auto const bytes = cbor::structs<header>::encode(header{"text/plain"});
     REQUIRE(bytes.has_value());
-    CHECK_EQ(cbor::diagnostic_notation(*bytes), R"({"content-type": "text/plain"})");
+    CHECK_EQ(cbor::diagnostic_notation(*bytes), R"(160060({"content-type": "text/plain"}))");
+    CHECK_EQ(cbor::structs<header>::decode(preferred(M("content-type"s, "text/plain"s))).error(),
+             error::incorrect_type);
     auto const none = cbor::structs<person>::encode(person{"bob", 40, {}, std::nullopt});
     REQUIRE(none.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*none), R"({"age": 40, "name": "bob", "tags": []})");
