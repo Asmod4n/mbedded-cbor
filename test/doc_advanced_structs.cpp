@@ -128,14 +128,14 @@ TEST_CASE("doc advanced structs: the item of each type")
     auto const bytes = cbor::structs<reading>::encode(r);
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes),
-             R"({"id": "x", "pair": [true, null], "state": 1, "value": 2.5, "counts": {"a": -1}, "samples": [1, 2]})");
+             R"({"id": "x", "pair": [true, null], "state": 1, "value": 2.5, "counts": {"a": -1}, "samples": 69(h'01000200')})");
     auto const back = cbor::structs<reading>::decode(*bytes);
     REQUIRE(back.has_value());
     CHECK(**back == r);
 
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::set<std::uint8_t>>::encode({3, 1})), "[1, 3]");
+    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::set<std::uint8_t>>::encode({3, 1})), "258([1, 3])");
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}})),
-             "h'0102'");
+             "64(h'0102')");
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<epoch>::encode(epoch{1700000000})), "1(1700000000)");
     CHECK_EQ(cbor::structs<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s).error(), error::number_out_of_range);
 }

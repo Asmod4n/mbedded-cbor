@@ -30,12 +30,14 @@
 #include <stdfloat>
 #endif
 
+#include "cbor_sets.hpp"
 #include "describe.hpp"
 #include "encode.hpp"
 #include "error.hpp"
 #include "head.hpp"
 #include "owning_ref.hpp"
 #include "rfc8746.hpp"
+#include "rfc8943.hpp"
 #include "rfc9535.hpp"
 #include "validity.hpp"
 
@@ -222,6 +224,26 @@ class reflection
         return validity::keys_unique(encoded);
     }
 
+    template <class E>
+    CBOR_ALWAYS_INLINE static E typed_array_element_read(std::span<char const, sizeof(E)> const in)
+    {
+        std::array<char, sizeof(E)> little;
+        std::ranges::copy(in, little.begin());
+        if constexpr (std::endian::native == std::endian::big)
+            std::ranges::reverse(little);
+        return std::bit_cast<E>(little);
+    }
+
+    template <class E>
+    CBOR_ALWAYS_INLINE static void typed_array_element_write(std::span<char, sizeof(E)> const out,
+                                                             E const value)
+    {
+        auto little = std::bit_cast<std::array<char, sizeof(E)>>(value);
+        if constexpr (std::endian::native == std::endian::big)
+            std::ranges::reverse(little);
+        std::ranges::copy(little, out.begin());
+    }
+
     static consteval std::size_t entries_count(std::string_view const list)
     {
         std::size_t depth = 0;
@@ -247,6 +269,20 @@ class reflection
             }
         }
         return count;
+    }
+
+    static consteval bool tag_taken_by_standard_type(std::uint64_t const tag)
+    {
+        return tag == std::to_underlying(rfc8949::tag_number::standard_date_time_string) ||
+               tag == std::to_underlying(rfc8949::tag_number::epoch_based_date_time) ||
+               tag == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
+               tag == std::to_underlying(rfc8949::tag_number::negative_bignum) ||
+               tag == std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item) ||
+               tag == std::to_underlying(rfc8943::tag_number::days_since_epoch_date) ||
+               tag == std::to_underlying(rfc8943::tag_number::full_date_string) ||
+               tag == std::to_underlying(cbor_sets::tag_number::set) ||
+               (tag >= std::to_underlying(rfc8746::tag_number::typed_array_first) &&
+                tag <= std::to_underlying(rfc8746::tag_number::typed_array_last));
     }
 
     static consteval map_key key_or(std::string_view const name)
@@ -443,24 +479,6 @@ class reflection
 
     static constexpr std::size_t typed_array_head = heads::initial_byte_size + sizeof(std::uint8_t) + item_head;
 
-    template <class E>
-    CBOR_ALWAYS_INLINE static E typed_array_element_read(std::span<char const, sizeof(E)> const in)
-    {
-        std::array<char, sizeof(E)> little;
-        std::ranges::copy(in, little.begin());
-        if constexpr (std::endian::native == std::endian::big)
-            std::ranges::reverse(little);
-        return std::bit_cast<E>(little);
-    }
-
-    template <class E>
-    CBOR_ALWAYS_INLINE static void typed_array_element_write(std::span<char, sizeof(E)> const out, E const value)
-    {
-        auto little = std::bit_cast<std::array<char, sizeof(E)>>(value);
-        if constexpr (std::endian::native == std::endian::big)
-            std::ranges::reverse(little);
-        std::ranges::copy(little, out.begin());
-    }
 
     static constexpr void fixed_width_head_encode(std::vector<char> &encoded, major_type const major, std::size_t const width)
     {

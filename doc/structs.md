@@ -1,11 +1,11 @@
 # Databind
 
-`cbor::structs<T>` writes a C++ value as CBOR and reads it back. A
-struct needs no code of its own: the compiler reads its members by
-reflection.
-
-Databind needs C++26 reflection: g++ 16 with `-std=c++26 -freflection`.
-clang has no reflection yet, so a clang build has no `cbor::structs`.
+`cbor::structs<T>` writes a C++ value as CBOR and reads it back. An
+aggregate struct needs no code of its own: g++ 16 with
+`-std=c++26 -freflection` reads its members by reflection, and every
+other compiler reads them through Boost.PFR (C++23 and the Boost
+headers). A class with a constructor or a base class takes a description
+(section 3).
 [basics.md](basics.md) states how errors come back and how long a result
 stays valid.
 
@@ -51,8 +51,12 @@ cbor::error>`: `*back` is the `owning_ref`, and `**back` is the
 | an integer type, for example `int` or `std::uint64_t` | an integer |
 | `float`, `double` | a float |
 | `std::string` | a text |
-| `std::vector<std::byte>` | a byte string |
-| `std::vector`, `std::list`, `std::set` | an array |
+| `std::span<std::byte const>` | a byte string |
+| `std::vector` or `std::array` of `std::byte` or of a number type, for example `std::uint16_t` or `double` | a typed array of RFC 8746: its tag over the bytes of the elements, little endian |
+| `std::set` | tag 258 on an array |
+| `std::chrono::sys_seconds` | tag 1 on the seconds since 1970-01-01 |
+| `std::chrono::year_month_day` | tag 100 on the days since 1970-01-01 |
+| `std::vector`, `std::list` of other types | an array |
 | `std::map`, `std::unordered_map` | a map |
 | `std::optional<E>` | the value of E; when empty, `null`, or no key for a member (section 3) |
 | an enum with a fixed underlying type | an integer |

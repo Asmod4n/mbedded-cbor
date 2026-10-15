@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -34,7 +35,7 @@ void round_trip(std::string const &bytes, T const &expected)
 {
     auto const back = cbor::structs<T>::decode(std::string(bytes));
     REQUIRE(back.has_value());
-    CHECK(**back == expected);
+    CHECK((**back == expected));
     auto const again = cbor::structs<T>::encode(expected);
     REQUIRE(again.has_value());
     CHECK_EQ(*again, bytes);
@@ -101,7 +102,9 @@ struct integer_order {
 
 } // namespace
 
-// The expectations are the examples of RFC 8949 Appendix A, each read into a C++ type and written back.
+// The expectations are the examples of RFC 8949 Appendix A, each read into a C++ type and written back. A
+// vector or an array of numbers is an RFC 8746 typed array since the owner decision of 2026-10-15: tag 64 for
+// bytes, tag 71 for uint64 little endian.
 TEST_CASE("structs: the examples of RFC 8949 Appendix A")
 {
     round_trip<std::uint64_t>("\x00"s, 0);
@@ -119,11 +122,14 @@ TEST_CASE("structs: the examples of RFC 8949 Appendix A")
     round_trip<bool>("\xf5"s, true);
     round_trip<std::optional<std::uint64_t>>("\xf6"s, std::nullopt);
     round_trip<std::string>("\x64IETF"s, "IETF");
-    round_trip<std::vector<std::byte>>("\x44\x01\x02\x03\x04"s,
+    round_trip<std::vector<std::byte>>("\xd8\x40\x44\x01\x02\x03\x04"s,
                                        {std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}});
     round_trip<std::tuple<std::uint64_t, std::array<std::uint64_t, 2>, std::vector<std::uint64_t>>>(
-        "\x83\x01\x82\x02\x03\x82\x04\x05"s, {1, {2, 3}, {4, 5}});
-    round_trip<pair_ab>("\xa2\x61\x61\x01\x61\x62\x82\x02\x03"s, {1, {2, 3}});
+        "\x83\x01\xd8\x47\x50\x02\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\xd8\x47\x50\x04\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00"s,
+        {1, {2, 3}, {4, 5}});
+    round_trip<pair_ab>(
+        "\xa2\x61\x61\x01\x61\x62\xd8\x47\x50\x02\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00"s,
+        {1, {2, 3}});
     round_trip<std::map<std::string, std::string>>("\xa2\x61\x61\x61\x41\x61\x62\x61\x42"s,
                                                    {{"a", "A"}, {"b", "B"}});
 }
@@ -132,7 +138,8 @@ TEST_CASE("structs: the examples of RFC 8949 Appendix A")
 // error; an optional member may be absent.
 TEST_CASE("structs: an unknown key is skipped, a missing key is an error")
 {
-    auto const extra = cbor::structs<pair_ab>::decode("\xa3\x61\x63\x82\x01\x02\x61\x61\x01\x61\x62\x80"s);
+    auto const extra =
+        cbor::structs<pair_ab>::decode("\xa3\x61\x63\x82\x01\x02\x61\x61\x01\x61\x62\xd8\x47\x40"s);
     REQUIRE(extra.has_value());
     CHECK_EQ((*extra)->a, 1u);
     CHECK_EQ(cbor::structs<pair_ab>::decode("\xa1\x61\x61\x01"s).error(), error::key_not_found);
@@ -153,7 +160,8 @@ TEST_CASE("structs: a repeated key of a member is duplicate_key")
         cbor::structs<std::map<std::string, std::string>>::decode("\xa2\x61\x61\x61\x41\x61\x61\x61\x42"s);
     REQUIRE(map.has_value());
     CHECK_EQ((*map)->at("a"), "A");
-    CHECK(cbor::structs<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\x80\x61x\x01\x61x\x02"s).has_value());
+    CHECK(cbor::structs<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\xd8\x47\x40\x61x\x01\x61x\x02"s)
+              .has_value());
     auto const widths = cbor::structs<std::map<std::uint64_t, std::uint64_t>>::decode("\xa2\x01\x00\x18\x01\x05"s);
     REQUIRE(widths.has_value());
     CHECK_EQ((*widths)->size(), 1u);
@@ -267,15 +275,15 @@ TEST_CASE("structs: bignums and simple values of RFC 8949 Appendix A")
     CHECK_EQ(cbor::structs<cbor::simple_value>::decode("\xf8\x10"s).error(), error::syntax_error);
 }
 
-// A std::variant takes the first alternative whose kind matches the item, so one array can hold several kinds,
-// as RFC 8949 allows.
+// A std::variant takes the first alternative whose kind matches the item, so one array can hold several
+// kinds, as RFC 8949 allows. A vector of bytes is the typed array of tag 64 (RFC 8746).
 TEST_CASE("structs: a variant takes the alternative that matches the item")
 {
     using any = std::variant<std::uint64_t, std::int64_t, std::string, double, bool, std::nullptr_t,
                              std::vector<std::byte>>;
     std::vector<any> const values{std::uint64_t{1}, std::int64_t{-1}, std::string("a"), 1.5, true, nullptr,
                                   std::vector<std::byte>{std::byte{7}}};
-    round_trip<std::vector<any>>("\x87\x01\x20\x61\x61\xf9\x3e\x00\xf5\xf6\x41\x07"s, values);
+    round_trip<std::vector<any>>("\x87\x01\x20\x61\x61\xf9\x3e\x00\xf5\xf6\xd8\x40\x41\x07"s, values);
     CHECK_EQ(cbor::structs<std::variant<std::string, bool>>::decode("\x01"s).error(), error::incorrect_type);
 }
 
@@ -367,6 +375,12 @@ TEST_CASE("structs: only public members are written and read")
 namespace
 {
 
+struct pair_marks {
+    std::uint64_t a;
+    std::vector<std::optional<std::uint64_t>> b;
+    bool operator==(pair_marks const &) const = default;
+};
+
 struct named_pair {
     std::vector<std::string> b;
     std::uint64_t a;
@@ -375,27 +389,38 @@ struct named_pair {
 
 } // namespace
 
-// The owner decided on 2026-10-13 that an eager decode keeps one table of the tags 28 of one call. A tag 28 on a
-// plain member is allowed and keeps the value. A tag 29 needs a member that can share a value; no plain member
-// can, so it gives incorrect_type. A tag 29 to a mark in a skipped member gives sharedref_not_complete, a forward
-// index sharedref_index_not_marked, and a tag 28 or 29 on a key unsupported_value.
+// The owner decided on 2026-10-13 that an eager decode keeps one table of the tags 28 of one call. A tag 28
+// on a plain member is allowed and keeps the value. A tag 29 needs a member that can share a value; no plain
+// member can, so it gives incorrect_type. A tag 29 to a mark in a skipped member gives
+// sharedref_not_complete, a forward index sharedref_index_not_marked, and a tag 28 or 29 on a key
+// unsupported_value. A typed array holds no tag, so the marks stand in a vector of std::optional, which is a
+// plain array.
 TEST_CASE("structs: the table of tags 28 and 29 of one decode")
 {
-    auto const marked = cbor::structs<pair_ab>::decode("\xa2\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1c\x03"s);
+    using marked_numbers = std::vector<std::optional<std::uint64_t>>;
+    auto const marked =
+        cbor::structs<pair_marks>::decode("\xa2\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1c\x03"s);
     REQUIRE(marked.has_value());
-    CHECK(**marked == pair_ab{2, {3}});
-    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa2\xd8\x1c\x61\x61\xd8\x1c\x01\x61\x62\x82\xd8\x1d\x01\xd8\x1d\x01"s).error(),
+    CHECK(**marked == pair_marks{2, {3}});
+    CHECK_EQ(cbor::structs<pair_marks>::decode(
+                 "\xa2\xd8\x1c\x61\x61\xd8\x1c\x01\x61\x62\x82\xd8\x1d\x01\xd8\x1d\x01"s)
+                 .error(),
              error::unsupported_value);
     CHECK_EQ(cbor::structs<named_pair>::decode("\xa2\x61\x62\x81\xd8\x1c\x61\x61\xd8\x1d\x00\x07"s).error(),
              error::unsupported_value);
-    CHECK_EQ(cbor::structs<std::vector<std::uint64_t>>::decode("\x81\xd8\x1d\x00"s).error(), error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa3\x61\x63\xd8\x1c\x00\x61\x61\x02\x61\x62\x81\xd8\x1d\x00"s).error(),
-             error::sharedref_not_complete);
-    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa3\x61\x63\xd8\x1c\x00\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1d\x01"s).error(),
-             error::incorrect_type);
-    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x18\x1d"s).error(),
+    CHECK_EQ(cbor::structs<marked_numbers>::decode("\x81\xd8\x1d\x00"s).error(),
              error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x61x"s).error(),
+    CHECK_EQ(
+        cbor::structs<pair_marks>::decode("\xa3\x61\x63\xd8\x1c\x00\x61\x61\x02\x61\x62\x81\xd8\x1d\x00"s)
+            .error(),
+        error::sharedref_not_complete);
+    CHECK_EQ(cbor::structs<pair_marks>::decode(
+                 "\xa3\x61\x63\xd8\x1c\x00\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1d\x01"s)
+                 .error(),
+             error::incorrect_type);
+    CHECK_EQ(cbor::structs<pair_marks>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x18\x1d"s).error(),
+             error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::structs<pair_marks>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x61x"s).error(),
              error::inadmissible_type_for_tag_content);
 }
 
@@ -491,12 +516,13 @@ struct standard_containers {
 TEST_CASE("structs: every standard container that encode writes decodes")
 {
     round_trip("\x82\xf5\xf4"s, std::vector<bool>{true, false});
-    round_trip("\x82\x01\x02"s, std::set<int>{1, 2});
+    round_trip("\xd9\x01\x02\x82\x01\x02"s, std::set<int>{1, 2});
     round_trip("\x83\x01\x02\x03"s, std::list<int>{1, 2, 3});
     round_trip("\x82\x01\x02"s, std::deque<int>{1, 2});
-    round_trip("\xa6\x61"
-               "b\x81\xf5\x61l\x82\x01\x02\x61m\x82\x06\x06\x61q\x81\x03\x61s\x82\x04\x05\x62mm\xa2\x01\x02\x01\x03"s,
-               standard_containers{{1, 2}, {3}, {true}, {4, 5}, {6, 6}, {{1, 2}, {1, 3}}});
+    round_trip(
+        "\xa6\x61"
+        "b\x81\xf5\x61l\x82\x01\x02\x61m\x82\x06\x06\x61q\x81\x03\x61s\xd9\x01\x02\x82\x04\x05\x62mm\xa2\x01\x02\x01\x03"s,
+        standard_containers{{1, 2}, {3}, {true}, {4, 5}, {6, 6}, {{1, 2}, {1, 3}}});
 }
 
 template <class T>
@@ -538,7 +564,7 @@ TEST_CASE("structs: decode reserves no more than the remaining bytes and returns
     CHECK_EQ(r.error(), error::incorrect_type);
 
     std::string many = "\xa1\x61v\x9a\x00\x00\x02\x01"s;
-    std::string const element = "\x99\x02\x00"s + std::string(512, '\x00');
+    std::string const element = "\xd8\x47\x59\x10\x00"s + std::string(4096, '\x00');
     for (int i = 0; i < 0x201; ++i)
         many += element;
     auto const full = cbor::structs<large_elements>::decode(std::move(many));
@@ -694,7 +720,7 @@ TEST_CASE("structs: an integer key written as a bignum that fits")
 // tree decode.
 TEST_CASE("structs: a tag 29 into a plain member is incorrect_type")
 {
-    using numbers = std::vector<std::uint64_t>;
+    using numbers = std::vector<std::optional<std::uint64_t>>;
     CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\xd8\x1c\x81\xd8\x1d\x00"s).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::map<std::uint64_t, numbers>>::decode("\xd8\x1c\xa1\x01\xd8\x1d\x00"s).error(),
              error::incorrect_type);
@@ -712,4 +738,187 @@ TEST_CASE("structs: a tag 29 into a plain member is incorrect_type")
         chain += "\xd8\x1c"s;
     CHECK_EQ(cbor::structs<std::uint64_t>::decode(chain + "\x05"s), 5u);
     CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c"s + chain + "\x05"s).error(), error::nesting_depth_exceeded);
+}
+
+namespace
+{
+
+// RFC 8949 3: the head of a tag, written by hand for the tag numbers below 2^16.
+std::string tag_head(std::uint64_t const tag)
+{
+    if (tag < 24)
+        return std::string(1, static_cast<char>(0xc0 + tag));
+    if (tag < 256)
+        return "\xd8"s + static_cast<char>(tag);
+    return "\xd9"s + static_cast<char>(tag >> 8) + static_cast<char>(tag & 0xff);
+}
+
+// One content for each tag of the cross product: the content that the registry names for the tag
+// (refs/cbor-tags.xml), with a value that every type which accepts the tag can hold.
+std::string content_of(std::uint64_t const tag)
+{
+    switch (tag) {
+    case 0:
+        return "\x74"
+               "1970-01-01T00:00:00Z"s;
+    case 1:
+    case 100:
+        return "\x00"s;
+    case 258:
+        return "\x80"s;
+    case 1004:
+        return "\x6a"
+               "1970-01-01"s;
+    default:
+        return "\x40"s;
+    }
+}
+
+template <class T>
+void tags_accepted(std::vector<std::uint64_t> const &accepted)
+{
+    std::vector<std::uint64_t> tags{0, 1, 24, 100, 258, 1004};
+    for (std::uint64_t t = 64; t <= 87; ++t)
+        tags.push_back(t);
+    REQUIRE_EQ(tags.size(), 30u);
+    for (std::uint64_t const t : tags) {
+        CAPTURE(t);
+        auto const r = cbor::structs<T>::decode(tag_head(t) + content_of(t));
+        if (std::ranges::find(accepted, t) != accepted.end())
+            CHECK(r.has_value());
+        else
+            CHECK_EQ(r.error(), error::incorrect_type);
+    }
+}
+
+} // namespace
+
+// The owner decided on 2026-10-15 that a standard library type takes the tag that CBOR assigns to it:
+// sys_seconds tag 1 (RFC 8949 3.4.2), year_month_day tag 100 (RFC 8943 2), std::set tag 258 (CBOR_SETS.md),
+// and a std::vector of a fixed-width number the RFC 8746 typed array of its element, little endian; std::byte
+// and std::uint8_t take tag
+// 64. Each cell of tags x types is one case. The tags 0 and 1004 come with the next commit; until then they
+// give incorrect_type. The tag of each element type comes from the table of RFC 8746 2.1
+// (refs/rfc8746.txt:473-539).
+TEST_CASE("structs: the tags that each standard library type accepts")
+{
+    tags_accepted<std::chrono::sys_seconds>({1});
+    tags_accepted<std::chrono::year_month_day>({100});
+    tags_accepted<std::set<int>>({258});
+    tags_accepted<std::vector<std::byte>>({64});
+    tags_accepted<std::vector<std::uint8_t>>({64});
+    tags_accepted<std::vector<std::uint16_t>>({69});
+    tags_accepted<std::vector<std::uint32_t>>({70});
+    tags_accepted<std::vector<std::uint64_t>>({71});
+    tags_accepted<std::vector<std::int8_t>>({72});
+    tags_accepted<std::vector<std::int16_t>>({77});
+    tags_accepted<std::vector<std::int32_t>>({78});
+    tags_accepted<std::vector<std::int64_t>>({79});
+    tags_accepted<std::vector<float>>({85});
+    tags_accepted<std::vector<double>>({86});
+}
+
+// RFC 8949 3.4.2: tag 1 holds the seconds since 1970-01-01T00:00Z; 1700000000 is 0x6553f100. RFC 8943 Table 1
+// (refs/rfc8943.txt:135-141): 1940-10-09 is day -10676 and 1980-12-08 is day 3994 under tag 100 ('d').
+TEST_CASE("structs: sys_seconds is tag 1 and year_month_day is tag 100")
+{
+    using namespace std::chrono;
+    round_trip("\xc1\x1a\x65\x53\xf1\x00"s, sys_seconds{seconds{1700000000}});
+    round_trip("\xc1\x20"s, sys_seconds{seconds{-1}});
+    round_trip("\xd8\x64\x39\x29\xb3"s, year_month_day{year{1940}, October, day{9}});
+    round_trip("\xd8\x64\x19\x0f\x9a"s, year_month_day{year{1980}, December, day{8}});
+    CHECK_EQ(cbor::structs<sys_seconds>::decode("\xc1\x1b\x80\x00\x00\x00\x00\x00\x00\x00"s).error(),
+             error::number_out_of_range);
+    CHECK_EQ(cbor::structs<sys_seconds>::decode("\xc1\x61x"s).error(), error::incorrect_type);
+}
+
+// RFC 8949 3.4.2 reads a nonnegative value of tag 1 as POSIX time and leaves a negative value and a value
+// that is not finite to the application (refs/rfc8949.txt:1047-1069). The owner decided on 2026-10-15 that a
+// float with a whole value goes into sys_seconds and any other float gives number_out_of_range. -0.0 has the
+// value 0. Each value stands in each width of RFC 8949 3.3 that holds it: 2^63 does not fit binary16.
+TEST_CASE("structs: tag 1 with a float into sys_seconds")
+{
+    using namespace std::chrono;
+    auto const read = [](std::string bytes) { return cbor::structs<sys_seconds>::decode("\xc1"s + bytes); };
+    for (std::string const &one :
+         {"\xf9\x3c\x00"s, "\xfa\x3f\x80\x00\x00"s, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"s}) {
+        auto const r = read(one);
+        REQUIRE(r.has_value());
+        CHECK_EQ((*r)->time_since_epoch().count(), 1);
+    }
+    for (std::string const &zero :
+         {"\xf9\x80\x00"s, "\xfa\x80\x00\x00\x00"s, "\xfb\x80\x00\x00\x00\x00\x00\x00\x00"s}) {
+        auto const r = read(zero);
+        REQUIRE(r.has_value());
+        CHECK_EQ((*r)->time_since_epoch().count(), 0);
+    }
+    for (std::string const &refused :
+         {"\xf9\x3e\x00"s, "\xfa\x3f\xc0\x00\x00"s, "\xfb\x3f\xf8\x00\x00\x00\x00\x00\x00"s, "\xf9\x7e\x00"s,
+          "\xfa\x7f\xc0\x00\x00"s, "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x00"s, "\xf9\x7c\x00"s,
+          "\xfa\x7f\x80\x00\x00"s, "\xfb\x7f\xf0\x00\x00\x00\x00\x00\x00"s, "\xf9\xfc\x00"s,
+          "\xfa\xff\x80\x00\x00"s, "\xfb\xff\xf0\x00\x00\x00\x00\x00\x00"s, "\xfa\x5f\x00\x00\x00"s,
+          "\xfb\x43\xe0\x00\x00\x00\x00\x00\x00"s}) {
+        CAPTURE(refused.size());
+        CHECK_EQ(read(refused).error(), error::number_out_of_range);
+    }
+}
+
+// CBOR_SETS.md (refs/CBOR_SETS.md): tag 258 on an array is a set. The library writes the order of the
+// container, as it never sorts at run time; std::set holds -1 before 1 and "aa" before "b". A decode takes
+// any order. A duplicate item makes the set not valid, and the owner decided that it gives duplicate_key, as
+// a repeated key of a map does.
+TEST_CASE("structs: std::set is tag 258")
+{
+    round_trip("\xd9\x01\x02\x82\x20\x01"s, std::set<int>{-1, 1});
+    round_trip("\xd9\x01\x02\x82\x62"
+               "aa\x61"
+               "b"s,
+               std::set<std::string>{"aa", "b"});
+    auto const any_order = cbor::structs<std::set<int>>::decode("\xd9\x01\x02\x82\x02\x01"s);
+    REQUIRE(any_order.has_value());
+    CHECK(**any_order == std::set<int>{1, 2});
+    CHECK_EQ(cbor::structs<std::set<int>>::decode("\xd9\x01\x02\x82\x01\x01"s).error(), error::duplicate_key);
+    CHECK_EQ(cbor::structs<std::set<int>>::decode("\x82\x01\x02"s).error(), error::incorrect_type);
+}
+
+// RFC 8746 2.1: a typed array is its tag over a byte string of the elements, here little endian. The owner
+// decided on 2026-10-15 that every std::vector and std::array of a fixed-width number, std::byte and
+// std::uint8_t included, is a typed array; a byte string comes from std::span<std::byte const>. A std::array
+// takes exactly its count; a byte string whose length is no multiple of the element size is no typed array
+// (RFC 8746 2).
+TEST_CASE("structs: a vector or an array of numbers is an RFC 8746 typed array")
+{
+    round_trip("\xd8\x40\x42\x01\x02"s, std::vector<std::byte>{std::byte{1}, std::byte{2}});
+    round_trip("\xd8\x40\x42\x01\xff"s, std::vector<std::uint8_t>{1, 255});
+    round_trip("\xd8\x45\x44\x01\x00\x02\x01"s, std::vector<std::uint16_t>{1, 0x102});
+    round_trip("\xd8\x46\x44\x04\x03\x02\x01"s, std::vector<std::uint32_t>{0x01020304});
+    round_trip("\xd8\x47\x48\x08\x07\x06\x05\x04\x03\x02\x01"s,
+               std::vector<std::uint64_t>{0x0102030405060708});
+    round_trip("\xd8\x48\x42\xff\x7f"s, std::vector<std::int8_t>{-1, 127});
+    round_trip("\xd8\x4d\x42\xfe\xff"s, std::vector<std::int16_t>{-2});
+    round_trip("\xd8\x4e\x44\xfd\xff\xff\xff"s, std::vector<std::int32_t>{-3});
+    round_trip("\xd8\x4f\x48\xfc\xff\xff\xff\xff\xff\xff\xff"s, std::vector<std::int64_t>{-4});
+    round_trip("\xd8\x55\x44\x00\x00\xc0\x3f"s, std::vector<float>{1.5f});
+    round_trip("\xd8\x56\x48\x00\x00\x00\x00\x00\x00\xf8\x3f"s, std::vector<double>{1.5});
+    round_trip("\xd8\x45\x40"s, std::vector<std::uint16_t>{});
+    round_trip("\xd8\x45\x44\x01\x00\x02\x00"s, std::array<std::uint16_t, 2>{1, 2});
+    round_trip("\xd8\x40\x42\x01\x02"s, std::array<std::byte, 2>{std::byte{1}, std::byte{2}});
+    CHECK_EQ((cbor::structs<std::array<std::uint16_t, 2>>::decode("\xd8\x45\x42\x01\x00"s).error()),
+             error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::vector<std::uint16_t>>::decode("\xd8\x45\x43\x01\x00\x02"s).error(),
+             error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::structs<std::vector<std::uint16_t>>::decode("\xd8\x45\x82\x01\x02"s).error(),
+             error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::structs<std::vector<std::uint16_t>>::decode("\xd8\x41\x44\x00\x01\x00\x02"s).error(),
+             error::incorrect_type);
+    round_trip("\x82\x61"
+               "a\x61"
+               "b"s,
+               std::vector<std::string>{"a", "b"});
+    std::array const three{std::byte{1}, std::byte{2}, std::byte{3}};
+    CHECK_EQ(*cbor::structs<std::span<std::byte const>>::encode(std::span<std::byte const>(three)),
+             "\x43\x01\x02\x03"s);
+    auto const view = cbor::structs<std::span<std::byte const>>::decode("\x43\x01\x02\x03"s);
+    REQUIRE(view.has_value());
+    CHECK_EQ((*view)->size(), 3u);
 }

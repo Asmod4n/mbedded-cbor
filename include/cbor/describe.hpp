@@ -85,6 +85,8 @@ concept has_describe_members = requires { describe_members<T>::members; };
         static constexpr std::uint64_t tag = cbor::tag{CBOR_REMOVE_PARENS TAG}.number;                       \
         static constexpr std::uint16_t generation = cbor::tag{CBOR_REMOVE_PARENS TAG}.generation;            \
         static constexpr auto members = std::tuple{CBOR_FOR_EACH(T, __VA_ARGS__)};                           \
+        static_assert(!cbor::reflection::tag_taken_by_standard_type(tag),                                    \
+                      "CBOR_DESCRIBE_STRUCT takes a tag that no standard type has.");                        \
         static_assert(cbor::reflection::names_unique(members),                                               \
                       "CBOR_DESCRIBE_STRUCT lists a member twice.");                                         \
         static_assert(cbor::reflection::keys_unique(members),                                                \

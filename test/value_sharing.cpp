@@ -804,21 +804,23 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
 }
 
 #ifdef __cpp_impl_reflection
-// The eager table of one struct decode, for each form of the head of tag 29 and of its index: a forward index is
-// sharedref_index_not_marked, and a tag 29 into a plain member is incorrect_type.
+// The eager table of one struct decode, for each form of the head of tag 29 and of its index: a forward index
+// is sharedref_index_not_marked, and a tag 29 into a plain member is incorrect_type. A vector of
+// std::optional is a plain array; a vector of numbers is a typed array, which holds no tag.
 TEST_CASE("value sharing: an eager decode reads every form of a tag 29")
 {
+    using marked_numbers = std::vector<std::optional<std::uint64_t>>;
     for (std::size_t const bytes : {1uz, 2uz, 4uz, 8uz}) {
         CAPTURE(bytes);
         std::string const reference = head_of(6, 29, bytes) + head_of(0, 0, bytes);
-        CHECK_EQ(cbor::structs<std::vector<std::uint64_t>>::decode("\x81"s + reference).error(),
+        CHECK_EQ(cbor::structs<marked_numbers>::decode("\x81"s + reference).error(),
                  error::sharedref_index_not_marked);
-        CHECK_EQ(cbor::structs<std::vector<std::uint64_t>>::decode("\x82"s + head_of(6, 28, bytes) + "\x05"s + reference)
+        CHECK_EQ(cbor::structs<marked_numbers>::decode("\x82"s + head_of(6, 28, bytes) + "\x05"s + reference)
                      .error(),
                  error::incorrect_type);
-        auto const marked = cbor::structs<std::vector<std::uint64_t>>::decode("\x81"s + head_of(6, 28, bytes) + "\x05"s);
+        auto const marked = cbor::structs<marked_numbers>::decode("\x81"s + head_of(6, 28, bytes) + "\x05"s);
         REQUIRE(marked.has_value());
-        CHECK_EQ(**marked, std::vector<std::uint64_t>{5});
+        CHECK((**marked == marked_numbers{5}));
     }
 }
 #endif

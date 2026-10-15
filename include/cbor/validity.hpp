@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -478,6 +479,15 @@ public:
         if (magnitude > (negative ? exact_max - 1 : exact_max)) [[unlikely]]
             return std::unexpected(error::number_out_of_range);
         return {};
+    }
+
+    template <std::signed_integral T>
+    static constexpr std::expected<T, error> check_whole_number(double const value)
+    {
+        constexpr double low = static_cast<double>(std::numeric_limits<T>::min());
+        if (!(value >= low && value < -low && value == std::trunc(value))) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
+        return static_cast<T>(value);
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>

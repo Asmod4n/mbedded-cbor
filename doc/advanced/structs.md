@@ -61,20 +61,31 @@ An empty owner throws `std::logic_error`. A `std::string` or a
 | an enum with a fixed underlying type | the integer of its underlying type |
 | `float`, `double` | the shortest float that holds the value exactly |
 | `std::string`, `std::pmr::string`, `std::string_view` | a text string |
-| `std::vector<std::byte>`, `std::array<std::byte, N>`, `std::span<std::byte const>` | a byte string |
+| `std::span<std::byte const>` | a byte string |
+| `std::vector<E>`, `std::array<E, N>` with E `std::byte` or an integer of 8 to 64 bits, `float` or `double` | an RFC 8746 typed array, little endian: tag 64 for `std::byte` and `std::uint8_t` |
+| `std::set`, `std::flat_set` | tag 258 on an array (CBOR_SETS.md) |
+| `std::chrono::sys_seconds` | tag 1 on an integer (RFC 8949 3.4.2) |
+| `std::chrono::year_month_day` | tag 100 on an integer of days (RFC 8943) |
 | `std::optional<E>` | the item of E, or `null` when empty |
 | `std::variant<E...>` | the item of the alternative it holds |
-| `std::tuple<E...>`, `std::array<E, N>` | an array of exactly that count |
+| `std::tuple<E...>`, `std::array<E, N>` of other types | an array of exactly that count |
 | `std::map`, `std::unordered_map` and their `std::pmr` forms | a map |
-| `std::vector`, `std::deque`, `std::list`, `std::set` and other containers | an array |
+| `std::vector`, `std::deque`, `std::list` and other containers | an array |
 | `cbor::tagged<N, E>` | tag N on the item of E |
 | a struct | a map, section 4 |
 
 ```cpp
-cbor::structs<std::set<std::uint8_t>>::encode({3, 1});                          // [1, 3]
-cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}});  // h'0102'
+cbor::structs<std::set<std::uint8_t>>::encode({3, 1});                          // 258([1, 3])
+cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}});  // 64(h'0102')
 cbor::structs<cbor::tagged<1, std::int64_t>>::encode({1700000000});             // 1(1700000000)
 ```
+
+`decode` takes each of these types only under its own tag. A typed
+array takes only the little-endian tag of its element, and a
+`std::array` only its own count. A `std::set` takes the items of tag 258
+in any order; an item that comes twice gives `error::duplicate_key`.
+`std::chrono::sys_seconds` also takes a float under tag 1 when its value
+is a whole number; any other float gives `error::number_out_of_range`.
 
 An enum with no fixed underlying type does not compile in `decode`,
 because some values of its underlying type are not values of the enum.

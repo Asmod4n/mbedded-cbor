@@ -126,8 +126,8 @@ TEST_CASE("doc readme: structs")
 {
     std::string const bytes = cbor::structs<reading>::encode({"t1", 21.5, {3, 4, 5}}).value();
     std::string const text = cbor::diagnostic_notation(bytes).value();
-    CHECK_EQ(text, R"({"value": 21.5, "sensor": "t1", "samples": [3, 4, 5]})");
-    CHECK_EQ(bytes.size(), 32u);
+    CHECK_EQ(text, R"({"value": 21.5, "sensor": "t1", "samples": 69(h'030004000500')})");
+    CHECK_EQ(bytes.size(), 37u);
 }
 
 #endif
