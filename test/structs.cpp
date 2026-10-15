@@ -141,14 +141,14 @@ TEST_CASE("structs: an unknown key is skipped, a missing key is an error")
     CHECK_EQ(cbor::structs<std::uint64_t>::decode("\x00\x00"s).error(), error::syntax_error);
 }
 
-// RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. A
-// struct member and a std::map take the first entry of a repeated key, with no error. A struct took the last
-// one before this test existed.
-TEST_CASE("structs: a repeated key gives the first entry")
+// RFC 8949 5.6 names two ways for a repeated key; the owner decided on 2026-10-14 that an eager decode takes
+// the first: it rejects the map with duplicate_key. A struct member took the first entry with no error before
+// this test changed, and the last one before that. A key that no member has is not read, so it is no
+// duplicate. A std::map takes the first entry of a repeated key.
+TEST_CASE("structs: a repeated key of a member is duplicate_key")
 {
-    auto const twice = cbor::structs<pair_ab>::decode("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x80"s);
-    REQUIRE(twice.has_value());
-    CHECK_EQ((*twice)->a, 1u);
+    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x80"s).error(),
+             error::duplicate_key);
     auto const map =
         cbor::structs<std::map<std::string, std::string>>::decode("\xa2\x61\x61\x61\x41\x61\x61\x61\x42"s);
     REQUIRE(map.has_value());

@@ -139,7 +139,8 @@ struct senml {          // RFC 8428 6: n is 0, v is 2
 `decode` reads the entries of a map in any order:
 
 - a key that no member has: the entry is skipped;
-- a key that comes twice: the first entry gives the value;
+- a key of a member that comes twice: `error::duplicate_key` (RFC 8949
+  5.6);
 - a missing key of a member that is not optional: `error::key_not_found`;
 - a key that is an array, a map or a tag: `error::unsupported_value`.
 
