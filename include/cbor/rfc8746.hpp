@@ -28,9 +28,7 @@ class rfc8746
 
     friend class heads;
 
-#ifdef __cpp_impl_reflection
     friend class reflection;
-#endif
 };
 
 }

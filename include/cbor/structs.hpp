@@ -528,19 +528,6 @@ class generic
         return {};
     }
 
-    static consteval std::vector<unsigned char> key_encoded(major_type const major, std::uint64_t const argument,
-                                                            std::string_view const text)
-    {
-        std::uint8_t const info = heads::preferred_argument_info(argument);
-        std::size_t const bytes = heads::argument_size(info);
-        std::vector<unsigned char> out{static_cast<unsigned char>(heads::initial_byte(major, info))};
-        for (std::size_t k = bytes; k > 0; --k)
-            out.push_back(static_cast<unsigned char>(argument >> (std::numeric_limits<std::uint8_t>::digits * (k - 1))));
-        for (char const c : text)
-            out.push_back(static_cast<unsigned char>(c));
-        return out;
-    }
-
     template <class U>
     static consteval std::array<std::size_t, reflection::members_of<U>().size()> key_order()
     {
@@ -549,11 +536,11 @@ class generic
         for (std::size_t i = 0; i < members.size(); ++i) {
             if constexpr (reflection::has_integer_keys<U>) {
                 std::int64_t const key = U::keys[i];
-                encoded[i] = key >= 0 ? key_encoded(major_type::unsigned_integer, static_cast<std::uint64_t>(key), {})
-                                      : key_encoded(major_type::negative_integer, static_cast<std::uint64_t>(-1 - key), {});
+                encoded[i] = key >= 0 ? reflection::key_encoded(major_type::unsigned_integer, static_cast<std::uint64_t>(key), {})
+                                      : reflection::key_encoded(major_type::negative_integer, static_cast<std::uint64_t>(-1 - key), {});
             } else {
                 std::string_view const name = reflection::key_of(members[i]);
-                encoded[i] = key_encoded(major_type::text_string, name.size(), name);
+                encoded[i] = reflection::key_encoded(major_type::text_string, name.size(), name);
             }
         }
         std::array<std::size_t, members.size()> order;
