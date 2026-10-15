@@ -796,14 +796,19 @@ void tags_accepted(std::vector<std::uint64_t> const &accepted)
 // The owner decided on 2026-10-15 that a standard library type takes the tag that CBOR assigns to it:
 // sys_seconds tag 1 (RFC 8949 3.4.2), year_month_day tag 100 (RFC 8943 2), std::set tag 258 (CBOR_SETS.md),
 // and a std::vector of a fixed-width number the RFC 8746 typed array of its element, little endian; std::byte
-// and std::uint8_t take tag
-// 64. Each cell of tags x types is one case. The tags 0 and 1004 come with the next commit; until then they
-// give incorrect_type. The tag of each element type comes from the table of RFC 8746 2.1
-// (refs/rfc8746.txt:473-539).
+// and std::uint8_t take tag 64. Each cell of tags x types is one case. A decode of sys_seconds also takes tag
+// 0 and a decode of year_month_day tag 1004, through std::chrono::parse; libc++ has no std::chrono::parse,
+// and the owner decided that these tags then give incorrect_type. The tag of each element type comes from the
+// table of RFC 8746 2.1 (refs/rfc8746.txt:473-539).
 TEST_CASE("structs: the tags that each standard library type accepts")
 {
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+    tags_accepted<std::chrono::sys_seconds>({0, 1});
+    tags_accepted<std::chrono::year_month_day>({100, 1004});
+#else
     tags_accepted<std::chrono::sys_seconds>({1});
     tags_accepted<std::chrono::year_month_day>({100});
+#endif
     tags_accepted<std::set<int>>({258});
     tags_accepted<std::vector<std::byte>>({64});
     tags_accepted<std::vector<std::uint8_t>>({64});
@@ -921,4 +926,82 @@ TEST_CASE("structs: a vector or an array of numbers is an RFC 8746 typed array")
     auto const view = cbor::structs<std::span<std::byte const>>::decode("\x43\x01\x02\x03"s);
     REQUIRE(view.has_value());
     CHECK_EQ((*view)->size(), 3u);
+}
+
+namespace
+{
+
+// RFC 8949 3: the head of a text string, written by hand for a length below 256.
+template <class T>
+std::expected<std::int64_t, error> since_epoch(std::string_view const text)
+{
+    std::string bytes = "\xc0"s;
+    if (text.size() < 24)
+        bytes += static_cast<char>(0x60 + text.size());
+    else
+        bytes += "\x78"s + static_cast<char>(text.size());
+    bytes += text;
+    auto const r = cbor::structs<T>::decode(std::move(bytes));
+    if (!r)
+        return std::unexpected(r.error());
+    return (*r)->time_since_epoch().count();
+}
+
+std::expected<std::int64_t, error> day_of(std::string_view const text)
+{
+    std::string bytes = "\xd9\x03\xec"s;
+    if (text.size() < 24)
+        bytes += static_cast<char>(0x60 + text.size());
+    else
+        bytes += "\x78"s + static_cast<char>(text.size());
+    bytes += text;
+    auto const r = cbor::structs<std::chrono::year_month_day>::decode(std::move(bytes));
+    if (!r)
+        return std::unexpected(r.error());
+    return std::chrono::sys_days{**r}.time_since_epoch().count();
+}
+
+} // namespace
+
+// Tag 0 holds an RFC 3339 date-time and tag 1004 an RFC 3339 full-date (RFC 8949 3.4.1, RFC 8943 2). The
+// inputs are the examples of RFC 3339 5.8 (refs/rfc3339.txt:515-536) and forms that the grammar of 5.6
+// (405-437) allows or refuses. The epoch values are computed from the calendar with Python calendar.timegm,
+// which is not the code under test. The owner decided on 2026-10-15: a fraction goes into a sys_time of finer
+// precision, and a time that cannot hold it gives incorrect_type; second 60 gives incorrect_type; t and z may
+// be lower case. Where the standard library has no std::chrono::parse (libc++), every input gives
+// incorrect_type.
+TEST_CASE("structs: RFC 3339 text under tags 0 and 1004")
+{
+    using namespace std::chrono;
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+    auto const value = [](std::expected<std::int64_t, error> const r) { return r.value_or(-1); };
+    CHECK_EQ(value(since_epoch<sys_seconds>("1985-04-12T23:20:50Z")), 482196050);
+    CHECK_EQ(since_epoch<sys_seconds>("1985-04-12T23:20:50.52Z").error(), error::incorrect_type);
+    CHECK_EQ(value(since_epoch<sys_time<milliseconds>>("1985-04-12T23:20:50.52Z")), 482196050520);
+    CHECK_EQ(value(since_epoch<sys_seconds>("1996-12-19T16:39:57-08:00")), 851042397);
+    CHECK_EQ(since_epoch<sys_seconds>("1990-12-31T23:59:60Z").error(), error::incorrect_type);
+    CHECK_EQ(since_epoch<sys_seconds>("1990-12-31T15:59:60-08:00").error(), error::incorrect_type);
+    CHECK_EQ(since_epoch<sys_seconds>("1937-01-01T12:00:27.87+00:20").error(), error::incorrect_type);
+    CHECK_EQ(value(since_epoch<sys_time<milliseconds>>("1937-01-01T12:00:27.87+00:20")), -1041337172130);
+    CHECK_EQ(value(since_epoch<sys_seconds>("1937-01-01T12:00:27+00:20")), -1041337173);
+    CHECK_EQ(value(since_epoch<sys_seconds>("1985-04-12t23:20:50Z")), 482196050);
+    CHECK_EQ(value(since_epoch<sys_seconds>("1985-04-12T23:20:50z")), 482196050);
+    CHECK_EQ(value(since_epoch<sys_seconds>("1985-04-12t23:20:50z")), 482196050);
+    CHECK_EQ(value(since_epoch<sys_seconds>("1996-12-19t16:39:57-08:00")), 851042397);
+    CHECK_EQ(since_epoch<sys_seconds>("1985-04-12 23:20:50Z").error(), error::incorrect_type);
+    CHECK_EQ(since_epoch<sys_seconds>("1985-04-12T23:20:50").error(), error::incorrect_type);
+    CHECK_EQ(since_epoch<sys_seconds>("1985-04-12T23:20:50.5Z").error(), error::incorrect_type);
+    CHECK_EQ(value(since_epoch<sys_time<milliseconds>>("1985-04-12T23:20:50.5Z")), 482196050500);
+    CHECK_EQ(value(since_epoch<sys_time<microseconds>>("1985-04-12T23:20:50.123456Z")), 482196050123456);
+    CHECK_EQ(since_epoch<sys_time<milliseconds>>("1985-04-12T23:20:50.123456Z").error(),
+             error::incorrect_type);
+    CHECK_EQ(value(day_of("1940-10-09")), -10676);
+    CHECK_EQ(value(day_of("1980-12-08")), 3994);
+    CHECK_EQ(day_of("1940-02-30").error(), error::incorrect_type);
+    CHECK_EQ(day_of("1940-10-09T00:00:00Z").error(), error::incorrect_type);
+#else
+    CHECK_EQ(since_epoch<sys_seconds>("1985-04-12T23:20:50Z").error(), error::incorrect_type);
+    CHECK_EQ(since_epoch<sys_time<milliseconds>>("1985-04-12T23:20:50.52Z").error(), error::incorrect_type);
+    CHECK_EQ(day_of("1940-10-09").error(), error::incorrect_type);
+#endif
 }

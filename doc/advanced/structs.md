@@ -87,6 +87,16 @@ in any order; an item that comes twice gives `error::duplicate_key`.
 `std::chrono::sys_seconds` also takes a float under tag 1 when its value
 is a whole number; any other float gives `error::number_out_of_range`.
 
+Where the standard library has `std::chrono::parse` (libstdc++), a
+`std::chrono::sys_time` also takes the RFC 3339 date-time of tag 0, and a
+`std::chrono::year_month_day` the RFC 3339 full-date of tag 1004. The
+letters `T` and `Z` may be lower case. A fraction of a second needs a
+`sys_time` that holds it, for example `sys_time<milliseconds>`; a
+`sys_seconds` gives `error::incorrect_type` for it. Second 60 gives
+`error::incorrect_type`. libc++ has no `std::chrono::parse`, so tags 0
+and 1004 give `error::incorrect_type` there; a program that needs them
+brings a type of its own.
+
 An enum with no fixed underlying type does not compile in `decode`,
 because some values of its underlying type are not values of the enum.
 

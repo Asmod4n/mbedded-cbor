@@ -83,7 +83,7 @@ concept has_describe_members = requires { describe_members<T>::members; };
         static_assert(cbor::reflection::entries_count(#__VA_ARGS__) <= cbor::describe_entries_max,           \
                       "CBOR_DESCRIBE_STRUCT takes at most cbor::describe_entries_max members.");             \
         static constexpr std::uint64_t tag = cbor::tag{CBOR_REMOVE_PARENS TAG}.number;                       \
-        static constexpr std::uint16_t generation = cbor::tag{CBOR_REMOVE_PARENS TAG}.generation;            \
+        [[maybe_unused]] static constexpr std::uint16_t generation = cbor::tag{CBOR_REMOVE_PARENS TAG}.generation; \
         static constexpr auto members = std::tuple{CBOR_FOR_EACH(T, __VA_ARGS__)};                           \
         static_assert(!cbor::reflection::tag_taken_by_standard_type(tag),                                    \
                       "CBOR_DESCRIBE_STRUCT takes a tag that no standard type has.");                        \
