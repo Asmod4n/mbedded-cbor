@@ -145,11 +145,11 @@ class reflection
         if constexpr (std::uses_allocator_v<E, Alloc> || !std::is_class_v<E> || !std::is_aggregate_v<E>) {
             return false;
         } else {
-            if (!std::meta::bases_of(^^E, std::meta::access_context::unchecked()).empty())
+            if (!std::meta::bases_of(^^E, std::meta::access_context::unprivileged()).empty())
                 return false;
             bool reached = false;
             template for (constexpr std::meta::info m :
-                          std::define_static_array(std::meta::nonstatic_data_members_of(^^E, std::meta::access_context::unchecked()))) {
+                          std::define_static_array(std::meta::nonstatic_data_members_of(^^E, std::meta::access_context::unprivileged()))) {
                 using M = typename[:std::meta::type_of(m):];
                 if constexpr (std::is_array_v<M> || std::is_reference_v<M>)
                     return false;
@@ -165,7 +165,7 @@ class reflection
     {
         if constexpr (uses_allocator_aggregate<E, Alloc>()) {
             static constexpr auto members =
-                std::define_static_array(std::meta::nonstatic_data_members_of(^^E, std::meta::access_context::unchecked()));
+                std::define_static_array(std::meta::nonstatic_data_members_of(^^E, std::meta::access_context::unprivileged()));
             return [&]<std::size_t... I>(std::index_sequence<I...>) {
                 return E{element_make<typename[:std::meta::type_of(members[I]):]>(alloc, std::move(from.[:members[I]:]))...};
             }(std::make_index_sequence<members.size()>());
@@ -1920,7 +1920,7 @@ consteval std::size_t reflection::fixed_size()
             return *size;
         }
     } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-        if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unchecked()).empty() ||
+        if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty() ||
                       !reflection::keys_unique(reflection::data_members<U>())) {
             return no_fixed_size<U>();
         } else {
