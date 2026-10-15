@@ -4,6 +4,7 @@
 #include <array>
 #include <bit>
 #include <bitset>
+#include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -14,6 +15,7 @@
 #include <numeric>
 #include <optional>
 #include <ranges>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -23,6 +25,9 @@
 #include <utility>
 #include <variant>
 #include <vector>
+#if __has_include(<flat_set>)
+#include <flat_set>
+#endif
 #ifdef __cpp_impl_reflection
 #include <meta>
 #elif __has_include(<boost/pfr.hpp>)
@@ -234,15 +239,56 @@ class generic
     static constexpr bool is_std_variant<std::variant<E...>> = true;
 
     template <class U>
-    static constexpr bool is_byte = std::same_as<U, std::byte> || std::same_as<U, unsigned char>;
+    static constexpr bool is_std_vector = false;
+
+    template <class E, class A>
+    static constexpr bool is_std_vector<std::vector<E, A>> = true;
 
     template <class U>
-    static constexpr bool is_byte_container = requires {
+    static constexpr bool is_sys_time = false;
+
+    template <class D>
+    static constexpr bool is_sys_time<std::chrono::sys_time<D>> = true;
+
+    template <class U>
+    static constexpr bool is_set = false;
+
+    template <class K, class C, class A>
+    static constexpr bool is_set<std::set<K, C, A>> = true;
+
+#ifdef __cpp_lib_flat_set
+    template <class K, class C, class KC>
+    static constexpr bool is_set<std::flat_set<K, C, KC>> = true;
+#endif
+
+    template <class E>
+    static constexpr bool is_typed_array_element =
+        std::same_as<E, std::byte> || std::same_as<E, float> || std::same_as<E, double> ||
+        reflection::is_typed_array_integer<E>;
+
+    template <class U>
+    static constexpr bool is_typed_array = requires {
         typename U::value_type;
-        requires is_byte<typename U::value_type>;
-        requires std::same_as<U, std::vector<typename U::value_type, typename U::allocator_type>> ||
-                     is_std_array<U>;
+        requires is_std_vector<U> || is_std_array<U>;
+        requires is_typed_array_element<typename U::value_type>;
     };
+
+    template <class U>
+    static constexpr std::uint64_t tag_of_standard_type()
+    {
+        if constexpr (is_sys_time<U>)
+            return std::to_underlying(rfc8949::tag_number::epoch_based_date_time);
+        else if constexpr (std::same_as<U, std::chrono::year_month_day>)
+            return std::to_underlying(rfc8943::tag_number::days_since_epoch_date);
+        else if constexpr (is_set<U>)
+            return std::to_underlying(cbor_sets::tag_number::set);
+        else
+            return reflection::typed_array_tag<typename U::value_type>();
+    }
+
+    template <class U>
+    static constexpr bool is_tagged_standard_type =
+        is_sys_time<U> || std::same_as<U, std::chrono::year_month_day> || is_set<U> || is_typed_array<U>;
 
     template <class U>
     static constexpr bool is_basic_string = requires {
@@ -292,9 +338,11 @@ class generic
         else if constexpr (std::is_integral_v<U>)
             return (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) &&
                    h.argument <= static_cast<std::uint64_t>(std::numeric_limits<U>::max());
+        else if constexpr (is_tagged_standard_type<U>)
+            return h.major == major_type::tag && h.argument == tag_of_standard_type<U>();
         else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>)
             return h.major == major_type::text_string;
-        else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>)
+        else if constexpr (std::same_as<U, std::span<std::byte const>>)
             return h.major == major_type::byte_string;
         else if constexpr (reflection::is_optional<U>)
             return heads::is_null(h) || head_accepted<typename U::value_type>(h);
@@ -501,7 +549,7 @@ class generic
             else
                 out = *text;
             return {};
-        } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
+        } else if constexpr (std::same_as<U, std::span<std::byte const>>) {
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -510,18 +558,15 @@ class generic
             auto const bytes = d.byte_string_decode(h->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            auto const view = std::as_bytes(std::span(*bytes));
-            if constexpr (std::same_as<U, std::span<std::byte const>>) {
-                out = view;
-            } else if constexpr (is_std_array<U>) {
-                if (view.size() != out.size()) [[unlikely]]
-                    return std::unexpected(error::incorrect_type);
-                std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
-            } else {
-                out.resize(view.size());
-                std::ranges::transform(view, out.begin(), [](std::byte const b) { return static_cast<typename U::value_type>(b); });
-            }
+            out = std::as_bytes(std::span(*bytes));
             return {};
+        } else if constexpr (is_tagged_standard_type<U>) {
+            auto const t = d.head_decode();
+            if (!t) [[unlikely]]
+                return std::unexpected(t.error());
+            if (!head_accepted<U>(*t)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return tag_content_read(d, out, *t, depth, depth_max);
         } else if constexpr (reflection::is_optional<U>) {
             if (!d.encoded.empty() &&
                 d.encoded.front() == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null))) {
@@ -602,6 +647,87 @@ class generic
             return {};
         } else {
             return struct_read(d, out, depth, depth_max);
+        }
+    }
+
+    template <class U, bool Checked>
+    static std::expected<void, error> tag_content_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+                                                       heads::head const &tag, std::size_t const depth,
+                                                       std::size_t const depth_max)
+    {
+        if constexpr (is_sys_time<U>) {
+            static_assert(std::same_as<typename U::duration, std::chrono::seconds>,
+                          "cbor::structs reads tag 1 into std::chrono::sys_seconds only.");
+            using rep = std::chrono::seconds::rep;
+            heads::decoder<Checked> look = d;
+            auto const h = look.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            rep seconds = 0;
+            if (h->major == major_type::simple_float) {
+                if (!head_accepted<double>(*h)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                d.encoded = look.encoded;
+                auto const whole =
+                    validity::check_whole_number<rep>(heads::float_decode(h->info, h->argument));
+                if (!whole) [[unlikely]]
+                    return std::unexpected(whole.error());
+                seconds = *whole;
+            } else if (auto const r = integer_read<rep>(d, seconds); !r) [[unlikely]] {
+                return r;
+            }
+            out = U{std::chrono::seconds{seconds}};
+            return {};
+        } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
+            std::chrono::days::rep days = 0;
+            if (auto const r = integer_read<std::chrono::days::rep>(d, days); !r) [[unlikely]]
+                return r;
+            std::chrono::year_month_day const date{std::chrono::sys_days{std::chrono::days{days}}};
+            if (!date.ok()) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            out = date;
+            return {};
+        } else if constexpr (is_set<U>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::array) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            out.clear();
+            for (std::uint64_t i = 0; i < h->argument; ++i) {
+                auto element = pfr::element_make<typename U::value_type>(out);
+                if (auto const r = generic_read(d, element, depth + 1, depth_max); !r) [[unlikely]]
+                    return r;
+                if (auto const r = validity::check_key_unique(!out.insert(std::move(element)).second); !r)
+                    [[unlikely]]
+                    return r;
+            }
+            return {};
+        } else {
+            using E = typename U::value_type;
+            auto const b = d.head_decode();
+            if (!b) [[unlikely]]
+                return std::unexpected(b.error());
+            if (error const c = validity::check_tag_content(tag.argument, b->major).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
+            auto const bytes = d.byte_string_decode(b->argument);
+            if (!bytes) [[unlikely]]
+                return std::unexpected(bytes.error());
+            if (auto const r = validity::typed_array_check(tag.argument, bytes->size()); !r) [[unlikely]]
+                return r;
+            std::size_t const count = bytes->size() / sizeof(E);
+            if constexpr (is_std_array<U>) {
+                if (count != out.size()) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+            } else {
+                out.resize(count);
+            }
+            std::span<char const> const elements(*bytes);
+            for (std::size_t i = 0; i < count; ++i)
+                out[i] = reflection::typed_array_element_read<E>(
+                    elements.subspan(i * sizeof(E)).template first<sizeof(E)>());
+            return {};
         }
     }
 
@@ -768,8 +894,13 @@ class generic
         } else if constexpr (std::is_floating_point_v<U>) {
             static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::structs reads and writes float and double only.");
             return float_size(static_cast<double>(value));
+        } else if constexpr (is_tagged_standard_type<U>) {
+            auto const content = tag_content_size(value);
+            if (!content) [[unlikely]]
+                return content;
+            return validity::checked_add(heads::head_size(tag_of_standard_type<U>()), *content);
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view> ||
-                             std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
+                             std::same_as<U, std::span<std::byte const>>) {
             return validity::checked_add(heads::head_size(value.size()), value.size());
         } else if constexpr (reflection::is_optional<U>) {
             if (!value)
@@ -808,14 +939,7 @@ class generic
                                  value.size();
                                  typename U::value_type;
                              }) {
-            std::size_t size = heads::head_size(value.size());
-            for (auto const &e : value) {
-                auto const sum = generic_size(e).and_then([size](std::size_t const n) { return validity::checked_add(size, n); });
-                if (!sum) [[unlikely]]
-                    return sum;
-                size = *sum;
-            }
-            return size;
+            return elements_size(value);
         } else {
             static_assert(pfr::struct_readable<U>());
             std::size_t present = 0;
@@ -852,6 +976,41 @@ class generic
             if constexpr (constexpr std::optional<std::uint64_t> tag = pfr::tag_of<U>(); tag.has_value())
                 head += heads::head_size(*tag);
             return validity::checked_add(*size, head);
+        }
+    }
+
+    template <class U>
+    static std::expected<std::size_t, std::errc> elements_size(U const &value)
+    {
+        std::size_t size = heads::head_size(value.size());
+        for (auto const &e : value) {
+            auto const sum = generic_size(e).and_then(
+                [size](std::size_t const n) { return validity::checked_add(size, n); });
+            if (!sum) [[unlikely]]
+                return sum;
+            size = *sum;
+        }
+        return size;
+    }
+
+    template <class U>
+    static std::expected<std::size_t, std::errc> tag_content_size(U const &value)
+    {
+        if constexpr (is_sys_time<U>) {
+            static_assert(std::same_as<typename U::duration, std::chrono::seconds>,
+                          "cbor::structs writes tag 1 from std::chrono::sys_seconds only.");
+            return generic_size(value.time_since_epoch().count());
+        } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
+            if (!value.ok()) [[unlikely]]
+                validity::throw_logic_error("cbor::structs::encode: the year_month_day is no valid date");
+            return generic_size(std::chrono::sys_days{value}.time_since_epoch().count());
+        } else if constexpr (is_set<U>) {
+            return elements_size(value);
+        } else {
+            auto const bytes = validity::checked_mul(value.size(), sizeof(typename U::value_type));
+            if (!bytes) [[unlikely]]
+                return bytes;
+            return validity::checked_add(heads::head_size(*bytes), *bytes);
         }
     }
 
@@ -913,14 +1072,13 @@ class generic
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>) {
             at += heads::head_write(out, at, major_type::text_string, value.size());
             return bytes_write(out, at, value);
-        } else if constexpr (std::same_as<U, std::span<std::byte const>> || is_byte_container<U>) {
+        } else if constexpr (std::same_as<U, std::span<std::byte const>>) {
             at += heads::head_write(out, at, major_type::byte_string, value.size());
-            if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>)
-                std::ranges::copy(value, std::as_writable_bytes(out.subspan(at, value.size())).begin());
-            else
-                std::ranges::transform(value, out.subspan(at, value.size()).begin(),
-                                       [](auto const b) { return static_cast<char>(b); });
+            std::ranges::copy(value, std::as_writable_bytes(out.subspan(at, value.size())).begin());
             return at + value.size();
+        } else if constexpr (is_tagged_standard_type<U>) {
+            at += heads::head_write(out, at, major_type::tag, tag_of_standard_type<U>());
+            return tag_content_write(out, at, value);
         } else if constexpr (reflection::is_optional<U>) {
             if (!value) {
                 out.subspan(at).front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
@@ -945,10 +1103,7 @@ class generic
                                  value.size();
                                  typename U::value_type;
                              }) {
-            at += heads::head_write(out, at, major_type::array, value.size());
-            for (auto const &e : value)
-                at = generic_write(out, at, e);
-            return at;
+            return elements_write(out, at, value);
         } else {
             static_assert(pfr::struct_readable<U>());
             if constexpr (constexpr std::optional<std::uint64_t> tag = pfr::tag_of<U>(); tag.has_value())
@@ -962,6 +1117,35 @@ class generic
             [&]<std::size_t... J>(std::index_sequence<J...>) {
                 ((at = member_write<order[J]>(out, at, value)), ...);
             }(std::make_index_sequence<order.size()>());
+            return at;
+        }
+    }
+
+    template <class U>
+    static std::size_t elements_write(std::span<char> const out, std::size_t at, U const &value)
+    {
+        at += heads::head_write(out, at, major_type::array, value.size());
+        for (auto const &e : value)
+            at = generic_write(out, at, e);
+        return at;
+    }
+
+    template <class U>
+    static std::size_t tag_content_write(std::span<char> const out, std::size_t at, U const &value)
+    {
+        if constexpr (is_sys_time<U>) {
+            return generic_write(out, at, value.time_since_epoch().count());
+        } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
+            return generic_write(out, at, std::chrono::sys_days{value}.time_since_epoch().count());
+        } else if constexpr (is_set<U>) {
+            return elements_write(out, at, value);
+        } else {
+            using E = typename U::value_type;
+            at += heads::head_write(out, at, major_type::byte_string, value.size() * sizeof(E));
+            for (E const e : value) {
+                reflection::typed_array_element_write<E>(out.subspan(at).template first<sizeof(E)>(), e);
+                at += sizeof(E);
+            }
             return at;
         }
     }

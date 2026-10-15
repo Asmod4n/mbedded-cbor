@@ -16,7 +16,7 @@ cmake --install build --prefix /usr/local
 find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
 
-# packed and structs: C++26 reflection, g++ 16
+# packed: C++26 reflection, g++ 16; structs: also C++23 with the Boost headers
 target_compile_features(app PRIVATE cxx_std_26)
 target_compile_options(app PRIVATE -freflection)
 ```
@@ -178,8 +178,8 @@ for these reasons:
 
 `cbor::structs` puts any CBOR into the members of a C++ struct or
 class, and writes it back as deterministic CBOR (RFC 8949 4.2.1): the
-shortest form of every number, and the keys in a fixed order. Needs
-reflection.
+shortest form of every number, and the keys in a fixed order. It reads
+an aggregate through reflection or through Boost.PFR.
 
 ```cpp
 struct reading {
@@ -191,9 +191,9 @@ struct reading {
 std::string const bytes = cbor::structs<reading>::encode({"t1", 21.5, {3, 4, 5}}).value();
 
 std::string const text = cbor::diagnostic_notation(bytes).value();
-// text is {"value": 21.5, "sensor": "t1", "samples": [3, 4, 5]}
+// text is {"value": 21.5, "sensor": "t1", "samples": 69(h'030004000500')}
 std::size_t const size = bytes.size();
-// size == 32; the same data as JSON with no spaces has 46 bytes
+// size == 37; the same data as JSON with no spaces has 46 bytes
 ```
 
 ## Next

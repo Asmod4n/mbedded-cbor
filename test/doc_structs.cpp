@@ -94,7 +94,7 @@ TEST_CASE("doc structs: types")
     auto const bytes = cbor::structs<kinds>::encode(k);
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes),
-             R"({"b": true, "c": 1, "d": 2.5, "f": 1.5, "l": [1, 2], "m": {"a": 1}, "s": [3], "u": 7, "raw": h'01'})");
+             R"({"b": true, "c": 1, "d": 2.5, "f": 1.5, "l": [1, 2], "m": {"a": 1}, "s": 258([3]), "u": 7, "raw": 64(h'01')})");
     auto const back = cbor::structs<kinds>::decode(*bytes);
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->c, color::green);
