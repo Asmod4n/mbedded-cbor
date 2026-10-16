@@ -6,6 +6,9 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#if __has_include(<flat_map>)
+#include <flat_map>
+#endif
 #include <functional>
 #include <limits>
 #include <list>
@@ -20,6 +23,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -153,21 +157,19 @@ TEST_CASE("structs: an unknown key is skipped, a missing key is an error")
 // RFC 8949 5.6 names two ways for a repeated key; the owner decided on 2026-10-14 that an eager decode takes
 // the first: it rejects the map with duplicate_key. A struct member took the first entry with no error before
 // this test changed, and the last one before that. A key that no member has is not read, so it is no
-// duplicate. A std::map takes the first entry of a repeated key.
+// duplicate. A std::map gives duplicate_key on a repeated key since the owner decision of 2026-10-16; the
+// key 1 in one byte and the key 1 in two bytes are the same key (RFC 8949 5.6).
 TEST_CASE("structs: a repeated key of a member is duplicate_key")
 {
     CHECK_EQ(cbor::structs<pair_ab>::decode("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x80"s).error(),
              error::duplicate_key);
-    auto const map =
-        cbor::structs<std::map<std::string, std::string>>::decode("\xa2\x61\x61\x61\x41\x61\x61\x61\x42"s);
-    REQUIRE(map.has_value());
-    CHECK_EQ((*map)->at("a"), "A");
+    CHECK_EQ(cbor::structs<std::map<std::string, std::string>>::decode("\xa2\x61\x61\x61\x41\x61\x61\x61\x42"s)
+                 .error(),
+             error::duplicate_key);
     CHECK(cbor::structs<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\xd8\x47\x40\x61x\x01\x61x\x02"s)
               .has_value());
-    auto const widths = cbor::structs<std::map<std::uint64_t, std::uint64_t>>::decode("\xa2\x01\x00\x18\x01\x05"s);
-    REQUIRE(widths.has_value());
-    CHECK_EQ((*widths)->size(), 1u);
-    CHECK_EQ((*widths)->at(1), 0u);
+    CHECK_EQ(cbor::structs<std::map<std::uint64_t, std::uint64_t>>::decode("\xa2\x01\x00\x18\x01\x05"s).error(),
+             error::duplicate_key);
 }
 
 // RFC 8428 6, the CBOR form of the example in 5.1.2: the integer labels come from the keys of the struct.
@@ -500,6 +502,35 @@ TEST_CASE("structs: a double that a float cannot hold is number_out_of_range")
     auto const half = cbor::structs<float>::decode("\xf9\x7c\x01"s);
     REQUIRE(half.has_value());
     CHECK_EQ(std::bit_cast<std::uint32_t>(**half), 0x7f802000u);
+}
+
+template <class M>
+void map_keys_check()
+{
+    CHECK_EQ(cbor::structs<M>::decode("\xa3\x01\x05\x02\x06\x01\x07"s).error(), error::duplicate_key);
+    CHECK_EQ(cbor::structs<M>::decode("\xa2\x02\x06\x02\x06"s).error(), error::duplicate_key);
+    for (std::string const &bytes : {"\xa3\x01\x05\x02\x06\x03\x07"s, "\xa3\x03\x07\x01\x05\x02\x06"s,
+                                     "\xa3\x02\x06\x03\x07\x01\x05"s, "\xa3\x01\x05\x03\x07\x02\x06"s,
+                                     "\xa3\x02\x06\x01\x05\x03\x07"s, "\xa3\x03\x07\x02\x06\x01\x05"s}) {
+        auto const read = cbor::structs<M>::decode(std::string(bytes));
+        REQUIRE(read.has_value());
+        CHECK_EQ((*read)->size(), 3u);
+        CHECK_EQ((*read)->at(1), 5);
+        CHECK_EQ((*read)->at(2), 6);
+        CHECK_EQ((*read)->at(3), 7);
+    }
+}
+
+// RFC 8949 5.6: a map with a repeated key is not valid. The owner decided on 2026-10-16 that every map container
+// with unique keys gives duplicate_key on it in decode, as a struct member does, and keeps no entry silently. The
+// keys 1, 2 and 3 in every order are distinct and decode.
+TEST_CASE("structs: a map container gives duplicate_key on a repeated key")
+{
+    map_keys_check<std::map<int, int>>();
+    map_keys_check<std::unordered_map<int, int>>();
+#if __has_include(<flat_map>)
+    map_keys_check<std::flat_map<int, int>>();
+#endif
 }
 
 struct standard_containers {

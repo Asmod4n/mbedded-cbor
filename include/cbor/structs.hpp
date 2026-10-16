@@ -636,9 +636,12 @@ class generic
                 auto value = pfr::element_make<typename U::mapped_type>(out);
                 if (auto const r = generic_read(d, value, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
-                if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); })
-                    out.try_emplace(std::move(key), std::move(value));
-                else
+                if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); }) {
+                    if (auto const r = validity::check_key_unique(
+                            !out.try_emplace(std::move(key), std::move(value)).second);
+                        !r) [[unlikely]]
+                        return r;
+                } else
                     out.emplace(std::move(key), std::move(value));
             }
             return {};
