@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <memory_resource>
@@ -72,8 +73,6 @@ struct senml {
     static constexpr std::array<std::int64_t, 2> keys{0, 2};
 };
 
-using epoch = cbor::tagged<1, std::int64_t>;
-
 struct tagged_person {
     std::string name;
     std::int64_t age;
@@ -82,6 +81,7 @@ struct tagged_person {
 } // namespace doc_advanced_structs
 
 CBOR_DESCRIBE_STRUCT(doc_advanced_structs::account, (160061, 0), (user), (level, 1))
+CBOR_DESCRIBE_STRUCT(doc_advanced_structs::tagged_person, (1800, 0), (name), (age))
 
 namespace doc_advanced_structs
 {
@@ -136,7 +136,9 @@ TEST_CASE("doc advanced structs: the item of each type")
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::set<std::uint8_t>>::encode({3, 1})), "258([1, 3])");
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}})),
              "64(h'0102')");
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<epoch>::encode(epoch{1700000000})), "1(1700000000)");
+    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::chrono::sys_seconds>::encode(
+                 std::chrono::sys_seconds{std::chrono::seconds{1700000000}})),
+             "1(1700000000)");
     CHECK_EQ(cbor::structs<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s).error(), error::number_out_of_range);
 }
 
@@ -163,11 +165,16 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
              error::unsupported_value);
 }
 
-// The section "Tags" states that structs writes the tag of a struct through cbor::tagged<N, E>, because a user who
-// knows the schema form expects [[=cbor::tag(n)]] to do this.
+// The section "Tags" states that a struct carries the tag of its description, and that cbor::tagged_item puts a tag on
+// content that is not a struct, here COSE_Sign1 of RFC 9052 4.2: tag 18 on an array.
 TEST_CASE("doc advanced structs: the tag of a struct")
 {
-    auto const bytes = cbor::structs<cbor::tagged<1800, tagged_person>>::encode({{"ann", 30}});
+    using cose_sign1 = cbor::tagged_item<18, std::tuple<std::span<std::byte const>, std::map<std::int64_t, std::int64_t>,
+                                                        std::span<std::byte const>, std::span<std::byte const>>>;
+    auto const sign1 = cbor::structs<cose_sign1>::decode("\xd2\x84\x40\xa0\x40\x40"s);
+    REQUIRE(sign1.has_value());
+    CHECK_EQ(*cbor::structs<cose_sign1>::encode(**sign1), "\xd2\x84\x40\xa0\x40\x40"s);
+    auto const bytes = cbor::structs<tagged_person>::encode({"ann", 30});
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes), R"(1800({"age": 30, "name": "ann"}))");
 }

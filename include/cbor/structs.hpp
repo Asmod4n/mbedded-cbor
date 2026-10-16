@@ -231,10 +231,10 @@ class generic
     static constexpr bool is_std_array<std::array<E, N>> = true;
 
     template <class U>
-    static constexpr bool is_tagged = false;
+    static constexpr bool is_tagged_item = false;
 
     template <std::uint64_t N, class E>
-    static constexpr bool is_tagged<tagged<N, E>> = true;
+    static constexpr bool is_tagged_item<tagged_item<N, E>> = true;
 
     template <class U>
     static constexpr bool is_std_variant = false;
@@ -379,7 +379,7 @@ class generic
             return h.major == major_type::byte_string;
         else if constexpr (reflection::is_optional<U>)
             return heads::is_null(h) || head_accepted<typename U::value_type>(h);
-        else if constexpr (is_tagged<U>)
+        else if constexpr (is_tagged_item<U>)
             return h.major == major_type::tag && h.argument == U::number;
         else if constexpr (is_std_variant<U>)
             return false;
@@ -608,7 +608,7 @@ class generic
                 return {};
             }
             return generic_read(d, out.emplace(), depth, depth_max);
-        } else if constexpr (is_tagged<U>) {
+        } else if constexpr (is_tagged_item<U>) {
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -979,7 +979,7 @@ class generic
             if (!value)
                 return heads::initial_byte_size;
             return generic_size(*value);
-        } else if constexpr (is_tagged<U>) {
+        } else if constexpr (is_tagged_item<U>) {
             auto const content = generic_size(value.content);
             if (!content) [[unlikely]]
                 return content;
@@ -1158,7 +1158,7 @@ class generic
                 return at + heads::initial_byte_size;
             }
             return generic_write(out, at, *value);
-        } else if constexpr (is_tagged<U>) {
+        } else if constexpr (is_tagged_item<U>) {
             at += heads::head_write(out, at, major_type::tag, U::number);
             return generic_write(out, at, value.content);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
