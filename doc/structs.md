@@ -58,6 +58,7 @@ cbor::error>`: `*back` is the `owning_ref`, and `**back` is the
 | `std::chrono::year_month_day` | tag 100 on the days since 1970-01-01 |
 | `std::vector`, `std::list` of other types | an array |
 | `std::map`, `std::unordered_map` | a map |
+| `std::multimap`, `std::unordered_multimap` | an array of `[key, value]` arrays, in container order |
 | `std::optional<E>` | the value of E; when empty, `null`, or no key for a member (section 3) |
 | an enum with a fixed underlying type | an integer |
 | a struct | a map |

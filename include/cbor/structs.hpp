@@ -226,6 +226,11 @@ class generic
     static constexpr bool is_std_array<std::array<E, N>> = true;
 
     template <class U>
+    static constexpr bool is_multimap = reflection::is_map<U> && requires(U &c, typename U::value_type const &v) {
+        { c.insert(v) } -> std::same_as<typename U::iterator>;
+    };
+
+    template <class U>
     static constexpr bool is_tagged_item = false;
 
     template <std::uint64_t N, class E>
@@ -380,6 +385,8 @@ class generic
             return false;
         else if constexpr (is_std_tuple<U> || is_std_array<U>)
             return h.major == major_type::array && h.argument == std::tuple_size_v<U>;
+        else if constexpr (is_multimap<U>)
+            return h.major == major_type::array;
         else if constexpr (reflection::is_map<U>)
             return h.major == major_type::map;
         else if constexpr (requires(U const &c) { typename U::value_type; c.size(); })
@@ -622,6 +629,29 @@ class generic
                  ...);
             }(std::make_index_sequence<std::tuple_size_v<U>>());
             return r;
+        } else if constexpr (is_multimap<U>) {
+            auto const h = d.head_decode();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (h->major != major_type::array) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            out.clear();
+            for (std::uint64_t i = 0; i < h->argument; ++i) {
+                auto const pair = d.head_decode();
+                if (!pair) [[unlikely]]
+                    return std::unexpected(pair.error());
+                if (pair->major != major_type::array || pair->argument != std::tuple_size_v<typename U::value_type>)
+                    [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                auto key = pfr::element_make<typename U::key_type>(out);
+                if (auto const r = generic_read(d, key, depth + 2, depth_max); !r) [[unlikely]]
+                    return r;
+                auto value = pfr::element_make<typename U::mapped_type>(out);
+                if (auto const r = generic_read(d, value, depth + 2, depth_max); !r) [[unlikely]]
+                    return r;
+                out.emplace(std::move(key), std::move(value));
+            }
+            return {};
         } else if constexpr (reflection::is_map<U>) {
             auto const h = d.head_decode();
             if (!h) [[unlikely]]
@@ -994,6 +1024,20 @@ class generic
                 },
                 value);
             return size;
+        } else if constexpr (is_multimap<U>) {
+            std::size_t size = heads::head_size(value.size());
+            for (auto const &[k, v] : value) {
+                auto const key = generic_size(k).and_then([size](std::size_t const n) {
+                    return validity::checked_add(size, heads::head_size(std::tuple_size_v<typename U::value_type>) + n);
+                });
+                if (!key) [[unlikely]]
+                    return key;
+                auto const mapped = generic_size(v).and_then([&key](std::size_t const n) { return validity::checked_add(*key, n); });
+                if (!mapped) [[unlikely]]
+                    return mapped;
+                size = *mapped;
+            }
+            return size;
         } else if constexpr (reflection::is_map<U>) {
             std::size_t size = heads::head_size(value.size());
             for (auto const &[k, v] : value) {
@@ -1162,6 +1206,14 @@ class generic
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
             at += heads::head_write(out, at, major_type::array, std::tuple_size_v<U>);
             std::apply([&](auto const &...e) { ((at = generic_write(out, at, e)), ...); }, value);
+            return at;
+        } else if constexpr (is_multimap<U>) {
+            at += heads::head_write(out, at, major_type::array, value.size());
+            for (auto const &[k, v] : value) {
+                at += heads::head_write(out, at, major_type::array, std::tuple_size_v<typename U::value_type>);
+                at = generic_write(out, at, k);
+                at = generic_write(out, at, v);
+            }
             return at;
         } else if constexpr (reflection::is_map<U>) {
             at += heads::head_write(out, at, major_type::map, value.size());
