@@ -790,7 +790,7 @@ TEST_CASE("structs: a plain struct in a std::pmr::vector takes the resource of t
     REQUIRE(decoded.has_value());
     REQUIRE_EQ((**decoded).size(), 2u);
     for (pmr_person const &p : **decoded) {
-        CHECK_EQ(p.name, long_name);
+        CHECK_EQ(std::string_view(p.name), long_name);
         CHECK_EQ(p.name.get_allocator().resource(), &target);
     }
     CHECK_EQ(fallback.allocations, 0u);
