@@ -55,13 +55,11 @@ struct senml_record {
     std::optional<std::string> u;
     std::optional<double> v;
     std::optional<std::int64_t> t;
-    static constexpr std::array<std::int64_t, 6> keys{-2, -3, 0, 1, 2, 6};
     bool operator==(senml_record const &) const = default;
 };
 
 struct cose_header {
     std::optional<std::span<std::byte const>> kid;
-    static constexpr std::array<std::int64_t, 1> keys{4};
 };
 
 // RFC 9052 4.2: COSE_Sign1 is tag 18 on an array of protected header, unprotected header, payload and signature.
@@ -83,7 +81,6 @@ struct get_assertion_response {
     std::span<std::byte const> auth_data;
     std::span<std::byte const> signature;
     std::optional<user_entity> user;
-    static constexpr std::array<std::int64_t, 4> keys{1, 2, 3, 4};
 };
 
 struct text_order {
@@ -96,11 +93,16 @@ struct integer_order {
     int first;
     int second;
     int third;
-    static constexpr std::array<std::int64_t, 3> keys{24, -1, 1};
     bool operator==(integer_order const &) const = default;
 };
 
 } // namespace
+
+CBOR_DESCRIBE_STRUCT(senml_record, cbor::untagged, (bn, -2), (bt, -3), (n, 0), (u, 1), (v, 2), (t, 6))
+CBOR_DESCRIBE_STRUCT(cose_header, cbor::untagged, (kid, 4))
+CBOR_DESCRIBE_STRUCT(get_assertion_response, cbor::untagged, (credential_id, 1), (auth_data, 2), (signature, 3),
+                     (user, 4))
+CBOR_DESCRIBE_STRUCT(integer_order, cbor::untagged, (first, 24), (second, -1), (third, 1))
 
 // The expectations are the examples of RFC 8949 Appendix A, each read into a C++ type and written back. A
 // vector or an array of numbers is an RFC 8746 typed array since the owner decision of 2026-10-15: tag 64 for

@@ -137,6 +137,14 @@ struct plain {
 
 using pair_alias = std::pair<std::uint8_t, std::uint8_t>;
 
+class senml_value
+{
+public:
+    senml_value() = default;
+    std::string n;
+    std::int64_t v = 0;
+};
+
 } // namespace describe_test
 
 CBOR_DESCRIBE_STRUCT(describe_test::aggregate, (160010, 0), (a))
@@ -166,6 +174,7 @@ CBOR_DESCRIBE_STRUCT(describe_test::car, (160002, 0), (doors))
 CBOR_DESCRIBE_STRUCT(describe_test::nothing, (160041, 0))
 CBOR_DESCRIBE_STRUCT(describe_test::claims, (160043, 0), (iss, 1), (exp, 4))
 CBOR_DESCRIBE_STRUCT(describe_test::pair_alias, (160042, 0), (first), (second, "s"))
+CBOR_DESCRIBE_STRUCT(describe_test::senml_value, cbor::untagged, (n, 0), (v, 2))
 
 namespace describe_test
 {
@@ -367,4 +376,22 @@ TEST_CASE("describe: an aggregate with no description gives the same bytes on ev
                               "b\x01\x62"
                               "aa\x61x"s,
                               describe_test::plain{1, "x"});
+}
+
+// RFC 9052 2 calls a message with no CBOR tag an untagged message. SenML (RFC 8428 6), CTAP2 and the COSE
+// header are such messages with integer keys. A description with cbor::untagged writes the map with no tag in
+// front, and a decode refuses a tag in front of the map, because the type has no tag that the tag could name.
+TEST_CASE("describe: cbor::untagged writes and reads a map with no tag")
+{
+    describe_test::senml_value v;
+    v.n = "t";
+    v.v = 5;
+    describe_test::round_trip("\xa2\x00\x61t\x02\x05"s, v);
+    auto const read = cbor::structs<describe_test::senml_value>::decode("\xa2\x02\x05\x00\x61t"s);
+    REQUIRE(read.has_value());
+    CHECK_EQ((*read)->n, "t");
+    CHECK_EQ((*read)->v, 5);
+    CHECK_EQ(cbor::structs<describe_test::senml_value>::decode("\xda\x00\x02\x71\x0a\xa2\x00\x61t\x02\x05"s)
+                 .error(),
+             cbor::error::incorrect_type);
 }
