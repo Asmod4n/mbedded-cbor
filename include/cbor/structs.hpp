@@ -230,7 +230,6 @@ class generic
         { c.insert(v) } -> std::same_as<typename U::iterator>;
     };
 
-    template <class U>
     static constexpr auto element_count = [](std::uint64_t const count, auto const &) { return count + 1; };
 
     template <class U>
