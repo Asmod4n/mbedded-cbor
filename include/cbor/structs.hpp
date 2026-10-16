@@ -231,6 +231,9 @@ class generic
     };
 
     template <class U>
+    static constexpr auto element_count = [](std::uint64_t const count, auto const &) { return count + 1; };
+
+    template <class U>
     static auto key_groups(U const &value)
     {
         return value | std::views::chunk_by([&value](auto const &a, auto const &b) {
@@ -1038,11 +1041,15 @@ class generic
             return size;
         } else if constexpr (is_multimap<U>) {
             auto groups = key_groups(value);
-            std::expected<std::size_t, std::errc> size = heads::head_size(std::ranges::distance(groups));
+            std::expected<std::size_t, std::errc> size =
+                heads::head_size(std::ranges::fold_left(groups, std::uint64_t{0}, element_count));
             for (auto const group : groups) {
                 size = size.and_then([&](std::size_t const sum) {
                     return generic_size(group.front().first).and_then([&](std::size_t const n) {
-                        return validity::checked_add(sum, n + heads::head_size(std::ranges::distance(group)));
+                        return validity::checked_add(sum, n).and_then([&group](std::size_t const total) {
+                            return validity::checked_add(
+                                total, heads::head_size(std::ranges::fold_left(group, std::uint64_t{0}, element_count)));
+                        });
                     });
                 });
                 for (auto const &[k, v] : group)
@@ -1224,10 +1231,12 @@ class generic
             return at;
         } else if constexpr (is_multimap<U>) {
             auto groups = key_groups(value);
-            at += heads::head_write(out, at, major_type::map, std::ranges::distance(groups));
+            at += heads::head_write(out, at, major_type::map,
+                                    std::ranges::fold_left(groups, std::uint64_t{0}, element_count));
             for (auto const group : groups) {
                 at = generic_write(out, at, group.front().first);
-                at += heads::head_write(out, at, major_type::array, std::ranges::distance(group));
+                at += heads::head_write(out, at, major_type::array,
+                                        std::ranges::fold_left(group, std::uint64_t{0}, element_count));
                 for (auto const &[k, v] : group)
                     at = generic_write(out, at, v);
             }
