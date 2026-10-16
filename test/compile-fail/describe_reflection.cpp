@@ -1,5 +1,5 @@
 // On a build with reflection, a description must list exactly the public members that reflection reads with
-// unprivileged(), and a described type takes no annotation: the macro is the only list of members, keys and
+// unprivileged(), and a described type takes no annotation: the description is the only list of members, keys and
 // tag. CBOR_TEST_CASE selects the case: 1 one member left out, 2 cbor::key, 3 cbor::tag, 4 cbor::skip, 5
 // cbor::allow, 6 cbor::allowlist.
 #include <cbor/cbor.hpp>
@@ -40,9 +40,22 @@ struct [[=cbor::allowlist{}]] t {
 #endif
 
 #if CBOR_TEST_CASE == 1
-CBOR_DESCRIBE_STRUCT(t, (160001, 0), (a))
+template <>
+struct cbor::describe_members<t> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(t, a),
+    };
+};
 #else
-CBOR_DESCRIBE_STRUCT(t, (160001, 0), (a), (b))
+template <>
+struct cbor::describe_members<t> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(t, a),
+        CBOR_MEMBER(t, b),
+    };
+};
 #endif
 
 int main()

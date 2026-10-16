@@ -62,7 +62,13 @@ struct t {
     }
     int a;
 };
-CBOR_DESCRIBE_STRUCT(t, (160001, 0), (a))
+template <>
+struct cbor::describe_members<t> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(t, a),
+    };
+};
 #endif
 
 int main()

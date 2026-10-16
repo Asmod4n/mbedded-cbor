@@ -10,7 +10,13 @@ struct t {
     int m;
 };
 
-CBOR_DESCRIBE_STRUCT(t, (CBOR_TEST_TAG, 0), (m))
+template <>
+struct cbor::describe_members<t> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{CBOR_TEST_TAG, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(t, m),
+    };
+};
 
 int main()
 {
