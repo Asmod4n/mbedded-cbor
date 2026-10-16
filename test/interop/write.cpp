@@ -454,7 +454,14 @@ struct senml {
 
 } // namespace
 
-CBOR_DESCRIBE_STRUCT(senml, cbor::untagged, (n, 0), (v, 2))
+template <>
+struct cbor::describe_members<senml> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{0, &senml::n},
+        cbor::member{2, &senml::v},
+    };
+};
 
 namespace
 {

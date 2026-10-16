@@ -18,7 +18,13 @@ struct cose_header {
     std::optional<std::span<std::byte const>> kid;
 };
 
-CBOR_DESCRIBE_STRUCT(cose_header, cbor::untagged, (kid, 4))
+template <>
+struct cbor::describe_members<cose_header> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{4, &cose_header::kid},
+    };
+};
 
 using cose_sign1 = cbor::tagged_item<18, std::tuple<std::span<std::byte const>, cose_header, std::span<std::byte const>,
                                                std::span<std::byte const>>>;
@@ -33,8 +39,19 @@ struct cwt_claims {
     std::optional<std::span<std::byte const>> cti;
 };
 
-CBOR_DESCRIBE_STRUCT(cwt_claims, cbor::untagged, (iss, 1), (sub, 2), (aud, 3), (exp, 4), (nbf, 5), (iat, 6),
-                     (cti, 7))
+template <>
+struct cbor::describe_members<cwt_claims> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{1, &cwt_claims::iss},
+        cbor::member{2, &cwt_claims::sub},
+        cbor::member{3, &cwt_claims::aud},
+        cbor::member{4, &cwt_claims::exp},
+        cbor::member{5, &cwt_claims::nbf},
+        cbor::member{6, &cwt_claims::iat},
+        cbor::member{7, &cwt_claims::cti},
+    };
+};
 
 static std::uint64_t bytes_sum(std::span<std::byte const> const s)
 {
