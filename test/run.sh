@@ -11,14 +11,14 @@
 #   full also runs test/interop/run.sh, which decodes the output of the library with other decoders.
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
-# The builds run one after the other, and each uses every processor.
+# The builds run one after the other, and each runs at most CMAKE_BUILD_PARALLEL_LEVEL jobs: one processor of four stays free.
 set -u
 src=$(cd "$(dirname "$0")/.." && pwd)
 root=${CBOR_BUILD_ROOT:-/home/user/mbedded-cbor-build}
 cache=${CCACHE_HOST_DIR:-/home/user/.ccache}
 image=${CBOR_IMAGE:-mbedded-cbor-tw}
 branch=$(git -C "$src" rev-parse --abbrev-ref HEAD | tr / -)
-cpus=$(nproc)
+parallel_level=3
 
 interop=0
 [ "${1:-fast}" = full ] && interop=1
@@ -58,17 +58,17 @@ one() {
 	mkdir -p "$root/$branch/$n" "$cache"
 	podman run --rm --network none \
 		-v "$src":/src:ro -v "$root/$branch/$n":/b -v "$cache":/ccache \
-		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=2G \
+		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=2G -e CMAKE_BUILD_PARALLEL_LEVEL="$parallel_level" \
 		-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 		"$image" bash -c '
 		s=${EPOCHREALTIME/./}
 		cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE='"$type"' \
 			-DCMAKE_CXX_COMPILER='"$cxx"' -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
 			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" '"$options"' >/b/configure.log 2>&1 &&
-		cmake --build /b -- -j'"$cpus"' >/b/build.log 2>&1
+		cmake --build /b >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
 		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test >/b/test.log 2>&1; r=$?; }
-		[ $r = 0 ] && { ctest --test-dir /b -j'"$cpus"' -R "^(cmake|clang_query|compile_fail)_" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
+		[ $r = 0 ] && { ctest --test-dir /b -j"$CMAKE_BUILD_PARALLEL_LEVEL" -R "^(cmake|clang_query|compile_fail)_" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
 			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log 2>/dev/null | head -1)"
