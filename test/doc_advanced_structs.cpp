@@ -79,9 +79,32 @@ struct tagged_person {
 
 } // namespace doc_advanced_structs
 
-CBOR_DESCRIBE_STRUCT(doc_advanced_structs::account, (160061, 0), (user), (level, 1))
-CBOR_DESCRIBE_STRUCT(doc_advanced_structs::tagged_person, (1800, 0), (name), (age))
-CBOR_DESCRIBE_STRUCT(doc_advanced_structs::senml, cbor::untagged, (n, 0), (v, 2))
+template <>
+struct cbor::describe_members<doc_advanced_structs::account> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160061, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_advanced_structs::account, user),
+        cbor::member{1, &doc_advanced_structs::account::level},
+    };
+};
+
+template <>
+struct cbor::describe_members<doc_advanced_structs::tagged_person> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_advanced_structs::tagged_person, name),
+        CBOR_MEMBER(doc_advanced_structs::tagged_person, age),
+    };
+};
+
+template <>
+struct cbor::describe_members<doc_advanced_structs::senml> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{0, &doc_advanced_structs::senml::n},
+        cbor::member{2, &doc_advanced_structs::senml::v},
+    };
+};
 
 namespace doc_advanced_structs
 {
