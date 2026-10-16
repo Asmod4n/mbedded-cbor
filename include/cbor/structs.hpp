@@ -54,9 +54,6 @@ namespace cbor
 class pfr
 {
     template <class U>
-    static constexpr bool has_keys = requires { U::keys; };
-
-    template <class U>
     static consteval bool struct_readable()
     {
         if constexpr (has_describe_members<U>) {
@@ -122,8 +119,6 @@ class pfr
     {
         if constexpr (has_describe_members<U>)
             return std::get<I>(describe_members<U>::members).key;
-        else if constexpr (has_keys<U>)
-            return map_key(std::get<I>(U::keys));
 #ifdef __cpp_impl_reflection
         else
             return map_key(reflection::key_of(reflection::members_of<U>()[I]));
@@ -137,9 +132,9 @@ class pfr
     static consteval std::optional<std::uint64_t> tag_of()
     {
         if constexpr (has_describe_members<U>)
-            return describe_members<U>::tag;
-        else
-            return std::nullopt;
+            if (describe_members<U>::tag.has_value())
+                return describe_members<U>::tag->number;
+        return std::nullopt;
     }
 
     template <class E, class Alloc>

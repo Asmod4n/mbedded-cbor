@@ -70,7 +70,6 @@ public:
 struct senml {
     std::string n;
     double v;
-    static constexpr std::array<std::int64_t, 2> keys{0, 2};
 };
 
 struct tagged_person {
@@ -82,6 +81,7 @@ struct tagged_person {
 
 CBOR_DESCRIBE_STRUCT(doc_advanced_structs::account, (160061, 0), (user), (level, 1))
 CBOR_DESCRIBE_STRUCT(doc_advanced_structs::tagged_person, (1800, 0), (name), (age))
+CBOR_DESCRIBE_STRUCT(doc_advanced_structs::senml, cbor::untagged, (n, 0), (v, 2))
 
 namespace doc_advanced_structs
 {
@@ -143,7 +143,7 @@ TEST_CASE("doc advanced structs: the item of each type")
 }
 
 // The section "Structs and keys" shows a description of a class with a private member and an integer key, and
-// integer keys from a static member keys.
+// a description with cbor::untagged that gives integer keys and no tag.
 TEST_CASE("doc advanced structs: the key of a member")
 {
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<account>::encode(account{"ann", 2, "secret"})),

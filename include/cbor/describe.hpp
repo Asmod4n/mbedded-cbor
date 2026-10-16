@@ -3,6 +3,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -13,6 +14,8 @@ namespace cbor
 {
 
 inline constexpr std::size_t describe_entries_max = 342;
+
+inline constexpr std::nullopt_t untagged = std::nullopt;
 
 struct map_key {
     major_type major;
@@ -66,6 +69,15 @@ concept has_describe_members = requires { describe_members<T>::members; };
 #define CBOR_EXPAND2(...) CBOR_EXPAND1(CBOR_EXPAND1(CBOR_EXPAND1(CBOR_EXPAND1(__VA_ARGS__))))
 #define CBOR_EXPAND1(...) __VA_ARGS__
 #define CBOR_REMOVE_PARENS(...) __VA_ARGS__
+#define CBOR_CAT(a, b) CBOR_CAT_I(a, b)
+#define CBOR_CAT_I(a, b) a##b
+#define CBOR_IS_BEGIN_PARENS(x) CBOR_IS_BEGIN_PARENS_SECOND(CBOR_IS_BEGIN_PARENS_PROBE x, 0, ~)
+#define CBOR_IS_BEGIN_PARENS_PROBE(...) ~, 1
+#define CBOR_IS_BEGIN_PARENS_SECOND(...) CBOR_IS_BEGIN_PARENS_SECOND_I(__VA_ARGS__)
+#define CBOR_IS_BEGIN_PARENS_SECOND_I(a, b, ...) b
+#define CBOR_DESCRIBE_TAG(TAG) CBOR_CAT(CBOR_DESCRIBE_TAG_, CBOR_IS_BEGIN_PARENS(TAG))(TAG)
+#define CBOR_DESCRIBE_TAG_1(TAG) std::optional<cbor::tag>{cbor::tag{CBOR_REMOVE_PARENS TAG}}
+#define CBOR_DESCRIBE_TAG_0(TAG) std::optional<cbor::tag>{TAG}
 #define CBOR_DESCRIBE_MEMBER(T, entry) CBOR_DESCRIBE_MEMBER_HELPER(T, CBOR_REMOVE_PARENS entry)
 #define CBOR_DESCRIBE_MEMBER_HELPER(T, ...) CBOR_DESCRIBE_MEMBER_DESCRIPTOR(T, __VA_ARGS__)
 #define CBOR_DESCRIBE_MEMBER_DESCRIPTOR(T, m, ...)                                                           \
@@ -82,10 +94,9 @@ concept has_describe_members = requires { describe_members<T>::members; };
     struct cbor::describe_members<T> {                                                                       \
         static_assert(cbor::reflection::entries_count(#__VA_ARGS__) <= cbor::describe_entries_max,           \
                       "CBOR_DESCRIBE_STRUCT takes at most cbor::describe_entries_max members.");             \
-        static constexpr std::uint64_t tag = cbor::tag{CBOR_REMOVE_PARENS TAG}.number;                       \
-        [[maybe_unused]] static constexpr std::uint16_t generation = cbor::tag{CBOR_REMOVE_PARENS TAG}.generation; \
+        static constexpr std::optional<cbor::tag> tag = CBOR_DESCRIBE_TAG(TAG);                              \
         static constexpr auto members = std::tuple{CBOR_FOR_EACH(T, __VA_ARGS__)};                           \
-        static_assert(!cbor::reflection::tag_taken_by_standard_type(tag),                                    \
+        static_assert(!tag.has_value() || !cbor::reflection::tag_taken_by_standard_type(tag->number),       \
                       "CBOR_DESCRIBE_STRUCT takes a tag that no standard type has.");                        \
         static_assert(cbor::reflection::names_unique(members),                                               \
                       "CBOR_DESCRIBE_STRUCT lists a member twice.");                                         \

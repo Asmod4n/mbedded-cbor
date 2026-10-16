@@ -578,17 +578,9 @@ class reflection
         static constexpr auto members = members_of<U>();
         heads::head_append(encoded, major_type::array, members.size());
         template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, members.size()))) {
-            if constexpr (has_integer_keys<U>) {
-                constexpr std::int64_t key = std::get<i>(U::keys);
-                if (key >= 0)
-                    heads::head_append(encoded, major_type::unsigned_integer, static_cast<std::uint64_t>(key));
-                else
-                    heads::head_append(encoded, major_type::negative_integer, static_cast<std::uint64_t>(-1 - key));
-            } else {
-                constexpr std::string_view key = key_of(members[i]);
-                heads::head_append(encoded, major_type::text_string, key.size());
-                encoded.insert(encoded.end(), key.begin(), key.end());
-            }
+            constexpr std::string_view key = key_of(members[i]);
+            heads::head_append(encoded, major_type::text_string, key.size());
+            encoded.insert(encoded.end(), key.begin(), key.end());
         }
         return std::define_static_array(encoded);
     }
@@ -1743,21 +1735,10 @@ class reflection
     }
 
     template <class U>
-    static constexpr bool has_integer_keys = requires { U::keys; };
-
-    template <class U>
     static consteval auto members_of()
     {
         auto const members = data_members<U>();
-        if constexpr (has_integer_keys<U>)
-            static_assert(
-                [] {
-                    auto keys = U::keys;
-                    std::ranges::sort(keys);
-                    return validity::keys_unique(keys);
-                }(),
-                "The integer keys of a struct must be unique.");
-        else if (!keys_unique(members))
+        if (!keys_unique(members))
             std::unreachable();
         return members;
     }

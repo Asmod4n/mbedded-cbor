@@ -115,14 +115,16 @@ other builds. It takes no annotation, so it gives the same bytes on
 every build. An aggregate with a base class needs a description.
 
 `CBOR_DESCRIBE_STRUCT(type, (tag, generation), entries...)` describes a
-struct or a class:
+struct or a class. In place of `(tag, generation)`, `cbor::untagged`
+gives a map with no tag, an untagged message in the words of RFC 9052 2
+(SenML, CTAP2, the COSE header). A decode of such a type refuses a tag
+in front of the map with `error::incorrect_type`.
 
 | Entry | Key |
 |---|---|
 | `(m)` | the text of the name `m` |
 | `(m, "x")` | the text `x` |
 | `(m, 4)`, `(m, -1)` | the integer |
-| `static constexpr std::array<std::int64_t, N> keys` in an aggregate with no description | the keys are these integers, one for each member |
 
 - The macro stands outside every namespace, after the type and after the
   description of each struct that the type holds.
@@ -153,8 +155,8 @@ CBOR_DESCRIBE_STRUCT(account, (160061, 0), (user), (level, 1))
 struct senml {          // RFC 8428 6: n is 0, v is 2
     std::string n;
     double v;
-    static constexpr std::array<std::int64_t, 2> keys{0, 2};
 };
+CBOR_DESCRIBE_STRUCT(senml, cbor::untagged, (n, 0), (v, 2))
 // senml{"t", 1.5} is {0: "t", 2: 1.5}
 ```
 

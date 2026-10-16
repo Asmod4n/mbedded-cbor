@@ -450,8 +450,14 @@ struct everything {
 struct senml {
     std::string n;
     double v;
-    static constexpr std::array<std::int64_t, 2> keys{0, 2};
 };
+
+} // namespace
+
+CBOR_DESCRIBE_STRUCT(senml, cbor::untagged, (n, 0), (v, 2))
+
+namespace
+{
 
 // structs<T>::encode. The expected bytes are written by hand in the preferred serialization; the decoders
 // compare values, so a float that the library writes in another width still compares equal.

@@ -1,7 +1,6 @@
 #include <benchmark/benchmark.h>
 #include <cbor/cbor.hpp>
 
-#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -17,8 +16,9 @@
 
 struct cose_header {
     std::optional<std::span<std::byte const>> kid;
-    static constexpr std::array<std::int64_t, 1> keys{4};
 };
+
+CBOR_DESCRIBE_STRUCT(cose_header, cbor::untagged, (kid, 4))
 
 using cose_sign1 = cbor::tagged_item<18, std::tuple<std::span<std::byte const>, cose_header, std::span<std::byte const>,
                                                std::span<std::byte const>>>;
@@ -31,8 +31,10 @@ struct cwt_claims {
     std::optional<std::uint64_t> nbf;
     std::optional<std::uint64_t> iat;
     std::optional<std::span<std::byte const>> cti;
-    static constexpr std::array<std::int64_t, 7> keys{1, 2, 3, 4, 5, 6, 7};
 };
+
+CBOR_DESCRIBE_STRUCT(cwt_claims, cbor::untagged, (iss, 1), (sub, 2), (aud, 3), (exp, 4), (nbf, 5), (iat, 6),
+                     (cti, 7))
 
 static std::uint64_t bytes_sum(std::span<std::byte const> const s)
 {
