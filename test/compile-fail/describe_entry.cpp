@@ -3,6 +3,9 @@
 // protected base, 3 a member function, 4 a static data member, 5 a bit-field, 6 a reference member.
 #include <cbor/cbor.hpp>
 
+#include <expected>
+#include <string>
+
 struct hidden_base {
     int inherited;
 };
@@ -39,4 +42,6 @@ CBOR_DESCRIBE_STRUCT(kinds, (160001, 0), (reference))
 
 int main()
 {
+    [[maybe_unused]] auto const encode =
+        static_cast<std::expected<std::string, cbor::error> (*)(kinds const &)>(&cbor::structs<kinds>::encode);
 }

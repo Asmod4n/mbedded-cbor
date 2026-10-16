@@ -4,6 +4,9 @@
 // documented form of -2^63 is std::numeric_limits<std::int64_t>::min().
 #include <cbor/cbor.hpp>
 
+#include <expected>
+#include <string>
+
 struct low {
     int a;
 };
@@ -12,4 +15,6 @@ CBOR_DESCRIBE_STRUCT(low, (160001, 0), (a, -9223372036854775808))
 
 int main()
 {
+    [[maybe_unused]] auto const encode =
+        static_cast<std::expected<std::string, cbor::error> (*)(low const &)>(&cbor::structs<low>::encode);
 }

@@ -57,13 +57,34 @@ class pfr
     static consteval bool struct_readable()
     {
         if constexpr (has_describe_members<U>) {
+            static_assert(reflection::tag_declared<U>(),
+                          "cbor::describe_members<T>::tag is a std::optional<cbor::tag>.");
+            if constexpr (reflection::tag_declared<U>()) {
+                static_assert(!describe_members<U>::tag.has_value() ||
+                                  !reflection::tag_taken_by_standard_type(describe_members<U>::tag->number),
+                              "cbor::describe_members takes a tag that no standard type has.");
+                static_assert(!describe_members<U>::tag.has_value() ||
+                                  !reflection::tag_invalid(describe_members<U>::tag->number),
+                              "cbor::describe_members takes a tag that the IANA registry calls always invalid.");
+            }
+            static_assert(reflection::members_of_class<U>(),
+                          "cbor::describe_members lists a member of another class.");
+            if constexpr (reflection::members_of_class<U>()) {
+                static_assert(reflection::pointers_unique<U>(), "cbor::describe_members lists a member twice.");
+                static_assert(reflection::reflected_members_listed<U>(),
+                              "cbor::describe_members lists other members than reflection reads with unprivileged().");
+            }
+            static_assert(reflection::keys_unique(describe_members<U>::members),
+                          "cbor::describe_members gives two members the same key.");
+            static_assert(reflection::annotations_absent<U>(),
+                          "a type with cbor::describe_members takes its members, keys and tag from the description only.");
             return true;
 #ifdef __cpp_impl_reflection
         } else if constexpr (std::is_aggregate_v<U>) {
             static_assert(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty(),
-                          "cbor::structs reads a class with a base class only through CBOR_DESCRIBE_STRUCT.");
+                          "cbor::structs reads a class with a base class only through cbor::describe_members.");
             static_assert(reflection::annotations_absent<U>(),
-                          "cbor::structs reads an aggregate with no CBOR_DESCRIBE_STRUCT by its member "
+                          "cbor::structs reads an aggregate with no cbor::describe_members by its member "
                           "names; it takes no annotation.");
             return true;
 #elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
@@ -71,13 +92,13 @@ class pfr
             return true;
 #else
         } else if constexpr (std::is_aggregate_v<U>) {
-            static_assert(false, "cbor::structs reads an aggregate with no CBOR_DESCRIBE_STRUCT through "
+            static_assert(false, "cbor::structs reads an aggregate with no cbor::describe_members through "
                                  "reflection or Boost.PFR; this build has neither.");
 #endif
         } else {
             static_assert(
                 false,
-                "cbor::structs reads a class that is not an aggregate only through CBOR_DESCRIBE_STRUCT.");
+                "cbor::structs reads a class that is not an aggregate only through cbor::describe_members.");
         }
     }
 
@@ -131,7 +152,7 @@ class pfr
     template <class U>
     static consteval std::optional<std::uint64_t> tag_of()
     {
-        if constexpr (has_describe_members<U>)
+        if constexpr (has_describe_members<U> && reflection::tag_declared<U>())
             if (describe_members<U>::tag.has_value())
                 return describe_members<U>::tag->number;
         return std::nullopt;
@@ -1091,12 +1112,12 @@ class generic
                     validity::checked_add(sum, heads::head_size(key.argument) + key.text.size());
                 if (!keyed) [[unlikely]]
                     return keyed;
-                std::expected<std::size_t, std::errc> member;
+                std::expected<std::size_t, std::errc> encoded_size;
                 if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
-                    member = generic_size(*m);
+                    encoded_size = generic_size(*m);
                 else
-                    member = generic_size(m);
-                return member.and_then(
+                    encoded_size = generic_size(m);
+                return encoded_size.and_then(
                     [&keyed](std::size_t const n) { return validity::checked_add(*keyed, n); });
             };
             std::expected<std::size_t, std::errc> size = std::size_t{0};

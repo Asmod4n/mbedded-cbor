@@ -58,7 +58,7 @@ struct tag {
 template <std::uint64_t Number, class T>
 struct tagged_item {
     static_assert(!has_describe_members<T> && !(std::is_class_v<T> && std::is_aggregate_v<T> && !std::ranges::range<T>),
-                  "the tag wrapper takes content that is not a struct; a struct carries its tag in CBOR_DESCRIBE_STRUCT.");
+                  "the tag wrapper takes content that is not a struct; a struct carries its tag in cbor::describe_members.");
     static constexpr std::uint64_t number = Number;
     T content;
 };
@@ -287,6 +287,77 @@ class reflection
                 tag <= std::to_underlying(rfc8746::tag_number::typed_array_last));
     }
 
+    static consteval bool tag_invalid(std::uint64_t const tag)
+    {
+        return tag == std::numeric_limits<std::uint16_t>::max() || tag == std::numeric_limits<std::uint32_t>::max() ||
+               tag == std::numeric_limits<std::uint64_t>::max();
+    }
+
+    template <class U>
+    static consteval bool tag_declared()
+    {
+        return requires {
+            { describe_members<U>::tag } -> std::same_as<std::optional<cbor::tag> const &>;
+        };
+    }
+
+    template <class M, class B>
+    static std::type_identity<B> class_of(M B::*);
+
+    template <class U, class P>
+    static consteval bool member_of()
+    {
+        using C = typename decltype(class_of(P{}))::type;
+        return std::is_base_of_v<C, U> && requires(U &u, P p) { u.*p; };
+    }
+
+    template <class U>
+    static consteval bool members_of_class()
+    {
+        return std::apply([](auto const &...m) { return (member_of<U, decltype(m.pointer)>() && ...); },
+                          describe_members<U>::members);
+    }
+
+    template <class U, class P>
+    static consteval bool converts_to_member_of()
+    {
+        return requires(typename decltype(class_of(P{}))::type *b) { static_cast<U *>(b); };
+    }
+
+    template <class U, std::size_t J, std::size_t L>
+    static consteval bool pointers_differ()
+    {
+        constexpr auto a = std::get<J>(describe_members<U>::members).pointer;
+        constexpr auto b = std::get<L>(describe_members<U>::members).pointer;
+        using PA = std::remove_cvref_t<decltype(a)>;
+        using PB = std::remove_cvref_t<decltype(b)>;
+        using MA = std::remove_reference_t<decltype(std::declval<U &>().*a)>;
+        using MB = std::remove_reference_t<decltype(std::declval<U &>().*b)>;
+        if constexpr (J == L || !std::is_same_v<MA, MB>)
+            return true;
+        else if constexpr (converts_to_member_of<U, PA>() && converts_to_member_of<U, PB>())
+            return static_cast<MA U::*>(a) != static_cast<MB U::*>(b);
+        else if constexpr (std::is_same_v<PA, PB>)
+            return a != b;
+        else
+            return true;
+    }
+
+    template <class U, std::size_t J, std::size_t... L>
+    static consteval bool pointer_differs_from_all(std::index_sequence<L...>)
+    {
+        return (pointers_differ<U, J, L>() && ...);
+    }
+
+    template <class U>
+    static consteval bool pointers_unique()
+    {
+        constexpr std::size_t n = std::tuple_size_v<std::remove_cvref_t<decltype(describe_members<U>::members)>>;
+        return []<std::size_t... J>(std::index_sequence<J...>) {
+            return (pointer_differs_from_all<U, J>(std::make_index_sequence<n>{}) && ...);
+        }(std::make_index_sequence<n>{});
+    }
+
     static consteval map_key key_or(std::string_view const name)
     {
         return map_key(name);
@@ -318,7 +389,7 @@ class reflection
     }
 
     template <class... P>
-    static consteval bool keys_unique(std::tuple<member_descriptor<P>...> const &members)
+    static consteval bool keys_unique(std::tuple<member<P>...> const &members)
     {
         std::vector<map_key> keys;
         std::apply([&](auto const &...m) { (keys.push_back(m.key), ...); }, members);
@@ -342,29 +413,52 @@ class reflection
     }
 
 #ifdef __cpp_impl_reflection
-    static consteval void public_member_names_add(std::meta::info const type,
-                                                  std::vector<std::string_view> &names)
+    static consteval void public_members_add(std::meta::info const type, std::vector<std::meta::info> &out)
     {
         for (std::meta::info const b : std::meta::bases_of(type, std::meta::access_context::unprivileged()))
-            public_member_names_add(std::meta::type_of(b), names);
+            public_members_add(std::meta::type_of(b), out);
         for (std::meta::info const m :
              std::meta::nonstatic_data_members_of(type, std::meta::access_context::unprivileged()))
-            names.push_back(std::meta::identifier_of(m));
+            out.push_back(m);
+    }
+
+    template <class U>
+    static consteval std::span<std::meta::info const> public_members()
+    {
+        std::vector<std::meta::info> out;
+        public_members_add(std::meta::dealias(^^U), out);
+        return std::define_static_array(out);
+    }
+
+    template <class U, std::meta::info R>
+    static consteval bool listed_once()
+    {
+        return std::apply(
+            [](auto const &...m) {
+                auto const hit = [](auto const &e) {
+                    if constexpr (std::is_same_v<decltype(e.pointer), decltype(&[:R:])>)
+                        return e.pointer == &[:R:];
+                    else
+                        return false;
+                };
+                return (int{hit(m)} + ... + 0) == 1;
+            },
+            describe_members<U>::members);
     }
 #endif
 
-    template <class T, class... P>
-    static consteval bool
-    reflected_members_listed([[maybe_unused]] std::tuple<member_descriptor<P>...> const &members)
+    template <class U>
+    static consteval bool reflected_members_listed()
     {
 #ifdef __cpp_impl_reflection
-        std::vector<std::string_view> reflected;
-        public_member_names_add(std::meta::dealias(^^T), reflected);
-        std::vector<std::string_view> listed;
-        std::apply([&](auto const &...m) { (listed.push_back(m.name), ...); }, members);
-        std::ranges::sort(reflected);
-        std::ranges::sort(listed);
-        return reflected == listed;
+        static constexpr auto r = public_members<U>();
+        constexpr std::size_t n = std::tuple_size_v<std::remove_cvref_t<decltype(describe_members<U>::members)>>;
+        if constexpr (r.size() != n)
+            return false;
+        else
+            return []<std::size_t... I>(std::index_sequence<I...>) {
+                return (listed_once<U, r[I]>() && ...);
+            }(std::make_index_sequence<r.size()>{});
 #else
         return true;
 #endif
@@ -374,12 +468,12 @@ class reflection
     friend struct cbor::describe_members;
 
 #ifdef __cpp_impl_reflection
-    static consteval std::string_view key_of(std::meta::info const member)
+    static consteval std::string_view key_of(std::meta::info const r)
     {
-        for (std::meta::info const a : std::meta::annotations_of(member))
+        for (std::meta::info const a : std::meta::annotations_of(r))
             if (std::meta::remove_const(std::meta::type_of(a)) == ^^cbor::key)
                 return std::meta::extract<cbor::key>(a).text;
-        auto const name = std::meta::u8identifier_of(member);
+        auto const name = std::meta::u8identifier_of(r);
         return std::define_static_string(std::string(name.begin(), name.end()));
     }
 
@@ -967,8 +1061,8 @@ class reflection
     static consteval std::meta::info member_named(std::string_view const name)
     {
         constexpr auto members = data_members<U>();
-        auto const m = std::ranges::find_if(members, [name](std::meta::info const member) {
-            return key_of(member) == name;
+        auto const m = std::ranges::find_if(members, [name](std::meta::info const r) {
+            return key_of(r) == name;
         });
         return m == members.end() ? std::meta::info{} : *m;
     }

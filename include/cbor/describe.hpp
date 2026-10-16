@@ -46,6 +46,13 @@ struct map_key {
 };
 
 template <class P>
+struct member {
+    static_assert(std::is_member_object_pointer_v<P>, "cbor::member takes a non-static data member only.");
+    map_key key;
+    P pointer;
+};
+
+template <class P>
 struct member_descriptor {
     static_assert(std::is_member_object_pointer_v<P>,
                   "CBOR_DESCRIBE_STRUCT lists a non-static data member only.");
@@ -61,6 +68,8 @@ template <class T>
 concept has_describe_members = requires { describe_members<T>::members; };
 
 }
+
+#define CBOR_MEMBER(T, m) cbor::member{cbor::map_key(std::string_view{#m}), &T::m}
 
 #define CBOR_PARENS ()
 #define CBOR_EXPAND(...) CBOR_EXPAND4(CBOR_EXPAND4(CBOR_EXPAND4(CBOR_EXPAND4(__VA_ARGS__))))
@@ -81,9 +90,9 @@ concept has_describe_members = requires { describe_members<T>::members; };
 #define CBOR_DESCRIBE_MEMBER(T, entry) CBOR_DESCRIBE_MEMBER_HELPER(T, CBOR_REMOVE_PARENS entry)
 #define CBOR_DESCRIBE_MEMBER_HELPER(T, ...) CBOR_DESCRIBE_MEMBER_DESCRIPTOR(T, __VA_ARGS__)
 #define CBOR_DESCRIBE_MEMBER_DESCRIPTOR(T, m, ...)                                                           \
-    cbor::member_descriptor<decltype(&T::m)>                                                                 \
+    cbor::member                                                                                             \
     {                                                                                                        \
-        &T::m, #m, cbor::reflection::key_or(#m __VA_OPT__(, __VA_ARGS__))                                    \
+        cbor::reflection::key_or(#m __VA_OPT__(, __VA_ARGS__)), &T::m                                        \
     }
 #define CBOR_FOR_EACH(T, ...) __VA_OPT__(CBOR_EXPAND(CBOR_FOR_EACH_HELPER(T, __VA_ARGS__)))
 #define CBOR_FOR_EACH_HELPER(T, a, ...)                                                                      \
@@ -96,16 +105,4 @@ concept has_describe_members = requires { describe_members<T>::members; };
                       "CBOR_DESCRIBE_STRUCT takes at most cbor::describe_entries_max members.");             \
         static constexpr std::optional<cbor::tag> tag = CBOR_DESCRIBE_TAG(TAG);                              \
         static constexpr auto members = std::tuple{CBOR_FOR_EACH(T, __VA_ARGS__)};                           \
-        static_assert(!tag.has_value() || !cbor::reflection::tag_taken_by_standard_type(tag->number),       \
-                      "CBOR_DESCRIBE_STRUCT takes a tag that no standard type has.");                        \
-        static_assert(cbor::reflection::names_unique(members),                                               \
-                      "CBOR_DESCRIBE_STRUCT lists a member twice.");                                         \
-        static_assert(cbor::reflection::keys_unique(members),                                                \
-                      "CBOR_DESCRIBE_STRUCT gives two members the same key.");                               \
-        static_assert(                                                                                       \
-            cbor::reflection::annotations_absent<T>(),                                                       \
-            "a type with CBOR_DESCRIBE_STRUCT takes its members, keys and tag from the macro only.");        \
-        static_assert(                                                                                       \
-            cbor::reflection::reflected_members_listed<T>(members),                                          \
-            "CBOR_DESCRIBE_STRUCT lists other members than reflection reads with unprivileged().");          \
     };

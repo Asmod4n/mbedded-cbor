@@ -4,6 +4,9 @@
 // cbor::allow, 6 cbor::allowlist.
 #include <cbor/cbor.hpp>
 
+#include <expected>
+#include <string>
+
 #if CBOR_TEST_CASE == 1
 struct t {
     int a;
@@ -44,4 +47,6 @@ CBOR_DESCRIBE_STRUCT(t, (160001, 0), (a), (b))
 
 int main()
 {
+    [[maybe_unused]] auto const encode =
+        static_cast<std::expected<std::string, cbor::error> (*)(t const &)>(&cbor::structs<t>::encode);
 }
