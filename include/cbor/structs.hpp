@@ -1037,7 +1037,7 @@ class generic
                 value);
             return size;
         } else if constexpr (is_multimap<U>) {
-            auto const groups = key_groups(value);
+            auto groups = key_groups(value);
             std::expected<std::size_t, std::errc> size = heads::head_size(std::ranges::distance(groups));
             for (auto const group : groups) {
                 size = size.and_then([&](std::size_t const sum) {
@@ -1223,7 +1223,7 @@ class generic
             std::apply([&](auto const &...e) { ((at = generic_write(out, at, e)), ...); }, value);
             return at;
         } else if constexpr (is_multimap<U>) {
-            auto const groups = key_groups(value);
+            auto groups = key_groups(value);
             at += heads::head_write(out, at, major_type::map, std::ranges::distance(groups));
             for (auto const group : groups) {
                 at = generic_write(out, at, group.front().first);
