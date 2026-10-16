@@ -3,6 +3,9 @@
 // never writes one. CBOR_TEST_CASE selects the case: 1 two text keys, 2 two integer keys, 3 one member twice.
 #include <cbor/cbor.hpp>
 
+#include <expected>
+#include <string>
+
 struct twice {
     int a;
     int b;
@@ -18,4 +21,6 @@ CBOR_DESCRIBE_STRUCT(twice, (160001, 0), (a), (a, "x"))
 
 int main()
 {
+    [[maybe_unused]] auto const encode =
+        static_cast<std::expected<std::string, cbor::error> (*)(twice const &)>(&cbor::structs<twice>::encode);
 }
