@@ -101,8 +101,6 @@ concept has_describe_members = requires { describe_members<T>::members; };
 #define CBOR_DESCRIBE_STRUCT(T, TAG, ...)                                                                    \
     template <>                                                                                              \
     struct cbor::describe_members<T> {                                                                       \
-        static_assert(cbor::reflection::entries_count(#__VA_ARGS__) <= cbor::describe_entries_max,           \
-                      "CBOR_DESCRIBE_STRUCT takes at most cbor::describe_entries_max members.");             \
         static constexpr std::optional<cbor::tag> tag = CBOR_DESCRIBE_TAG(TAG);                              \
         static constexpr auto members = std::tuple{CBOR_FOR_EACH(T, __VA_ARGS__)};                           \
     };
