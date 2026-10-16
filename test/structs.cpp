@@ -554,35 +554,37 @@ TEST_CASE("structs: every standard container that encode writes decodes")
     round_trip("\x82\x01\x02"s, std::deque<int>{1, 2});
     round_trip(
         "\xa6\x61"
-        "b\x81\xf5\x61l\x82\x01\x02\x61m\x82\x06\x06\x61q\x81\x03\x61s\xd9\x01\x02\x82\x04\x05\x62mm\x82\x82\x01\x02\x82\x01\x03"s,
+        "b\x81\xf5\x61l\x82\x01\x02\x61m\x82\x06\x06\x61q\x81\x03\x61s\xd9\x01\x02\x82\x04\x05\x62mm\xa1\x01\x82\x02\x03"s,
         standard_containers{{1, 2}, {3}, {true}, {4, 5}, {6, 6}, {{1, 2}, {1, 3}}});
 }
 
-// RFC 8949 5.6 makes a map with a repeated key invalid, and no tag marks a multimap. So a multimap is an array of
-// [key, value] arrays in container order, and a map, an element that is not a two-element array, or a two-element
-// map gives incorrect_type. The bytes are written by hand from RFC 8949 3.1: 0x80 is an array of 0 items, 0x82 of 2.
+// RFC 8949 5.6 makes a map with a repeated key invalid, so a multimap is a map from each key to the array of its
+// values. A repeated key gives duplicate_key, as for std::map. A value that is not an array, and an empty array,
+// which encode never writes, give incorrect_type. The bytes are written by hand from RFC 8949 3.1: 0xa0 to 0xa2 are
+// maps of 0 to 2 pairs, 0x80 to 0x82 arrays of 0 to 2 items.
 template <class M>
 void multimap_check()
 {
-    round_trip("\x80"s, M{});
-    round_trip("\x81\x82\x01\x02"s, M{{1, 2}});
-    auto const back = cbor::structs<M>::decode("\x82\x82\x01\x02\x82\x01\x03"s);
+    round_trip("\xa0"s, M{});
+    round_trip("\xa1\x01\x81\x02"s, M{{1, 2}});
+    auto const back = cbor::structs<M>::decode("\xa2\x01\x82\x02\x03\x02\x81\x04"s);
     REQUIRE(back.has_value());
-    CHECK_EQ((**back).count(1), 2);
-    CHECK_EQ((**back), M{{1, 3}, {1, 2}});
-    CHECK_EQ(cbor::structs<M>::decode("\xa2\x01\x02\x01\x03"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<M>::decode("\x81\x01"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<M>::decode("\x81\x83\x01\x02\x03"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<M>::decode("\x81\x81\x01"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<M>::decode("\x81\xa1\x01\x02"s).error(), error::incorrect_type);
+    CHECK_EQ((**back), M{{1, 2}, {1, 3}, {2, 4}});
+    auto const again = cbor::structs<M>::encode(M{{1, 2}, {1, 3}});
+    REQUIRE(again.has_value());
+    CHECK((*again == "\xa1\x01\x82\x02\x03"s || *again == "\xa1\x01\x82\x03\x02"s));
+    CHECK_EQ(cbor::structs<M>::decode("\xa2\x01\x81\x02\x01\x81\x03"s).error(), error::duplicate_key);
+    CHECK_EQ(cbor::structs<M>::decode("\xa1\x01\x02"s).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<M>::decode("\xa1\x01\x80"s).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<M>::decode("\x81\x82\x01\x02"s).error(), error::incorrect_type);
 }
 
-TEST_CASE("structs: a multimap is an array of key and value pairs")
+TEST_CASE("structs: a multimap is a map from each key to the array of its values")
 {
     multimap_check<std::multimap<int, int>>();
-    // std::multimap keeps equal keys in insertion order, so the bytes of two entries with one key are fixed.
-    round_trip("\x82\x82\x01\x02\x82\x01\x03"s, std::multimap<int, int>{{1, 2}, {1, 3}});
     multimap_check<std::unordered_multimap<int, int>>();
+    // std::multimap keeps the keys sorted and equal keys in insertion order, so its bytes are fixed.
+    round_trip("\xa2\x01\x82\x02\x03\x02\x81\x04"s, std::multimap<int, int>{{1, 2}, {1, 3}, {2, 4}});
 }
 
 template <class T>

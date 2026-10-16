@@ -70,7 +70,7 @@ An empty owner throws `std::logic_error`. A `std::string` or a
 | `std::variant<E...>` | the item of the alternative it holds |
 | `std::tuple<E...>`, `std::array<E, N>` of other types | an array of exactly that count |
 | `std::map`, `std::unordered_map` and their `std::pmr` forms | a map |
-| `std::multimap`, `std::unordered_multimap` and their `std::pmr` forms | an array of `[key, value]` arrays, in container order: RFC 8949 5.6 makes a map with a repeated key invalid |
+| `std::multimap`, `std::unordered_multimap` and their `std::pmr` forms | a map from each key to the array of its values: RFC 8949 5.6 makes a map with a repeated key invalid |
 | `std::vector`, `std::deque`, `std::list` and other containers | an array |
 | `cbor::tagged_item<N, E>`, E no struct | tag N on the item of E |
 | a struct | a map, section 4 |
