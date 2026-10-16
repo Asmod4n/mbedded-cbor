@@ -31,6 +31,7 @@
 #endif
 
 #include "cbor_sets.hpp"
+#include "notable_tags.hpp"
 #include "describe.hpp"
 #include "encode.hpp"
 #include "error.hpp"
@@ -263,7 +264,8 @@ class reflection
     static consteval bool tag_invalid(std::uint64_t const tag)
     {
         return tag == std::numeric_limits<std::uint16_t>::max() || tag == std::numeric_limits<std::uint32_t>::max() ||
-               tag == std::numeric_limits<std::uint64_t>::max();
+               tag == std::numeric_limits<std::uint64_t>::max() ||
+               tag == std::to_underlying(notable_tags::tag_number::programming_aid_for_simple_values);
     }
 
     template <class U>
