@@ -1614,3 +1614,13 @@ TEST_CASE("at_path: the copy form and the view form of a text")
     REQUIRE(taken.has_value());
     CHECK_EQ((**taken).data(), data + 3);
 }
+
+// A container count above 2^32 - 1 does not fit a 32-bit size_t. The count must be compared with the bytes left
+// before it is narrowed, so that every target gives the error of the 64-bit build.
+TEST_CASE("lazy: a decode checks a container count that does not fit 32 bits")
+{
+    std::string const array_count = "\x82\x9b\x00\x00\x00\x01\x00\x00\x00\x00\x01"s;
+    std::string const map_count = "\x82\xbb\x00\x00\x00\x00\x80\x00\x00\x00\x01"s;
+    CHECK_EQ(cbor::lazy::copy(array_count)->decode().error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::copy(map_count)->decode().error(), error::too_little_data);
+}

@@ -809,14 +809,14 @@ std::expected<item *, error> value_sharing::tree_decoder<Checked>::content_decod
             head.argument, head.major == major_type::map ? rfc8949::data_items_per_pair : std::size_t{1});
         if (!count) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        auto const reserved = validity::checked_add(open, *count);
+        auto const reserved = validity::checked_add(std::uint64_t{open}, *count);
         if (!reserved) [[unlikely]]
             return std::unexpected(error::too_little_data);
         if (auto const r = validity::check_pending_items(*reserved, d.encoded.size()); !r) [[unlikely]]
             return std::unexpected(r.error());
         std::size_t const n = static_cast<std::size_t>(*count);
         std::span<item> const nodes(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(n), n);
-        open = *reserved;
+        open = static_cast<std::size_t>(*reserved);
         if (n != 0)
             if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
