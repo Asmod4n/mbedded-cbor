@@ -74,7 +74,13 @@ struct kinds {
 
 } // namespace doc_structs
 
-CBOR_DESCRIBE_STRUCT(doc_structs::header, (160060, 0), (content_type, "content-type"))
+template <>
+struct cbor::describe_members<doc_structs::header> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060, 0};
+    static constexpr std::tuple members{
+        cbor::member{"content-type", &doc_structs::header::content_type},
+    };
+};
 
 namespace doc_structs
 {

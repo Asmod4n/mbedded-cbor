@@ -69,17 +69,24 @@ does not compile.
 
 ## 3. Keys
 
-The key of a member is its name. A description changes it.
-`CBOR_DESCRIBE_STRUCT` stands after the struct, outside every
-namespace. It gives the tag of the struct, its generation, and one entry
-for each member. The entry `(member, key)` gives the key. A key is a
-text or an integer.
+The key of a member is its name. A description changes it. A
+description is a specialization of `cbor::describe_members` after the
+struct, outside every namespace. It gives the tag of the struct, its
+generation, and one `cbor::member` for each member. The entry
+`cbor::member{key, &type::member}` gives the key. A key is a text or an
+integer. `CBOR_MEMBER(type, member)` takes the name as the key.
 
 ```cpp
 struct header {
     std::string content_type;
 };
-CBOR_DESCRIBE_STRUCT(header, (160060, 0), (content_type, "content-type"))
+template <>
+struct cbor::describe_members<header> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060, 0};
+    static constexpr std::tuple members{
+        cbor::member{"content-type", &header::content_type},
+    };
+};
 // header{"text/plain"} is 160060({"content-type": "text/plain"})
 ```
 

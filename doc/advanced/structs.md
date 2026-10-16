@@ -115,26 +115,30 @@ through reflection on a build with `-freflection`, through Boost.PFR on
 other builds. It takes no annotation, so it gives the same bytes on
 every build. An aggregate with a base class needs a description.
 
-`CBOR_DESCRIBE_STRUCT(type, (tag, generation), entries...)` describes a
-struct or a class. In place of `(tag, generation)`, `cbor::untagged`
-gives a map with no tag, an untagged message in the words of RFC 9052 2
-(SenML, CTAP2, the COSE header). A decode of such a type refuses a tag
-in front of the map with `error::incorrect_type`.
+A specialization of `cbor::describe_members<T>` describes a struct or a
+class. It holds `tag`, a `std::optional<cbor::tag>` with the tag and its
+generation, and `members`, a `std::tuple` of `cbor::member` entries.
+The tag `cbor::untagged` gives a map with no tag, an untagged message in
+the words of RFC 9052 2 (SenML, CTAP2, the COSE header). A decode of
+such a type refuses a tag in front of the map with
+`error::incorrect_type`.
 
 | Entry | Key |
 |---|---|
-| `(m)` | the text of the name `m` |
-| `(m, "x")` | the text `x` |
-| `(m, 4)`, `(m, -1)` | the integer |
+| `CBOR_MEMBER(T, m)` | the text of the name `m` |
+| `cbor::member{"x", &T::m}` | the text `x` |
+| `cbor::member{4, &T::m}`, `cbor::member{-1, &T::m}` | the integer |
 
-- The macro stands outside every namespace, after the type and after the
-  description of each struct that the type holds.
-- A type whose name holds a comma takes a type alias.
+- The specialization stands outside every namespace, after the type and
+  after the description of each struct that the type holds.
+- `CBOR_MEMBER` takes a type alias for a type whose name holds a comma.
+  `cbor::member` takes the name as it is.
 - An entry names a public data member of the type or of a public base.
 - On a build with `-freflection`, the entries are exactly the public data
   members of the type and of its public bases. Another list does not
   compile.
-- The macro takes at most `cbor::describe_entries_max` (342) entries.
+- A description is checked where `encode`, `decode` or the size of the
+  type is compiled. A description that nothing uses is not checked.
 - No C++ literal holds -2^63. The key -2^63 is
   `std::numeric_limits<std::int64_t>::min()`.
 - A described class needs a default constructor for `decode(bytes)`.
@@ -150,14 +154,28 @@ public:
 private:
     std::string password;
 };
-CBOR_DESCRIBE_STRUCT(account, (160061, 0), (user), (level, 1))
+template <>
+struct cbor::describe_members<account> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160061, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(account, user),
+        cbor::member{1, &account::level},
+    };
+};
 // an account with user "ann" and level 2 is 160061({1: 2, "user": "ann"})
 
 struct senml {          // RFC 8428 6: n is 0, v is 2
     std::string n;
     double v;
 };
-CBOR_DESCRIBE_STRUCT(senml, cbor::untagged, (n, 0), (v, 2))
+template <>
+struct cbor::describe_members<senml> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{0, &senml::n},
+        cbor::member{2, &senml::v},
+    };
+};
 // senml{"t", 1.5} is {0: "t", 2: 1.5}
 ```
 
@@ -180,7 +198,14 @@ A struct that carries `[[=cbor::tag(n)]]` does not compile in `structs`.
 
 ```cpp
 struct person { std::string name; std::int64_t age; };
-CBOR_DESCRIBE_STRUCT(person, (1800, 0), (name), (age))
+template <>
+struct cbor::describe_members<person> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(person, name),
+        CBOR_MEMBER(person, age),
+    };
+};
 cbor::structs<person>::encode({"ann", 30});
 // 1800({"age": 30, "name": "ann"})
 ```
