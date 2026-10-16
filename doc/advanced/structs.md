@@ -164,7 +164,8 @@ CBOR_DESCRIBE_STRUCT(senml, cbor::untagged, (n, 0), (v, 2))
 
 - a key that no member has: the entry is skipped;
 - a key of a member that comes twice: `error::duplicate_key` (RFC 8949
-  5.6);
+  5.6); a `std::map`, a `std::unordered_map` and a `std::flat_map` give
+  the same error on a key that comes twice;
 - a missing key of a member that is not optional: `error::key_not_found`;
 - a key that is an array, a map or a tag: `error::unsupported_value`.
 
