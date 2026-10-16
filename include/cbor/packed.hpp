@@ -56,7 +56,9 @@ struct tag {
 };
 
 template <std::uint64_t Number, class T>
-struct tagged {
+struct tagged_item {
+    static_assert(!has_describe_members<T> && !(std::is_class_v<T> && std::is_aggregate_v<T> && !std::ranges::range<T>),
+                  "the tag wrapper takes content that is not a struct; a struct carries its tag in CBOR_DESCRIBE_STRUCT.");
     static constexpr std::uint64_t number = Number;
     T content;
 };

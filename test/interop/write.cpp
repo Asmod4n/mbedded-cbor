@@ -15,6 +15,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <chrono>
 #include <map>
 #include <optional>
 #include <span>
@@ -439,7 +440,7 @@ struct everything {
     std::vector<std::int32_t> list;
     std::vector<double> reals;
     std::map<std::string, int> table;
-    cbor::tagged<1, std::int64_t> time;
+    std::chrono::sys_seconds time;
     __int128 big;
     unsigned __int128 ubig;
     color hue;
@@ -476,7 +477,7 @@ void structs_cases()
                        {1, -1, 1000},
                        {1.5, 2.5},
                        {{"a", 1}, {"b", 2}},
-                       {1700000000},
+                       std::chrono::sys_seconds{std::chrono::seconds{1700000000}},
                        -(static_cast<__int128>(1) << 100),
                        static_cast<unsigned __int128>(1) << 64,
                        color::green,

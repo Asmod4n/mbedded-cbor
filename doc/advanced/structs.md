@@ -71,13 +71,14 @@ An empty owner throws `std::logic_error`. A `std::string` or a
 | `std::tuple<E...>`, `std::array<E, N>` of other types | an array of exactly that count |
 | `std::map`, `std::unordered_map` and their `std::pmr` forms | a map |
 | `std::vector`, `std::deque`, `std::list` and other containers | an array |
-| `cbor::tagged<N, E>` | tag N on the item of E |
+| `cbor::tagged_item<N, E>`, E no struct | tag N on the item of E |
 | a struct | a map, section 4 |
 
 ```cpp
 cbor::structs<std::set<std::uint8_t>>::encode({3, 1});                          // 258([1, 3])
 cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}});  // 64(h'0102')
-cbor::structs<cbor::tagged<1, std::int64_t>>::encode({1700000000});             // 1(1700000000)
+cbor::structs<std::chrono::sys_seconds>::encode(std::chrono::sys_seconds{std::chrono::seconds{1700000000}});
+// 1(1700000000)
 ```
 
 `decode` takes each of these types only under its own tag. A typed
@@ -168,12 +169,15 @@ struct senml {          // RFC 8428 6: n is 0, v is 2
 ## 5. Tags
 
 A described struct carries the tag of its description (section 4).
-`cbor::tagged<N, E>` writes tag N on the item of E. A struct that
-carries `[[=cbor::tag(n)]]` does not compile in `structs`.
+`cbor::tagged_item<N, E>` (RFC 8949 3.4, "tagged data item") writes tag
+N on the item of E, for content that is not a struct, for example the
+array of COSE_Sign1 (RFC 9052 4.2). Over a struct it does not compile.
+A struct that carries `[[=cbor::tag(n)]]` does not compile in `structs`.
 
 ```cpp
 struct person { std::string name; std::int64_t age; };
-cbor::structs<cbor::tagged<1800, person>>::encode({{"ann", 30}});
+CBOR_DESCRIBE_STRUCT(person, (1800, 0), (name), (age))
+cbor::structs<person>::encode({"ann", 30});
 // 1800({"age": 30, "name": "ann"})
 ```
 

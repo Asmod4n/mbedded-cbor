@@ -20,7 +20,7 @@ struct cose_header {
     static constexpr std::array<std::int64_t, 1> keys{4};
 };
 
-using cose_sign1 = cbor::tagged<18, std::tuple<std::span<std::byte const>, cose_header, std::span<std::byte const>,
+using cose_sign1 = cbor::tagged_item<18, std::tuple<std::span<std::byte const>, cose_header, std::span<std::byte const>,
                                                std::span<std::byte const>>>;
 
 struct cwt_claims {

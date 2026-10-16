@@ -65,7 +65,7 @@ struct cose_header {
 };
 
 // RFC 9052 4.2: COSE_Sign1 is tag 18 on an array of protected header, unprotected header, payload and signature.
-using cose_sign1 = cbor::tagged<18, std::tuple<std::span<std::byte const>, cose_header, std::span<std::byte const>,
+using cose_sign1 = cbor::tagged_item<18, std::tuple<std::span<std::byte const>, cose_header, std::span<std::byte const>,
                                                std::span<std::byte const>>>;
 
 struct credential {
