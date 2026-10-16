@@ -71,7 +71,7 @@ one() {
 		[ $r = 0 ] && { ctest --test-dir /b -j"$CMAKE_BUILD_PARALLEL_LEVEL" -R "^(cmake|clang_query|compile_fail)_" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
-			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log 2>/dev/null | head -1)"
+			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log | head -1)"
 		exit $r' >"$root/$branch/$n.result" 2>&1
 }
 
@@ -83,7 +83,7 @@ done
 for n in "$@"; do
 	cat "$root/$branch/$n.result"
 	[ -s "$root/$branch/$n.result" ] && grep -q "rc=0" "$root/$branch/$n.result" ||
-		tail -30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log" 2>/dev/null
+		tail -30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log"
 done
 if [ $interop = 1 ]; then
 	"$src/test/interop/run.sh" | tail -40
