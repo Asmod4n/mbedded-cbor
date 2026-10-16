@@ -246,33 +246,6 @@ class reflection
         std::ranges::copy(little, out.begin());
     }
 
-    static consteval std::size_t entries_count(std::string_view const list)
-    {
-        std::size_t depth = 0;
-        std::size_t count = 0;
-        for (std::size_t i = 0; i < list.size(); ++i) {
-            char const c = list[i];
-            if (c == '"' && i > 0 && list[i - 1] == 'R') {
-                std::size_t const open = list.find('(', i);
-                std::string const closing = ")" +
-                                            (list | std::views::drop(i + 1) | std::views::take(open - i - 1) |
-                                             std::ranges::to<std::string>()) +
-                                            "\"";
-                i = list.find(closing, open) + closing.size() - 1;
-            } else if (c == '"' || c == '\'') {
-                for (++i; list[i] != c; ++i)
-                    if (list[i] == '\\')
-                        ++i;
-            } else if (c == '(') {
-                if (depth++ == 0)
-                    ++count;
-            } else if (c == ')') {
-                --depth;
-            }
-        }
-        return count;
-    }
-
     static consteval bool tag_taken_by_standard_type(std::uint64_t const tag)
     {
         return tag == std::to_underlying(rfc8949::tag_number::standard_date_time_string) ||
@@ -358,16 +331,6 @@ class reflection
         }(std::make_index_sequence<n>{});
     }
 
-    static consteval map_key key_or(std::string_view const name)
-    {
-        return map_key(name);
-    }
-
-    static consteval map_key key_or(std::string_view, map_key const key)
-    {
-        return key;
-    }
-
     static consteval auto key_encoding_of(map_key const key)
     {
         return std::tuple(heads::initial_byte(key.major, heads::preferred_argument_info(key.argument)),
@@ -377,15 +340,6 @@ class reflection
     static consteval bool key_encoding_less(map_key const a, map_key const b)
     {
         return key_encoding_of(a) < key_encoding_of(b);
-    }
-
-    template <class... P>
-    static consteval bool names_unique(std::tuple<member_descriptor<P>...> const &members)
-    {
-        std::vector<std::string_view> names;
-        std::apply([&](auto const &...m) { (names.push_back(m.name), ...); }, members);
-        std::ranges::sort(names);
-        return validity::keys_unique(names);
     }
 
     template <class... P>
@@ -463,9 +417,6 @@ class reflection
         return true;
 #endif
     }
-
-    template <class>
-    friend struct cbor::describe_members;
 
 #ifdef __cpp_impl_reflection
     static consteval std::string_view key_of(std::meta::info const r)

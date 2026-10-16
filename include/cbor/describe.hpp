@@ -13,8 +13,6 @@
 namespace cbor
 {
 
-inline constexpr std::size_t describe_entries_max = 342;
-
 inline constexpr std::nullopt_t untagged = std::nullopt;
 
 struct map_key {
@@ -52,15 +50,6 @@ struct member {
     P pointer;
 };
 
-template <class P>
-struct member_descriptor {
-    static_assert(std::is_member_object_pointer_v<P>,
-                  "CBOR_DESCRIBE_STRUCT lists a non-static data member only.");
-    P pointer;
-    std::string_view name;
-    map_key key;
-};
-
 template <class T>
 struct describe_members;
 
@@ -70,37 +59,3 @@ concept has_describe_members = requires { describe_members<T>::members; };
 }
 
 #define CBOR_MEMBER(T, m) cbor::member{cbor::map_key(std::string_view{#m}), &T::m}
-
-#define CBOR_PARENS ()
-#define CBOR_EXPAND(...) CBOR_EXPAND4(CBOR_EXPAND4(CBOR_EXPAND4(CBOR_EXPAND4(__VA_ARGS__))))
-#define CBOR_EXPAND4(...) CBOR_EXPAND3(CBOR_EXPAND3(CBOR_EXPAND3(CBOR_EXPAND3(__VA_ARGS__))))
-#define CBOR_EXPAND3(...) CBOR_EXPAND2(CBOR_EXPAND2(CBOR_EXPAND2(CBOR_EXPAND2(__VA_ARGS__))))
-#define CBOR_EXPAND2(...) CBOR_EXPAND1(CBOR_EXPAND1(CBOR_EXPAND1(CBOR_EXPAND1(__VA_ARGS__))))
-#define CBOR_EXPAND1(...) __VA_ARGS__
-#define CBOR_REMOVE_PARENS(...) __VA_ARGS__
-#define CBOR_CAT(a, b) CBOR_CAT_I(a, b)
-#define CBOR_CAT_I(a, b) a##b
-#define CBOR_IS_BEGIN_PARENS(x) CBOR_IS_BEGIN_PARENS_SECOND(CBOR_IS_BEGIN_PARENS_PROBE x, 0, ~)
-#define CBOR_IS_BEGIN_PARENS_PROBE(...) ~, 1
-#define CBOR_IS_BEGIN_PARENS_SECOND(...) CBOR_IS_BEGIN_PARENS_SECOND_I(__VA_ARGS__)
-#define CBOR_IS_BEGIN_PARENS_SECOND_I(a, b, ...) b
-#define CBOR_DESCRIBE_TAG(TAG) CBOR_CAT(CBOR_DESCRIBE_TAG_, CBOR_IS_BEGIN_PARENS(TAG))(TAG)
-#define CBOR_DESCRIBE_TAG_1(TAG) std::optional<cbor::tag>{cbor::tag{CBOR_REMOVE_PARENS TAG}}
-#define CBOR_DESCRIBE_TAG_0(TAG) std::optional<cbor::tag>{TAG}
-#define CBOR_DESCRIBE_MEMBER(T, entry) CBOR_DESCRIBE_MEMBER_HELPER(T, CBOR_REMOVE_PARENS entry)
-#define CBOR_DESCRIBE_MEMBER_HELPER(T, ...) CBOR_DESCRIBE_MEMBER_DESCRIPTOR(T, __VA_ARGS__)
-#define CBOR_DESCRIBE_MEMBER_DESCRIPTOR(T, m, ...)                                                           \
-    cbor::member                                                                                             \
-    {                                                                                                        \
-        cbor::reflection::key_or(#m __VA_OPT__(, __VA_ARGS__)), &T::m                                        \
-    }
-#define CBOR_FOR_EACH(T, ...) __VA_OPT__(CBOR_EXPAND(CBOR_FOR_EACH_HELPER(T, __VA_ARGS__)))
-#define CBOR_FOR_EACH_HELPER(T, a, ...)                                                                      \
-    CBOR_DESCRIBE_MEMBER(T, a) __VA_OPT__(, CBOR_FOR_EACH_AGAIN CBOR_PARENS(T, __VA_ARGS__))
-#define CBOR_FOR_EACH_AGAIN() CBOR_FOR_EACH_HELPER
-#define CBOR_DESCRIBE_STRUCT(T, TAG, ...)                                                                    \
-    template <>                                                                                              \
-    struct cbor::describe_members<T> {                                                                       \
-        static constexpr std::optional<cbor::tag> tag = CBOR_DESCRIBE_TAG(TAG);                              \
-        static constexpr auto members = std::tuple{CBOR_FOR_EACH(T, __VA_ARGS__)};                           \
-    };
