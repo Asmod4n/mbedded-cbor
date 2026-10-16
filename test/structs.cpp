@@ -102,11 +102,47 @@ struct integer_order {
 
 } // namespace
 
-CBOR_DESCRIBE_STRUCT(senml_record, cbor::untagged, (bn, -2), (bt, -3), (n, 0), (u, 1), (v, 2), (t, 6))
-CBOR_DESCRIBE_STRUCT(cose_header, cbor::untagged, (kid, 4))
-CBOR_DESCRIBE_STRUCT(get_assertion_response, cbor::untagged, (credential_id, 1), (auth_data, 2), (signature, 3),
-                     (user, 4))
-CBOR_DESCRIBE_STRUCT(integer_order, cbor::untagged, (first, 24), (second, -1), (third, 1))
+template <>
+struct cbor::describe_members<senml_record> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{-2, &senml_record::bn},
+        cbor::member{-3, &senml_record::bt},
+        cbor::member{0, &senml_record::n},
+        cbor::member{1, &senml_record::u},
+        cbor::member{2, &senml_record::v},
+        cbor::member{6, &senml_record::t},
+    };
+};
+
+template <>
+struct cbor::describe_members<cose_header> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{4, &cose_header::kid},
+    };
+};
+
+template <>
+struct cbor::describe_members<get_assertion_response> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{1, &get_assertion_response::credential_id},
+        cbor::member{2, &get_assertion_response::auth_data},
+        cbor::member{3, &get_assertion_response::signature},
+        cbor::member{4, &get_assertion_response::user},
+    };
+};
+
+template <>
+struct cbor::describe_members<integer_order> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{24, &integer_order::first},
+        cbor::member{-1, &integer_order::second},
+        cbor::member{1, &integer_order::third},
+    };
+};
 
 // The expectations are the examples of RFC 8949 Appendix A, each read into a C++ type and written back. A
 // vector or an array of numbers is an RFC 8746 typed array since the owner decision of 2026-10-15: tag 64 for
@@ -301,7 +337,14 @@ struct renamed {
 
 } // namespace
 
-CBOR_DESCRIBE_STRUCT(renamed, (160050, 0), (m0, "x-user-id"), (m1, "EOF"))
+template <>
+struct cbor::describe_members<renamed> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160050, 0};
+    static constexpr std::tuple members{
+        cbor::member{"x-user-id", &renamed::m0},
+        cbor::member{"EOF", &renamed::m1},
+    };
+};
 
 // A generator gives each member a fixed name and carries the key of the other language in the description, so
 // a key need not be a C++ identifier and never meets a macro such as EOF. The map comes from RFC 8949 3.1 by
@@ -353,7 +396,14 @@ private:
 
 } // namespace
 
-CBOR_DESCRIBE_STRUCT(account, (160051, 0), (name), (id))
+template <>
+struct cbor::describe_members<account> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160051, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(account, name),
+        CBOR_MEMBER(account, id),
+    };
+};
 
 // A private or protected member is state the class keeps to itself. It never goes on the wire, and a key of
 // its name on the wire is an unknown key, so the bytes of a sender cannot set it. A class with private

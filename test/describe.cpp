@@ -109,6 +109,11 @@ struct key_form {
     std::uint8_t v;
 };
 
+template <int N>
+struct tag_form {
+    std::uint8_t v;
+};
+
 struct mixed {
     std::uint8_t text;
     std::uint8_t positive;
@@ -147,34 +152,324 @@ public:
 
 } // namespace describe_test
 
-CBOR_DESCRIBE_STRUCT(describe_test::aggregate, (160010, 0), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::aggregate_derived, (160011, 0), (id), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::with_constructor, (160012, 0), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::with_private, (160013, 0), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::with_protected, (160014, 0), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::with_base, (160015, 0), (id), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::with_protected_base, (160016, 0), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::with_private_base, (160017, 0), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::with_empty_base, (160018, 0), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::with_virtual_base, (160019, 0), (id), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::no_default, (160020, 0), (a))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<0>, (160030, 0), (v))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<1>, (160031, 0), (v, "text"))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<2>, (160032, 0), (v, 0))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<3>, (160033, 0), (v, 23))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<4>, (160034, 0), (v, 24))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<5>, (160035, 0), (v, -1))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<6>, (160036, 0), (v, -24))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<7>, (160037, 0), (v, -25))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<8>, (160038, 0), (v, std::numeric_limits<std::uint64_t>::max()))
-CBOR_DESCRIBE_STRUCT(describe_test::key_form<9>, (160039, 0), (v, std::numeric_limits<std::int64_t>::min()))
-CBOR_DESCRIBE_STRUCT(describe_test::mixed, (160040, 0), (text, "a"), (positive, 10), (negative, -1))
-CBOR_DESCRIBE_STRUCT(describe_test::doors, (160001, 0), (count))
-CBOR_DESCRIBE_STRUCT(describe_test::car, (160002, 0), (doors))
-CBOR_DESCRIBE_STRUCT(describe_test::nothing, (160041, 0))
-CBOR_DESCRIBE_STRUCT(describe_test::claims, (160043, 0), (iss, 1), (exp, 4))
-CBOR_DESCRIBE_STRUCT(describe_test::pair_alias, (160042, 0), (first), (second, "s"))
-CBOR_DESCRIBE_STRUCT(describe_test::senml_value, cbor::untagged, (n, 0), (v, 2))
+template <>
+struct cbor::describe_members<describe_test::aggregate> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160010, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::aggregate, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::aggregate_derived> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160011, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::aggregate_derived, id),
+        CBOR_MEMBER(describe_test::aggregate_derived, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::with_constructor> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160012, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::with_constructor, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::with_private> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160013, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::with_private, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::with_protected> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160014, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::with_protected, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::with_base> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160015, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::with_base, id),
+        CBOR_MEMBER(describe_test::with_base, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::with_protected_base> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160016, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::with_protected_base, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::with_private_base> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160017, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::with_private_base, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::with_empty_base> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160018, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::with_empty_base, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::with_virtual_base> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160019, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::with_virtual_base, id),
+        CBOR_MEMBER(describe_test::with_virtual_base, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::no_default> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160020, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::no_default, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<0>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160030, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::key_form<0>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<1>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160031, 0};
+    static constexpr std::tuple members{
+        cbor::member{"text", &describe_test::key_form<1>::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<2>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160032, 0};
+    static constexpr std::tuple members{
+        cbor::member{0, &describe_test::key_form<2>::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<3>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160033, 0};
+    static constexpr std::tuple members{
+        cbor::member{23, &describe_test::key_form<3>::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<4>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160034, 0};
+    static constexpr std::tuple members{
+        cbor::member{24, &describe_test::key_form<4>::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<5>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160035, 0};
+    static constexpr std::tuple members{
+        cbor::member{-1, &describe_test::key_form<5>::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<6>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160036, 0};
+    static constexpr std::tuple members{
+        cbor::member{-24, &describe_test::key_form<6>::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<7>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160037, 0};
+    static constexpr std::tuple members{
+        cbor::member{-25, &describe_test::key_form<7>::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<8>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160038, 0};
+    static constexpr std::tuple members{
+        cbor::member{std::numeric_limits<std::uint64_t>::max(), &describe_test::key_form<8>::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::key_form<9>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160039, 0};
+    static constexpr std::tuple members{
+        cbor::member{std::numeric_limits<std::int64_t>::min(), &describe_test::key_form<9>::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::mixed> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160040, 0};
+    static constexpr std::tuple members{
+        cbor::member{"a", &describe_test::mixed::text},
+        cbor::member{10, &describe_test::mixed::positive},
+        cbor::member{-1, &describe_test::mixed::negative},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::doors> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::doors, count),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::car> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160002, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::car, doors),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::nothing> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160041, 0};
+    static constexpr std::tuple members{};
+};
+
+template <>
+struct cbor::describe_members<describe_test::claims> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160043, 0};
+    static constexpr std::tuple members{
+        cbor::member{1, &describe_test::claims::iss},
+        cbor::member{4, &describe_test::claims::exp},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::pair_alias> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160042, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::pair_alias, first),
+        cbor::member{"s", &describe_test::pair_alias::second},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::senml_value> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{0, &describe_test::senml_value::n},
+        cbor::member{2, &describe_test::senml_value::v},
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<0>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<0>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<1>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{23, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<1>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<2>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{25, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<2>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<3>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{255, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<3>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<4>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{256, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<4>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<5>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{65534, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<5>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<6>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{65536, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<6>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<7>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{4294967294, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<7>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<8>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{4294967296, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<8>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<describe_test::tag_form<9>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{18446744073709551614u, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(describe_test::tag_form<9>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<std::pair<int, long>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160044, 0};
+    static constexpr std::tuple members{
+        cbor::member{"first", &std::pair<int, long>::first},
+        cbor::member{"second", &std::pair<int, long>::second},
+    };
+};
 
 namespace describe_test
 {
@@ -200,7 +495,7 @@ T with_a(std::uint8_t const a)
 
 } // namespace describe_test
 
-// Each kind of class that CBOR_DESCRIBE_STRUCT takes, written as the tag of the description (RFC 8949 3.4,
+// Each kind of class that cbor::describe_members takes, written as the tag of the description (RFC 8949 3.4,
 // 160010 = 0x0002710a in four bytes, DA) over a map whose keys come in the order of RFC 8949 4.2.1. Every
 // kind gives the same bytes on every build, because the description is the only list of members. A member
 // that the description leaves out keeps the value of the default constructor, also when the map holds its
@@ -291,8 +586,38 @@ TEST_CASE("describe: every key form of an entry")
                               key_form<9>{1});
 }
 
+// Every width of the tag head of RFC 8949 3 (major type 6, C0): no tag, 23 in the initial byte (d7), 25 and
+// 255 in one more byte (d8), 256 and 65534 in two (d9), 65536 and 2^32-2 in four (da), 2^32 and 2^64-2 in
+// eight (db). The top of each width (65535, 2^32-1, 2^64-1) is a tag that the IANA registry calls always
+// invalid, so the value one below stands for it. Tag 24 takes one more byte too, but RFC 8949 3.4.5.1 gives
+// it to the encoded data item, so 25 shows that width.
+TEST_CASE("describe: every width of the tag of a description")
+{
+    using namespace describe_test;
+    describe_test::round_trip("\xa1\x61v\x01"s, tag_form<0>{1});
+    describe_test::round_trip("\xd7\xa1\x61v\x01"s, tag_form<1>{1});
+    describe_test::round_trip("\xd8\x19\xa1\x61v\x01"s, tag_form<2>{1});
+    describe_test::round_trip("\xd8\xff\xa1\x61v\x01"s, tag_form<3>{1});
+    describe_test::round_trip("\xd9\x01\x00\xa1\x61v\x01"s, tag_form<4>{1});
+    describe_test::round_trip("\xd9\xff\xfe\xa1\x61v\x01"s, tag_form<5>{1});
+    describe_test::round_trip("\xda\x00\x01\x00\x00\xa1\x61v\x01"s, tag_form<6>{1});
+    describe_test::round_trip("\xda\xff\xff\xff\xfe\xa1\x61v\x01"s, tag_form<7>{1});
+    describe_test::round_trip("\xdb\x00\x00\x00\x01\x00\x00\x00\x00\xa1\x61v\x01"s, tag_form<8>{1});
+    describe_test::round_trip("\xdb\xff\xff\xff\xff\xff\xff\xff\xfe\xa1\x61v\x01"s, tag_form<9>{1});
+}
+
+// A description needs no macro, so it names a type whose name holds a comma directly, with no alias. The
+// tag is 160044 = 0x0002712c; "first" (65) comes before "second" (66) by RFC 8949 4.2.1.
+TEST_CASE("describe: a description of a type whose name holds a comma")
+{
+    describe_test::round_trip("\xda\x00\x02\x71\x2c\xa2\x65"
+                              "first\x01\x66"
+                              "second\x02"s,
+                              std::pair<int, long>{1, 2});
+}
+
 // RFC 8949 4.2.1 sorts the keys by their encoded bytes, across kinds: 10 (0a) before -1 (20) before "a" (61
-// 61). The order of the macro differs on purpose.
+// 61). The order of the description differs on purpose.
 TEST_CASE("describe: keys of three kinds come out in the order of RFC 8949 4.2.1")
 {
     describe_test::round_trip("\xda\x00\x02\x71\x28\xa3\x0a\x02\x20\x03\x61"
