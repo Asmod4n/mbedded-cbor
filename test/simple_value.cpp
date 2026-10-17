@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 #include "item_head.hpp"
 
 #include <cstdint>
@@ -56,7 +57,7 @@ TEST_CASE("simple value: lazy::get gives every simple value 0 to 255")
     for (unsigned i = 0; i < 256; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
-        auto const top_level = cbor::lazy::copy(wire_of(v));
+        auto const top_level = test::lazy_of_copy(wire_of(v));
         if (reserved(v)) {
             if (top_level.has_value())
                 CHECK_EQ(top_level->get<cbor::simple_value>().error(), error::syntax_error);
@@ -77,7 +78,7 @@ TEST_CASE("simple value: lazy::get refuses a float and an integer")
 {
     for (auto const &wire : {"\xf9\x3c\x00"s, "\xfa\x47\xc3\x50\x00"s,
                              "\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"s, "\x01"s, "\x14"s}) {
-        auto const top_level = cbor::lazy::copy(wire);
+        auto const top_level = test::lazy_of_copy(wire);
         REQUIRE(top_level.has_value());
         CHECK_EQ(top_level->get<cbor::simple_value>().error(), error::incorrect_type);
     }
@@ -108,7 +109,7 @@ TEST_CASE("simple value: lazy::decode gives every simple value 0 to 255 as its c
     for (unsigned i = 0; i < 256; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
-        auto const top_level = cbor::lazy::copy(wire_of(v));
+        auto const top_level = test::lazy_of_copy(wire_of(v));
         if (reserved(v)) {
             if (top_level.has_value())
                 CHECK_EQ(top_level->decode().error(), error::syntax_error);

@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -31,7 +32,7 @@ TEST_CASE("doc advanced comparison: iterate an array")
 {
     std::string const bytes = preferred(A(1, 2, 3));
     // begin iterate
-    auto const doc = cbor::lazy::copy(bytes); // [1, 2, 3]
+    auto const doc = test::lazy_of_copy(bytes); // [1, 2, 3]
     std::int64_t sum = 0;
     for (auto const e : *doc->elements())
         sum += e->get<std::int64_t>().value_or(0);
@@ -45,7 +46,7 @@ TEST_CASE("doc advanced comparison: shared values")
 {
     std::string const bytes = "\x82\xd8\x1c\x61x\xd8\x1d\x00"s;
     // begin shared
-    auto const second = cbor::lazy::copy(bytes)->at(1);
+    auto const second = test::lazy_of_copy(bytes)->at(1);
     // second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0
     // end shared
     CHECK_EQ(second->type(), cbor::type::tag);

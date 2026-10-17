@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -101,15 +102,15 @@ TEST_CASE("sequence: an error ends the sequence")
     CHECK_EQ(nested[1].value().size(), 21u);
 }
 
-// Each element is a top-level item of its own (RFC 8742 2). lazy and path read an element through the copy form,
-// because an element is a part of the bytes of the owner and a view takes a whole std::string.
-TEST_CASE("sequence: lazy, path and decode read each element through a copy")
+// Each element is a top-level item of its own (RFC 8742 2). lazy reads an element through a copy here; path reads it
+// as a view with the owner of the whole sequence, so its text points into the bytes of that owner.
+TEST_CASE("sequence: lazy, path and decode read each element")
 {
     auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz\x82\x01\x02"s);
     std::vector<cbor::lazy> items;
     for (auto const e : cbor::sequence{owner}) {
         REQUIRE(e.has_value());
-        auto const l = cbor::lazy::copy(*e);
+        auto const l = test::lazy_of_copy(*e);
         REQUIRE(l.has_value());
         items.push_back(*l);
     }
@@ -127,10 +128,10 @@ TEST_CASE("sequence: lazy, path and decode read each element through a copy")
     std::vector<std::string_view> views;
     for (auto const e : cbor::sequence{owner})
         views.push_back(e.value());
-    auto const path = cbor::at_path<"$.a", std::string_view>(views[0]);
+    auto const path = cbor::at_path<"$.a", std::string_view>(owner, views[0]);
     REQUIRE(path.has_value());
     CHECK_EQ(**path, "xyz"sv);
-    CHECK_FALSE(inside(*owner, (*path)->data()));
+    CHECK(inside(*owner, (*path)->data()));
     CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]).value(), 1u);
 
     auto const decoded = test::value_of(items[1]);
@@ -147,7 +148,7 @@ TEST_CASE("sequence: shared references do not cross elements")
     for (auto const e : cbor::sequence{owner})
         views.push_back(e.value());
     REQUIRE_EQ(views.size(), 2u);
-    auto const l = cbor::lazy::copy(views[1]);
+    auto const l = test::lazy_of_copy(views[1]);
     REQUIRE(l.has_value());
     auto const element = l->at(0).and_then([](cbor::lazy const &e) { return e.get<std::uint64_t>(); });
     CHECK_EQ(element, 0u);

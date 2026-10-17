@@ -1,4 +1,5 @@
 #include <cbor/cbor.hpp>
+#include "owned_copy.hpp"
 #include <doctest/doctest.h>
 
 #include "reference.hpp"
@@ -21,7 +22,7 @@ using namespace std::string_literals;
 TEST_CASE("doc readme: read a message")
 {
     std::string const bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
-    auto const doc = cbor::lazy::copy(bytes).value();
+    auto const doc = test::lazy_of_copy(bytes).value();
 
     std::uint64_t const pairs = doc.size().value();
     auto const missing = doc.at("unit");
@@ -40,7 +41,7 @@ TEST_CASE("doc readme: read a message")
 TEST_CASE("doc readme: read one value by its path")
 {
     std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
-    auto const doc = cbor::lazy::copy(bytes).value();
+    auto const doc = test::lazy_of_copy(bytes).value();
 
     auto const id = doc.at_path<"$.user.id", std::int64_t>();
     auto const name = doc.at_path<"$.user.name", std::string_view>();
@@ -57,7 +58,7 @@ TEST_CASE("doc readme: handle bad input")
     std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
     std::string const cut = bytes.substr(0, bytes.size() - 1);
 
-    auto const doc = cbor::lazy::copy(cut).value();
+    auto const doc = test::lazy_of_copy(cut).value();
     auto const name = doc.at_path<"$.user.name", std::string_view>();
     REQUIRE_FALSE(name.has_value());
     CHECK_EQ(name.error(), cbor::error::too_little_data);
@@ -75,7 +76,7 @@ TEST_CASE("doc readme: set limits")
     for (int i = 0; i < 101; ++i)
         a.push_back(test::V(i));
     std::string const bytes = test::preferred(test::value{std::move(a)});
-    auto const n = cbor::lazy::copy(bytes).value().size();
+    auto const n = test::lazy_of_copy(bytes).value().size();
     CHECK_EQ(n.error(), cbor::error::container_elements_exceeded);
 }
 

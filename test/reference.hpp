@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cbor/cbor.hpp>
+#include "owned_copy.hpp"
 #include "limits_guard.hpp"
 #include <doctest/doctest.h>
 
@@ -555,7 +556,7 @@ inline std::expected<value, error> value_of(std::expected<cbor::lazy, E> const &
 
 inline std::expected<value, error> decoded(std::string_view const wire)
 {
-    auto const l = cbor::lazy::copy(wire);
+    auto const l = test::lazy_of_copy(wire);
     if (!l)
         return std::unexpected(l.error());
     return value_of(*l);

@@ -5,6 +5,7 @@
 // stands for a case with no expected bytes; the decoders must then only accept the written bytes. A writer
 // that refuses a value gives "!" and the error in place of written, so the driver reports it.
 #include <cbor/cbor.hpp>
+#include "../owned_copy.hpp"
 
 #include <bit>
 #include <charconv>
@@ -149,7 +150,7 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
 // with one call per head. The input bytes are the expectation of both.
 void reencode(std::string_view const name, std::string_view const section, std::string const &input)
 {
-    auto const doc = cbor::lazy::copy(std::string_view(input));
+    auto const doc = test::lazy_of_copy(std::string_view(input));
     auto const item = doc.and_then([](cbor::lazy const &d) { return d.decode(); });
     if (!item) {
         case_print(std::string("decode/") + std::string(name), section, message_of(item.error()), hex_of(input));
@@ -192,7 +193,7 @@ void cbor_wg(std::filesystem::path const &root)
     std::ranges::sort(files);
     for (auto const &path : files) {
         std::string const file = file_read(path);
-        auto const top = cbor::lazy::copy(std::string_view(file));
+        auto const top = test::lazy_of_copy(std::string_view(file));
         if (!top)
             continue;
         auto const file_fail = top->at("fail").and_then([](cbor::lazy const &l) { return l.get<bool>(); });

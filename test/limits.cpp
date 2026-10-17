@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <array>
 #include <cstddef>
@@ -91,7 +92,7 @@ TEST_CASE("limits: string_length on each string head")
             for (std::string const &encoded : {text_of_length(n), "\x82"s + text_of_length(n) + "\x00"s}) {
                 bool const passes = n <= limit;
                 auto const size = cbor::item_size(encoded);
-                auto const decoded = test::value_of(*cbor::lazy::copy(encoded));
+                auto const decoded = test::value_of(*test::lazy_of_copy(encoded));
                 auto const notation = cbor::diagnostic_notation(encoded);
                 CHECK_EQ(size.has_value(), passes);
                 CHECK_EQ(decoded.has_value(), passes);
@@ -102,7 +103,7 @@ TEST_CASE("limits: string_length on each string head")
                     CHECK_EQ(notation.error(), error::string_length_exceeded);
                 }
             }
-            auto const text = cbor::lazy::copy(text_of_length(n))->get<std::string_view>();
+            auto const text = test::lazy_of_copy(text_of_length(n))->get<std::string_view>();
             CHECK_EQ(text.has_value(), n <= limit);
         }
     }
@@ -120,7 +121,7 @@ TEST_CASE("limits: container_elements on each array and map head")
         bool const passes = n <= 2;
         for (std::string const &encoded : {array_of(n), map_of(n), "\x81"s + array_of(n)}) {
             auto const size = cbor::item_size(encoded);
-            auto const decoded = test::value_of(*cbor::lazy::copy(encoded));
+            auto const decoded = test::value_of(*test::lazy_of_copy(encoded));
             auto const notation = cbor::diagnostic_notation(encoded);
             CHECK_EQ(size.has_value(), passes);
             CHECK_EQ(decoded.has_value(), passes);
@@ -131,8 +132,8 @@ TEST_CASE("limits: container_elements on each array and map head")
                 CHECK_EQ(notation.error(), error::container_elements_exceeded);
             }
         }
-        CHECK_EQ(cbor::lazy::copy(array_of(n))->elements().has_value(), passes);
-        CHECK_EQ(cbor::lazy::copy(map_of(n))->entries().has_value(), passes);
+        CHECK_EQ(test::lazy_of_copy(array_of(n))->elements().has_value(), passes);
+        CHECK_EQ(test::lazy_of_copy(map_of(n))->entries().has_value(), passes);
     }
 }
 
@@ -144,7 +145,7 @@ TEST_CASE("limits: input_bytes on entry")
         CAPTURE(encoded.size());
         bool const passes = encoded.size() <= 3;
         auto const size = cbor::item_size(encoded);
-        auto const lazy = cbor::lazy::copy(encoded);
+        auto const lazy = test::lazy_of_copy(encoded);
         auto const notation = cbor::diagnostic_notation(encoded);
         auto const first = cbor::at_path<"$[0]", std::int64_t>(encoded);
         CHECK_EQ(size.has_value(), passes);
@@ -238,7 +239,7 @@ TEST_CASE("limits: nesting_depth is checked in the unchecked and in the checked 
         for (std::size_t const depth : {2uz, 3uz, 4uz}) {
             CAPTURE(depth);
             test::limits_guard const guard{{.nesting_depth = depth, .string_length = string_length}};
-            auto const decoded = cbor::lazy::copy(tags)->decode();
+            auto const decoded = test::lazy_of_copy(tags)->decode();
             auto const notation = cbor::diagnostic_notation(tags);
             CHECK_EQ(decoded.has_value(), depth >= 3);
             CHECK_EQ(notation.has_value(), depth >= 3);
@@ -259,8 +260,8 @@ TEST_CASE("limits: the iterators of elements() and entries() skip without counti
                                 "ab\x01"s;
     std::string const map = "\xa2\x62"
                             "ab\x01\x02\x03"s;
-    auto const l = cbor::lazy::copy(encoded);
-    auto const m = cbor::lazy::copy(map);
+    auto const l = test::lazy_of_copy(encoded);
+    auto const m = test::lazy_of_copy(map);
     REQUIRE(l.has_value());
     REQUIRE(m.has_value());
     test::limits_guard const guard{{.string_length = 1}};
@@ -293,7 +294,7 @@ TEST_CASE("limits: an item that a path or a lazy only skips does not count")
          {std::tuple{cbor::limit_values{.string_length = 2}, strings, error::string_length_exceeded},
           std::tuple{cbor::limit_values{.container_elements = 2}, arrays, error::container_elements_exceeded}}) {
         test::limits_guard const guard{limits};
-        auto const l = *cbor::lazy::copy(doc);
+        auto const l = *test::lazy_of_copy(doc);
         CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
         CHECK_EQ(l.at_path<"$.n", int>(), 1);
         CHECK_EQ(l.at("n")->get<int>(), 1);
@@ -304,7 +305,7 @@ TEST_CASE("limits: an item that a path or a lazy only skips does not count")
     }
     test::limits_guard const guard{{.string_length = 2, .container_elements = 2}};
     std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;
-    auto const l = *cbor::lazy::copy("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
+    auto const l = *test::lazy_of_copy("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
     CHECK_EQ(l.at_path<"$[1]", int>(), 5);
     CHECK_EQ(l.at(1)->get<int>(), 5);
     CHECK_EQ(l.at_path<"$[0][1]", int>().error(), error::container_elements_exceeded);
