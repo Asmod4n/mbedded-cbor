@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -10,6 +11,7 @@
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <span>
 #include <type_traits>
 #if defined(__cpp_exceptions)
 #include <stdexcept>
@@ -28,9 +30,11 @@
 
 #ifdef _MSC_VER
 #define CBOR_ALWAYS_INLINE [[msvc::forceinline]]
+#define CBOR_NEVER_INLINE [[msvc::noinline]]
 #define CBOR_ASSUME(condition) __assume(condition)
 #else
 #define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
+#define CBOR_NEVER_INLINE [[gnu::noinline]]
 #define CBOR_ASSUME(condition) [[assume(condition)]]
 #endif
 
@@ -73,6 +77,12 @@ class validity
     };
 
 public:
+    enum class offset : std::size_t {};
+
+    enum class index : std::uint64_t {};
+
+    static constexpr offset npos{std::numeric_limits<std::size_t>::max()};
+
     static constexpr std::size_t nesting_depth_limit = 512;
 
     static constexpr std::size_t nesting_depth_default = CBOR_NESTING_DEPTH_DEFAULT;
@@ -110,7 +120,7 @@ public:
     };
 
     template <class F>
-    static decltype(auto) limits_apply(limit_values v, F &&f);
+    static decltype(auto) limits_apply(limit_values const &v, F &&f);
 
     template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
@@ -146,6 +156,23 @@ public:
     {
         if (!pending_items_fit(pending, bytes_left)) [[unlikely]]
             return std::unexpected(error::too_little_data);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_pending_items(major_type const major, std::uint8_t const info, std::uint64_t const argument,
+                        std::size_t const bytes_left)
+    {
+        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
+            return {};
+        if (major == major_type::array)
+            return check_pending_items(argument, bytes_left);
+        if (major == major_type::map) {
+            auto const items = checked_mul(argument, std::uint64_t{rfc8949::data_items_per_pair});
+            if (!items) [[unlikely]]
+                return std::unexpected(error::too_little_data);
+            return check_pending_items(*items, bytes_left);
+        }
         return {};
     }
 
@@ -245,18 +272,9 @@ public:
     }
 
     template <class First, class Second, bool Checked>
-    static std::expected<bool, error> keys_equivalent(First &first, std::size_t first_at, Second &second,
-                                                      std::size_t second_at, std::size_t depth,
+    static std::expected<bool, error> keys_equivalent(First &first, offset first_at, Second &second,
+                                                      offset second_at, std::size_t depth,
                                                       std::size_t depth_max, limit_checks<Checked> checks);
-
-    template <std::invocable MarksRead, class Projection, bool Checked>
-    static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
-                                                        std::size_t content_at, MarksRead marks_read,
-                                                        Projection offset_of, limit_checks<Checked> checks);
-
-    template <class Item>
-    static std::expected<void, error> check_tag_content(std::uint64_t tag, Item const *content,
-                                                        std::span<Item const *const> shareables);
 
     static constexpr error writer_error(std::errc const e) noexcept
     {
@@ -319,21 +337,10 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_tag_content(std::uint64_t const tag, major_type const content, std::uint8_t const info)
+    check_tag_content(std::uint64_t const tag, major_type const content)
     {
         major_type admitted;
         switch (tag) {
-        case std::to_underlying(rfc8949::tag_number::standard_date_time_string):
-            admitted = major_type::text_string;
-            break;
-        case std::to_underlying(rfc8949::tag_number::epoch_based_date_time):
-            if (content != major_type::unsigned_integer && content != major_type::negative_integer &&
-                (content != major_type::simple_float ||
-                 info < std::to_underlying(rfc8949::simple_float_information::half_precision_float) ||
-                 info > std::to_underlying(rfc8949::simple_float_information::double_precision_float)))
-                [[unlikely]]
-                return std::unexpected(error::inadmissible_type_for_tag_content);
-            return {};
         case std::to_underlying(rfc8949::tag_number::unsigned_bignum):
         case std::to_underlying(rfc8949::tag_number::negative_bignum):
         case std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item):
@@ -374,24 +381,6 @@ public:
         return {};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<std::size_t, error>
-    check_sharedref_index(std::uint64_t const argument, std::size_t const marked)
-    {
-        if (!std::in_range<std::size_t>(argument)) [[unlikely]]
-            return std::unexpected(error::sharedref_index_out_of_range);
-        if (argument >= marked) [[unlikely]]
-            return std::unexpected(error::sharedref_index_not_marked);
-        return static_cast<std::size_t>(argument);
-    }
-
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_sharedref_chain_ends(std::size_t const references_followed, std::size_t const marked)
-    {
-        if (references_followed > marked) [[unlikely]]
-            return std::unexpected(error::sharedref_not_complete);
-        return {};
-    }
-
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_entries_all_read(std::uint64_t const claimed, std::uint64_t const readable, error const failure)
     {
@@ -402,21 +391,63 @@ public:
         return {};
     }
 
+    CBOR_ALWAYS_INLINE static constexpr offset element_offset(offset const start, std::size_t const element_size,
+                                                              index const i)
+    {
+        return offset{std::to_underlying(start) + static_cast<std::size_t>(std::to_underlying(i)) * element_size};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr offset next(offset const at, std::size_t const size)
+    {
+        return offset{std::to_underlying(at) + size};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr offset distance(std::string_view const whole, std::string_view const rest)
+    {
+        return offset{whole.size() - rest.size()};
+    }
+
+    template <class Bytes>
+        requires std::ranges::contiguous_range<Bytes const> && std::ranges::sized_range<Bytes const>
+    CBOR_ALWAYS_INLINE static constexpr auto subspan(Bytes const &encoded, offset const at)
+    {
+        using view = std::conditional_t<std::is_convertible_v<Bytes const &, std::string_view>, std::string_view,
+                                        std::span<std::ranges::range_value_t<Bytes> const>>;
+        view const whole(encoded);
+        if (std::to_underlying(at) > whole.size()) [[unlikely]]
+            throw_logic_error("cbor::validity: the offset is after the end of its input");
+        return view(std::views::drop(whole, static_cast<std::ranges::range_difference_t<view>>(std::to_underlying(at))));
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::span<char const> element_span(std::string_view const elements,
+                                                                           index const i, std::size_t const size)
+    {
+        return std::span(elements).subspan(static_cast<std::size_t>(std::to_underlying(i)) * size, size);
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<std::string_view, error>
+    substr(std::string_view const encoded, offset const at, std::size_t const size)
+    {
+        if (std::to_underlying(at) > encoded.size() || encoded.size() - std::to_underlying(at) < size) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return encoded.substr(std::to_underlying(at), size);
+    }
+
     template <std::integral I>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<std::uint64_t, error>
-    check_index(I const index, std::uint64_t const length)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<index, error>
+    check_index(I const i, std::uint64_t const length)
     {
         if constexpr (std::is_signed_v<I>) {
-            if (index < 0) {
-                std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(index);
+            if (i < 0) {
+                std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(i);
                 if (back > length) [[unlikely]]
                     return std::unexpected(error::index_out_of_bounds);
-                return length - back;
+                return index{length - back};
             }
         }
-        if (static_cast<std::uint64_t>(index) >= length) [[unlikely]]
+        if (static_cast<std::uint64_t>(i) >= length) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
-        return static_cast<std::uint64_t>(index);
+        return index{static_cast<std::uint64_t>(i)};
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_count(std::size_t const count,
@@ -450,6 +481,15 @@ public:
         return {};
     }
 
+    template <std::signed_integral T>
+    static constexpr std::expected<T, error> check_whole_number(double const value)
+    {
+        constexpr double low = static_cast<double>(std::numeric_limits<T>::min());
+        if (!(value >= low && value < -low && value == std::trunc(value))) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
+        return static_cast<T>(value);
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_magnitude_size(std::size_t const size, std::size_t const width)
     {
@@ -464,22 +504,20 @@ public:
 
     friend class well_formedness;
 
-    friend class value_sharing;
-
     friend class extended_diagnostic_notation;
 
     friend class jsonpath;
 
-#ifdef __cpp_impl_reflection
     friend class reflection;
 
     friend class generic;
 
     template <class>
-    friend class packed;
-
-    template <class>
     friend class structs;
+
+#ifdef __cpp_impl_reflection
+    template <class>
+    friend class packed;
 #endif
 };
 
@@ -525,7 +563,7 @@ public:
     {
     }
 
-    constexpr explicit resource_limits(limit_values const v) noexcept
+    constexpr explicit resource_limits(limit_values const &v) noexcept
         : nesting_depth(v.nesting_depth), string_length(v.string_length),
           container_elements(v.container_elements), input_bytes(v.input_bytes)
     {
@@ -540,7 +578,7 @@ public:
         return {nesting_depth, string_length, container_elements, input_bytes};
     }
 
-    resource_limits &operator=(limit_values const v)
+    resource_limits &operator=(limit_values const &v)
     {
         nesting_depth = v.nesting_depth;
         string_length = v.string_length;
@@ -567,7 +605,7 @@ static_assert(validity::check_limit(limit_values{}.input_bytes, validity::size_l
 inline constinit resource_limits limits{};
 
 template <class F>
-CBOR_ALWAYS_INLINE inline decltype(auto) validity::limits_apply(limit_values const v, F &&f)
+CBOR_ALWAYS_INLINE inline decltype(auto) validity::limits_apply(limit_values const &v, F &&f)
 {
     if (v.string_length == size_limit && v.container_elements == size_limit && v.input_bytes == size_limit)
         return std::forward<F>(f)(v.nesting_depth, limit_checks<false>{});

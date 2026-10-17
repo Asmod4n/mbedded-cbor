@@ -16,6 +16,7 @@ using namespace std::literals;
 using cbor::error;
 using cbor::major_type;
 using cbor::validity;
+using cbor::value_sharing;
 
 // The owner set the bound of the nesting depth to 512 and its default to 128. Every function that reads the
 // nesting depth reads both from these two constants, so this test is the one place that holds the two numbers.
@@ -365,14 +366,12 @@ TEST_CASE("validity: typed_array_check for the tags around 64 to 87 and the leng
         }
 }
 
-// RFC 8949 5.3.2 calls a tag content of the wrong type "inadmissible type for tag content". The content of
-// tags 2 and 3 (RFC 8949 3.4.3), of tag 24 (RFC 8949 3.4.5.1) and of tags 64 to 87 (RFC 8746 2) is a byte
-// string; the content of tag 29 is an unsigned integer (value-sharing). The content of tag 0 is a text string
-// (RFC 8949 3.4.1). The content of tag 1 is an unsigned or negative integer, or a float with additional
-// information 25, 26 or 27 (RFC 8949 3.4.2). Every other tag takes every major type. This test exists
-// so that no content that these sections forbid passes a reader. Tag 1 admits major type 7 only with three
-// additional informations, so every additional information 0 to 31 is checked.
-TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113, every major type and additional information")
+// The rule table holds a row only for a tag that the library interprets (owner, 2026-10-13). The content of tags
+// 2 and 3 (RFC 8949 3.4.3), of tag 24 (RFC 8949 3.4.5.1) and of tags 64 to 87 (RFC 8746 2) is a byte string; the
+// content of tag 29 is an unsigned integer (value-sharing). Tags 0 and 1 and every other tag take every major
+// type. This test exists so that no content that these sections forbid passes a reader that interprets the tag,
+// and so that no row refuses a tag that the library does not interpret.
+TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113 and every major type")
 {
     std::vector<std::uint64_t> tags;
     for (std::uint64_t tag = 0; tag <= 100; ++tag)
@@ -380,43 +379,51 @@ TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113, every maj
     tags.push_back(1113);
     tags.push_back(std::numeric_limits<std::uint64_t>::max());
     for (std::uint64_t const tag : tags)
-        for (major_type const major : major_types)
-            for (std::uint8_t info = 0; info < 32; ++info) {
-                auto const r = validity::check_tag_content(tag, major, info);
-                bool const byte_string = tag == 2 || tag == 3 || tag == 24 || (tag >= 64 && tag <= 87);
-                bool admitted = true;
-                if (byte_string)
-                    admitted = major == major_type::byte_string;
-                else if (tag == 29)
-                    admitted = major == major_type::unsigned_integer;
-                else if (tag == 0)
-                    admitted = major == major_type::text_string;
-                else if (tag == 1)
-                    admitted = major == major_type::unsigned_integer || major == major_type::negative_integer ||
-                               (major == major_type::simple_float && info >= 25 && info <= 27);
-                if (admitted)
-                    CHECK(r.has_value());
-                else
-                    CHECK_EQ(r.error(), error::inadmissible_type_for_tag_content);
-            }
+        for (major_type const major : major_types) {
+            auto const r = validity::check_tag_content(tag, major);
+            bool const byte_string = tag == 2 || tag == 3 || tag == 24 || (tag >= 64 && tag <= 87);
+            bool admitted = true;
+            if (byte_string)
+                admitted = major == major_type::byte_string;
+            else if (tag == 29)
+                admitted = major == major_type::unsigned_integer;
+            if (admitted)
+                CHECK(r.has_value());
+            else
+                CHECK_EQ(r.error(), error::inadmissible_type_for_tag_content);
+        }
 }
 
 // A shared reference names one of the values that were marked before it. The decoder and the lazy reader read
 // the index through this one check, so an index that no mark has reached gives the same error on both paths,
 // and the index is converted to std::size_t only after it is known to fit.
-TEST_CASE("validity: check_sharedref_index for up to three marks")
+TEST_CASE("value_sharing: check_sharedref_index for up to three marks")
 {
     std::array<std::uint64_t, 6> const arguments{0, 1, 2, 3, 4, std::numeric_limits<std::uint64_t>::max()};
     for (std::size_t marked = 0; marked <= 3; ++marked)
         for (std::uint64_t const argument : arguments) {
-            auto const r = validity::check_sharedref_index(argument, marked);
+            auto const r = value_sharing::check_sharedref_index(argument, marked);
             if (argument > std::numeric_limits<std::size_t>::max())
                 CHECK_EQ(r.error(), error::sharedref_index_out_of_range);
             else if (argument >= marked)
                 CHECK_EQ(r.error(), error::sharedref_index_not_marked);
             else
-                CHECK_EQ(*r, argument);
+                CHECK_EQ(std::to_underlying(*r), argument);
         }
+}
+
+template <class Argument>
+constexpr bool sharedref_index_accepts =
+    requires(Argument const argument, void (*const take)(value_sharing::index)) { take(argument); };
+
+// An index into the marks of tags 28 and 29 is a type of its own. A byte offset or an index of an array that
+// stands where a shared reference index is expected does not compile, so the two cannot be mixed up silently.
+TEST_CASE("value_sharing: index takes no byte offset and no other index")
+{
+    CHECK(sharedref_index_accepts<value_sharing::index>);
+    CHECK_FALSE(sharedref_index_accepts<validity::index>);
+    CHECK_FALSE(sharedref_index_accepts<validity::offset>);
+    CHECK_FALSE(sharedref_index_accepts<std::size_t>);
 }
 
 #ifdef __SIZEOF_INT128__
@@ -445,7 +452,7 @@ TEST_CASE("validity: check_index against Normalize of RFC 9535")
             bool const selects = normalized >= 0 && normalized < static_cast<cbor::int128>(length);
             auto const r = validity::check_index(index, length);
             if (selects)
-                CHECK_EQ(static_cast<cbor::int128>(*r), normalized);
+                CHECK_EQ(*r, validity::index{static_cast<std::uint64_t>(normalized)});
             else
                 CHECK_EQ(r.error(), error::index_out_of_bounds);
             if (index >= 0) {
@@ -519,31 +526,6 @@ TEST_CASE("validity: check_magnitude_size for every size up to one past the widt
         }
 }
 
-// The check of a tag content follows each tag 29 back to its mark. A reader that knows every mark of the
-// message, as lazy does, can name a mark at or after the reference, and the walk would not end. This test
-// exists so that such a reference ends the walk: a mark at the reference is not complete, and a mark after
-// it is not marked yet, as for a reader that reads the marks in order.
-TEST_CASE("validity: check_tag_content refuses a tag 29 that names a mark at or after it")
-{
-    std::vector<std::size_t> const self{1};
-    CHECK_EQ(validity::check_tag_content(
-                 1, "\xc1\xd8\x1d\x00"sv, 1, [&self]() -> auto const & { return self; }, std::identity{},
-                 validity::limit_checks<false>{})
-                 .error(),
-             error::sharedref_not_complete);
-    std::vector<std::size_t> const forward{4};
-    CHECK_EQ(validity::check_tag_content(
-                 1, "\xc1\xd8\x1d\x00\x05"sv, 1, [&forward]() -> auto const & { return forward; },
-                 std::identity{}, validity::limit_checks<false>{})
-                 .error(),
-             error::sharedref_index_not_marked);
-    std::vector<std::size_t> const before{0};
-    CHECK(validity::check_tag_content(
-              1, "\x05\xc1\xd8\x1d\x00"sv, 2, [&before]() -> auto const & { return before; }, std::identity{},
-              validity::limit_checks<false>{})
-              .has_value());
-}
-
 // RFC 8949 5.6 lets a map repeat a key outside a deterministic profile. Two maps are equal only when each pair
 // occurs the same number of times in both. A check that each pair has a partner in the other map finds the
 // first two maps equal, because every pair of each occurs in the other.
@@ -554,10 +536,83 @@ TEST_CASE("validity: keys_equivalent compares the pairs of two maps as multisets
     std::string_view const jkk = "\xa3\x61j\x01\x61k\x01\x61k\x01"sv;
     std::string_view const kk = "\xa2\x61k\x01\x61k\x01"sv;
     std::string_view const kj = "\xa2\x61k\x01\x61j\x01"sv;
-    CHECK_FALSE(*validity::keys_equivalent(kkj, 0, kjj, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK_FALSE(*validity::keys_equivalent(kjj, 0, kkj, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK(*validity::keys_equivalent(kkj, 0, jkk, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK(*validity::keys_equivalent(jkk, 0, kkj, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK_FALSE(*validity::keys_equivalent(kk, 0, kj, 0, 0, 16, validity::limit_checks<false>{}));
-    CHECK(*validity::keys_equivalent(kk, 0, kk, 0, 0, 16, validity::limit_checks<false>{}));
+    CHECK_FALSE(*validity::keys_equivalent(kkj, validity::offset{}, kjj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK_FALSE(*validity::keys_equivalent(kjj, validity::offset{}, kkj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK(*validity::keys_equivalent(kkj, validity::offset{}, jkk, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK(*validity::keys_equivalent(jkk, validity::offset{}, kkj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK_FALSE(*validity::keys_equivalent(kk, validity::offset{}, kj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK(*validity::keys_equivalent(kk, validity::offset{}, kk, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+}
+
+// An offset, an element size and an element index are three kinds of number. Each has its own type, so a call that
+// swaps two of them does not compile. The checks ask the compiler whether each swapped call is well-formed.
+TEST_CASE("validity: element_offset refuses a swapped offset, size or index")
+{
+    using offset = validity::offset;
+    using index = validity::index;
+    auto const callable = [](auto const a, auto const b, auto const c) {
+        return requires { validity::element_offset(a, b, c); };
+    };
+    CHECK(callable(offset{}, std::size_t{}, index{}));
+    CHECK_FALSE(callable(std::size_t{}, offset{}, index{}));
+    CHECK_FALSE(callable(index{}, std::size_t{}, offset{}));
+    CHECK_FALSE(callable(offset{}, index{}, std::size_t{}));
+    CHECK_FALSE(callable(index{}, std::size_t{}, index{}));
+    CHECK_FALSE(callable(offset{}, std::size_t{}, offset{}));
+    CHECK_FALSE(callable(std::size_t{}, std::size_t{}, std::size_t{}));
+    CHECK_FALSE(callable(offset{}, std::size_t{}, std::uint64_t{}));
+    // Element 3 of 8 bytes each starts 24 bytes after the first element.
+    CHECK_EQ(validity::element_offset(offset{5}, 8, index{3}), offset{29});
+}
+
+// next, distance, subspan and substr take an offset where an offset is meant and a size where a size is meant. A
+// size, an index or a plain integer in the place of an offset does not compile, and an offset does not convert back
+// to a size. The result of check_index is an index and not an offset.
+TEST_CASE("validity: an offset, a size and an index do not take the place of each other")
+{
+    using offset = validity::offset;
+    using index = validity::index;
+    auto const next_callable = [](auto const a, auto const b) { return requires { validity::next(a, b); }; };
+    CHECK(next_callable(offset{}, std::size_t{}));
+    CHECK_FALSE(next_callable(std::size_t{}, std::size_t{}));
+    CHECK_FALSE(next_callable(index{}, std::size_t{}));
+    CHECK_FALSE(next_callable(std::size_t{}, offset{}));
+    CHECK_FALSE(next_callable(offset{}, offset{}));
+    auto const subspan_callable = [](auto const a) {
+        return requires { validity::subspan(std::string_view{}, a); };
+    };
+    CHECK(subspan_callable(offset{}));
+    CHECK_FALSE(subspan_callable(std::size_t{}));
+    CHECK_FALSE(subspan_callable(index{}));
+    CHECK_FALSE(std::is_convertible_v<offset, std::size_t>);
+    CHECK_FALSE(std::is_convertible_v<std::size_t, offset>);
+    CHECK_FALSE(std::is_convertible_v<index, offset>);
+    CHECK_FALSE(std::is_convertible_v<offset, index>);
+    CHECK(std::same_as<decltype(validity::check_index(0, 1))::value_type, index>);
+    CHECK_FALSE(std::same_as<decltype(cbor::lazy::offset), std::size_t>);
+    CHECK(std::same_as<decltype(cbor::lazy::offset), offset>);
+}
+
+// subspan accepts every offset from the start to the end of its input. An offset at the end gives an empty view, and
+// an offset after the end is a wrong use of the library, so it fails loudly and does not read past the input.
+TEST_CASE("validity: subspan accepts an offset at the end and refuses an offset after it")
+{
+    std::string_view const encoded = "abc";
+    CHECK_EQ(validity::subspan(encoded, validity::offset{}), "abc");
+    CHECK_EQ(validity::subspan(encoded, validity::offset{1}), "bc");
+    CHECK(validity::subspan(encoded, validity::offset{3}).empty());
+    std::array<char const, 3> const bytes{'a', 'b', 'c'};
+    CHECK_EQ(validity::subspan(std::span<char const>(bytes), validity::offset{2}).size(), 1u);
+    CHECK(std::same_as<decltype(validity::subspan(std::span<char const>(bytes), validity::offset{})),
+                       std::span<char const>>);
+#if defined(__cpp_exceptions)
+    CHECK_THROWS_AS(static_cast<void>(validity::subspan(encoded, validity::offset{4})), std::logic_error);
+    CHECK_THROWS_AS(static_cast<void>(validity::subspan(std::span<char const>(bytes), validity::offset{4})),
+                    std::logic_error);
+#endif
+    // substr refuses a piece that ends after the input with an error value, because the size comes from the input.
+    CHECK_EQ(*validity::substr(encoded, validity::offset{1}, 2), "bc");
+    CHECK_EQ(validity::substr(encoded, validity::offset{1}, 3).error(), error::too_little_data);
+    CHECK_EQ(validity::distance(encoded, encoded.substr(2)), validity::offset{2});
+    CHECK_EQ(validity::next(validity::offset{2}, 3), validity::offset{5});
 }

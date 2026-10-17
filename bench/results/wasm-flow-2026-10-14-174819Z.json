@@ -1,0 +1,1045 @@
+{
+ "context": {
+  "commit": "b6e3510",
+  "dirty": false,
+  "browser": "chromium 141.0.7390.37 headless shell, playwright 1.56.1, default launch flags",
+  "isolated": true,
+  "wasm_flags": "clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -flto -fno-exceptions -Wl,--strip-all,--gc-sections",
+  "wasm_bytes": 309530,
+  "inputs": {
+   "cbor_bytes": 402814,
+   "json_bytes": 492596
+  },
+  "json_library": "json-p3 2.2.2 iife, cbor-x 1.6.0 dist/index.min.js",
+  "method": "each repetition of each arm is one cold flow in a fresh page, timed once; arms alternate; before the timer the CBOR bytes are a Uint8Array, the JSON text is a string, the wasm module is instantiated and json-p3 is loaded; values_*: load or parse, then the user id and the list of status ids; objects_*: load or parse, then four paths each compiled once and applied once, results as JS objects; decode_*: the whole document into one JS object, eager decode against JSON.parse, no path; *_tape: one call gives a tape in linear memory, a JS loop builds the objects with a key cache and its own decoding of short ASCII strings; decode_tape_shapes: the same with one generated constructor per object shape; decode_cborx: cbor-x 1.6.0 decodes the whole buffer in JS",
+  "kernel": "6.18.44-fc-v114",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpus": 4,
+  "user": "ubuntu",
+  "priority": 0,
+  "node": "v22.22.0",
+  "repetitions": 21,
+  "note": "commit and dirty mark written by hand: git refused the worktree for user ubuntu; the tree was clean at b6e3510"
+ },
+ "summary": {
+  "objects_cbor": {
+   "median_ns": 21279999.99979511,
+   "min": 17399999.999906868,
+   "max": 33569999.99983236,
+   "check": "[1,100,264,73]"
+  },
+  "objects_tape": {
+   "median_ns": 103270000.00001863,
+   "min": 84625000,
+   "max": 130010000.00024214,
+   "check": "[1,100,264,73]"
+  },
+  "objects_json": {
+   "median_ns": 37500000,
+   "min": 29804999.999701977,
+   "max": 58185000.00005588,
+   "check": "[1,100,264,73]"
+  },
+  "decode_cbor": {
+   "median_ns": 18739999.999757856,
+   "min": 13634999.999776483,
+   "max": 21529999.99979511,
+   "check": "100"
+  },
+  "decode_tape": {
+   "median_ns": 15344999.99973923,
+   "min": 11635000.000242144,
+   "max": 20770000.000018626,
+   "check": "100"
+  },
+  "decode_tape_aa": {
+   "median_ns": 14580000.000074506,
+   "min": 11655000.00026077,
+   "max": 20784999.99968335,
+   "check": "100"
+  },
+  "decode_tape_shapes": {
+   "median_ns": 16020000.000018626,
+   "min": 13925000.000279397,
+   "max": 23995000.00011176,
+   "check": "100"
+  },
+  "decode_cborx": {
+   "median_ns": 12020000.000018626,
+   "min": 9534999.99968335,
+   "max": 16399999.999906868,
+   "check": "100"
+  },
+  "decode_json": {
+   "median_ns": 1435000.0000558794,
+   "min": 1189999.9999441206,
+   "max": 5404999.999795109,
+   "check": "100"
+  }
+ },
+ "runs": {
+  "objects_cbor": [
+   {
+    "ns": 18505000.000353903,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 17734999.999869615,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 25729999.999981374,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 20084999.999962747,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 28119999.999646097,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 17399999.999906868,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 21569999.999832362,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 17455000.000074506,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 23330000.000074506,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 24510000.000242144,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 19104999.999981374,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 18820000.000298023,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 19859999.999869615,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 21279999.99979511,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 27354999.999981374,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 18610000.000335276,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 22680000.000167638,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 19100000.000093132,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 26680000.000167638,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 21439999.99994412,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 33569999.99983236,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   }
+  ],
+  "objects_tape": [
+   {
+    "ns": 94685000.00005588,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 84625000,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 104750000,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 103870000.00011176,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 117399999.99990687,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 103270000.00001863,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 103954999.99960884,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 96615000.00022352,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 90535000.00014901,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 86694999.99983236,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 102535000.00014901,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 124694999.99983236,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 91899999.99990687,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 121170000.00039116,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 85725000.00009313,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 96214999.99985099,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 123205000.0000745,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 92825000.00018626,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 122970000.00020489,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 116935000.00005588,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 130010000.00024214,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   }
+  ],
+  "objects_json": [
+   {
+    "ns": 34265000.000130385,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 29804999.999701977,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 52625000,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 52870000.00011176,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 32899999.999906868,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 40500000,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 33469999.99973923,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36004999.99988824,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36419999.999925494,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 35300000.0002794,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36015000.000130385,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36184999.99959022,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 38049999.999813735,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 55030000.00026077,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 37500000,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 49569999.99983236,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 36245000.00011176,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 47609999.999869615,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 48199999.9997206,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 52095000.00020489,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   },
+   {
+    "ns": 58185000.00005588,
+    "check": "[1,100,264,73]",
+    "isolated": true
+   }
+  ],
+  "decode_cbor": [
+   {
+    "ns": 15785000.000149012,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 18919999.999925494,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16839999.99985099,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16194999.999832362,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 18739999.999757856,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 21529999.99979511,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14004999.999888241,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 21220000.00020489,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20359999.999869615,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14150000.000372529,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13634999.999776483,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20294999.999925494,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 19319999.999832362,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 21189999.99994412,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15615000.000223517,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 21489999.999757856,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20285000.00014901,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15255000.000353903,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16475000.000093132,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16340000.00031665,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 19000000,
+    "check": "100",
+    "isolated": true
+   }
+  ],
+  "decode_tape": [
+   {
+    "ns": 14564999.99994412,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13044999.999925494,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16709999.999962747,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 12460000.000428408,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 18219999.99973923,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15520000.000018626,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 12115000.000223517,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15859999.999869615,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14029999.999795109,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15875000,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15344999.99973923,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 11635000.000242144,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14005000.000353903,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 19649999.999906868,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20770000.000018626,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13260000.000242144,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13475000.000093132,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16035000.000149012,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 12219999.99973923,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 17234999.999869615,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15775000.000372529,
+    "check": "100",
+    "isolated": true
+   }
+  ],
+  "decode_tape_aa": [
+   {
+    "ns": 14875000,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14439999.99994412,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16555000.000167638,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16754999.999888241,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13095000.000204891,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16435000.00005588,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15694999.999832362,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13200000.000186265,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 12314999.99994412,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13690000.000409782,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14984999.999869615,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 11655000.00026077,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 12984999.999869615,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16949999.999720603,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20784999.99968335,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13544999.999925494,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14580000.000074506,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 12995000.000111759,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 12615000.000223517,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 19449999.999720603,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15930000.000167638,
+    "check": "100",
+    "isolated": true
+   }
+  ],
+  "decode_tape_shapes": [
+   {
+    "ns": 16479999.999981374,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14625000,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20229999.999981374,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20060000.00005588,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15709999.999962747,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 19850000.000093132,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15804999.999701977,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14760000.000242144,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 23995000.00011176,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14689999.99994412,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13935000.00005588,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14344999.99973923,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 20965000.00031665,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16824999.999720603,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15530000.00026077,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 17549999.999813735,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16020000.000018626,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 23254999.99988824,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 19094999.99973923,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15839999.999850988,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13925000.000279397,
+    "check": "100",
+    "isolated": true
+   }
+  ],
+  "decode_cborx": [
+   {
+    "ns": 9534999.99968335,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 9955000.000074506,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16129999.999888241,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 10055000.000167638,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15339999.999850988,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 11205000.000074506,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 11574999.999720603,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 10084999.999962747,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 10814999.99994412,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 11879999.999888241,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 9915000.000037253,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15049999.999813735,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 12390000.000130385,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 16399999.999906868,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14075000.000186265,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 11260000.000242144,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 12020000.000018626,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13925000.000279397,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 13694999.999832362,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 15669999.999925494,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 14890000.000130385,
+    "check": "100",
+    "isolated": true
+   }
+  ],
+  "decode_json": [
+   {
+    "ns": 1370000.0001117587,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1345000.000204891,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1665000.000037253,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1530000.0002607703,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1430000.000167638,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2084999.999962747,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1189999.9999441206,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1220000.000204891,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1630000.0003539026,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1344999.9997392297,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1209999.999962747,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1500000,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1435000.0000558794,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1425000.0002793968,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2640000.000130385,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1364999.9997578561,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2220000.000204891,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 5404999.999795109,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 1419999.9999254942,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2110000.000335276,
+    "check": "100",
+    "isolated": true
+   },
+   {
+    "ns": 2235000.000335276,
+    "check": "100",
+    "isolated": true
+   }
+  ]
+ }
+}

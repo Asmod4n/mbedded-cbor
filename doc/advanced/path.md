@@ -16,14 +16,19 @@ Every function is in the namespace `cbor`. A comment shows the CBOR in
 | `at_path<Path, T>(owner)` | compile time, singular | `std::expected<owning_ref<T>, error>`, T a view, `owner` a `std::shared_ptr<std::string const>`, no copy |
 | `at_path<Path, T>(encoded)` | compile time, singular | `std::expected<owning_ref<T>, error>`, T a view; the bytes are copied, an rvalue `std::string` is moved |
 | `at_path<Path, T>(lazy)` | compile time, singular | T a scalar: `std::expected<T, error>`. T a view: `std::expected<owning_ref<T>, error>` |
-| `at_path<Path>(lazy)` | compile time, singular | `std::expected<lazy, error>`, the node |
-| `at_path(path, lazy)` | run time, singular | `std::expected<lazy, error>`, the node |
-| `query<Path>(lazy)` | compile time, any | `std::expected<std::vector<lazy>, error>`, the nodelist |
-| `query(path, lazy)` | run time, any | `std::expected<std::vector<lazy>, error>`, the nodelist |
+| `lazy.at_path<Path>()` | compile time, singular | `std::expected<lazy, error>`, the node |
+| `lazy.at_path<Path, nodelist>()` | compile time, any | `std::expected<nodelist, error>`, the nodelist |
+| `jsonpath::compile<T>(path)` | run time | `std::expected<jsonpath::query<T>, error>`, the parsed path |
+| `lazy.at_path(e)` | run time, `e` a query | T `lazy`: the node. T `nodelist`: the nodelist. Else as `at_path<Path, T>(lazy)` |
+| `at_path(encoded, e)`, `at_path(owner, e)` | run time, `e` a query | as `at_path<Path, T>(encoded)` and `at_path<Path, T>(owner)` |
 
 `encoded` is a `std::string_view`, so a `std::string` or one element of a
 `cbor::sequence` goes in directly. A path is a string literal for the
-compile-time forms and a `std::string_view` for the run-time forms. A
+compile-time forms. A run-time path is a `std::string_view` that
+`jsonpath::compile<T>` parses once. The query owns its data
+and is applied to any number of items. `T` of a `compile` that is
+not `nodelist` needs a singular path, else the result is
+`not_singular_query`. `nodelist` is `std::vector<lazy>`. A
 compile-time path that is not valid leaves no form to call: the compiler
 reports that no function matches. `packed<T>::at_path` reads a member of
 a packed message ([packed.md](packed.md)).
@@ -55,16 +60,16 @@ any CBOR item: a map, an array, a tag. Read it on with a step, `get`,
 
 ```cpp
 // {"a": [1, 2, 3]}
-cbor::at_path<"$.a">(l);          // the node of [1, 2, 3]
-cbor::at_path("$.a[2]", l);       // the node of 3, path at run time
-cbor::query<"$.a[*]">(l);         // the nodes of 1, 2 and 3
-cbor::query("$.a[?@ > 1]", l);    // the nodes of 2 and 3
-cbor::query("$.b", l);            // no node, no error
+l.at_path<"$.a">();          // the node of [1, 2, 3]
+l.at_path<"$.a[*]", cbor::nodelist>();   // the nodes of 1, 2 and 3
+auto const e = cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]");
+l.at_path(*e);               // the nodes of 2 and 3, path at run time
+l.at_path<"$.b", cbor::nodelist>();      // no node, no error
 ```
 
-`at_path` gives one node. `query` gives the nodelist, also for a singular
-path and for an empty nodelist. `query` gives no error when a selector
-finds nothing.
+`at_path` with a node type gives one node. `at_path` with `nodelist`
+gives the nodelist, also for a singular path and for an empty nodelist.
+It gives no error when a selector finds nothing.
 
 ## 3. Which types a typed read gives
 
@@ -95,7 +100,7 @@ A typed read passes a tag that the path does not read (section 7), so
 `at_path<"$", int>` reads 5 from `1(5)` and
 `at_path<"$", std::string_view>` reads the text of `32("x")`. Any other T
 does not compile, for example `float`, `std::string` or a view without an
-owner. For any other result, read the node of `at_path<Path>(lazy)`.
+owner. For any other result, read the node of `lazy.at_path<Path>()`.
 
 ## 4. Path syntax
 
@@ -197,10 +202,10 @@ its `length` is Nothing.
 
 ```cpp
 // [{"t": "abc"}, {"t": [1, 2]}, {"t": 5}]
-cbor::query("$[?length(@.t) == 3].t", l);    // the node of "abc"
-cbor::query("$[?count(@.t[*]) == 2].t", l);  // the node of [1, 2]
-cbor::query("$[?value(@..t) == 5].t", l);    // the node of 5
-cbor::query("$[?match(@.t, 'a.c')]", l);     // invalid_path
+l.at_path<"$[?length(@.t) == 3].t", cbor::nodelist>();    // the node of "abc"
+l.at_path<"$[?count(@.t[*]) == 2].t", cbor::nodelist>();  // the node of [1, 2]
+l.at_path<"$[?value(@..t) == 5].t", cbor::nodelist>();    // the node of 5
+cbor::jsonpath::compile<cbor::nodelist>("$[?match(@.t, 'a.c')]");  // invalid_path
 ```
 
 A compile-time path with `match` or `search` does not compile:
@@ -222,12 +227,12 @@ A map key in CBOR can be any item. Two ways reach such a key:
 
 ```cpp
 // {1: "x", -2: "y", h'01': "z", [1, 2]: "w"}
-cbor::at_path<"$[1]">(l);                   // the node of "x"
-cbor::at_path<"$[-2]">(l);                  // the node of "y"
-cbor::at_path<"$[h'01']">(l);               // the node of "z"
-cbor::at_path<"$[[1, 2]]">(l);              // the node of "w"
-cbor::at_path("$[h'01']", l);               // the node of "z", path at run time
-cbor::at_path<"$[h'01']", std::string_view>(l);      // owning_ref, "z"
+l.at_path<"$[1]">();                   // the node of "x"
+l.at_path<"$[-2]">();                  // the node of "y"
+l.at_path<"$[h'01']">();               // the node of "z"
+l.at_path<"$[[1, 2]]">();              // the node of "w"
+l.at_path(*cbor::jsonpath::compile<cbor::lazy>("$[h'01']"));  // the node of "z", path at run time
+l.at_path<"$[h'01']", std::string_view>();      // owning_ref, "z"
 ```
 
 Keys compare by value (RFC 8949 5.6.1). So `h'01'` and `b64'AQ'` name the
@@ -257,8 +262,8 @@ pair. A wildcard, a descendant segment and a filter take all pairs.
 | `55799({"a": 5})` | `at_path<"$.a", int>` | `5` |
 | `{"a": 24(<<55799([1, 2])>>)}` | `at_path<"$.a[1]", int>` | `2` |
 | `{"v": 1000([1, 2])}` | `at_path<"$.v[1]", int>` | `2` |
-| `{"v": 1000([1, 2])}` | `query("$.v[*]", l)` | the nodes of `1` and `2` |
-| `{"v": 1000([1, 2])}` | `at_path("$.v", l)` | the node of `1000([1, 2])` |
+| `{"v": 1000([1, 2])}` | `l.at_path<"$.v[*]", cbor::nodelist>()` | the nodes of `1` and `2` |
+| `{"v": 1000([1, 2])}` | `l.at_path<"$.v">()` | the node of `1000([1, 2])` |
 
 A path passes a tag that it does not read, as a generic decoder does (RFC
 8949 6.1): a step and a typed read go to the content. A path that ends at the
@@ -284,8 +289,8 @@ cbor::at_path<"$.v[1]", int>(bytes);                       // 8
 cbor::at_path<"$.v[-1]", double>(bytes);                   // 8.0
 cbor::at_path<"$.v[2]", int>(bytes);                       // index_out_of_bounds
 cbor::at_path<"$.v[1][0]", int>(bytes);                    // not_indexable
-cbor::query("$.v[*]", l);                                  // the nodes of 7 and 8
-cbor::at_path<"$.v", cbor::typed_array>(l);                // tag 69, 4 bytes
+l.at_path<"$.v[*]", cbor::nodelist>();              // the nodes of 7 and 8
+l.at_path<"$.v", cbor::typed_array>();                // tag 69, 4 bytes
 ```
 
 An element of an integer array is an integer, and an element of a float
@@ -298,8 +303,8 @@ The element of a clamped uint8 array (tag 68) is an unsigned integer.
 A singular query (RFC 9535 2.3.5.1) has only name selectors and index
 selectors, one in each segment, and no descendant segment. It selects one
 node at most. An EDN key in brackets is a name selector with one key, so a
-path with it is singular. `at_path` reads only a singular query. `query`
-reads every query.
+path with it is singular. `at_path` with a node or a typed result reads
+only a singular query. `at_path` with `nodelist` reads every query.
 
 ```cpp
 static_assert(cbor::is_singular_query_v<"$.a[0]['b']">);
@@ -314,28 +319,29 @@ static_assert(!cbor::is_valid_path_v<"$.a[">);
 - `is_singular_query_v<Path>` is true when the path is valid and singular.
 
 `at_path<Path, T>` with a path that is not singular does not compile.
-`at_path<Path>(lazy)` with such a path stops at a `static_assert` that
-names `cbor::query`. `at_path(path, lazy)` with such a path gives
-`invalid_path`.
+`lazy.at_path<Path>()` with such a path stops at a `static_assert` that
+names `cbor::nodelist`. `compile<T>(path)` with such a path and a
+`T` that is not `nodelist` gives `not_singular_query`.
 
 ## 9. Compile time and run time
 
 | Check | Compile-time path | Run-time path |
 |---|---|---|
-| Grammar of RFC 9535 with EDN literals | at compile time | at each call: `invalid_path` |
-| Singular path for `at_path` | at compile time | at each call: `invalid_path` |
+| Grammar of RFC 9535 with EDN literals | at compile time | once, in `compile`: `invalid_path` |
+| Singular path for a result that is not `nodelist` | at compile time | once, in `compile`: `not_singular_query` |
 | Segments against the nesting depth | default depth at compile time; depth in force at each call | depth in force at each call |
-| Type T of a typed read | at compile time | no typed run-time form |
+| Type T of a typed read | at compile time | at compile time, the `T` of the query |
 | Everything about the data | at each call | at each call |
 
-A run-time path is parsed at each call, and the parse allocates. To read
-the same path many times, use a compile-time path.
+`compile` parses a run-time path once, and the parse allocates.
+An apply of the query does not parse again.
 
 ## 10. Errors
 
 | Error | When |
 |---|---|
-| `invalid_path` | The path text is not valid. A run-time `at_path` with a path that is not singular. `match` or `search`. A comparison with a side that is not singular. An index of 16 digits or less outside ±(2^53 - 1). |
+| `invalid_path` | The path text is not valid. `match` or `search`. A comparison with a side that is not singular. An index of 16 digits or less outside ±(2^53 - 1). |
+| `not_singular_query` | `compile<T>` with a path that is not singular and a `T` that is not `nodelist`. |
 | `key_not_found` | A name or a key is not in the map. |
 | `index_out_of_bounds` | The index is outside the array. |
 | `not_indexable` | A name, an index or a key meets a value that is not a map or an array, for example a text, a number, a bignum or an element of a typed array. A name or a key meets an array or a typed array. |
@@ -345,34 +351,36 @@ the same path many times, use a compile-time path.
 | `string_length_exceeded`, `container_elements_exceeded`, `input_bytes_exceeded` | A limit is in force and the input goes past it (section 12). |
 | `too_little_data` | The bytes end before the target or before an item that the walk reads. |
 | `syntax_error`, `indefinite_length` | A head that the walk reads is not well-formed, or uses indefinite length. |
-| `sharedref_index_not_marked`, `sharedref_not_complete` | A tag 29 names no tag 28 before it, or names a tag 28 that contains it. |
 | `inadmissible_type_for_tag_content` | A tag on the way has content that its definition does not allow, for example tag 24 over a number. |
-| `nodelist_too_long` | One step of `query` selects more nodes than the top-level item has bytes. Tag 29 makes this possible. |
+| `nodelist_too_long` | One step of a nodelist read selects more nodes than the top-level item has bytes. Tag 29 makes this possible. |
 
 | bytes | Call | Result |
 |---|---|---|
-| `{"a": [1, 2], "s": "x"}` | `at_path("$.a[", l)` | `invalid_path` |
+| `{"a": [1, 2], "s": "x"}` | `compile<cbor::lazy>("$.a[")` | `invalid_path` |
 | the same | `at_path<"$.s[0]", int>(bytes)` | `not_indexable` |
 | the first 5 bytes of the same | `at_path<"$.a[1]", int>` | `too_little_data` |
 | `{"a": 29(5)}` | `at_path<"$.a", int>` | `sharedref_index_not_marked` |
 | `{"a": 24(5)}` | `at_path<"$.a", int>` | `inadmissible_type_for_tag_content` |
-| `[28([0, 0, 0, 0, 0, 0, 0, 0]), 29(0)]` | `query("$[*][*]", l)` | `nodelist_too_long` |
+| `[28([0, 0, 0, 0, 0, 0, 0, 0]), 29(0)]` | `l.at_path<"$[*][*]", cbor::nodelist>()` | `nodelist_too_long` |
 
 ## 11. What the form over bytes checks
 
 A path reads the heads from the start of the item to the target, and the
-heads and strings that it skips on the way. It does not read the bytes
-after the target. So these faults are not found:
+heads and strings that it skips on the way. Each data item has at least
+one byte, so an array or a map that claims more items than the bytes left
+gives `too_little_data` before any element is read. A path does not read
+the bytes after the target. So these faults are not found:
 
 | bytes | Call | Result |
 |---|---|---|
-| `82 01`, the second element is missing | `at_path<"$[0]", int>` | `1` |
+| `82 01`, the second element is missing | `at_path<"$[0]", int>` | `too_little_data` |
 | `82 01 ff` | `at_path<"$[0]", int>` | `1` |
 | `01 02`, a byte after the item | `at_path<"$", int>` | `1` |
 | `82 01` | `at_path<"$[1]", int>` | `too_little_data` |
 
 `lazy::copy` does not read the whole item either: it accepts `82 01` and
-`01 02`. `item_size` and a decode check a whole item.
+`01 02`. A step into `82 01` gives `too_little_data`. `item_size` and a
+decode check a whole item.
 
 ## 12. Limits
 
@@ -431,8 +439,8 @@ when a key is not a text: these two cases read the item through a lazy. A
 view result allocates nothing: the owner is a copy of a
 `std::shared_ptr`.
 
-`query` allocates the nodelist. A filter with a literal allocates for each
-child that it tests. `at_path`, `query` and the lazy walk read an element
+A `nodelist` read allocates the nodelist. A filter with a literal allocates for each
+child that it tests. `at_path` and the lazy walk read an element
 of a typed array as a small CBOR item that the library writes, and this
 allocates once for each step.
 
@@ -446,13 +454,12 @@ costs more to compare ([complexity.md](complexity.md)).
 ## 14. Threads
 
 A path from a lazy follows the rules of a lazy ([basics.md](basics.md)):
-a `cbor::lazy` and every `owning_ref` belong to one thread, and
-`cbor::transfer` hands a lazy to another thread.
+several threads read one `cbor::lazy` at the same time.
 `at_path<Path, T>(encoded)` with bytes has no shared state.
 
 ## 15. RFC 9535 and this library
 
-The run-time `query` gives the result of the JSONPath Compliance Test Suite
+A run-time `nodelist` query gives the result of the JSONPath Compliance Test Suite
 in 694 of 706 cases. 50 of these are valid paths with `match()` or
 `search()`, and the library refuses them as `invalid_path`.
 
@@ -470,7 +477,7 @@ them:
 |---|---|
 | `match()`, `search()` (2.4.6, 2.4.7) and I-Regexp | not supported: `invalid_path` |
 | Function extensions beyond the five of 2.4 | not supported: `invalid_path` |
-| Normalized paths (2.7), the location of a node | not given: `query` gives values, not locations |
+| Normalized paths (2.7), the location of a node | not given: a `nodelist` gives values, not locations |
 
 What this library adds to RFC 9535: an index selector on a map finds an
 integer key, and a path takes EDN literals as keys and in filters.

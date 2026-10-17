@@ -124,7 +124,7 @@ TEST_CASE("doc basics: threads")
         std::jthread first([&bytes, &use_first] { use_first(cbor::at_path<"$.id", std::int64_t>(bytes)); });
         std::jthread second([&bytes, &use_second] {
             if (auto const doc = cbor::lazy::copy(bytes))
-                use_second(cbor::at_path<"$.id", std::int64_t>(*doc));
+                use_second(doc->at_path<"$.id", std::int64_t>());
         });
     }
     CHECK_EQ(first_read, 42);

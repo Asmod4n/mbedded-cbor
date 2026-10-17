@@ -52,8 +52,8 @@ the lazy holds the bytes.
 // bytes: {"cars": [{"hp": 5}, {"hp": 7, "make": "kia"}]}
 auto const cars = cbor::lazy::copy(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
 if (cars) {
-    cbor::at_path<"$[1].hp", std::int64_t>(*cars);          // 7
-    cbor::at_path<"$[1].make", std::string_view>(*cars);    // "kia"
+    cars->at_path<"$[1].hp", std::int64_t>();          // 7
+    cars->at_path<"$[1].make", std::string_view>();    // "kia"
 }
 ```
 
@@ -81,8 +81,8 @@ The examples select from this value:
 
 `at_path` reads a path that selects one value: names and indexes only.
 `[*]`, `..`, a filter and a slice such as `[0:2]` select many values, and
-only `cbor::query` reads them. `query` gives every match as a
-`cbor::lazy`, in a `std::vector`, and an empty vector when nothing matches.
+only `lazy.at_path<Path, cbor::nodelist>()` reads them. It gives every match as a
+`cbor::lazy`, in a `cbor::nodelist`, and an empty vector when nothing matches.
 
 In a filter, `@` is the current value. A filter compares with `==`,
 `!=`, `<`, `<=`, `>` and `>=`, and joins tests with `&&`, `||` and `!`.
@@ -111,15 +111,17 @@ if (!id) {
 ```
 
 A path reads the bytes up to its value and no further, so it does not
-find a fault after the value. `cbor::item_size(bytes)` checks the whole
+find a fault after the value. A list or a map that claims more items than
+the bytes left gives `too_little_data` before the path reads an element.
+`cbor::item_size(bytes)` checks the whole
 value and gives its size in bytes.
 
 ## 6. What is not supported
 
 - `match()` and `search()`: the library has no regular expressions.
 - Function extensions beyond those of RFC 9535.
-- Normalized paths: `query` gives values, not their places.
+- Normalized paths: a `nodelist` gives values, not their places.
 
-More: every form of `at_path` and `query`, the full syntax, keys that are
+More: every form of `at_path`, a path at run time, the full syntax, keys that are
 not text, tags, typed arrays, limits and cost are in
 [advanced/path.md](advanced/path.md).

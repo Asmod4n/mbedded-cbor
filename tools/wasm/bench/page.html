@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>wasm bench</title>
+<script type="module">
+import { showcase_instantiate } from "../loader.js";
+
+const target_ms = 200;
+const params = new URLSearchParams(location.search);
+const arm = params.get("arm");
+const [wasm_bytes, cbor_bytes, json_text] = await Promise.all([
+  fetch(params.get("wasm") ?? "showcase.wasm").then((r) => r.arrayBuffer()),
+  fetch("twitter.cbor").then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b)),
+  fetch("twitter.json").then((r) => r.text()),
+]);
+const s = await showcase_instantiate(wasm_bytes);
+
+const loops = {
+  json_parse: () => JSON.parse(json_text),
+  json_parse_aa: () => JSON.parse(json_text),
+  json_value: () => JSON.parse(json_text).statuses[0].user.id,
+  json_ids: () => JSON.parse(json_text).statuses.map((x) => x.id % 1000000007).reduce((a, b) => a + b, 0),
+  cbor_value_literal: () => s.exports.user_id_literal(),
+  cbor_value_literal_aa: () => s.exports.user_id_literal(),
+  cbor_value_runtime: () => s.exports.compiled_first_int(),
+  cbor_ids_literal: () => Number(s.exports.literal_ids_sum()),
+  cbor_ids_runtime: () => Number(s.exports.compiled_int_sum()),
+  empty_call: () => s.exports.release(0),
+};
+
+let result;
+if (arm === "first_json") {
+  const t0 = performance.now();
+  const id = JSON.parse(json_text).statuses[0].user.id;
+  result = { arm, ns_per_op: (performance.now() - t0) * 1e6, iterations: 1, check: String(id) };
+} else if (arm === "first_cbor") {
+  const ptr = s.exports.alloc(cbor_bytes.length);
+  new Uint8Array(s.exports.memory.buffer, ptr, cbor_bytes.length).set(cbor_bytes);
+  const t0 = performance.now();
+  s.exports.load(ptr, cbor_bytes.length);
+  const id = s.exports.user_id_literal();
+  result = { arm, ns_per_op: (performance.now() - t0) * 1e6, iterations: 1, check: String(id) };
+} else {
+  if (s.load(cbor_bytes) !== 0) throw new Error("load failed");
+  if (arm === "cbor_value_runtime") s.compile("$.statuses[0].user.id");
+  if (arm === "cbor_ids_runtime") s.compile("$.statuses[*].id");
+  const f = loops[arm];
+  let sink = f();
+  let n = 1;
+  for (;;) {
+    const t0 = performance.now();
+    for (let i = 0; i < n; i++) sink = f();
+    const ms = performance.now() - t0;
+    if (ms >= target_ms) {
+      result = { arm, ns_per_op: (ms * 1e6) / n, iterations: n, check: String(sink) };
+      break;
+    }
+    n *= 2;
+  }
+}
+result.isolated = crossOriginIsolated;
+window.bench_result = result;
+</script>

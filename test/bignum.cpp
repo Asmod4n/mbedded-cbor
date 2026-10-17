@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "item_head.hpp"
 
 #include <cstdint>
 #include <string>
@@ -80,11 +81,13 @@ TEST_CASE("bignum: an empty magnitude is 0 or -1")
     CHECK(*decoded("\xc3\x40"sv) == value{negative{0}});
 }
 
-// Ported from test.rb: 'bignum: non-byte-string payload raises TypeError'.
+// Ported from test.rb: 'bignum: non-byte-string payload raises TypeError'. The owner decided that a tree decode
+// interprets a tag 2 or 3 only over a byte string; any other content leaves a tag over that content.
 TEST_CASE("bignum: content that is not a byte string")
 {
-    CHECK_EQ(decode_error("\xc2\x05"sv), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(decode_error("\xc3\x05"sv), error::inadmissible_type_for_tag_content);
+    CHECK(*decoded("\xc2\x05"sv) == value{tagged{2, value{std::uint64_t{5}}}});
+    CHECK(*decoded("\xc3\x05"sv) == value{tagged{3, value{std::uint64_t{5}}}});
+    CHECK_EQ(cbor::lazy::copy("\xc2\x05"s)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
 }
 
 // Ported from test.rb: 'bignum: mixed with normal integers in array'.
@@ -123,4 +126,151 @@ TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
     std::string again;
     REQUIRE(cbor::encode(**ok, again).has_value());
     CHECK_EQ(again, shallow);
+}
+
+// RFC 8949 3.4.3: a bignum is equivalent to the integer of the same numeric value, and leading zeros are allowed.
+// The tree holds values (RFC 8949 2), so a tag 2 or 3 whose magnitude fits in 64 bits is that integer, and lazy
+// type() says the same. The rows cover the empty magnitude (0 and -1), leading zeros past eight bytes, both ends of
+// 64 bits and the first magnitude that does not fit.
+TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in type()")
+{
+    struct row {
+        std::string wire;
+        cbor::type type;
+        std::uint64_t argument;
+    };
+    std::string const max = std::string(8, '\xff');
+    std::string const two_64 = "\x01"s + std::string(8, '\0');
+    row const rows[] = {
+        {"\xc2\x40"s, cbor::type::unsigned_integer, 0},
+        {"\xc3\x40"s, cbor::type::negative_integer, 0},
+        {"\xc2\x4a"s + std::string(9, '\0') + "\x01"s, cbor::type::unsigned_integer, 1},
+        {"\xc3\x4c"s + std::string(11, '\0') + "\x07"s, cbor::type::negative_integer, 7},
+        {"\xc2\x48"s + max, cbor::type::unsigned_integer, ~std::uint64_t{0}},
+        {"\xc3\x48"s + max, cbor::type::negative_integer, ~std::uint64_t{0}},
+        {"\xc2\x49"s + two_64, cbor::type::unsigned_bignum, 2},
+        {"\xc3\x49"s + two_64, cbor::type::negative_bignum, 3},
+    };
+    for (row const &r : rows) {
+        CAPTURE(r.wire);
+        auto const l = cbor::lazy::copy(r.wire);
+        REQUIRE(l.has_value());
+        auto const t = l->type();
+        REQUIRE(t.has_value());
+        CHECK_EQ(*t, r.type);
+        auto const tree = l->decode();
+        REQUIRE(tree.has_value());
+        CHECK_EQ((*tree)->type, r.type);
+        CHECK_EQ(argument_of(**tree), r.argument);
+    }
+    CHECK_EQ(cbor::lazy::copy("\xc3\x48"s + max)->get<std::int64_t>().error(), error::number_out_of_range);
+    CHECK_EQ(*cbor::lazy::copy("\xc2\x40"s)->get<std::int64_t>(), 0);
+    CHECK_EQ(*cbor::lazy::copy("\xc2\x41\x05"s)->get<double>(), 5.0);
+    CHECK_EQ(*cbor::lazy::copy("\xc3\x41\x05"s)->get<double>(), -6.0);
+    CHECK_EQ(cbor::lazy::copy("\xc2\x41\x05"s)->get<std::span<std::byte const>>().error(), error::incorrect_type);
+    CHECK_EQ(*cbor::lazy::copy("\xc3\x40"s)->get<std::int64_t>(), -1);
+}
+
+// RFC 8949 3.4.3 admits only a byte string as the content of tag 2 or 3. The owner decided that decode and type()
+// interpret only a definite byte string, and leave a tag over any other content (Q4 a). A content that ends early
+// gives too_little_data and reads no byte past the input.
+TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
+{
+    struct row {
+        std::string_view wire;
+        cbor::type type;
+    };
+    for (row const r : {row{"\xc2\x61\x61"sv, cbor::type::unsigned_bignum}, row{"\xc2\x80"sv, cbor::type::unsigned_bignum},
+                        row{"\xc2\x01"sv, cbor::type::unsigned_bignum}, row{"\xc3\x61\x61"sv, cbor::type::negative_bignum}}) {
+        CAPTURE(r.wire);
+        auto const l = cbor::lazy::copy(std::string(r.wire));
+        REQUIRE(l.has_value());
+        CHECK_EQ(l->type(), r.type);
+        auto const tree = l->decode();
+        REQUIRE(tree.has_value());
+        CHECK_EQ((*tree)->type, r.type);
+        CHECK_EQ((*tree)->via.tag.number, r.wire[0] == '\xc2' ? 2u : 3u);
+    }
+    struct failure {
+        std::string_view wire;
+        error expected;
+    };
+    for (failure const f : {failure{"\xc2\x5f\x41\x01\xff"sv, error::indefinite_length},
+                            failure{"\xc2\x5f"sv, error::indefinite_length}, failure{"\xc2"sv, error::too_little_data},
+                            failure{"\xc2\x41"sv, error::too_little_data}, failure{"\xc2\x49\x01"sv, error::too_little_data}}) {
+        CAPTURE(f.wire);
+        auto const l = cbor::lazy::copy(std::string(f.wire));
+        REQUIRE(l.has_value());
+        CHECK_EQ(l->decode().error(), f.expected);
+    }
+}
+
+// RFC 8949 3.4.3: the value of a bignum that fits is the integer. A tag 28 around it is a plain tag over that
+// integer, and a tag 29 is a plain tag over its index.
+TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
+{
+    std::string const wire = "\x82\xd8\x1c\xc2\x41\x01\xd8\x1d\x00"s;
+    auto const l = cbor::lazy::copy(wire);
+    REQUIRE(l.has_value());
+    auto const tree = l->decode();
+    REQUIRE(tree.has_value());
+    auto const elements = children_of(**tree);
+    REQUIRE_EQ(elements.size(), 2u);
+    REQUIRE_EQ(elements[0]->type, cbor::type::tag);
+    cbor::item const *const marked = elements[0]->via.tag.content;
+    CHECK_EQ(marked->type, cbor::type::unsigned_integer);
+    CHECK_EQ(marked->via.u64, 1u);
+    CHECK_EQ((*elements[1]).via.tag.number, 29u);
+    CHECK_EQ(*l->at(1)->type(), cbor::type::tag);
+    CHECK_EQ(*l->at(1)->get<std::int64_t>(), 0);
+    std::string again;
+    REQUIRE(cbor::encode(**tree, again).has_value());
+    CHECK_EQ(again, "\x82\xd8\x1c\x01\xd8\x1d\x00"s);
+}
+
+// RFC 8949 5.6.1 compares keys in the data model, and RFC 8949 3.4.3 makes 2(h'01') the integer 1. So a key
+// written as a bignum that fits is the same key as the integer: keys_equivalent says so, a lookup by an integer
+// finds it, and a map with both holds the key twice.
+TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
+{
+    struct pair {
+        std::string first;
+        std::string second;
+        bool equal;
+    };
+    pair const pairs[] = {
+        {"\x01"s, "\xc2\x41\x01"s, true},
+        {"\xc2\x41\x01"s, "\x01"s, true},
+        {"\x20"s, "\xc3\x40"s, true},
+        {"\x20"s, "\xc3\x41\x00"s, true},
+        {"\x01"s, "\xc2\x43\x00\x00\x01"s, true},
+        {"\xc2\x41\x01"s, "\xc2\x42\x00\x01"s, true},
+        {"\x01"s, "\xc3\x41\x01"s, false},
+        {"\x01"s, "\xc2\x41\x02"s, false},
+        {"\xc2\x41\x01"s, "\xc3\x41\x01"s, false},
+        {"\x01"s, "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s, false},
+        {"\xc1\x01"s, "\xc2\x41\x01"s, false},
+        {"\x41\x01"s, "\xc2\x41\x01"s, false},
+        {"\xa2\x01\x00\xc2\x41\x01\x00"s, "\xa2\x01\x00\x01\x00"s, true},
+        {"\xa2\x01\x00\xc2\x41\x01\x00"s, "\xa2\x01\x00\x02\x00"s, false},
+    };
+    for (pair const &p : pairs) {
+        CAPTURE(p.first);
+        CAPTURE(p.second);
+        std::string_view const first = p.first;
+        std::string_view const second = p.second;
+        auto const equal =
+            cbor::validity::keys_equivalent(first, cbor::validity::offset{}, second, cbor::validity::offset{}, 0, 16, cbor::validity::limit_checks<false>{});
+        REQUIRE(equal.has_value());
+        CHECK_EQ(*equal, p.equal);
+    }
+    CHECK_EQ(cbor::lazy::copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(cbor::key{1})->get<int>(), 0);
+    CHECK_EQ(cbor::lazy::copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(cbor::key{-1})->get<int>(), 0);
+    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{1})->get<std::string_view>().has_value(), true);
+    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{-2}).error(), error::key_not_found);
+    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x61\x61\x61\x61"s)->at(cbor::key{1}).error(), error::inadmissible_type_for_tag_content);
+    CHECK(test::query("$[1]", *cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
+          test::query("$[1]", *cbor::lazy::copy("\xa1\x01\x61\x61"s)));
+    CHECK(test::query("$[-1]", *cbor::lazy::copy("\xa1\xc3\x40\x61\x61"s)) ==
+          test::query("$[-1]", *cbor::lazy::copy("\xa1\x20\x61\x61"s)));
 }

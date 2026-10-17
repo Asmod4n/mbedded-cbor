@@ -16,7 +16,7 @@ cmake --install build --prefix /usr/local
 find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
 
-# packed and structs: C++26 reflection, g++ 16
+# packed: C++26 reflection, g++ 16; structs: also C++23 with the Boost headers
 target_compile_features(app PRIVATE cxx_std_26)
 target_compile_options(app PRIVATE -freflection)
 ```
@@ -48,8 +48,9 @@ reads only up to the item that it looks for. No reflection needed.
 // bytes holds the CBOR of {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
 auto const doc = cbor::lazy::copy(bytes).value();
 
-bool const has_samples = doc.contains("samples").value();  // true
 std::uint64_t const pairs = doc.size().value();            // 3
+auto const missing = doc.at("unit");
+// missing.error() == cbor::error::key_not_found
 
 int sum = 0;
 if (auto const samples = doc.at("samples"))
@@ -66,9 +67,9 @@ The read side needs only C++23. It works with g++ 16 and with clang 23.
 // bytes is a std::string with the CBOR of {"user": {"id": 42, "name": "ann"}}
 auto const doc = cbor::lazy::copy(bytes).value();
 
-auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);         // *id == 42
-auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);  // **name == "ann"
-auto const age = cbor::at_path<"$.user.age", int>(doc);
+auto const id = doc.at_path<"$.user.id", std::int64_t>();         // *id == 42
+auto const name = doc.at_path<"$.user.name", std::string_view>();  // **name == "ann"
+auto const age = doc.at_path<"$.user.age", int>();
 // age.error() == cbor::error::key_not_found
 ```
 
@@ -82,7 +83,7 @@ copy. The owning_ref keeps the bytes alive, so the view stays valid.
 std::string const cut = bytes.substr(0, bytes.size() - 1);  // the last byte is missing
 
 auto const doc = cbor::lazy::copy(cut).value();
-auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
+auto const name = doc.at_path<"$.user.name", std::string_view>();
 // name.error() == cbor::error::too_little_data
 
 std::string const why = std::error_code(name.error()).message();  // "too little data"
@@ -177,8 +178,8 @@ for these reasons:
 
 `cbor::structs` puts any CBOR into the members of a C++ struct or
 class, and writes it back as deterministic CBOR (RFC 8949 4.2.1): the
-shortest form of every number, and the keys in a fixed order. Needs
-reflection.
+shortest form of every number, and the keys in a fixed order. It reads
+an aggregate through reflection or through Boost.PFR.
 
 ```cpp
 struct reading {
@@ -190,9 +191,9 @@ struct reading {
 std::string const bytes = cbor::structs<reading>::encode({"t1", 21.5, {3, 4, 5}}).value();
 
 std::string const text = cbor::diagnostic_notation(bytes).value();
-// text is {"value": 21.5, "sensor": "t1", "samples": [3, 4, 5]}
+// text is {"value": 21.5, "sensor": "t1", "samples": 69(h'030004000500')}
 std::size_t const size = bytes.size();
-// size == 32; the same data as JSON with no spaces has 46 bytes
+// size == 37; the same data as JSON with no spaces has 46 bytes
 ```
 
 ## Next

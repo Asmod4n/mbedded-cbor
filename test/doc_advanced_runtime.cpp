@@ -53,29 +53,25 @@ TEST_CASE("doc advanced runtime: steps and searches")
     auto const doc = *cbor::lazy::copy(preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7)), 7, "seven"s)));
     auto const seven = doc.at(cbor::key{7})->get<std::string_view>();
     CHECK_EQ(**seven, "seven"sv);
-    CHECK(*doc.contains("cars"));
-    CHECK_EQ(*doc.count(std::int64_t{7}), 1u);
     CHECK_EQ(*doc.size(), 2u);
     CHECK_FALSE(*doc.empty());
-    auto const found = doc.find("cars");
-    REQUIRE(found.has_value());
-    REQUIRE(*found != std::default_sentinel);
-    CHECK_EQ(*(**found)->second.size(), 2u);
-    CHECK(*doc.find("bus") == std::default_sentinel);
+    CHECK_EQ(*doc["cars"]->size(), 2u);
+    CHECK_EQ(doc["cars"]->at(1)->at("hp")->get<std::int64_t>(), 7);
     CHECK_EQ(doc.at("cars")->at(5).error(), error::index_out_of_bounds);
     CHECK_EQ(doc.at("bus").error(), error::key_not_found);
     CHECK_EQ(doc.at(0).error(), error::not_indexable);
 }
 
 // The section "Steps and searches in a map or an array" states that a byte string is not a text key, and that a
-// repeated key gives the first pair and counts every pair.
+// repeated key gives the first pair.
 TEST_CASE("doc advanced runtime: keys")
 {
     CHECK_EQ(cbor::lazy::copy("\xa1\x41" "a\x01"s)->at("a").error(), error::key_not_found);
-    CHECK_EQ(cbor::lazy::copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a")->get<std::int64_t>(), 1);
+    CHECK_EQ(cbor::lazy::copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a").error(), error::key_not_found);
     auto const twice = *cbor::lazy::copy("\xa2\x61" "a\x01\x61" "a\x02"s);
     CHECK_EQ(twice.at("a")->get<std::int64_t>(), 1);
-    CHECK_EQ(*twice.count("a"), 2u);
+    CHECK_EQ(twice["a"]->get<std::int64_t>(), 1);
+    CHECK_EQ(twice.at_path<"$.a", std::int64_t>(), 1);
 }
 
 // The section "elements and entries" shows both views with a loop and with a standard view.
@@ -114,29 +110,6 @@ TEST_CASE("doc advanced runtime: an algorithm over elements")
              2);
 }
 
-// The section "A search between two iterators" shows find and equal_range over a part of a sorted map.
-TEST_CASE("doc advanced runtime: a search between two iterators")
-{
-    auto const m = *cbor::lazy::copy(preferred(M("b"s, 2, "d"s, 4, "f"s, 6, "h"s, 8)));
-    auto const e = *m.entries();
-    auto const h = *m.find("h");
-    auto const d = cbor::lazy::find(e.begin(), h, "d");
-    REQUIRE(d.has_value());
-    CHECK_EQ((**d)->second.get<std::int64_t>(), 4);
-    CHECK(*cbor::lazy::find(h, std::default_sentinel, "d") == std::default_sentinel);
-    auto const f = cbor::lazy::equal_range(e.begin(), h, "f");
-    REQUIRE(f.has_value());
-    REQUIRE_EQ(std::ranges::distance(*f), 1);
-    CHECK_EQ((*f->begin())->second.get<std::int64_t>(), 6);
-    auto const miss = cbor::lazy::equal_range(e.begin(), h, "e");
-    REQUIRE(miss.has_value());
-    CHECK(miss->empty());
-    auto const at = (*miss->begin())->first.get<std::string_view>();
-    CHECK_EQ(**at, "f"sv);
-    auto const other = *cbor::lazy::copy(preferred(M("x"s, 1)));
-    CHECK_THROWS_AS(std::ignore = cbor::lazy::equal_range(e.begin(), *other.find("x"), "x"), std::logic_error);
-}
-
 // The section "get" shows a read of each kind.
 TEST_CASE("doc advanced runtime: get")
 {
@@ -157,7 +130,7 @@ TEST_CASE("doc advanced runtime: get")
     CHECK_EQ((*typed)->bytes.size(), 4u);
     CHECK_EQ(cbor::lazy::copy("\x63" "abc"s)->get<bool>().error(), error::incorrect_type);
     CHECK_EQ(cbor::lazy::copy("\xc2\x41\x05"s)->get<std::int64_t>(), 5);
-    CHECK_EQ(cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->get<std::int64_t>(), 1);
+    CHECK_EQ(cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->get<std::int64_t>(), 0);
     CHECK_EQ(cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(0)->get<std::int64_t>(), 1);
 }
 
@@ -170,8 +143,9 @@ TEST_CASE("doc advanced runtime: decode")
     CHECK_EQ(children_of(*(*i)).size(), 2u);
     CHECK_EQ(cbor::lazy::copy("\x82\x01"s)->decode().error(), error::too_little_data);
     CHECK_EQ(cbor::lazy::copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->decode().error(), error::too_little_data);
-    CHECK_EQ(*cbor::lazy::copy("\xc2\x41\x05"s)->type(), cbor::type::unsigned_bignum);
-    CHECK_EQ(*cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::unsigned_integer);
+    CHECK_EQ(*cbor::lazy::copy("\xc2\x41\x05"s)->type(), cbor::type::unsigned_integer);
+    CHECK_EQ(*cbor::lazy::copy("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s)->type(), cbor::type::unsigned_bignum);
+    CHECK_EQ(*cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::tag);
     auto const tree = cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->decode();
     REQUIRE(tree.has_value());
     CHECK_EQ(children_of(*(*tree))[1]->type, cbor::type::tag);
@@ -204,26 +178,18 @@ TEST_CASE("doc advanced runtime: encode")
     string_writer w;
     REQUIRE(test::encode(w, v).has_value());
     CHECK_EQ(w.encoded, "\x82"s + native_unsigned(1) + native_unsigned(2));
-    std::string shared;
-    {
-        cbor::encoder e(shared);
-        REQUIRE(e.array(2).has_value());
-        REQUIRE(e.shareable().has_value());
-        REQUIRE(e.text_string("a").has_value());
-        REQUIRE(e.sharedref(0).has_value());
-        CHECK_EQ(e.finish(), 8u);
-    }
-    CHECK_EQ(shared, "\x82\xd8\x1c\x61" "a" "\xd8\x1d\x00"s);
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
     auto const tagged = *cbor::lazy::copy(cycle)->decode();
     cbor::item const *const six = tagged->via.tag.content;
     CHECK_EQ(argument_of(*six), 6u);
     cbor::item const *const reference = six->via.tag.content;
-    CHECK_EQ(&cbor::shared_value(tagged, *reference), six);
+    CHECK_EQ((*reference).via.tag.number, 29u);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
+    std::string const own = wire;
     std::string again;
-    CHECK_EQ(cbor::encode(**cbor::lazy::copy(wire)->decode(), again), wire.size());
-    CHECK_EQ(again, wire);
+    CHECK_EQ(cbor::encode(**cbor::lazy::copy(wire)->decode(), again), own.size());
+    CHECK_EQ(again, own);
+    CHECK(same_value(again, wire));
 }
 
 // The section "cbor::sequence" shows the items of a sequence, the error at a cut item, and the owner of the
@@ -265,17 +231,18 @@ TEST_CASE("doc advanced runtime: item_size")
     CHECK_EQ(cbor::item_size("\x82\x01"sv).error(), error::too_little_data);
 }
 
-// The section "Tags 28 and 29" shows a reference that is read, written and refused.
+// The section "Tags 28 and 29" shows that a lazy, a tree decode and diagnostic notation read both as plain tags.
 TEST_CASE("doc advanced runtime: tags 28 and 29")
 {
     auto const l = *cbor::lazy::copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
-    CHECK_EQ(l.at(1)->get<std::int64_t>(), 1);
+    CHECK_EQ(l.at(1)->type(), cbor::type::tag);
+    CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
-    CHECK_EQ(cbor::lazy::copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->decode().error(),
-             error::sharedref_index_not_marked);
+    auto const forward = cbor::lazy::copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->decode();
+    REQUIRE(forward.has_value());
+    CHECK_EQ((*forward)->via.array[0].via.tag.number, 29u);
     CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)->decode().has_value());
-    CHECK(cbor::lazy::copy("\xd8\x1c\x81\xd8\x1d\x00"s)->at(0).has_value());
-    CHECK_EQ(cbor::lazy::copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::sharedref_not_complete);
+    CHECK_EQ(cbor::lazy::copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::not_indexable);
 }
 
 // The section "Tag 55799" shows that only a leading tag 55799 is read as its content.

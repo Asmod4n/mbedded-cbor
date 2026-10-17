@@ -1,7 +1,6 @@
 #include <benchmark/benchmark.h>
 #include <cbor/cbor.hpp>
 
-#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -17,10 +16,17 @@
 
 struct cose_header {
     std::optional<std::span<std::byte const>> kid;
-    static constexpr std::array<std::int64_t, 1> keys{4};
 };
 
-using cose_sign1 = cbor::tagged<18, std::tuple<std::span<std::byte const>, cose_header, std::span<std::byte const>,
+template <>
+struct cbor::describe_members<cose_header> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{4, &cose_header::kid},
+    };
+};
+
+using cose_sign1 = cbor::tagged_item<18, std::tuple<std::span<std::byte const>, cose_header, std::span<std::byte const>,
                                                std::span<std::byte const>>>;
 
 struct cwt_claims {
@@ -31,7 +37,20 @@ struct cwt_claims {
     std::optional<std::uint64_t> nbf;
     std::optional<std::uint64_t> iat;
     std::optional<std::span<std::byte const>> cti;
-    static constexpr std::array<std::int64_t, 7> keys{1, 2, 3, 4, 5, 6, 7};
+};
+
+template <>
+struct cbor::describe_members<cwt_claims> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{1, &cwt_claims::iss},
+        cbor::member{2, &cwt_claims::sub},
+        cbor::member{3, &cwt_claims::aud},
+        cbor::member{4, &cwt_claims::exp},
+        cbor::member{5, &cwt_claims::nbf},
+        cbor::member{6, &cwt_claims::iat},
+        cbor::member{7, &cwt_claims::cti},
+    };
 };
 
 static std::uint64_t bytes_sum(std::span<std::byte const> const s)

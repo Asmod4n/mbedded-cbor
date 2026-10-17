@@ -15,6 +15,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <chrono>
 #include <map>
 #include <optional>
 #include <span>
@@ -439,7 +440,7 @@ struct everything {
     std::vector<std::int32_t> list;
     std::vector<double> reals;
     std::map<std::string, int> table;
-    cbor::tagged<1, std::int64_t> time;
+    std::chrono::sys_seconds time;
     __int128 big;
     unsigned __int128 ubig;
     color hue;
@@ -449,8 +450,21 @@ struct everything {
 struct senml {
     std::string n;
     double v;
-    static constexpr std::array<std::int64_t, 2> keys{0, 2};
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<senml> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{0, &senml::n},
+        cbor::member{2, &senml::v},
+    };
+};
+
+namespace
+{
 
 // structs<T>::encode. The expected bytes are written by hand in the preferred serialization; the decoders
 // compare values, so a float that the library writes in another width still compares equal.
@@ -476,7 +490,7 @@ void structs_cases()
                        {1, -1, 1000},
                        {1.5, 2.5},
                        {{"a", 1}, {"b", 2}},
-                       {1700000000},
+                       std::chrono::sys_seconds{std::chrono::seconds{1700000000}},
                        -(static_cast<__int128>(1) << 100),
                        static_cast<unsigned __int128>(1) << 64,
                        color::green,
@@ -497,9 +511,9 @@ void structs_cases()
         "63663634f98000"                             // "f64": -0.0
         "657468697264fb3fd5555555555555"             // "third"
         "647465787463616e6e"                         // "text": "ann"
-        "656279746573420102"                         // "bytes": h'0102'
-        "646c6973748301201903e8"                     // "list": [1, -1, 1000]
-        "657265616c7382f93e00f94100"              // "reals": [1.5, 2.5]
+        "656279746573d840420102"                     // "bytes": 64(h'0102'), RFC 8746 uint8
+        "646c697374d84e4c01000000ffffffffe8030000"   // "list": 78(sint32 LE [1, -1, 1000])
+        "657265616c73d85650000000000000f83f0000000000000440" // "reals": 86(binary64 LE [1.5, 2.5])
         "657461626c65a2616101616202"                 // "table": {"a": 1, "b": 2}
         "6474696d65c11a6553f100"                     // "time": 1(1700000000)
         "63626967c34d0fffffffffffffffffffffffff"     // "big": -2^100 = -1 - 0x0fff...ff (13 bytes)

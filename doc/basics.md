@@ -93,7 +93,7 @@ that made them, so each thread makes its own lazy.
 std::jthread first([&bytes] { use(cbor::at_path<"$.id", std::int64_t>(bytes)); });
 std::jthread second([&bytes] {
     if (auto const doc = cbor::lazy::copy(bytes))   // the lazy of this thread
-        use(cbor::at_path<"$.id", std::int64_t>(*doc));
+        use(doc->at_path<"$.id", std::int64_t>());
 });
 ```
 

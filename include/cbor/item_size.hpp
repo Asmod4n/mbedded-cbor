@@ -175,6 +175,8 @@ class well_formedness
             }
             if (children == 0)
                 continue;
+            if (auto const r = validity::check_pending_items(children, d.encoded.size()); !r) [[unlikely]]
+                return r;
             if (auto const r = validity::check_nesting_depth(depth + level + 1, depth_max); !r) [[unlikely]]
                 return r;
             left[++level] = children;
@@ -194,11 +196,7 @@ class well_formedness
 
     friend class jsonpath;
 
-    friend class value_sharing;
-
-#ifdef __cpp_impl_reflection
     friend class generic;
-#endif
 };
 
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)

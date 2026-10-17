@@ -57,8 +57,7 @@ std::expected<std::string, cbor::error> round_trip()
 enum class color : std::uint8_t { red, green };
 
 struct header {
-    [[=cbor::key("content-type")]] std::string content_type;
-    [[=cbor::skip{}]] std::string cache;
+    std::string content_type;
 };
 
 struct kinds {
@@ -72,6 +71,19 @@ struct kinds {
     std::unordered_map<std::string, int> m;
     color c;
 };
+
+} // namespace doc_structs
+
+template <>
+struct cbor::describe_members<doc_structs::header> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060, 0};
+    static constexpr std::tuple members{
+        cbor::member{"content-type", &doc_structs::header::content_type},
+    };
+};
+
+namespace doc_structs
+{
 
 // The section "Write a struct and read it back" gives the text of the bytes and a member of the struct that decode
 // gives back.
@@ -88,7 +100,7 @@ TEST_CASE("doc structs: types")
     auto const bytes = cbor::structs<kinds>::encode(k);
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes),
-             R"({"b": true, "c": 1, "d": 2.5, "f": 1.5, "l": [1, 2], "m": {"a": 1}, "s": [3], "u": 7, "raw": h'01'})");
+             R"({"b": true, "c": 1, "d": 2.5, "f": 1.5, "l": [1, 2], "m": {"a": 1}, "s": 258([3]), "u": 7, "raw": 64(h'01')})");
     auto const back = cbor::structs<kinds>::decode(*bytes);
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->c, color::green);
@@ -96,12 +108,15 @@ TEST_CASE("doc structs: types")
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::optional<int>>::encode(std::nullopt)), "null");
 }
 
-// The section "Keys" shows the two annotations, and that an empty optional member has no key.
+// The section "Keys" shows a key that a description gives, the tag that the description writes, and that an
+// empty optional member has no key.
 TEST_CASE("doc structs: keys")
 {
-    auto const bytes = cbor::structs<header>::encode(header{"text/plain", "x"});
+    auto const bytes = cbor::structs<header>::encode(header{"text/plain"});
     REQUIRE(bytes.has_value());
-    CHECK_EQ(cbor::diagnostic_notation(*bytes), R"({"content-type": "text/plain"})");
+    CHECK_EQ(cbor::diagnostic_notation(*bytes), R"(160060({"content-type": "text/plain"}))");
+    CHECK_EQ(cbor::structs<header>::decode(preferred(M("content-type"s, "text/plain"s))).error(),
+             error::incorrect_type);
     auto const none = cbor::structs<person>::encode(person{"bob", 40, {}, std::nullopt});
     REQUIRE(none.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*none), R"({"age": 40, "name": "bob", "tags": []})");
