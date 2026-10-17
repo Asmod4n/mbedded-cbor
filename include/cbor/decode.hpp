@@ -258,27 +258,43 @@ std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const s
 }
 
 
+template <bool Checked>
+struct decoded_tree {
+    std::shared_ptr<item const> tree;
+    std::string_view rest;
+};
+
+template <bool Checked>
+std::expected<decoded_tree<Checked>, error> tree_decode(std::string_view const encoded,
+                                                         validity::limit_checks<Checked> const checks,
+                                                         std::size_t const depth_max)
+{
+    if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    auto decoded = std::make_unique<zone>(
+        validity::checked_mul(encoded.size(), sizeof(item))
+            .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
+            .value_or(validity::initial_size_limit));
+    tree_decoder<Checked> tree{*decoded, {encoded, checks}, depth_max};
+    auto const built = tree.item_decode(std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0);
+    if (!built) [[unlikely]]
+        return std::unexpected(built.error());
+    std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &zone::link::first);
+    return decoded_tree<Checked>{std::shared_ptr<item const>(*built, zone_owner{std::move(decoded)}), tree.d.encoded};
+}
+
 inline std::expected<std::shared_ptr<item const>, error> decode(std::string_view const encoded)
 {
     return validity::limits_apply(
         limits.load(),
         [encoded]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
             -> std::expected<std::shared_ptr<item const>, error> {
-            if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            auto decoded = std::make_unique<zone>(
-                validity::checked_mul(encoded.size(), sizeof(item))
-                .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
-                .value_or(validity::initial_size_limit));
-            tree_decoder<Checked> tree{*decoded, {encoded, checks}, depth_max};
-            auto const built =
-                tree.item_decode(std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0);
-            if (!built) [[unlikely]]
-                return std::unexpected(built.error());
-            if (auto const one = validity::check_one_data_item(tree.d.encoded); !one) [[unlikely]]
+            auto const decoded = tree_decode(encoded, checks, depth_max);
+            if (!decoded) [[unlikely]]
+                return std::unexpected(decoded.error());
+            if (auto const one = validity::check_one_data_item(decoded->rest); !one) [[unlikely]]
                 return std::unexpected(one.error());
-            std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &zone::link::first);
-            return std::shared_ptr<item const>(*built, zone_owner{std::move(decoded)});
+            return decoded->tree;
         });
 }
 
