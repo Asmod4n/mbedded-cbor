@@ -116,7 +116,7 @@ TEST_CASE("doc readme: packed")
     std::string const bytes = cbor::packed<series>::encode({"m", {1.5, 2.5, 3.5}}).value();
     auto const second = cbor::packed<series>::at_path<"$.values[1]">(bytes);
     CHECK_EQ(*second, 2.5);
-    auto const root = cbor::packed<series>::path(bytes).value();
+    auto const root = cbor::packed<series>::path(std::string(bytes)).value();
     auto const values = root.view<"$.values">();
     double const sum = std::ranges::fold_left(*values, 0.0, std::plus{});
     CHECK_EQ(sum, 7.5);

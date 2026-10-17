@@ -1339,26 +1339,13 @@ template <class T>
 class structs
 {
 public:
-    static std::expected<ref<T>, error> decode(std::string_view const encoded)
-    {
-#if defined(__cpp_exceptions)
-        try {
-#endif
-            return decode(std::make_shared<std::string const>(encoded));
-#if defined(__cpp_exceptions)
-        } catch (std::bad_alloc const &) {
-            return std::unexpected(error::not_enough_memory);
-        }
-#endif
-    }
-
-    template <std::same_as<std::string> Encoded>
+    template <owned_bytes Encoded>
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
 #if defined(__cpp_exceptions)
         try {
 #endif
-            return decode(std::make_shared<std::string const>(std::move(encoded)));
+            return decode(std::make_shared<Encoded const>(std::move(encoded)));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
             return std::unexpected(error::not_enough_memory);
@@ -1366,17 +1353,34 @@ public:
 #endif
     }
 
-    static std::expected<ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
+    template <owning_bytes Encoded>
+    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
         pfr::check_default_constructible<T>();
         return decode(std::move(encoded), T{});
     }
 
-    static std::expected<ref<T>, error> decode(std::shared_ptr<std::string const> encoded, T &&target)
+    template <owning_bytes Encoded>
+    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::structs::decode: the encoded data item is null");
-        std::string_view const bytes = *encoded;
+        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
         return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
+    }
+
+    template <borrowed_bytes Encoded>
+    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+    {
+        pfr::check_default_constructible<T>();
+        return decode(std::move(owner), encoded, T{});
+    }
+
+    template <borrowed_bytes Encoded>
+    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
+                                               T &&target)
+    {
+        return owned_decode(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+                            std::move(target));
     }
 
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
@@ -1444,8 +1448,8 @@ public:
     }
 
 private:
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner,
-                                                      std::string_view const encoded, T &&target)
+    static std::expected<ref<T>, error> owned_decode(std::shared_ptr<void const> owner,
+                                                     std::string_view const encoded, T &&target)
     {
         validity::throw_logic_error_if_empty(owner,
                                              "cbor::structs::decode: the owner of the encoded data item is empty");

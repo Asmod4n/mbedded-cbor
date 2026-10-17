@@ -48,6 +48,16 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
     case cbor::type::negative_bignum:
     case cbor::type::typed_array:
         return it.tag_number().value() + item_tree_sum((*it.tag_content().value()));
+    case cbor::type::half_float:
+    case cbor::type::single_float:
+    case cbor::type::double_float:
+        return std::bit_cast<std::uint64_t>(it.floating_point().value());
+    case cbor::type::false_value:
+    case cbor::type::true_value:
+    case cbor::type::null:
+    case cbor::type::undefined:
+    case cbor::type::simple_value:
+        return std::to_underlying(it.simple_value().value());
     default:
         return it.argument().value();
     }

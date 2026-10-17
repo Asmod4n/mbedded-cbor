@@ -81,7 +81,7 @@ TEST_CASE("doc schema: read a text, a list or a struct")
     std::string const bytes = *cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::vector<double> used;
     auto const use = [&used](double const r) { used.push_back(r); };
-    auto const root = cbor::packed<sensor>::path(bytes);
+    auto const root = cbor::packed<sensor>::path(std::string(bytes));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.name">(), "t1"sv);
     auto const readings = root->view<"$.readings">();
@@ -103,7 +103,7 @@ TEST_CASE("doc schema: read the whole struct")
     std::string const bytes = *cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::size_t used = 0;
     auto const use = [&used](std::size_t const n) { used = n; };
-    auto const back = cbor::packed<sensor>::decode(bytes);
+    auto const back = cbor::packed<sensor>::decode(std::string(bytes));
     if (back)
         use((*back)->readings.size());
     CHECK_EQ(used, 2u);
@@ -118,15 +118,15 @@ struct [[=cbor::tag(1701)]] other {
 TEST_CASE("doc schema: errors")
 {
     std::string const bytes = *cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
-    CHECK_EQ(cbor::packed<sensor>::decode(std::string_view(bytes).substr(0, 3)).error(), error::too_little_data);
-    CHECK_EQ(cbor::packed<other>::decode(bytes).error(), error::incorrect_type);
+    CHECK_EQ(cbor::packed<sensor>::decode(bytes.substr(0, 3)).error(), error::too_little_data);
+    CHECK_EQ(cbor::packed<other>::decode(std::string(bytes)).error(), error::incorrect_type);
     CHECK_EQ(cbor::packed<sensor>::at_path<"$.readings[]">(bytes, 9uz).error(), error::index_out_of_bounds);
     std::size_t const head = bytes.find("\x19\x00\x07"sv);
     REQUIRE_NE(head, std::string::npos);
     std::string forged = bytes;
     forged[head] = '\x59';
     CHECK_FALSE(cbor::packed<sensor>::at_path<"$.id">(forged).has_value());
-    CHECK_FALSE(cbor::packed<sensor>::decode(forged).has_value());
+    CHECK_FALSE(cbor::packed<sensor>::decode(std::string(forged)).has_value());
 }
 
 } // namespace doc_packed

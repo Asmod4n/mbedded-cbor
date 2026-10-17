@@ -86,7 +86,7 @@ TEST_CASE("doc advanced schema: encode and decode")
 {
     auto const bytes = cbor::packed<car>::encode(sample);
     REQUIRE(bytes.has_value());
-    auto const back = cbor::packed<car>::decode(*bytes);
+    auto const back = cbor::packed<car>::decode(std::string(*bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->make, "Volvo");
     CHECK_EQ((*back)->tires.size(), 2u);
@@ -126,7 +126,7 @@ TEST_CASE("doc advanced schema: a wrong path does not compile")
 TEST_CASE("doc advanced schema: the accessor")
 {
     std::string const bytes = *cbor::packed<car>::encode(sample);
-    auto const root = cbor::packed<car>::path(bytes);
+    auto const root = cbor::packed<car>::path(std::string(bytes));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
     auto const tires = root->at_path<"$.tires">();
@@ -142,7 +142,8 @@ TEST_CASE("doc advanced schema: the accessor")
 }
 
 // The section "The accessor" says that the accessor holds the owner, so it stays valid after the caller releases the
-// bytes, that path(std::string_view) copies, that an empty owner throws and that a temporary accessor reads nothing.
+// bytes, that a caller who wants a copy makes it with std::string, that an empty owner throws and that a temporary
+// accessor reads nothing.
 TEST_CASE("doc advanced schema: the accessor holds the owner")
 {
     auto owner = std::make_shared<std::string const>(*cbor::packed<car>::encode(sample));
@@ -151,7 +152,7 @@ TEST_CASE("doc advanced schema: the accessor holds the owner")
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
     std::string temp = *cbor::packed<car>::encode(sample);
-    auto const copied = cbor::packed<car>::path(std::string_view(temp));
+    auto const copied = cbor::packed<car>::path(std::string(temp));
     temp.assign(temp.size(), '\0');
     REQUIRE(copied.has_value());
     CHECK_EQ(*copied->at_path<"$.make">(), "Volvo"sv);
@@ -166,7 +167,7 @@ TEST_CASE("doc advanced schema: the accessor holds the owner")
 TEST_CASE("doc advanced schema: a list accessor keeps the bytes alive")
 {
     std::string const bytes = *cbor::packed<car>::encode(sample);
-    auto const tires = cbor::packed<car>::path(bytes)->at_path<"$.tires">();
+    auto const tires = cbor::packed<car>::path(std::string(bytes))->at_path<"$.tires">();
     REQUIRE(tires.has_value());
     CHECK_EQ(tires->size(), 2u);
     CHECK_EQ(*tires->at_path<"@[1].diameter">(), 18u);
@@ -197,11 +198,11 @@ TEST_CASE("doc advanced schema: a typed array view")
 TEST_CASE("doc advanced schema: errors")
 {
     std::string const bytes = *cbor::packed<car>::encode(sample);
-    CHECK_EQ(cbor::packed<car>::decode(std::string_view(bytes).substr(0, 3)).error(), error::too_little_data);
+    CHECK_EQ(cbor::packed<car>::decode(bytes.substr(0, 3)).error(), error::too_little_data);
     std::string const small = *cbor::packed<tire>::encode(tire{1, 1.0f});
-    CHECK_EQ(cbor::packed<car>::decode(small).error(), error::too_little_data);
-    CHECK_EQ(cbor::packed<tire>::decode(bytes).error(), error::incorrect_type);
-    CHECK_EQ(cbor::packed<tire>::path(bytes).error(), error::incorrect_type);
+    CHECK_EQ(cbor::packed<car>::decode(std::string(small)).error(), error::too_little_data);
+    CHECK_EQ(cbor::packed<tire>::decode(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::packed<tire>::path(std::string(bytes)).error(), error::incorrect_type);
     std::size_t const seats = bytes.find("\x18\x05"sv);
     REQUIRE_NE(seats, std::string::npos);
     std::string forged = bytes;

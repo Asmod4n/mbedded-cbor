@@ -354,7 +354,7 @@ TEST_CASE("limits: the string and container limits of schema")
     constexpr std::size_t typed_array_bytes = 2 * sizeof(std::int32_t);
     for (std::size_t const limit : {typed_array_bytes - 1, typed_array_bytes, typed_array_bytes + 1}) {
         test::limits_guard const guard{{.string_length = limit}};
-        auto const decoded = cbor::packed<note>::decode(*encoded);
+        auto const decoded = cbor::packed<note>::decode(std::string(*encoded));
         CHECK_EQ(decoded.has_value(), limit >= typed_array_bytes);
         if (limit < typed_array_bytes)
             CHECK_EQ(decoded.error(), error::string_length_exceeded);
@@ -363,14 +363,14 @@ TEST_CASE("limits: the string and container limits of schema")
     REQUIRE(list.has_value());
     for (std::size_t const limit : {1uz, 2uz, 3uz}) {
         test::limits_guard const guard{{.container_elements = limit}};
-        auto const decoded = cbor::packed<names>::decode(*list);
+        auto const decoded = cbor::packed<names>::decode(std::string(*list));
         CHECK_EQ(decoded.has_value(), limit >= 2);
         if (limit < 2)
             CHECK_EQ(decoded.error(), error::container_elements_exceeded);
     }
     {
         test::limits_guard const guard{{.input_bytes = encoded->size() - 1}};
-        CHECK_EQ(cbor::packed<note>::decode(*encoded).error(), error::input_bytes_exceeded);
+        CHECK_EQ(cbor::packed<note>::decode(std::string(*encoded)).error(), error::input_bytes_exceeded);
     }
 }
 

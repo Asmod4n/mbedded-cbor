@@ -255,14 +255,16 @@ TEST_CASE("structs: the view form reads the bytes of the owner")
     CHECK_THROWS_AS((void)cbor::structs<cose_sign1>::decode(std::shared_ptr<std::string const>()), std::logic_error);
 }
 
-// An owner is empty when it holds no object, whatever pointer it stores. An owner beside separate bytes does not
-// compile, because the owner may not hold them. The test exists because each of these let a view outlive its bytes,
-// and a check of the stored pointer refused an owner that holds the bytes.
+// An owner is empty when it holds no object, whatever pointer it stores. An owner beside borrowed bytes compiles
+// (owner decision 2026-10-17); an owner beside a string does not, because the string may die first. The test exists
+// because each of these let a view outlive its bytes, and a check of the stored pointer refused an owner that holds
+// the bytes.
 TEST_CASE("structs: decode checks that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>("\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s);
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::structs<cose_sign1>::decode(o, std::string(*o)); }; }(bytes)));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::structs<cose_sign1>::decode(o, std::string_view(*o)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::structs<cose_sign1>::decode(o, std::string_view(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::structs<cose_sign1>::decode(o, *o); }; }(bytes)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::structs<cose_sign1>::decode(o); }; }(bytes)));
     std::shared_ptr<std::string const> const holds_nothing(std::shared_ptr<std::string const>{}, bytes.get());
     CHECK_THROWS_AS((void)cbor::structs<cose_sign1>::decode(holds_nothing), std::logic_error);
@@ -481,10 +483,10 @@ TEST_CASE("structs: the table of tags 28 and 29 of one decode")
 template <class Encoded>
 concept decodable = requires(Encoded &&e) { cbor::structs<std::string_view>::decode(std::forward<Encoded>(e)); };
 
-// The value category of the bytes says what decode does, as for packed::decode and lazy::copy. A moved std::string
-// becomes the owner and is not copied: the view points into the buffer that was moved. Every other form is copied
-// once, so no view points into bytes that nothing keeps alive.
-TEST_CASE("structs: decode takes a moved string as the owner and copies every other form")
+// A moved std::string becomes the owner and is not copied: the view points into the buffer that was moved. Owner
+// decision 2026-10-17: no form copies the input, so a named string, a const string, a pointer and a view do not
+// compile; a caller who wants a copy writes it.
+TEST_CASE("structs: decode takes a moved string as the owner and takes no other bare form")
 {
     std::string const text(40, 'x');
     std::string const message = "\x78\x28"s + text;
@@ -498,14 +500,14 @@ TEST_CASE("structs: decode takes a moved string as the owner and copies every ot
     CHECK_EQ(**moved, text);
 
     CHECK(decodable<std::string>);
-    CHECK(decodable<std::string &>);
-    CHECK(decodable<std::string const &>);
-    CHECK(decodable<std::string const>);
-    CHECK(decodable<char const *>);
-    CHECK(decodable<std::string_view>);
+    CHECK_FALSE(decodable<std::string &>);
+    CHECK_FALSE(decodable<std::string const &>);
+    CHECK_FALSE(decodable<std::string const>);
+    CHECK_FALSE(decodable<char const *>);
+    CHECK_FALSE(decodable<std::string_view>);
 
     std::string lvalue = message;
-    auto const copied = cbor::structs<std::string_view>::decode(lvalue);
+    auto const copied = cbor::structs<std::string_view>::decode(std::string(lvalue));
     REQUIRE(copied.has_value());
     CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(lvalue.data() + 2));
     lvalue.assign(message.size(), '\0');

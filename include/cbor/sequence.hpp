@@ -14,6 +14,7 @@
 
 #include "error.hpp"
 #include "item_size.hpp"
+#include "ref.hpp"
 #include "validity.hpp"
 
 namespace cbor
@@ -21,14 +22,23 @@ namespace cbor
 
 class sequence
 {
-    std::shared_ptr<std::string const> owner;
+    std::shared_ptr<void const> owner;
     std::string_view encoded;
 
 public:
-    explicit sequence(std::shared_ptr<std::string const> e) : owner(std::move(e))
+    template <owning_bytes Encoded>
+    explicit sequence(std::shared_ptr<Encoded const> e)
     {
-        validity::throw_logic_error_if_null(owner, "cbor::sequence: the encoded data items are null");
-        encoded = *owner;
+        validity::throw_logic_error_if_null(e, "cbor::sequence: the encoded data items are null");
+        encoded = std::string_view(std::ranges::data(*e), std::ranges::size(*e));
+        owner = std::move(e);
+    }
+
+    template <borrowed_bytes Encoded>
+    sequence(std::shared_ptr<void const> o, Encoded const &e)
+        : owner(std::move(o)), encoded(std::ranges::data(e), std::ranges::size(e))
+    {
+        validity::throw_logic_error_if_empty(owner, "cbor::sequence: the owner of the encoded data items is empty");
     }
 
 
