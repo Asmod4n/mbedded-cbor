@@ -37,10 +37,12 @@ using namespace std::string_view_literals;
 // gives -1 - argument from the fields.
 TEST_CASE("an integer is the head fields and nothing else")
 {
-    cbor::item const minus_500{cbor::type::negative_integer, 25, {.u64 = 499}};
+    auto const tree = cbor::decode("\x39\x01\xf3"sv);
+    REQUIRE(tree.has_value());
+    cbor::item const &minus_500 = **tree;
     CHECK(minus_500.type == cbor::type::negative_integer);
     CHECK(minus_500.additional_information == 25);
-    CHECK(-1 - static_cast<std::int64_t>(minus_500.via.u64) == -500);
+    CHECK(-1 - static_cast<std::int64_t>(minus_500.argument().value()) == -500);
 }
 
 // RFC 8949 3.4: a tag is major type 6 with the tag number as argument.
@@ -48,10 +50,13 @@ TEST_CASE("an integer is the head fields and nothing else")
 // from the tag to its content by the address.
 TEST_CASE("a tag holds its number and points to its content")
 {
-    cbor::item const epoch{cbor::type::unsigned_integer, 26, {.u64 = 1363896240}};
-    cbor::item const time{cbor::type::tag, 1, {.tag = {1, &epoch}}};
-    CHECK(time.via.tag.number == 1);
-    CHECK(time.via.tag.content == &epoch);
+    auto const tree = cbor::decode("\xc1\x1a\x51\x4b\x67\xb0"sv);
+    REQUIRE(tree.has_value());
+    cbor::item const &time = **tree;
+    CHECK(time.tag_number().value() == 1);
+    cbor::item const &epoch = *time.tag_content().value();
+    CHECK(epoch.additional_information == 26);
+    CHECK(epoch.argument().value() == 1363896240u);
 }
 
 // RFC 8949 3.3 Table 3: major type 7 says by its additional information
@@ -60,23 +65,29 @@ TEST_CASE("a tag holds its number and points to its content")
 // which holds every value of the narrower widths.
 TEST_CASE("a float keeps its width in the additional information and its value as a double")
 {
-    cbor::item const f16{cbor::type::half_float, 25, {.f64 = 1.5}};
-    cbor::item const f32{cbor::type::single_float, 26, {.f64 = 100000.0}};
-    cbor::item const f64{cbor::type::double_float, 27, {.f64 = 1.1}};
+    auto const tree = cbor::decode("\x83\xf9\x3e\x00\xfa\x47\xc3\x50\x00\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"sv);
+    REQUIRE(tree.has_value());
+    auto const floats = (*tree)->array().value();
+    cbor::item const &f16 = floats[0];
+    cbor::item const &f32 = floats[1];
+    cbor::item const &f64 = floats[2];
     CHECK(f16.additional_information == 25);
-    CHECK(f16.via.f64 == 1.5);
+    CHECK(f16.floating_point().value() == 1.5);
     CHECK(f32.additional_information == 26);
-    CHECK(f32.via.f64 == 100000.0);
+    CHECK(f32.floating_point().value() == 100000.0);
     CHECK(f64.additional_information == 27);
-    CHECK(f64.via.f64 == 1.1);
+    CHECK(f64.floating_point().value() == 1.1);
 }
 
 // undefined is a value of its own, apart from null, so that a message
 // from JavaScript passes through unchanged.
 TEST_CASE("null and undefined are two items")
 {
-    cbor::item const null{cbor::type::null, 22, {.simple_value = cbor::simple_value::null}};
-    cbor::item const undefined{cbor::type::undefined, 23, {.simple_value = cbor::simple_value::undefined}};
+    auto const tree = cbor::decode("\x82\xf6\xf7"sv);
+    REQUIRE(tree.has_value());
+    auto const items = (*tree)->array().value();
+    cbor::item const &null = items[0];
+    cbor::item const &undefined = items[1];
     CHECK(null.type != undefined.type);
     CHECK(null.additional_information != undefined.additional_information);
 }
@@ -84,12 +95,13 @@ TEST_CASE("null and undefined are two items")
 // An item owns no memory, so a cache of many items costs only their own
 // size. Each member of the union is an immediate value or a view, and the
 // item takes 24 bytes: one byte of type, one of additional information,
-// and a union of 16 bytes.
+// and a union of 16 bytes. It is no aggregate, because only a decode
+// builds one.
 TEST_CASE("an item owns no memory")
 {
     CHECK(std::is_trivially_destructible_v<cbor::item>);
     CHECK(std::is_trivially_copyable_v<cbor::item>);
-    CHECK(std::is_aggregate_v<cbor::item>);
+    CHECK_FALSE(std::is_aggregate_v<cbor::item>);
     CHECK_EQ(sizeof(cbor::item), 24u);
 }
 
@@ -119,8 +131,8 @@ TEST_CASE("decode: a node decoded twice gives two items that the caller owns")
     REQUIRE_EQ(a.size(), 2u);
     REQUIRE_EQ(b.size(), 2u);
     CHECK_NE(a[1], b[1]);
-    CHECK_EQ(a[1]->via.str, b[1]->via.str);
-    CHECK_NE(a[1]->via.str.data(), b[1]->via.str.data());
+    CHECK_EQ(a[1]->text_string().value(), b[1]->text_string().value());
+    CHECK_NE(a[1]->text_string().value().data(), b[1]->text_string().value().data());
 }
 
 // Owner decision: cbor::decode builds a tree that points into nothing
@@ -134,12 +146,12 @@ TEST_CASE("decode: the tree stays valid after the input is gone")
     REQUIRE(tree.has_value());
     auto const children = children_of(**tree);
     REQUIRE_EQ(children.size(), 3u);
-    CHECK_EQ(children[0]->via.str, "hi"sv);
-    CHECK_EQ(children[1]->via.bin.size(), 2u);
-    CHECK_EQ(children[1]->via.bin[1], std::byte{2});
+    CHECK_EQ(children[0]->text_string().value(), "hi"sv);
+    CHECK_EQ(children[1]->byte_string().value().size(), 2u);
+    CHECK_EQ(children[1]->byte_string().value()[1], std::byte{2});
     auto const embedded = cbor::encoded_cbor_data_item(*tree, *children[2]);
     REQUIRE(embedded.has_value());
-    CHECK_EQ(embedded->get().via.str, "b"sv);
+    CHECK_EQ(embedded->get().text_string().value(), "b"sv);
 }
 
 // RFC 8949 3.1: the argument of a string head is its length in bytes. A
@@ -212,8 +224,8 @@ TEST_CASE("decode: an array and a map hold their data items in the order of the 
     CHECK_EQ(elements[1]->type, cbor::type::map);
     auto const pairs = children_of(*elements[1]);
     REQUIRE_EQ(pairs.size(), 4u);
-    CHECK_EQ(pairs[0]->via.str, "k");
-    CHECK_EQ(pairs[1]->via.str, "hi");
+    CHECK_EQ(pairs[0]->text_string().value(), "k");
+    CHECK_EQ(pairs[1]->text_string().value(), "hi");
     CHECK_EQ(argument_of(*pairs[2]), 2u);
     CHECK_EQ(pairs[3]->type, cbor::type::array);
     CHECK(children_of(*pairs[3]).empty());
@@ -307,11 +319,11 @@ TEST_CASE("decode: a bignum and a typed array are tags over a byte string")
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(elements[0]->type, cbor::type::unsigned_bignum);
     CHECK_EQ(argument_of(*elements[0]), 2u);
-    auto const *const magnitude = elements[0]->via.tag.content;
-    CHECK_EQ(magnitude->via.bin.size(), 9u);
+    auto const *const magnitude = elements[0]->tag_content().value();
+    CHECK_EQ(magnitude->byte_string().value().size(), 9u);
     CHECK_EQ(argument_of(*elements[1]), 64u);
-    auto const *const typed = elements[1]->via.tag.content;
-    CHECK_EQ(typed->via.bin.size(), 2u);
+    auto const *const typed = elements[1]->tag_content().value();
+    CHECK_EQ(typed->byte_string().value().size(), 2u);
 }
 
 // RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. decode
@@ -416,12 +428,12 @@ TEST_CASE("decode: a shared reference points to the item of the shared value")
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(elements[0]->type, cbor::type::tag);
     CHECK_EQ(argument_of(*elements[0]), 28u);
-    auto const *const value = elements[0]->via.tag.content;
-    CHECK_EQ(value->via.str, "hi");
+    auto const *const value = elements[0]->tag_content().value();
+    CHECK_EQ(value->text_string().value(), "hi");
     CHECK_EQ(argument_of(*elements[1]), 29u);
-    CHECK_EQ((*elements[1]).via.tag.number, 29u);
-    CHECK_EQ(elements[1]->via.tag.content->type, cbor::type::unsigned_integer);
-    CHECK_EQ(elements[1]->via.tag.content->via.u64, 0u);
+    CHECK_EQ((*elements[1]).tag_number().value(), 29u);
+    CHECK_EQ(elements[1]->tag_content().value()->type, cbor::type::unsigned_integer);
+    CHECK_EQ(elements[1]->tag_content().value()->argument().value(), 0u);
 }
 
 // A tag 29 inside a lazy is a tag over its index, also when its mark lies before the decoded node.
@@ -433,8 +445,8 @@ TEST_CASE("decode: a tag 29 after its mark is a tag over its index")
     REQUIRE(element.has_value());
     auto const inner = item_of(element->decode());
     cbor::item const &reference = *children_of(*inner)[0];
-    CHECK_EQ(reference.via.tag.number, 29u);
-    CHECK_EQ(reference.via.tag.content->via.u64, 0u);
+    CHECK_EQ(reference.tag_number().value(), 29u);
+    CHECK_EQ(reference.tag_content().value()->argument().value(), 0u);
 }
 // A cycle comes from the wire: 28([29(0)]) is an array that holds
 // itself. The element points to that array, and the decode ends.
@@ -443,11 +455,11 @@ TEST_CASE("decode: a cyclic array is its own element")
     auto const top_level = test::lazy_of_copy(std::string("\xd8\x1c\x81\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->decode());
-    auto const *const array = root->via.tag.content;
+    auto const *const array = root->tag_content().value();
     CHECK_EQ(array->type, cbor::type::array);
     auto const elements = children_of(*array);
     REQUIRE_EQ(elements.size(), 1u);
-    CHECK_EQ((*elements[0]).via.tag.number, 29u);
+    CHECK_EQ((*elements[0]).tag_number().value(), 29u);
 }
 
 // A tag 29 before its mark is a plain tag: the tree decode checks no index.
@@ -456,11 +468,11 @@ TEST_CASE("decode: a forward tag 29 is a plain tag")
     auto const top_level = test::lazy_of_copy(std::string("\x82\xd8\x1d\x00\xd8\x1c\x00"sv));
     REQUIRE(top_level.has_value());
     auto const whole = item_of(top_level->decode());
-    CHECK_EQ(whole->via.array[0].via.tag.number, 29u);
+    CHECK_EQ(whole->array().value()[0].tag_number().value(), 29u);
     auto const element = top_level->at(0);
     REQUIRE(element.has_value());
     auto const inner = item_of(element->decode());
-    CHECK_EQ(inner->via.tag.number, 29u);
+    CHECK_EQ(inner->tag_number().value(), 29u);
 }
 // Fault 21: in [28(0), 28(29(0)), 28(29(1)), ...] each element refers to the
 // one before it. The decode of the last element walked the chain once for
@@ -493,10 +505,10 @@ TEST_CASE("decode: a long chain of shared references is read without recursion")
     auto const last = top_level->at(chain_length - 1);
     REQUIRE(last.has_value());
     auto const decoded = item_of(last->decode());
-    REQUIRE_EQ(decoded->via.tag.content->type, cbor::type::tag);
-    cbor::item const &reference = *decoded->via.tag.content;
-    CHECK_EQ(reference.via.tag.number, 29u);
-    CHECK_EQ(reference.via.tag.content->via.u64, chain_length - 2u);
+    REQUIRE_EQ(decoded->tag_content().value()->type, cbor::type::tag);
+    cbor::item const &reference = (*decoded->tag_content().value());
+    CHECK_EQ(reference.tag_number().value(), 29u);
+    CHECK_EQ(reference.tag_content().value()->argument().value(), chain_length - 2u);
 }
 
 // The nesting depth is checked where the decode recurses: 100(100(100(0))) holds an
@@ -572,7 +584,7 @@ TEST_CASE("decode: a float16 keeps additional information 25")
     auto const f = item_of(top_level->decode());
     CHECK_EQ(f->type, cbor::type::half_float);
     CHECK_EQ(f->additional_information, 25);
-    CHECK_EQ(f->via.f64, 1.5);
+    CHECK_EQ(f->floating_point().value(), 1.5);
     std::string again;
     REQUIRE(cbor::encode(*f, again).has_value());
     CHECK_EQ(again, "\xf9\x3e\x00"sv);
@@ -717,7 +729,7 @@ TEST_CASE("decode: a reference before its mark is a plain tag")
     auto const top_level = test::lazy_of_copy(std::string("\x82\xd8\x1d\x00\xd8\x1c\x01"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->decode());
-    CHECK_EQ(root->via.array[0].via.tag.number, 29u);
+    CHECK_EQ(root->array().value()[0].tag_number().value(), 29u);
 }
 // RFC 8949 3.4.5.1: tag 24 holds a byte string with one encoded CBOR data item. The decode gives both the byte
 // string as written and the embedded item as a tree, so a reader takes the item without a second decode, and
@@ -729,10 +741,10 @@ TEST_CASE("decode: tag 24 gives the byte string and the embedded item")
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->decode());
     REQUIRE_EQ(root->type, cbor::type::tag);
-    CHECK_EQ(root->via.tag.number, 24u);
-    CHECK_EQ(root->via.tag.content->type, cbor::type::byte_string);
-    CHECK_EQ(root->via.tag.content->via.bin.size(), 5u);
-    CHECK_EQ(cbor::encoded_cbor_data_item(root, *root)->get().via.str, "IETF");
+    CHECK_EQ(root->tag_number().value(), 24u);
+    CHECK_EQ(root->tag_content().value()->type, cbor::type::byte_string);
+    CHECK_EQ(root->tag_content().value()->byte_string().value().size(), 5u);
+    CHECK_EQ(cbor::encoded_cbor_data_item(root, *root)->get().text_string().value(), "IETF");
     std::string again;
     REQUIRE(cbor::encode(*root, again).has_value());
     CHECK_EQ(again, wire);
@@ -754,7 +766,7 @@ TEST_CASE("decode: a tag 24 inside a tag 24 is decoded at each level")
     REQUIRE(inner_found.has_value());
     cbor::item const &inner = inner_found->get();
     CHECK_EQ(inner.type, cbor::type::unsigned_integer);
-    CHECK_EQ(inner.via.u64, 1u);
+    CHECK_EQ(inner.argument().value(), 1u);
     std::string again;
     REQUIRE(cbor::encode(*root, again).has_value());
     CHECK_EQ(again, wire);
@@ -777,8 +789,8 @@ TEST_CASE("decode: the embedded item of a tag 24 lives as long as the result")
     cbor::item const &inner = inner_found->get();
     auto const children = children_of(inner);
     REQUIRE_EQ(children.size(), 2u);
-    CHECK_EQ(children[0]->via.u64, 1u);
-    CHECK_EQ(children[1]->via.str, "x");
+    CHECK_EQ(children[0]->argument().value(), 1u);
+    CHECK_EQ(children[1]->text_string().value(), "x");
 }
 
 // A tree decode keeps a tag 28 over its value and a tag 29 over its index.
@@ -787,9 +799,9 @@ TEST_CASE("decode: a tag 28 and a tag 29 are tag nodes")
     std::string const wire = "\x82\xd8\x1c\x82\x01\x02\xd8\x1d\x00"s;
     auto const root = item_of(test::lazy_of_copy(std::string(wire))->decode());
     auto const children = children_of(*root);
-    CHECK_EQ(children[0]->via.tag.content->type, cbor::type::array);
-    CHECK_EQ((*children[1]).via.tag.number, 29u);
-    CHECK_EQ(children[1]->via.tag.content->via.u64, 0u);
+    CHECK_EQ(children[0]->tag_content().value()->type, cbor::type::array);
+    CHECK_EQ((*children[1]).tag_number().value(), 29u);
+    CHECK_EQ(children[1]->tag_content().value()->argument().value(), 0u);
 }
 
 // Owner decision: the embedded item is a top-level item of its own. A tag 29 inside it refers to a tag 28 inside
@@ -801,7 +813,7 @@ TEST_CASE("decode: a shared reference inside tag 24 refers to a mark inside the 
     auto const root = item_of(top_level->decode());
     auto const elements = children_of(cbor::encoded_cbor_data_item(root, *root).value().get());
     REQUIRE_EQ(elements.size(), 2u);
-    CHECK_EQ((*elements[1]).via.tag.number, 29u);
+    CHECK_EQ((*elements[1]).tag_number().value(), 29u);
 }
 
 // The other direction of the same decision: a mark outside is not visible inside, so 29(0) inside the embedded
@@ -811,9 +823,9 @@ TEST_CASE("decode: a shared reference inside tag 24 does not see a mark outside"
     auto const top_level = test::lazy_of_copy(std::string("\x82\xd8\x1c\x61\x61\xd8\x18\x43\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->decode());
-    auto const embedded = cbor::encoded_cbor_data_item(root, root->via.array[1]);
+    auto const embedded = cbor::encoded_cbor_data_item(root, root->array().value()[1]);
     REQUIRE(embedded.has_value());
-    CHECK_EQ(embedded->get().via.tag.number, 29u);
+    CHECK_EQ(embedded->get().tag_number().value(), 29u);
 }
 
 // And a mark inside the embedded item does not count outside: the 29(0) after the tag 24 has no mark.
@@ -822,7 +834,7 @@ TEST_CASE("decode: a mark inside tag 24 does not count outside")
     auto const top_level = test::lazy_of_copy(std::string("\x82\xd8\x18\x43\xd8\x1c\x01\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->decode());
-    CHECK_EQ(root->via.array[1].via.tag.number, 29u);
+    CHECK_EQ(root->array().value()[1].tag_number().value(), 29u);
 }
 
 // The embedded bytes are read with the same checks as the outer bytes, so malformed embedded bytes give the
@@ -1047,18 +1059,28 @@ TEST_CASE("encode: a bignum that fits is an integer, a larger bignum and a typed
 TEST_CASE("encoded_cbor_data_item: an item that is not a tag 24 of the tree throws")
 {
     auto const root = item_of(test::lazy_of_copy(std::string("\x82\xd8\x1c\x01\xd8\x1d\x00"sv))->decode());
-    CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(root, root->via.array[1]), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(root, root->array().value()[1]), std::logic_error);
     // A tree that no decode made cannot be built: owning<item> has no public constructor.
     CHECK_FALSE((std::is_constructible_v<cbor::owning<cbor::item>, std::shared_ptr<cbor::item const>>));
 }
-// A map holds a key and a value for each entry. A map item built by hand with an odd count of items is a wrong
-// use, and encode throws before it writes a head with the wrong count.
-TEST_CASE("encode: a map with an odd count of items throws")
+// Owner decision 2026-10-17: an item is a result of a decode only. No caller builds one, so no item holds a wrong
+// count or a type that its content does not match, and every read of the content checks the type.
+TEST_CASE("item: no caller builds an item, and each read checks the type")
 {
-    cbor::item const key{cbor::type::unsigned_integer, 1, {.u64 = 1}};
-    cbor::item const odd{cbor::type::map, 0, {.map = std::span(&key, 1)}};
-    std::string out;
-    CHECK_THROWS_AS((void)cbor::encode(odd, out), std::logic_error);
+    CHECK_FALSE((std::is_constructible_v<cbor::item, cbor::type, std::uint8_t>));
+    CHECK_FALSE(std::is_default_constructible_v<cbor::item>);
+    CHECK_FALSE(std::is_copy_assignable_v<cbor::item>);
+    auto const tree = cbor::decode("\x61x"sv);
+    REQUIRE(tree.has_value());
+    CHECK_EQ((*tree)->text_string().value(), "x"sv);
+    CHECK_EQ((*tree)->argument().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*tree)->byte_string().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*tree)->array().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*tree)->map().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*tree)->tag_number().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*tree)->tag_content().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*tree)->floating_point().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*tree)->simple_value().error(), cbor::error::incorrect_type);
 }
 
 }

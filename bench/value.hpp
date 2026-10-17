@@ -336,44 +336,44 @@ inline value value_of(cbor::item const &it)
 {
     switch (it.type) {
     case cbor::type::text_string:
-        return text_value(it.via.str);
+        return text_value(it.text_string().value());
     case cbor::type::byte_string:
-        return {bytes{std::string(reinterpret_cast<char const *>(it.via.bin.data()), it.via.bin.size())}};
+        return {bytes{std::string(reinterpret_cast<char const *>(it.byte_string().value().data()), it.byte_string().value().size())}};
     case cbor::type::half_float:
     case cbor::type::single_float:
     case cbor::type::double_float:
-        return {it.via.f64};
+        return {it.floating_point().value()};
     case cbor::type::false_value:
     case cbor::type::true_value:
     case cbor::type::null:
     case cbor::type::undefined:
     case cbor::type::simple_value:
-        return {simple{std::to_underlying(it.via.simple_value)}};
+        return {simple{std::to_underlying(it.simple_value().value())}};
     case cbor::type::unsigned_integer:
-        return {it.via.u64};
+        return {it.argument().value()};
     case cbor::type::negative_integer:
-        return {negative{it.via.u64}};
+        return {negative{it.argument().value()}};
     case cbor::type::array: {
         array a;
-        a.reserve(it.via.array.size());
-        for (cbor::item const &child : it.via.array)
+        a.reserve(it.array().value().size());
+        for (cbor::item const &child : it.array().value())
             a.push_back(value_of(child));
         return {std::move(a)};
     }
     case cbor::type::map: {
         map m;
-        m.reserve(it.via.map.size() / 2);
-        for (std::size_t i = 0; i + 1 < it.via.map.size(); i += 2)
-            m.push_back(entry{value_of(it.via.map[i]), value_of(it.via.map[i + 1])});
+        m.reserve(it.map().value().size() / 2);
+        for (std::size_t i = 0; i + 1 < it.map().value().size(); i += 2)
+            m.push_back(entry{value_of(it.map().value()[i]), value_of(it.map().value()[i + 1])});
         return {std::move(m)};
     }
     default:
         break;
     }
-    std::uint64_t const number = it.via.tag.number;
-    cbor::item const &inner = *it.via.tag.content;
+    std::uint64_t const number = it.tag_number().value();
+    cbor::item const &inner = *it.tag_content().value();
     if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
-        std::string m(reinterpret_cast<char const *>(inner.via.bin.data()), inner.via.bin.size());
+        std::string m(reinterpret_cast<char const *>(inner.byte_string().value().data()), inner.byte_string().value().size());
         m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
         if (m.size() <= sizeof(std::uint64_t)) {
             std::uint64_t n = 0;

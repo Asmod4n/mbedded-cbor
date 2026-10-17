@@ -1137,7 +1137,7 @@ TEST_CASE("lazy: two threads read one root lazy")
                                        });
                 auto const element = l.at_path<"$[3][1]", std::uint64_t>();
                 bool const reference = named.has_value() && (*named)->type == cbor::type::tag &&
-                                       (*named)->via.tag.number == 29 && (*named)->via.tag.content->via.u64 == 0;
+                                       (*named)->tag_number().value() == 29 && (*named)->tag_content().value()->argument().value() == 0;
                 right[t] = {text.has_value() && **text == "hello", index == 0u, reference, count == 4, pairs == 1,
                             element == 2u};
             });

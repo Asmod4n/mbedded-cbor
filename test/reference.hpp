@@ -469,30 +469,30 @@ inline std::expected<value, error> value_of(cbor::item const &it)
 {
     switch (it.type) {
     case cbor::type::text_string:
-        return value{std::string(it.via.str)};
+        return value{std::string(it.text_string().value())};
     case cbor::type::byte_string:
-        return value{bytes{std::string(reinterpret_cast<char const *>(it.via.bin.data()), it.via.bin.size())}};
+        return value{bytes{std::string(reinterpret_cast<char const *>(it.byte_string().value().data()), it.byte_string().value().size())}};
     case cbor::type::half_float:
     case cbor::type::single_float:
     case cbor::type::double_float:
-        return value{it.via.f64};
+        return value{it.floating_point().value()};
     case cbor::type::false_value:
     case cbor::type::true_value:
     case cbor::type::null:
     case cbor::type::undefined:
     case cbor::type::simple_value:
-        return value{simple{std::to_underlying(it.via.simple_value)}};
+        return value{simple{std::to_underlying(it.simple_value().value())}};
     case cbor::type::unsigned_integer:
-        return value{it.via.u64};
+        return value{it.argument().value()};
     case cbor::type::negative_integer:
-        return value{negative{it.via.u64}};
+        return value{negative{it.argument().value()}};
     default:
         break;
     }
     std::expected<value, error> made = value{};
     if (it.type == cbor::type::array) {
         array a;
-        for (cbor::item const &child : it.via.array) {
+        for (cbor::item const &child : it.array().value()) {
             auto e = value_of(child);
             if (!e) {
                 made = std::unexpected(e.error());
@@ -504,9 +504,9 @@ inline std::expected<value, error> value_of(cbor::item const &it)
             made = value{std::move(a)};
     } else if (it.type == cbor::type::map) {
         map m;
-        for (std::size_t i = 0; i + 1 < it.via.map.size(); i += 2) {
-            auto k = value_of(it.via.map[i]);
-            auto v = k ? value_of(it.via.map[i + 1]) : std::expected<value, error>(std::unexpected(k.error()));
+        for (std::size_t i = 0; i + 1 < it.map().value().size(); i += 2) {
+            auto k = value_of(it.map().value()[i]);
+            auto v = k ? value_of(it.map().value()[i + 1]) : std::expected<value, error>(std::unexpected(k.error()));
             if (!v) {
                 made = std::unexpected(v.error());
                 break;
@@ -516,12 +516,12 @@ inline std::expected<value, error> value_of(cbor::item const &it)
         if (made)
             made = value{std::move(m)};
     } else {
-        std::uint64_t const number = it.via.tag.number;
-        cbor::item const &inner = *it.via.tag.content;
+        std::uint64_t const number = it.tag_number().value();
+        cbor::item const &inner = (*it.tag_content().value());
         if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
             bool const negative_value = number == 3;
             std::string_view const m = magnitude_without_leading_zeros(
-                std::string_view(reinterpret_cast<char const *>(inner.via.bin.data()), inner.via.bin.size()));
+                std::string_view(reinterpret_cast<char const *>(inner.byte_string().value().data()), inner.byte_string().value().size()));
             if (m.size() <= sizeof(std::uint64_t)) {
                 std::uint64_t n = 0;
                 for (char const c : m)

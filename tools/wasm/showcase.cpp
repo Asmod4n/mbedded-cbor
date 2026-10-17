@@ -95,29 +95,29 @@ void js_value_built(cbor::item const &i)
 {
     switch (i.type) {
     case cbor::type::unsigned_integer:
-        return value_number(static_cast<double>(i.via.u64));
+        return value_number(static_cast<double>(i.argument().value()));
     case cbor::type::negative_integer:
-        return value_number(-1.0 - static_cast<double>(i.via.u64));
+        return value_number(-1.0 - static_cast<double>(i.argument().value()));
     case cbor::type::text_string:
-        return value_string(i.via.str.data(), i.via.str.size());
+        return value_string(i.text_string().value().data(), i.text_string().value().size());
     case cbor::type::array:
         array_begin();
-        for (auto const &e : i.via.array)
+        for (auto const &e : i.array().value())
             js_value_built(e);
         return container_end();
     case cbor::type::map:
         object_begin();
-        for (std::size_t k = 0; k < i.via.map.size(); k += 2) {
-            auto const &key = i.via.map[k];
+        for (std::size_t k = 0; k < i.map().value().size(); k += 2) {
+            auto const &key = i.map().value()[k];
             if (key.type == cbor::type::text_string)
-                key_string(key.via.str.data(), key.via.str.size());
+                key_string(key.text_string().value().data(), key.text_string().value().size());
             else
-                key_number(static_cast<double>(key.via.u64));
-            js_value_built(i.via.map[k + 1]);
+                key_number(static_cast<double>(key.argument().value()));
+            js_value_built(i.map().value()[k + 1]);
         }
         return container_end();
     case cbor::type::tag:
-        return js_value_built(*i.via.tag.content);
+        return js_value_built((*i.tag_content().value()));
     case cbor::type::false_value:
         return value_bool(0);
     case cbor::type::true_value:
@@ -125,7 +125,7 @@ void js_value_built(cbor::item const &i)
     case cbor::type::half_float:
     case cbor::type::single_float:
     case cbor::type::double_float:
-        return value_number(i.via.f64);
+        return value_number(i.floating_point().value());
     default:
         return value_null();
     }

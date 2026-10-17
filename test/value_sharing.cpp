@@ -60,9 +60,9 @@ std::vector<cbor::item const *> marks_of(tree const &t)
         cbor::item const *const i = pending.back();
         pending.pop_back();
         if (i->type == cbor::type::tag) {
-            if (i->via.tag.number == 28)
+            if (i->tag_number().value() == 28)
                 marks.push_back(i);
-            pending.push_back(i->via.tag.content);
+            pending.push_back(i->tag_content().value());
         }
         if (i->type == cbor::type::array || i->type == cbor::type::map) {
             auto const c = children_of(*i);
@@ -77,13 +77,13 @@ std::vector<cbor::item const *> marks_of(tree const &t)
 place target(place n)
 {
     for (int steps = 0; steps < 1000; ++steps) {
-        if (n.i->type == cbor::type::tag && n.i->via.tag.number == 29) {
+        if (n.i->type == cbor::type::tag && n.i->tag_number().value() == 29) {
             auto const marks = marks_of(n.t);
-            REQUIRE(n.i->via.tag.content->type == cbor::type::unsigned_integer);
-            REQUIRE(n.i->via.tag.content->via.u64 < marks.size());
-            n.i = marks[n.i->via.tag.content->via.u64];
-        } else if (n.i->type == cbor::type::tag && n.i->via.tag.number == 28)
-            n.i = n.i->via.tag.content;
+            REQUIRE(n.i->tag_content().value()->type == cbor::type::unsigned_integer);
+            REQUIRE(n.i->tag_content().value()->argument().value() < marks.size());
+            n.i = marks[n.i->tag_content().value()->argument().value()];
+        } else if (n.i->type == cbor::type::tag && n.i->tag_number().value() == 28)
+            n.i = n.i->tag_content().value();
         else
             return n;
     }
@@ -132,7 +132,7 @@ place at(P const &map, std::string_view const key)
 {
     auto const c = children(map);
     for (std::size_t i = 0; i + 1 < c.size(); i += 2)
-        if (place const k = target(c[i]); k->type == cbor::type::text_string && k->via.str == key)
+        if (place const k = target(c[i]); k->type == cbor::type::text_string && k->text_string().value() == key)
             return target(c[i + 1]);
     FAIL("no such key");
     return c.front();
@@ -143,7 +143,7 @@ template <class P>
 place content(P const &tagged)
 {
     place const t = target(tagged);
-    return target(place{t.t, t->via.tag.content});
+    return target(place{t.t, t->tag_content().value()});
 }
 
 // A resolved tag 29 gives a tree of its own, so two places are compared by the encoded form of their targets.
@@ -158,7 +158,7 @@ std::string encoded_of(place const &p)
 // that two values are distinct checks that the second one is written in full.
 inline bool is_reference(place const &p)
 {
-    return p->type == cbor::type::tag && p->via.tag.number == 29;
+    return p->type == cbor::type::tag && p->tag_number().value() == 29;
 }
 
 template <class A, class B>
@@ -790,12 +790,12 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
         REQUIRE(tree.has_value());
         auto const elements = children_of(**tree);
         REQUIRE_EQ(elements.size(), 3u);
-        CHECK_EQ(elements[0]->via.tag.number, 28u);
-        CHECK_EQ(elements[0]->via.tag.content->via.u64, 5u);
-        CHECK_EQ(elements[1]->via.tag.number, 29u);
-        CHECK_EQ(elements[1]->via.tag.content->via.u64, 0u);
-        CHECK_EQ(elements[2]->via.tag.number, 29u);
-        CHECK_EQ(elements[2]->via.tag.content->via.u64, 7u);
+        CHECK_EQ(elements[0]->tag_number().value(), 28u);
+        CHECK_EQ(elements[0]->tag_content().value()->argument().value(), 5u);
+        CHECK_EQ(elements[1]->tag_number().value(), 29u);
+        CHECK_EQ(elements[1]->tag_content().value()->argument().value(), 0u);
+        CHECK_EQ(elements[2]->tag_number().value(), 29u);
+        CHECK_EQ(elements[2]->tag_content().value()->argument().value(), 7u);
         auto const text = cbor::diagnostic_notation(doc);
         REQUIRE(text.has_value());
         CHECK_EQ(text->contains("28_"), bytes > 1);

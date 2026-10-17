@@ -160,11 +160,11 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             break;
         case cbor::major_type::byte_string:
             REQUIRE_EQ(it.type, cbor::type::byte_string);
-            CHECK(std::ranges::equal(it.via.bin, std::as_bytes(std::span(after_head))));
+            CHECK(std::ranges::equal(it.byte_string().value(), std::as_bytes(std::span(after_head))));
             break;
         case cbor::major_type::text_string:
             REQUIRE_EQ(it.type, cbor::type::text_string);
-            CHECK_EQ(it.via.str, after_head);
+            CHECK_EQ(it.text_string().value(), after_head);
             break;
         case cbor::major_type::array:
         case cbor::major_type::map:
@@ -175,7 +175,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             REQUIRE((it.type == cbor::type::tag || it.type == cbor::type::unsigned_bignum ||
                      it.type == cbor::type::negative_bignum || it.type == cbor::type::typed_array));
             std::string content;
-            REQUIRE(cbor::encode(*it.via.tag.content, content).has_value());
+            REQUIRE(cbor::encode((*it.tag_content().value()), content).has_value());
             CHECK_EQ(static_cast<std::uint8_t>(content.front()) >> 5, static_cast<std::uint8_t>(after_head.front()) >> 5);
             break;
         }
@@ -187,7 +187,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             else if (info == 27)
                 CHECK_EQ(it.type, cbor::type::double_float);
             else
-                CHECK_EQ(std::to_underlying(it.via.simple_value), argument);
+                CHECK_EQ(std::to_underlying(it.simple_value().value()), argument);
             break;
         }
     }
@@ -376,12 +376,12 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         return value{negative{argument_of(it)}};
     case cbor::major_type::byte_string: {
         std::string b;
-        for (std::byte const x : it.via.bin)
+        for (std::byte const x : it.byte_string().value())
             b.push_back(static_cast<char>(x));
         return value{bytes{std::move(b)}};
     }
     case cbor::major_type::text_string:
-        return value{std::string(it.via.str)};
+        return value{std::string(it.text_string().value())};
     case cbor::major_type::array: {
         auto const elements = l.elements();
         if (!elements)

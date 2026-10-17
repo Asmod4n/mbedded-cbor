@@ -154,11 +154,10 @@ std::expected<item *, error> tree_decoder<Checked>::bignum_decode(item &node, st
         d = before;
         return nullptr;
     }
-    node = item{tag == std::to_underlying(rfc8949::tag_number::negative_bignum) ? cbor::type::negative_integer
-                                                                              : cbor::type::unsigned_integer,
-                heads::preferred_argument_info(**read),
-                {.u64 = **read}};
-    return &node;
+    return ::new (&node) item{tag == std::to_underlying(rfc8949::tag_number::negative_bignum)
+                                  ? cbor::type::negative_integer
+                                  : cbor::type::unsigned_integer,
+                              heads::preferred_argument_info(**read), {.u64 = **read}};
 }
 
 template <bool Checked>
