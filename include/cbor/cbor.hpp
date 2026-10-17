@@ -15,6 +15,7 @@
 #include "sequence.hpp"
 #include "shared.hpp"
 #include "item.hpp"
+#include "decode.hpp"
 #include "lazy.hpp"
 #include "query.hpp"
 #include "diagnostic_notation.hpp"

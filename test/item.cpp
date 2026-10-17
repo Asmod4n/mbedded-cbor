@@ -100,7 +100,9 @@ std::shared_ptr<cbor::item const> item_of(std::expected<std::shared_ptr<cbor::it
 
 // Each decode returns items that the caller owns, and no lazy keeps a
 // cache that a second call or a second thread would write. Two decodes
-// of one node give two items with the same content.
+// of one node give two items with the same content. A decode copies
+// each text string into its own tree (owner decision: eager copies), so
+// the two texts lie in two places.
 TEST_CASE("decode: a node decoded twice gives two items that the caller owns")
 {
     auto const top_level = cbor::lazy::copy(std::string("\x82\x01\x62hi"sv));
@@ -116,7 +118,47 @@ TEST_CASE("decode: a node decoded twice gives two items that the caller owns")
     REQUIRE_EQ(a.size(), 2u);
     REQUIRE_EQ(b.size(), 2u);
     CHECK_NE(a[1], b[1]);
-    CHECK_EQ(a[1]->via.str.data(), b[1]->via.str.data());
+    CHECK_EQ(a[1]->via.str, b[1]->via.str);
+    CHECK_NE(a[1]->via.str.data(), b[1]->via.str.data());
+}
+
+// Owner decision: cbor::decode builds a tree that points into nothing
+// outside itself. The input is freed before the tree is read; the
+// address sanitizer build finds any read of the freed input.
+TEST_CASE("decode: the tree stays valid after the input is gone")
+{
+    auto input = std::make_unique<std::string>("\x83\x62hi\x42\x01\x02\xd8\x18\x42\x61\x62"s);
+    auto const tree = cbor::decode(*input);
+    input.reset();
+    REQUIRE(tree.has_value());
+    auto const children = children_of(**tree);
+    REQUIRE_EQ(children.size(), 3u);
+    CHECK_EQ(children[0]->via.str, "hi"sv);
+    CHECK_EQ(children[1]->via.bin.size(), 2u);
+    CHECK_EQ(children[1]->via.bin[1], std::byte{2});
+    auto const embedded = cbor::encoded_cbor_data_item(*tree, *children[2]);
+    REQUIRE(embedded.has_value());
+    CHECK_EQ(embedded->get().via.str, "b"sv);
+}
+
+// RFC 8949 3.1: the argument of a string head is its length in bytes. A
+// length that the bytes left cannot hold is too_little_data before any
+// memory is taken for the copy (rule: a count in the input reserves
+// nothing).
+TEST_CASE("decode: a string length larger than the input is too_little_data")
+{
+    for (std::string const &wire : {"\x7b\x80\x00\x00\x00\x00\x00\x00\x00"s,
+                                   "\x5b\x7f\xff\xff\xff\xff\xff\xff\xff\x00"s, "\x65"s + "abc"}) {
+        CAPTURE(wire);
+        CHECK_EQ(cbor::decode(wire).error(), cbor::error::too_little_data);
+    }
+}
+
+// cbor::decode takes exactly one data item (RFC 8949 5.3.1). Bytes after
+// it are a syntax error.
+TEST_CASE("decode: bytes after the data item are a syntax error")
+{
+    CHECK_EQ(cbor::decode("\x01\x02"s).error(), cbor::error::syntax_error);
 }
 
 // The fault: decode on the lazy inside a temporary expected returned a
