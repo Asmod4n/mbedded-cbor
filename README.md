@@ -74,8 +74,8 @@ auto const age = doc.at_path<"$.user.age", int>();
 ```
 
 `id` is a `std::expected<std::int64_t, cbor::error>`. `name` holds a
-`cbor::owning_ref<std::string_view>`: a view into the bytes, with no
-copy. The owning_ref keeps the bytes alive, so the view stays valid.
+`cbor::ref<std::string_view>`: a view into the bytes, with no
+copy. The ref keeps the bytes alive, so the view stays valid.
 
 ## 4. Handle bad input
 

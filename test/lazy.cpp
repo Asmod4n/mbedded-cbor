@@ -782,7 +782,7 @@ concept read_from_temporary = requires(R &&r) { *std::move(*r); };
 TEST_CASE("lazy: a view holds the top-level item")
 {
     bool released = false;
-    std::optional<cbor::owning_ref<std::string_view>> view;
+    std::optional<cbor::ref<std::string_view>> view;
     {
         auto const owner = std::make_shared<buffer_owner>(encoded(M("name"s, "ann"s)), &released);
         auto const name = cbor::lazy::view(owner, std::string_view(owner->bytes))
@@ -795,7 +795,7 @@ TEST_CASE("lazy: a view holds the top-level item")
     CHECK_EQ(**view, "ann"sv);
     view.reset();
     CHECK(released);
-    CHECK_FALSE(read_from_temporary<std::expected<cbor::owning_ref<std::string_view>, cbor::error>>);
+    CHECK_FALSE(read_from_temporary<std::expected<cbor::ref<std::string_view>, cbor::error>>);
     CHECK_THROWS_AS((void)cbor::lazy::view(std::shared_ptr<void const>{}, "\x00"sv), std::logic_error);
 }
 
@@ -1622,7 +1622,7 @@ constexpr bool bytes_at_path_compiles = requires(
 }
 
 // A lazy or a nodelist over a bare string_view would read the buffer of the caller with no owner, so that form does
-// not compile; a scalar is copied out, and a view gets an owning_ref with a copy of the bytes.
+// not compile; a scalar is copied out, and a view gets a ref with a copy of the bytes.
 TEST_CASE("lazy: at_path over bare bytes compiles for a scalar only")
 {
     CHECK(bytes_at_path_compiles<int>);

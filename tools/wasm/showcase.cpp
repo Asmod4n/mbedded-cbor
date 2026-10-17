@@ -33,9 +33,9 @@ struct reactor_state {
     std::optional<cbor::lazy> root;
     std::optional<cbor::jsonpath::query<cbor::nodelist>> query;
     std::string result;
-    std::optional<cbor::owning_ref<std::string_view>> text;
-    std::optional<cbor::owning_ref<std::span<std::byte const>>> bytes;
-    std::optional<cbor::owning_ref<cbor::typed_array>> array;
+    std::optional<cbor::ref<std::string_view>> text;
+    std::optional<cbor::ref<std::span<std::byte const>>> bytes;
+    std::optional<cbor::ref<cbor::typed_array>> array;
     std::vector<double> numbers;
     cbor::error last{};
     std::shared_ptr<std::string> buffer;
@@ -180,7 +180,7 @@ __attribute__((export_name("release"))) void release(void *const ptr)
 
 __attribute__((export_name("load"))) std::int32_t load(char const *const ptr, std::size_t const len)
 {
-    auto l = cbor::lazy::copy(std::string_view{ptr, len});
+    auto l = cbor::lazy::take(std::string(ptr, len));
     if (!l) [[unlikely]]
         return static_cast<std::int32_t>(l.error());
     state.root = std::move(*l);
@@ -339,7 +339,7 @@ __attribute__((export_name("buffer_reserve"))) char *buffer_reserve(std::size_t 
 
 __attribute__((export_name("buffer_view"))) std::int32_t buffer_view()
 {
-    auto l = cbor::lazy::view(std::move(state.buffer));
+    auto l = cbor::lazy::view(std::shared_ptr<std::string const>(std::move(state.buffer)));
     if (!l) [[unlikely]]
         return static_cast<std::int32_t>(l.error());
     state.root = std::move(*l);

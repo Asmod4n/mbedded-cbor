@@ -17,7 +17,7 @@ namespace
 {
 
 using iov_encoder = cbor::encoding::encoder<cbor::iov_writer>;
-using pieces = cbor::owning_ref<std::span<std::string_view const>>;
+using pieces = cbor::ref<std::span<std::string_view const>>;
 
 std::string joined(pieces const &p)
 {

@@ -198,7 +198,7 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
     CHECK(*keep->at(1)->get<std::string_view>() == "b"sv);
 }
 
-// The section "Owners" states what *, -> and == of an owning_ref give, that a copy shares the owner, and that the
+// The section "Owners" states what *, -> and == of a ref give, that a copy shares the owner, and that the
 // aliasing constructor of std::shared_ptr makes an owner from an object that holds the bytes.
 TEST_CASE("doc advanced basics: owners")
 {

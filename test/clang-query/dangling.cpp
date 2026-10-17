@@ -1,6 +1,6 @@
-// Each form below binds a reference to the cbor::owning_ref inside a
-// temporary std::expected. The owning_ref ends with the statement, so the
-// reference reads dead memory, and no compiler warns. tools/owning_ref.query
+// Each form below binds a reference to the cbor::ref inside a
+// temporary std::expected. The ref ends with the statement, so the
+// reference reads dead memory, and no compiler warns. tools/ref.query
 // must find both forms.
 #include <cbor/cbor.hpp>
 

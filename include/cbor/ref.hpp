@@ -36,12 +36,12 @@ concept borrowed_bytes = std::ranges::contiguous_range<R> && std::ranges::borrow
                          std::same_as<std::ranges::range_value_t<R>, char>;
 
 template <class T>
-class owning_ref
+class ref
 {
     std::shared_ptr<void const> owner;
     T value;
 
-    owning_ref(std::shared_ptr<void const> o, T v) : owner(std::move(o)), value(std::move(v))
+    ref(std::shared_ptr<void const> o, T v) : owner(std::move(o)), value(std::move(v))
     {
     }
 
@@ -60,17 +60,17 @@ class owning_ref
     friend class iov_writer;
 
 public:
-    owning_ref(owning_ref const &) = default;
-    owning_ref &operator=(owning_ref const &) = default;
+    ref(ref const &) = default;
+    ref &operator=(ref const &) = default;
 
-    owning_ref(owning_ref &&o) noexcept(std::is_nothrow_move_constructible_v<T> &&
+    ref(ref &&o) noexcept(std::is_nothrow_move_constructible_v<T> &&
                                         std::is_nothrow_default_constructible_v<T>)
         requires std::is_default_constructible_v<T>
         : owner(std::move(o.owner)), value(std::exchange(o.value, T{}))
     {
     }
 
-    owning_ref &operator=(owning_ref &&o) noexcept(std::is_nothrow_move_assignable_v<T> &&
+    ref &operator=(ref &&o) noexcept(std::is_nothrow_move_assignable_v<T> &&
                                                    std::is_nothrow_default_constructible_v<T>)
         requires std::is_default_constructible_v<T>
     {
@@ -93,13 +93,13 @@ public:
         return &self.value;
     }
 
-    friend bool operator==(owning_ref const &a, owning_ref const &b)
+    friend bool operator==(ref const &a, ref const &b)
         requires std::equality_comparable<T>
     {
         return a.value == b.value;
     }
 
-    friend bool operator==(owning_ref const &a, T const &b)
+    friend bool operator==(ref const &a, T const &b)
         requires std::equality_comparable<T>
     {
         return a.value == b;

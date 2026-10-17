@@ -25,7 +25,7 @@
 #include "validity.hpp"
 #include "head.hpp"
 #include "item.hpp"
-#include "owning_ref.hpp"
+#include "ref.hpp"
 
 namespace cbor
 {
@@ -38,7 +38,7 @@ class iov_writer;
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
-std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
 
 class encoding
 {
@@ -143,7 +143,7 @@ private:
     template <class Target>
     friend std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
-    friend std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+    friend std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
 
     template <class>
     friend class cbor::encoder;
@@ -410,7 +410,7 @@ struct encoding::encoder {
         return text_string_encode(std::string_view(*text));
     }
 
-    std::expected<void, std::errc> text_string_encode(owning_ref<std::string_view> const text)
+    std::expected<void, std::errc> text_string_encode(ref<std::string_view> const text)
     {
         if constexpr (blocks)
             if ((*text).size() >= ref_size)
@@ -439,7 +439,7 @@ struct encoding::encoder {
         return byte_string_encode(chars_of(*bytes));
     }
 
-    std::expected<void, std::errc> byte_string_encode(owning_ref<std::span<std::byte const>> const bytes)
+    std::expected<void, std::errc> byte_string_encode(ref<std::span<std::byte const>> const bytes)
     {
         if constexpr (blocks)
             if ((*bytes).size() >= ref_size)
@@ -465,7 +465,7 @@ struct encoding::encoder {
         return {};
     }
 
-    owning_ref<std::span<std::string_view const>> release()
+    ref<std::span<std::string_view const>> release()
         requires blocks
     {
         std::ignore = flush();
@@ -577,7 +577,7 @@ class iov_writer
         piece_open = false;
     }
 
-    owning_ref<std::span<std::string_view const>> release()
+    ref<std::span<std::string_view const>> release()
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a second release");
         released = true;
@@ -683,7 +683,7 @@ public:
         return written(out.byte_string_encode(bytes));
     }
 
-    std::expected<void, error> byte_string(owning_ref<std::span<std::byte const>> const &bytes)
+    std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(bytes));
@@ -709,7 +709,7 @@ public:
         return written(out.text_string_encode(text));
     }
 
-    std::expected<void, error> text_string(owning_ref<std::string_view> const &text)
+    std::expected<void, error> text_string(ref<std::string_view> const &text)
     {
         throw_logic_error_if_unusable();
         return written(out.text_string_encode(text));
@@ -785,7 +785,7 @@ public:
     }
 
     auto finish()
-        -> std::expected<std::conditional_t<pieces, owning_ref<std::span<std::string_view const>>, std::size_t>, error>
+        -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>
     {
         throw_logic_error_if_unusable();
         usable = false;
@@ -918,7 +918,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
     return out.written;
 }
 
-inline std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(item const &root)
+inline std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root)
 {
     std::size_t const depth_max = limits.load().nesting_depth;
     iov_writer writer;

@@ -19,6 +19,6 @@
 #include "lazy.hpp"
 #include "query.hpp"
 #include "diagnostic_notation.hpp"
-#include "owning_ref.hpp"
+#include "ref.hpp"
 #include "packed.hpp"
 #include "structs.hpp"
