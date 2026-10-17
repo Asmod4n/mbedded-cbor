@@ -540,7 +540,7 @@ inline std::expected<value, error> value_of(cbor::item const &it)
 
 inline std::expected<value, error> value_of(cbor::lazy const &l)
 {
-    auto const tree = l.decode();
+    auto const tree = l.clone();
     if (!tree)
         return std::unexpected(tree.error());
     return value_of(**tree);

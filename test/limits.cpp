@@ -239,7 +239,7 @@ TEST_CASE("limits: nesting_depth is checked in the unchecked and in the checked 
         for (std::size_t const depth : {2uz, 3uz, 4uz}) {
             CAPTURE(depth);
             test::limits_guard const guard{{.nesting_depth = depth, .string_length = string_length}};
-            auto const decoded = test::lazy_of_copy(tags)->decode();
+            auto const decoded = test::lazy_of_copy(tags)->clone();
             auto const notation = cbor::diagnostic_notation(tags);
             CHECK_EQ(decoded.has_value(), depth >= 3);
             CHECK_EQ(notation.has_value(), depth >= 3);

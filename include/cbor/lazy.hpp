@@ -147,7 +147,7 @@ public:
 
     std::expected<lazy_entries, error> entries() const;
 
-    std::expected<owning<item>, error> decode() const;
+    std::expected<owning<item>, error> clone() const;
 
 private:
     static std::expected<lazy, error> from(std::shared_ptr<void const> owner, std::string_view encoded,
@@ -1244,9 +1244,9 @@ inline std::expected<lazy_entries, error> lazy::entries(limit_values const &load
         });
 }
 
-inline std::expected<owning<item>, error> lazy::decode() const
+inline std::expected<owning<item>, error> lazy::clone() const
 {
-    validity::throw_logic_error_if(top_level.encoded.data() == nullptr, "cbor::lazy::decode: the lazy holds no top-level item");
+    validity::throw_logic_error_if(top_level.encoded.data() == nullptr, "cbor::lazy::clone: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {
         auto const h = validity::limits_apply(
             limits.load(),

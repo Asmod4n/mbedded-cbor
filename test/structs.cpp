@@ -1119,3 +1119,44 @@ TEST_CASE("structs: RFC 3339 text under tags 0 and 1004")
     CHECK_EQ(day_of("1940-10-09").error(), error::incorrect_type);
 #endif
 }
+
+namespace
+{
+
+struct clone_probe {
+    std::string_view name;
+    std::optional<std::span<std::byte const>> key;
+    std::vector<std::string_view> tags;
+    std::map<std::string_view, std::string_view> labels;
+};
+
+}
+
+// Owner decision 2026-10-17: clone() of a ref gives an object that owns all its memory, recursively (rule: a clone
+// is recursive). Each view of the struct is copied into the zone of the result, so the result stays valid after the
+// input and the ref are gone; the address sanitizer build sees any read of the freed input.
+TEST_CASE("structs: clone of a ref copies every view of the struct, recursively")
+{
+    std::array<std::byte, 2> const key{std::byte{1}, std::byte{2}};
+    clone_probe const probe{"ann", std::span<std::byte const>(key), {"a", "bc"}, {{"k", "v"}, {"x", "yz"}}};
+    auto encoded = cbor::structs<clone_probe>::encode(probe);
+    REQUIRE(encoded.has_value());
+    auto read = cbor::structs<clone_probe>::decode(std::move(*encoded));
+    REQUIRE(read.has_value());
+    std::optional<cbor::ref<clone_probe>> decoded(std::move(*read));
+    auto const cloned = decoded->clone();
+    decoded.reset();
+    read = std::unexpected(cbor::error::too_little_data);
+    CHECK_EQ(cloned->name, "ann"sv);
+    REQUIRE(cloned->key.has_value());
+    CHECK_EQ(cloned->key->size(), 2u);
+    CHECK_EQ((*cloned->key)[1], std::byte{2});
+    REQUIRE_EQ(cloned->tags.size(), 2u);
+    CHECK_EQ(cloned->tags[1], "bc"sv);
+    REQUIRE_EQ(cloned->labels.size(), 2u);
+    CHECK_EQ(cloned->labels.at("x"), "yz"sv);
+    auto const text = cbor::at_path<"$", std::string_view>(std::make_shared<std::string const>("\x63xyz"));
+    REQUIRE(text.has_value());
+    std::string const own = text->clone();
+    CHECK_EQ(own, "xyz"s);
+}

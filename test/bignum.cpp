@@ -116,13 +116,13 @@ TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
     std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
     std::string const deep = std::string(16, '\x81') + bignum;
     std::string const shallow = std::string(15, '\x81') + bignum;
-    auto const tree = test::lazy_of_copy(deep)->decode();
+    auto const tree = test::lazy_of_copy(deep)->clone();
     REQUIRE(tree.has_value());
     test::limits_guard const depth{{.nesting_depth = 16}};
-    CHECK_EQ(test::lazy_of_copy(deep)->decode().error(), error::nesting_depth_exceeded);
+    CHECK_EQ(test::lazy_of_copy(deep)->clone().error(), error::nesting_depth_exceeded);
     std::string out;
     CHECK_EQ(cbor::encode(**tree, out).error(), error::nesting_depth_exceeded);
-    auto const ok = test::lazy_of_copy(shallow)->decode();
+    auto const ok = test::lazy_of_copy(shallow)->clone();
     REQUIRE(ok.has_value());
     std::string again;
     REQUIRE(cbor::encode(**ok, again).has_value());
@@ -159,7 +159,7 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
         auto const t = l->type();
         REQUIRE(t.has_value());
         CHECK_EQ(*t, r.type);
-        auto const tree = l->decode();
+        auto const tree = l->clone();
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type, r.type);
         CHECK_EQ(argument_of(**tree), r.argument);
@@ -187,7 +187,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
         auto const l = test::lazy_of_copy(std::string(r.wire));
         REQUIRE(l.has_value());
         CHECK_EQ(l->type(), r.type);
-        auto const tree = l->decode();
+        auto const tree = l->clone();
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type, r.type);
         CHECK_EQ((*tree)->tag_number().value(), r.wire[0] == '\xc2' ? 2u : 3u);
@@ -202,7 +202,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
         CAPTURE(f.wire);
         auto const l = test::lazy_of_copy(std::string(f.wire));
         REQUIRE(l.has_value());
-        CHECK_EQ(l->decode().error(), f.expected);
+        CHECK_EQ(l->clone().error(), f.expected);
     }
 }
 
@@ -213,7 +213,7 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
     std::string const wire = "\x82\xd8\x1c\xc2\x41\x01\xd8\x1d\x00"s;
     auto const l = test::lazy_of_copy(wire);
     REQUIRE(l.has_value());
-    auto const tree = l->decode();
+    auto const tree = l->clone();
     REQUIRE(tree.has_value());
     auto const elements = children_of(**tree);
     REQUIRE_EQ(elements.size(), 2u);

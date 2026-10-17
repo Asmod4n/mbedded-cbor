@@ -334,7 +334,7 @@ TEST_CASE("encode_iov: the encoder over views gives the bytes of encode")
 // An error of encode_iov of a tree must come back as the error value, and the writer must free what it holds.
 TEST_CASE("encode_iov: an error of the tree comes back as the error value")
 {
-    auto const tree = test::lazy_of_copy(std::string(100, '\x81') + '\x80')->decode();
+    auto const tree = test::lazy_of_copy(std::string(100, '\x81') + '\x80')->clone();
     REQUIRE(tree.has_value());
     test::limits_guard const depth{{.nesting_depth = 16}};
     auto const p = cbor::encode_iov(**tree);

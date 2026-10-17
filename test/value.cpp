@@ -106,8 +106,8 @@ TEST_CASE("depth: encode past the limit")
     value deep = V(0);
     for (int i = 0; i < 16; ++i)
         deep = A(deep);
-    auto const fits = test::lazy_of_copy(preferred(deep))->decode();
-    auto const past = test::lazy_of_copy(preferred(A(deep)))->decode();
+    auto const fits = test::lazy_of_copy(preferred(deep))->clone();
+    auto const past = test::lazy_of_copy(preferred(A(deep)))->clone();
     REQUIRE(fits.has_value());
     REQUIRE(past.has_value());
     test::limits_guard const depth{{.nesting_depth = 16}};

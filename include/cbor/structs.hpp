@@ -20,6 +20,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <memory_resource>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -227,12 +228,18 @@ class pfr
 
     template <class>
     friend class structs;
+
+    template <class T>
+    friend void copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
 };
 
 class generic
 {
     template <class>
     friend class structs;
+
+    template <class T>
+    friend void copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
 
     template <class U>
     static constexpr bool is_std_tuple = false;
@@ -1485,5 +1492,62 @@ private:
         return out;
     }
 };
+
+
+template <class T>
+void copy_views_into_zone(T &value, std::pmr::memory_resource &zone)
+{
+    if constexpr (std::is_same_v<T, std::string_view>) {
+        std::span<char> const owned(std::pmr::polymorphic_allocator<char>(&zone).allocate(value.size()), value.size());
+        std::ranges::copy(value, owned.begin());
+        value = std::string_view(owned.data(), owned.size());
+    } else if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
+        std::span<std::byte> const owned(std::pmr::polymorphic_allocator<std::byte>(&zone).allocate(value.size()),
+                                         value.size());
+        std::ranges::copy(value, owned.begin());
+        value = owned;
+    } else if constexpr (std::is_same_v<T, typed_array>) {
+        copy_views_into_zone(value.bytes, zone);
+    } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || generic::is_sys_time<T> ||
+                         std::is_same_v<T, std::nullptr_t> ||
+                         requires { typename T::traits_type; typename T::allocator_type; }) {
+    } else if constexpr (requires { typename T::value_type; value.has_value(); *value; }) {
+        if (value)
+            copy_views_into_zone(*value, zone);
+    } else if constexpr (generic::is_std_variant<T>) {
+        std::visit([&zone](auto &alternative) { copy_views_into_zone(alternative, zone); }, value);
+    } else if constexpr (generic::is_std_tuple<T>) {
+        std::apply([&zone](auto &...element) { (copy_views_into_zone(element, zone), ...); }, value);
+    } else if constexpr (generic::is_tagged_item<T>) {
+        copy_views_into_zone(value.content, zone);
+    } else if constexpr (generic::is_std_vector<T> || generic::is_std_array<T>) {
+        for (auto &element : value)
+            copy_views_into_zone(element, zone);
+    } else if constexpr (requires { typename T::key_type; typename T::mapped_type; }) {
+        T copied(value.get_allocator());
+        for (auto const &[key, mapped] : value) {
+            typename T::key_type k = key;
+            typename T::mapped_type m = mapped;
+            copy_views_into_zone(k, zone);
+            copy_views_into_zone(m, zone);
+            copied.emplace(std::move(k), std::move(m));
+        }
+        value = std::move(copied);
+    } else if constexpr (requires { typename T::key_type; }) {
+        T copied(value.get_allocator());
+        for (auto const &element : value) {
+            typename T::key_type k = element;
+            copy_views_into_zone(k, zone);
+            copied.insert(std::move(k));
+        }
+        value = std::move(copied);
+    } else {
+        static_assert(std::is_class_v<T> && std::is_aggregate_v<T>,
+                      "cbor::ref::clone takes a type whose views it knows how to copy.");
+        [&]<std::size_t... I>(std::index_sequence<I...>) {
+            (copy_views_into_zone(pfr::get<I>(value), zone), ...);
+        }(std::make_index_sequence<pfr::members_count<T>()>{});
+    }
+}
 
 }
