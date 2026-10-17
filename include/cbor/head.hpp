@@ -35,6 +35,11 @@ __extension__ typedef unsigned __int128 uint128;
 #endif
 
 struct lazy;
+struct item;
+
+template <bool>
+struct tree_decoder;
+
 
 std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
@@ -766,6 +771,11 @@ class heads
     friend class encoder;
 
     friend struct lazy;
+
+    template <bool>
+    friend struct tree_decoder;
+
+    friend std::expected<std::shared_ptr<item const>, error> decode(std::string_view encoded);
 
     friend struct item;
 

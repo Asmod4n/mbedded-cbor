@@ -58,6 +58,11 @@ namespace cbor
 {
 
 struct lazy;
+struct item;
+
+template <bool>
+struct tree_decoder;
+
 
 struct limit_values {
     std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
@@ -501,6 +506,11 @@ public:
     friend class heads;
 
     friend struct lazy;
+
+    template <bool>
+    friend struct tree_decoder;
+
+    friend std::expected<std::shared_ptr<item const>, error> decode(std::string_view encoded);
 
     friend class well_formedness;
 

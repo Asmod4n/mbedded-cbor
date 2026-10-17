@@ -6,6 +6,10 @@
 namespace cbor
 {
 
+template <bool>
+struct tree_decoder;
+
+
 template <std::size_t N>
 struct fixed_string;
 
@@ -94,6 +98,9 @@ class rfc8949
     friend class encoding;
 
     friend struct lazy;
+
+    template <bool>
+    friend struct tree_decoder;
 
     template <class Target>
     friend class encoder;
