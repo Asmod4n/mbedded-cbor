@@ -47,7 +47,7 @@ std::expected<std::string, cbor::error> round_trip()
         return std::unexpected(bytes.error());
     auto const text = cbor::diagnostic_notation(*bytes);
 
-    auto const back = cbor::structs<person>::decode(*bytes);
+    auto const back = cbor::structs<person>::decode(std::string(*bytes));
     if (!back)
         return std::unexpected(back.error());
     person const &p = **back;
@@ -101,7 +101,7 @@ TEST_CASE("doc structs: types")
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes),
              R"({"b": true, "c": 1, "d": 2.5, "f": 1.5, "l": [1, 2], "m": {"a": 1}, "s": 258([3]), "u": 7, "raw": 64(h'01')})");
-    auto const back = cbor::structs<kinds>::decode(*bytes);
+    auto const back = cbor::structs<kinds>::decode(std::string(*bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->c, color::green);
     CHECK_EQ((*back)->m.at("a"), 1);
@@ -120,7 +120,7 @@ TEST_CASE("doc structs: keys")
     auto const none = cbor::structs<person>::encode(person{"bob", 40, {}, std::nullopt});
     REQUIRE(none.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*none), R"({"age": 40, "name": "bob", "tags": []})");
-    auto const back = cbor::structs<person>::decode(*none);
+    auto const back = cbor::structs<person>::decode(std::string(*none));
     REQUIRE(back.has_value());
     CHECK_FALSE((*back)->home.has_value());
 }

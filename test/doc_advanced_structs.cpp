@@ -124,7 +124,7 @@ TEST_CASE("doc advanced structs: encode appends to a target")
 TEST_CASE("doc advanced structs: the forms of decode")
 {
     std::string bytes = preferred(V("abc"s));
-    auto const copied = cbor::structs<std::string_view>::decode(bytes);
+    auto const copied = cbor::structs<std::string_view>::decode(std::string(bytes));
     REQUIRE(copied.has_value());
     CHECK_EQ(**copied, "abc"sv);
     CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(bytes.data() + 1));
@@ -152,7 +152,7 @@ TEST_CASE("doc advanced structs: the item of each type")
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes),
              R"({"id": "x", "pair": [true, null], "state": 1, "value": 2.5, "counts": {"a": -1}, "samples": 69(h'01000200')})");
-    auto const back = cbor::structs<reading>::decode(*bytes);
+    auto const back = cbor::structs<reading>::decode(std::string(*bytes));
     REQUIRE(back.has_value());
     CHECK(**back == r);
 

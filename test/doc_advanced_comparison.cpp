@@ -53,7 +53,7 @@ TEST_CASE("doc advanced comparison: shared values")
     CHECK_EQ(second->get<std::uint64_t>(), 0u);
 #ifdef __cpp_impl_reflection
     // begin shared-structs
-    auto const v = cbor::structs<std::vector<std::string>>::decode(bytes);
+    auto const v = cbor::structs<std::vector<std::string>>::decode(std::string(bytes));
     // v.error() is cbor::error::incorrect_type
     // end shared-structs
     CHECK_EQ(v.error(), error::incorrect_type);
@@ -76,7 +76,7 @@ TEST_CASE("doc advanced comparison: a number array")
 {
     std::string const bytes = *cbor::packed<series>::encode(series{{1.5, 2.5, 3.5}});
     // begin numbers
-    auto const root = cbor::packed<series>::path(bytes);
+    auto const root = cbor::packed<series>::path(std::string(bytes));
     auto const values = root->view<"$.values">();
     double const sum = std::accumulate(values->begin(), values->end(), 0.0);
     // end numbers
