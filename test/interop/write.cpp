@@ -116,25 +116,25 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
     };
     switch (node.type) {
     case type::unsigned_integer:
-        return integer(node.via.u64, [&](auto const v) { return e.unsigned_integer(v); });
+        return integer(node.argument().value(), [&](auto const v) { return e.unsigned_integer(v); });
     case type::negative_integer:
-        return integer(node.via.u64, [&](auto const v) { return e.negative_integer(v); });
+        return integer(node.argument().value(), [&](auto const v) { return e.negative_integer(v); });
     case type::byte_string:
-        return e.byte_string(node.via.bin);
+        return e.byte_string(node.byte_string().value());
     case type::text_string:
-        return e.text_string(node.via.str);
+        return e.text_string(node.text_string().value());
     case type::array:
-        return container(node.via.array, node.via.array.size(), true);
+        return container(node.array().value(), node.array().value().size(), true);
     case type::map:
-        return container(node.via.map, node.via.map.size() / 2, false);
+        return container(node.map().value(), node.map().value().size() / 2, false);
     case type::typed_array:
-        return e.typed_array({node.via.tag.number, node.via.tag.content->via.bin});
+        return e.typed_array({node.tag_number().value(), node.tag_content().value()->byte_string().value()});
     case type::tag:
     case type::unsigned_bignum:
     case type::negative_bignum:
-        if (auto const r = e.tag(node.via.tag.number); !r)
+        if (auto const r = e.tag(node.tag_number().value()); !r)
             return r;
-        return item_walk(e, *node.via.tag.content);
+        return item_walk(e, (*node.tag_content().value()));
     case type::half_float:
         return e.floating_point(std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(bits())));
     case type::single_float:
@@ -142,7 +142,7 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
     case type::double_float:
         return e.floating_point(std::bit_cast<double>(bits()));
     default:
-        return e.simple_value(node.via.simple_value);
+        return e.simple_value(node.simple_value().value());
     }
 }
 

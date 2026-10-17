@@ -181,10 +181,10 @@ TEST_CASE("doc advanced runtime: encode")
     CHECK_EQ(w.encoded, "\x82"s + native_unsigned(1) + native_unsigned(2));
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
     auto const tagged = *test::lazy_of_copy(cycle)->decode();
-    cbor::item const *const six = tagged->via.tag.content;
+    cbor::item const *const six = tagged->tag_content().value();
     CHECK_EQ(argument_of(*six), 6u);
-    cbor::item const *const reference = six->via.tag.content;
-    CHECK_EQ((*reference).via.tag.number, 29u);
+    cbor::item const *const reference = six->tag_content().value();
+    CHECK_EQ((*reference).tag_number().value(), 29u);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string const own = wire;
     std::string again;
@@ -242,7 +242,7 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
     auto const forward = test::lazy_of_copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->decode();
     REQUIRE(forward.has_value());
-    CHECK_EQ((*forward)->via.array[0].via.tag.number, 29u);
+    CHECK_EQ((*forward)->array().value()[0].tag_number().value(), 29u);
     CHECK(test::lazy_of_copy("\xd8\x1c\x81\xd8\x1d\x00"s)->decode().has_value());
     CHECK_EQ(test::lazy_of_copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::not_indexable);
 }

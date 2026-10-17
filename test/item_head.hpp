@@ -19,24 +19,24 @@ inline std::uint64_t argument_of(cbor::item const &node)
 {
     switch (node.type) {
     case cbor::type::byte_string:
-        return node.via.bin.size();
+        return node.byte_string().value().size();
     case cbor::type::text_string:
-        return node.via.str.size();
+        return node.text_string().value().size();
     case cbor::type::array:
-        return node.via.array.size();
+        return node.array().value().size();
     case cbor::type::map:
-        return node.via.map.size() / 2;
+        return node.map().value().size() / 2;
     case cbor::type::tag:
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
     case cbor::type::typed_array:
-        return node.via.tag.number;
+        return node.tag_number().value();
     case cbor::type::false_value:
     case cbor::type::true_value:
     case cbor::type::null:
     case cbor::type::undefined:
     case cbor::type::simple_value:
-        return std::to_underlying(node.via.simple_value);
+        return std::to_underlying(node.simple_value().value());
     case cbor::type::half_float:
     case cbor::type::single_float:
     case cbor::type::double_float: {
@@ -48,7 +48,7 @@ inline std::uint64_t argument_of(cbor::item const &node)
         return bits;
     }
     default:
-        return node.via.u64;
+        return node.argument().value();
     }
 }
 
@@ -57,7 +57,7 @@ inline std::vector<cbor::item const *> children_of(cbor::item const &container)
 {
     REQUIRE((container.type == cbor::type::array || container.type == cbor::type::map));
     std::vector<cbor::item const *> children;
-    for (cbor::item const &child : container.type == cbor::type::array ? container.via.array : container.via.map)
+    for (cbor::item const &child : container.type == cbor::type::array ? container.array().value() : container.map().value())
         children.push_back(&child);
     return children;
 }
@@ -100,9 +100,9 @@ inline bool item_values_equal(cbor::item const &a, cbor::item const &b)
         return false;
     switch (a.type) {
     case cbor::type::byte_string:
-        return std::ranges::equal(a.via.bin, b.via.bin);
+        return std::ranges::equal(a.byte_string().value(), b.byte_string().value());
     case cbor::type::text_string:
-        return a.via.str == b.via.str;
+        return a.text_string().value() == b.text_string().value();
     case cbor::type::array:
     case cbor::type::map: {
         auto const x = children_of(a);
@@ -112,15 +112,15 @@ inline bool item_values_equal(cbor::item const &a, cbor::item const &b)
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum: {
         auto const digits = [](cbor::item const &n) {
-            std::string_view const s(reinterpret_cast<char const *>(n.via.tag.content->via.bin.data()),
-                                     n.via.tag.content->via.bin.size());
+            std::string_view const s(reinterpret_cast<char const *>(n.tag_content().value()->byte_string().value().data()),
+                                     n.tag_content().value()->byte_string().value().size());
             return s.substr(std::min(s.find_first_not_of('\0'), s.size()));
         };
         return digits(a) == digits(b);
     }
     case cbor::type::tag:
     case cbor::type::typed_array:
-        return a.via.tag.number == b.via.tag.number && item_values_equal(*a.via.tag.content, *b.via.tag.content);
+        return a.tag_number().value() == b.tag_number().value() && item_values_equal((*a.tag_content().value()), (*b.tag_content().value()));
     default:
         return argument_of(a) == argument_of(b);
     }

@@ -31,13 +31,13 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
 {
     switch (it.type) {
     case cbor::type::text_string:
-        return it.via.str.size() + bytes_sum(it.via.str);
+        return it.text_string().value().size() + bytes_sum(it.text_string().value());
     case cbor::type::byte_string:
-        return it.via.bin.size() +
-               bytes_sum(std::string_view(reinterpret_cast<char const *>(it.via.bin.data()), it.via.bin.size()));
+        return it.byte_string().value().size() +
+               bytes_sum(std::string_view(reinterpret_cast<char const *>(it.byte_string().value().data()), it.byte_string().value().size()));
     case cbor::type::array:
     case cbor::type::map: {
-        std::span<cbor::item const> const children = it.type == cbor::type::array ? it.via.array : it.via.map;
+        std::span<cbor::item const> const children = it.type == cbor::type::array ? it.array().value() : it.map().value();
         std::uint64_t s = it.type == cbor::type::array ? children.size() : children.size() / 2;
         for (cbor::item const &child : children)
             s += item_tree_sum(child);
@@ -47,9 +47,9 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
     case cbor::type::typed_array:
-        return it.via.tag.number + item_tree_sum(*it.via.tag.content);
+        return it.tag_number().value() + item_tree_sum((*it.tag_content().value()));
     default:
-        return it.via.u64;
+        return it.argument().value();
     }
 }
 #endif
