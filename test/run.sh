@@ -29,7 +29,7 @@ esac
 
 asan="-Og -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
 tsan="-Og -fsanitize=thread -fno-omit-frame-pointer"
-pch_clang="-Xclang -fno-pch-timestamp"
+pch_clang="-Xclang -fno-pch-timestamp -Wlifetime-safety -Wno-lifetime-safety-invalidation"
 
 one() {
 	local n=$1 cxx type flags options=
