@@ -93,7 +93,7 @@ TEST_CASE("an item owns no memory")
     CHECK_EQ(sizeof(cbor::item), 24u);
 }
 
-std::shared_ptr<cbor::item const> item_of(std::expected<std::shared_ptr<cbor::item const>, cbor::error> const &r)
+cbor::owning<cbor::item> item_of(std::expected<cbor::owning<cbor::item>, cbor::error> const &r)
 {
     REQUIRE(r.has_value());
     return *r;
@@ -112,7 +112,7 @@ TEST_CASE("decode: a node decoded twice gives two items that the caller owns")
     auto const second = top_level->decode();
     REQUIRE(first.has_value());
     REQUIRE(second.has_value());
-    CHECK_NE(first->get(), second->get());
+    CHECK_NE(&**first, &**second);
     CHECK_EQ(argument_of(*(*first)), argument_of(*(*second)));
     auto const a = children_of(**first);
     auto const b = children_of(**second);
@@ -623,7 +623,8 @@ TEST_CASE("type: every type of an item, through lazy and through the decoded ite
         auto const by_lazy = l->type();
         REQUIRE(by_lazy.has_value());
         CHECK_EQ(*by_lazy, r.expected);
-        CHECK_EQ(item_of(l->decode())->type, r.expected);
+        auto const tree = item_of(l->decode());
+        CHECK_EQ(tree->type, r.expected);
     }
 }
 
@@ -763,15 +764,15 @@ TEST_CASE("decode: a tag 24 inside a tag 24 is decoded at each level")
 // owner alive after the lazy and the caller's string are gone, so the address sanitizer sees every read here.
 TEST_CASE("decode: the embedded item of a tag 24 lives as long as the result")
 {
-    std::shared_ptr<cbor::item const> root;
+    std::optional<cbor::owning<cbor::item>> root;
     {
         std::string const wire = "\xd8\x18\x47\xd8\x18\x44\x82\x01\x61x"s;
-        root = item_of(test::lazy_of_copy(std::string(wire))->decode());
+        root.emplace(item_of(test::lazy_of_copy(std::string(wire))->decode()));
     }
-    auto const outer_found = cbor::encoded_cbor_data_item(root, *root);
+    auto const outer_found = cbor::encoded_cbor_data_item(*root, **root);
     REQUIRE(outer_found.has_value());
     cbor::item const &outer = outer_found->get();
-    auto const inner_found = cbor::encoded_cbor_data_item(root, outer);
+    auto const inner_found = cbor::encoded_cbor_data_item(*root, outer);
     REQUIRE(inner_found.has_value());
     cbor::item const &inner = inner_found->get();
     auto const children = children_of(inner);
@@ -1047,8 +1048,8 @@ TEST_CASE("encoded_cbor_data_item: an item that is not a tag 24 of the tree thro
 {
     auto const root = item_of(test::lazy_of_copy(std::string("\x82\xd8\x1c\x01\xd8\x1d\x00"sv))->decode());
     CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(root, root->via.array[1]), std::logic_error);
-    auto const made = std::make_shared<cbor::item const>(cbor::item{cbor::type::unsigned_integer, 0, {.u64 = 0}});
-    CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(made, *made), std::logic_error);
+    // A tree that no decode made cannot be built: owning<item> has no public constructor.
+    CHECK_FALSE((std::is_constructible_v<cbor::owning<cbor::item>, std::shared_ptr<cbor::item const>>));
 }
 // A map holds a key and a value for each entry. A map item built by hand with an odd count of items is a wrong
 // use, and encode throws before it writes a head with the wrong count.

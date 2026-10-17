@@ -18,6 +18,7 @@
 #include "error.hpp"
 #include "head.hpp"
 #include "item.hpp"
+#include "ref.hpp"
 #include "rfc8949.hpp"
 #include "validity.hpp"
 
@@ -45,9 +46,14 @@ struct zone_owner {
     {
     }
 
-    static zone &zone_found(std::shared_ptr<item const> const &tree, char const *const what)
+    static owning<item> tree_owned(item const *const root, std::unique_ptr<zone> decoded)
     {
-        zone_owner const *const owner = std::get_deleter<zone_owner>(tree);
+        return owning<item>(std::shared_ptr<item const>(root, zone_owner{std::move(decoded)}));
+    }
+
+    static zone &zone_found(owning<item> const &tree, char const *const what)
+    {
+        zone_owner const *const owner = std::get_deleter<zone_owner>(tree.held);
         validity::throw_logic_error_if(owner == nullptr || owner->owned == nullptr, what);
         return *owner->owned;
     }
@@ -64,7 +70,7 @@ struct zone_owner {
 };
 
 inline std::expected<std::reference_wrapper<item const>, error>
-encoded_cbor_data_item(std::shared_ptr<item const> const &tree, item const &tagged)
+encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
 {
     constexpr char const *what = "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree";
     zone const &z = zone_owner::zone_found(tree, what);
@@ -257,7 +263,7 @@ std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const s
 
 template <bool Checked>
 struct decoded_tree {
-    std::shared_ptr<item const> tree;
+    owning<item> tree;
     std::string_view rest;
 };
 
@@ -280,15 +286,15 @@ std::expected<decoded_tree<Checked>, error> tree_decode(std::string_view const e
     if (!built) [[unlikely]]
         return std::unexpected(built.error());
     std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &zone::link::first);
-    return decoded_tree<Checked>{std::shared_ptr<item const>(*built, zone_owner{std::move(decoded)}), tree.d.encoded};
+    return decoded_tree<Checked>{zone_owner::tree_owned(*built, std::move(decoded)), tree.d.encoded};
 }
 
-inline std::expected<std::shared_ptr<item const>, error> decode(std::string_view const encoded)
+inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
     return validity::limits_apply(
         limits.load(),
         [encoded]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
-            -> std::expected<std::shared_ptr<item const>, error> {
+            -> std::expected<owning<item>, error> {
             auto const decoded = tree_decode(encoded, checks, depth_max);
             if (!decoded) [[unlikely]]
                 return std::unexpected(decoded.error());

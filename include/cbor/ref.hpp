@@ -1,7 +1,12 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
 #include <memory>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 #include <ranges>
 #include <type_traits>
 #include <utility>
@@ -26,6 +31,9 @@ class iov_writer;
 template <class R>
 concept owned_bytes = std::ranges::contiguous_range<R> && !std::is_lvalue_reference_v<R> && !std::is_const_v<R> &&
                       !std::ranges::borrowed_range<R> && std::same_as<std::ranges::range_value_t<R>, char>;
+
+template <class T>
+concept copied_value = std::same_as<T, std::string> || std::same_as<T, std::vector<std::byte>>;
 
 template <class R>
 concept owning_bytes = std::ranges::contiguous_range<R> && !std::ranges::borrowed_range<R> &&
@@ -93,6 +101,18 @@ public:
         return &self.value;
     }
 
+    std::string decode() const
+        requires std::same_as<T, std::string_view>
+    {
+        return std::string(value);
+    }
+
+    std::vector<std::byte> decode() const
+        requires std::same_as<T, std::span<std::byte const>>
+    {
+        return std::vector<std::byte>(value.begin(), value.end());
+    }
+
     friend bool operator==(ref const &a, ref const &b)
         requires std::equality_comparable<T>
     {
@@ -103,6 +123,35 @@ public:
         requires std::equality_comparable<T>
     {
         return a.value == b;
+    }
+};
+
+struct zone_owner;
+
+template <class T>
+class owning
+{
+    std::shared_ptr<T const> held;
+
+    explicit owning(std::shared_ptr<T const> h) : held(std::move(h))
+    {
+    }
+
+    friend struct zone_owner;
+
+public:
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    T const &operator*(this Self &&self)
+    {
+        return *self.held;
+    }
+
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    T const *operator->(this Self &&self)
+    {
+        return self.held.get();
     }
 };
 

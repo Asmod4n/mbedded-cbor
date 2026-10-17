@@ -523,7 +523,9 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     REQUIRE(cbor::encode(**tree, again).has_value());
     CHECK(same_value(again, v.encoded));
     std::string twice;
-    REQUIRE(cbor::encode(**test::lazy_of_copy(again)->decode(), twice).has_value());
+    auto const again_lazy = test::lazy_of_copy(again);
+    auto const again_tree = again_lazy->decode();
+    REQUIRE(cbor::encode(**again_tree, twice).has_value());
     CHECK_EQ(twice, again);
 
     auto const text = cbor::diagnostic_notation(v.encoded);

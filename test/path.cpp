@@ -1359,3 +1359,23 @@ TEST_CASE("path: every standalone at_path gives what the member gives")
     CHECK_EQ(**copied, **member);
     CHECK_EQ(**moved, **member);
 }
+
+// Owner decision 2026-10-17: a request for a type that owns its memory copies only that value, so the result needs
+// no owner and the bytes may end at once. A ref gives the same copy through decode().
+TEST_CASE("path: a std::string or a byte vector is a copy of that value only")
+{
+    auto bytes = std::make_unique<std::string>("\xa2\x61\x61\x63xyz\x61\x62\x42\x01\x02"s);
+    auto const text = cbor::at_path<"$.a", std::string>(*bytes);
+    auto const blob = cbor::at_path<"$.b", std::vector<std::byte>>(*bytes);
+    bytes.reset();
+    REQUIRE(text.has_value());
+    CHECK_EQ(*text, "xyz"s);
+    REQUIRE(blob.has_value());
+    CHECK_EQ(*blob, std::vector<std::byte>{std::byte{1}, std::byte{2}});
+    CHECK_EQ(cbor::at_path<"$.b", std::string>("\xa1\x61\x62\x42\x01\x02"sv).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$.c", std::string>("\xa1\x61\x62\x42\x01\x02"sv).error(), error::key_not_found);
+    auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
+    std::string copied = cbor::at_path<"$.a", std::string_view>(owner)->decode();
+    CHECK_EQ(copied, "xyz"s);
+    CHECK_FALSE(inside(*owner, copied.data()));
+}

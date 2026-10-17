@@ -188,7 +188,8 @@ TEST_CASE("doc advanced runtime: encode")
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string const own = wire;
     std::string again;
-    CHECK_EQ(cbor::encode(**test::lazy_of_copy(wire)->decode(), again), own.size());
+    auto const tree = test::lazy_of_copy(wire)->decode();
+    CHECK_EQ(cbor::encode(**tree, again), own.size());
     CHECK_EQ(again, own);
     CHECK(same_value(again, wire));
 }

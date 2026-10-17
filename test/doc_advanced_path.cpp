@@ -127,7 +127,7 @@ TEST_CASE("doc advanced path: the types of a typed read")
     CHECK_EQ(cbor::at_path<"$", int>("\xc1\x05"s), 5);
     CHECK(*test::lazy_of_copy("\xd8\x20\x61x"s)->at_path<"$", std::string_view>() == "x"sv);
     CHECK_FALSE((advanced_typed_path_compiles<"$", float>));
-    CHECK_FALSE((advanced_typed_path_compiles<"$", std::string>));
+    CHECK((advanced_typed_path_compiles<"$", std::string>));
     CHECK_FALSE((advanced_typed_path_compiles<"$", std::string_view>));
 }
 

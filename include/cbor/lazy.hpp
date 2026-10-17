@@ -147,7 +147,7 @@ public:
 
     std::expected<lazy_entries, error> entries() const;
 
-    std::expected<std::shared_ptr<item const>, error> decode() const;
+    std::expected<owning<item>, error> decode() const;
 
 private:
     static std::expected<lazy, error> from(std::shared_ptr<void const> owner, std::string_view encoded,
@@ -1244,7 +1244,7 @@ inline std::expected<lazy_entries, error> lazy::entries(limit_values const &load
         });
 }
 
-inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
+inline std::expected<owning<item>, error> lazy::decode() const
 {
     validity::throw_logic_error_if(top_level.encoded.data() == nullptr, "cbor::lazy::decode: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {
@@ -1265,7 +1265,7 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
         return validity::limits_apply(
             limits.load(),
             [this]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
-                -> std::expected<std::shared_ptr<item const>, error> {
+                -> std::expected<owning<item>, error> {
                 return tree_decode(top_level.encoded, checks, depth_max)
                     .transform([](decoded_tree<Checked> const &d) { return d.tree; });
             });

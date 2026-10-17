@@ -61,6 +61,10 @@ template <fixed_string Path, class T, owned_bytes Encoded>
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(Encoded &&encoded);
 
+template <fixed_string Path, copied_value T>
+    requires is_singular_query_v<Path>
+std::expected<T, error> at_path(std::string_view encoded);
+
 class jsonpath
 {
     struct selector {
@@ -971,6 +975,10 @@ class jsonpath
         return ref<T>(std::move(owner), *r);
     }
 
+    template <fixed_string Path, copied_value T>
+        requires is_singular_query_v<Path>
+    friend std::expected<T, error> at_path(std::string_view encoded);
+
     template <fixed_string>
     friend class is_singular_query;
 
@@ -1808,6 +1816,14 @@ template <fixed_string Path, class T, owned_bytes Encoded>
 std::expected<ref<T>, error> at_path(Encoded &&encoded)
 {
     return at_path<Path, T>(std::make_shared<Encoded const>(std::move(encoded)));
+}
+
+template <fixed_string Path, copied_value T>
+    requires is_singular_query_v<Path>
+std::expected<T, error> at_path(std::string_view const encoded)
+{
+    using view = std::conditional_t<std::same_as<T, std::string>, std::string_view, std::span<std::byte const>>;
+    return jsonpath::query_walk<Path, view>(encoded).transform([](view const v) { return T(v.begin(), v.end()); });
 }
 
 inline std::expected<lazy, error> lazy::operator[](std::string_view const key) const

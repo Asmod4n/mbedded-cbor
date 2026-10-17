@@ -1421,7 +1421,8 @@ TEST_CASE("lazy: an index reads an element of each typed array")
     REQUIRE(element.has_value());
     CHECK_EQ(*element->type(), cbor::type::single_float);
     CHECK_EQ(element->at(0).error(), error::not_indexable);
-    CHECK_EQ((*element->decode())->type, cbor::type::single_float);
+    auto const element_tree = element->decode();
+    CHECK_EQ((*element_tree)->type, cbor::type::single_float);
     auto const negative = lazy_of(typed_array_of(72, "\x00\xff"sv)).at(1);
     REQUIRE(negative.has_value());
     CHECK_EQ(*negative->type(), cbor::type::negative_integer);
