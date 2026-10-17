@@ -78,12 +78,12 @@ public:
     validity::offset offset;
     std::uint64_t typed_array_tag{};
 
-    template <borrowed_bytes Encoded>
+    template <borrowed_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
-    template <owning_bytes Encoded>
+    template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
-    template <owned_bytes Encoded>
-    static std::expected<lazy, error> take(Encoded &&encoded);
+    template <owning_range_of_chars Encoded>
+    static std::expected<lazy, error> take_ownership(Encoded &&encoded);
 
     std::expected<lazy, error> at(std::string_view key) const;
 
@@ -762,14 +762,14 @@ decltype(auto) lazy::limits_apply(limit_values const &loaded, F &&f) const
     return validity::limits_apply(loaded, std::forward<F>(f));
 }
 
-template <borrowed_bytes Encoded>
+template <borrowed_range_of_chars Encoded>
 std::expected<lazy, error> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
     return from(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
                 limits.load());
 }
 
-template <owning_bytes Encoded>
+template <owning_range_of_chars Encoded>
 std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
 {
     validity::throw_logic_error_if_null(owner, "cbor::lazy::view: the encoded data item is null");
@@ -777,8 +777,8 @@ std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
     return from(std::move(owner), bytes, limits.load());
 }
 
-template <owned_bytes Encoded>
-std::expected<lazy, error> lazy::take(Encoded &&encoded)
+template <owning_range_of_chars Encoded>
+std::expected<lazy, error> lazy::take_ownership(Encoded &&encoded)
 {
     return view(std::make_shared<Encoded const>(std::move(encoded)));
 }
@@ -1266,7 +1266,7 @@ inline std::expected<owning<item>, error> lazy::decode() const
             limits.load(),
             [this]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
                 -> std::expected<owning<item>, error> {
-                return tree_decode(top_level.encoded, checks, depth_max)
+                return decode_tree(top_level.encoded, checks, depth_max)
                     .transform([](decoded_tree<Checked> const &d) { return d.tree; });
             });
     std::string_view const rest = validity::subspan(top_level.encoded, offset);

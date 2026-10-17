@@ -267,7 +267,7 @@ struct decoded_tree {
 };
 
 template <bool Checked>
-std::expected<decoded_tree<Checked>, error> tree_decode(std::string_view const encoded,
+std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const encoded,
                                                          validity::limit_checks<Checked> const checks,
                                                          std::size_t const depth_max)
 {
@@ -294,7 +294,7 @@ inline std::expected<owning<item>, error> decode(std::string_view const encoded)
         limits.load(),
         [encoded]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
             -> std::expected<owning<item>, error> {
-            auto const decoded = tree_decode(encoded, checks, depth_max);
+            auto const decoded = decode_tree(encoded, checks, depth_max);
             if (!decoded) [[unlikely]]
                 return std::unexpected(decoded.error());
             if (auto const one = validity::check_one_data_item(decoded->rest); !one) [[unlikely]]

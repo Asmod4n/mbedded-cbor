@@ -12,7 +12,7 @@ namespace test
 // string that the lazy then owns, so the test needs no owner of its own.
 inline std::expected<cbor::lazy, cbor::error> lazy_of_copy(std::string_view const encoded)
 {
-    return cbor::lazy::take(std::string(encoded));
+    return cbor::lazy::take_ownership(std::string(encoded));
 }
 
 }

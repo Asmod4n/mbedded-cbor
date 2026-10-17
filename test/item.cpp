@@ -296,7 +296,7 @@ TEST_CASE("decode: many sibling containers keep their children through the growt
     std::string wire = "\x99\x10\x00"s;
     for (std::size_t i = 0; i < siblings; ++i)
         wire += "\x82\x01\x02"sv;
-    auto const top_level = cbor::lazy::take(std::move(wire));
+    auto const top_level = cbor::lazy::take_ownership(std::move(wire));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->decode());
     auto const elements = children_of(*root);
@@ -358,10 +358,10 @@ TEST_CASE("decode: a map of 65536 keys is read with a repeated key")
     distinct[distinct.size() - 2] = '\x01';
     distinct[distinct.size() - 3] = '\xff';
     distinct[distinct.size() - 4] = '\xff';
-    auto const unique = cbor::lazy::take(std::move(distinct));
+    auto const unique = cbor::lazy::take_ownership(std::move(distinct));
     REQUIRE(unique.has_value());
     CHECK(unique->decode().has_value());
-    auto const twice = cbor::lazy::take(std::move(map));
+    auto const twice = cbor::lazy::take_ownership(std::move(map));
     REQUIRE(twice.has_value());
     CHECK(twice->decode().has_value());
 }
@@ -380,12 +380,12 @@ TEST_CASE("decode: a map of 65535 integer keys is read with a repeated key")
     }
     std::string negative = map;
     negative[3] = '\x39';
-    auto const unique = cbor::lazy::take(std::move(negative));
+    auto const unique = cbor::lazy::take_ownership(std::move(negative));
     REQUIRE(unique.has_value());
     CHECK(unique->decode().has_value());
     std::string longer = map;
     longer.replace(map.size() - 4, 4, "\x1a\x00\x00\x00\x00\x00"sv);
-    auto const twice = cbor::lazy::take(std::move(longer));
+    auto const twice = cbor::lazy::take_ownership(std::move(longer));
     REQUIRE(twice.has_value());
     CHECK(twice->decode().has_value());
 }
@@ -500,7 +500,7 @@ TEST_CASE("decode: a long chain of shared references is read without recursion")
         document += sharedref;
         document += uint16_head + uint16_of(static_cast<std::uint16_t>(i - 1));
     }
-    auto const top_level = cbor::lazy::take(std::move(document));
+    auto const top_level = cbor::lazy::take_ownership(std::move(document));
     REQUIRE(top_level.has_value());
     auto const last = top_level->at(chain_length - 1);
     REQUIRE(last.has_value());
@@ -550,7 +550,7 @@ TEST_CASE("decode: the hard bound of the nesting depth fits the stack")
     for (std::size_t i = 0; i < bound; ++i)
         tags += "\xd8\x64"sv;
     tags += '\x00';
-    auto const tagged = cbor::lazy::take(std::move(tags));
+    auto const tagged = cbor::lazy::take_ownership(std::move(tags));
     REQUIRE(tagged.has_value());
     CHECK(tagged->decode().has_value());
     // [28([[...[0]...]]), [[...[29(0)]...]]]: a lazy at the second element meets the reference near the bound

@@ -30,7 +30,7 @@ TEST_CASE("doc advanced runtime: lazy::copy and lazy::view in every form")
     std::string bytes = "\x78\x28"s + std::string(40, 'x');
     char const *const data = bytes.data();
     std::string const kept = bytes;
-    auto const a = cbor::lazy::take(std::move(bytes));
+    auto const a = cbor::lazy::take_ownership(std::move(bytes));
     REQUIRE(a.has_value());
     CHECK_EQ(a->top_level.encoded.data(), data);
     auto const b = test::lazy_of_copy(std::string_view{kept});

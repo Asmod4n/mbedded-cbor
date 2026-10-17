@@ -2329,20 +2329,20 @@ public:
         }
     };
 
-    template <owning_bytes Encoded>
+    template <owning_range_of_chars Encoded>
     static std::expected<accessor<>, error> path(std::shared_ptr<Encoded const> encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         validity::throw_logic_error_if_null(encoded, "cbor::packed::path: the encoded data item is null");
         std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
-        return owned_path(std::shared_ptr<void const>(std::move(encoded)), bytes);
+        return path_with_owner(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
 
-    template <borrowed_bytes Encoded>
+    template <borrowed_range_of_chars Encoded>
     static std::expected<accessor<>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        return owned_path(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+        return path_with_owner(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
 
     template <fixed_string Path, std::convertible_to<std::size_t>... Index>
@@ -2371,14 +2371,14 @@ public:
             });
     }
 
-    template <owned_bytes Encoded>
+    template <owning_range_of_chars Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static std::expected<accessor<>, error> path(Encoded &&encoded)
     {
         return path(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
-    template <owned_bytes Encoded>
+    template <owning_range_of_chars Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
@@ -2393,34 +2393,34 @@ public:
 #endif
     }
 
-    template <owning_bytes Encoded>
+    template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         return decode(std::move(encoded), T{});
     }
 
-    template <owning_bytes Encoded>
+    template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         validity::throw_logic_error_if_null(encoded, "cbor::packed::decode: the encoded data item is null");
         std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
-        return owned_decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
+        return decode_with_owner(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
 
-    template <borrowed_bytes Encoded>
+    template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         return decode(std::move(owner), encoded, T{});
     }
 
-    template <borrowed_bytes Encoded>
+    template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        return owned_decode(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+        return decode_with_owner(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
                             std::move(target));
     }
 
@@ -2505,7 +2505,7 @@ public:
     }
 
 private:
-    static std::expected<accessor<>, error> owned_path(std::shared_ptr<void const> owner, std::string_view const encoded)
+    static std::expected<accessor<>, error> path_with_owner(std::shared_ptr<void const> owner, std::string_view const encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         validity::throw_logic_error_if_empty(owner,
@@ -2527,7 +2527,7 @@ private:
         return accessor<>(std::move(owner), encoded, root, *dir);
     }
 
-    static std::expected<ref<T>, error> owned_decode(std::shared_ptr<void const> owner,
+    static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<void const> owner,
                                                      std::string_view const encoded, T target)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
