@@ -912,7 +912,7 @@ static std::uint64_t op()
     benchmark::ClobberMemory();
     return buf.size();
 #elif defined(ARM_READ)
-    auto const r = cbor::lazy::view(*held)->decode();
+    auto const r = cbor::lazy::view(*held)->clone();
     if (!r)
         std::abort();
     return item_tree_sum(**r);

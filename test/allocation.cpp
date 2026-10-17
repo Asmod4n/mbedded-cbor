@@ -92,7 +92,7 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
     bytes.resize(4099);
     auto const root = *test::lazy_of_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
-    auto const r = root.decode();
+    auto const r = root.clone();
     std::size_t const after = allocated_bytes;
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::syntax_error);
@@ -106,7 +106,7 @@ TEST_CASE("decode: a claimed count of 2^63 with one byte left allocates in propo
     std::string const bytes = "\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s;
     auto const root = *test::lazy_of_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
-    auto const r = root.decode();
+    auto const r = root.clone();
     std::size_t const after = allocated_bytes;
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::too_little_data);
@@ -129,7 +129,7 @@ std::size_t decode_allocations(std::string const &bytes)
 {
     auto const root = *test::lazy_of_copy(std::string(bytes));
     std::size_t const before = allocations;
-    auto const r = root.decode();
+    auto const r = root.clone();
     std::size_t const after = allocations;
     REQUIRE(r.has_value());
     return after - before;
@@ -158,7 +158,7 @@ TEST_CASE("decode: nested arrays that each claim a large count do not multiply t
     bytes.append(4200, '\x01');
     auto const root = *test::lazy_of_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
-    auto const r = root.decode();
+    auto const r = root.clone();
     std::size_t const after = allocated_bytes;
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::too_little_data);
@@ -175,7 +175,7 @@ TEST_CASE("decode: a wide array of nested arrays is read whole after the decode"
     bytes += static_cast<char>(count & 0xff);
     for (std::size_t i = 0; i < count; ++i)
         bytes += "\x82\x01\x02"s;
-    auto r = test::lazy_of_copy(std::string(bytes))->decode();
+    auto r = test::lazy_of_copy(std::string(bytes))->clone();
     REQUIRE(r.has_value());
     auto const outer = children_of(*(*r));
     REQUIRE_EQ(outer.size(), count);

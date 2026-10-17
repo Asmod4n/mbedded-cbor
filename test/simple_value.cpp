@@ -103,8 +103,8 @@ TEST_CASE("simple value: at_path gives every simple value 0 to 255")
     CHECK_EQ((cbor::at_path<"$[0]", cbor::simple_value>("\x81\x01"sv)).error(), error::incorrect_type);
 }
 
-// lazy::decode gives an item whose content is the simple value, beside the head fields of the wire.
-TEST_CASE("simple value: lazy::decode gives every simple value 0 to 255 as its content")
+// lazy::clone gives an item whose content is the simple value, beside the head fields of the wire.
+TEST_CASE("simple value: lazy::clone gives every simple value 0 to 255 as its content")
 {
     for (unsigned i = 0; i < 256; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
@@ -112,13 +112,13 @@ TEST_CASE("simple value: lazy::decode gives every simple value 0 to 255 as its c
         auto const top_level = test::lazy_of_copy(wire_of(v));
         if (reserved(v)) {
             if (top_level.has_value())
-                CHECK_EQ(top_level->decode().error(), error::syntax_error);
+                CHECK_EQ(top_level->clone().error(), error::syntax_error);
             else
                 CHECK_EQ(top_level.error(), error::syntax_error);
             continue;
         }
         REQUIRE(top_level.has_value());
-        auto const r = top_level->decode();
+        auto const r = top_level->clone();
         REQUIRE(r.has_value());
         cbor::item const &it = **r;
         CHECK_EQ(major_of(it.type), cbor::major_type::simple_float);

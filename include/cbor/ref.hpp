@@ -3,6 +3,7 @@
 #include <concepts>
 #include <cstddef>
 #include <memory>
+#include <memory_resource>
 #include <span>
 #include <string>
 #include <string_view>
@@ -54,6 +55,12 @@ concept owning_range_of_chars = std::ranges::contiguous_range<R> && !std::ranges
 template <class R>
 concept borrowed_range_of_chars = std::ranges::contiguous_range<R> && std::ranges::borrowed_range<R> &&
                          std::same_as<std::ranges::range_value_t<R>, char>;
+
+template <class T>
+class owning;
+
+template <class T>
+void copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
 
 template <class T>
 class CBOR_OWNER ref
@@ -113,16 +120,32 @@ public:
 
     void operator->() const && = delete;
 
-    std::string decode() const
+    std::string clone() const
         requires std::same_as<T, std::string_view>
     {
         return std::string(value);
     }
 
-    std::vector<std::byte> decode() const
+    std::vector<std::byte> clone() const
         requires std::same_as<T, std::span<std::byte const>>
     {
         return std::vector<std::byte>(value.begin(), value.end());
+    }
+
+    owning<T> clone() const
+        requires(!std::same_as<T, std::string_view> && !std::same_as<T, std::span<std::byte const>>)
+    {
+        struct held {
+            std::pmr::monotonic_buffer_resource zone;
+            T value;
+
+            explicit held(T const &v) : value(v)
+            {
+            }
+        };
+        auto const h = std::make_shared<held>(value);
+        copy_views_into_zone(h->value, h->zone);
+        return owning<T>(std::shared_ptr<T const>(h, &h->value));
     }
 
     friend bool operator==(ref const &a, ref const &b)
@@ -150,6 +173,9 @@ class CBOR_OWNER owning
     }
 
     friend struct zone_owner;
+
+    template <class>
+    friend class ref;
 
 public:
     T const &operator*() const & CBOR_LIFETIMEBOUND

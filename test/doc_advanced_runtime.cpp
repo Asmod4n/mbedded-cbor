@@ -138,16 +138,16 @@ TEST_CASE("doc advanced runtime: get")
 // The section "decode" shows the item of an array, its children, an error, and type().
 TEST_CASE("doc advanced runtime: decode")
 {
-    auto const i = test::lazy_of_copy(preferred(A(1, M("a"s, 2))))->decode();
+    auto const i = test::lazy_of_copy(preferred(A(1, M("a"s, 2))))->clone();
     REQUIRE(i.has_value());
     CHECK_EQ((*i)->type, cbor::type::array);
     CHECK_EQ(children_of(*(*i)).size(), 2u);
-    CHECK_EQ(test::lazy_of_copy("\x82\x01"s)->decode().error(), error::too_little_data);
-    CHECK_EQ(test::lazy_of_copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->decode().error(), error::too_little_data);
+    CHECK_EQ(test::lazy_of_copy("\x82\x01"s)->clone().error(), error::too_little_data);
+    CHECK_EQ(test::lazy_of_copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->clone().error(), error::too_little_data);
     CHECK_EQ(*test::lazy_of_copy("\xc2\x41\x05"s)->type(), cbor::type::unsigned_integer);
     CHECK_EQ(*test::lazy_of_copy("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s)->type(), cbor::type::unsigned_bignum);
     CHECK_EQ(*test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::tag);
-    auto const tree = test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->decode();
+    auto const tree = test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->clone();
     REQUIRE(tree.has_value());
     CHECK_EQ(children_of(*(*tree))[1]->type, cbor::type::tag);
 }
@@ -180,7 +180,7 @@ TEST_CASE("doc advanced runtime: encode")
     REQUIRE(test::encode(w, v).has_value());
     CHECK_EQ(w.encoded, "\x82"s + native_unsigned(1) + native_unsigned(2));
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
-    auto const tagged = *test::lazy_of_copy(cycle)->decode();
+    auto const tagged = *test::lazy_of_copy(cycle)->clone();
     cbor::item const *const six = tagged->tag_content().value();
     CHECK_EQ(argument_of(*six), 6u);
     cbor::item const *const reference = six->tag_content().value();
@@ -188,7 +188,7 @@ TEST_CASE("doc advanced runtime: encode")
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string const own = wire;
     std::string again;
-    auto const tree = test::lazy_of_copy(wire)->decode();
+    auto const tree = test::lazy_of_copy(wire)->clone();
     CHECK_EQ(cbor::encode(**tree, again), own.size());
     CHECK_EQ(again, own);
     CHECK(same_value(again, wire));
@@ -240,10 +240,10 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(l.at(1)->type(), cbor::type::tag);
     CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
-    auto const forward = test::lazy_of_copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->decode();
+    auto const forward = test::lazy_of_copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->clone();
     REQUIRE(forward.has_value());
     CHECK_EQ((*forward)->array().value()[0].tag_number().value(), 29u);
-    CHECK(test::lazy_of_copy("\xd8\x1c\x81\xd8\x1d\x00"s)->decode().has_value());
+    CHECK(test::lazy_of_copy("\xd8\x1c\x81\xd8\x1d\x00"s)->clone().has_value());
     CHECK_EQ(test::lazy_of_copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::not_indexable);
 }
 
@@ -251,7 +251,7 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
 TEST_CASE("doc advanced runtime: tag 55799")
 {
     CHECK_EQ(test::lazy_of_copy("\xd9\xd9\xf7\x82\x01\x02"s)->at(1)->get<std::int64_t>(), 2);
-    auto const tree = test::lazy_of_copy("\x81\xd9\xd9\xf7\x01"s)->decode();
+    auto const tree = test::lazy_of_copy("\x81\xd9\xd9\xf7\x01"s)->clone();
     REQUIRE(tree.has_value());
     cbor::item const *const inner = children_of(*(*tree))[0];
     CHECK_EQ(inner->type, cbor::type::tag);
@@ -268,7 +268,7 @@ TEST_CASE("doc advanced runtime: tag 55799")
 TEST_CASE("doc advanced runtime: encode_iov")
 {
     std::string const wire = "\x82\x01\x63" "abc"s;
-    auto const tree = test::lazy_of_copy(wire)->decode();
+    auto const tree = test::lazy_of_copy(wire)->clone();
     REQUIRE(tree.has_value());
     auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces.has_value());

@@ -30,7 +30,7 @@ using cbor::error;
 namespace shared_test
 {
 
-// The decoded item tree of a top-level item, as lazy::decode gives it.
+// The decoded item tree of a top-level item, as lazy::clone gives it.
 using tree = cbor::owning<cbor::item>;
 
 // An item of a decoded tree together with the tree. A tree decode reads a tag 29 as a plain tag, so the tests of
@@ -100,7 +100,7 @@ tree decoded_ref(std::string_view const wire)
 {
     auto const l = test::lazy_of_copy(wire);
     REQUIRE(l.has_value());
-    auto t = l->decode();
+    auto t = l->clone();
     REQUIRE(t.has_value());
     return *t;
 }
@@ -647,7 +647,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 {
     auto const a = arr({u(1), u(2)});
     std::string const doc = encoded_shared(arr({a, a}), marks::repeats_marked);
-    auto const r = test::lazy_of_copy(doc)->decode();
+    auto const r = test::lazy_of_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(element(*r, 0), element(*r, 1)));
 }
@@ -656,7 +656,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 TEST_CASE("lazy: a cyclic array")
 {
     std::string const doc = "\xd8\x1c\x81\xd8\x1d\x00"s;
-    auto const r = test::lazy_of_copy(doc)->decode();
+    auto const r = test::lazy_of_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(*r, element(*r, 0)));
 }
@@ -684,7 +684,7 @@ TEST_CASE("lazy: a value shared by two map values keeps its identity")
 {
     auto const v = arr({u(1), u(2), u(3)});
     std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}), marks::repeats_marked);
-    auto const r = test::lazy_of_copy(doc)->decode();
+    auto const r = test::lazy_of_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -732,7 +732,7 @@ TEST_CASE("lazy: a registered object keeps its identity")
 {
     auto const l = object_of(5003, arr({u(99)}));
     std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}), marks::repeats_marked);
-    auto const r = test::lazy_of_copy(doc)->decode();
+    auto const r = test::lazy_of_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -786,7 +786,7 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
         for (auto const e : *l.elements())
             types.push_back(*e->type());
         CHECK(types == std::vector<cbor::type>(3, cbor::type::tag));
-        auto const tree = l.decode();
+        auto const tree = l.clone();
         REQUIRE(tree.has_value());
         auto const elements = children_of(**tree);
         REQUIRE_EQ(elements.size(), 3u);

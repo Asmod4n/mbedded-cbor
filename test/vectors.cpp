@@ -128,7 +128,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
         std::string const wire = bytes_of_hex(c.hex);
         auto const top_level = test::lazy_of_copy(wire);
         REQUIRE(top_level.has_value());
-        auto const decoded_item = top_level->decode();
+        auto const decoded_item = top_level->clone();
         auto const initial = static_cast<std::uint8_t>(wire.front());
         if ((initial & 0x1f) == 31) {
             CHECK_EQ(decoded_item.error(), error::indefinite_length);
@@ -361,11 +361,11 @@ bool equivalent(value const &a, value const &b)
     return a == b;
 }
 
-// The walk of lazy: lazy::decode gives the item of each node, elements and entries give the members,
+// The walk of lazy: lazy::clone gives the item of each node, elements and entries give the members,
 // get<double> gives a float. A tag stays a tag, so a bignum compares through integer_of.
 std::expected<value, error> lazy_value(cbor::lazy const &l)
 {
-    auto const decoded_item = l.decode();
+    auto const decoded_item = l.clone();
     if (!decoded_item)
         return std::unexpected(decoded_item.error());
     cbor::item const &it = **decoded_item;
@@ -517,14 +517,14 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     // only where it is in the own form, which the test of RFC 8949 Appendix A does.
     auto const top_level = test::lazy_of_copy(std::string(v.encoded));
     REQUIRE(top_level.has_value());
-    auto const tree = top_level->decode();
+    auto const tree = top_level->clone();
     REQUIRE(tree.has_value());
     std::string again;
     REQUIRE(cbor::encode(**tree, again).has_value());
     CHECK(same_value(again, v.encoded));
     std::string twice;
     auto const again_lazy = test::lazy_of_copy(again);
-    auto const again_tree = again_lazy->decode();
+    auto const again_tree = again_lazy->clone();
     REQUIRE(cbor::encode(**again_tree, twice).has_value());
     CHECK_EQ(twice, again);
 

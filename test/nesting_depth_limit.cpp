@@ -44,15 +44,15 @@ TEST_CASE("nesting depth depth_limit: decode of the item tree")
 }
 
 // lazy::tree_decoder::item_decode counts one level for each tag, and none for an array or a map.
-TEST_CASE("nesting depth depth_limit: lazy::decode")
+TEST_CASE("nesting depth depth_limit: lazy::clone")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
     auto const deepest = test::lazy_of_copy(repeat("\xd8\x64"sv, depth_limit) + '\x00');
     REQUIRE(deepest.has_value());
-    CHECK(deepest->decode().has_value());
+    CHECK(deepest->clone().has_value());
     auto const deeper = test::lazy_of_copy(repeat("\xd8\x64"sv, depth_limit + 1) + '\x00');
     REQUIRE(deeper.has_value());
-    CHECK_EQ(deeper->decode().error(), error::nesting_depth_exceeded);
+    CHECK_EQ(deeper->clone().error(), error::nesting_depth_exceeded);
 }
 
 // validity::keys_equivalent compares two keys that differ only in the innermost item, so it recurses through
@@ -112,7 +112,7 @@ TEST_CASE("nesting depth depth_limit: diagnostic_notation")
 TEST_CASE("nesting depth depth_limit: encode")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    auto const deepest = test::lazy_of_copy(preferred(arrays_around_zero(depth_limit)))->decode();
+    auto const deepest = test::lazy_of_copy(preferred(arrays_around_zero(depth_limit)))->clone();
     REQUIRE(deepest.has_value());
     std::string out;
     CHECK(cbor::encode(**deepest, out).has_value());

@@ -133,8 +133,8 @@ inline bool same_value(std::string_view const a, std::string_view const b)
     auto const y = test::lazy_of_copy(std::string(b));
     REQUIRE(x.has_value());
     REQUIRE(y.has_value());
-    auto const p = x->decode();
-    auto const q = y->decode();
+    auto const p = x->clone();
+    auto const q = y->clone();
     REQUIRE(p.has_value());
     REQUIRE(q.has_value());
     return item_values_equal(**p, **q);
