@@ -1746,3 +1746,24 @@ TEST_CASE("lazy: a decode checks a container count that does not fit 32 bits")
     CHECK_EQ(test::lazy_of_copy(array_count)->decode().error(), error::too_little_data);
     CHECK_EQ(test::lazy_of_copy(map_count)->decode().error(), error::too_little_data);
 }
+
+// RFC 8746 2.1 (refs/rfc8746.txt:143): the content of a typed array tag is a byte string. A typed array tag whose
+// content is not one is refused the same way by every reader, whether the reader reads the content or only the tag.
+TEST_CASE("lazy: a typed array tag with content that is no byte string is refused by every reader")
+{
+    std::string const wire = "\xd8\x51\x88\x51\x51\x51\x51\x51\x51\x40\x40\x51\x6b\x40\x40\xf9\x04\x7c\x60\x00\xd8\x51\x0a\x00\x00\x51\xd8\x51\x88\x51\x51\x41\x51\x23\x51\x40\x51\x51\x40\x40\x00\x00\x0a\x51\x51\x51\x52\x51\x75\x40\x40\xc7\x81\x81\x81\xd8\x1c\xed\xd0\xf3\x0b\xa0"s;
+    auto const refused = [](auto const &r) { return !r.has_value() && r.error() == error::inadmissible_type_for_tag_content; };
+    CHECK(refused(cbor::decode(wire)));
+    auto const l = cbor::lazy::take_ownership(std::string(wire));
+    REQUIRE(l.has_value());
+    for (char const *const p : {"$['a']", "$['a'][*].*", "$[*]", "$[0]", "$.*", "$..*"}) {
+        CAPTURE(p);
+        auto const q = cbor::jsonpath::compile<cbor::nodelist>(p);
+        REQUIRE(q.has_value());
+        CHECK(refused(l->at_path(*q)));
+    }
+    CHECK(refused(l->at(0)));
+    CHECK(refused(l->at("a")));
+    CHECK(refused(l->size()));
+    CHECK(refused(l->decode()));
+}

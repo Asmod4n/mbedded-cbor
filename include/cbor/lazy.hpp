@@ -629,16 +629,13 @@ std::expected<lazy::tag_content, error> lazy::typed_array_bytes_read(resolved<Ch
     auto const r = d.head_decode();
     if (!r) [[unlikely]]
         return std::unexpected(r.error());
-    if (error const c = validity::check_tag_content(found.h.argument, r->major).error_or(error{});
+    if (error const c = validity::check_typed_array_content(found.h.argument, r->major, r->argument).error_or(error{});
         c != error{}) [[unlikely]]
         return std::unexpected(c);
     auto const offset = validity::offset{validity::distance(found.source.encoded, d.encoded)};
     auto const bytes = d.byte_string_decode(r->argument);
     if (!bytes) [[unlikely]]
         return std::unexpected(bytes.error());
-    if (error const c = validity::typed_array_check(found.h.argument, bytes->size()).error_or(error{});
-        c != error{}) [[unlikely]]
-        return std::unexpected(c);
     return tag_content{offset, *bytes};
 }
 
@@ -788,6 +785,9 @@ template <class Key, class Entries, bool Checked>
 std::expected<typename Entries::iterator, error>
 lazy::key_find(resolved<Checked> found, Key const key, limit_values const &loaded)
 {
+    if (heads::is_typed_array(found.h)) [[unlikely]]
+        if (auto const bytes = typed_array_bytes_read(found); !bytes) [[unlikely]]
+            return std::unexpected(bytes.error());
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     validity::offset const first = validity::distance(found.source.encoded, found.d.encoded);

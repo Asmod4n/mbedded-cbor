@@ -234,6 +234,12 @@ std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const s
         if (!content) [[unlikely]]
             return content;
         node.via.tag = {head.argument, *content};
+        if (node.type == cbor::type::typed_array)
+            if (auto const r = validity::check_typed_array_content(
+                    head.argument, heads::major_type_of((*content)->type),
+                    (*content)->type == cbor::type::byte_string ? (*content)->via.bin.size() : std::size_t{});
+                !r) [[unlikely]]
+                return std::unexpected(r.error());
         if (head.argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
             return &node;
         item const *const bytes_item = *content;
