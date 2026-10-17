@@ -26,7 +26,7 @@ class sequence
     std::string_view encoded;
 
 public:
-    template <owning_bytes Encoded>
+    template <owning_range_of_chars Encoded>
     explicit sequence(std::shared_ptr<Encoded const> e)
     {
         validity::throw_logic_error_if_null(e, "cbor::sequence: the encoded data items are null");
@@ -34,7 +34,7 @@ public:
         owner = std::move(e);
     }
 
-    template <borrowed_bytes Encoded>
+    template <borrowed_range_of_chars Encoded>
     sequence(std::shared_ptr<void const> o, Encoded const &e)
         : owner(std::move(o)), encoded(std::ranges::data(e), std::ranges::size(e))
     {

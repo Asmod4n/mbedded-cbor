@@ -1339,7 +1339,7 @@ template <class T>
 class structs
 {
 public:
-    template <owned_bytes Encoded>
+    template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
 #if defined(__cpp_exceptions)
@@ -1353,14 +1353,14 @@ public:
 #endif
     }
 
-    template <owning_bytes Encoded>
+    template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
         pfr::check_default_constructible<T>();
         return decode(std::move(encoded), T{});
     }
 
-    template <owning_bytes Encoded>
+    template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::structs::decode: the encoded data item is null");
@@ -1368,18 +1368,18 @@ public:
         return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
 
-    template <borrowed_bytes Encoded>
+    template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         pfr::check_default_constructible<T>();
         return decode(std::move(owner), encoded, T{});
     }
 
-    template <borrowed_bytes Encoded>
+    template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
     {
-        return owned_decode(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+        return decode_with_owner(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
                             std::move(target));
     }
 
@@ -1448,7 +1448,7 @@ public:
     }
 
 private:
-    static std::expected<ref<T>, error> owned_decode(std::shared_ptr<void const> owner,
+    static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<void const> owner,
                                                      std::string_view const encoded, T &&target)
     {
         validity::throw_logic_error_if_empty(owner,

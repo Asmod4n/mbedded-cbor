@@ -193,7 +193,7 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
     std::optional<cbor::lazy> keep;
     {
         std::string bytes = message();
-        keep = *cbor::lazy::take(std::move(bytes))->at("tags");
+        keep = *cbor::lazy::take_ownership(std::move(bytes))->at("tags");
     }
     CHECK(*keep->at(1)->get<std::string_view>() == "b"sv);
 }
@@ -238,7 +238,7 @@ TEST_CASE("doc advanced basics: an owner avoids the copy")
 
     std::string bytes = preferred(V(std::string(40, 'x')));
     char const *const data = bytes.data();
-    auto const b = cbor::lazy::take(std::move(bytes)).value();
+    auto const b = cbor::lazy::take_ownership(std::move(bytes)).value();
     auto const vb = b.get<std::string_view>().value();
     CHECK_EQ((*vb).data(), data + 2);
 }

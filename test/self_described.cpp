@@ -70,7 +70,7 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     auto const second = a->at(1);
     REQUIRE(second.has_value());
     CHECK_EQ(second->get<std::uint64_t>().value(), 6u);
-    auto const owned = cbor::lazy::take(std::string(document));
+    auto const owned = cbor::lazy::take_ownership(std::string(document));
     REQUIRE(owned.has_value());
     CHECK_EQ(owned->at("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
 }

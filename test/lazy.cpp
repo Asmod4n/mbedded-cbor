@@ -449,7 +449,7 @@ TEST_CASE("lazy: an entry iterator outlives the lazy that gave it")
     std::optional<cbor::lazy_entries::iterator> kept;
     {
         std::string message = encoded(M("a"s, 1, "b"s, 2, "c"s, 3));
-        auto const l = cbor::lazy::take(std::move(message));
+        auto const l = cbor::lazy::take_ownership(std::move(message));
         REQUIRE(l.has_value());
         kept = l->entries()->begin();
     }
@@ -733,7 +733,7 @@ TEST_CASE("lazy: copy, at and get as a chain")
 {
     std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
     char const *const data = bytes.data();
-    cbor::lazy const doc = *cbor::lazy::take(std::move(bytes));
+    cbor::lazy const doc = *cbor::lazy::take_ownership(std::move(bytes));
     auto const name = doc.at("statuses")
                           .and_then([](cbor::lazy const &s) { return s.at(1); })
                           .and_then([](cbor::lazy const &s) { return s.at("user"); })
@@ -825,7 +825,7 @@ TEST_CASE("lazy: view checks that the owner holds an object")
 // const range and a range that owns nothing do not compile, because each would either copy or dangle.
 TEST_CASE("lazy::take: only an owning rvalue range compiles")
 {
-    auto const takeable = []<class S>(S &&) { return requires(S &&t) { cbor::lazy::take(std::forward<S>(t)); }; };
+    auto const takeable = []<class S>(S &&) { return requires(S &&t) { cbor::lazy::take_ownership(std::forward<S>(t)); }; };
     std::string named = "\x78\x20"s + std::string(32, 'x');
     std::string const constant = "\x01"s;
     CHECK(takeable(std::string("\x01")));
@@ -837,7 +837,7 @@ TEST_CASE("lazy::take: only an owning rvalue range compiles")
     CHECK_FALSE(takeable(std::string_view("\x01")));
     CHECK_FALSE(takeable(std::span<char const>(constant)));
     char const *const data = named.data();
-    auto const l = cbor::lazy::take(std::move(named));
+    auto const l = cbor::lazy::take_ownership(std::move(named));
     REQUIRE(l.has_value());
     CHECK_EQ(l->top_level.encoded.data(), data);
 }
@@ -882,7 +882,7 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     std::string const message = encoded(M("k"s, text));
     auto buffer = std::make_unique<std::string>(message);
     char const *const data = buffer->data();
-    auto const moved = cbor::lazy::take(std::move(*buffer));
+    auto const moved = cbor::lazy::take_ownership(std::move(*buffer));
     REQUIRE(moved.has_value());
     CHECK_EQ(static_cast<void const *>(moved->top_level.encoded.data()), static_cast<void const *>(data));
     buffer->assign(message.size(), '\0');
@@ -899,7 +899,7 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
 
     std::string again = message;
     char const *const again_data = again.data();
-    auto const from_moved = cbor::lazy::take(std::move(again));
+    auto const from_moved = cbor::lazy::take_ownership(std::move(again));
     CHECK_EQ(static_cast<void const *>(from_moved->top_level.encoded.data()), static_cast<void const *>(again_data));
     auto const from_lvalue = test::lazy_of_copy(message);
     CHECK_NE(static_cast<void const *>(from_lvalue->top_level.encoded.data()), static_cast<void const *>(message.data()));
@@ -1280,7 +1280,7 @@ TEST_CASE("lazy::copy: an rvalue std::string is moved")
 {
     std::string bytes = two_forms::long_text();
     char const *const data = bytes.data();
-    auto const l = cbor::lazy::take(std::move(bytes));
+    auto const l = cbor::lazy::take_ownership(std::move(bytes));
     REQUIRE(l.has_value());
     CHECK_EQ(two_forms::text_data(l), data + 2);
 }

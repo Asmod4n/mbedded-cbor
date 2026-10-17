@@ -180,7 +180,7 @@ __attribute__((export_name("release"))) void release(void *const ptr)
 
 __attribute__((export_name("load"))) std::int32_t load(char const *const ptr, std::size_t const len)
 {
-    auto l = cbor::lazy::take(std::string(ptr, len));
+    auto l = cbor::lazy::take_ownership(std::string(ptr, len));
     if (!l) [[unlikely]]
         return static_cast<std::int32_t>(l.error());
     state.root = std::move(*l);

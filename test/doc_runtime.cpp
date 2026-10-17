@@ -59,7 +59,7 @@ TEST_CASE("doc runtime: read step by step")
         use(*hp);
     CHECK_EQ(used, 7);
     CHECK_EQ(cbor::at_path<"$.cars[1].hp", std::int64_t>(bytes), 7);
-    auto const doc = cbor::lazy::take(std::move(bytes));
+    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
     REQUIRE(doc.has_value());
     CHECK_EQ(doc->at("bus").error(), error::key_not_found);
     CHECK_EQ(doc->at("cars")->at(2).error(), error::index_out_of_bounds);

@@ -38,10 +38,6 @@ class encoding;
 
 class iov_writer;
 
-template <class R>
-concept owned_bytes = std::ranges::contiguous_range<R> && !std::is_lvalue_reference_v<R> && !std::is_const_v<R> &&
-                      !std::ranges::borrowed_range<R> && std::same_as<std::ranges::range_value_t<R>, char>;
-
 template <class T>
 inline constexpr bool is_view = std::ranges::view<T>;
 
@@ -52,11 +48,11 @@ template <class T>
 concept copied_value = std::same_as<T, std::string> || std::same_as<T, std::vector<std::byte>>;
 
 template <class R>
-concept owning_bytes = std::ranges::contiguous_range<R> && !std::ranges::borrowed_range<R> &&
+concept owning_range_of_chars = std::ranges::contiguous_range<R> && !std::ranges::borrowed_range<R> && !std::is_const_v<R> &&
                        std::same_as<std::ranges::range_value_t<R>, char>;
 
 template <class R>
-concept borrowed_bytes = std::ranges::contiguous_range<R> && std::ranges::borrowed_range<R> &&
+concept borrowed_range_of_chars = std::ranges::contiguous_range<R> && std::ranges::borrowed_range<R> &&
                          std::same_as<std::ranges::range_value_t<R>, char>;
 
 template <class T>

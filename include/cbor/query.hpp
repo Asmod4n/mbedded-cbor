@@ -43,19 +43,19 @@ template <fixed_string Path, class T>
               ))
 std::expected<T, error> at_path(std::string_view encoded);
 
-template <fixed_string Path, class T, borrowed_bytes Encoded>
+template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
-template <fixed_string Path, class T, owning_bytes Encoded>
+template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
 
-template <fixed_string Path, class T, owned_bytes Encoded>
+template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
@@ -992,7 +992,7 @@ class jsonpath
               ))
     friend std::expected<T, error> at_path(std::string_view encoded);
 
-    template <fixed_string Path, class T, borrowed_bytes Encoded>
+    template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
         requires(is_singular_query_v<Path> &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, typed_array>))
@@ -1126,7 +1126,7 @@ private:
     template <scalar_result T>
     friend std::expected<T, error> at_path(std::string_view encoded, query<T> const &e);
 
-    template <view_result T, borrowed_bytes Encoded>
+    template <view_result T, borrowed_range_of_chars Encoded>
     friend std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                        query<T> const &e);
 };
@@ -1140,7 +1140,7 @@ std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<
     return jsonpath::query_apply(e, encoded, limits.load());
 }
 
-template <view_result T, borrowed_bytes Encoded>
+template <view_result T, borrowed_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                             jsonpath::query<T> const &e)
 {
@@ -1150,7 +1150,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
                                  limits.load());
 }
 
-template <class T, borrowed_bytes Encoded>
+template <class T, borrowed_range_of_chars Encoded>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                 jsonpath::query<T> const &e)
@@ -1158,7 +1158,7 @@ std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const
     return lazy::view(std::move(owner), encoded).and_then([&e](lazy const &root) { return root.at_path(e); });
 }
 
-template <class T, owning_bytes Encoded>
+template <class T, owning_range_of_chars Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
                                                                        jsonpath::query<T> const &e)
@@ -1168,7 +1168,7 @@ std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shar
     return at_path(std::move(owner), bytes, e);
 }
 
-template <class T, owned_bytes Encoded>
+template <class T, owning_range_of_chars Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<typename jsonpath::query<T>::result_type, error> at_path(Encoded &&encoded,
                                                                        jsonpath::query<T> const &e)
@@ -1787,7 +1787,7 @@ std::expected<T, error> at_path(std::string_view const encoded)
     return jsonpath::query_walk<Path, T>(encoded);
 }
 
-template <fixed_string Path, class T, borrowed_bytes Encoded>
+template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
@@ -1798,7 +1798,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
                                          std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
 }
 
-template <fixed_string Path, class T, owning_bytes Encoded>
+template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
@@ -1809,7 +1809,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
     return at_path<Path, T>(std::move(owner), bytes);
 }
 
-template <fixed_string Path, class T, owned_bytes Encoded>
+template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
