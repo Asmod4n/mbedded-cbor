@@ -72,26 +72,9 @@ TEST_CASE("path: a key is compared without an allocation")
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
     auto const root = *cbor::lazy::copy(std::string(bytes));
     auto const map = *root.at(1);
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(map).has_value());
+    REQUIRE(map.at_path<"$[[1, \"x\"]]">().has_value());
     std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]">(map);
-    std::size_t const after = allocations;
-    REQUIRE(found.has_value());
-    CHECK_EQ(after, before);
-    CHECK_EQ(found->get<std::uint64_t>(), 1u);
-}
-
-// A top-level item with a shared value (tag 28) reads its marks once, at the first tag 29, and keeps them for
-// every later read from any thread. The key [1, 29(0)] refers to the shared value "x". The first read builds the
-// marks, so a second read allocates nothing.
-TEST_CASE("path: a second read of a top-level item with shared values allocates nothing")
-{
-    std::string const bytes = "\x82\xd8\x1c\x61x\xa2\x82\x01\xd8\x1d\x00\x01\xa1\x61k\xd8\x1d\x00\x02"s;
-    auto const root = *cbor::lazy::copy(std::string(bytes));
-    auto const map = *root.at(1);
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(map).has_value());
-    std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]">(map);
+    auto const found = map.at_path<"$[[1, \"x\"]]">();
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
     CHECK_EQ(after, before);
@@ -224,19 +207,6 @@ TEST_CASE("path: a typed read allocates nothing")
     CHECK_EQ(*shared, 2u);
 }
 
-// A tag 29 on the walk names a mark, and only a top-level item keeps the marks. The typed read then goes through lazy
-// and allocates as lazy does. This test records that it allocates; the count depends on the C++ library.
-TEST_CASE("path: a typed read through tag 29 allocates")
-{
-    std::string const doc = "\x82\xd8\x1c\x82\x07\x08\xd8\x1d\x00"s;
-    std::size_t const before = allocations;
-    auto const first = cbor::at_path<"$[1][0]", std::uint64_t>(std::string_view(doc));
-    std::size_t const after = allocations;
-    CHECK_GT(after, before);
-    REQUIRE(first.has_value());
-    CHECK_EQ(*first, 7u);
-}
-
 // A typed read enters tag 24 in the bytes it walks, so the embedded item costs no allocation.
 TEST_CASE("path: a typed read through tag 24 allocates nothing")
 {
@@ -244,7 +214,7 @@ TEST_CASE("path: a typed read through tag 24 allocates nothing")
     auto const root = *cbor::lazy::copy(std::string(doc));
     std::size_t const before = allocations;
     auto const from_bytes = cbor::at_path<"$.a[1]", int>(std::string_view(doc));
-    auto const from_lazy = cbor::at_path<"$.a[1]", int>(root);
+    auto const from_lazy = root.at_path<"$.a[1]", int>();
     std::size_t const after = allocations;
     CHECK_EQ(after, before);
     CHECK_EQ(from_bytes, 2);

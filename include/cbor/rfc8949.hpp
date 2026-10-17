@@ -87,8 +87,6 @@ class rfc8949
 
     friend class well_formedness;
 
-    friend class value_sharing;
-
     friend class extended_diagnostic_notation;
 
     friend class jsonpath;
@@ -103,11 +101,9 @@ class rfc8949
     template <fixed_string Path>
     friend class is_singular_query;
 
-#ifdef __cpp_impl_reflection
     friend class reflection;
 
     friend class generic;
-#endif
 };
 
 }

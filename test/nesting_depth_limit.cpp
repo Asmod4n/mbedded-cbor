@@ -42,7 +42,7 @@ TEST_CASE("nesting depth depth_limit: decode of the item tree")
              error::nesting_depth_exceeded);
 }
 
-// value_sharing::item_decode counts one level for each tag, and none for an array or a map.
+// lazy::tree_decoder::item_decode counts one level for each tag, and none for an array or a map.
 TEST_CASE("nesting depth depth_limit: lazy::decode")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
@@ -63,7 +63,7 @@ TEST_CASE("nesting depth depth_limit: keys_equivalent")
         std::string const b = arrays_around(n, "\x01"sv);
         std::string_view const first = a;
         std::string_view const second = b;
-        return cbor::validity::keys_equivalent(first, 0, second, 0, 1, depth_limit,
+        return cbor::validity::keys_equivalent(first, cbor::validity::offset{}, second, cbor::validity::offset{}, 1, depth_limit,
                                                cbor::validity::limit_checks<false>{});
     };
     CHECK(checked(depth_limit - 1).has_value());

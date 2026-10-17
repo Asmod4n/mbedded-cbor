@@ -17,15 +17,15 @@ using namespace std::string_literals;
 // Each test in this file is one example of README.md. The tests exist so that every example in the README
 // compiles and gives the result that the README states.
 
-// Step 2 reads a message in place: contains, size, and a loop over the elements of an array.
+// Step 2 reads a message in place: size, a missing key, and a loop over the elements of an array.
 TEST_CASE("doc readme: read a message")
 {
     std::string const bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
     auto const doc = cbor::lazy::copy(bytes).value();
 
-    bool const has_samples = doc.contains("samples").value();
     std::uint64_t const pairs = doc.size().value();
-    CHECK(has_samples);
+    auto const missing = doc.at("unit");
+    CHECK_EQ(missing.error(), cbor::error::key_not_found);
     CHECK_EQ(pairs, 3u);
 
     int sum = 0;
@@ -42,9 +42,9 @@ TEST_CASE("doc readme: read one value by its path")
     std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
     auto const doc = cbor::lazy::copy(bytes).value();
 
-    auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);
-    auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
-    auto const age = cbor::at_path<"$.user.age", int>(doc);
+    auto const id = doc.at_path<"$.user.id", std::int64_t>();
+    auto const name = doc.at_path<"$.user.name", std::string_view>();
+    auto const age = doc.at_path<"$.user.age", int>();
     CHECK_EQ(*id, 42);
     CHECK_EQ(**name, "ann");
     CHECK_EQ(age.error(), cbor::error::key_not_found);
@@ -58,7 +58,7 @@ TEST_CASE("doc readme: handle bad input")
     std::string const cut = bytes.substr(0, bytes.size() - 1);
 
     auto const doc = cbor::lazy::copy(cut).value();
-    auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
+    auto const name = doc.at_path<"$.user.name", std::string_view>();
     REQUIRE_FALSE(name.has_value());
     CHECK_EQ(name.error(), cbor::error::too_little_data);
     std::string const why = std::error_code(name.error()).message();
@@ -126,8 +126,8 @@ TEST_CASE("doc readme: structs")
 {
     std::string const bytes = cbor::structs<reading>::encode({"t1", 21.5, {3, 4, 5}}).value();
     std::string const text = cbor::diagnostic_notation(bytes).value();
-    CHECK_EQ(text, R"({"value": 21.5, "sensor": "t1", "samples": [3, 4, 5]})");
-    CHECK_EQ(bytes.size(), 32u);
+    CHECK_EQ(text, R"({"value": 21.5, "sensor": "t1", "samples": 69(h'030004000500')})");
+    CHECK_EQ(bytes.size(), 37u);
 }
 
 #endif

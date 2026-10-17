@@ -52,12 +52,14 @@ public:
 
     owning_ref(owning_ref &&o) noexcept(std::is_nothrow_move_constructible_v<T> &&
                                         std::is_nothrow_default_constructible_v<T>)
+        requires std::is_default_constructible_v<T>
         : owner(std::move(o.owner)), value(std::exchange(o.value, T{}))
     {
     }
 
     owning_ref &operator=(owning_ref &&o) noexcept(std::is_nothrow_move_assignable_v<T> &&
                                                    std::is_nothrow_default_constructible_v<T>)
+        requires std::is_default_constructible_v<T>
     {
         owner = std::move(o.owner);
         value = std::exchange(o.value, T{});

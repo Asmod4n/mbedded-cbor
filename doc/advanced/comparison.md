@@ -276,15 +276,15 @@ bool const same = v[0] == v[1];
 
 ### mbedded-cbor
 
-A lazy and structs read tag 29 as the value that tag 28 marks. `decode` keeps tag 28 as a tag and points tag 29 to the marked item; the application writes tags 28 and 29 through `cbor::encoder` ([runtime.md](runtime.md)).
+Tags 28 and 29 are plain tags in a lazy and in a tree decode; `cbor::structs` decode resolves them. The encoder writes them only for a cycle that it finds itself ([runtime.md](runtime.md)).
 
 ```cpp
 // bytes: [28("x"), 29(0)]
-auto const second = cbor::lazy::copy(bytes)->at(1)->get<std::string_view>();
-// **second is "x"
+auto const second = cbor::lazy::copy(bytes)->at(1);
+// second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0
 
 auto const v = cbor::structs<std::vector<std::string>>::decode(bytes);
-// **v is {"x", "x"}
+// v.error() is cbor::error::incorrect_type
 ```
 
 ### nlohmann/json
@@ -546,7 +546,7 @@ section 6:
 
 The A/A difference of a cell lies between 0.07 and 10.9 percent (field
 `aa_percent` of the file). The mbedded-cbor sum reads each element
-through `at_path<"@[]">(i)`, not through the `view` of section 6.
+through `i.at_path<"@[]">()`, not through the `view` of section 6.
 
 bench/results has no measurement of nlohmann/json, libcbor, the plain
 at_path form, the lazy elements form, structs, shared values or broken

@@ -10,6 +10,7 @@
 #endif
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -329,10 +330,9 @@ inline value text_value(std::string_view const t)
     return {s};
 }
 
-// The value of a decoded item tree. Tag 28 is the value it marks and tag 29 the value it points to; a bignum of at
-// most 8 bytes is an integer, as a dynamic language reads it. A float is a double. The tree is passed to find the
-// item that a tag 29 points to.
-inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it)
+// The value of a decoded item tree. A bignum of at most 8 bytes is an integer, as a dynamic language reads it. A
+// float is a double. Tags 28 and 29 are plain tags.
+inline value value_of(cbor::item const &it)
 {
     switch (it.type) {
     case cbor::type::text_string:
@@ -357,14 +357,14 @@ inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item 
         array a;
         a.reserve(it.via.array.size());
         for (cbor::item const &child : it.via.array)
-            a.push_back(value_of(tree, child));
+            a.push_back(value_of(child));
         return {std::move(a)};
     }
     case cbor::type::map: {
         map m;
         m.reserve(it.via.map.size() / 2);
         for (std::size_t i = 0; i + 1 < it.via.map.size(); i += 2)
-            m.push_back(entry{value_of(tree, it.via.map[i]), value_of(tree, it.via.map[i + 1])});
+            m.push_back(entry{value_of(it.via.map[i]), value_of(it.via.map[i + 1])});
         return {std::move(m)};
     }
     default:
@@ -372,10 +372,6 @@ inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item 
     }
     std::uint64_t const number = it.via.tag.number;
     cbor::item const &inner = *it.via.tag.content;
-    if (number == 29)
-        return value_of(tree, cbor::shared_value(tree, it));
-    if (number == 28)
-        return value_of(tree, inner);
     if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
         std::string m(reinterpret_cast<char const *>(inner.via.bin.data()), inner.via.bin.size());
         m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
@@ -387,7 +383,7 @@ inline value value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item 
         }
         return {bignum{number == 3, std::move(m)}};
     }
-    return {tagged{number, value_of(tree, inner)}};
+    return {tagged{number, value_of(inner)}};
 }
 
 inline std::expected<value, error> value_of(cbor::lazy const &l)
@@ -395,7 +391,7 @@ inline std::expected<value, error> value_of(cbor::lazy const &l)
     auto const tree = l.decode();
     if (!tree)
         return std::unexpected(tree.error());
-    return value_of(*tree, **tree);
+    return value_of(**tree);
 }
 
 // A value written through the public encoder: an integer at 64 bits, a float as a double, a bignum as tag 2 or 3

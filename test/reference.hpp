@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -460,15 +461,10 @@ inline std::string magnitude_plus_one(std::string_view const m)
     return sum;
 }
 
-inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it,
-                                            std::vector<cbor::item const *> &open);
-
-// The reference model of a decoded item tree. Tag 28 is the value it marks, and tag 29 is the value it points to,
-// as an application without identity reads them. A bignum that fits 64 bits is an integer. A reference to an item
-// whose read is not complete is sharedref_not_complete, as a cycle has no value in this model. Tag 24 is a tag
-// over its byte string. The tree is passed to find the item that a tag 29 points to.
-inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> const &tree, cbor::item const &it,
-                                            std::vector<cbor::item const *> &open)
+// The reference model of a decoded item tree. Tags 28 and 29 are plain tags over their content, as RFC 8949
+// 3.4 lets a reader that does not know a tag pass it on. A bignum that fits 64 bits is an integer. Tag 24 is a tag
+// over its byte string.
+inline std::expected<value, error> value_of(cbor::item const &it)
 {
     switch (it.type) {
     case cbor::type::text_string:
@@ -492,21 +488,11 @@ inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> co
     default:
         break;
     }
-    if (it.type == cbor::type::tag && it.via.tag.number == 29) {
-        cbor::item const &shared = cbor::shared_value(tree, it);
-        if (std::ranges::find(open, &shared) != open.end())
-            return std::unexpected(error::sharedref_not_complete);
-        open.push_back(&it);
-        auto made = value_of(tree, shared, open);
-        open.pop_back();
-        return made;
-    }
-    open.push_back(&it);
     std::expected<value, error> made = value{};
     if (it.type == cbor::type::array) {
         array a;
         for (cbor::item const &child : it.via.array) {
-            auto e = value_of(tree, child, open);
+            auto e = value_of(child);
             if (!e) {
                 made = std::unexpected(e.error());
                 break;
@@ -518,8 +504,8 @@ inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> co
     } else if (it.type == cbor::type::map) {
         map m;
         for (std::size_t i = 0; i + 1 < it.via.map.size(); i += 2) {
-            auto k = value_of(tree, it.via.map[i], open);
-            auto v = k ? value_of(tree, it.via.map[i + 1], open) : std::expected<value, error>(std::unexpected(k.error()));
+            auto k = value_of(it.via.map[i]);
+            auto v = k ? value_of(it.via.map[i + 1]) : std::expected<value, error>(std::unexpected(k.error()));
             if (!v) {
                 made = std::unexpected(v.error());
                 break;
@@ -531,9 +517,7 @@ inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> co
     } else {
         std::uint64_t const number = it.via.tag.number;
         cbor::item const &inner = *it.via.tag.content;
-        if (number == 28) {
-            made = value_of(tree, inner, open);
-        } else if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
+        if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
             bool const negative_value = number == 3;
             std::string_view const m = magnitude_without_leading_zeros(
                 std::string_view(reinterpret_cast<char const *>(inner.via.bin.data()), inner.via.bin.size()));
@@ -546,11 +530,10 @@ inline std::expected<value, error> value_of(std::shared_ptr<cbor::item const> co
                 made = value{bignum{negative_value, negative_value ? magnitude_plus_one(m) : std::string(m)}};
             }
         } else {
-            auto c = value_of(tree, inner, open);
+            auto c = value_of(inner);
             made = c ? std::expected<value, error>(value{tagged{number, std::move(*c)}}) : std::unexpected(c.error());
         }
     }
-    open.pop_back();
     return made;
 }
 
@@ -559,8 +542,7 @@ inline std::expected<value, error> value_of(cbor::lazy const &l)
     auto const tree = l.decode();
     if (!tree)
         return std::unexpected(tree.error());
-    std::vector<cbor::item const *> open;
-    return value_of(*tree, **tree, open);
+    return value_of(**tree);
 }
 
 template <class E>
@@ -726,13 +708,14 @@ inline void check_both(std::string_view const wire, value const &expected)
 // The value of the node that a singular query selects.
 inline std::expected<value, error> at_path(std::string_view const path, cbor::lazy const &l)
 {
-    return value_of(cbor::at_path(path, l));
+    return cbor::jsonpath::compile<cbor::lazy>(path).and_then(
+        [&l](cbor::jsonpath::query<cbor::lazy> const &e) { return value_of(l.at_path(e)); });
 }
 
 template <cbor::fixed_string Path>
 std::expected<value, error> at_path(cbor::lazy const &l)
 {
-    return value_of(cbor::at_path<Path>(l));
+    return value_of(l.at_path<Path>());
 }
 
 // The nodelist of a query as an array of the values of its nodes.
@@ -752,13 +735,14 @@ inline std::expected<value, error> values_of(std::expected<std::vector<cbor::laz
 
 inline std::expected<value, error> query(std::string_view const path, cbor::lazy const &l)
 {
-    return values_of(cbor::query(path, l));
+    return cbor::jsonpath::compile<cbor::nodelist>(path).and_then(
+        [&l](cbor::jsonpath::query<cbor::nodelist> const &e) { return values_of(l.at_path(e)); });
 }
 
 template <cbor::fixed_string Path>
 std::expected<value, error> query(cbor::lazy const &l)
 {
-    return values_of(cbor::query<Path>(l));
+    return values_of(l.at_path<Path, cbor::nodelist>());
 }
 
 } // namespace test

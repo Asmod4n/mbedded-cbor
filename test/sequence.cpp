@@ -45,9 +45,9 @@ bool inside(std::string const &bytes, char const *const p)
 TEST_CASE("sequence: an empty CBOR Sequence has no element")
 {
     CHECK(elements_of(held(""sv)).empty());
-    static_assert(std::ranges::input_range<cbor::sequence>);
-    static_assert(!std::ranges::forward_range<cbor::sequence>);
-    static_assert(!std::ranges::sized_range<cbor::sequence>);
+    CHECK((std::ranges::input_range<cbor::sequence>));
+    CHECK((!std::ranges::forward_range<cbor::sequence>));
+    CHECK((!std::ranges::sized_range<cbor::sequence>));
     CHECK(cbor::sequence{held(""sv)}.empty());
     CHECK(std::ranges::empty(cbor::sequence{held(""sv)}));
     CHECK_FALSE(cbor::sequence{held("\x01"sv)}.empty());
@@ -138,8 +138,8 @@ TEST_CASE("sequence: lazy, path and decode read each element through a copy")
     CHECK(*decoded == A(1, 2));
 }
 
-// Value sharing (tags 28 and 29) counts within one top-level item. A reference in the second element cannot
-// reach a value that the first element marks.
+// A lazy reads tags 28 and 29 as plain tags, so a reference in the second element is a tag over its index and
+// reaches nothing in the first element.
 TEST_CASE("sequence: shared references do not cross elements")
 {
     auto const owner = std::make_shared<std::string const>("\xd8\x1c\x01\x81\xd8\x1d\x00"s);
@@ -150,8 +150,9 @@ TEST_CASE("sequence: shared references do not cross elements")
     auto const l = cbor::lazy::copy(views[1]);
     REQUIRE(l.has_value());
     auto const element = l->at(0).and_then([](cbor::lazy const &e) { return e.get<std::uint64_t>(); });
-    CHECK_EQ(element.error(), error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]).error(), error::sharedref_index_not_marked);
+    CHECK_EQ(element, 0u);
+    CHECK_EQ(l->at(0)->type(), cbor::type::tag);
+    CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]), 0u);
 }
 
 // Owner decision: a sequence takes its bytes only in the view form, so each element is a view that the sequence
@@ -168,4 +169,17 @@ TEST_CASE("sequence: only a std::shared_ptr<std::string const> makes a sequence"
     CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::pmr::string &&>);
     CHECK_FALSE(std::is_constructible_v<cbor::sequence, char const (&)[3]>);
     CHECK_THROWS_AS(cbor::sequence{std::shared_ptr<std::string const>{}}, std::logic_error);
+}
+
+// RFC 8742 2 and RFC 8949 3: each data item of a CBOR Sequence has at least its initial byte. An element whose count is
+// larger than the bytes left is too_little_data before its elements are read, by owner decision.
+TEST_CASE("sequence: a count larger than the bytes left is too_little_data before the elements")
+{
+    for (std::string_view const wire : {"\x8c\xff"sv, "\x95\xf8\x04"sv, "\x95\xbf"sv, "\x88\x00\x7f"sv,
+                                        "\x87\xd8\x1c\x1f"sv, "\x85\xd8\x1c\xd8\x1c"sv, "\xa2\xff\x00\x00"sv}) {
+        CAPTURE(wire);
+        auto const elements = elements_of(held(wire));
+        REQUIRE_EQ(elements.size(), 1);
+        CHECK_EQ(elements.front().error(), error::too_little_data);
+    }
 }

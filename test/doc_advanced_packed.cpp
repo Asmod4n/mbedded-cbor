@@ -175,8 +175,8 @@ TEST_CASE("doc advanced schema: a list accessor keeps the bytes alive")
 // The section "Typed arrays" shows view, which gives a typed_array_view of a list of a fixed-width number.
 TEST_CASE("doc advanced schema: a typed array view")
 {
-    static_assert(std::ranges::random_access_range<cbor::typed_array_view<double>>);
-    static_assert(std::ranges::sized_range<cbor::typed_array_view<double>>);
+    CHECK((std::ranges::random_access_range<cbor::typed_array_view<double>>));
+    CHECK((std::ranges::sized_range<cbor::typed_array_view<double>>));
     auto const root = cbor::packed<car>::path(*cbor::packed<car>::encode(sample));
     REQUIRE(root.has_value());
     auto const track = root->view<"$.track">();

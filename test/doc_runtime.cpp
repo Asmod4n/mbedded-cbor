@@ -108,13 +108,13 @@ TEST_CASE("doc runtime: loop over an array or a map")
     CHECK(seen == std::vector<std::pair<std::string, std::int64_t>>{{"a", 1}, {"b", 2}});
 }
 
-// The section "Size and keys" shows size and contains.
+// The section "Size and keys" shows size and a missing key.
 TEST_CASE("doc runtime: size and keys")
 {
     std::string const bytes = preferred(M("a"s, 1, "b"s, 2));
     auto const map = cbor::lazy::copy(bytes);
     CHECK_EQ(map->size(), 2u);
-    CHECK_EQ(map->contains("a"), true);
+    CHECK_EQ(map->at("z").error(), cbor::error::key_not_found);
     CHECK_EQ(cbor::lazy::copy(preferred(A(1, 2, 3)))->size(), 3u);
 }
 
