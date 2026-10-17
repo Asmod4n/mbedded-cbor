@@ -139,7 +139,7 @@ view that gave it end. An iterator belongs to one thread
 
 ## 5. decode
 
-`lazy::decode()` gives `std::expected<std::shared_ptr<cbor::item const>,
+`lazy::clone()` gives `std::expected<std::shared_ptr<cbor::item const>,
 error>`. It reads the whole item at the lazy, checks every head and builds
 one `cbor::item` for each data item. An item is an aggregate of 24 bytes:
 `type` (a `cbor::type`), `additional_information` (RFC 8949 3) and a union

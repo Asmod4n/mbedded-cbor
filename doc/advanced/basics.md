@@ -195,7 +195,7 @@ members use the default resource.
 | `item_size`, the iterator of `cbor::sequence` | nothing |
 | a step of a lazy (`at`, `find`, `get`) | nothing |
 | `lazy::copy`, `lazy::view` | the shared state of the top-level item, once; `lazy::copy` also the `std::shared_ptr<std::string const>` that holds the bytes |
-| `lazy::decode` | its items |
+| `lazy::clone` | its items |
 | `diagnostic_notation`, the encoder into a `std::string` | the string |
 | the encoder into a span | nothing |
 
