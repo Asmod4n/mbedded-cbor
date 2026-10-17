@@ -65,15 +65,16 @@ trap 'rm -rf "$build"; rm -f "$gate_out"' EXIT
 mkdir -p "$build/bin" "$build/out" "$build/log" "$build/src" "$build/docs"
 echo "building into $build"
 
-# The tree of a commit: include/ only. COMMIT_TREES=<dir> holds <commit>/include and <commit>.id where git is absent.
+# The tree of a commit: include/ and the bench code of that commit, so each arm builds its own API. COMMIT_TREES=<dir>
+# holds <commit>/ (include, bench and test/owned_copy.hpp) and <commit>.id where git is absent.
 tree_of() {
 	local c=$1 dest=$2
 	mkdir -p "$dest"
 	if [ -n "${COMMIT_TREES:-}" ]; then
-		cp -r "$COMMIT_TREES/$c/include" "$dest/include"
+		cp -r "$COMMIT_TREES/$c/." "$dest/"
 		cat "$COMMIT_TREES/$c.id" > "$dest/id"
 	else
-		git -C "$repo" archive "$c" include | tar -x -C "$dest"
+		git -C "$repo" archive "$c" include bench/runtime.cpp bench/value.hpp $(git -C "$repo" ls-tree --name-only "$c" test/owned_copy.hpp) | tar -x -C "$dest"
 		git -C "$repo" rev-parse --verify "$c^{commit}" > "$dest/id"
 	fi
 }
@@ -96,8 +97,8 @@ compile() {
 	AP_*_[0-9]) defs="-DARM_${arm%_*} -DAP_PATH=${arm##*_}" ;;
 	esac
 	if "$cc" $std $flags -DDOCTEST_CONFIG_DISABLE $defs -DARM_NAME="\"$arm\"" -DDOC_"$doc" \
-		-DDOC_PATH="\"$build/docs/$doc.cbor\"" -I"$build/src/$variant/include" -I"$bench" \
-		"$build/runtime.cpp" -lbenchmark -lpthread -o "$build/bin/$name" > "$build/log/$name" 2>&1; then
+		-DDOC_PATH="\"$build/docs/$doc.cbor\"" -I"$build/src/$variant/include" -I"$build/src/$variant/bench" \
+		"$build/src/$variant/bench/runtime.cpp" -lbenchmark -lpthread -o "$build/bin/$name" > "$build/log/$name" 2>&1; then
 		rm -f "$build/log/$name"
 	else
 		rm -f "$build/bin/$name"
