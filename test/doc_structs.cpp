@@ -39,7 +39,7 @@ struct person {
 };
 
 // The section "Write a struct and read it back" shows this round trip whole, with the check of each result, because
-// a new user meets two std::expected values and an owning_ref in it.
+// a new user meets two std::expected values and a ref in it.
 std::expected<std::string, cbor::error> round_trip()
 {
     auto const bytes = cbor::structs<person>::encode(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});

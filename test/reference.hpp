@@ -661,7 +661,7 @@ auto encode(Target &&target, value const &v)
     return e.finish();
 }
 
-inline std::expected<cbor::owning_ref<std::span<std::string_view const>>, error> encode_iov(value const &v)
+inline std::expected<cbor::ref<std::span<std::string_view const>>, error> encode_iov(value const &v)
 {
     cbor::iov_writer w;
     return encode(w, v);

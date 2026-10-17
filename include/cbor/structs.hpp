@@ -44,7 +44,7 @@
 #include "validity.hpp"
 #include "head.hpp"
 #include "lazy.hpp"
-#include "owning_ref.hpp"
+#include "ref.hpp"
 #include "packed.hpp"
 #include "shared.hpp"
 
@@ -1339,7 +1339,7 @@ template <class T>
 class structs
 {
 public:
-    static std::expected<owning_ref<T>, error> decode(std::string_view const encoded)
+    static std::expected<ref<T>, error> decode(std::string_view const encoded)
     {
 #if defined(__cpp_exceptions)
         try {
@@ -1353,7 +1353,7 @@ public:
     }
 
     template <std::same_as<std::string> Encoded>
-    static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
+    static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
 #if defined(__cpp_exceptions)
         try {
@@ -1366,13 +1366,13 @@ public:
 #endif
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
+    static std::expected<ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
     {
         pfr::check_default_constructible<T>();
         return decode(std::move(encoded), T{});
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded, T &&target)
+    static std::expected<ref<T>, error> decode(std::shared_ptr<std::string const> encoded, T &&target)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::structs::decode: the encoded data item is null");
         std::string_view const bytes = *encoded;
@@ -1444,7 +1444,7 @@ public:
     }
 
 private:
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner,
+    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner,
                                                       std::string_view const encoded, T &&target)
     {
         validity::throw_logic_error_if_empty(owner,
@@ -1459,7 +1459,7 @@ private:
                 });
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
-            return owning_ref<T>(std::move(owner), std::move(*value));
+            return ref<T>(std::move(owner), std::move(*value));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
             return std::unexpected(error::not_enough_memory);

@@ -1,5 +1,5 @@
-// The result is kept in a variable, so the owning_ref lives as long as
-// the reference. tools/owning_ref.query must find nothing here.
+// The result is kept in a variable, so the ref lives as long as
+// the reference. tools/ref.query must find nothing here.
 #include <cbor/cbor.hpp>
 
 #include <cstddef>

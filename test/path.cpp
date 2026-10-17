@@ -701,20 +701,20 @@ TEST_CASE("path: a typed read checks that the owner holds an object")
 
 // A move gives the owner and the view to the target. The test exists because a source that kept its view after it
 // lost its owner read freed memory once the target and the bytes were gone. The source keeps an empty view.
-TEST_CASE("path: a moved owning_ref keeps no view")
+TEST_CASE("path: a moved ref keeps no view")
 {
     auto const read = [] {
         auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
         return *cbor::at_path<"$.a", std::string_view>(owner);
     };
-    std::optional<cbor::owning_ref<std::string_view>> source(read());
+    std::optional<cbor::ref<std::string_view>> source(read());
     {
         auto const target = std::move(*source);
         CHECK_EQ(*target, "xyz"sv);
     }
     CHECK(source->operator->()->empty());
     CHECK_EQ(source->operator->()->data(), nullptr);
-    std::optional<cbor::owning_ref<std::string_view>> assigned(read());
+    std::optional<cbor::ref<std::string_view>> assigned(read());
     source.emplace(read());
     *source = std::move(*assigned);
     assigned.reset();
@@ -728,7 +728,7 @@ namespace
 {
 
 template <class R>
-concept owning_ref_compares = requires(R const &r) { r == r; };
+concept ref_compares = requires(R const &r) { r == r; };
 
 template <class R>
 concept rvalue_dereferences = requires(R &&r) { *std::move(r); };
@@ -741,9 +741,9 @@ concept lvalue_reaches_member = requires(R const &r) { r.operator->(); };
 
 } // namespace
 
-// std::optional compares its value with == and reaches its members with ->. An owning_ref does the same, so a caller
+// std::optional compares its value with == and reaches its members with ->. A ref does the same, so a caller
 // compares a view without *. The lvalue rule of * and -> stays: a view from a temporary does not compile.
-TEST_CASE("path: owning_ref compares and reaches its value as std::optional does")
+TEST_CASE("path: ref compares and reaches its value as std::optional does")
 {
     auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x63xyz\x61\x62\x63xyz"s);
     auto const a = *cbor::at_path<"$.a", std::string_view>(owner);
@@ -757,10 +757,10 @@ TEST_CASE("path: owning_ref compares and reaches its value as std::optional does
     CHECK_EQ(a->size(), 3uz);
     std::optional<std::string_view> const o = "xyz"sv;
     CHECK_EQ(a == "xyz"sv, o == "xyz"sv);
-    CHECK_FALSE(owning_ref_compares<cbor::owning_ref<cbor::typed_array>>);
-    CHECK_FALSE(rvalue_dereferences<cbor::owning_ref<std::string_view>>);
-    CHECK_FALSE(rvalue_reaches_member<cbor::owning_ref<std::string_view>>);
-    CHECK(lvalue_reaches_member<cbor::owning_ref<std::string_view>>);
+    CHECK_FALSE(ref_compares<cbor::ref<cbor::typed_array>>);
+    CHECK_FALSE(rvalue_dereferences<cbor::ref<std::string_view>>);
+    CHECK_FALSE(rvalue_reaches_member<cbor::ref<std::string_view>>);
+    CHECK(lvalue_reaches_member<cbor::ref<std::string_view>>);
 }
 
 // RFC 8949 3: a data item has at least its initial byte, and an argument or a string has as many bytes as its head

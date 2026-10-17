@@ -100,7 +100,7 @@ TEST_CASE("doc runtime: loop over an array or a map")
 
     std::string const bytes = preferred(M("a"s, 1, "b"s, 2));
     std::vector<std::pair<std::string, std::int64_t>> seen;
-    auto const use = [&seen](std::expected<cbor::owning_ref<std::string_view>, error> const &k,
+    auto const use = [&seen](std::expected<cbor::ref<std::string_view>, error> const &k,
                              std::expected<std::int64_t, error> const &v) { seen.emplace_back(std::string{**k}, *v); };
     auto const map = test::lazy_of_copy(bytes);
     for (auto const pair : *map->entries())

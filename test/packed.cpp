@@ -1823,7 +1823,7 @@ std::string ticket_bytes()
 // the caller would read freed memory, and the address sanitizer reports that read.
 TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 {
-    std::expected<cbor::owning_ref<ticket>, cbor::error> const t = cbor::packed<ticket>::decode(ticket_bytes());
+    std::expected<cbor::ref<ticket>, cbor::error> const t = cbor::packed<ticket>::decode(ticket_bytes());
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);
@@ -2051,7 +2051,7 @@ TEST_CASE("attack: the sample message reads every path")
 }
 
 // A text is a view into the bytes that the root holds. An accessor is read through an lvalue only, so each accessor
-// on the way to a value has a name. An owning_ref cannot be read through a temporary. An owner that is empty is a
+// on the way to a value has a name. A ref cannot be read through a temporary. An owner that is empty is a
 // wrong use and throws. The test exists because each of these would otherwise let a view outlive its bytes.
 TEST_CASE("attack: no text result outlives its bytes")
 {
@@ -2063,7 +2063,7 @@ TEST_CASE("attack: no text result outlives its bytes")
     CHECK_FALSE(temporary_reads<A, "$.text">);
     CHECK_FALSE(temporary_reads<cbor::packed<probe>::accessor<tire>, "@.diameter">);
     CHECK_FALSE(chain_reads<A>);
-    CHECK_FALSE(dereferenced_as_rvalue<cbor::owning_ref<probe>>);
+    CHECK_FALSE(dereferenced_as_rvalue<cbor::ref<probe>>);
     CHECK_THROWS_AS((void)cbor::packed<probe>::path(std::shared_ptr<std::string const>{}), std::logic_error);
     CHECK_THROWS_AS((void)cbor::packed<probe>::decode(std::shared_ptr<std::string const>{}), std::logic_error);
 }

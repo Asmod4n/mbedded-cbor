@@ -36,7 +36,7 @@
 #include "encode.hpp"
 #include "error.hpp"
 #include "head.hpp"
-#include "owning_ref.hpp"
+#include "ref.hpp"
 #include "rfc8746.hpp"
 #include "rfc8943.hpp"
 #include "rfc9535.hpp"
@@ -2376,7 +2376,7 @@ public:
         return path(std::make_shared<std::string const>(std::move(encoded)));
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::string_view const encoded)
+    static std::expected<ref<T>, error> decode(std::string_view const encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
 #if defined(__cpp_exceptions)
@@ -2386,7 +2386,7 @@ public:
             T value{};
             if (auto const r = reflection::root_read<T>(value, *copy, limits.load()); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            return owning_ref<T>(std::move(copy), std::move(value));
+            return ref<T>(std::move(copy), std::move(value));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
             return std::unexpected(error::not_enough_memory);
@@ -2396,7 +2396,7 @@ public:
 
     template <std::same_as<std::string> Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static std::expected<owning_ref<T>, error> decode(Encoded &&encoded)
+    static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
 #if defined(__cpp_exceptions)
         try {
@@ -2409,13 +2409,13 @@ public:
 #endif
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
+    static std::expected<ref<T>, error> decode(std::shared_ptr<std::string const> encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         return decode(std::move(encoded), T{});
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<std::string const> encoded, T target)
+    static std::expected<ref<T>, error> decode(std::shared_ptr<std::string const> encoded, T target)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         validity::throw_logic_error_if_null(encoded, "cbor::packed::decode: the encoded data item is null");
@@ -2526,7 +2526,7 @@ private:
         return accessor<>(std::move(owner), encoded, root, *dir);
     }
 
-    static std::expected<owning_ref<T>, error> decode(std::shared_ptr<void const> owner,
+    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner,
                                                       std::string_view const encoded, T target)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
@@ -2537,7 +2537,7 @@ private:
 #endif
             if (auto const r = reflection::root_read<T>(target, encoded, limits.load()); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            return owning_ref<T>(std::move(owner), std::move(target));
+            return ref<T>(std::move(owner), std::move(target));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
             return std::unexpected(error::not_enough_memory);

@@ -87,13 +87,13 @@ TEST_CASE("doc basics: bytes go in as a copy or as a view")
 }
 
 // The section "Results that point into the bytes" shows the owner rule: the view stays valid after the owner of the
-// caller ends, because the owning_ref holds the bytes.
+// caller ends, because the ref holds the bytes.
 TEST_CASE("doc basics: results that point into the bytes")
 {
     std::string bytes = preferred(M("name"s, "ann"s));
     std::string_view text;
     std::string copy;
-    std::optional<std::expected<cbor::owning_ref<std::string_view>, cbor::error>> kept;
+    std::optional<std::expected<cbor::ref<std::string_view>, cbor::error>> kept;
     {
         auto const owner = std::make_shared<std::string const>(std::move(bytes));
         auto const name = cbor::at_path<"$.name", std::string_view>(owner);

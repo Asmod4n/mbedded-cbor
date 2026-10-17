@@ -33,7 +33,7 @@
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
-#include "owning_ref.hpp"
+#include "ref.hpp"
 #include "item.hpp"
 #include "decode.hpp"
 
@@ -115,7 +115,7 @@ public:
         requires(is_singular_query_v<Path> &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, typed_array>))
-    std::expected<owning_ref<T>, error> at_path() const;
+    std::expected<ref<T>, error> at_path() const;
 
     template <fixed_string Path, std::same_as<nodelist> T>
         requires is_valid_path_v<Path>
@@ -141,7 +141,7 @@ public:
 #endif
     std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                    std::is_same_v<T, typed_array>,
-                               owning_ref<T>, T>, error> get() const;
+                               ref<T>, T>, error> get() const;
 
     std::expected<lazy_elements, error> elements() const;
 
@@ -1042,7 +1042,7 @@ template <class T>
 #endif
 std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                std::is_same_v<T, typed_array>,
-                           owning_ref<T>, T>, error> lazy::get() const
+                           ref<T>, T>, error> lazy::get() const
 {
     return get<T>(limits.load());
 }
@@ -1053,7 +1053,7 @@ auto lazy::get(limit_values const &loaded) const
     using result = std::expected<std::conditional_t<std::is_same_v<T, std::string_view> ||
                                                         std::is_same_v<T, std::span<std::byte const>> ||
                                                         std::is_same_v<T, typed_array>,
-                                                    owning_ref<T>, T>,
+                                                    ref<T>, T>,
                                  error>;
     return limits_apply(
         loaded, [&]<bool Checked>(std::size_t, validity::limit_checks<Checked> const checks) -> result {
@@ -1062,7 +1062,7 @@ auto lazy::get(limit_values const &loaded) const
                     auto const element = typed_array_element_read(*this);
                     if (!element) [[unlikely]]
                         return std::unexpected(element.error());
-                    return owning_ref<T>(top_level.owner, std::as_bytes(std::span(*element)));
+                    return ref<T>(top_level.owner, std::as_bytes(std::span(*element)));
                 }
             }
 #ifdef __STDCPP_FLOAT128_T__
@@ -1163,19 +1163,19 @@ auto lazy::get(limit_values const &loaded) const
                 auto const text = d.byte_string_decode(h.argument);
                 if (!text) [[unlikely]]
                     return std::unexpected(text.error());
-                return owning_ref<T>(source.owner, *text);
+                return ref<T>(source.owner, *text);
             } else if constexpr (std::is_same_v<T, typed_array>) {
                 auto const bytes = typed_array_bytes_read(*found);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
-                return owning_ref<T>(source.owner, typed_array{h.argument, std::as_bytes(std::span(bytes->bytes))});
+                return ref<T>(source.owner, typed_array{h.argument, std::as_bytes(std::span(bytes->bytes))});
             } else {
                 if (h.major != major_type::byte_string) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
                 auto const bytes = d.byte_string_decode(h.argument);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
-                return owning_ref<T>(source.owner, std::as_bytes(std::span(*bytes)));
+                return ref<T>(source.owner, std::as_bytes(std::span(*bytes)));
             }
 #ifdef __STDCPP_FLOAT128_T__
             }
