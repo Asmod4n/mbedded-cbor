@@ -51,7 +51,7 @@ constant arrays.
 
 ## 7. The item tree
 
-`lazy::decode` builds one `cbor::item` for each data item in a
+`lazy::clone` builds one `cbor::item` for each data item in a
 `std::pmr::monotonic_buffer_resource` that the result owns. The children
 of an array or a map stand by value in one block of that resource, so a
 container holds a `std::span<cbor::item const>`. The first block is sized

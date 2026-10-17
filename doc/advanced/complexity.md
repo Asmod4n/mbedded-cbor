@@ -178,7 +178,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy::copy<Encoded>(Encoded&&)` | O(1) | O(1) | Moves; two allocations. |
 | `lazy::copy(string_view)` :231 | O(n) | O(n) | Copies the input. |
 | `lazy::tree_decoder::item_decode(size_t depth, optional<size_t> mark)` | O(n) heads and string views; a tag 29 that names a mark before the start of the lazy adds one item_skip over the top-level item, O(N_top), once | one item per data item in a deque; one pointer per child in one vector; a scratch vector of pointers for the open containers; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. An empty container allocates nothing. |
-| `lazy::decode()` | as item_decode | as item_decode, plus one make_shared | |
+| `lazy::clone()` | as item_decode | as item_decode, plus one make_shared | |
 | `lazy::type()` | O(1) | O(1) | |
 | `lazy::key_find<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
 | `lazy::key_find<Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to the end) | O(1) | No allocation. |
@@ -426,7 +426,7 @@ Above linear in the input:
 Allocation on a success path:
 
 - `value_sharing::sharing_decoder::mark`, `lazy::tree_decoder::item_decode`.
-- `lazy::copy`, `lazy::view`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::decode`.
+- `lazy::copy`, `lazy::view`, `packed::path`, `packed::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::clone`.
 - jsonpath: every parser, `compile`, a `nodelist` read, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `string_sink`, `container_message`.
 - diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.
