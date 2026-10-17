@@ -623,15 +623,12 @@ class jsonpath
             auto const r = d.head_decode();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (error const c = validity::check_tag_content(tag, r->major).error_or(error{}); c != error{})
-                [[unlikely]]
+            if (error const c = validity::check_typed_array_content(tag, r->major, r->argument).error_or(error{});
+                c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = d.byte_string_decode(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            if (error const c = validity::typed_array_check(tag, bytes->size()).error_or(error{}); c != error{})
-                [[unlikely]]
-                return std::unexpected(c);
             return *bytes;
         };
         for (;;) {

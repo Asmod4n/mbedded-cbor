@@ -390,6 +390,14 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_typed_array_content(std::uint64_t const tag, major_type const content, std::size_t const size)
+    {
+        if (auto const r = check_tag_content(tag, content); !r) [[unlikely]]
+            return r;
+        return typed_array_check(tag, size);
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_entries_all_read(std::uint64_t const claimed, std::uint64_t const readable, error const failure)
     {
         if (failure != error{}) [[unlikely]]
