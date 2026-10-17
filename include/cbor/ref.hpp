@@ -11,6 +11,16 @@
 #include <type_traits>
 #include <utility>
 
+#include "rfc8746.hpp"
+
+#if defined(__clang__)
+#define CBOR_LIFETIMEBOUND [[clang::lifetimebound]]
+#define CBOR_OWNER [[gsl::Owner]]
+#else
+#define CBOR_LIFETIMEBOUND
+#define CBOR_OWNER
+#endif
+
 namespace cbor
 {
 
@@ -33,6 +43,12 @@ concept owned_bytes = std::ranges::contiguous_range<R> && !std::is_lvalue_refere
                       !std::ranges::borrowed_range<R> && std::same_as<std::ranges::range_value_t<R>, char>;
 
 template <class T>
+inline constexpr bool is_view = std::ranges::view<T>;
+
+template <>
+inline constexpr bool is_view<typed_array> = true;
+
+template <class T>
 concept copied_value = std::same_as<T, std::string> || std::same_as<T, std::vector<std::byte>>;
 
 template <class R>
@@ -44,7 +60,7 @@ concept borrowed_bytes = std::ranges::contiguous_range<R> && std::ranges::borrow
                          std::same_as<std::ranges::range_value_t<R>, char>;
 
 template <class T>
-class ref
+class CBOR_OWNER ref
 {
     std::shared_ptr<void const> owner;
     T value;
@@ -87,19 +103,19 @@ public:
         return *this;
     }
 
-    template <class Self>
-        requires std::is_lvalue_reference_v<Self>
-    T const &operator*(this Self &&self)
+    std::conditional_t<is_view<T>, T, T const &> operator*() const & CBOR_LIFETIMEBOUND
     {
-        return self.value;
+        return value;
     }
 
-    template <class Self>
-        requires std::is_lvalue_reference_v<Self>
-    T const *operator->(this Self &&self)
+    void operator*() const && = delete;
+
+    T const *operator->() const & CBOR_LIFETIMEBOUND
     {
-        return &self.value;
+        return &value;
     }
+
+    void operator->() const && = delete;
 
     std::string decode() const
         requires std::same_as<T, std::string_view>
@@ -129,7 +145,7 @@ public:
 struct zone_owner;
 
 template <class T>
-class owning
+class CBOR_OWNER owning
 {
     std::shared_ptr<T const> held;
 
@@ -140,19 +156,19 @@ class owning
     friend struct zone_owner;
 
 public:
-    template <class Self>
-        requires std::is_lvalue_reference_v<Self>
-    T const &operator*(this Self &&self)
+    T const &operator*() const & CBOR_LIFETIMEBOUND
     {
-        return *self.held;
+        return *held;
     }
 
-    template <class Self>
-        requires std::is_lvalue_reference_v<Self>
-    T const *operator->(this Self &&self)
+    void operator*() const && = delete;
+
+    T const *operator->() const & CBOR_LIFETIMEBOUND
     {
-        return self.held.get();
+        return held.get();
     }
+
+    void operator->() const && = delete;
 };
 
 }
