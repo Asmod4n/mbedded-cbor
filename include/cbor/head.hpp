@@ -37,6 +37,9 @@ __extension__ typedef unsigned __int128 uint128;
 struct lazy;
 struct item;
 
+template <class>
+class owning;
+
 template <bool>
 struct tree_decoder;
 
@@ -775,7 +778,7 @@ class heads
     template <bool>
     friend struct tree_decoder;
 
-    friend std::expected<std::shared_ptr<item const>, error> decode(std::string_view encoded);
+    friend std::expected<owning<item>, error> decode(std::string_view encoded);
 
     friend struct item;
 

@@ -31,7 +31,7 @@ namespace shared_test
 {
 
 // The decoded item tree of a top-level item, as lazy::decode gives it.
-using tree = std::shared_ptr<cbor::item const>;
+using tree = cbor::owning<cbor::item>;
 
 // An item of a decoded tree together with the tree. A tree decode reads a tag 29 as a plain tag, so the tests of
 // the encoder find the value that a tag 29 names in the tree itself.
@@ -55,7 +55,7 @@ struct place {
 std::vector<cbor::item const *> marks_of(tree const &t)
 {
     std::vector<cbor::item const *> marks;
-    std::vector<cbor::item const *> pending{t.get()};
+    std::vector<cbor::item const *> pending{&*t};
     while (!pending.empty()) {
         cbor::item const *const i = pending.back();
         pending.pop_back();
@@ -93,7 +93,7 @@ place target(place n)
 
 place target(tree const &t)
 {
-    return target(place{t, t.get()});
+    return target(place{t, &*t});
 }
 
 tree decoded_ref(std::string_view const wire)

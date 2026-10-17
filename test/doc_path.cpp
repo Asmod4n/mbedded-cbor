@@ -51,7 +51,7 @@ TEST_CASE("doc path: the types of a number")
     CHECK_EQ(cbor::at_path<"$", std::int64_t>(preferred(V("a"s))).error(), error::incorrect_type);
     CHECK_EQ(cbor::at_path<"$", std::uint8_t>(preferred(V(256))).error(), error::number_out_of_range);
     CHECK_FALSE((doc_path_compiles<"$", float>));
-    CHECK_FALSE((doc_path_compiles<"$", std::string>));
+    CHECK((doc_path_compiles<"$", std::string>));
     CHECK_FALSE((doc_path_compiles<"$.a[", int>));
 }
 
