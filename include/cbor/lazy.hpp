@@ -1259,11 +1259,13 @@ inline std::expected<std::shared_ptr<item const>, error> lazy::decode() const
         heads::head_append(encoded, h->major, h->info, h->argument);
         return cbor::decode(encoded);
     }
-    std::string_view const rest = validity::subspan(top_level->encoded, offset);
-    auto const size = item_size(rest);
-    if (!size) [[unlikely]]
-        return std::unexpected(size.error());
-    return cbor::decode(rest.substr(0, *size));
+    return validity::limits_apply(
+        limits.load(),
+        [this]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
+            -> std::expected<std::shared_ptr<item const>, error> {
+            return tree_decode(validity::subspan(top_level->encoded, offset), checks, depth_max)
+                .transform([](decoded_tree<Checked> const &d) { return d.tree; });
+        });
 }
 
 }
