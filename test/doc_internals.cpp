@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -26,10 +27,10 @@ TEST_CASE("doc internals: encoded builds the input that a comment shows")
 // target.
 TEST_CASE("doc internals: a lazy reads heads when a step needs them")
 {
-    auto const broken = cbor::lazy::copy("\xff"s);
+    auto const broken = test::lazy_of_copy("\xff"s);
     REQUIRE(broken.has_value());
     CHECK_EQ(broken->get<std::int64_t>().error(), error::syntax_error);
-    auto const cut = cbor::lazy::copy("\x82\x01"s);
+    auto const cut = test::lazy_of_copy("\x82\x01"s);
     REQUIRE(cut.has_value());
     CHECK_EQ(cut->at(0).error(), error::too_little_data);
     CHECK_EQ(cut->at(1).error(), error::too_little_data);
@@ -58,7 +59,7 @@ TEST_CASE("doc internals: a limit is one atomic field")
 // The section "Tags 28 and 29" states that a lazy keeps no marks and reads a tag 29 as a tag over its index.
 TEST_CASE("doc internals: two references to one mark")
 {
-    auto const l = *cbor::lazy::copy("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s);
+    auto const l = *test::lazy_of_copy("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s);
     CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);
     CHECK_EQ(l.at(2)->get<std::int64_t>(), 0);
     CHECK_EQ(cbor::at_path<"$[2]", int>("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s), 0);

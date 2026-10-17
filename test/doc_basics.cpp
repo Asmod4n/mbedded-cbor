@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -54,7 +55,7 @@ TEST_CASE("doc basics: the errors that a program meets most often")
     CHECK_EQ(cbor::at_path<"$[1]", int>(pair.substr(0, pair.size() - 1)).error(), error::too_little_data);
     CHECK_EQ(cbor::at_path<"$", int>("\xff"s).error(), error::syntax_error);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s).error(), error::indefinite_length);
-    CHECK_EQ(test::at_path("$.a[", *cbor::lazy::copy(preferred(M("a"s, 1)))).error(), error::invalid_path);
+    CHECK_EQ(test::at_path("$.a[", *test::lazy_of_copy(preferred(M("a"s, 1)))).error(), error::invalid_path);
     std::string const three = preferred(A(1, 2, 3));
     test::limits_guard const g{{.container_elements = 2}};
     CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
@@ -71,7 +72,7 @@ TEST_CASE("doc basics: a wrong use throws std::logic_error")
 TEST_CASE("doc basics: bytes go in as a copy or as a view")
 {
     std::string const kept = preferred(M("name"s, std::string(40, 'a')));
-    auto const copied = cbor::at_path<"$.name", std::string_view>(std::string_view(kept));
+    auto const copied = cbor::at_path<"$.name", std::string_view>(std::string(kept));
     REQUIRE(copied.has_value());
     CHECK_NE((**copied).data(), kept.data() + 8);
     std::string moved = kept;
@@ -123,7 +124,7 @@ TEST_CASE("doc basics: threads")
         auto const use_second = [&second_read](std::expected<std::int64_t, error> const &v) { second_read = *v; };
         std::jthread first([&bytes, &use_first] { use_first(cbor::at_path<"$.id", std::int64_t>(bytes)); });
         std::jthread second([&bytes, &use_second] {
-            if (auto const doc = cbor::lazy::copy(bytes))
+            if (auto const doc = test::lazy_of_copy(bytes))
                 use_second(doc->at_path<"$.id", std::int64_t>());
         });
     }
@@ -161,12 +162,12 @@ TEST_CASE("doc basics: the error of each limit")
     {
         std::string const text = preferred(V("xyz"s));
         test::limits_guard const g{{.string_length = 2}};
-        CHECK_EQ(cbor::lazy::copy(text)->get<std::string_view>().error(), error::string_length_exceeded);
+        CHECK_EQ(test::lazy_of_copy(text)->get<std::string_view>().error(), error::string_length_exceeded);
     }
     {
         std::string const three = preferred(A(1, 2, 3));
         test::limits_guard const g{{.container_elements = 2}};
-        CHECK_EQ(cbor::lazy::copy(three)->size().error(), error::container_elements_exceeded);
+        CHECK_EQ(test::lazy_of_copy(three)->size().error(), error::container_elements_exceeded);
     }
     {
         std::string const three = preferred(A(1, 2, 3));

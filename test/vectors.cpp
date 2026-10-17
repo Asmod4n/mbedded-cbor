@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 #include "item_head.hpp"
 
 #include <algorithm>
@@ -125,7 +126,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
         std::string const wire = bytes_of_hex(c.hex);
-        auto const top_level = cbor::lazy::copy(wire);
+        auto const top_level = test::lazy_of_copy(wire);
         REQUIRE(top_level.has_value());
         auto const decoded_item = top_level->decode();
         auto const initial = static_cast<std::uint8_t>(wire.front());
@@ -245,7 +246,7 @@ std::string member_bytes(cbor::lazy const &object, std::string_view const key)
 std::vector<wg_vector> wg_vectors_of(std::string const &path)
 {
     std::string const file = file_read(path);
-    auto const top = cbor::lazy::copy(std::string_view(file));
+    auto const top = test::lazy_of_copy(std::string_view(file));
     REQUIRE(top.has_value());
     bool const file_fail = member_bool(*top, "fail", false);
     auto const tests = top->at("tests");
@@ -437,7 +438,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
 
 std::expected<value, error> lazy_value_of(std::string_view const wire)
 {
-    auto const top = cbor::lazy::copy(wire);
+    auto const top = test::lazy_of_copy(wire);
     REQUIRE(top.has_value());
     return lazy_value(*top);
 }
@@ -514,7 +515,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     // encode of the decoded tree writes the library's own form: the same value (RFC 8949 2), and the own form is a
     // fixed point, so a second decode and encode gives the same bytes. The bytes of the vector itself are checked
     // only where it is in the own form, which the test of RFC 8949 Appendix A does.
-    auto const top_level = cbor::lazy::copy(std::string(v.encoded));
+    auto const top_level = test::lazy_of_copy(std::string(v.encoded));
     REQUIRE(top_level.has_value());
     auto const tree = top_level->decode();
     REQUIRE(tree.has_value());
@@ -522,7 +523,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     REQUIRE(cbor::encode(**tree, again).has_value());
     CHECK(same_value(again, v.encoded));
     std::string twice;
-    REQUIRE(cbor::encode(**cbor::lazy::copy(again)->decode(), twice).has_value());
+    REQUIRE(cbor::encode(**test::lazy_of_copy(again)->decode(), twice).has_value());
     CHECK_EQ(twice, again);
 
     auto const text = cbor::diagnostic_notation(v.encoded);
@@ -612,7 +613,7 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
     test::limits_guard const depth{{.nesting_depth = depth_limit}};
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
-    auto const top = cbor::lazy::copy(std::string_view(file));
+    auto const top = test::lazy_of_copy(std::string_view(file));
     REQUIRE(top.has_value());
     auto const tests = top->at("tests");
     REQUIRE(tests.has_value());

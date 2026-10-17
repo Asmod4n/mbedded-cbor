@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cbor/cbor.hpp>
+#include "owned_copy.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -128,8 +129,8 @@ inline bool item_values_equal(cbor::item const &a, cbor::item const &b)
 // Decodes both byte strings into trees and compares their values.
 inline bool same_value(std::string_view const a, std::string_view const b)
 {
-    auto const x = cbor::lazy::copy(std::string(a));
-    auto const y = cbor::lazy::copy(std::string(b));
+    auto const x = test::lazy_of_copy(std::string(a));
+    auto const y = test::lazy_of_copy(std::string(b));
     REQUIRE(x.has_value());
     REQUIRE(y.has_value());
     auto const p = x->decode();

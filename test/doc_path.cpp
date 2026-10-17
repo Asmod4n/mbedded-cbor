@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -71,14 +72,14 @@ TEST_CASE("doc path: read a text")
     auto const key = cbor::at_path<"$.user.key", std::span<std::byte const>>(owner);
     REQUIRE(key.has_value());
     CHECK_EQ((*key)->size(), 2u);
-    CHECK((doc_path_compiles<"$.user.name", std::string_view>));
+    CHECK_FALSE((doc_path_compiles<"$.user.name", std::string_view>));
 }
 
 // The section "Start at a lazy" shows that $ is the value of the lazy and that a text needs no separate owner there.
 TEST_CASE("doc path: start at a lazy")
 {
     std::string const bytes = preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
-    auto const cars = cbor::lazy::copy(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
+    auto const cars = test::lazy_of_copy(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
     REQUIRE(cars.has_value());
     if (cars) {
         CHECK_EQ(cars->at_path<"$[1].hp", std::int64_t>(), 7);
@@ -96,7 +97,7 @@ TEST_CASE("doc path: path syntax")
                                               M("title"s, "C"s, "price"s, 9, "isbn"s, "x"s)),
                                     "bicycle"s, M("price"s, 20)));
     std::string const bytes = preferred(doc);
-    auto const l = *cbor::lazy::copy(bytes);
+    auto const l = *test::lazy_of_copy(bytes);
     CHECK(*test::query("$", l) == A(doc));
     CHECK_EQ(cbor::at_path<"$.store.bicycle.price", int>(bytes), 20);
     CHECK_EQ(cbor::at_path<"$['store']['bicycle']['price']", int>(bytes), 20);
@@ -155,7 +156,7 @@ TEST_CASE("doc path: a path does not read past its value")
 // The section "What is not supported" names match and search, which a user of other JSONPath libraries tries.
 TEST_CASE("doc path: what is not supported")
 {
-    auto const l = *cbor::lazy::copy(preferred(A("abc"s)));
+    auto const l = *test::lazy_of_copy(preferred(A("abc"s)));
     CHECK_EQ(test::query("$[?match(@, 'a.c')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?search(@, 'b')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?foo(@)]", l).error(), error::invalid_path);

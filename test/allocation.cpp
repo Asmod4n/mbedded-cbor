@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 #include "item_head.hpp"
 
 #include <array>
@@ -70,7 +71,7 @@ std::size_t allocated_bytes = 0;
 TEST_CASE("path: a key is compared without an allocation")
 {
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
-    auto const root = *cbor::lazy::copy(std::string(bytes));
+    auto const root = *test::lazy_of_copy(std::string(bytes));
     auto const map = *root.at(1);
     REQUIRE(map.at_path<"$[[1, \"x\"]]">().has_value());
     std::size_t const before = allocations;
@@ -89,7 +90,7 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
 {
     std::string bytes = "\x99\x10\x00\xff"s;
     bytes.resize(4099);
-    auto const root = *cbor::lazy::copy(std::string(bytes));
+    auto const root = *test::lazy_of_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
     auto const r = root.decode();
     std::size_t const after = allocated_bytes;
@@ -103,7 +104,7 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
 TEST_CASE("decode: a claimed count of 2^63 with one byte left allocates in proportion to the input")
 {
     std::string const bytes = "\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s;
-    auto const root = *cbor::lazy::copy(std::string(bytes));
+    auto const root = *test::lazy_of_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
     auto const r = root.decode();
     std::size_t const after = allocated_bytes;
@@ -126,7 +127,7 @@ std::string array_of_ones(std::size_t const count)
 
 std::size_t decode_allocations(std::string const &bytes)
 {
-    auto const root = *cbor::lazy::copy(std::string(bytes));
+    auto const root = *test::lazy_of_copy(std::string(bytes));
     std::size_t const before = allocations;
     auto const r = root.decode();
     std::size_t const after = allocations;
@@ -155,7 +156,7 @@ TEST_CASE("decode: nested arrays that each claim a large count do not multiply t
     for (int i = 0; i < 100; ++i)
         bytes += "\x99\x10\x00"s;
     bytes.append(4200, '\x01');
-    auto const root = *cbor::lazy::copy(std::string(bytes));
+    auto const root = *test::lazy_of_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
     auto const r = root.decode();
     std::size_t const after = allocated_bytes;
@@ -174,7 +175,7 @@ TEST_CASE("decode: a wide array of nested arrays is read whole after the decode"
     bytes += static_cast<char>(count & 0xff);
     for (std::size_t i = 0; i < count; ++i)
         bytes += "\x82\x01\x02"s;
-    auto r = cbor::lazy::copy(std::string(bytes))->decode();
+    auto r = test::lazy_of_copy(std::string(bytes))->decode();
     REQUIRE(r.has_value());
     auto const outer = children_of(*(*r));
     REQUIRE_EQ(outer.size(), count);
@@ -211,7 +212,7 @@ TEST_CASE("path: a typed read allocates nothing")
 TEST_CASE("path: a typed read through tag 24 allocates nothing")
 {
     std::string const doc = "\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s;
-    auto const root = *cbor::lazy::copy(std::string(doc));
+    auto const root = *test::lazy_of_copy(std::string(doc));
     std::size_t const before = allocations;
     auto const from_bytes = cbor::at_path<"$.a[1]", int>(std::string_view(doc));
     auto const from_lazy = root.at_path<"$.a[1]", int>();
@@ -221,15 +222,15 @@ TEST_CASE("path: a typed read through tag 24 allocates nothing")
     CHECK_EQ(from_lazy, 2);
 }
 
-// A key that is not a text goes through lazy, as tag 29 does. This test records that the form over bytes then
-// allocates.
-TEST_CASE("path: a typed read with a key that is not text allocates")
+// A key that is not a text goes through lazy, as tag 29 does. Since lazy holds its owner inline (owner decision
+// 2026-10-17), that walk allocates nothing either.
+TEST_CASE("path: a typed read with a key that is not text allocates nothing")
 {
     std::string const doc = "\xa1\x41\x01\x07"s;
     std::size_t const before = allocations;
     auto const value = cbor::at_path<"$[h'01']", int>(std::string_view(doc));
     std::size_t const after = allocations;
-    CHECK_GT(after, before);
+    CHECK_EQ(after, before);
     CHECK_EQ(value, 7);
 }
 
@@ -237,8 +238,8 @@ TEST_CASE("path: a typed read with a key that is not text allocates")
 // children.
 TEST_CASE("path: a filter with a literal allocates for each child")
 {
-    auto const three = *cbor::lazy::copy(encoded(A(1, 2, 3)));
-    auto const six = *cbor::lazy::copy(encoded(A(4, 5, 6, 7, 8, 9)));
+    auto const three = *test::lazy_of_copy(encoded(A(1, 2, 3)));
+    auto const six = *test::lazy_of_copy(encoded(A(4, 5, 6, 7, 8, 9)));
     std::size_t const before = allocations;
     (void)test::query("$[?@ == 1]", three);
     std::size_t const middle = allocations;

@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <array>
 #include <cstddef>
@@ -32,14 +33,14 @@ TEST_CASE("validity: cbor::limits.nesting_depth lowers and raises the nesting de
 {
     CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_default);
     std::string const deep = std::string(200, '\x81') + '\x00';
-    CHECK_EQ(test::value_of(*cbor::lazy::copy(deep)).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(test::value_of(*test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
     {
         test::limits_guard const raised{{.nesting_depth = 200}};
         CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, 200u);
-        CHECK(test::value_of(*cbor::lazy::copy(deep)).has_value());
+        CHECK(test::value_of(*test::lazy_of_copy(deep)).has_value());
         CHECK(cbor::diagnostic_notation(deep).has_value());
         test::limits_guard const lowered{{.nesting_depth = 199}};
-        CHECK_EQ(test::value_of(*cbor::lazy::copy(deep)).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(test::value_of(*test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
         CHECK_EQ(cbor::diagnostic_notation(deep).error(), error::nesting_depth_exceeded);
     }
     CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_default);
@@ -52,8 +53,8 @@ TEST_CASE("validity: cbor::limits.nesting_depth lowers and raises the nesting de
     }
     {
         test::limits_guard const zero{{.nesting_depth = 0}};
-        CHECK(test::value_of(*cbor::lazy::copy("\x00"sv)).has_value());
-        CHECK_EQ(test::value_of(*cbor::lazy::copy("\x81\x00"sv)).error(), error::nesting_depth_exceeded);
+        CHECK(test::value_of(*test::lazy_of_copy("\x00"sv)).has_value());
+        CHECK_EQ(test::value_of(*test::lazy_of_copy("\x81\x00"sv)).error(), error::nesting_depth_exceeded);
     }
 }
 

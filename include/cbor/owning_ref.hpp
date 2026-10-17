@@ -2,6 +2,7 @@
 
 #include <concepts>
 #include <memory>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 
@@ -21,6 +22,18 @@ class jsonpath;
 class encoding;
 
 class iov_writer;
+
+template <class R>
+concept owned_bytes = std::ranges::contiguous_range<R> && !std::is_lvalue_reference_v<R> && !std::is_const_v<R> &&
+                      !std::ranges::borrowed_range<R> && std::same_as<std::ranges::range_value_t<R>, char>;
+
+template <class R>
+concept owning_bytes = std::ranges::contiguous_range<R> && !std::ranges::borrowed_range<R> &&
+                       std::same_as<std::ranges::range_value_t<R>, char>;
+
+template <class R>
+concept borrowed_bytes = std::ranges::contiguous_range<R> && std::ranges::borrowed_range<R> &&
+                         std::same_as<std::ranges::range_value_t<R>, char>;
 
 template <class T>
 class owning_ref

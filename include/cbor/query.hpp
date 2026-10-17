@@ -43,19 +43,19 @@ template <fixed_string Path, class T>
               ))
 std::expected<T, error> at_path(std::string_view encoded);
 
-template <fixed_string Path, class T>
+template <fixed_string Path, class T, borrowed_bytes Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded);
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
-template <fixed_string Path, class T>
+template <fixed_string Path, class T, owning_bytes Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<owning_ref<T>, error> at_path(std::string_view encoded);
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
 
-template <fixed_string Path, class T, std::same_as<std::string> Encoded>
+template <fixed_string Path, class T, owned_bytes Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
@@ -879,7 +879,7 @@ class jsonpath
                 if (walked) [[likely]]
                     return *walked;
                 return query_walk<T>(v, top,
-                                     lazy{std::make_shared<lazy::top_level_item>(std::shared_ptr<void const>{}, content),
+                                     lazy{lazy::top_level_item{std::shared_ptr<void const>{}, content},
                                           validity::offset{}, {}},
                                      loaded);
             });
@@ -889,7 +889,7 @@ class jsonpath
     static std::expected<T, error> lazy_walk(query_view const &v, parsed_query const &top, std::size_t const depth_reached,
                                              lazy const &root, limit_values const &loaded)
     {
-        validity::throw_logic_error_if_empty(root.top_level, "cbor::lazy::at_path: the lazy holds no top-level item");
+        validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr, "cbor::lazy::at_path: the lazy holds no top-level item");
         return validity::limits_apply(
             loaded,
             [&]<bool Checked>(std::size_t const depth_max,
@@ -900,7 +900,7 @@ class jsonpath
                 if (root.typed_array_tag != 0) [[unlikely]]
                     return query_walk<T>(v, top, root, loaded);
                 auto const walked =
-                    query_walk<T>(v, top, validity::subspan(root.top_level->encoded, root.offset), checks);
+                    query_walk<T>(v, top, validity::subspan(root.top_level.encoded, root.offset), checks);
                 if (walked) [[likely]]
                     return *walked;
                 return query_walk<T>(v, top, root, loaded);
@@ -958,7 +958,7 @@ class jsonpath
         auto const r = query_walk<Path, T>(root);
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
-        return owning_ref<T>(root.top_level, *r);
+        return owning_ref<T>(root.top_level.owner, *r);
     }
 
     template <fixed_string Path, class T>
@@ -984,11 +984,11 @@ class jsonpath
               ))
     friend std::expected<T, error> at_path(std::string_view encoded);
 
-    template <fixed_string Path, class T>
+    template <fixed_string Path, class T, borrowed_bytes Encoded>
         requires(is_singular_query_v<Path> &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, typed_array>))
-    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded);
+    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
     template <fixed_string>
     friend class is_valid_path;
@@ -1084,7 +1084,7 @@ private:
             auto const r = lazy_walk<T>(v, e.top, e.depth_reached, root, loaded);
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            return owning_ref<T>(root.top_level, *r);
+            return owning_ref<T>(root.top_level.owner, *r);
         } else
             return lazy_walk<T>(v, e.top, e.depth_reached, root, loaded);
     }
@@ -1099,13 +1099,13 @@ private:
 
     template <view_result T>
     static std::expected<owning_ref<T>, error>
-    query_apply(query<T> const &e, std::shared_ptr<std::string const> encoded, limit_values const &loaded)
+    query_apply(query<T> const &e, std::shared_ptr<void const> owner, std::string_view const encoded,
+                limit_values const &loaded)
     {
-        std::string_view const bytes = *encoded;
-        auto const r = query_apply(e, bytes, loaded);
+        auto const r = query_apply(e, encoded, loaded);
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
-        return owning_ref<T>(std::move(encoded), *r);
+        return owning_ref<T>(std::move(owner), *r);
     }
 
     template <class T>
@@ -1118,8 +1118,8 @@ private:
     template <scalar_result T>
     friend std::expected<T, error> at_path(std::string_view encoded, query<T> const &e);
 
-    template <view_result T>
-    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded,
+    template <view_result T, borrowed_bytes Encoded>
+    friend std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                        query<T> const &e);
 };
 
@@ -1132,34 +1132,40 @@ std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<
     return jsonpath::query_apply(e, encoded, limits.load());
 }
 
-template <view_result T>
-std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded,
+template <view_result T, borrowed_bytes Encoded>
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                             jsonpath::query<T> const &e)
 {
-    validity::throw_logic_error_if_null(encoded, "cbor::at_path: the encoded data item is null");
-    validity::throw_logic_error_if_empty(encoded, "cbor::at_path: the owner of the encoded data item is empty");
-    return jsonpath::query_apply(e, std::move(encoded), limits.load());
+    validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
+    return jsonpath::query_apply(e, std::move(owner),
+                                 std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+                                 limits.load());
 }
 
-template <class T>
+template <class T, borrowed_bytes Encoded>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<T, error> at_path(std::shared_ptr<std::string const> encoded, jsonpath::query<T> const &e)
+std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
+                                jsonpath::query<T> const &e)
 {
-    return lazy::view(std::move(encoded)).and_then([&e](lazy const &root) { return root.at_path(e); });
+    return lazy::view(std::move(owner), encoded).and_then([&e](lazy const &root) { return root.at_path(e); });
 }
 
-template <view_result T>
-std::expected<owning_ref<T>, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e)
+template <class T, owning_bytes Encoded>
+    requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
+std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
+                                                                       jsonpath::query<T> const &e)
 {
-    return at_path(std::make_shared<std::string const>(encoded), e);
+    validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
+    std::string_view const bytes(std::ranges::data(*owner), std::ranges::size(*owner));
+    return at_path(std::move(owner), bytes, e);
 }
 
-template <class T, std::same_as<std::string> Encoded>
+template <class T, owned_bytes Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<typename jsonpath::query<T>::result_type, error> at_path(Encoded &&encoded,
                                                                        jsonpath::query<T> const &e)
 {
-    return at_path(std::make_shared<std::string const>(std::move(encoded)), e);
+    return at_path(std::make_shared<Encoded const>(std::move(encoded)), e);
 }
 
 template <fixed_string Path>
@@ -1203,15 +1209,15 @@ inline std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::stri
             if (h.major != major_type::map) [[unlikely]]
                 return std::unexpected(error::not_indexable);
             for (std::uint64_t i = 0; i < h.argument; ++i) {
-                validity::offset const start = validity::distance(source->encoded, d.encoded);
+                validity::offset const start = validity::distance(source.encoded, d.encoded);
                 if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 auto const match =
-                    validity::keys_equivalent(*source, start, key, validity::offset{}, 0, loaded.nesting_depth, checks);
+                    validity::keys_equivalent(source, start, key, validity::offset{}, 0, loaded.nesting_depth, checks);
                 if (!match) [[unlikely]]
                     return std::unexpected(match.error());
                 if (*match)
-                    return lazy{source, validity::distance(source->encoded, d.encoded), {}};
+                    return lazy{source, validity::distance(source.encoded, d.encoded), {}};
                 if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
             }
@@ -1260,8 +1266,8 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
                 return number(h) == number(k);
             if (h.major != k.major || floating(h) || floating(k))
                 return false;
-            validity::offset const x_content = validity::distance(x->source->encoded, x->d.encoded);
-            validity::offset const y_content = validity::distance(y->source->encoded, y->d.encoded);
+            validity::offset const x_content = validity::distance(x->source.encoded, x->d.encoded);
+            validity::offset const y_content = validity::distance(y->source.encoded, y->d.encoded);
             switch (h.major) {
             case major_type::byte_string:
             case major_type::text_string: {
@@ -1562,7 +1568,7 @@ inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, 
                                                            std::vector<lazy> &nodes,
                                                            limit_values const &loaded)
 {
-    std::size_t const limit = root.top_level->encoded.size();
+    std::size_t const limit = root.top_level.encoded.size();
     auto const append = [&nodes, limit](lazy const &l) -> std::expected<void, error> {
         if (nodes.size() >= limit) [[unlikely]]
             return std::unexpected(error::nodelist_too_long);
@@ -1687,7 +1693,7 @@ jsonpath::segments_apply(query_view const &v, std::size_t const segment_at, std:
 inline std::expected<lazy, error> jsonpath::singular_query_walk(query_view const &v, parsed_query const &top,
                                                                 lazy const &root, limit_values const &loaded)
 {
-    validity::throw_logic_error_if_null(root.top_level, "cbor::lazy::at_path: the lazy holds no top-level item");
+    validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr, "cbor::lazy::at_path: the lazy holds no top-level item");
     lazy node = root;
     for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
         selector const &each = v.selectors[s.selector_at];
@@ -1706,7 +1712,7 @@ inline std::expected<lazy, error> jsonpath::singular_query_walk(query_view const
 inline std::expected<std::vector<lazy>, error> jsonpath::query_walk(query_view const &v, parsed_query const &top,
                                                                     lazy const &root, limit_values const &loaded)
 {
-    validity::throw_logic_error_if_null(root.top_level, "cbor::lazy::query: the lazy holds no top-level item");
+    validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr, "cbor::lazy::query: the lazy holds no top-level item");
     std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
     query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
     for (std::size_t i = 0; i < v.expressions.size(); ++i)
@@ -1773,34 +1779,35 @@ std::expected<T, error> at_path(std::string_view const encoded)
     return jsonpath::query_walk<Path, T>(encoded);
 }
 
-template <fixed_string Path, class T>
+template <fixed_string Path, class T, borrowed_bytes Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<owning_ref<T>, error> at_path(std::shared_ptr<std::string const> encoded)
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
-    validity::throw_logic_error_if_null(encoded, "cbor::at_path: the encoded data item is null");
-    validity::throw_logic_error_if_empty(encoded, "cbor::at_path: the owner of the encoded data item is empty");
-    std::string_view const bytes = *encoded;
-    return jsonpath::query_walk<Path, T>(std::move(encoded), bytes);
+    validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
+    return jsonpath::query_walk<Path, T>(std::move(owner),
+                                         std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
 }
 
-template <fixed_string Path, class T>
+template <fixed_string Path, class T, owning_bytes Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<owning_ref<T>, error> at_path(std::string_view const encoded)
+std::expected<owning_ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
 {
-    return at_path<Path, T>(std::make_shared<std::string const>(encoded));
+    validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
+    std::string_view const bytes(std::ranges::data(*owner), std::ranges::size(*owner));
+    return at_path<Path, T>(std::move(owner), bytes);
 }
 
-template <fixed_string Path, class T, std::same_as<std::string> Encoded>
+template <fixed_string Path, class T, owned_bytes Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<owning_ref<T>, error> at_path(Encoded &&encoded)
 {
-    return at_path<Path, T>(std::make_shared<std::string const>(std::move(encoded)));
+    return at_path<Path, T>(std::make_shared<Encoded const>(std::move(encoded)));
 }
 
 inline std::expected<lazy, error> lazy::operator[](std::string_view const key) const

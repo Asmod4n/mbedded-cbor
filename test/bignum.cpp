@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 #include "item_head.hpp"
 
 #include <cstdint>
@@ -87,7 +88,7 @@ TEST_CASE("bignum: content that is not a byte string")
 {
     CHECK(*decoded("\xc2\x05"sv) == value{tagged{2, value{std::uint64_t{5}}}});
     CHECK(*decoded("\xc3\x05"sv) == value{tagged{3, value{std::uint64_t{5}}}});
-    CHECK_EQ(cbor::lazy::copy("\xc2\x05"s)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(test::lazy_of_copy("\xc2\x05"s)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
 }
 
 // Ported from test.rb: 'bignum: mixed with normal integers in array'.
@@ -115,13 +116,13 @@ TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
     std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
     std::string const deep = std::string(16, '\x81') + bignum;
     std::string const shallow = std::string(15, '\x81') + bignum;
-    auto const tree = cbor::lazy::copy(deep)->decode();
+    auto const tree = test::lazy_of_copy(deep)->decode();
     REQUIRE(tree.has_value());
     test::limits_guard const depth{{.nesting_depth = 16}};
-    CHECK_EQ(cbor::lazy::copy(deep)->decode().error(), error::nesting_depth_exceeded);
+    CHECK_EQ(test::lazy_of_copy(deep)->decode().error(), error::nesting_depth_exceeded);
     std::string out;
     CHECK_EQ(cbor::encode(**tree, out).error(), error::nesting_depth_exceeded);
-    auto const ok = cbor::lazy::copy(shallow)->decode();
+    auto const ok = test::lazy_of_copy(shallow)->decode();
     REQUIRE(ok.has_value());
     std::string again;
     REQUIRE(cbor::encode(**ok, again).has_value());
@@ -153,7 +154,7 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
     };
     for (row const &r : rows) {
         CAPTURE(r.wire);
-        auto const l = cbor::lazy::copy(r.wire);
+        auto const l = test::lazy_of_copy(r.wire);
         REQUIRE(l.has_value());
         auto const t = l->type();
         REQUIRE(t.has_value());
@@ -163,12 +164,12 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
         CHECK_EQ((*tree)->type, r.type);
         CHECK_EQ(argument_of(**tree), r.argument);
     }
-    CHECK_EQ(cbor::lazy::copy("\xc3\x48"s + max)->get<std::int64_t>().error(), error::number_out_of_range);
-    CHECK_EQ(*cbor::lazy::copy("\xc2\x40"s)->get<std::int64_t>(), 0);
-    CHECK_EQ(*cbor::lazy::copy("\xc2\x41\x05"s)->get<double>(), 5.0);
-    CHECK_EQ(*cbor::lazy::copy("\xc3\x41\x05"s)->get<double>(), -6.0);
-    CHECK_EQ(cbor::lazy::copy("\xc2\x41\x05"s)->get<std::span<std::byte const>>().error(), error::incorrect_type);
-    CHECK_EQ(*cbor::lazy::copy("\xc3\x40"s)->get<std::int64_t>(), -1);
+    CHECK_EQ(test::lazy_of_copy("\xc3\x48"s + max)->get<std::int64_t>().error(), error::number_out_of_range);
+    CHECK_EQ(*test::lazy_of_copy("\xc2\x40"s)->get<std::int64_t>(), 0);
+    CHECK_EQ(*test::lazy_of_copy("\xc2\x41\x05"s)->get<double>(), 5.0);
+    CHECK_EQ(*test::lazy_of_copy("\xc3\x41\x05"s)->get<double>(), -6.0);
+    CHECK_EQ(test::lazy_of_copy("\xc2\x41\x05"s)->get<std::span<std::byte const>>().error(), error::incorrect_type);
+    CHECK_EQ(*test::lazy_of_copy("\xc3\x40"s)->get<std::int64_t>(), -1);
 }
 
 // RFC 8949 3.4.3 admits only a byte string as the content of tag 2 or 3. The owner decided that decode and type()
@@ -183,7 +184,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
     for (row const r : {row{"\xc2\x61\x61"sv, cbor::type::unsigned_bignum}, row{"\xc2\x80"sv, cbor::type::unsigned_bignum},
                         row{"\xc2\x01"sv, cbor::type::unsigned_bignum}, row{"\xc3\x61\x61"sv, cbor::type::negative_bignum}}) {
         CAPTURE(r.wire);
-        auto const l = cbor::lazy::copy(std::string(r.wire));
+        auto const l = test::lazy_of_copy(std::string(r.wire));
         REQUIRE(l.has_value());
         CHECK_EQ(l->type(), r.type);
         auto const tree = l->decode();
@@ -199,7 +200,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
                             failure{"\xc2\x5f"sv, error::indefinite_length}, failure{"\xc2"sv, error::too_little_data},
                             failure{"\xc2\x41"sv, error::too_little_data}, failure{"\xc2\x49\x01"sv, error::too_little_data}}) {
         CAPTURE(f.wire);
-        auto const l = cbor::lazy::copy(std::string(f.wire));
+        auto const l = test::lazy_of_copy(std::string(f.wire));
         REQUIRE(l.has_value());
         CHECK_EQ(l->decode().error(), f.expected);
     }
@@ -210,7 +211,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
 TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
 {
     std::string const wire = "\x82\xd8\x1c\xc2\x41\x01\xd8\x1d\x00"s;
-    auto const l = cbor::lazy::copy(wire);
+    auto const l = test::lazy_of_copy(wire);
     REQUIRE(l.has_value());
     auto const tree = l->decode();
     REQUIRE(tree.has_value());
@@ -264,13 +265,13 @@ TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
         REQUIRE(equal.has_value());
         CHECK_EQ(*equal, p.equal);
     }
-    CHECK_EQ(cbor::lazy::copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(cbor::key{1})->get<int>(), 0);
-    CHECK_EQ(cbor::lazy::copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(cbor::key{-1})->get<int>(), 0);
-    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{1})->get<std::string_view>().has_value(), true);
-    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{-2}).error(), error::key_not_found);
-    CHECK_EQ(cbor::lazy::copy("\xa1\xc2\x61\x61\x61\x61"s)->at(cbor::key{1}).error(), error::inadmissible_type_for_tag_content);
-    CHECK(test::query("$[1]", *cbor::lazy::copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
-          test::query("$[1]", *cbor::lazy::copy("\xa1\x01\x61\x61"s)));
-    CHECK(test::query("$[-1]", *cbor::lazy::copy("\xa1\xc3\x40\x61\x61"s)) ==
-          test::query("$[-1]", *cbor::lazy::copy("\xa1\x20\x61\x61"s)));
+    CHECK_EQ(test::lazy_of_copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(cbor::key{1})->get<int>(), 0);
+    CHECK_EQ(test::lazy_of_copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(cbor::key{-1})->get<int>(), 0);
+    CHECK_EQ(test::lazy_of_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{1})->get<std::string_view>().has_value(), true);
+    CHECK_EQ(test::lazy_of_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{-2}).error(), error::key_not_found);
+    CHECK_EQ(test::lazy_of_copy("\xa1\xc2\x61\x61\x61\x61"s)->at(cbor::key{1}).error(), error::inadmissible_type_for_tag_content);
+    CHECK(test::query("$[1]", *test::lazy_of_copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
+          test::query("$[1]", *test::lazy_of_copy("\xa1\x01\x61\x61"s)));
+    CHECK(test::query("$[-1]", *test::lazy_of_copy("\xa1\xc3\x40\x61\x61"s)) ==
+          test::query("$[-1]", *test::lazy_of_copy("\xa1\x20\x61\x61"s)));
 }

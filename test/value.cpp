@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <initializer_list>
 #include <limits>
@@ -105,8 +106,8 @@ TEST_CASE("depth: encode past the limit")
     value deep = V(0);
     for (int i = 0; i < 16; ++i)
         deep = A(deep);
-    auto const fits = cbor::lazy::copy(preferred(deep))->decode();
-    auto const past = cbor::lazy::copy(preferred(A(deep)))->decode();
+    auto const fits = test::lazy_of_copy(preferred(deep))->decode();
+    auto const past = test::lazy_of_copy(preferred(A(deep)))->decode();
     REQUIRE(fits.has_value());
     REQUIRE(past.has_value());
     test::limits_guard const depth{{.nesting_depth = 16}};

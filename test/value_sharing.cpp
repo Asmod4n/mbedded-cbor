@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "owned_copy.hpp"
 #include <array>
 #include <cstdint>
 #include <expected>
@@ -97,7 +98,7 @@ place target(tree const &t)
 
 tree decoded_ref(std::string_view const wire)
 {
-    auto const l = cbor::lazy::copy(wire);
+    auto const l = test::lazy_of_copy(wire);
     REQUIRE(l.has_value());
     auto t = l->decode();
     REQUIRE(t.has_value());
@@ -646,7 +647,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 {
     auto const a = arr({u(1), u(2)});
     std::string const doc = encoded_shared(arr({a, a}), marks::repeats_marked);
-    auto const r = cbor::lazy::copy(doc)->decode();
+    auto const r = test::lazy_of_copy(doc)->decode();
     REQUIRE(r.has_value());
     CHECK(same(element(*r, 0), element(*r, 1)));
 }
@@ -655,7 +656,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 TEST_CASE("lazy: a cyclic array")
 {
     std::string const doc = "\xd8\x1c\x81\xd8\x1d\x00"s;
-    auto const r = cbor::lazy::copy(doc)->decode();
+    auto const r = test::lazy_of_copy(doc)->decode();
     REQUIRE(r.has_value());
     CHECK(same(*r, element(*r, 0)));
 }
@@ -683,7 +684,7 @@ TEST_CASE("lazy: a value shared by two map values keeps its identity")
 {
     auto const v = arr({u(1), u(2), u(3)});
     std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}), marks::repeats_marked);
-    auto const r = cbor::lazy::copy(doc)->decode();
+    auto const r = test::lazy_of_copy(doc)->decode();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -731,7 +732,7 @@ TEST_CASE("lazy: a registered object keeps its identity")
 {
     auto const l = object_of(5003, arr({u(99)}));
     std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}), marks::repeats_marked);
-    auto const r = cbor::lazy::copy(doc)->decode();
+    auto const r = test::lazy_of_copy(doc)->decode();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -773,7 +774,7 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
         CAPTURE(bytes);
         std::string const doc = "\x83"s + head_of(6, 28, bytes) + "\x05"s + head_of(6, 29, bytes) +
                                 head_of(0, 0, bytes) + head_of(6, 29, bytes) + head_of(0, 7, bytes);
-        auto const l = *cbor::lazy::copy(doc);
+        auto const l = *test::lazy_of_copy(doc);
         CHECK_EQ(l.at(0)->type(), cbor::type::tag);
         CHECK_EQ(l.at(1)->type(), cbor::type::tag);
         CHECK_EQ(l.at(0)->get<std::uint64_t>(), 5u);

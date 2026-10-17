@@ -1,4 +1,5 @@
 #include <benchmark/benchmark.h>
+#include "../test/owned_copy.hpp"
 
 #include <bit>
 #include <cstdint>
@@ -805,7 +806,7 @@ static vg_out vo;
 static void setup()
 {
 #if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
-    auto t = bench::value_of(*cbor::lazy::copy(std::string_view(doc)));
+    auto t = bench::value_of(*test::lazy_of_copy(std::string_view(doc)));
     if (!t)
         std::abort();
     tree = std::move(*t);
@@ -1163,7 +1164,7 @@ int main(int argc, char **argv)
     in = **held;
 #if defined(ARM_MB_DECODE)
     {
-        auto const r = bench::value_of(*cbor::lazy::copy(doc));
+        auto const r = bench::value_of(*test::lazy_of_copy(doc));
         benchmark::AddCustomContext("check", std::to_string(value_sum(*r)));
     }
 #elif defined(ARM_LC_DECODE)

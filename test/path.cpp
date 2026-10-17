@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <algorithm>
 #include <array>
@@ -32,7 +33,7 @@ namespace
 std::expected<value, cbor::error> path_read(std::string_view const path, value const &data)
 {
     std::string const doc = encoded(data);
-    auto const l = *cbor::lazy::copy(doc);
+    auto const l = *test::lazy_of_copy(doc);
     auto const r = test::at_path(path, l);
     if (r || r.error() != error::not_singular_query)
         return r;
@@ -56,13 +57,13 @@ error path_error(std::string_view const path, value const &data)
 template <cbor::fixed_string Path>
 std::expected<value, cbor::error> compiled_at(std::string const &doc)
 {
-    return test::at_path<Path>(*cbor::lazy::copy(doc));
+    return test::at_path<Path>(*test::lazy_of_copy(doc));
 }
 
 template <cbor::fixed_string Path>
 std::expected<value, cbor::error> compiled_query(std::string const &doc)
 {
-    return test::query<Path>(*cbor::lazy::copy(doc));
+    return test::query<Path>(*test::lazy_of_copy(doc));
 }
 
 value found(std::expected<value, cbor::error> const &r)
@@ -194,10 +195,10 @@ TEST_CASE("path: the grammar")
     std::string const deep = encoded(A(A(A(A(1)))));
     {
         test::limits_guard const depth{{.nesting_depth = 3}};
-        CHECK_EQ(test::at_path("$[0][0][0][0]", *cbor::lazy::copy(deep)).error(), error::nesting_depth_exceeded);
+        CHECK_EQ(test::at_path("$[0][0][0][0]", *test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
     }
     test::limits_guard const depth{{.nesting_depth = 4}};
-    CHECK(test::at_path("$[0][0][0][0]", *cbor::lazy::copy(deep)).has_value());
+    CHECK(test::at_path("$[0][0][0][0]", *test::lazy_of_copy(deep)).has_value());
 }
 
 // The compile-time form reads the same grammar and, inside brackets, any literal of CBOR diagnostic notation
@@ -287,7 +288,7 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
     CHECK(found(compiled_at<"$[[_ 1, 2]]">(doc)) == V(4));
     CHECK_EQ(compiled_at<"$[1.0]">(doc).error(), error::key_not_found);
     std::string runtime_text = "$[16]";
-    CHECK(*test::at_path(runtime_text, *cbor::lazy::copy(doc)) == V(14));
+    CHECK(*test::at_path(runtime_text, *test::lazy_of_copy(doc)) == V(14));
 }
 
 // RFC 4648 Table 1 gives each character of the base64 alphabet a value from 0 to 63, and section 5 replaces + and /
@@ -321,10 +322,10 @@ TEST_CASE("path: a nodelist is no longer than the message")
 {
     std::string doc = "\x82\x83\x00\x00\x00"s;
     doc += "\x82\x82\x00\x00\x82\x00\x00"s;
-    auto const three = test::query("$[0][*]", *cbor::lazy::copy(doc));
+    auto const three = test::query("$[0][*]", *test::lazy_of_copy(doc));
     REQUIRE(three.has_value());
     CHECK(*three == A(0, 0, 0));
-    auto const four = test::query("$[1][*][*]", *cbor::lazy::copy(doc));
+    auto const four = test::query("$[1][*][*]", *test::lazy_of_copy(doc));
     REQUIRE(four.has_value());
     CHECK(*four == A(0, 0, 0, 0));
 }
@@ -395,7 +396,7 @@ TEST_CASE("path: a key map with duplicate keys is no match for other keys")
 TEST_CASE("path: every form gives the first entry of a repeated key")
 {
     std::string const doc = "\xa2\x61\x61\x01\x61\x61\x02"s;
-    CHECK(test::at_path("$.a", *cbor::lazy::copy(doc)).has_value());
+    CHECK(test::at_path("$.a", *test::lazy_of_copy(doc)).has_value());
     CHECK(compiled_at<"$.a">(doc).has_value());
     CHECK_EQ((cbor::at_path<"$.a", int>(doc)), 1);
     auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x61x\x61\x61\x61y"s);
@@ -410,9 +411,9 @@ TEST_CASE("path: every form gives the first entry of a repeated key")
     std::string const deep = "\xa1\x61\x62\xa2\x61\x61\x01\x61\x61\x02"s;
     CHECK_EQ((cbor::at_path<"$.b.a", int>(deep)), 1);
     CHECK(compiled_at<"$.b.a">(deep).has_value());
-    CHECK(test::query("$.*", *cbor::lazy::copy(doc)).has_value());
-    CHECK(test::query("$..c", *cbor::lazy::copy(deep)).has_value());
-    CHECK(test::query("$[?@ == 1]", *cbor::lazy::copy(doc)).has_value());
+    CHECK(test::query("$.*", *test::lazy_of_copy(doc)).has_value());
+    CHECK(test::query("$..c", *test::lazy_of_copy(deep)).has_value());
+    CHECK(test::query("$[?@ == 1]", *test::lazy_of_copy(doc)).has_value());
     std::string const arrays = "\xa2\x81\x01\x00\x81\x18\x01\x01"s;
     CHECK(compiled_at<"$[[1]]">(arrays).has_value());
 }
@@ -461,7 +462,7 @@ TEST_CASE("path: the descendant segment")
         CHECK_EQ(path_error(bad, doc), error::invalid_path);
     std::string const deep = encoded(A(A(A(A(A(1))))));
     test::limits_guard const depth{{.nesting_depth = 3}};
-    CHECK_EQ(test::query("$..[0]", *cbor::lazy::copy(deep)).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(test::query("$..[0]", *test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
 }
 
 // RFC 9535 2.3.5: a filter keeps the children for which the logical expression is true. A comparison of numbers
@@ -554,7 +555,7 @@ using comparable_t = decltype(comparable(std::declval<T>()));
 template <class T>
 std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vector<step> const &steps)
 {
-    auto const root = cbor::lazy::copy(std::string(doc));
+    auto const root = test::lazy_of_copy(std::string(doc));
     if (!root)
         return std::unexpected(root.error());
     cbor::lazy node = *root;
@@ -677,7 +678,7 @@ TEST_CASE("path: a typed read holds the owner of the bytes")
 // A null owner is a wrong use that the compiler cannot see.
 TEST_CASE("path: a typed read with a null owner throws std::logic_error")
 {
-    auto const read = [] { return cbor::at_path<"$.a", std::string_view>(std::shared_ptr<std::string const>{}); };
+    auto const read = [] { return cbor::at_path<"$.a", std::string_view>(std::shared_ptr<void const>{}, ""sv); };
     CHECK_THROWS_AS((void)read(), std::logic_error);
 }
 
@@ -981,7 +982,8 @@ TEST_CASE("path: a typed read skips an item of any nesting depth")
 // them: a std::string, a temporary std::string, a std::string_view and a literal alone are copied into an owner that
 // the result keeps, and a temporary std::string is moved into it. A temporary or a
 // moved std::string beside an owner does not compile either, because the owner does not hold it and the view would
-// read freed memory. No owner is taken beside separate bytes. A scalar holds no bytes and is read
+// read freed memory. Owner decision 2026-10-17: a view takes an owner and borrowed bytes, or an owner that is the
+// bytes; bare bytes and a string as the bytes do not compile. A scalar holds no bytes and is read
 // from any of them. The path is a singular query of RFC 9535 2.3.5.1 with names and indexes only: a wildcard, a
 // descendant segment and a literal key of EDN go to at_path that gives a lazy node. A path with more segments than the
 // default nesting depth does not compile.
@@ -992,19 +994,19 @@ TEST_CASE("path: a typed read that is not safe does not compile")
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o); }; }(owner)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::span<std::byte const>>(o); }; }(owner)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", cbor::typed_array>(o); }; }(owner)));
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(text)));
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::as_const(text))));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(text)));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::as_const(text))));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string{})));
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::move(std::as_const(text)))));
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string_view(text))));
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }("\xa1\x61\x61\x61x")));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::move(std::as_const(text)))));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }(std::string_view(text))));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::string_view>(std::forward<S>(s)); }; }("\xa1\x61\x61\x61x")));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o, std::string(*o)); }; }(owner)));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string s) { cbor::at_path<"$.a", std::string_view>(o, std::move(s)); }; }(owner)));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::string_view>(o, std::declval<std::string const>()); }; }(owner)));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", cbor::typed_array>(o, std::string(*o)); }; }(owner)));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o, std::string const &s) { cbor::at_path<"$.a", std::string_view>(o, s); }; }(owner)));
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::span<std::byte const>>(std::forward<S>(s)); }; }(text)));
-    CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", cbor::typed_array>(std::forward<S>(s)); }; }(std::string_view(text))));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::span<std::byte const>>(std::forward<S>(s)); }; }(text)));
+    CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", cbor::typed_array>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::int64_t>(o, std::string_view(*o)); }; }(owner)));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::int64_t>(std::forward<S>(s)); }; }(std::string{})));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
@@ -1031,7 +1033,7 @@ TEST_CASE("at_path: a compiled path with more segments than the nesting depth in
     CHECK_EQ(cbor::at_path<"$[0][0][0]", std::int64_t>(std::string_view(text)).error(), error::nesting_depth_exceeded);
     auto const owner = std::make_shared<std::string const>(text);
     CHECK_EQ(cbor::at_path<"$[0][0][0]", std::string_view>(owner).error(), error::nesting_depth_exceeded);
-    auto const l = cbor::lazy::copy(text);
+    auto const l = test::lazy_of_copy(text);
     REQUIRE(l.has_value());
     CHECK_EQ(test::at_path<"$[0][0][0]">(*l).error(), error::nesting_depth_exceeded);
     CHECK_EQ(test::at_path("$[0][0][0]", *l).error(), error::nesting_depth_exceeded);
@@ -1044,7 +1046,7 @@ TEST_CASE("at_path: a compiled path with more segments than the nesting depth in
 TEST_CASE("path: at_path reads a singular query, at_path with a nodelist reads any query")
 {
     std::string const doc = encoded(M("a"s, A(1, 2)));
-    cbor::lazy const l = *cbor::lazy::copy(doc);
+    cbor::lazy const l = *test::lazy_of_copy(doc);
     CHECK(*test::at_path("$.a[1]", l) == V(2));
     CHECK(*test::query("$.a[1]", l) == A(2));
     CHECK(*test::query("$.a[*]", l) == A(1, 2));
@@ -1068,7 +1070,7 @@ TEST_CASE("path: at_path reads a singular query, at_path with a nodelist reads a
 TEST_CASE("path: a long chain of || or && in one filter is tested without recursion")
 {
     std::string const doc = encoded(A(1));
-    auto const l = *cbor::lazy::copy(doc);
+    auto const l = *test::lazy_of_copy(doc);
     for (std::string_view const op : {"||"sv, "&&"sv}) {
         std::string path = "$[?@==1";
         for (int i = 0; i < 10000; ++i)
@@ -1092,13 +1094,13 @@ TEST_CASE("path: an absolute query in a filter is evaluated once")
     doc += static_cast<char>(n >> 8);
     doc += static_cast<char>(n & 0xff);
     doc.append(n, '\x01');
-    auto const l = *cbor::lazy::copy(doc);
+    auto const l = *test::lazy_of_copy(doc);
     CHECK_EQ(std::get<test::array *>(found(test::query("$[?@ == $[-1]]", l)).kind)->size(), n);
     CHECK_EQ(std::get<test::array *>(found(test::query("$[?$[-1]]", l)).kind)->size(), n);
     CHECK_EQ(std::get<test::array *>(found(test::query("$[?count($[*]) == 5000]", l)).kind)->size(), n);
 
     std::string const small = encoded(M("a"s, A(1, 2, 3), "b"s, 2));
-    auto const s = *cbor::lazy::copy(small);
+    auto const s = *test::lazy_of_copy(small);
     CHECK(found(test::query("$.a[?@ == $.b]", s)) == A(2));
     CHECK(found(test::query("$.a[?$.a[?@ == $.b]]", s)) == A(1, 2, 3));
     CHECK(found(test::query("$.a[?$.c]", s)) == A());
@@ -1126,10 +1128,10 @@ TEST_CASE("path: tag 55799 inside the item is skipped")
     CHECK_EQ(cbor::at_path<"$.a[1]", int>(inner), 2);
     CHECK_EQ(cbor::at_path<"$.a", int>(leaf), 7);
     CHECK_EQ(cbor::at_path<"$.a", int>(key), 7);
-    auto const l = *cbor::lazy::copy(inner);
+    auto const l = *test::lazy_of_copy(inner);
     CHECK(found(test::query("$.a[1]", l)) == A(2));
     CHECK_EQ(l.at("a")->at(std::size_t{1})->get<int>(), 2);
-    CHECK_EQ(cbor::lazy::copy(leaf)->at("a")->get<int>(), 7);
+    CHECK_EQ(test::lazy_of_copy(leaf)->at("a")->get<int>(), 7);
 }
 
 // RFC 8949 6.1: a generic decoder passes a tag it does not know and gives its content. The owner decided on
@@ -1140,17 +1142,17 @@ TEST_CASE("path: a tag that the path does not know is passed to its content")
 {
     std::string const doc = "\xa2\x61""v\xd9\x03\xe8\x82\x01\x02\x61""m\xd9\x03\xe9\xa1\x61""k\x07"s;
     std::string const shared = "\x82\xd8\x1c\xd9\x03\xe8\x82\x01\x02\xd8\x1d\x00"s;
-    auto const l = *cbor::lazy::copy(doc);
+    auto const l = *test::lazy_of_copy(doc);
     CHECK_EQ(cbor::at_path<"$.v[1]", int>(doc), 2);
     CHECK_EQ(l.at_path<"$.v[1]", int>(), 2);
     CHECK_EQ(cbor::at_path<"$.m.k", int>(doc), 7);
     CHECK_EQ(l.at_path<"$.m.k", int>(), 7);
     CHECK_EQ(cbor::at_path<"$[0][1]", int>(shared), 2);
-    CHECK_EQ(cbor::lazy::copy(shared)->at_path<"$[0][1]", int>(), 2);
+    CHECK_EQ(test::lazy_of_copy(shared)->at_path<"$[0][1]", int>(), 2);
     CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared).error(), error::not_indexable);
     CHECK_EQ(cbor::at_path<"$", int>("\xd9\x03\xe8\x05"s), 5);
-    CHECK_EQ(cbor::lazy::copy("\xd9\x03\xe8\x05"s)->at_path<"$", int>(), 5);
-    CHECK_EQ(cbor::lazy::copy("\xd9\x03\xe8\x05"s)->get<int>(), 5);
+    CHECK_EQ(test::lazy_of_copy("\xd9\x03\xe8\x05"s)->at_path<"$", int>(), 5);
+    CHECK_EQ(test::lazy_of_copy("\xd9\x03\xe8\x05"s)->get<int>(), 5);
     CHECK_EQ(cbor::at_path<"$", std::int64_t>("\xc1\x1a\x5f\x5e\x10\x00"s), 1600000000);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\xc2\x41\x01"s).error(), error::not_indexable);
     CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\x03\xe8\x61""k\x07"s).error(), error::key_not_found);
@@ -1200,25 +1202,25 @@ TEST_CASE("path: an index reads one element of a typed array")
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\x43\x07\x00\x08"s)).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\xd8\x1c\x42\x07\x00"s)).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd9\x03\xe8\xd8\x45\x42\x07\x00"s)), 7);
-    auto const l = *cbor::lazy::copy(uint16_le);
+    auto const l = *test::lazy_of_copy(uint16_le);
     CHECK_EQ(l.at_path<"$.v[1]", int>(), 0x108);
     std::string const shared = "\x82\xd8\x1c\xd8\x45\x44\x07\x00\x08\x01\xd8\x1d\x00"s;
     CHECK_EQ(cbor::at_path<"$[0][1]", int>(shared), 0x108);
-    CHECK_EQ(cbor::lazy::copy(shared)->at_path<"$[0][-2]", double>(), 7.0);
+    CHECK_EQ(test::lazy_of_copy(shared)->at_path<"$[0][-2]", double>(), 7.0);
     CHECK_EQ(cbor::at_path<"$[0][2]", int>(shared).error(), error::index_out_of_bounds);
     CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(shared).error(), error::not_indexable);
     CHECK(found(test::at_path("$.v[1]", l)) == V(0x108));
-    CHECK(found(test::at_path("$[0][0]", *cbor::lazy::copy(shared))) == V(7));
+    CHECK(found(test::at_path("$[0][0]", *test::lazy_of_copy(shared))) == V(7));
     CHECK(found(test::query("$.v[*]", l)) == A(7, 0x108));
     CHECK(found(test::query("$.v[1:]", l)) == A(0x108));
     CHECK(found(test::query("$.v[?@ > 7]", l)) == A(0x108));
     CHECK(found(test::query("$..*", l)) == A(found(test::at_path("$.v", l)), 7, 0x108));
     CHECK(found(test::query<"$.v[*]">(l)) == A(7, 0x108));
-    auto const floats = *cbor::lazy::copy(in("\xd8\x50\x44\x00\x00\x3c\x00"s));
+    auto const floats = *test::lazy_of_copy(in("\xd8\x50\x44\x00\x00\x3c\x00"s));
     CHECK(found(test::query("$.v[*]", floats)) == A(0.0, 1.0));
-    CHECK_EQ(test::query("$.v[*]", *cbor::lazy::copy(in("\xd8\x53\x50"s + std::string(16, '\0')))).error(),
+    CHECK_EQ(test::query("$.v[*]", *test::lazy_of_copy(in("\xd8\x53\x50"s + std::string(16, '\0')))).error(),
              error::incorrect_type);
-    CHECK(found(test::query("$.v[*]", *cbor::lazy::copy(in("\xd8\x45\x40"s)))) == A());
+    CHECK(found(test::query("$.v[*]", *test::lazy_of_copy(in("\xd8\x45\x40"s)))) == A());
 }
 
 // Found by the path fuzz target: 28(81([0])) under a wildcard. A wildcard reads a typed array as the array of its
@@ -1227,11 +1229,11 @@ TEST_CASE("path: an index reads one element of a typed array")
 // once took every tag from 64 to 87 as a leaf and gave an empty nodelist.
 TEST_CASE("path: a wildcard over a typed array whose content is no byte string")
 {
-    auto const l = *cbor::lazy::copy("\xd8\x1c\xd8\x51\x81\x00"s);
+    auto const l = *test::lazy_of_copy("\xd8\x1c\xd8\x51\x81\x00"s);
     CHECK_EQ(test::query("$[*]", l).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(test::query("$[*].*", l).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(test::at_path("$[0]", l).error(), error::inadmissible_type_for_tag_content);
-    CHECK(found(test::query("$[*]", *cbor::lazy::copy("\xd8\x1c\xd8\x51\x44\x3f\xc0\x00\x00"s))) == A(1.5));
+    CHECK(found(test::query("$[*]", *test::lazy_of_copy("\xd8\x1c\xd8\x51\x44\x3f\xc0\x00\x00"s))) == A(1.5));
 }
 
 // A held lazy is a start point: at_path reads a path relative to it, from
@@ -1239,16 +1241,16 @@ TEST_CASE("path: a wildcard over a typed array whose content is no byte string")
 TEST_CASE("at_path: a path from a held lazy")
 {
     std::string const s("\xa2\x63pad\x82\x01\x02\x64" "cars\x82\xa1\x62hp\x05\xa1\x62hp\x07", 24);
-    auto const cars = cbor::lazy::copy(s)->at("cars");
+    auto const cars = test::lazy_of_copy(s)->at("cars");
     REQUIRE(cars.has_value());
     CHECK_EQ(*cars->at_path<"$[1].hp", std::int64_t>(), 7);
     CHECK_EQ(cars->at_path<"$[2].hp", std::int64_t>().error(), cbor::error::index_out_of_bounds);
     std::string const shared("\x82\xd8\x1c\xa1\x62hp\x05\xd8\x1d\x00", 11);
-    auto const first = cbor::lazy::copy(shared)->at(std::size_t{0});
+    auto const first = test::lazy_of_copy(shared)->at(std::size_t{0});
     REQUIRE(first.has_value());
     CHECK_EQ(*first->at_path<"$.hp", std::int64_t>(), 5);
     std::string const text("\xa1\x61k\x62ok", 6);
-    auto const word = cbor::lazy::copy(text)->at_path<"$.k", std::string_view>();
+    auto const word = test::lazy_of_copy(text)->at_path<"$.k", std::string_view>();
     REQUIRE(word.has_value());
     CHECK_EQ(**word, "ok");
 }
@@ -1257,7 +1259,7 @@ TEST_CASE("at_path: a path from a held lazy")
 // canonical_append loop until memory ran out, so this test runs a tag, two tags and a tag inside an array.
 TEST_CASE("path: a tag literal in a run-time filter")
 {
-    auto const doc = *cbor::lazy::copy(encoded(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
+    auto const doc = *test::lazy_of_copy(encoded(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
     CHECK(*test::query("$[?@ == 1000(1)]", doc) == A(tagged{1000, V(1)}));
     CHECK(*test::query("$[?@ == 1001(1000(3))]", doc) == A(tagged{1001, V(tagged{1000, V(3)})}));
     CHECK(*test::query("$[?@ == [1(2)]]", doc) == A(A(tagged{1, V(2)})));
@@ -1314,7 +1316,7 @@ auto member_at_path(L const &l)
 TEST_CASE("path: the member at_path starts at the item of the lazy")
 {
     std::string const doc = encoded(M("a"s, M("b"s, A(1, 2, "x"s))));
-    cbor::lazy const l = *cbor::lazy::copy(doc);
+    cbor::lazy const l = *test::lazy_of_copy(doc);
     CHECK(*test::at_path("$", *l.at_path(*cbor::jsonpath::compile<cbor::lazy>("$.a.b[1]"))) == V(2));
     CHECK_EQ(cbor::jsonpath::compile<cbor::lazy>("$.a.b[").error(), error::invalid_path);
     CHECK_EQ(cbor::jsonpath::compile<cbor::lazy>("$..b").error(), error::not_singular_query);
@@ -1345,12 +1347,12 @@ TEST_CASE("path: a typed at_path with a path that is not singular does not compi
 TEST_CASE("path: every standalone at_path gives what the member gives")
 {
     std::string const doc = encoded(M("a"s, A(7, "x"s)));
-    cbor::lazy const l = *cbor::lazy::copy(doc);
+    cbor::lazy const l = *test::lazy_of_copy(doc);
     CHECK_EQ(cbor::at_path<"$.a[0]", int>(std::string_view(doc)), l.at_path<"$.a[0]", int>());
     auto const owner = std::make_shared<std::string const>(doc);
     auto const member = l.at_path<"$.a[1]", std::string_view>();
     auto const shared = cbor::at_path<"$.a[1]", std::string_view>(owner);
-    auto const copied = cbor::at_path<"$.a[1]", std::string_view>(std::string_view(doc));
+    auto const copied = cbor::at_path<"$.a[1]", std::string_view>(std::string(doc));
     auto const moved = cbor::at_path<"$.a[1]", std::string_view>(std::string(doc));
     CHECK_EQ(**member, "x"sv);
     CHECK_EQ(**shared, **member);

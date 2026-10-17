@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstddef>
 #include <string>
@@ -77,7 +78,7 @@ TEST_CASE("item_size: a cut item inside tag 24 is framed, and decode refuses it"
 {
     std::string_view const wire = "\xd8\x1c\xd8\x18\x41\x83"sv;
     CHECK_EQ(cbor::item_size(wire).value(), wire.size());
-    auto const top_level = cbor::lazy::copy(wire);
+    auto const top_level = test::lazy_of_copy(wire);
     REQUIRE(top_level.has_value());
     CHECK_EQ(top_level->decode().error(), error::too_little_data);
     CHECK_EQ(cbor::item_size("\xd8\x1c\xd8\x18\x41"sv).error(), error::too_little_data);
