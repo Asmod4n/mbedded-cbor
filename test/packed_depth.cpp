@@ -37,15 +37,16 @@ void reference_append(std::string &out, std::uint32_t const item)
     u32_append(out, item / 2);
 }
 
-// A chain of nodes, each with one child, as an attacker writes it by hand. Item k is the list of children of
-// the node at depth k: one node that refers to item k + 1, and the last item is empty. Each record carries
-// the class tag 1515 = d9 05 eb of node. Tag 1113 holds the directory at shared index 0, f7 at 1 to 16 and
-// item k at 17 + k, then the record function of node as the one argument, then the root. The directory holds
-// the root start, the start of each item and the end of the items. The encoder of this library cannot write
-// it, because gcc does not inline a recursive encoder.
+// A chain of nodes, each with one child, as an attacker writes it by hand. Each node is a record with the
+// class tag 1515 = d9 05 eb whose one field names the list of its children. List k holds one reference to the
+// record of node k + 1, and that record names list k + 1; the last list is empty. Tag 1113 holds the
+// directory at shared index 0, f7 at 1 to 16, list k at 17 + 2k and the record of node k + 1 at 18 + 2k, then
+// the record function of node as the one argument, then the root, node 0. The directory holds the root start,
+// the start of each item and the end of the items. The encoder of this library cannot write it, because gcc
+// does not inline a recursive encoder.
 std::string node_chain(std::size_t const levels)
 {
-    auto const items = static_cast<std::uint32_t>(levels + 1);
+    auto const items = static_cast<std::uint32_t>(2 * levels + 1);
     std::string out = "\xd9\x04\x59\x83\x9a"s;
     u32_append(out, 17 + items);
     out += "\x5a"s;
@@ -58,15 +59,17 @@ std::string node_chain(std::size_t const levels)
         u32_append(offset, static_cast<std::uint32_t>(out.size()));
         out.replace(directory + 4 * j, 4, offset);
     };
-    for (std::uint32_t k = 0; k < items; ++k) {
-        entry_write(k + 1);
-        bool const last = k + 1 == items;
+    for (std::uint32_t k = 0; k <= levels; ++k) {
+        entry_write(2 * k + 1);
+        bool const last = k == levels;
         out += "\x9a"s;
         u32_append(out, last ? 0 : 1);
-        if (!last) {
-            out += "\xd9\x05\xeb\xd8\x80\x9a\x00\x00\x00\x01"s;
-            reference_append(out, k + 2);
-        }
+        if (last)
+            break;
+        reference_append(out, 2 + 2 * k);
+        entry_write(2 * k + 2);
+        out += "\xd9\x05\xeb\xd8\x80\x9a\x00\x00\x00\x01"s;
+        reference_append(out, 3 + 2 * k);
     }
     entry_write(items + 1);
     out += "\x81\xd8\x72\x81\x68"

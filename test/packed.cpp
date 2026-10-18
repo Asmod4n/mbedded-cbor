@@ -98,14 +98,15 @@ TEST_CASE("fixed_size: text, bytes and arrays of fixed length")
     CHECK_EQ(cbor::packed<wheel>::fixed_size<std::uint32_t[2]>(), 11u);
 }
 
-// draft-ietf-cbor-packed-19 4.2: a struct is a record, its values behind a straight reference to the table entry
-// that holds its keys. The tag of the class stands outside the reference; tag 1500 is d9 05 dc in preferred
-// serialization (RFC 8949 3.4 and 4.1). The reference is d8 80 to d8 87, the value array has a head of 9a and 4
-// bytes, so 10 bytes come before the values. wheel: 10, then 3 + 5 + 1.
+// draft-ietf-cbor-packed-19 4.2: a struct is a record, its values behind a straight reference to the table
+// entry that holds its keys. The tag of the class stands outside the reference; tag 1500 is d9 05 dc in
+// preferred serialization (RFC 8949 3.4 and 4.1). The reference is d8 80 to d8 87, the value array has a head
+// of 9a and 4 bytes, so 10 bytes come before the values. wheel: 10, then 3 + 5 + 1. A struct inside another
+// value is a record of its own in the shared items, so in its parent it takes one reference of 6 bytes (2.2).
 TEST_CASE("fixed_size: a struct is a record of its values under the tag of its class")
 {
     CHECK_EQ(cbor::packed<wheel>::fixed_size(), 19u);
-    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::array<wheel, 4>>(), 1u + 4u * 19u);
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::array<wheel, 4>>(), 1u + 4u * 6u);
 }
 
 // A part of variable size is a shared item in the shared table of tag 1113. The record holds the reference c6
@@ -168,13 +169,16 @@ TEST_CASE("member_offset: the head of each value, behind the class tag and the h
     CHECK_EQ(cbor::packed<wheel const>::member_offset<^^wheel::snowTires>(), 18u);
 }
 
-// A nested struct is a record at the offset of its member, so offsets add up. car: 10, seats 2, so the engine record
-// with its own class tag is at 12; inside it horsepower at 10.
-TEST_CASE("member_offset: offsets of nested structs add up")
+// A nested struct is a record of its own, and its member in the parent is a reference of 6 bytes. car: 10,
+// seats 2, so the reference to the engine record is at 12 and hasNavSystem at 18; inside the engine record
+// horsepower is at 10. The test exists because the offsets of the parent must not depend on the size of an
+// inner struct, so an inner struct can grow without moving them.
+TEST_CASE("member_offset: a nested struct takes one reference in its parent")
 {
     CHECK_EQ(cbor::packed<car>::member_offset<^^car::motor>(), 12u);
     CHECK_EQ(cbor::packed<engine>::member_offset<^^engine::horsepower>(), 10u);
-    CHECK_EQ(cbor::packed<car>::member_offset<^^car::hasNavSystem>(), 12u + cbor::packed<engine>::fixed_size());
+    CHECK_EQ(cbor::packed<car>::member_offset<^^car::hasNavSystem>(), 18u);
+    CHECK_EQ(cbor::packed<car>::fixed_size(), 19u);
 }
 
 // The count of values has a head of 9a and 4 bytes whatever the count, so a member added later moves no offset, and
@@ -338,25 +342,51 @@ TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
     check_one_item(bytes);
 }
 
-// Two record functions stand in the arguments, people at 0 and named at 1. The list is item 17; its elements
-// are records of fixed size, each the class tag 1509 = d9 05 e5 over d8 81 for the second type. The strings
-// of the elements follow the list as items 18 and 19, in the order the encoder meets them: 6(1) and 6(-2).
-// The directory holds the root start 116 (74), the item starts 50 (32), 87 (57) and 93 (5d), and the end of
-// the items 100 (64). The root is the class tag 1510 = d9 05 e6 over d8 80.
+// Two record functions stand in the arguments, people at 0 and named at 1. The list is item 17; it holds one
+// reference of 6 bytes per element. Each element is a record of its own, the class tag 1509 = d9 05 e5 over
+// d8 81 for the second type, and its string follows it, in the order the encoder meets them: record 18 with
+// "x" at 19, record 20 with "yz" at 21. Index 18 is 6(1), 19 is 6(-2), 20 is 6(2), 21 is 6(-3) (draft 2.2
+// Table 1). The directory holds the root start 136 (88), the item starts 58 (3a), 75 (4b), 91 (5b), 97 (61)
+// and 113 (71), and the end of the items 120 (78). The root is the class tag 1510 = d9 05 e6 over d8 80.
 TEST_CASE("encode: a list of structs that hold strings")
 {
     std::string const bytes = schema_bytes(people{{{"x"}, {"yz"}}});
-    CHECK_EQ(bytes, "\xd9\x04\x59\x83\x9a\x00\x00\x00\x14"
-                    "\x5a\x00\x00\x00\x14\x00\x00\x00\x74\x00\x00\x00\x32\x00\x00\x00\x57\x00\x00\x00\x5d"
-                    "\x00\x00\x00\x64"
+    CHECK_EQ(bytes, "\xd9\x04\x59\x83\x9a\x00\x00\x00\x16"
+                    "\x5a\x00\x00\x00\x1c\x00\x00\x00\x88\x00\x00\x00\x3a\x00\x00\x00\x4b\x00\x00\x00\x5b"
+                    "\x00\x00\x00\x61\x00\x00\x00\x71\x00\x00\x00\x78"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-                    "\x9a\x00\x00\x00\x02"
-                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x01"
+                    "\x9a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x02"
                     "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"
-                    "\x7a\x00\x00\x00\x01x\x7a\x00\x00\x00\x02yz"
+                    "\x7a\x00\x00\x00\x01x"
+                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x02"
+                    "\x7a\x00\x00\x00\x02yz"
                     "\x82\xd8\x72\x81\x66people\xd8\x72\x81\x61n"
                     "\xd9\x05\xe6\xd8\x80\x9a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x00"s);
     check_one_item(bytes);
+}
+
+// An inner struct is a record of its own in the shared items, named from its parent by a reference of 6
+// bytes. car holds seats, motor and hasNavSystem; the engine record is item 17 = 6(-1) = c6 3a 00 00 00 00:
+// the class tag 1501 = d9 05 dd, the record function of the second type d8 81, the count 9a 00 00 00 02, 300
+// as 19 01 2c and 1800 as 1a 00 00 07 08. The arguments hold the keys of car and of engine. The directory
+// holds the root start 106 (6a), the item start 42 (2a) and the end of the items 60 (3c). The bytes are
+// written from the draft and RFC 8949 3 by hand. The test exists because a record of fixed size inside its
+// parent would move every offset behind it when the inner struct grows.
+TEST_CASE("encode: an inner struct is a record of its own")
+{
+    std::string const bytes = schema_bytes(car{4, {300, 1800}, true});
+    CHECK_EQ(bytes, "\xd9\x04\x59\x83\x9a\x00\x00\x00\x12"
+                    "\x5a\x00\x00\x00\x0c\x00\x00\x00\x6a\x00\x00\x00\x2a\x00\x00\x00\x3c"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\xd9\x05\xdd\xd8\x81\x9a\x00\x00\x00\x02\x19\x01\x2c\x1a\x00\x00\x07\x08"
+                    "\x82\xd8\x72\x83\x65seats\x65motor\x6chasNavSystem\xd8\x72\x82\x6ahorsepower\x62"
+                    "cc"
+                    "\xd9\x05\xde\xd8\x80\x9a\x00\x00\x00\x03\x18\x04\xc6\x3a\x00\x00\x00\x00\xf5"s);
+    check_one_item(bytes);
+    auto const decoded_back = *cbor::packed<car>::decode(std::string(bytes));
+    car const &back = *decoded_back;
+    CHECK_EQ(back.motor.cc, 1800u);
+    CHECK_EQ(at_path<car, "$.motor.horsepower">(bytes), 300u);
 }
 
 #endif
@@ -1462,9 +1492,10 @@ TEST_CASE("encode: into the exact span that a writer allocates")
     check(passkey_login{{}, passkey_user{{}, ""}, std::nullopt});
 }
 
-// CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct lies in the
-// fixed item as an array of a presence flag and its fields. decode reads it; a path does not step into it. Both
-// forms stay two well-formed CBOR items.
+// CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct is a reference of 6
+// bytes to its record in the shared items, or to an item f7 (undefined, draft-ietf-cbor-packed-19 4.2: an
+// absent value) when it is empty. decode reads it; a path does not step into it. Both forms stay well-formed
+// CBOR items.
 TEST_CASE("schema: an optional struct and an optional string, present and absent")
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
@@ -1486,7 +1517,8 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
         REQUIRE(end.has_value());
         CHECK_EQ(*end, message.size());
     }
-    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::optional<passkey_user>>(), 2 + cbor::packed<passkey_user>::fixed_size());
+    CHECK_EQ(cbor::packed<wheel>::fixed_size<std::optional<passkey_user>>(), 6u);
+    CHECK_NE(none.find("\x5a\x00\x00\x00\x01\x01\xf7"s), std::string::npos);
     auto const decoded_back2 = *cbor::packed<passkey_login>::decode(std::string(none));
     passkey_login const &back2 = *decoded_back2;
     CHECK_FALSE(back2.user.has_value());
@@ -1615,27 +1647,30 @@ C chain_of(std::uint8_t const v)
 // draft-ietf-cbor-packed-19 2.3 Table 2 gives tags 128..135 to the first 8 table indexes only. The test
 // exists because a root with 20 struct types needs record functions at indexes 8 to 19, which a record
 // reaches with the straight reference 6([N, rump]) at index 8 + N. chain19 is index 19, so N = 11 (0b): c6 82
-// 0b, then the rump 9a 00 00 00 03. The record functions stand in the arguments of tag 1113, so the shared
-// items start at 17 for any count of types. Table 1 maps index 17 to 6(-1) = c6 3a 00 00 00 00 and index 18
-// to 6(1) = c6 1a 00 00 00 01. The shared table head counts 17 + 4 entries. A record of index 8 or more is
-// one byte longer, so its size depends on the root. The class tag of chainK is 1600 + K, 3 bytes in front of
-// each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
+// 0b, then the rump 9a 00 00 00 03. Each inner chain record is a shared item of its own: chain1 to chain19
+// are the items 17 to 35, text is 36 = 6(10) = c6 1a 00 00 00 0a, words 37 = 6(-11) = c6 3a 00 00 00 0a
+// (Table 1), and "x" and "yz" follow. The shared table head counts 17 + 23 entries. The class tag of chainK
+// is 1600 + K, 3 bytes in front of each record, and stands outside the reference: 1619 = d9 06 53 before c6
+// 82 0b. The root is chain0, 1600 = d9 06 40, with v and the reference to item 17.
 TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
 {
     CHECK_EQ(cbor::packed<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
     CHECK_EQ(cbor::packed<chain19>::fixed_size(), 3u + 2u + 5u + 2u + 6u + 6u);
-    CHECK_EQ(cbor::packed<chain0>::fixed_size(), 8u * 12u + 11u * 13u + 25u);
+    CHECK_EQ(cbor::packed<chain0>::fixed_size(), 3u + 2u + 5u + 2u + 6u);
     CHECK_EQ((cbor::packed<chain0>::member_offset<^^chain8::next, chain8>()), 13u);
     CHECK_EQ(cbor::packed<chain8>::member_offset<^^chain8::next>(), 12u);
 
     chain0 const value = chain_of<chain0>(0);
     std::string const bytes = *cbor::packed<chain0>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
-    CHECK_EQ(bytes.substr(0, 9), "\xd9\x04\x59\x83\x9a\x00\x00\x00\x15"s);
-    CHECK_EQ(
-        bytes.substr(bytes.size() - 25),
-        "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x00\xc6\x1a\x00\x00\x00\x01"s);
-    CHECK_EQ(bytes.substr(bytes.size() - cbor::packed<chain0>::fixed_size() + 8u * 12u, 6), "\xd9\x06\x48\xc6\x82\x00"s);
+    CHECK_EQ(bytes.substr(0, 9), "\xd9\x04\x59\x83\x9a\x00\x00\x00\x28"s);
+    CHECK_EQ(bytes.substr(bytes.size() - 18),
+             "\xd9\x06\x40\xd8\x80\x9a\x00\x00\x00\x02\x18\x00\xc6\x3a\x00\x00\x00\x00"s);
+    CHECK_NE(
+        bytes.find(
+            "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x1a\x00\x00\x00\x0a\xc6\x3a\x00\x00\x00\x0a"s),
+        std::string::npos);
+    CHECK_NE(bytes.find("\xd9\x06\x48\xc6\x82\x00\x9a\x00\x00\x00\x02\x18\x08"s), std::string::npos);
 
     auto const decoded_back = *cbor::packed<chain0>::decode(std::string(bytes));
     chain0 const &back = *decoded_back;
@@ -1654,18 +1689,17 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
 }
 
 // draft-ietf-cbor-packed-19 3.1: tag 1113 keeps the record functions in the arguments, so with 17 struct
-// types the first shared item is still index 17, which 2.2 Table 1 names 6(-1) = c6 3a 00 00 00 00. The test
-// exists because a reference below index 17 names no item: 6(0) = c6 1a 00 00 00 00 is index 16, an f7, and
-// the reader refuses it.
+// types the first shared item is still index 17, which 2.2 Table 1 names 6(-1) = c6 3a 00 00 00 00. The root
+// chain3 = 1603 = d9 06 43 names it as its next record. The test exists because a reference below index 17
+// names no item: 6(0) = c6 1a 00 00 00 00 is index 16, an f7, and the reader refuses it.
 TEST_CASE("schema: a root with 17 struct types starts its shared items at index 17")
 {
     chain3 const value = chain_of<chain3>(3);
     std::string const bytes = *cbor::packed<chain3>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
-    CHECK_EQ(bytes.substr(0, 9), "\xd9\x04\x59\x83\x9a\x00\x00\x00\x15"s);
-    CHECK_EQ(
-        bytes.substr(bytes.size() - 25),
-        "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x00\xc6\x1a\x00\x00\x00\x01"s);
+    CHECK_EQ(bytes.substr(0, 9), "\xd9\x04\x59\x83\x9a\x00\x00\x00\x25"s);
+    CHECK_EQ(bytes.substr(bytes.size() - 18),
+             "\xd9\x06\x43\xd8\x80\x9a\x00\x00\x00\x02\x18\x03\xc6\x3a\x00\x00\x00\x00"s);
 
     auto const decoded_back = *cbor::packed<chain3>::decode(std::string(bytes));
     chain3 const &back = *decoded_back;
@@ -1673,7 +1707,7 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
     CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(bytes), "ab"s);
 
     std::string broken = bytes;
-    broken.at(broken.size() - 11) = '\x1a';
+    broken.at(broken.size() - 5) = '\x1a';
     CHECK_EQ(cbor::packed<chain3>::decode(std::string(broken)).error(), error::unpopulated_table_index);
     CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(broken).error(),
              error::unpopulated_table_index);
@@ -2065,6 +2099,23 @@ struct packed_tables {
 
 std::string unpacked(cbor::item const &x, packed_tables const &t);
 
+// draft-ietf-cbor-packed-19 2.2 Table 1: 6(N) over an integer names shared item 16 + 2N, or 16 - 2N - 1 for a
+// negative N. The item it names is what stands at its place.
+cbor::item const &resolved(cbor::item const &x, packed_tables const &t)
+{
+    using cbor::type;
+    if (x.type != type::tag)
+        return x;
+    auto const [number, content] = *x.get<type::tag>();
+    if (number != 6 || (content->type != type::unsigned_integer && content->type != type::negative_integer))
+        return x;
+    std::uint64_t const index = content->type == type::unsigned_integer
+                                    ? 16 + 2 * *content->get<type::unsigned_integer>()
+                                    : 16 + 2 * *content->get<type::negative_integer>() + 1;
+    REQUIRE_LT(index, t.shared.size());
+    return resolved(t.shared[static_cast<std::size_t>(index)], t);
+}
+
 // draft-ietf-cbor-packed-19 4.2: the record function 114 over the keys, applied to an array of values, is the
 // map of each key to its value; a value that is undefined is absent, and there are not more values than keys.
 std::string record_unpacked(std::uint64_t const argument, cbor::item const &rump, packed_tables const &t)
@@ -2080,9 +2131,11 @@ std::string record_unpacked(std::uint64_t const argument, cbor::item const &rump
     REQUIRE(values.has_value());
     REQUIRE_LE(values->size(), keys->size());
     std::vector<std::string> parts;
-    for (std::size_t i = 0; i < values->size(); ++i)
-        if ((*values)[i].type != type::undefined)
-            parts.push_back(canonical((*keys)[i]) + ":" + unpacked((*values)[i], t));
+    for (std::size_t i = 0; i < values->size(); ++i) {
+        cbor::item const &value = resolved((*values)[i], t);
+        if (value.type != type::undefined)
+            parts.push_back(canonical((*keys)[i]) + ":" + unpacked(value, t));
+    }
     std::ranges::sort(parts);
     std::string out;
     for (std::string const &p : parts)
@@ -2103,13 +2156,8 @@ std::string unpacked(cbor::item const &x, packed_tables const &t)
             REQUIRE_EQ(pair.size(), 2u);
             return record_unpacked(8 + *pair[0].get<type::unsigned_integer>(), pair[1], t);
         }
-        if (number == 6) {
-            std::uint64_t const index = content->type == type::unsigned_integer
-                                            ? 16 + 2 * *content->get<type::unsigned_integer>()
-                                            : 16 + 2 * *content->get<type::negative_integer>() + 1;
-            REQUIRE_LT(index, t.shared.size());
-            return unpacked(t.shared[static_cast<std::size_t>(index)], t);
-        }
+        if (number == 6)
+            return unpacked(resolved(x, t), t);
         if (number >= 128 && number <= 135)
             return record_unpacked(number - 128, *content, t);
         return std::to_string(number) + "(" + unpacked(*content, t) + ")";
@@ -2159,6 +2207,16 @@ std::string structs_canonical(T const &value)
 
 } // namespace
 
+namespace
+{
+
+struct[[= cbor::tag(1535)]] spare {
+    std::uint8_t id;
+    std::optional<engine> motor;
+};
+
+} // namespace
+
 namespace packed_mirror
 {
 
@@ -2189,6 +2247,11 @@ struct car {
 
 struct doubles {
     std::vector<double> v;
+};
+
+struct spare {
+    std::uint8_t id;
+    std::optional<engine> motor;
 };
 
 } // namespace packed_mirror
@@ -2229,6 +2292,13 @@ struct cbor::describe_members<packed_mirror::car> {
 };
 
 template <>
+struct cbor::describe_members<packed_mirror::spare> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1535, 0};
+    static constexpr std::tuple members{CBOR_MEMBER(packed_mirror::spare, id),
+                                        CBOR_MEMBER(packed_mirror::spare, motor)};
+};
+
+template <>
 struct cbor::describe_members<packed_mirror::doubles> {
     static constexpr std::optional<cbor::tag> tag = cbor::tag{1531, 0};
     static constexpr std::tuple members{CBOR_MEMBER(packed_mirror::doubles, v)};
@@ -2238,10 +2308,11 @@ struct cbor::describe_members<packed_mirror::doubles> {
 // item it stands for. That item is the item that cbor::structs writes for the same value, in the generic data
 // model. The unpacker here is test code. cbor::structs takes a tag only from a description, so each packed
 // type has a described mirror with the same tag and members. The types hold numbers, texts, lists of numbers,
-// lists of structs and inner structs; chain0 has 20 types and reaches arguments 8 to 19 through 6([N, rump]),
-// and its item is written from the definition of the types. An optional is left out, because packed writes an
-// empty optional as an empty array until the optional takes its place as an absent value. The test exists
-// because others must read what packed writes.
+// lists of structs, inner structs and an optional struct, present and absent (an f7 item, which 4.2 treats as
+// absent); chain0 has 20 types and reaches arguments 8 to 19 through 6([N, rump]), and its item is written
+// from the definition of the types. An optional of another type is left out, because packed writes it empty
+// as an empty array until it takes its place as an absent value. The test exists because others must read
+// what packed writes.
 TEST_CASE("schema: a generic unpacker gives the item that cbor::structs writes")
 {
     namespace m = packed_mirror;
@@ -2253,6 +2324,10 @@ TEST_CASE("schema: a generic unpacker gives the item that cbor::structs writes")
              structs_canonical(m::car{4, {300, 1800}, true}));
     CHECK_EQ(message_unpacked(schema_bytes(doubles{{1.0, 2.0}})), structs_canonical(m::doubles{{1.0, 2.0}}));
     CHECK_EQ(message_unpacked(*cbor::packed<chain0>::encode(chain_of<chain0>(0))), chain_canonical(0));
+    CHECK_EQ(message_unpacked(schema_bytes(spare{7, engine{300, 1800}})),
+             structs_canonical(m::spare{7, m::engine{300, 1800}}));
+    CHECK_EQ(message_unpacked(schema_bytes(spare{7, std::nullopt})),
+             structs_canonical(m::spare{7, std::nullopt}));
     CHECK_EQ(message_unpacked(schema_bytes(login{5, true, "ab"})), R"(1507({"id":5,"name":"ab","ok":true}))");
 }
 
@@ -2287,20 +2362,43 @@ TEST_CASE("schema: a root of another class tag is incorrect_type")
     CHECK_EQ(at_path<point_a, "$.x">(bytes), 7u);
 }
 
-// The class tag of a nested record is a fixed head like any other. car holds the engine record at offset 12, and
-// the low byte of its tag 1501 = d9 05 dd is changed to de. The test exists because a forged nested tag must stop
+// The class tag of a nested record is a fixed head like any other. car names the engine record, whose tag
+// 1501 = d9 05 dd has its low byte changed to de. The test exists because a forged nested tag must stop
 // decode, and a path through that record must stop too, while the root and the other fields still read.
 TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 {
     std::string const bytes = *cbor::packed<car>::encode(car{4, {300, 1800}, true});
-    std::size_t const motor = bytes.size() - cbor::packed<car>::fixed_size() + cbor::packed<car>::member_offset<^^car::motor>();
-    CHECK_EQ(bytes.substr(motor, 3), "\xd9\x05\xdd"s);
+    std::size_t const motor = bytes.find("\xd9\x05\xdd"s);
+    REQUIRE_NE(motor, std::string::npos);
     std::string forged = bytes;
     forged.at(motor + 2) = '\xde';
     CHECK_EQ(cbor::packed<car>::decode(std::string(forged)).error(), error::incorrect_type);
     CHECK_EQ(at_path<car, "$.seats">(forged), 4u);
     CHECK_EQ(at_path<car, "$.motor.cc">(forged).error(), error::incorrect_type);
     CHECK_EQ(at_path<car, "$.motor.cc">(bytes), 1800u);
+}
+
+// A record item has the size of its record. The start of the engine item of car is forged one byte later, so
+// the item is one byte shorter than the record, and the reference to it is forged to name index 16, an f7
+// filler. The test exists because a record read past its item would read the bytes of another item as its
+// fields.
+TEST_CASE("schema: a record item of another size is an error")
+{
+    std::string const bytes = *cbor::packed<car>::encode(car{4, {300, 1800}, true});
+    REQUIRE_EQ(u32_read(bytes, 18), 42u);
+    std::string shorter = bytes;
+    shorter.replace(18, 4, u32_bytes(43));
+    CHECK_EQ(at_path<car, "$.motor.cc">(shorter).error(), error::syntax_error);
+    CHECK_EQ(at_path<car, "$.seats">(shorter), 4u);
+    CHECK_EQ(cbor::packed<car>::decode(std::string(shorter)).error(), error::syntax_error);
+
+    std::size_t const motor =
+        bytes.size() - cbor::packed<car>::fixed_size() + cbor::packed<car>::member_offset<^^car::motor>();
+    REQUIRE_EQ(bytes.substr(motor, 6), "\xc6\x3a\x00\x00\x00\x00"s);
+    std::string filler = bytes;
+    filler.at(motor + 1) = '\x1a';
+    CHECK_EQ(at_path<car, "$.motor.cc">(filler).error(), error::unpopulated_table_index);
+    CHECK_EQ(cbor::packed<car>::decode(std::string(filler)).error(), error::unpopulated_table_index);
 }
 
 namespace
@@ -2675,8 +2773,8 @@ TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the 
     }
 }
 
-// Each of the five directory entries of probe (the root start, the starts of the three items and the end of
-// the items) is forged to the edges of the message: the start of the message, the directory head, the root,
+// Each of the eight directory entries of probe (the root start, the starts of the six items: text, the list of
+// tires, the two tire records, maybe and the engine record, and the end of the items) is forged to the edges of the message: the start of the message, the directory head, the root,
 // one byte before and after the root, the end, and large u32 values. The test exists because an item that
 // begins in the directory or ends in the root would overlap bytes that another path reads as another type,
 // and a root start that moves would read a record that is not there. A forged value equal to the written one
@@ -2684,10 +2782,10 @@ TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the 
 TEST_CASE("attack: a directory entry out of range is an error")
 {
     std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
-    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x14"s);
+    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x20"s);
     REQUIRE_NE(head, std::string::npos);
     std::size_t const root = bytes.size() - cbor::packed<probe>::fixed_size();
-    for (std::size_t j = 0; j < 5; ++j) {
+    for (std::size_t j = 0; j < 8; ++j) {
         for (std::uint32_t const to :
              {0u, static_cast<std::uint32_t>(head), static_cast<std::uint32_t>(root - 1),
               static_cast<std::uint32_t>(root), static_cast<std::uint32_t>(root + 1),
@@ -2712,7 +2810,7 @@ TEST_CASE("attack: a directory entry out of range is an error")
 TEST_CASE("attack: overlapping items are an error")
 {
     std::string const bytes = *cbor::packed<probe>::encode(sample_probe);
-    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x14"s);
+    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x20"s);
     REQUIRE_NE(head, std::string::npos);
     std::string same = bytes;
     same.replace(head + 13, 4, bytes.substr(head + 9, 4));
