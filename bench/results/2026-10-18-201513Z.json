@@ -1,0 +1,1061 @@
+{
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+ "resolved_march": "-march= \t\tsapphirerapids",
+ "compilers": {
+  "g++-16": "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "clang++-23": "clang version 23.1.3"
+ },
+ "cxx_library": {
+  "cmp.g++-16.base.carsales.MB_FIELD": "libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f8e779ba000)",
+  "cmp.g++-16.base2.carsales.MB_FIELD": "libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f2389ddc000)",
+  "rpm": "libstdc++6-16.2.1+git9713-1.1.x86_64\nlibc++1-23.1.3-1.1.x86_64"
+ },
+ "libc": "glibc-2.44-3.1.x86_64 / libc.so.6 => /lib64/libc.so.6 (0x00007facfcb5d000)",
+ "kernel": "Linux b3e157dba0c0 6.18.44-fc-v139 #1 SMP PREEMPT_DYNAMIC @0 x86_64 x86_64 x86_64 GNU/Linux",
+ "scheduler": "EEVDF (Linux >= 6.6); sched_autogroup_enabled=1",
+ "virtualization": "hypervisor ",
+ "container": "podman, image localhost/mbedded-cbor-tw-compare, uid 0 for the context read; runs as uid 1000",
+ "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+ "cpu_flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+ "user": "uid=1000(ubuntu) gid=1000(1000) groups=1000(1000)",
+ "priority": "nice -10",
+ "threads": 1,
+ "pinned": false,
+ "start": "2026-10-18T20:07:30Z",
+ "end": "2026-10-18T20:15:13Z",
+ "min_time": "1s",
+ "steal_percent": {
+  "round 1": 0.244,
+  "round 2": 0.298,
+  "round 3": 0.269,
+  "round 4": 0.206,
+  "round 5": 0.252,
+  "round 6": 0.28,
+  "round 7": 0.287
+ },
+ "binaries": {
+  "cmp.g++-16.base.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    18.083698525851172,
+    18.607601317815345,
+    17.052576347505845,
+    21.075594481817,
+    16.592458643134854,
+    20.55697194883331,
+    17.52288949762582
+   ],
+   "iterations": [
+    87429915,
+    72147332,
+    83221072,
+    87750876,
+    70305120,
+    65673223,
+    88219280
+   ],
+   "median": 18.083698525851172,
+   "spread": 0.2701911714896481,
+   "check": "7008",
+   "bytes_mb": "198805"
+  },
+  "cmp.g++-16.base.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    97365.72067205889,
+    98200.2619953339,
+    92775.6863261869,
+    103675.05230005918,
+    88074.58171101757,
+    94205.56064704672,
+    102608.35320004844
+   ],
+   "iterations": [
+    16486,
+    16027,
+    11767,
+    10000,
+    15769,
+    15145,
+    10000
+   ],
+   "median": 97365.72067205889,
+   "spread": 0.17712795548922933,
+   "check": "33191310.687370282",
+   "bytes_mb": "198805"
+  },
+  "cmp.g++-16.base.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    7.239518069752956,
+    7.372170931457338,
+    7.234946885350677,
+    8.399006987389026,
+    8.714900850806785,
+    9.234205212622987,
+    7.334694435948484
+   ],
+   "iterations": [
+    193730277,
+    167537386,
+    156930712,
+    178380212,
+    195822268,
+    166240826,
+    141248473
+   ],
+   "median": 7.372170931457338,
+   "spread": 0.27633351826264385,
+   "check": "-189",
+   "bytes_mb": "480064"
+  },
+  "cmp.g++-16.base.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    54891.62359797496,
+    56597.126439825784,
+    80886.27695502306,
+    60703.87092897586,
+    58665.81539768217,
+    60044.334437783575,
+    53677.233959815225
+   ],
+   "iterations": [
+    22468,
+    26740,
+    19718,
+    25792,
+    21159,
+    20524,
+    26231
+   ],
+   "median": 58665.81539768217,
+   "spread": 0.5069009892644158,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480064"
+  },
+  "cmp.g++-16.base.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    26.302332706237667,
+    23.419189901533365,
+    22.495816086043813,
+    25.82824439504984,
+    23.81437223422322,
+    23.675962855496955,
+    23.090203309807
+   ],
+   "iterations": [
+    49339303,
+    59117135,
+    52942891,
+    56143047,
+    61643429,
+    63088076,
+    59837893
+   ],
+   "median": 23.675962855496955,
+   "spread": 0.16920998134205845,
+   "check": "640",
+   "bytes_mb": "479588"
+  },
+  "cmp.g++-16.base.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    171482.34324014615,
+    184799.6458538747,
+    180020.1131169209,
+    193256.1617048021,
+    183626.51244327938,
+    179550.24233128963,
+    170748.74726396165
+   ],
+   "iterations": [
+    6864,
+    8104,
+    7921,
+    6147,
+    7273,
+    8150,
+    7949
+   ],
+   "median": 180020.1131169209,
+   "spread": 0.13181598577731335,
+   "check": "15874369319.428572",
+   "bytes_mb": "479588"
+  },
+  "cmp.g++-16.base2.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    17.829631429285325,
+    15.782660944436088,
+    19.124710521645024,
+    17.736476084902797,
+    19.344095483307537,
+    24.396388941649782,
+    16.457907788541327
+   ],
+   "iterations": [
+    75586688,
+    88424770,
+    79692923,
+    76595534,
+    75126191,
+    50006226,
+    84154773
+   ],
+   "median": 17.829631429285325,
+   "spread": 0.5457715924798041,
+   "check": "7008",
+   "bytes_mb": "198805"
+  },
+  "cmp.g++-16.base2.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    89896.60027318806,
+    86722.2530081115,
+    92064.54862687833,
+    119557.14765617343,
+    115852.29770007572,
+    105844.35543085568,
+    93918.10957041978
+   ],
+   "iterations": [
+    16106,
+    15126,
+    16277,
+    10538,
+    10000,
+    11766,
+    14785
+   ],
+   "median": 93918.10957041978,
+   "spread": 0.37862132854171526,
+   "check": "33191310.687370282",
+   "bytes_mb": "198805"
+  },
+  "cmp.g++-16.base2.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    7.797016646452443,
+    9.312926132524336,
+    8.306190074113472,
+    8.658927146809676,
+    9.79601408008501,
+    7.765397020752418,
+    8.141545456702556
+   ],
+   "iterations": [
+    188451483,
+    184497621,
+    129813470,
+    134210479,
+    110465742,
+    173270566,
+    151978972
+   ],
+   "median": 8.306190074113472,
+   "spread": 0.2614955879146845,
+   "check": "-189",
+   "bytes_mb": "480064"
+  },
+  "cmp.g++-16.base2.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    61449.553094965886,
+    65357.16809679214,
+    57304.798126223985,
+    55861.27370569798,
+    65292.39356280463,
+    61825.6619751295,
+    81070.37695431784
+   ],
+   "iterations": [
+    20501,
+    23308,
+    25937,
+    23507,
+    25508,
+    21386,
+    12792
+   ],
+   "median": 61825.6619751295,
+   "spread": 0.45128049498893663,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480064"
+  },
+  "cmp.g++-16.base2.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    24.090785551463448,
+    24.844843653734813,
+    24.21013002364983,
+    24.064203646927822,
+    26.127093409960526,
+    23.567927923458583,
+    27.9858497774421
+   ],
+   "iterations": [
+    62990552,
+    61246905,
+    62997780,
+    62697373,
+    62862567,
+    61922495,
+    49163467
+   ],
+   "median": 24.21013002364983,
+   "spread": 0.18745482709941963,
+   "check": "640",
+   "bytes_mb": "479588"
+  },
+  "cmp.g++-16.base2.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    182716.0654378808,
+    180722.7973921763,
+    180082.9647923338,
+    185167.36377408792,
+    186257.52520497938,
+    177988.66459867597,
+    186757.78855266265
+   ],
+   "iterations": [
+    8084,
+    7823,
+    7612,
+    7928,
+    6586,
+    7898,
+    8229
+   ],
+   "median": 182716.0654378808,
+   "spread": 0.049267878793062936,
+   "check": "15874369319.428572",
+   "bytes_mb": "479588"
+  },
+  "cmp.g++-16.head.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    33.968289010448935,
+    29.85340878175752,
+    41.956167212646044,
+    32.90472966874458,
+    36.77034640008741,
+    43.21878878930019,
+    41.53223213008743
+   ],
+   "iterations": [
+    47251411,
+    44236654,
+    34451220,
+    35915179,
+    41849037,
+    28915828,
+    32819736
+   ],
+   "median": 36.77034640008741,
+   "spread": 0.44770029798774047,
+   "check": "7008",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.head.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    93139.85036631548,
+    101716.98579283326,
+    85849.42810921962,
+    96704.1276810152,
+    96526.73465235608,
+    110471.19369995926,
+    92933.31932833258
+   ],
+   "iterations": [
+    15558,
+    14007,
+    14216,
+    13894,
+    14253,
+    10000,
+    11972
+   ],
+   "median": 96526.73465235608,
+   "spread": 0.28680174269088043,
+   "check": "33191310.687370282",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.head.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    19.388327655549478,
+    15.858161279649371,
+    17.12137234995746,
+    19.272445436123437,
+    19.927273712488773,
+    17.683573685961164,
+    17.756064774070953
+   ],
+   "iterations": [
+    79651659,
+    64532576,
+    73852183,
+    68914199,
+    86571819,
+    69541432,
+    75732953
+   ],
+   "median": 17.756064774070953,
+   "spread": 0.25659421423978435,
+   "check": "-189",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.head.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    56111.600228052666,
+    59692.3045899385,
+    75437.03444372297,
+    75063.49448579478,
+    59711.61590535373,
+    77633.88738069659,
+    74282.3795588924
+   ],
+   "iterations": [
+    20169,
+    27299,
+    21194,
+    16684,
+    21125,
+    20334,
+    20948
+   ],
+   "median": 74282.3795588924,
+   "spread": 0.38356217012474336,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.head.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    40.13632609838363,
+    40.735402234516535,
+    40.673157512750386,
+    46.81143167433333,
+    46.06559369072576,
+    41.58295126099671,
+    40.08645024608861
+   ],
+   "iterations": [
+    35157142,
+    34162386,
+    34430591,
+    30242884,
+    32101807,
+    34267074,
+    35705416
+   ],
+   "median": 40.735402234516535,
+   "spread": 0.1677619591398194,
+   "check": "640",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.head.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    177123.18908069827,
+    169668.23998590698,
+    191621.6854941464,
+    204370.13513176792,
+    183214.71198555463,
+    178100.19788460623,
+    182779.90204579948
+   ],
+   "iterations": [
+    7473,
+    8488,
+    7914,
+    8081,
+    8260,
+    7469,
+    6697
+   ],
+   "median": 182779.90204579948,
+   "spread": 0.2045279372777331,
+   "check": "15874369319.428572",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headB.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    21.984040377106364,
+    21.024156640730105,
+    20.157188049601846,
+    25.707255151899375,
+    31.690153105202235,
+    22.228666465537827,
+    21.87525747651259
+   ],
+   "iterations": [
+    70580803,
+    67394470,
+    71400676,
+    68566228,
+    43340983,
+    69388631,
+    55454089
+   ],
+   "median": 21.984040377106364,
+   "spread": 0.5721514839877775,
+   "check": "7008",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headB.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    96912.31286235331,
+    105454.96402644747,
+    94624.74128544923,
+    101622.34952876152,
+    131133.7933799174,
+    95846.31615743057,
+    90157.1297614494
+   ],
+   "iterations": [
+    14492,
+    15984,
+    15434,
+    10291,
+    11722,
+    10868,
+    11945
+   ],
+   "median": 96912.31286235331,
+   "spread": 0.4545027523268532,
+   "check": "33191310.687370282",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headB.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    11.855631997258659,
+    12.911471085493543,
+    11.756538118033975,
+    11.857902525332548,
+    12.398164043657852,
+    14.127799328030674,
+    12.825980096761201
+   ],
+   "iterations": [
+    95708223,
+    89251597,
+    130572551,
+    129233866,
+    122449535,
+    95721677,
+    116526964
+   ],
+   "median": 12.398164043657852,
+   "spread": 0.20169723316418264,
+   "check": "-189",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headB.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    55041.323120541914,
+    55385.08413727715,
+    53078.47701087062,
+    65285.76322023525,
+    61620.28157255418,
+    66920.15698301172,
+    70030.26191221585
+   ],
+   "iterations": [
+    26111,
+    21976,
+    20140,
+    19837,
+    18695,
+    25920,
+    25562
+   ],
+   "median": 61620.28157255418,
+   "spread": 0.31937210440068675,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headB.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    28.84158310289207,
+    49.65091068461735,
+    26.870617042266836,
+    36.776493778099066,
+    30.751057414719494,
+    32.257884813400025,
+    26.20032735902694
+   ],
+   "iterations": [
+    53083119,
+    28899521,
+    43392701,
+    49407506,
+    46676578,
+    41522162,
+    47791565
+   ],
+   "median": 30.751057414719494,
+   "spread": 0.8950492489747788,
+   "check": "640",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headB.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    169256.82004594605,
+    175050.62798835043,
+    186911.8850367092,
+    182597.41645646383,
+    176308.47013893948,
+    160256.01903751868,
+    170239.22123892544
+   ],
+   "iterations": [
+    8241,
+    8575,
+    7759,
+    7134,
+    8774,
+    8457,
+    8814
+   ],
+   "median": 175050.62798835043,
+   "spread": 0.1663330098880711,
+   "check": "15874369319.428572",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headC.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    27.110732621001297,
+    26.82590403261873,
+    29.37282170178695,
+    28.59610803355348,
+    32.01798800018306,
+    29.876942907098467,
+    35.62966527782769
+   ],
+   "iterations": [
+    50259643,
+    52227706,
+    52491550,
+    46158363,
+    49231376,
+    51535274,
+    40436338
+   ],
+   "median": 29.37282170178695,
+   "spread": 0.32818134421505807,
+   "check": "7008",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headC.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    100503.00908502679,
+    86549.98037097997,
+    87984.44948077796,
+    97943.91042429353,
+    99058.85403806335,
+    129157.99699947973,
+    107547.16840001493
+   ],
+   "iterations": [
+    15520,
+    15742,
+    15311,
+    14658,
+    12147,
+    10998,
+    10000
+   ],
+   "median": 99058.85403806335,
+   "spread": 0.4922937757567203,
+   "check": "33191310.687370282",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headC.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    12.100382539899584,
+    11.441508811579064,
+    11.78328417549376,
+    10.636044271965112,
+    12.965684056478814,
+    13.058689337620153,
+    11.184797434517659
+   ],
+   "iterations": [
+    108732186,
+    114387563,
+    132242738,
+    117638775,
+    102042568,
+    124901563,
+    91150497
+   ],
+   "median": 11.78328417549376,
+   "spread": 0.22777688807113572,
+   "check": "-189",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headC.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    62059.18070700194,
+    67923.15352235218,
+    55458.37077994255,
+    63728.53990402706,
+    83864.05135629166,
+    96268.85294577022,
+    57643.62446956901
+   ],
+   "iterations": [
+    26507,
+    18766,
+    22156,
+    19998,
+    15188,
+    12492,
+    25452
+   ],
+   "median": 63728.53990402706,
+   "spread": 0.7358759659161764,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headC.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    37.88853545929099,
+    38.09331363424892,
+    39.0534826748064,
+    38.919559649196096,
+    40.080298652727016,
+    43.623238213299246,
+    38.08499436016081
+   ],
+   "iterations": [
+    36603551,
+    34486836,
+    34453662,
+    37589120,
+    34851581,
+    30268136,
+    37705090
+   ],
+   "median": 38.919559649196096,
+   "spread": 0.1513572030296566,
+   "check": "640",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headC.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    185371.39069529882,
+    190555.44548053716,
+    188148.16907988474,
+    208124.50826505187,
+    179109.64093906025,
+    196948.46083037343,
+    176535.470595927
+   ],
+   "iterations": [
+    8211,
+    7401,
+    8150,
+    7925,
+    6815,
+    5106,
+    7737
+   ],
+   "median": 188148.16907988474,
+   "spread": 0.17893875696759665,
+   "check": "15874369319.428572",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headD.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    31.149448368810685,
+    29.706572304144636,
+    32.94661564249548,
+    33.83643609076081,
+    31.46036641763506,
+    34.222979079483366,
+    29.943411706925716
+   ],
+   "iterations": [
+    48183644,
+    48980189,
+    46238732,
+    39528066,
+    43502111,
+    37600662,
+    42214933
+   ],
+   "median": 31.46036641763506,
+   "spread": 0.15203392465136756,
+   "check": "7008",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headD.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    105348.04689996236,
+    97500.46942513398,
+    111189.75295481521,
+    117448.51014475193,
+    103900.7778001178,
+    92915.5877593278,
+    94102.37740365574
+   ],
+   "iterations": [
+    10000,
+    13099,
+    13791,
+    13751,
+    10000,
+    15571,
+    15445
+   ],
+   "median": 103900.7778001178,
+   "spread": 0.2640345175340213,
+   "check": "33191310.687370282",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headD.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    18.69869324537543,
+    17.623379406262842,
+    17.657790294836214,
+    15.632592309079431,
+    18.080309042698573,
+    17.298060995562086,
+    16.97983696099791
+   ],
+   "iterations": [
+    82507762,
+    63355484,
+    82643451,
+    78910776,
+    85526309,
+    67699690,
+    86336886
+   ],
+   "median": 17.623379406262842,
+   "spread": 0.19613515632434186,
+   "check": "-189",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headD.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    64796.06627933244,
+    56440.222591043836,
+    62796.59461612745,
+    74553.3566768189,
+    70604.94635785905,
+    59261.08451911415,
+    58712.650805817844
+   ],
+   "iterations": [
+    25815,
+    18981,
+    23886,
+    18392,
+    23228,
+    25722,
+    23454
+   ],
+   "median": 62796.59461612745,
+   "spread": 0.32092598601213407,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headD.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    42.16977516961735,
+    41.309687321166415,
+    42.426346671394825,
+    42.164681276809056,
+    42.19306121272702,
+    40.426992059578005,
+    42.43263303809157
+   ],
+   "iterations": [
+    34510235,
+    34889026,
+    32291935,
+    33013583,
+    34183956,
+    33621384,
+    34876673
+   ],
+   "median": 42.16977516961735,
+   "spread": 0.04961143227173115,
+   "check": "640",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headD.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    176743.096614682,
+    180256.63268966958,
+    177574.12638549073,
+    199344.26027401604,
+    209160.0218436776,
+    190372.29637463499,
+    197681.3091496999
+   ],
+   "iterations": [
+    7887,
+    7819,
+    8300,
+    7592,
+    6867,
+    6151,
+    8339
+   ],
+   "median": 190372.29637463499,
+   "spread": 0.18341268117344245,
+   "check": "15874369319.428572",
+   "bytes_mb": "479596"
+  }
+ },
+ "against_base": [
+  {
+   "compiler": "g++-16",
+   "cell": "carsales.MB_FIELD",
+   "unit": "ns",
+   "base": 18.083698525851172,
+   "base2": 17.829631429285325,
+   "aa_base2_over_base": 0.9859504903710571,
+   "over_base": {
+    "base2": 0.9859504903710571,
+    "head": 2.033342147764913,
+    "headB": 1.215682751273449,
+    "headC": 1.6242707021352767,
+    "headD": 1.7397086316530632
+   },
+   "head": 36.77034640008741,
+   "head_over_base": 2.033342147764913,
+   "beyond_noise": true
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "carsales.MB_READ",
+   "unit": "ns",
+   "base": 97365.72067205889,
+   "base2": 93918.10957041978,
+   "aa_base2_over_base": 0.9645911201823162,
+   "over_base": {
+    "base2": 0.9645911201823162,
+    "head": 0.991383147848013,
+    "headB": 0.9953432501030551,
+    "headC": 1.0173894195443505,
+    "headD": 1.0671186643815833
+   },
+   "head": 96526.73465235608,
+   "head_over_base": 0.991383147848013,
+   "beyond_noise": false
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "floats.MB_FIELD",
+   "unit": "ns",
+   "base": 7.372170931457338,
+   "base2": 8.306190074113472,
+   "aa_base2_over_base": 1.126695264032829,
+   "over_base": {
+    "base2": 1.126695264032829,
+    "head": 2.408525919862376,
+    "headB": 1.6817521133095827,
+    "headC": 1.5983465772902838,
+    "headD": 2.3905277794174853
+   },
+   "head": 17.756064774070953,
+   "head_over_base": 2.408525919862376,
+   "beyond_noise": true
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "floats.MB_READ",
+   "unit": "ns",
+   "base": 58665.81539768217,
+   "base2": 61825.6619751295,
+   "aa_base2_over_base": 1.053861802755616,
+   "over_base": {
+    "base2": 1.053861802755616,
+    "head": 1.2661952971308608,
+    "headB": 1.0503609496406785,
+    "headC": 1.0862976926516035,
+    "headD": 1.070412031102673
+   },
+   "head": 74282.3795588924,
+   "head_over_base": 1.2661952971308608,
+   "beyond_noise": true
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "records.MB_FIELD",
+   "unit": "ns",
+   "base": 23.675962855496955,
+   "base2": 24.21013002364983,
+   "aa_base2_over_base": 1.0225615816097149,
+   "over_base": {
+    "base2": 1.0225615816097149,
+    "head": 1.7205383571151707,
+    "headB": 1.2988302778815977,
+    "headC": 1.6438427398596787,
+    "headD": 1.7811218672285847
+   },
+   "head": 40.735402234516535,
+   "head_over_base": 1.7205383571151707,
+   "beyond_noise": true
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "records.MB_READ",
+   "unit": "ns",
+   "base": 180020.1131169209,
+   "base2": 182716.0654378808,
+   "aa_base2_over_base": 1.014975839500828,
+   "over_base": {
+    "base2": 1.014975839500828,
+    "head": 1.015330447698842,
+    "headB": 0.9723948338742413,
+    "headC": 1.0451508213289744,
+    "headD": 1.05750570354875
+   },
+   "head": 182779.90204579948,
+   "head_over_base": 1.015330447698842,
+   "beyond_noise": true
+  }
+ ],
+ "failed_build": {},
+ "failed_run": [],
+ "max_abs_aa_percent": 12.67,
+ "what": "bench/compare.cpp, g++-16, OP_MB_READ and OP_MB_FIELD: base 1fb5cda twice, head fbfb5ef, and arms outside the tree on top of fbfb5ef: headB (as in the previous run), headC (headB with four std::uint32_t members and the root start read again from the first directory entry), headD (headC without the block compare of the fillers).",
+ "how": "Each arm in its own binary; 7 rounds; each round runs every binary once in a shuffled order, one at a time, as uid 1000 with CAP_SYS_NICE in podman image localhost/mbedded-cbor-tw-compare, under the bench lock with nothing else running; --benchmark_min_time=1s (calibrated in 2026-10-18-190359Z.json); medians compared; a cell differs only where |arm/base - 1| exceeds |base2/base - 1|. Compile flags: -std=c++26 -freflection -Wall -Wextra -Werror plus flags. Time unit ns.",
+ "commit": "fbfb5ef (clean); arms are the diffs in arm_diffs against fbfb5ef include/cbor/packed.hpp",
+ "base_commit": "1fb5cda",
+ "gate": "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------\n r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu\n 0  0      0 12952860  83100 3041652    0    0   162   412  601    0 27  2 71  0  0  0\n 0  0      0 12953664  83100 3041412    0    0     0     0  280  284  1  0 99  0  0  0\n 0  0      0 12956128  83100 3041412    0    0     0     0  453  537  4  0 96  0  0  0\n 0  0      0 12956128  83100 3041412    0    0     0     0  225  270  0  0 100  0  0  0\n 0  0      0 12956128  83100 3041412    0    0     0     0  285  384  1  0 99  0  0  0\n  PID USER     %CPU  NI COMMAND\n  124 root      2.9   0 claude\n25607 root      0.2   0 bash\n   86 root      0.0   0 environment-man\n    1 root      0.0   0 process_api\n17505 root      0.0   0 kworker/1:2-mm_percpu_wq\n20575 root      0.0   0 kworker/2:1-mm_percpu_wq\n   81 64321     0.0   0 4\n",
+ "arm_diffs": {
+  "headB": "--- head/include/cbor/packed.hpp\t2026-10-18 19:13:32.000000000 +0000\n+++ headB/include/cbor/packed.hpp\t2026-10-18 19:54:46.941989236 +0000\n@@ -81,7 +81,6 @@\n class typed_array_view;\n \n struct directory {\n-    std::size_t at;\n     std::size_t count;\n     std::size_t items_at;\n     std::size_t items_end;\n@@ -1234,10 +1233,11 @@\n         }\n     }\n \n-    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, cbor::directory const dir, std::size_t const j)\n+    template <class Root>\n+    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, std::size_t const j)\n     {\n         return heads::unsigned_read<std::uint32_t>(\n-            std::span<char const>(encoded).subspan(dir.at + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());\n+            std::span<char const>(encoded).subspan(directory_at<Root>() + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());\n     }\n \n     template <class Root, major_type Major, class E = void>\n@@ -1248,10 +1248,10 @@\n         auto const j = shared_index_read(field, dir.shared_start);\n         if (!j) [[unlikely]]\n             return std::unexpected(j.error());\n-        return item_read<Major, E>(encoded, dir, *j, element);\n+        return item_read<Root, Major, E>(encoded, dir, *j, element);\n     }\n \n-    template <major_type Major, class E = void>\n+    template <class Root, major_type Major, class E = void>\n     CBOR_ALWAYS_INLINE static std::expected<reference, error>\n     item_read(std::string_view const encoded, cbor::directory const dir, std::uint64_t const j,\n               std::size_t const element)\n@@ -1260,8 +1260,8 @@\n         if (!i) [[unlikely]]\n             return std::unexpected(error::unpopulated_table_index);\n         std::size_t const n = static_cast<std::size_t>(std::to_underlying(*i));\n-        std::size_t const item = directory_entry(encoded, dir, n + 1);\n-        std::size_t const end = directory_entry(encoded, dir, n + 2);\n+        std::size_t const item = directory_entry<Root>(encoded, n + 1);\n+        std::size_t const end = directory_entry<Root>(encoded, n + 2);\n         if (error const r =\n                 validity::check_item_range(item, end, dir.items_at, dir.items_end).error_or(error{});\n             r != error{}) [[unlikely]]\n@@ -1314,14 +1314,21 @@\n         std::size_t const after = header + length;\n         if (!validity::pending_items_fit(fillers, encoded.size() - after - fixed_size<T, T>())) [[unlikely]]\n             return std::unexpected(error::too_little_data);\n-        if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {\n-                return c == heads::initial_byte(major_type::simple_float,\n-                                                std::to_underlying(simple_value::undefined));\n+        constexpr std::size_t written = shared_first_of<T>() - keys_and_directory;\n+        static constexpr auto undefined = [] {\n+            std::array<char, written> a{};\n+            a.fill(static_cast<char>(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined))));\n+            return a;\n+        }();\n+        if (fillers == written) [[likely]] {\n+            if (!std::ranges::equal(std::span(encoded).subspan(after).template first<written>(), undefined)) [[unlikely]]\n+                return std::unexpected(error::incorrect_type);\n+        } else if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {\n+                return c == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined));\n             })) [[unlikely]]\n             return std::unexpected(error::incorrect_type);\n-        cbor::directory dir{header, count, after + fillers, 0, 0, shared_start};\n-        dir.root = directory_entry(encoded, dir, 0);\n-        dir.items_end = directory_entry(encoded, dir, count - 1);\n+        cbor::directory dir{count, after + fillers, directory_entry<T>(encoded, count - 1), directory_entry<T>(encoded, 0),\n+                            shared_start};\n         if (error const r = validity::check_item_range(dir.items_at, dir.items_end, dir.items_at, dir.root)\n                                 .error_or(error{});\n             r != error{}) [[unlikely]]\n@@ -1588,7 +1595,7 @@\n                 return std::unexpected(j.error());\n             if (*j != index || !validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]\n                 return std::unexpected(error::unpopulated_table_index);\n-            if (directory_entry(encoded, dir, index + 1) != at) [[unlikely]]\n+            if (directory_entry<Root>(encoded, index + 1) != at) [[unlikely]]\n                 return std::unexpected(error::syntax_error);\n             auto const r = item_reference_read<Major, E>(encoded, at, end, element);\n             if (!r) [[unlikely]]\n",
+  "headC": "--- head/include/cbor/packed.hpp\t2026-10-18 19:13:32.000000000 +0000\n+++ headC/include/cbor/packed.hpp\t2026-10-18 20:04:51.490707854 +0000\n@@ -81,12 +81,10 @@\n class typed_array_view;\n \n struct directory {\n-    std::size_t at;\n-    std::size_t count;\n-    std::size_t items_at;\n-    std::size_t items_end;\n-    std::size_t root;\n-    std::size_t shared_start;\n+    std::uint32_t count;\n+    std::uint32_t items_at;\n+    std::uint32_t items_end;\n+    std::uint32_t shared_start;\n };\n \n #endif\n@@ -1234,10 +1232,11 @@\n         }\n     }\n \n-    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, cbor::directory const dir, std::size_t const j)\n+    template <class Root>\n+    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, std::size_t const j)\n     {\n         return heads::unsigned_read<std::uint32_t>(\n-            std::span<char const>(encoded).subspan(dir.at + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());\n+            std::span<char const>(encoded).subspan(directory_at<Root>() + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());\n     }\n \n     template <class Root, major_type Major, class E = void>\n@@ -1248,10 +1247,10 @@\n         auto const j = shared_index_read(field, dir.shared_start);\n         if (!j) [[unlikely]]\n             return std::unexpected(j.error());\n-        return item_read<Major, E>(encoded, dir, *j, element);\n+        return item_read<Root, Major, E>(encoded, dir, *j, element);\n     }\n \n-    template <major_type Major, class E = void>\n+    template <class Root, major_type Major, class E = void>\n     CBOR_ALWAYS_INLINE static std::expected<reference, error>\n     item_read(std::string_view const encoded, cbor::directory const dir, std::uint64_t const j,\n               std::size_t const element)\n@@ -1260,8 +1259,8 @@\n         if (!i) [[unlikely]]\n             return std::unexpected(error::unpopulated_table_index);\n         std::size_t const n = static_cast<std::size_t>(std::to_underlying(*i));\n-        std::size_t const item = directory_entry(encoded, dir, n + 1);\n-        std::size_t const end = directory_entry(encoded, dir, n + 2);\n+        std::size_t const item = directory_entry<Root>(encoded, n + 1);\n+        std::size_t const end = directory_entry<Root>(encoded, n + 2);\n         if (error const r =\n                 validity::check_item_range(item, end, dir.items_at, dir.items_end).error_or(error{});\n             r != error{}) [[unlikely]]\n@@ -1314,21 +1313,29 @@\n         std::size_t const after = header + length;\n         if (!validity::pending_items_fit(fillers, encoded.size() - after - fixed_size<T, T>())) [[unlikely]]\n             return std::unexpected(error::too_little_data);\n-        if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {\n-                return c == heads::initial_byte(major_type::simple_float,\n-                                                std::to_underlying(simple_value::undefined));\n+        constexpr std::size_t written = shared_first_of<T>() - keys_and_directory;\n+        static constexpr auto undefined = [] {\n+            std::array<char, written> a{};\n+            a.fill(static_cast<char>(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined))));\n+            return a;\n+        }();\n+        if (fillers == written) [[likely]] {\n+            if (!std::ranges::equal(std::span(encoded).subspan(after).template first<written>(), undefined)) [[unlikely]]\n+                return std::unexpected(error::incorrect_type);\n+        } else if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {\n+                return c == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined));\n             })) [[unlikely]]\n             return std::unexpected(error::incorrect_type);\n-        cbor::directory dir{header, count, after + fillers, 0, 0, shared_start};\n-        dir.root = directory_entry(encoded, dir, 0);\n-        dir.items_end = directory_entry(encoded, dir, count - 1);\n-        if (error const r = validity::check_item_range(dir.items_at, dir.items_end, dir.items_at, dir.root)\n-                                .error_or(error{});\n-            r != error{}) [[unlikely]]\n+        std::size_t const items_at = after + fillers;\n+        std::size_t const items_end = directory_entry<T>(encoded, count - 1);\n+        std::size_t const root = directory_entry<T>(encoded, 0);\n+        if (error const r = validity::check_item_range(items_at, items_end, items_at, root).error_or(error{}); r != error{})\n+            [[unlikely]]\n             return std::unexpected(r);\n-        if (!validity::pending_items_fit(dir.root, encoded.size() - fixed_size<T, T>())) [[unlikely]]\n+        if (!validity::pending_items_fit(root, encoded.size() - fixed_size<T, T>())) [[unlikely]]\n             return std::unexpected(error::too_little_data);\n-        return dir;\n+        return cbor::directory{static_cast<std::uint32_t>(count), static_cast<std::uint32_t>(items_at),\n+                               static_cast<std::uint32_t>(items_end), static_cast<std::uint32_t>(shared_start)};\n     }\n \n     template <fixed_string Path>\n@@ -1588,7 +1595,7 @@\n                 return std::unexpected(j.error());\n             if (*j != index || !validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]\n                 return std::unexpected(error::unpopulated_table_index);\n-            if (directory_entry(encoded, dir, index + 1) != at) [[unlikely]]\n+            if (directory_entry<Root>(encoded, index + 1) != at) [[unlikely]]\n                 return std::unexpected(error::syntax_error);\n             auto const r = item_reference_read<Major, E>(encoded, at, end, element);\n             if (!r) [[unlikely]]\n@@ -1756,14 +1763,14 @@\n         if (!dir) [[unlikely]]\n             return std::unexpected(dir.error());\n         auto const field =\n-            std::span<char const>(encoded).subspan(dir->root).template first<fixed_size<T, T>()>();\n+            std::span<char const>(encoded).subspan(directory_entry<T>(encoded, 0)).template first<fixed_size<T, T>()>();\n         if (!class_tag_valid<T, T>(field)) [[unlikely]]\n             return std::unexpected(error::incorrect_type);\n         decode_cursor c{encoded, *dir, 0, dir->items_at, dir->items_end};\n         if (auto const r = c.template value_read<T>(out, field, 0, depth_max); !r) [[unlikely]]\n             return std::unexpected(r.error());\n         if (c.index != dir->count - root_and_end_entries || c.at != dir->items_end ||\n-            dir->items_end != dir->root) [[unlikely]]\n+            dir->items_end != directory_entry<T>(encoded, 0)) [[unlikely]]\n             return std::unexpected(error::syntax_error);\n         return {};\n     }\n@@ -2285,7 +2292,7 @@\n                     constexpr std::size_t root = reflection::fixed_size<T, T>();\n                     return reflection::path_walk<T, T, Path, 1>(\n                         self.encoded,\n-                        std::span<char const>(self.encoded).subspan(self.dir.root).template first<root>(),\n+                        std::span<char const>(self.encoded).subspan(reflection::directory_entry<T>(self.encoded, 0)).template first<root>(),\n                         self.dir, i);\n                 } else if constexpr (reflection::is_typed_array<U> && path.size() > 1) {\n                     using E = std::remove_cv_t<std::ranges::range_value_t<U>>;\n@@ -2381,7 +2388,7 @@\n             return std::expected<X, error>(std::unexpect, dir.error());\n         std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};\n         return std::expected<X, error>(reflection::path_walk<T, T, Path, 1>(\n-            encoded, std::span<char const>(encoded).subspan(dir->root).template first<fixed_size()>(), *dir,\n+            encoded, std::span<char const>(encoded).subspan(reflection::directory_entry<T>(encoded, 0)).template first<fixed_size()>(), *dir,\n             i));\n     }\n \n@@ -2527,7 +2534,8 @@\n         auto const dir = reflection::directory_read<T>(encoded);\n         if (!dir) [[unlikely]]\n             return std::unexpected(dir.error());\n-        auto const root = std::span<char const>(encoded).subspan(dir->root).template first<fixed_size()>();\n+        auto const root =\n+            std::span<char const>(encoded).subspan(reflection::directory_entry<T>(encoded, 0)).template first<fixed_size()>();\n         if (!reflection::class_tag_valid<T, T>(root)) [[unlikely]]\n             return std::unexpected(error::incorrect_type);\n         return accessor<>(std::move(owner), encoded, root, *dir);\n",
+  "headD": "--- head/include/cbor/packed.hpp\t2026-10-18 19:13:32.000000000 +0000\n+++ headD/include/cbor/packed.hpp\t2026-10-18 20:05:01.525770302 +0000\n@@ -81,12 +81,10 @@\n class typed_array_view;\n \n struct directory {\n-    std::size_t at;\n-    std::size_t count;\n-    std::size_t items_at;\n-    std::size_t items_end;\n-    std::size_t root;\n-    std::size_t shared_start;\n+    std::uint32_t count;\n+    std::uint32_t items_at;\n+    std::uint32_t items_end;\n+    std::uint32_t shared_start;\n };\n \n #endif\n@@ -1234,10 +1232,11 @@\n         }\n     }\n \n-    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, cbor::directory const dir, std::size_t const j)\n+    template <class Root>\n+    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, std::size_t const j)\n     {\n         return heads::unsigned_read<std::uint32_t>(\n-            std::span<char const>(encoded).subspan(dir.at + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());\n+            std::span<char const>(encoded).subspan(directory_at<Root>() + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());\n     }\n \n     template <class Root, major_type Major, class E = void>\n@@ -1248,10 +1247,10 @@\n         auto const j = shared_index_read(field, dir.shared_start);\n         if (!j) [[unlikely]]\n             return std::unexpected(j.error());\n-        return item_read<Major, E>(encoded, dir, *j, element);\n+        return item_read<Root, Major, E>(encoded, dir, *j, element);\n     }\n \n-    template <major_type Major, class E = void>\n+    template <class Root, major_type Major, class E = void>\n     CBOR_ALWAYS_INLINE static std::expected<reference, error>\n     item_read(std::string_view const encoded, cbor::directory const dir, std::uint64_t const j,\n               std::size_t const element)\n@@ -1260,8 +1259,8 @@\n         if (!i) [[unlikely]]\n             return std::unexpected(error::unpopulated_table_index);\n         std::size_t const n = static_cast<std::size_t>(std::to_underlying(*i));\n-        std::size_t const item = directory_entry(encoded, dir, n + 1);\n-        std::size_t const end = directory_entry(encoded, dir, n + 2);\n+        std::size_t const item = directory_entry<Root>(encoded, n + 1);\n+        std::size_t const end = directory_entry<Root>(encoded, n + 2);\n         if (error const r =\n                 validity::check_item_range(item, end, dir.items_at, dir.items_end).error_or(error{});\n             r != error{}) [[unlikely]]\n@@ -1315,20 +1314,19 @@\n         if (!validity::pending_items_fit(fillers, encoded.size() - after - fixed_size<T, T>())) [[unlikely]]\n             return std::unexpected(error::too_little_data);\n         if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {\n-                return c == heads::initial_byte(major_type::simple_float,\n-                                                std::to_underlying(simple_value::undefined));\n+                return c == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined));\n             })) [[unlikely]]\n             return std::unexpected(error::incorrect_type);\n-        cbor::directory dir{header, count, after + fillers, 0, 0, shared_start};\n-        dir.root = directory_entry(encoded, dir, 0);\n-        dir.items_end = directory_entry(encoded, dir, count - 1);\n-        if (error const r = validity::check_item_range(dir.items_at, dir.items_end, dir.items_at, dir.root)\n-                                .error_or(error{});\n-            r != error{}) [[unlikely]]\n+        std::size_t const items_at = after + fillers;\n+        std::size_t const items_end = directory_entry<T>(encoded, count - 1);\n+        std::size_t const root = directory_entry<T>(encoded, 0);\n+        if (error const r = validity::check_item_range(items_at, items_end, items_at, root).error_or(error{}); r != error{})\n+            [[unlikely]]\n             return std::unexpected(r);\n-        if (!validity::pending_items_fit(dir.root, encoded.size() - fixed_size<T, T>())) [[unlikely]]\n+        if (!validity::pending_items_fit(root, encoded.size() - fixed_size<T, T>())) [[unlikely]]\n             return std::unexpected(error::too_little_data);\n-        return dir;\n+        return cbor::directory{static_cast<std::uint32_t>(count), static_cast<std::uint32_t>(items_at),\n+                               static_cast<std::uint32_t>(items_end), static_cast<std::uint32_t>(shared_start)};\n     }\n \n     template <fixed_string Path>\n@@ -1588,7 +1586,7 @@\n                 return std::unexpected(j.error());\n             if (*j != index || !validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]\n                 return std::unexpected(error::unpopulated_table_index);\n-            if (directory_entry(encoded, dir, index + 1) != at) [[unlikely]]\n+            if (directory_entry<Root>(encoded, index + 1) != at) [[unlikely]]\n                 return std::unexpected(error::syntax_error);\n             auto const r = item_reference_read<Major, E>(encoded, at, end, element);\n             if (!r) [[unlikely]]\n@@ -1756,14 +1754,14 @@\n         if (!dir) [[unlikely]]\n             return std::unexpected(dir.error());\n         auto const field =\n-            std::span<char const>(encoded).subspan(dir->root).template first<fixed_size<T, T>()>();\n+            std::span<char const>(encoded).subspan(directory_entry<T>(encoded, 0)).template first<fixed_size<T, T>()>();\n         if (!class_tag_valid<T, T>(field)) [[unlikely]]\n             return std::unexpected(error::incorrect_type);\n         decode_cursor c{encoded, *dir, 0, dir->items_at, dir->items_end};\n         if (auto const r = c.template value_read<T>(out, field, 0, depth_max); !r) [[unlikely]]\n             return std::unexpected(r.error());\n         if (c.index != dir->count - root_and_end_entries || c.at != dir->items_end ||\n-            dir->items_end != dir->root) [[unlikely]]\n+            dir->items_end != directory_entry<T>(encoded, 0)) [[unlikely]]\n             return std::unexpected(error::syntax_error);\n         return {};\n     }\n@@ -2285,7 +2283,7 @@\n                     constexpr std::size_t root = reflection::fixed_size<T, T>();\n                     return reflection::path_walk<T, T, Path, 1>(\n                         self.encoded,\n-                        std::span<char const>(self.encoded).subspan(self.dir.root).template first<root>(),\n+                        std::span<char const>(self.encoded).subspan(reflection::directory_entry<T>(self.encoded, 0)).template first<root>(),\n                         self.dir, i);\n                 } else if constexpr (reflection::is_typed_array<U> && path.size() > 1) {\n                     using E = std::remove_cv_t<std::ranges::range_value_t<U>>;\n@@ -2381,7 +2379,7 @@\n             return std::expected<X, error>(std::unexpect, dir.error());\n         std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};\n         return std::expected<X, error>(reflection::path_walk<T, T, Path, 1>(\n-            encoded, std::span<char const>(encoded).subspan(dir->root).template first<fixed_size()>(), *dir,\n+            encoded, std::span<char const>(encoded).subspan(reflection::directory_entry<T>(encoded, 0)).template first<fixed_size()>(), *dir,\n             i));\n     }\n \n@@ -2527,7 +2525,8 @@\n         auto const dir = reflection::directory_read<T>(encoded);\n         if (!dir) [[unlikely]]\n             return std::unexpected(dir.error());\n-        auto const root = std::span<char const>(encoded).subspan(dir->root).template first<fixed_size()>();\n+        auto const root =\n+            std::span<char const>(encoded).subspan(reflection::directory_entry<T>(encoded, 0)).template first<fixed_size()>();\n         if (!reflection::class_tag_valid<T, T>(root)) [[unlikely]]\n             return std::unexpected(error::incorrect_type);\n         return accessor<>(std::move(owner), encoded, root, *dir);\n"
+ }
+}

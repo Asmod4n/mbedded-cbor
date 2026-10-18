@@ -1,0 +1,904 @@
+{
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+ "resolved_march": "-march= \t\tsapphirerapids",
+ "compilers": {
+  "g++-16": "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "clang++-23": "clang version 23.1.3"
+ },
+ "cxx_library": {
+  "cmp.g++-16.base.carsales.MB_FIELD": "libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f17ca4a9000)",
+  "cmp.g++-16.base2.carsales.MB_FIELD": "libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fea17647000)",
+  "rpm": "libstdc++6-16.2.1+git9713-1.1.x86_64\nlibc++1-23.1.3-1.1.x86_64"
+ },
+ "libc": "glibc-2.44-3.1.x86_64 / libc.so.6 => /lib64/libc.so.6 (0x00007fd52438d000)",
+ "kernel": "Linux 21f02d16e799 6.18.44-fc-v139 #1 SMP PREEMPT_DYNAMIC @0 x86_64 x86_64 x86_64 GNU/Linux",
+ "scheduler": "EEVDF (Linux >= 6.6); sched_autogroup_enabled=1",
+ "virtualization": "hypervisor ",
+ "container": "podman, image localhost/mbedded-cbor-tw-compare, uid 0 for the context read; runs as uid 1000",
+ "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+ "cpu_flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+ "user": "uid=1000(ubuntu) gid=1000(1000) groups=1000(1000)",
+ "priority": "nice -10",
+ "threads": 1,
+ "pinned": false,
+ "start": "2026-10-18T19:56:59Z",
+ "end": "2026-10-18T20:03:33Z",
+ "min_time": "1s",
+ "steal_percent": {
+  "round 1": 0.276,
+  "round 2": 0.279,
+  "round 3": 0.313,
+  "round 4": 0.24,
+  "round 5": 0.234,
+  "round 6": 0.304,
+  "round 7": 0.236
+ },
+ "binaries": {
+  "cmp.g++-16.base.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    17.460493490588068,
+    16.340267585921467,
+    17.312680405354502,
+    17.365127386975814,
+    16.72782301675273,
+    17.033859510438447,
+    18.340707542830476
+   ],
+   "iterations": [
+    81683096,
+    81625524,
+    91132970,
+    87562254,
+    88260156,
+    80570273,
+    87460177
+   ],
+   "median": 17.312680405354502,
+   "spread": 0.12242394112520882,
+   "check": "7008",
+   "bytes_mb": "198805"
+  },
+  "cmp.g++-16.base.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    91904.6311306881,
+    84282.61105253019,
+    91148.31334451916,
+    89911.90327185421,
+    89045.51818416483,
+    91375.15835750746,
+    110427.79194220877
+   ],
+   "iterations": [
+    16556,
+    15200,
+    15542,
+    13998,
+    15508,
+    16267,
+    13155
+   ],
+   "median": 91148.31334451916,
+   "spread": 0.3102084826653422,
+   "check": "33191310.687370282",
+   "bytes_mb": "198805"
+  },
+  "cmp.g++-16.base.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    8.063655544723982,
+    7.525597417075078,
+    8.010703338990814,
+    7.304842913392903,
+    7.565923858463606,
+    7.976570408430694,
+    7.725505992369541
+   ],
+   "iterations": [
+    195771037,
+    173157002,
+    138598432,
+    168196070,
+    196048006,
+    194645988,
+    192311200
+   ],
+   "median": 7.725505992369541,
+   "spread": 0.10387802179015382,
+   "check": "-189",
+   "bytes_mb": "480064"
+  },
+  "cmp.g++-16.base.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    59268.60606553455,
+    65075.49615025504,
+    56560.17133777832,
+    59725.95381522086,
+    59160.55771796031,
+    66081.49114747607,
+    58089.774512141186
+   ],
+   "iterations": [
+    24301,
+    25716,
+    25797,
+    20353,
+    25538,
+    22423,
+    25722
+   ],
+   "median": 59268.60606553455,
+   "spread": 0.1683396564136319,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480064"
+  },
+  "cmp.g++-16.base.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    21.67431340832708,
+    23.022971062492733,
+    22.113136286028396,
+    22.75192069960543,
+    23.90224608248009,
+    23.860855990196757,
+    22.193594861573267
+   ],
+   "iterations": [
+    63634511,
+    64806493,
+    64183263,
+    47039370,
+    63365082,
+    58093913,
+    55833641
+   ],
+   "median": 22.75192069960543,
+   "spread": 0.10279138407664878,
+   "check": "640",
+   "bytes_mb": "479588"
+  },
+  "cmp.g++-16.base.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    173603.2570772219,
+    176230.19377844033,
+    171292.7741816835,
+    174996.99209127197,
+    196040.50567629834,
+    173061.25249469836,
+    181328.55812662287
+   ],
+   "iterations": [
+    8266,
+    7297,
+    8095,
+    7966,
+    5990,
+    7616,
+    7217
+   ],
+   "median": 174996.99209127197,
+   "spread": 0.1444762139724931,
+   "check": "15874369319.428572",
+   "bytes_mb": "479588"
+  },
+  "cmp.g++-16.base2.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    16.059933465550372,
+    16.81726510772095,
+    18.6260810853423,
+    18.5410234003377,
+    16.303619832961992,
+    17.33623345005841,
+    16.811460132921756
+   ],
+   "iterations": [
+    90513104,
+    88187356,
+    87725498,
+    85072653,
+    77928292,
+    86762370,
+    86749971
+   ],
+   "median": 16.81726510772095,
+   "spread": 0.1597856943365603,
+   "check": "7008",
+   "bytes_mb": "198805"
+  },
+  "cmp.g++-16.base2.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    87076.8090808187,
+    96701.78090715986,
+    95265.64434208827,
+    85191.95531668676,
+    104388.59540008707,
+    90320.87237051889,
+    87085.79558844147
+   ],
+   "iterations": [
+    16342,
+    14309,
+    15633,
+    15442,
+    10000,
+    15592,
+    15097
+   ],
+   "median": 90320.87237051889,
+   "spread": 0.22533395332974848,
+   "check": "33191310.687370282",
+   "bytes_mb": "198805"
+  },
+  "cmp.g++-16.base2.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    7.300695964914299,
+    7.886910086731781,
+    8.193335730712134,
+    8.418392569879156,
+    7.520389914438402,
+    7.721212212409525,
+    8.094648666895788
+   ],
+   "iterations": [
+    192657128,
+    190665572,
+    191119618,
+    183484169,
+    192987568,
+    195841222,
+    185676593
+   ],
+   "median": 7.886910086731781,
+   "spread": 0.1530945282937799,
+   "check": "-189",
+   "bytes_mb": "480064"
+  },
+  "cmp.g++-16.base2.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    55885.01985168455,
+    57402.34176895196,
+    65340.032154076514,
+    57352.718422864,
+    62414.698789847556,
+    55755.510260997085,
+    54453.689180471796
+   ],
+   "iterations": [
+    25086,
+    23709,
+    23885,
+    24931,
+    24790,
+    24754,
+    24770
+   ],
+   "median": 57352.718422864,
+   "spread": 0.1999192917402699,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480064"
+  },
+  "cmp.g++-16.base2.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    23.647320630266066,
+    22.124872817973795,
+    23.629348421864716,
+    23.81975765770412,
+    23.85543629494609,
+    22.990744859297813,
+    23.816677275128807
+   ],
+   "iterations": [
+    60954932,
+    61683240,
+    51162383,
+    58435692,
+    57335318,
+    66543991,
+    64990557
+   ],
+   "median": 23.647320630266066,
+   "spread": 0.07821800790495037,
+   "check": "640",
+   "bytes_mb": "479588"
+  },
+  "cmp.g++-16.base2.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    175141.9590818442,
+    173417.52428703915,
+    181583.70867104313,
+    190712.81962676492,
+    190773.83279384853,
+    173950.64125735886,
+    177220.38187628877
+   ],
+   "iterations": [
+    8016,
+    8276,
+    8142,
+    8305,
+    7105,
+    7858,
+    7835
+   ],
+   "median": 177220.38187628877,
+   "spread": 0.1000839366042463,
+   "check": "15874369319.428572",
+   "bytes_mb": "479588"
+  },
+  "cmp.g++-16.head.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    31.23418059745146,
+    31.672963744748962,
+    31.302381518546778,
+    34.208538877453634,
+    30.79323621573291,
+    32.18680154382787,
+    31.11258446306124
+   ],
+   "iterations": [
+    44833599,
+    43540035,
+    44042361,
+    46986270,
+    40784565,
+    46467662,
+    44336544
+   ],
+   "median": 31.302381518546778,
+   "spread": 0.11091080644442863,
+   "check": "7008",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.head.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    90626.68768041483,
+    97143.18289189624,
+    97154.48940551709,
+    92767.10899254748,
+    88382.19832874458,
+    88782.11579897154,
+    85084.21611644741
+   ],
+   "iterations": [
+    14895,
+    11854,
+    14111,
+    15157,
+    14839,
+    16615,
+    15996
+   ],
+   "median": 90626.68768041483,
+   "spread": 0.14186266078481746,
+   "check": "33191310.687370282",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.head.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    18.70149979731149,
+    17.06992971502077,
+    16.911177795672796,
+    17.752160747324453,
+    18.472587512958526,
+    16.986070204071243,
+    17.441535115384088
+   ],
+   "iterations": [
+    76002270,
+    80075716,
+    83406284,
+    84941561,
+    79398706,
+    80010648,
+    58356525
+   ],
+   "median": 17.441535115384088,
+   "spread": 0.10586619236519423,
+   "check": "-189",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.head.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    57203.11881307459,
+    55586.70307648399,
+    53599.66275570546,
+    53055.021347661575,
+    58139.096892698624,
+    55713.737319481195,
+    58887.89343816726
+   ],
+   "iterations": [
+    24669,
+    21908,
+    25910,
+    19159,
+    21787,
+    25137,
+    22128
+   ],
+   "median": 55713.737319481195,
+   "spread": 0.10994005736580048,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.head.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    42.32850352381604,
+    39.83744868238111,
+    39.68684384348669,
+    39.79346125314147,
+    39.93009295744854,
+    43.28850428529532,
+    40.11247315214187
+   ],
+   "iterations": [
+    31159407,
+    36199805,
+    32299745,
+    35654569,
+    35852425,
+    35479934,
+    34641965
+   ],
+   "median": 39.93009295744854,
+   "spread": 0.09075199973100712,
+   "check": "640",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.head.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    167305.16745653265,
+    216383.2307170055,
+    168492.24063071667,
+    170438.07755273592,
+    174280.80741676484,
+    170646.32561636518,
+    173661.71422709382
+   ],
+   "iterations": [
+    8229,
+    7351,
+    7738,
+    6963,
+    7955,
+    8596,
+    7310
+   ],
+   "median": 170646.32561636518,
+   "spread": 0.2933445751053909,
+   "check": "15874369319.428572",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headA.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    28.70638201163658,
+    29.68655102251285,
+    28.110594688810302,
+    28.652798036162253,
+    29.915219328217905,
+    38.35845899153925,
+    30.754598606554662
+   ],
+   "iterations": [
+    51244861,
+    46905551,
+    49249101,
+    49766173,
+    50077322,
+    38694323,
+    45693787
+   ],
+   "median": 29.68655102251285,
+   "spread": 0.3645552296625092,
+   "check": "7008",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headA.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    101390.52617529193,
+    92565.98086286086,
+    85080.39402923544,
+    92593.36671154446,
+    100949.5121999862,
+    87516.6498419438,
+    86006.76922599517
+   ],
+   "iterations": [
+    16103,
+    15833,
+    15174,
+    14870,
+    10000,
+    15493,
+    16189
+   ],
+   "median": 92565.98086286086,
+   "spread": 0.19170259296697645,
+   "check": "33191310.687370282",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headA.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    11.806570879343974,
+    11.524542977213713,
+    11.89385695492217,
+    13.034784483113246,
+    12.690027461046608,
+    12.279650232439144,
+    11.996216713087582
+   ],
+   "iterations": [
+    113929774,
+    105948108,
+    122411685,
+    107739304,
+    118747132,
+    124453510,
+    104221279
+   ],
+   "median": 11.996216713087582,
+   "spread": 0.13104567433915393,
+   "check": "-189",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headA.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    59109.53132080537,
+    56167.901381612966,
+    54604.01801840761,
+    58737.986499862716,
+    66428.2880899055,
+    57785.269354714634,
+    63033.456703469856
+   ],
+   "iterations": [
+    23387,
+    23089,
+    25807,
+    24296,
+    23753,
+    22346,
+    22369
+   ],
+   "median": 58737.986499862716,
+   "spread": 0.21654578729923868,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headA.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    37.365666499053994,
+    38.472036149566605,
+    39.61517357425222,
+    38.59229844278019,
+    38.22149680167934,
+    38.605996179523345,
+    40.37321063442581
+   ],
+   "iterations": [
+    37123677,
+    34135714,
+    37745833,
+    37515400,
+    37576976,
+    36747032,
+    33699514
+   ],
+   "median": 38.59229844278019,
+   "spread": 0.0804895086094064,
+   "check": "640",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headA.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    166657.25852072617,
+    162689.2746106813,
+    177504.56241811987,
+    175836.5609209747,
+    166021.7017336765,
+    173655.04939565927,
+    165093.07754816592
+   ],
+   "iterations": [
+    8274,
+    7771,
+    8403,
+    6254,
+    6749,
+    8604,
+    8614
+   ],
+   "median": 166657.25852072617,
+   "spread": 0.09106493247875025,
+   "check": "15874369319.428572",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headB.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    19.755378005069527,
+    31.720998759313925,
+    20.680028257807283,
+    21.090318716742424,
+    20.031003284190874,
+    46.301902153213796,
+    22.59384474396285
+   ],
+   "iterations": [
+    72095553,
+    46527044,
+    67910400,
+    70734187,
+    63828883,
+    28838423,
+    67992460
+   ],
+   "median": 21.090318716742424,
+   "spread": 1.3437618931580064,
+   "check": "7008",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headB.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    94163.32168309738,
+    98483.53146263775,
+    105016.81055847996,
+    95394.30406049063,
+    94161.6556043767,
+    98756.5243569932,
+    101472.84374798302
+   ],
+   "iterations": [
+    13333,
+    13079,
+    11782,
+    14826,
+    15247,
+    14349,
+    14803
+   ],
+   "median": 98483.53146263775,
+   "spread": 0.11528211653065612,
+   "check": "33191310.687370282",
+   "bytes_mb": "198813"
+  },
+  "cmp.g++-16.headB.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    12.088961973118922,
+    11.660537583862713,
+    11.227125106307316,
+    11.06909769578044,
+    11.42941023574209,
+    12.059858575667251,
+    11.47208362912642
+   ],
+   "iterations": [
+    127501601,
+    126402491,
+    124021243,
+    121683117,
+    128694487,
+    126883106,
+    117727122
+   ],
+   "median": 11.47208362912642,
+   "spread": 0.09213617092992643,
+   "check": "-189",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headB.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    53917.37492936865,
+    59795.54410388703,
+    57116.95861639872,
+    62214.32209313632,
+    58129.710687821775,
+    60384.52303500908,
+    53336.24834193404
+   ],
+   "iterations": [
+    26549,
+    22345,
+    25759,
+    24881,
+    25094,
+    22748,
+    24728
+   ],
+   "median": 58129.710687821775,
+   "spread": 0.16645478501385624,
+   "check": "3361922545318.1553",
+   "bytes_mb": "480072"
+  },
+  "cmp.g++-16.headB.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    24.842448080718007,
+    27.527025166404787,
+    25.903065776564095,
+    26.05910128905079,
+    28.52350304767108,
+    27.552941944348635,
+    28.553346882300126
+   ],
+   "iterations": [
+    56632855,
+    55045193,
+    54390852,
+    55100118,
+    40204169,
+    47110595,
+    55158856
+   ],
+   "median": 27.527025166404787,
+   "spread": 0.14937733952485988,
+   "check": "640",
+   "bytes_mb": "479596"
+  },
+  "cmp.g++-16.headB.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    169483.43576305165,
+    179816.47594200878,
+    168737.4097612226,
+    183654.31916802312,
+    166350.13102045903,
+    171602.9683203029,
+    164845.52527343621
+   ],
+   "iterations": [
+    8780,
+    8625,
+    8544,
+    8895,
+    8388,
+    8365,
+    8685
+   ],
+   "median": 169483.43576305165,
+   "spread": 0.11409951142676134,
+   "check": "15874369319.428572",
+   "bytes_mb": "479596"
+  }
+ },
+ "against_base": [
+  {
+   "compiler": "g++-16",
+   "cell": "carsales.MB_FIELD",
+   "unit": "ns",
+   "base": 17.312680405354502,
+   "base2": 16.81726510772095,
+   "aa_base2_over_base": 0.9713842521184455,
+   "over_base": {
+    "base2": 0.9713842521184455,
+    "head": 1.8080609579592026,
+    "headA": 1.7147287610837738,
+    "headB": 1.2182006611881755
+   },
+   "head": 31.302381518546778,
+   "head_over_base": 1.8080609579592026,
+   "beyond_noise": true
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "carsales.MB_READ",
+   "unit": "ns",
+   "base": 91148.31334451916,
+   "base2": 90320.87237051889,
+   "aa_base2_over_base": 0.9909220374613764,
+   "over_base": {
+    "base2": 0.9909220374613764,
+    "head": 0.9942771769990663,
+    "headA": 1.0155534147185286,
+    "headB": 1.080475631955944
+   },
+   "head": 90626.68768041483,
+   "head_over_base": 0.9942771769990663,
+   "beyond_noise": false
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "floats.MB_FIELD",
+   "unit": "ns",
+   "base": 7.725505992369541,
+   "base2": 7.886910086731781,
+   "aa_base2_over_base": 1.020892365434919,
+   "over_base": {
+    "base2": 1.020892365434919,
+    "head": 2.257656020539113,
+    "headA": 1.5528066025625,
+    "headB": 1.4849621035123606
+   },
+   "head": 17.441535115384088,
+   "head_over_base": 2.257656020539113,
+   "beyond_noise": true
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "floats.MB_READ",
+   "unit": "ns",
+   "base": 59268.60606553455,
+   "base2": 57352.718422864,
+   "aa_base2_over_base": 0.967674494646422,
+   "over_base": {
+    "base2": 0.967674494646422,
+    "head": 0.9400210502315061,
+    "headA": 0.9910472069296666,
+    "headB": 0.9807841713629392
+   },
+   "head": 55713.737319481195,
+   "head_over_base": 0.9400210502315061,
+   "beyond_noise": true
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "records.MB_FIELD",
+   "unit": "ns",
+   "base": 22.75192069960543,
+   "base2": 23.647320630266066,
+   "aa_base2_over_base": 1.0393549161181879,
+   "over_base": {
+    "base2": 1.0393549161181879,
+    "head": 1.7550207511993048,
+    "headA": 1.696221560909777,
+    "headB": 1.2098769826884184
+   },
+   "head": 39.93009295744854,
+   "head_over_base": 1.7550207511993048,
+   "beyond_noise": true
+  },
+  {
+   "compiler": "g++-16",
+   "cell": "records.MB_READ",
+   "unit": "ns",
+   "base": 174996.99209127197,
+   "base2": 177220.38187628877,
+   "aa_base2_over_base": 1.0127053028651896,
+   "over_base": {
+    "base2": 1.0127053028651896,
+    "head": 0.975138621396203,
+    "headA": 0.9523435604756217,
+    "headB": 0.9684934223021122
+   },
+   "head": 170646.32561636518,
+   "head_over_base": 0.975138621396203,
+   "beyond_noise": true
+  }
+ ],
+ "failed_build": {},
+ "failed_run": [],
+ "max_abs_aa_percent": 3.94,
+ "what": "bench/compare.cpp, g++-16, OP_MB_READ and OP_MB_FIELD: base 1fb5cda twice, head fbfb5ef, and two arms outside the tree on top of fbfb5ef: headA (the fillers compared as one block of the size that the writer writes, other counts byte by byte) and headB (headA plus a directory struct without its own position; entries read at the offset of the type).",
+ "how": "Each arm in its own binary; 7 rounds; each round runs every binary once in a shuffled order, one at a time, as uid 1000 with CAP_SYS_NICE in podman image localhost/mbedded-cbor-tw-compare, under the bench lock with nothing else running; --benchmark_min_time=1s (calibrated in 2026-10-18-190359Z.json); medians compared; a cell differs only where |arm/base - 1| exceeds |base2/base - 1|. Compile flags: -std=c++26 -freflection -Wall -Wextra -Werror plus flags. Time unit ns.",
+ "commit": "fbfb5ef (clean); arms headA, headB are the diffs in arm_diffs against fbfb5ef include/cbor/packed.hpp",
+ "base_commit": "1fb5cda",
+ "gate": "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------\n r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu\n 0  0      0 12959332  83040 3038208    0    0   171   431  601    0 27  2 71  0  0  0\n 0  0      0 12960192  83040 3038212    0    0     0     0  296  282  1  0 99  0  0  0\n 0  0      0 12960192  83040 3038212    0    0     0     0  172  206  0  0 99  0  0  0\n 0  0      0 12960192  83040 3038212    0    0     0   468  217  252  0  0 100  0  0  0\n 0  0      0 12966612  83040 3038212    0    0     0     0  445  565  4  1 96  0  0  0\n  PID USER     %CPU  NI COMMAND\n  124 root      3.0   0 claude\n24539 root      0.4   0 bash\n   86 root      0.0   0 environment-man\n    1 root      0.0   0 process_api\n17505 root      0.0   0 kworker/1:2-mm_percpu_wq\n20575 root      0.0   0 kworker/2:1-mm_percpu_wq\n   15 root      0.0   0 rcu_preempt\n",
+ "arm_diffs": {
+  "headA": "--- head/include/cbor/packed.hpp\t2026-10-18 19:13:32.000000000 +0000\n+++ headA/include/cbor/packed.hpp\t2026-10-18 19:54:34.904398693 +0000\n@@ -1314,9 +1314,17 @@\n         std::size_t const after = header + length;\n         if (!validity::pending_items_fit(fillers, encoded.size() - after - fixed_size<T, T>())) [[unlikely]]\n             return std::unexpected(error::too_little_data);\n-        if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {\n-                return c == heads::initial_byte(major_type::simple_float,\n-                                                std::to_underlying(simple_value::undefined));\n+        constexpr std::size_t written = shared_first_of<T>() - keys_and_directory;\n+        static constexpr auto undefined = [] {\n+            std::array<char, written> a{};\n+            a.fill(static_cast<char>(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined))));\n+            return a;\n+        }();\n+        if (fillers == written) [[likely]] {\n+            if (!std::ranges::equal(std::span(encoded).subspan(after).template first<written>(), undefined)) [[unlikely]]\n+                return std::unexpected(error::incorrect_type);\n+        } else if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {\n+                return c == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined));\n             })) [[unlikely]]\n             return std::unexpected(error::incorrect_type);\n         cbor::directory dir{header, count, after + fillers, 0, 0, shared_start};\n",
+  "headB": "--- head/include/cbor/packed.hpp\t2026-10-18 19:13:32.000000000 +0000\n+++ headB/include/cbor/packed.hpp\t2026-10-18 19:54:46.941989236 +0000\n@@ -81,7 +81,6 @@\n class typed_array_view;\n \n struct directory {\n-    std::size_t at;\n     std::size_t count;\n     std::size_t items_at;\n     std::size_t items_end;\n@@ -1234,10 +1233,11 @@\n         }\n     }\n \n-    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, cbor::directory const dir, std::size_t const j)\n+    template <class Root>\n+    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, std::size_t const j)\n     {\n         return heads::unsigned_read<std::uint32_t>(\n-            std::span<char const>(encoded).subspan(dir.at + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());\n+            std::span<char const>(encoded).subspan(directory_at<Root>() + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());\n     }\n \n     template <class Root, major_type Major, class E = void>\n@@ -1248,10 +1248,10 @@\n         auto const j = shared_index_read(field, dir.shared_start);\n         if (!j) [[unlikely]]\n             return std::unexpected(j.error());\n-        return item_read<Major, E>(encoded, dir, *j, element);\n+        return item_read<Root, Major, E>(encoded, dir, *j, element);\n     }\n \n-    template <major_type Major, class E = void>\n+    template <class Root, major_type Major, class E = void>\n     CBOR_ALWAYS_INLINE static std::expected<reference, error>\n     item_read(std::string_view const encoded, cbor::directory const dir, std::uint64_t const j,\n               std::size_t const element)\n@@ -1260,8 +1260,8 @@\n         if (!i) [[unlikely]]\n             return std::unexpected(error::unpopulated_table_index);\n         std::size_t const n = static_cast<std::size_t>(std::to_underlying(*i));\n-        std::size_t const item = directory_entry(encoded, dir, n + 1);\n-        std::size_t const end = directory_entry(encoded, dir, n + 2);\n+        std::size_t const item = directory_entry<Root>(encoded, n + 1);\n+        std::size_t const end = directory_entry<Root>(encoded, n + 2);\n         if (error const r =\n                 validity::check_item_range(item, end, dir.items_at, dir.items_end).error_or(error{});\n             r != error{}) [[unlikely]]\n@@ -1314,14 +1314,21 @@\n         std::size_t const after = header + length;\n         if (!validity::pending_items_fit(fillers, encoded.size() - after - fixed_size<T, T>())) [[unlikely]]\n             return std::unexpected(error::too_little_data);\n-        if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {\n-                return c == heads::initial_byte(major_type::simple_float,\n-                                                std::to_underlying(simple_value::undefined));\n+        constexpr std::size_t written = shared_first_of<T>() - keys_and_directory;\n+        static constexpr auto undefined = [] {\n+            std::array<char, written> a{};\n+            a.fill(static_cast<char>(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined))));\n+            return a;\n+        }();\n+        if (fillers == written) [[likely]] {\n+            if (!std::ranges::equal(std::span(encoded).subspan(after).template first<written>(), undefined)) [[unlikely]]\n+                return std::unexpected(error::incorrect_type);\n+        } else if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {\n+                return c == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined));\n             })) [[unlikely]]\n             return std::unexpected(error::incorrect_type);\n-        cbor::directory dir{header, count, after + fillers, 0, 0, shared_start};\n-        dir.root = directory_entry(encoded, dir, 0);\n-        dir.items_end = directory_entry(encoded, dir, count - 1);\n+        cbor::directory dir{count, after + fillers, directory_entry<T>(encoded, count - 1), directory_entry<T>(encoded, 0),\n+                            shared_start};\n         if (error const r = validity::check_item_range(dir.items_at, dir.items_end, dir.items_at, dir.root)\n                                 .error_or(error{});\n             r != error{}) [[unlikely]]\n@@ -1588,7 +1595,7 @@\n                 return std::unexpected(j.error());\n             if (*j != index || !validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]\n                 return std::unexpected(error::unpopulated_table_index);\n-            if (directory_entry(encoded, dir, index + 1) != at) [[unlikely]]\n+            if (directory_entry<Root>(encoded, index + 1) != at) [[unlikely]]\n                 return std::unexpected(error::syntax_error);\n             auto const r = item_reference_read<Major, E>(encoded, at, end, element);\n             if (!r) [[unlikely]]\n"
+ }
+}
