@@ -281,3 +281,15 @@ TEST_CASE("decode: many tag 24 items with a string share one block for their str
     REQUIRE(tree.has_value());
     CHECK_LT(after - before, count * cbor::validity::bump_chunk_size / 8);
 }
+
+// A small message must not take a whole block for its strings: the block is bounded by the bytes left of the input,
+// because no later string can be longer than those bytes.
+TEST_CASE("decode: the block for the strings of a small message stays in proportion to the message")
+{
+    std::string const bytes = "\x82\x61x\x62yz"s;
+    std::size_t const before = allocated_bytes;
+    auto const tree = cbor::decode(bytes);
+    std::size_t const after = allocated_bytes;
+    REQUIRE(tree.has_value());
+    CHECK_LT(after - before, cbor::validity::bump_chunk_size);
+}
