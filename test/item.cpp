@@ -1152,3 +1152,91 @@ TEST_CASE("decode: a string inside a tag 24 tree outlives the input")
     REQUIRE(tree.has_value());
     CHECK_EQ(cbor::encoded_cbor_data_item(*tree, **tree)->get().text_string().value(), "IETF");
 }
+
+namespace
+{
+
+struct sample {
+    cbor::type type;
+    std::string_view encoded;
+};
+
+// One encoded item for each member of cbor::type, written from RFC 8949 Appendix A and RFC 8746.
+constexpr std::array<sample, 18> samples{{
+    {cbor::type::unsigned_integer, "\x18\x64"sv},
+    {cbor::type::negative_integer, "\x38\x63"sv},
+    {cbor::type::byte_string, "\x44\x01\x02\x03\x04"sv},
+    {cbor::type::text_string, "\x64IETF"sv},
+    {cbor::type::array, "\x83\x01\x02\x03"sv},
+    {cbor::type::map, "\xa1\x01\x02"sv},
+    {cbor::type::tag, "\xc1\x1a\x51\x4b\x67\xb0"sv},
+    {cbor::type::false_value, "\xf4"sv},
+    {cbor::type::true_value, "\xf5"sv},
+    {cbor::type::null, "\xf6"sv},
+    {cbor::type::undefined, "\xf7"sv},
+    {cbor::type::simple_value, "\xf0"sv},
+    {cbor::type::half_float, "\xf9\x3c\x00"sv},
+    {cbor::type::single_float, "\xfa\x47\xc3\x50\x00"sv},
+    {cbor::type::double_float, "\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"sv},
+    {cbor::type::unsigned_bignum, "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv},
+    {cbor::type::negative_bignum, "\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv},
+    {cbor::type::typed_array, "\xd8\x40\x42\x01\x02"sv},
+}};
+
+template <cbor::type K>
+void check_get(cbor::item const &it)
+{
+    auto const r = it.get<K>();
+    if (K == it.type) {
+        CHECK(r.has_value());
+        return;
+    }
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::incorrect_type);
+}
+
+template <std::size_t... I>
+void check_every_kind(cbor::item const &it, std::index_sequence<I...>)
+{
+    (check_get<samples[I].type>(it), ...);
+}
+
+} // namespace
+
+// get<K> must give its value for the type of the item and incorrect_type for each of the other 17 types: the set of
+// types is finite, so every pair is checked.
+TEST_CASE("item get<K>: the value for its own type and incorrect_type for every other type")
+{
+    for (sample const &s : samples) {
+        CAPTURE(std::to_underlying(s.type));
+        auto const tree = cbor::decode(s.encoded);
+        REQUIRE(tree.has_value());
+        REQUIRE_EQ((*tree)->type, s.type);
+        check_every_kind(**tree, std::make_index_sequence<samples.size()>{});
+    }
+}
+
+// The values that get<K> gives are the head fields of RFC 8949 3.1: an integer gives its argument, a negative
+// integer too (its value is -1 minus the argument).
+TEST_CASE("item get<K>: the values of the head")
+{
+    auto const u = cbor::decode("\x18\x64"sv);
+    CHECK_EQ(*(*u)->get<cbor::type::unsigned_integer>(), 100u);
+    auto const n = cbor::decode("\x38\x63"sv);
+    CHECK_EQ(*(*n)->get<cbor::type::negative_integer>(), 99u);
+    auto const t = cbor::decode("\x64IETF"sv);
+    CHECK_EQ(*(*t)->get<cbor::type::text_string>(), "IETF"sv);
+    auto const b = cbor::decode("\x44\x01\x02\x03\x04"sv);
+    CHECK_EQ((*b)->get<cbor::type::byte_string>()->size(), 4u);
+    auto const a = cbor::decode("\x83\x01\x02\x03"sv);
+    CHECK_EQ((*a)->get<cbor::type::array>()->size(), 3u);
+    auto const m = cbor::decode("\xa1\x01\x02"sv);
+    CHECK_EQ((*m)->get<cbor::type::map>()->size(), 2u);
+    auto const tag = cbor::decode("\xc1\x1a\x51\x4b\x67\xb0"sv);
+    CHECK_EQ((*tag)->get<cbor::type::tag>()->first, 1u);
+    CHECK_EQ(*(*tag)->get<cbor::type::tag>()->second->get<cbor::type::unsigned_integer>(), 1363896240u);
+    auto const h = cbor::decode("\xf9\x3c\x00"sv);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*(*h)->get<cbor::type::half_float>()), std::bit_cast<std::uint64_t>(1.0));
+    auto const yes = cbor::decode("\xf5"sv);
+    CHECK_EQ(*(*yes)->get<cbor::type::true_value>(), cbor::simple_value{21});
+}
