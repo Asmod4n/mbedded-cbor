@@ -39,10 +39,10 @@ struct zone {
     {
     }
 
-    std::span<char> bump_allocate(std::size_t const size)
+    std::span<char> bump_allocate(std::size_t const size, std::size_t const bytes_left)
     {
         if (size > free.size()) [[unlikely]] {
-            std::size_t const chunk = std::max(size, validity::bump_chunk_size);
+            std::size_t const chunk = size + std::min(validity::bump_chunk_size, bytes_left);
             free = std::span<char>(std::pmr::polymorphic_allocator<char>(&memory).allocate(chunk), chunk);
         }
         std::span<char> const taken = free.first(size);
@@ -123,7 +123,7 @@ std::expected<void, error> tree_decoder<Checked>::scalar_decode(item &node, head
         auto const string = d.byte_string_decode(h.argument);
         if (!string) [[unlikely]]
             return std::unexpected(string.error());
-        std::span<char> const own = decoded.bump_allocate(string->size());
+        std::span<char> const own = decoded.bump_allocate(string->size(), d.encoded.size());
         std::ranges::copy(*string, own.begin());
         if (h.major == major_type::text_string)
             node.via.str = std::string_view(own.data(), own.size());
