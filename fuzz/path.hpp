@@ -250,6 +250,12 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
             }
             if (auto const *m = test::get_if<test::map>(v)) {
                 for (auto const &[k, x] : *m) {
+                    // An eager tree keeps a tag 2 or 3 over content that is not a byte string as a tag; a lookup by
+                    // number reads such a key as a bignum and gives inadmissible_type_for_tag_content.
+                    if (auto const *g = std::get_if<test::tagged *>(&k.kind);
+                        g && s.kind == segment::kind::index && ((*g)->tag == 2 || (*g)->tag == 3) &&
+                        !test::get_if<test::bytes>((*g)->content))
+                        return std::nullopt;
                     bool const t = (std::holds_alternative<test::short_text>(k.kind) || std::holds_alternative<std::string *>(k.kind));
                     auto const *u = std::get_if<std::uint64_t>(&k.kind);
                     auto const *n = std::get_if<test::negative>(&k.kind);
