@@ -265,3 +265,19 @@ TEST_CASE("encoder: the span target allocates nothing")
     REQUIRE(size.has_value());
     CHECK_EQ(after, before);
 }
+
+// Each tag 24 is decoded by an inner decoder. If each inner decoder took its own block for strings, N small tag 24
+// items would take N blocks of validity::bump_chunk_size from an input of a few bytes each. The bytes taken must stay
+// in proportion to the input, so the inner decoders share the one block of the zone.
+TEST_CASE("decode: many tag 24 items with a string share one block for their strings")
+{
+    constexpr std::size_t count = 1000;
+    std::string bytes = "\x99\x03\xe8"s;
+    for (std::size_t i = 0; i < count; ++i)
+        bytes += "\xd8\x18\x42\x61x"s;
+    std::size_t const before = allocated_bytes;
+    auto const tree = cbor::decode(bytes);
+    std::size_t const after = allocated_bytes;
+    REQUIRE(tree.has_value());
+    CHECK_LT(after - before, count * cbor::validity::bump_chunk_size / 8);
+}

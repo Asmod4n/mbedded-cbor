@@ -1099,3 +1099,56 @@ TEST_CASE("decode: a count larger than the bytes left is too_little_data before 
         CHECK_EQ(r.error(), cbor::error::too_little_data);
     }
 }
+
+// A string of length 0 takes no bytes from the block, and its view must still read as an empty string.
+TEST_CASE("decode: an empty text string and an empty byte string read as empty")
+{
+    auto const tree = cbor::decode("\x82\x60\x40"sv);
+    REQUIRE(tree.has_value());
+    auto const children = (*tree)->array().value();
+    CHECK_EQ(children[0].text_string().value(), ""sv);
+    CHECK(children[1].byte_string().value().empty());
+}
+
+// The strings of a decode are copied into blocks of validity::bump_chunk_size. A string of exactly that size fills a
+// block, and a string one byte longer needs a block of its own; both must keep every byte, and the tree must outlive
+// the input.
+TEST_CASE("decode: strings at the size of a block and one byte over keep every byte after the input is freed")
+{
+    constexpr std::size_t block = cbor::validity::bump_chunk_size;
+    std::string const a(block, 'a');
+    std::string const b(block + 1, 'b');
+    auto input = std::make_unique<std::string>("\x83\x61x\x79"s);
+    input->push_back(static_cast<char>(block >> 8));
+    input->push_back(static_cast<char>(block & 0xff));
+    *input += a;
+    *input += "\x79"s;
+    input->push_back(static_cast<char>((block + 1) >> 8));
+    input->push_back(static_cast<char>((block + 1) & 0xff));
+    *input += b;
+    auto const tree = cbor::decode(*input);
+    input.reset();
+    REQUIRE(tree.has_value());
+    auto const children = (*tree)->array().value();
+    CHECK_EQ(children[0].text_string().value(), "x"sv);
+    CHECK_EQ(children[1].text_string().value(), a);
+    CHECK_EQ(children[2].text_string().value(), b);
+}
+
+// An error part way through gives the error and no tree; the strings copied before the error go with the zone.
+TEST_CASE("decode: an error after some strings gives the error and no tree")
+{
+    auto const tree = cbor::decode("\x83\x61x\x61y\x7a\x00\x00\x10\x00"sv);
+    REQUIRE_FALSE(tree.has_value());
+    CHECK_EQ(tree.error(), error::too_little_data);
+}
+
+// The strings inside the tree of a tag 24 are copies in the zone too, so they stay valid after the input is freed.
+TEST_CASE("decode: a string inside a tag 24 tree outlives the input")
+{
+    auto input = std::make_unique<std::string>("\xd8\x18\x45\x64IETF"s);
+    auto const tree = cbor::decode(*input);
+    input.reset();
+    REQUIRE(tree.has_value());
+    CHECK_EQ(cbor::encoded_cbor_data_item(*tree, **tree)->get().text_string().value(), "IETF");
+}

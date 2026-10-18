@@ -98,6 +98,7 @@ public:
     static constexpr std::size_t size_limit = std::numeric_limits<std::size_t>::max();
 
     static constexpr std::size_t initial_size_limit = std::size_t{1} << 20;
+    static constexpr std::size_t bump_chunk_size = std::size_t{1} << 13;
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_limit(std::uint64_t const value,
                                                                                std::size_t const limit,
