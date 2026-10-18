@@ -38,8 +38,9 @@ void reference_append(std::string &out, std::uint32_t const item)
 
 // A chain of nodes, each with one child, as an attacker writes it by hand. Item k is the list of children of
 // the node at depth k: one node that refers to item k + 1, and the last item is empty. Each record carries
-// the class tag 1515 = d9 05 eb of node. The encoder of this library cannot write it, because gcc does not
-// inline a recursive encoder.
+// the class tag 1515 = d9 05 eb of node. The directory holds the root start, the start of each item and the
+// end of the items, which is the root start. The encoder of this library cannot write it, because gcc does
+// not inline a recursive encoder.
 std::string node_chain(std::size_t const levels)
 {
     auto const items = static_cast<std::uint32_t>(levels + 1);
@@ -48,14 +49,17 @@ std::string node_chain(std::size_t const levels)
     out += "\xd8\x72\x81\x68"
            "children"
            "\x5a"s;
-    u32_append(out, 4 * items);
+    u32_append(out, 4 * (items + 2));
     std::size_t const directory = out.size();
-    out.append(4 * items, '\0');
+    out.append(4 * (items + 2), '\0');
     out.append(14, '\xf7');
-    for (std::uint32_t k = 0; k < items; ++k) {
+    auto const entry_write = [&out, directory](std::uint32_t const j) {
         std::string offset;
         u32_append(offset, static_cast<std::uint32_t>(out.size()));
-        out.replace(directory + 4 * k, 4, offset);
+        out.replace(directory + 4 * j, 4, offset);
+    };
+    for (std::uint32_t k = 0; k < items; ++k) {
+        entry_write(k + 1);
         bool const last = k + 1 == items;
         out += "\x9a"s;
         u32_append(out, last ? 0 : 1);
@@ -64,6 +68,8 @@ std::string node_chain(std::size_t const levels)
             reference_append(out, k + 1);
         }
     }
+    entry_write(0);
+    entry_write(items + 1);
     out += "\xd9\x05\xeb\xd8\x80\x9a\x00\x00\x00\x01"s;
     reference_append(out, 0);
     return out;

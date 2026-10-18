@@ -27,8 +27,9 @@ A message is one tag 113 (Basic-Packed-CBOR, draft-ietf-cbor-packed-19)
 on an array of a table and a rump.
 
 - The table holds the keys of each struct as a tag 114 (the record
-  function), a directory of the offsets of the parts of variable size,
-  and those parts: texts, byte strings and lists.
+  function), a directory, and the parts of variable size: texts, byte
+  strings and lists. The directory holds the offset of the root, the
+  offset of each part, and the offset where the parts end.
 - The rump is the root struct. It starts with the tag of its struct. Each
   field has a head of fixed width, so a number takes the same count of
   bytes for every value.
@@ -157,6 +158,7 @@ not compile on a temporary view.
 - that the start of the table holds the keys of `T` and of each struct
   inside it, so a message of another layout gives `incorrect_type`;
 - that the directory lies inside the message;
+- that the root lies behind the parts and inside the message;
 - the tag of the struct of the root.
 
 Each `at_path` checks at each read:

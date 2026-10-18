@@ -480,6 +480,31 @@ TEST_CASE("validity: check_number_range for every standard integer width and sig
 }
 #endif
 
+// A packed item [start, end) is taken from two directory entries of the wire. It is read only when it lies
+// inside [first, last), the bytes that hold the items, and it does not end before it starts. The test exists
+// because the path, the decoder and the check of the root start use this one check, so it must accept exactly
+// the ranges that lie inside, for every order of the four positions and at the largest size_t.
+TEST_CASE("validity: check_item_range accepts exactly a range inside the items")
+{
+    constexpr std::size_t max = std::numeric_limits<std::size_t>::max();
+    std::array<std::size_t, 6> const positions{0, 1, 2, 3, max - 1, max};
+    for (std::size_t const start : positions)
+        for (std::size_t const end : positions)
+            for (std::size_t const first : positions)
+                for (std::size_t const last : positions) {
+                    CAPTURE(start);
+                    CAPTURE(end);
+                    CAPTURE(first);
+                    CAPTURE(last);
+                    bool const inside = first <= start && start <= end && end <= last;
+                    auto const r = validity::check_item_range(start, end, first, last);
+                    if (inside)
+                        CHECK(r.has_value());
+                    else
+                        CHECK_EQ(r.error(), error::syntax_error);
+                }
+}
+
 // [span.sub]: first(count) and last(count) need count <= size(). A sub-view of a typed array is made only
 // after this check, for every count up to one past the size.
 TEST_CASE("validity: check_count for every count up to one past the size")

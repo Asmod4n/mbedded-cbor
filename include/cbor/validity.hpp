@@ -439,6 +439,16 @@ public:
         return index{static_cast<std::uint64_t>(i)};
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_item_range(std::size_t const start,
+                                                                                    std::size_t const end,
+                                                                                    std::size_t const first,
+                                                                                    std::size_t const last)
+    {
+        if (start < first || end < start || last < end) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return {};
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_count(std::size_t const count,
                                                                                std::size_t const size)
     {
