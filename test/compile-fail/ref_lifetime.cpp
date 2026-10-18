@@ -52,7 +52,7 @@ std::size_t read()
         auto const tree = cbor::decode("\x81\x01").value();
         root = &*tree;
     }
-    return root->array().value().size();
+    return root->get<cbor::type::array>().value().size();
 }
 #endif
 

@@ -190,7 +190,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
         auto const tree = l->clone();
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type, r.type);
-        CHECK_EQ((*tree)->tag_number().value(), r.wire[0] == '\xc2' ? 2u : 3u);
+        CHECK_EQ(argument_of(**tree), r.wire[0] == '\xc2' ? 2u : 3u);
     }
     struct failure {
         std::string_view wire;
@@ -217,11 +217,10 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
     REQUIRE(tree.has_value());
     auto const elements = children_of(**tree);
     REQUIRE_EQ(elements.size(), 2u);
-    REQUIRE_EQ(elements[0]->type, cbor::type::tag);
-    cbor::item const *const marked = elements[0]->tag_content().value();
-    CHECK_EQ(marked->type, cbor::type::unsigned_integer);
-    CHECK_EQ(marked->argument().value(), 1u);
-    CHECK_EQ((*elements[1]).tag_number().value(), 29u);
+    auto const mark = elements[0]->get<cbor::type::tag>();
+    REQUIRE(mark.has_value());
+    CHECK_EQ(mark->second->get<cbor::type::unsigned_integer>(), 1u);
+    CHECK_EQ(elements[1]->get<cbor::type::tag>().value().first, 29u);
     CHECK_EQ(*l->at(1)->type(), cbor::type::tag);
     CHECK_EQ(*l->at(1)->get<std::int64_t>(), 0);
     std::string again;

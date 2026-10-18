@@ -124,7 +124,6 @@ TEST_CASE("simple value: lazy::clone gives every simple value 0 to 255 as its co
         CHECK_EQ(major_of(it.type), cbor::major_type::simple_float);
         CHECK_EQ(it.additional_information, v < 24 ? v : 24);
         CHECK_EQ(argument_of(it), v);
-        CHECK_EQ(std::to_underlying(it.simple_value().value()), v);
     }
 }
 
