@@ -35,7 +35,7 @@ inline void tree_encode(std::string_view const input)
     auto const top_level = test::lazy_of_copy(input);
     if (!top_level)
         return;
-    auto const tree = top_level->decode();
+    auto const tree = top_level->clone();
     if (!tree)
         return;
     auto const end = cbor::item_size(input);
@@ -52,7 +52,7 @@ inline void tree_encode(std::string_view const input)
         require(value.error() == again.error());
     auto const top_again = test::lazy_of_copy(out);
     require(top_again.has_value());
-    auto const tree_again = top_again->decode();
+    auto const tree_again = top_again->clone();
     require(tree_again.has_value());
     std::string twice;
     require(cbor::encode(**tree_again, twice).has_value() && twice == out);
