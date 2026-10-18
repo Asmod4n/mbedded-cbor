@@ -1136,8 +1136,15 @@ TEST_CASE("lazy: two threads read one root lazy")
                                            return std::ranges::distance(e.begin(), e.end());
                                        });
                 auto const element = l.at_path<"$[3][1]", std::uint64_t>();
-                bool const reference = named.has_value() && (*named)->type == cbor::type::tag &&
-                                       (*named)->tag_number().value() == 29 && (*named)->tag_content().value()->argument().value() == 0;
+                bool const reference = [&] {
+                    if (!named)
+                        return false;
+                    auto const tag = (*named)->get<cbor::type::tag>();
+                    if (!tag || tag->first != 29)
+                        return false;
+                    auto const mark = tag->second->get<cbor::type::unsigned_integer>();
+                    return mark && *mark == 0;
+                }();
                 right[t] = {text.has_value() && **text == "hello", index == 0u, reference, count == 4, pairs == 1,
                             element == 2u};
             });

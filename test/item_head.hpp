@@ -62,6 +62,25 @@ inline std::uint64_t argument_of(cbor::item const &node)
     std::unreachable();
 }
 
+// The tag content of an item of any of the four tag types, so that a test reads the content of a tag whose type
+// comes from the wire.
+inline cbor::item const *tag_content_of(cbor::item const &node)
+{
+    switch (node.type) {
+    case cbor::type::tag:
+        return node.get<cbor::type::tag>().value().second;
+    case cbor::type::unsigned_bignum:
+        return node.get<cbor::type::unsigned_bignum>().value().second;
+    case cbor::type::negative_bignum:
+        return node.get<cbor::type::negative_bignum>().value().second;
+    case cbor::type::typed_array:
+        return node.get<cbor::type::typed_array>().value().second;
+    default:
+        FAIL("the item is no tag");
+        return nullptr;
+    }
+}
+
 // The children of an array or a map as pointers, so that a test reads each child as it read it before.
 inline std::vector<cbor::item const *> children_of(cbor::item const &container)
 {
