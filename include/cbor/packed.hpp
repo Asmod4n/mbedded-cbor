@@ -268,6 +268,32 @@ class reflection
                tag == std::to_underlying(notable_tags::tag_number::programming_aid_for_simple_values);
     }
 
+#ifdef __cpp_impl_reflection
+    template <class Root>
+    static consteval bool table_tag_taken_by_standard_type()
+    {
+        if constexpr (std::is_class_v<Root> && std::is_aggregate_v<Root>)
+            return std::ranges::any_of(packing_table_of<Root>(), [](std::meta::info const type) {
+                auto const number = tag_number_of(type);
+                return number && tag_taken_by_standard_type(*number);
+            });
+        else
+            return false;
+    }
+
+    template <class Root>
+    static consteval bool table_tag_invalid()
+    {
+        if constexpr (std::is_class_v<Root> && std::is_aggregate_v<Root>)
+            return std::ranges::any_of(packing_table_of<Root>(), [](std::meta::info const type) {
+                auto const number = tag_number_of(type);
+                return number && tag_invalid(*number);
+            });
+        else
+            return false;
+    }
+#endif
+
     template <class U>
     static consteval bool tag_declared()
     {
@@ -2146,6 +2172,10 @@ consteval std::size_t reflection::member_offset()
 template <class T>
 class packed
 {
+    static_assert(!reflection::table_tag_taken_by_standard_type<T>(),
+                  "cbor::packed takes a tag that no standard type has.");
+    static_assert(!reflection::table_tag_invalid<T>(), "cbor::packed takes a tag that the IANA registry calls always invalid.");
+
     template <class X>
     static constexpr bool value_holds_no_view = std::is_trivially_copyable_v<X> && !std::same_as<X, std::string_view> &&
                                                 !std::same_as<X, std::optional<std::string_view>>;
