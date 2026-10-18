@@ -683,6 +683,10 @@ class jsonpath
                     each.index, (*elements)->size() / validity::typed_array_element_size(h.argument));
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
+                if constexpr (std::is_same_v<T, std::span<std::byte const>>)
+                    if (step == top.segment_count)
+                        return std::as_bytes(validity::element_span(**elements, *position,
+                                                                    validity::typed_array_element_size(h.argument)));
                 auto const element = heads::typed_array_element_decode(h.argument, **elements, *position);
                 if (!element) [[unlikely]]
                     return std::unexpected(element.error());

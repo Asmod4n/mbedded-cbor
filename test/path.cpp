@@ -881,6 +881,14 @@ TEST_CASE("path: a typed read of each type")
     check_path<"$", std::string_view>("\x43\x61\x62\x63"s, {}, std::unexpected(error::incorrect_type));
     check_path<"$", std::span<std::byte const>>("\x43\x01\x02\x03"s, {}, byte_vector("\x01\x02\x03"));
     check_path<"$", std::span<std::byte const>>("\x63\x61\x62\x63"s, {}, std::unexpected(error::incorrect_type));
+    // The bytes of a typed array element are the input bytes in place, as lazy::get gives them, also for a little
+    // endian element and for a float of 128 bits that no other read gives.
+    check_path<"$[0]", std::span<std::byte const>>("\xd8\x40\x41\x40"s, {std::int64_t{0}}, byte_vector("\x40"));
+    check_path<"$[-1]", std::span<std::byte const>>("\xd8\x45\x44\x01\x02\x03\x04"s, {std::int64_t{-1}}, byte_vector("\x03\x04"));
+    check_path<"$[0]", std::span<std::byte const>>("\xd8\x53\x50\x3f\xff\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e"s,
+                                                    {std::int64_t{0}},
+                                                    byte_vector("\x3f\xff\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e"));
+    check_path<"$[1]", std::span<std::byte const>>("\xd8\x40\x41\x40"s, {std::int64_t{1}}, std::unexpected(error::index_out_of_bounds));
     check_path<"$", cbor::typed_array>("\xd8\x48\x43\x01\x02\x03"s, {}, std::pair{std::uint64_t{72}, byte_vector("\x01\x02\x03")});
     check_path<"$", cbor::typed_array>("\x43\x01\x02\x03"s, {}, std::unexpected(error::incorrect_type));
     check_path<"$", cbor::typed_array>("\xd8\x4c\x41\x01"s, {}, std::unexpected(error::incorrect_type));
