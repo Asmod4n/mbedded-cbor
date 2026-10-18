@@ -33,9 +33,21 @@ struct zone {
 
     std::pmr::monotonic_buffer_resource memory;
     std::vector<link> encoded_cbor_data_items;
+    std::span<char> free{};
 
     explicit zone(std::size_t const initial_size) : memory(initial_size)
     {
+    }
+
+    std::span<char> bump_allocate(std::size_t const size)
+    {
+        if (size > free.size()) [[unlikely]] {
+            std::size_t const chunk = std::max(size, validity::bump_chunk_size);
+            free = std::span<char>(std::pmr::polymorphic_allocator<char>(&memory).allocate(chunk), chunk);
+        }
+        std::span<char> const taken = free.first(size);
+        free = free.subspan(size);
+        return taken;
     }
 };
 
@@ -111,8 +123,7 @@ std::expected<void, error> tree_decoder<Checked>::scalar_decode(item &node, head
         auto const string = d.byte_string_decode(h.argument);
         if (!string) [[unlikely]]
             return std::unexpected(string.error());
-        std::span<char> const own(std::pmr::polymorphic_allocator<char>(&decoded.memory).allocate(string->size()),
-                                  string->size());
+        std::span<char> const own = decoded.bump_allocate(string->size());
         std::ranges::copy(*string, own.begin());
         if (h.major == major_type::text_string)
             node.via.str = std::string_view(own.data(), own.size());
