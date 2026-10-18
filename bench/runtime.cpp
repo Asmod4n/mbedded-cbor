@@ -27,40 +27,84 @@
 #if defined(ARM_READ) || defined(ARM_MB_TREE) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
 // The sum of a decoded item tree: the argument of each head and the bytes of each string. A reference of tag 29
 // adds its index and is not followed.
+static std::uint64_t item_tree_sum(cbor::item const &it);
+
+template <cbor::type K>
+static std::uint64_t children_sum(cbor::item const &it)
+{
+    std::span<cbor::item const> const children = it.get<K>().value();
+    std::uint64_t s = K == cbor::type::array ? children.size() : children.size() / 2;
+    for (cbor::item const &child : children)
+        s += item_tree_sum(child);
+    return s;
+}
+
+template <cbor::type K>
+static std::uint64_t tag_sum(cbor::item const &it)
+{
+    std::pair<std::uint64_t, cbor::item const *> const tag = it.get<K>().value();
+    std::uint64_t const number = tag.first;
+    cbor::item const *const content = tag.second;
+    return number + item_tree_sum(*content);
+}
+
+template <cbor::type K>
+static std::uint64_t float_sum(cbor::item const &it)
+{
+    return std::bit_cast<std::uint64_t>(it.get<K>().value());
+}
+
+template <cbor::type K>
+static std::uint64_t simple_sum(cbor::item const &it)
+{
+    return std::to_underlying(it.get<K>().value());
+}
+
 static std::uint64_t item_tree_sum(cbor::item const &it)
 {
     switch (it.type) {
-    case cbor::type::text_string:
-        return it.text_string().value().size() + bytes_sum(it.text_string().value());
-    case cbor::type::byte_string:
-        return it.byte_string().value().size() +
-               bytes_sum(std::string_view(reinterpret_cast<char const *>(it.byte_string().value().data()), it.byte_string().value().size()));
+    case cbor::type::text_string: {
+        std::string_view const t = it.get<cbor::type::text_string>().value();
+        return t.size() + bytes_sum(t);
+    }
+    case cbor::type::byte_string: {
+        std::span<std::byte const> const b = it.get<cbor::type::byte_string>().value();
+        return b.size() + bytes_sum(std::string_view(reinterpret_cast<char const *>(b.data()), b.size()));
+    }
     case cbor::type::array:
-    case cbor::type::map: {
-        std::span<cbor::item const> const children = it.type == cbor::type::array ? it.array().value() : it.map().value();
-        std::uint64_t s = it.type == cbor::type::array ? children.size() : children.size() / 2;
-        for (cbor::item const &child : children)
-            s += item_tree_sum(child);
-        return s;
-    }
+        return children_sum<cbor::type::array>(it);
+    case cbor::type::map:
+        return children_sum<cbor::type::map>(it);
     case cbor::type::tag:
+        return tag_sum<cbor::type::tag>(it);
     case cbor::type::unsigned_bignum:
+        return tag_sum<cbor::type::unsigned_bignum>(it);
     case cbor::type::negative_bignum:
+        return tag_sum<cbor::type::negative_bignum>(it);
     case cbor::type::typed_array:
-        return it.tag_number().value() + item_tree_sum((*it.tag_content().value()));
+        return tag_sum<cbor::type::typed_array>(it);
     case cbor::type::half_float:
+        return float_sum<cbor::type::half_float>(it);
     case cbor::type::single_float:
+        return float_sum<cbor::type::single_float>(it);
     case cbor::type::double_float:
-        return std::bit_cast<std::uint64_t>(it.floating_point().value());
+        return float_sum<cbor::type::double_float>(it);
     case cbor::type::false_value:
+        return simple_sum<cbor::type::false_value>(it);
     case cbor::type::true_value:
+        return simple_sum<cbor::type::true_value>(it);
     case cbor::type::null:
+        return simple_sum<cbor::type::null>(it);
     case cbor::type::undefined:
+        return simple_sum<cbor::type::undefined>(it);
     case cbor::type::simple_value:
-        return std::to_underlying(it.simple_value().value());
-    default:
-        return it.argument().value();
+        return simple_sum<cbor::type::simple_value>(it);
+    case cbor::type::unsigned_integer:
+        return it.get<cbor::type::unsigned_integer>().value();
+    case cbor::type::negative_integer:
+        return it.get<cbor::type::negative_integer>().value();
     }
+    std::unreachable();
 }
 #endif
 
