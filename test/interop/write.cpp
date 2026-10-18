@@ -114,36 +114,56 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
             v = v << 8 | static_cast<std::uint8_t>(c);
         return v;
     };
+    auto const tagged = [&](std::pair<std::uint64_t, cbor::item const *> const t) -> std::expected<void, cbor::error> {
+        if (auto const r = e.tag(t.first); !r)
+            return r;
+        return item_walk(e, *t.second);
+    };
     switch (node.type) {
     case type::unsigned_integer:
-        return integer(node.argument().value(), [&](auto const v) { return e.unsigned_integer(v); });
+        return integer(node.get<type::unsigned_integer>().value(), [&](auto const v) { return e.unsigned_integer(v); });
     case type::negative_integer:
-        return integer(node.argument().value(), [&](auto const v) { return e.negative_integer(v); });
+        return integer(node.get<type::negative_integer>().value(), [&](auto const v) { return e.negative_integer(v); });
     case type::byte_string:
-        return e.byte_string(node.byte_string().value());
+        return e.byte_string(node.get<type::byte_string>().value());
     case type::text_string:
-        return e.text_string(node.text_string().value());
-    case type::array:
-        return container(node.array().value(), node.array().value().size(), true);
-    case type::map:
-        return container(node.map().value(), node.map().value().size() / 2, false);
-    case type::typed_array:
-        return e.typed_array({node.tag_number().value(), node.tag_content().value()->byte_string().value()});
+        return e.text_string(node.get<type::text_string>().value());
+    case type::array: {
+        std::span<cbor::item const> const children = node.get<type::array>().value();
+        return container(children, children.size(), true);
+    }
+    case type::map: {
+        std::span<cbor::item const> const children = node.get<type::map>().value();
+        return container(children, children.size() / 2, false);
+    }
+    case type::typed_array: {
+        std::pair<std::uint64_t, cbor::item const *> const t = node.get<type::typed_array>().value();
+        return e.typed_array({t.first, t.second->get<type::byte_string>().value()});
+    }
     case type::tag:
+        return tagged(node.get<type::tag>().value());
     case type::unsigned_bignum:
+        return tagged(node.get<type::unsigned_bignum>().value());
     case type::negative_bignum:
-        if (auto const r = e.tag(node.tag_number().value()); !r)
-            return r;
-        return item_walk(e, (*node.tag_content().value()));
+        return tagged(node.get<type::negative_bignum>().value());
     case type::half_float:
         return e.floating_point(std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(bits())));
     case type::single_float:
         return e.floating_point(std::bit_cast<float>(static_cast<std::uint32_t>(bits())));
     case type::double_float:
         return e.floating_point(std::bit_cast<double>(bits()));
-    default:
-        return e.simple_value(node.simple_value().value());
+    case type::false_value:
+        return e.simple_value(node.get<type::false_value>().value());
+    case type::true_value:
+        return e.simple_value(node.get<type::true_value>().value());
+    case type::null:
+        return e.simple_value(node.get<type::null>().value());
+    case type::undefined:
+        return e.simple_value(node.get<type::undefined>().value());
+    case type::simple_value:
+        return e.simple_value(node.get<type::simple_value>().value());
     }
+    std::unreachable();
 }
 
 // One input item goes through both generic writers: cbor::encode of the decoded item, and cbor::encoder
