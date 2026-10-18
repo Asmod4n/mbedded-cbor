@@ -844,11 +844,11 @@ TEST_CASE("structs: a tag 29 into a plain member is incorrect_type")
              error::incorrect_type);
     CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c\xd8\x1d\x00"s).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<numbers>::decode("\x82\xd8\x1d\x00\xd8\x1c\x01"s).error(), error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"s).error(),
+    CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"s)
+                 .error(),
              error::incorrect_type);
-    test::limits_guard const depth{{.nesting_depth = 16}};
     std::string chain;
-    for (int i = 0; i < 16; ++i)
+    for (std::size_t i = 0; i < cbor::limits::nesting_depth; ++i)
         chain += "\xd8\x1c"s;
     CHECK_EQ(cbor::structs<std::uint64_t>::decode(chain + "\x05"s), 5u);
     CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c"s + chain + "\x05"s).error(), error::nesting_depth_exceeded);

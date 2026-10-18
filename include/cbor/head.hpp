@@ -230,7 +230,6 @@ class heads
     template <bool Checked>
     struct decoder {
         std::string_view encoded;
-        [[no_unique_address]] validity::limit_checks<Checked> checks;
 
         CBOR_ALWAYS_INLINE std::expected<head, error> head_decode()
         {
@@ -240,7 +239,7 @@ class heads
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
             if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-                if (error const r = validity::check_argument(major, info, checks).error_or(error{});
+                if (error const r = validity::check_argument<Checked>(major, info).error_or(error{});
                     r != error{}) [[unlikely]]
                     return std::unexpected(r);
                 encoded.remove_prefix(initial_byte_size);
@@ -277,7 +276,7 @@ class heads
                 argument = unsigned_read<std::uint64_t>(rest.first<sizeof(std::uint64_t)>());
                 break;
             }
-            if (error const r = validity::check_argument(major, argument, checks).error_or(error{});
+            if (error const r = validity::check_argument<Checked>(major, argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
             encoded.remove_prefix(initial_byte_size + size);
@@ -308,7 +307,7 @@ class heads
                                  std::numeric_limits<std::uint8_t>::digits * size) &
                                 (std::numeric_limits<std::uint64_t>::digits - 1));
                 }
-                if (!validity::check_argument(major, argument, checks)) [[unlikely]]
+                if (!validity::check_argument<Checked>(major, argument)) [[unlikely]]
                     return std::nullopt;
                 encoded.remove_prefix(initial_byte_size + size);
                 return head{major, info, argument};
@@ -697,8 +696,7 @@ class heads
 
     template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<raw_head, error>
-    raw_head_read(std::string_view const encoded, validity::offset const at,
-                  validity::limit_checks<Checked> const checks)
+    raw_head_read(std::string_view const encoded, validity::offset const at)
     {
         std::string_view const rest = validity::subspan(encoded, at);
         if (rest.empty()) [[unlikely]]
@@ -707,8 +705,8 @@ class heads
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
         std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-            if (error const r = validity::check_argument(major, info, checks).error_or(error{}); r != error{})
-                [[unlikely]]
+            if (error const r = validity::check_argument<Checked>(major, info).error_or(error{});
+                r != error{}) [[unlikely]]
                 return std::unexpected(r);
             return raw_head{major, info, info, validity::next(at, initial_byte_size)};
         }
@@ -723,15 +721,15 @@ class heads
         std::uint64_t argument = 0;
         for (char const c : validity::subspan(encoded, validity::next(at, initial_byte_size)).substr(0, size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
-        if (error const r = validity::check_argument(major, argument, checks).error_or(error{}); r != error{})
-            [[unlikely]]
+        if (error const r = validity::check_argument<Checked>(major, argument).error_or(error{});
+            r != error{}) [[unlikely]]
             return std::unexpected(r);
         return raw_head{major, info, argument, validity::next(at, initial_byte_size + size)};
     }
 
     static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
-        auto const h = raw_head_read(encoded, validity::offset{}, validity::limit_checks<false>{});
+        auto const h = raw_head_read<false>(encoded, validity::offset{});
         if (h && h->major == major_type::tag &&
             h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))
             return validity::subspan(encoded, h->at);
@@ -741,7 +739,7 @@ class heads
     static constexpr validity::offset self_described_cbor_content_at(std::string_view const encoded, validity::offset at)
     {
         for (;;) {
-            auto const h = raw_head_read(encoded, at, validity::limit_checks<false>{});
+            auto const h = raw_head_read<false>(encoded, at);
             if (!h || h->major != major_type::tag ||
                 h->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))
                 return at;

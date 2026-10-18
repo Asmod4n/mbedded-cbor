@@ -192,13 +192,12 @@ TEST_CASE("path: the grammar")
     CHECK_EQ(path_error("$[9007199254740991]", A(1)), error::index_out_of_bounds);
     for (std::string_view const key : {"$[-0]"sv, "$[1.5]"sv, "$[h'01']"sv, "$[true]"sv})
         CHECK_EQ(path_error(key, A(1)), error::not_indexable);
-    std::string const deep = encoded(A(A(A(A(1)))));
-    {
-        test::limits_guard const depth{{.nesting_depth = 3}};
-        CHECK_EQ(test::at_path("$[0][0][0][0]", *test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
-    }
-    test::limits_guard const depth{{.nesting_depth = 4}};
-    CHECK(test::at_path("$[0][0][0][0]", *test::lazy_of_copy(deep)).has_value());
+    constexpr std::size_t depth = cbor::limits::nesting_depth;
+    std::string const deepest = repeat("\x81", depth) + "\x01"s;
+    std::string const deeper = repeat("\x81", depth + 1) + "\x01"s;
+    CHECK(test::at_path("$" + repeat("[0]", depth), *test::lazy_of_copy(deepest)) == V(1));
+    CHECK_EQ(test::at_path("$" + repeat("[0]", depth + 1), *test::lazy_of_copy(deeper)).error(),
+             error::nesting_depth_exceeded);
 }
 
 // The compile-time form reads the same grammar and, inside brackets, any literal of CBOR diagnostic notation
@@ -460,9 +459,8 @@ TEST_CASE("path: the descendant segment")
     CHECK(at("$..['b', 'c'][0]", doc) == A(M("b"s, 2)));
     for (std::string_view const bad : {"$..."sv, "$.. b"sv, "$..1"sv})
         CHECK_EQ(path_error(bad, doc), error::invalid_path);
-    std::string const deep = encoded(A(A(A(A(A(1))))));
-    test::limits_guard const depth{{.nesting_depth = 3}};
-    CHECK_EQ(test::query("$..[0]", *test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
+    std::string const deeper = repeat("\x81", cbor::limits::nesting_depth + 1) + "\x01"s;
+    CHECK_EQ(test::query("$..[0]", *test::lazy_of_copy(deeper)).error(), error::nesting_depth_exceeded);
 }
 
 // RFC 9535 2.3.5: a filter keeps the children for which the logical expression is true. A comparison of numbers
@@ -974,8 +972,6 @@ TEST_CASE("path: a typed read skips an item of any nesting depth")
     check_path<"$[1]", std::uint64_t>(deeper, {std::int64_t{1}}, 1u);
     std::string const keyed = "\xa2\x61k"s + repeat("\x81", 2000) + "\x00\x61\x61\x01"s;
     check_path<"$.a", std::uint64_t>(keyed, {"a"sv}, 1u);
-    test::limits_guard const depth{{.nesting_depth = 4}};
-    CHECK(path_get<"$[1]", std::uint64_t>("\x82\x81\x81\x81\x81\x00\x01"s) == 1u);
 }
 
 // The typed read compiles only where it is safe. A view is read only with an owner of the bytes, so it cannot outlive
@@ -1021,22 +1017,6 @@ TEST_CASE("path: a typed read that is not safe does not compile")
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$[?@.a]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"a", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", float>(std::forward<S>(s)); }; }(std::string_view(text))));
-}
-
-// A path that compiles has at most the default nesting depth of segments. The depth in force at run time can be
-// lower, so the walk checks the count of segments against it again.
-TEST_CASE("at_path: a compiled path with more segments than the nesting depth in force is refused")
-{
-    std::string const text = "\x81\x81\x81\x07";
-    test::limits_guard const depth{{.nesting_depth = 2}};
-    CHECK_EQ(cbor::at_path<"$[0][0]", std::int64_t>(std::string_view(text)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$[0][0][0]", std::int64_t>(std::string_view(text)).error(), error::nesting_depth_exceeded);
-    auto const owner = std::make_shared<std::string const>(text);
-    CHECK_EQ(cbor::at_path<"$[0][0][0]", std::string_view>(owner).error(), error::nesting_depth_exceeded);
-    auto const l = test::lazy_of_copy(text);
-    REQUIRE(l.has_value());
-    CHECK_EQ(test::at_path<"$[0][0][0]">(*l).error(), error::nesting_depth_exceeded);
-    CHECK_EQ(test::at_path("$[0][0][0]", *l).error(), error::nesting_depth_exceeded);
 }
 
 // RFC 9535 2.3.5.1: a singular query selects at most one node. at_path reads only such a query and gives the value

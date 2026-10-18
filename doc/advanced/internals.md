@@ -31,12 +31,13 @@ with `too_little_data` when an item claims more than the bytes that are
 left. So the nesting depth does not bound a skip, and `item_size` uses
 the same skip.
 
-## 4. The limits are read once
+## 4. The limits are constants
 
-Each public entry reads `cbor::limits` once and passes the values down.
-Each field holds one `std::atomic<std::size_t>`, read with relaxed
-order. When the three size limits are `SIZE_MAX`, an entry takes the
-form of the code that checks no size.
+Each limit is a `static constexpr` member of `cbor::limits`. A check of
+a string length or an element count stands under `if constexpr` on its
+limit, so a build that sets no size limit has no such check. A skip
+uses `heads::decoder<false>`, which checks no size limit, because the
+limits count only what a call reads.
 
 ## 5. Tags 28 and 29
 

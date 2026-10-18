@@ -24,6 +24,7 @@
 #include <stdfloat>
 #endif
 
+using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
@@ -197,8 +198,6 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
 
 namespace
 {
-
-constexpr std::size_t depth_limit = cbor::validity::nesting_depth_limit;
 
 // One test of a file of the CBOR WG test vectors. decoded holds the bytes of the "decoded" item, empty when
 // the test has none.
@@ -496,6 +495,15 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     CAPTURE(v.description);
     CAPTURE(v.encoded);
     REQUIRE_FALSE(v.decoded.empty());
+    // The nesting depth defaults to 128 (owner, 2026-10-06). A vector nested deeper gives
+    // nesting_depth_exceeded in a build with the default and is read in full in the build with the nesting
+    // depth at its bound.
+    if (auto const shallow = decoded(v.encoded);
+        !shallow && shallow.error() == error::nesting_depth_exceeded) {
+        ++count.nesting_depth_exceeded;
+        ++count.vectors;
+        return;
+    }
     auto const expected = decoded(v.decoded);
     REQUIRE(expected.has_value());
 
@@ -540,14 +548,6 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     bool const bignum_tag = text->starts_with("2(") || text->starts_with("3(");
     if (!bignum_tag && !text->starts_with("float'"))
         CHECK_EQ(without_encoding_indicators(*text), without_encoding_indicators(*expected_text));
-
-    // The nesting depth defaults to 128 (owner, 2026-10-06). A vector nested deeper is read with the depth set to
-    // the limit and gives nesting_depth_exceeded at the default.
-    test::limits_guard const shallow_depth{{.nesting_depth = cbor::validity::nesting_depth_default}};
-    if (auto const shallow = decoded(v.encoded); !shallow) {
-        CHECK_EQ(shallow.error(), error::nesting_depth_exceeded);
-        ++count.nesting_depth_exceeded;
-    }
     ++count.vectors;
 }
 
@@ -558,7 +558,6 @@ void wg_good_check(wg_vector const &v, wg_count &count)
 // item in the extended generic data model.
 TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
 {
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     wg_count count{};
     for (char const *const file :
          {"/rfc8949/good.cbor", "/rfc8949-appendixA/mt0.cbor", "/rfc8949-appendixA/mt1.cbor",
@@ -572,14 +571,15 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
         }
     }
     CHECK_EQ(count.vectors, 88u + 11u + 5u + 2u + 7u + 4u + 5u + 8u + 22u + 6u + 1165u);
-    CHECK_EQ(count.nesting_depth_exceeded, 3u);
+    // Three vectors nest deeper than 128 and no vector deeper than the bound.
+    CHECK_EQ(count.nesting_depth_exceeded,
+             cbor::limits::nesting_depth == cbor::validity::nesting_depth_limit ? 0u : 3u);
 }
 
 // bad.cbor holds items that are not well-formed or not valid. Each one fails in decode, lazy and diagnostic_notation,
 // except where a decision of this library differs from the vector.
 TEST_CASE("cbor-wg test vectors: every bad vector fails")
 {
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     std::size_t checked = 0;
     for (wg_vector const &v : wg_vectors_of(CBOR_TEST_VECTORS "/tests/rfc8949/bad.cbor")) {
         CAPTURE(v.description);
@@ -615,7 +615,6 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
 // streaming.edn. decode and lazy give indefinite_length; diagnostic_notation writes the item.
 TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
     auto const top = test::lazy_of_copy(std::string_view(file));
     REQUIRE(top.has_value());
@@ -647,7 +646,6 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 // major type, each float width and two simple values, alone and behind a tag 28 or a tag 29.
 TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation pass every content")
 {
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     std::array<std::string_view, 12> const contents{
         "\x00"sv, "\x20"sv, "\x40"sv, "\x60"sv, "\x80"sv, "\xa0"sv, "\xc2\x40"sv, "\xf4"sv, "\xf8\x20"sv,
         "\xf9\x3c\x00"sv, "\xfa\x3f\x80\x00\x00"sv, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv,

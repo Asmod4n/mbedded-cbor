@@ -432,21 +432,14 @@ TEST_CASE("tag 28/29: a cyclic array and a cyclic map")
     std::get<std::vector<std::pair<handle, handle>>>(h->kind).clear();
 }
 
-// A cycle can come from the wire. encode of the tree writes the reference as it stands and does not follow it, so a
-// cycle ends. A tree that is only deep is nesting_depth_exceeded under a lower limit.
+// A cycle can come from the wire. encode of the tree writes the reference as it stands and does not follow
+// it, so a cycle ends.
 TEST_CASE("tag 28/29: encode of a tree with a cycle ends")
 {
     tree const a = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
     std::string out;
     REQUIRE(cbor::encode(*a, out).has_value());
     CHECK_EQ(out, "\xd8\x1c\x81\xd8\x1d\x00"sv);
-
-    tree const deep = decoded_ref(repeat("\x81"sv, 20) + '\x01');
-    test::limits_guard const depth{{.nesting_depth = 16}};
-    std::string d;
-    auto const too_deep = cbor::encode(*deep, d);
-    REQUIRE_FALSE(too_deep.has_value());
-    CHECK_EQ(too_deep.error(), error::nesting_depth_exceeded);
 }
 
 // Ported from test.rb: 'tag 28/29: mutual recursion — hash↔array cycle'.

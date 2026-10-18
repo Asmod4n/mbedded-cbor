@@ -27,7 +27,7 @@ owner throws `std::logic_error`. A `std::string` lvalue and a literal go
 to the form with `std::string_view` and are copied. `lazy::view` takes
 no `std::string` and no `std::string_view`.
 
-`lazy::copy` and `lazy::view` check only the limit `input_bytes`. It does not check that
+`lazy::copy` and `lazy::view` check no limit. They do not check that
 the bytes are one complete item. It accepts `82 01`, an array of two
 elements with one element, and a read of the missing element gives
 `too_little_data`. It accepts bytes after the item, and no step reads

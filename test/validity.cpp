@@ -24,38 +24,19 @@ using cbor::value_sharing;
 TEST_CASE("validity: the limit and the default of the nesting depth")
 {
     CHECK_EQ(validity::nesting_depth_limit, 512u);
-    CHECK_EQ(validity::nesting_depth_default, 128u);
+    CHECK_EQ(cbor::limits::nesting_depth, 128u);
 }
 
-// The nesting depth in force starts at the default. Its operator= refuses every value above the limit with the check
-// that every reader of a depth uses, so the depth in force never exceeds the limit.
-TEST_CASE("validity: cbor::limits.nesting_depth lowers and raises the nesting depth and refuses a value above the limit")
+// The nesting depth of the build bounds every reader with the check that every reader of a depth uses: an
+// item at the depth passes and one level more is refused.
+TEST_CASE("validity: cbor::limits::nesting_depth bounds the decode and the diagnostic notation")
 {
-    CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_default);
-    std::string const deep = std::string(200, '\x81') + '\x00';
-    CHECK_EQ(test::value_of(*test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
-    {
-        test::limits_guard const raised{{.nesting_depth = 200}};
-        CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, 200u);
-        CHECK(test::value_of(*test::lazy_of_copy(deep)).has_value());
-        CHECK(cbor::diagnostic_notation(deep).has_value());
-        test::limits_guard const lowered{{.nesting_depth = 199}};
-        CHECK_EQ(test::value_of(*test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
-        CHECK_EQ(cbor::diagnostic_notation(deep).error(), error::nesting_depth_exceeded);
-    }
-    CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_default);
-    CHECK_THROWS_AS(cbor::limits.nesting_depth = 513, std::logic_error);
-    CHECK_THROWS_AS(cbor::limits.nesting_depth = std::numeric_limits<std::size_t>::max(), std::logic_error);
-    CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_default);
-    {
-        test::limits_guard const limit{{.nesting_depth = validity::nesting_depth_limit}};
-        CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, validity::nesting_depth_limit);
-    }
-    {
-        test::limits_guard const zero{{.nesting_depth = 0}};
-        CHECK(test::value_of(*test::lazy_of_copy("\x00"sv)).has_value());
-        CHECK_EQ(test::value_of(*test::lazy_of_copy("\x81\x00"sv)).error(), error::nesting_depth_exceeded);
-    }
+    std::string const deepest = std::string(cbor::limits::nesting_depth, '\x81') + '\x00';
+    std::string const deeper = std::string(cbor::limits::nesting_depth + 1, '\x81') + '\x00';
+    CHECK(test::value_of(*test::lazy_of_copy(deepest)).has_value());
+    CHECK(cbor::diagnostic_notation(deepest).has_value());
+    CHECK_EQ(test::value_of(*test::lazy_of_copy(deeper)).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(cbor::diagnostic_notation(deeper).error(), error::nesting_depth_exceeded);
 }
 
 // One function decides whether a depth is allowed, at compile time for the default and at run time for the depth
@@ -537,12 +518,12 @@ TEST_CASE("validity: keys_equivalent compares the pairs of two maps as multisets
     std::string_view const jkk = "\xa3\x61j\x01\x61k\x01\x61k\x01"sv;
     std::string_view const kk = "\xa2\x61k\x01\x61k\x01"sv;
     std::string_view const kj = "\xa2\x61k\x01\x61j\x01"sv;
-    CHECK_FALSE(*validity::keys_equivalent(kkj, validity::offset{}, kjj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
-    CHECK_FALSE(*validity::keys_equivalent(kjj, validity::offset{}, kkj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
-    CHECK(*validity::keys_equivalent(kkj, validity::offset{}, jkk, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
-    CHECK(*validity::keys_equivalent(jkk, validity::offset{}, kkj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
-    CHECK_FALSE(*validity::keys_equivalent(kk, validity::offset{}, kj, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
-    CHECK(*validity::keys_equivalent(kk, validity::offset{}, kk, validity::offset{}, 0, 16, validity::limit_checks<false>{}));
+    CHECK_FALSE(*validity::keys_equivalent<false>(kkj, validity::offset{}, kjj, validity::offset{}, 0, 16));
+    CHECK_FALSE(*validity::keys_equivalent<false>(kjj, validity::offset{}, kkj, validity::offset{}, 0, 16));
+    CHECK(*validity::keys_equivalent<false>(kkj, validity::offset{}, jkk, validity::offset{}, 0, 16));
+    CHECK(*validity::keys_equivalent<false>(jkk, validity::offset{}, kkj, validity::offset{}, 0, 16));
+    CHECK_FALSE(*validity::keys_equivalent<false>(kk, validity::offset{}, kj, validity::offset{}, 0, 16));
+    CHECK(*validity::keys_equivalent<false>(kk, validity::offset{}, kk, validity::offset{}, 0, 16));
 }
 
 // An offset, an element size and an element index are three kinds of number. Each has its own type, so a call that

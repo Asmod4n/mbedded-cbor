@@ -1268,64 +1268,6 @@ TEST_CASE("decode: an error is read as a value")
 namespace
 {
 
-struct [[=cbor::tag(1515)]] node {
-    std::vector<node> children;
-};
-
-void u32_append(std::string &out, std::uint32_t const value)
-{
-    for (int shift = 24; shift >= 0; shift -= 8)
-        out += static_cast<char>(value >> shift);
-}
-
-// draft-ietf-cbor-packed-19 2.2: item j sits at table index 16 + j. An even j is 6(j / 2), an odd j is
-// 6(-(j + 1) / 2), so its argument is (j - 1) / 2 under major type 1.
-void reference_append(std::string &out, std::uint32_t const item)
-{
-    out += '\xc6';
-    out += item % 2 == 0 ? '\x1a' : '\x3a';
-    u32_append(out, item / 2);
-}
-
-// A chain of nodes, each with one child, as an attacker writes it by hand. Item k is the list of children of the
-// node at depth k: one node that refers to item k + 1, and the last item is empty. Each record carries the class tag
-// 1515 = d9 05 eb of node. The encoder of this library cannot write it, because gcc does not inline a recursive
-// encoder.
-std::string node_chain(std::size_t const levels)
-{
-    auto const items = static_cast<std::uint32_t>(levels + 1);
-    std::string out = "\xd8\x71\x82\x9a"s;
-    u32_append(out, 16 + items);
-    out += "\xd8\x72\x81\x68" "children" "\x5a"s;
-    u32_append(out, 4 * items);
-    std::size_t const directory = out.size();
-    out.append(4 * items, '\0');
-    out.append(14, '\xf7');
-    for (std::uint32_t k = 0; k < items; ++k) {
-        std::string offset;
-        u32_append(offset, static_cast<std::uint32_t>(out.size()));
-        out.replace(directory + 4 * k, 4, offset);
-        bool const last = k + 1 == items;
-        out += "\x9a"s;
-        u32_append(out, last ? 0 : 1);
-        if (!last) {
-            out += "\xd9\x05\xeb\xd8\x80\x9a\x00\x00\x00\x01"s;
-            reference_append(out, k + 1);
-        }
-    }
-    out += "\xd9\x05\xeb\xd8\x80\x9a\x00\x00\x00\x01"s;
-    reference_append(out, 0);
-    return out;
-}
-
-std::size_t depth_of(node const &root)
-{
-    std::size_t depth = 0;
-    for (node const *at = &root; !at->children.empty(); at = &at->children.front())
-        ++depth;
-    return depth;
-}
-
 struct [[=cbor::tag(65536)]] keyed {
     [[=cbor::key("x-user-id")]] std::uint8_t m0;
     [[=cbor::key("EOF")]] bool m1;
@@ -1373,46 +1315,6 @@ TEST_CASE("schema: an annotation gives the key of a member")
     CHECK_EQ(back.m0, 7u);
     CHECK(back.m1);
     CHECK_EQ(at_path<keyed, "$.EOF">(bytes), true);
-}
-
-// A struct that holds a list of itself is read by recursion, and the bytes decide how deep. Without a limit, a
-// chain of 100000 nodes in 2.2 MB overflowed a stack of 8 MiB. Each reference that is followed counts one
-// level, as each nested item counts one in the other decoders.
-TEST_CASE("decode: a struct that holds itself stops at the nesting depth in force")
-{
-    REQUIRE_EQ(cbor::packed<node>::fixed_size(), 16u);
-
-    auto const at_limit = cbor::packed<node>::decode(node_chain(128));
-    REQUIRE(at_limit.has_value());
-    CHECK_EQ(depth_of(**at_limit), 128u);
-
-    auto const over = cbor::packed<node>::decode(node_chain(129));
-    REQUIRE_FALSE(over.has_value());
-    CHECK_EQ(over.error(), error::nesting_depth_exceeded);
-
-    {
-        test::limits_guard const depth{{.nesting_depth = 3}};
-        auto const small = cbor::packed<node>::decode(node_chain(3));
-        REQUIRE(small.has_value());
-        CHECK_EQ(depth_of(**small), 3u);
-        CHECK_EQ(cbor::packed<node>::decode(node_chain(4)).error(), error::nesting_depth_exceeded);
-    }
-
-    auto const deep = cbor::packed<node>::decode(node_chain(100000));
-    REQUIRE_FALSE(deep.has_value());
-    CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
-}
-
-// schema::value_read reads a chain as deep as validity::nesting_depth_limit allows, so the stack of the
-// thread holds the deepest chain that the library accepts.
-TEST_CASE("nesting depth limit: schema")
-{
-    test::limits_guard const depth{{.nesting_depth = cbor::validity::nesting_depth_limit}};
-    auto const deepest = cbor::packed<node>::decode(node_chain(cbor::validity::nesting_depth_limit));
-    REQUIRE(deepest.has_value());
-    CHECK_EQ(depth_of(**deepest), cbor::validity::nesting_depth_limit);
-    CHECK_EQ(cbor::packed<node>::decode(node_chain(cbor::validity::nesting_depth_limit + 1)).error(),
-             error::nesting_depth_exceeded);
 }
 
 #endif

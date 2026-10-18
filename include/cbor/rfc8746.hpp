@@ -29,6 +29,8 @@ class rfc8746
     friend class heads;
 
     friend class reflection;
+
+    friend struct lazy;
 };
 
 }

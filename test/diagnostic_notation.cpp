@@ -206,12 +206,10 @@ TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
     CHECK_EQ(cbor::diagnostic_notation("\x5f\x5f\xff\xff"sv).error(), error::syntax_error);
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01"sv).error(), error::too_little_data);
     CHECK_EQ(cbor::diagnostic_notation("\x00\x00"sv).error(), error::syntax_error);
-    {
-        test::limits_guard const depth{{.nesting_depth = 4}};
-        CHECK_EQ(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).error(), error::nesting_depth_exceeded);
-    }
-    test::limits_guard const depth{{.nesting_depth = 5}};
-    CHECK(cbor::diagnostic_notation("\x81\x81\x81\x81\x81\x00"sv).has_value());
+    constexpr std::size_t depth = cbor::limits::nesting_depth;
+    CHECK(cbor::diagnostic_notation(test::repeat("\x81"sv, depth) + '\x00').has_value());
+    CHECK_EQ(cbor::diagnostic_notation(test::repeat("\x81"sv, depth + 1) + '\x00').error(),
+             error::nesting_depth_exceeded);
 }
 
 // RFC 8949 Section 3.2.3: an indefinite-length string is a sequence of chunks that ends with the break 0xff. 5f and

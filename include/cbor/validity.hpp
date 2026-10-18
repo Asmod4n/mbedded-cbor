@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -50,10 +49,6 @@
 #define CBOR_CONTAINER_ELEMENTS_DEFAULT SIZE_MAX
 #endif
 
-#ifndef CBOR_INPUT_BYTES_DEFAULT
-#define CBOR_INPUT_BYTES_DEFAULT SIZE_MAX
-#endif
-
 namespace cbor
 {
 
@@ -66,12 +61,10 @@ class owning;
 template <bool>
 struct tree_decoder;
 
-
-struct limit_values {
-    std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
-    std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
-    std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
-    std::size_t input_bytes = CBOR_INPUT_BYTES_DEFAULT;
+struct limits {
+    static constexpr std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
+    static constexpr std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
+    static constexpr std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
 };
 
 class validity
@@ -92,8 +85,6 @@ public:
     static constexpr offset npos{std::numeric_limits<std::size_t>::max()};
 
     static constexpr std::size_t nesting_depth_limit = 512;
-
-    static constexpr std::size_t nesting_depth_default = CBOR_NESTING_DEPTH_DEFAULT;
 
     static constexpr std::size_t size_limit = std::numeric_limits<std::size_t>::max();
 
@@ -116,41 +107,22 @@ public:
     }
 
     template <bool Checked>
-    struct limit_checks {
-        std::size_t string_length;
-        std::size_t container_elements;
-        std::size_t input_bytes;
-        std::size_t argument_max = std::min(string_length, container_elements);
-    };
-
-    template <bool Checked>
-        requires(!Checked)
-    struct limit_checks<Checked> {
-    };
-
-    template <class F>
-    static decltype(auto) limits_apply(limit_values const &v, F &&f);
-
-    template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_input_bytes(std::size_t const size, limit_checks<Checked> const checks)
+    check_argument(major_type const major, std::uint64_t const argument)
     {
-        if constexpr (Checked)
-            return check_limit(size, checks.input_bytes, error::input_bytes_exceeded);
-        return {};
-    }
-
-    template <bool Checked>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_argument(major_type const major, std::uint64_t const argument, limit_checks<Checked> const checks)
-    {
-        if constexpr (Checked) {
-            if (argument <= checks.argument_max) [[likely]]
+        if constexpr (Checked &&
+                      (limits::string_length != size_limit || limits::container_elements != size_limit)) {
+            if (argument <= std::min(limits::string_length, limits::container_elements)) [[likely]]
                 return {};
-            if (major == major_type::byte_string || major == major_type::text_string)
-                return check_limit(argument, checks.string_length, error::string_length_exceeded);
-            if (major == major_type::array || major == major_type::map)
-                return check_limit(argument, checks.container_elements, error::container_elements_exceeded);
+            if constexpr (limits::string_length != size_limit) {
+                if (major == major_type::byte_string || major == major_type::text_string)
+                    return check_limit(argument, limits::string_length, error::string_length_exceeded);
+            }
+            if constexpr (limits::container_elements != size_limit) {
+                if (major == major_type::array || major == major_type::map)
+                    return check_limit(argument, limits::container_elements,
+                                       error::container_elements_exceeded);
+            }
         }
         return {};
     }
@@ -280,10 +252,10 @@ public:
         return {};
     }
 
-    template <class First, class Second, bool Checked>
+    template <bool Checked, class First, class Second>
     static std::expected<bool, error> keys_equivalent(First &first, offset first_at, Second &second,
                                                       offset second_at, std::size_t depth,
-                                                      std::size_t depth_max, limit_checks<Checked> checks);
+                                                      std::size_t depth_max);
 
     static constexpr error writer_error(std::errc const e) noexcept
     {
@@ -543,96 +515,14 @@ public:
 #endif
 };
 
-template <std::size_t Bound, error Exceeded>
-class limit
-{
-    std::atomic<std::size_t> value;
-
-public:
-    constexpr explicit limit(std::size_t const initial) noexcept
-        : value(initial)
-    {
-    }
-
-    limit(limit const &) = delete;
-
-    limit &operator=(limit const &) = delete;
-
-    limit &operator=(std::size_t const v)
-    {
-        if (!validity::check_limit(v, Bound, Exceeded)) [[unlikely]]
-            validity::throw_logic_error("cbor::limits: the value is above the bound of the limit");
-        value.store(v, std::memory_order_relaxed);
-        return *this;
-    }
-
-    operator std::size_t() const noexcept
-    {
-        return value.load(std::memory_order_relaxed);
-    }
-};
-
-class resource_limits
-{
-public:
-    limit<validity::nesting_depth_limit, error::nesting_depth_exceeded> nesting_depth;
-    limit<validity::size_limit, error::string_length_exceeded> string_length;
-    limit<validity::size_limit, error::container_elements_exceeded> container_elements;
-    limit<validity::size_limit, error::input_bytes_exceeded> input_bytes;
-
-    constexpr explicit resource_limits() noexcept
-        : resource_limits(limit_values{})
-    {
-    }
-
-    constexpr explicit resource_limits(limit_values const &v) noexcept
-        : nesting_depth(v.nesting_depth), string_length(v.string_length),
-          container_elements(v.container_elements), input_bytes(v.input_bytes)
-    {
-    }
-
-    resource_limits(resource_limits const &) = delete;
-
-    resource_limits &operator=(resource_limits const &) = delete;
-
-    limit_values load() const noexcept
-    {
-        return {nesting_depth, string_length, container_elements, input_bytes};
-    }
-
-    resource_limits &operator=(limit_values const &v)
-    {
-        nesting_depth = v.nesting_depth;
-        string_length = v.string_length;
-        container_elements = v.container_elements;
-        input_bytes = v.input_bytes;
-        return *this;
-    }
-};
-
-static_assert(
-    validity::check_nesting_depth(limit_values{}.nesting_depth, validity::nesting_depth_limit).has_value(),
-    "CBOR_NESTING_DEPTH_DEFAULT is at most validity::nesting_depth_limit.");
-static_assert(validity::check_limit(limit_values{}.string_length, validity::size_limit, error::string_length_exceeded)
+static_assert(validity::check_nesting_depth(limits::nesting_depth, validity::nesting_depth_limit).has_value(),
+              "CBOR_NESTING_DEPTH_DEFAULT is at most validity::nesting_depth_limit.");
+static_assert(validity::check_limit(limits::string_length, validity::size_limit,
+                                    error::string_length_exceeded)
                   .has_value(),
               "CBOR_STRING_LENGTH_DEFAULT fits in std::size_t.");
-static_assert(validity::check_limit(limit_values{}.container_elements, validity::size_limit,
+static_assert(validity::check_limit(limits::container_elements, validity::size_limit,
                                     error::container_elements_exceeded)
                   .has_value(),
               "CBOR_CONTAINER_ELEMENTS_DEFAULT fits in std::size_t.");
-static_assert(validity::check_limit(limit_values{}.input_bytes, validity::size_limit, error::input_bytes_exceeded)
-                  .has_value(),
-              "CBOR_INPUT_BYTES_DEFAULT fits in std::size_t.");
-
-inline constinit resource_limits limits{};
-
-template <class F>
-CBOR_ALWAYS_INLINE inline decltype(auto) validity::limits_apply(limit_values const &v, F &&f)
-{
-    if (v.string_length == size_limit && v.container_elements == size_limit && v.input_bytes == size_limit)
-        return std::forward<F>(f)(v.nesting_depth, limit_checks<false>{});
-    return std::forward<F>(f)(v.nesting_depth,
-                              limit_checks<true>{v.string_length, v.container_elements, v.input_bytes});
-}
-
 }
