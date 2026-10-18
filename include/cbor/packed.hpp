@@ -81,7 +81,6 @@ template <class E>
 class typed_array_view;
 
 struct directory {
-    std::size_t at;
     std::size_t count;
     std::size_t items_at;
     std::size_t items_end;
@@ -1234,10 +1233,13 @@ class reflection
         }
     }
 
-    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, cbor::directory const dir, std::size_t const j)
+    template <class Root>
+    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, std::size_t const j)
     {
         return heads::unsigned_read<std::uint32_t>(
-            std::span<char const>(encoded).subspan(dir.at + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());
+            std::span<char const>(encoded)
+                .subspan(directory_at<Root>() + sizeof(std::uint32_t) * j)
+                .template first<sizeof(std::uint32_t)>());
     }
 
     template <class Root, major_type Major, class E = void>
@@ -1248,10 +1250,10 @@ class reflection
         auto const j = shared_index_read(field, dir.shared_start);
         if (!j) [[unlikely]]
             return std::unexpected(j.error());
-        return item_read<Major, E>(encoded, dir, *j, element);
+        return item_read<Root, Major, E>(encoded, dir, *j, element);
     }
 
-    template <major_type Major, class E = void>
+    template <class Root, major_type Major, class E = void>
     CBOR_ALWAYS_INLINE static std::expected<reference, error>
     item_read(std::string_view const encoded, cbor::directory const dir, std::uint64_t const j,
               std::size_t const element)
@@ -1260,8 +1262,8 @@ class reflection
         if (!i) [[unlikely]]
             return std::unexpected(error::unpopulated_table_index);
         std::size_t const n = static_cast<std::size_t>(std::to_underlying(*i));
-        std::size_t const item = directory_entry(encoded, dir, n + 1);
-        std::size_t const end = directory_entry(encoded, dir, n + 2);
+        std::size_t const item = directory_entry<Root>(encoded, n + 1);
+        std::size_t const end = directory_entry<Root>(encoded, n + 2);
         if (error const r =
                 validity::check_item_range(item, end, dir.items_at, dir.items_end).error_or(error{});
             r != error{}) [[unlikely]]
@@ -1314,14 +1316,23 @@ class reflection
         std::size_t const after = header + length;
         if (!validity::pending_items_fit(fillers, encoded.size() - after - fixed_size<T, T>())) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers), [](char const c) {
-                return c == heads::initial_byte(major_type::simple_float,
-                                                std::to_underlying(simple_value::undefined));
-            })) [[unlikely]]
+        static constexpr char undefined = static_cast<char>(
+            heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
+        constexpr std::size_t written = shared_first_of<T>() - keys_and_directory;
+        static constexpr auto written_fillers = [] {
+            std::array<char, written> a{};
+            a.fill(undefined);
+            return a;
+        }();
+        if (fillers == written) [[likely]] {
+            if (!std::ranges::equal(std::span(encoded).subspan(after).template first<written>(), written_fillers))
+                [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+        } else if (!std::ranges::all_of(std::span(encoded).subspan(after, fillers),
+                                        [](char const c) { return c == undefined; })) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        cbor::directory dir{header, count, after + fillers, 0, 0, shared_start};
-        dir.root = directory_entry(encoded, dir, 0);
-        dir.items_end = directory_entry(encoded, dir, count - 1);
+        cbor::directory dir{count, after + fillers, directory_entry<T>(encoded, count - 1),
+                            directory_entry<T>(encoded, 0), shared_start};
         if (error const r = validity::check_item_range(dir.items_at, dir.items_end, dir.items_at, dir.root)
                                 .error_or(error{});
             r != error{}) [[unlikely]]
@@ -1588,7 +1599,7 @@ class reflection
                 return std::unexpected(j.error());
             if (*j != index || !validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]
                 return std::unexpected(error::unpopulated_table_index);
-            if (directory_entry(encoded, dir, index + 1) != at) [[unlikely]]
+            if (directory_entry<Root>(encoded, index + 1) != at) [[unlikely]]
                 return std::unexpected(error::syntax_error);
             auto const r = item_reference_read<Major, E>(encoded, at, end, element);
             if (!r) [[unlikely]]

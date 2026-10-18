@@ -1782,6 +1782,15 @@ TEST_CASE("schema: the reader takes the start of the shared items from the messa
     CHECK_EQ((*decoded)->id, 5u);
     CHECK_EQ(at_path<login, "$.name">(fifteen), "ab"s);
     CHECK_EQ(at_path<login, "$.id">(fifteen), 5u);
+    std::size_t const first_filler = fifteen.find("\xf7"s);
+    REQUIRE_NE(first_filler, std::string::npos);
+    for (std::size_t at = first_filler; at < first_filler + 15; ++at) {
+        CAPTURE(at);
+        std::string defined = fifteen;
+        defined.at(at) = '\xf6';
+        CHECK_EQ(cbor::packed<login>::path(std::string(defined)).error(), error::incorrect_type);
+        CHECK_EQ(cbor::packed<login>::decode(std::string(defined)).error(), error::incorrect_type);
+    }
 
     std::string const filler_named = login_with_one_filler_more(false);
     CHECK_EQ(cbor::packed<login>::decode(std::string(filler_named)).error(), error::unpopulated_table_index);
