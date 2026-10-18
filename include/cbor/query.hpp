@@ -691,6 +691,9 @@ class jsonpath
                 h = *element;
                 break;
             }
+            if (heads::is_typed_array(h)) [[unlikely]]
+                if (auto const elements = typed_array_elements(h.argument); elements && !*elements) [[unlikely]]
+                    return std::unexpected(elements->error());
             if (h.major != major_type::map) [[unlikely]]
                 return std::unexpected(error::not_indexable);
             std::string_view const key =
