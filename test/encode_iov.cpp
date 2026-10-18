@@ -331,17 +331,6 @@ TEST_CASE("encode_iov: the encoder over views gives the bytes of encode")
     CHECK_EQ(joined(*p), encoded(long_text));
 }
 
-// An error of encode_iov of a tree must come back as the error value, and the writer must free what it holds.
-TEST_CASE("encode_iov: an error of the tree comes back as the error value")
-{
-    auto const tree = test::lazy_of_copy(std::string(100, '\x81') + '\x80')->clone();
-    REQUIRE(tree.has_value());
-    test::limits_guard const depth{{.nesting_depth = 16}};
-    auto const p = cbor::encode_iov(**tree);
-    REQUIRE_FALSE(p.has_value());
-    CHECK_EQ(p.error(), error::nesting_depth_exceeded);
-}
-
 // Without preferred serialization the encoder writes every float as a double, the width that needs no
 // test of the value. With it, the shortest width that keeps the value, as RFC 8949 4.2.2 prefers.
 TEST_CASE("encode: a float is a double unless preferred serialization is on")

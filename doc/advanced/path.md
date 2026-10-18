@@ -329,7 +329,7 @@ names `cbor::nodelist`. `compile<T>(path)` with such a path and a
 |---|---|---|
 | Grammar of RFC 9535 with EDN literals | at compile time | once, in `compile`: `invalid_path` |
 | Singular path for a result that is not `nodelist` | at compile time | once, in `compile`: `not_singular_query` |
-| Segments against the nesting depth | default depth at compile time; depth in force at each call | depth in force at each call |
+| Segments against the nesting depth | at compile time | once, in `compile`: `nesting_depth_exceeded` |
 | Type T of a typed read | at compile time | at compile time, the `T` of the query |
 | Everything about the data | at each call | at each call |
 
@@ -348,7 +348,7 @@ An apply of the query does not parse again.
 | `incorrect_type` | A typed read finds another kind of item than T takes. |
 | `number_out_of_range` | The integer does not fit T. |
 | `nesting_depth_exceeded` | Section 12. |
-| `string_length_exceeded`, `container_elements_exceeded`, `input_bytes_exceeded` | A limit is in force and the input goes past it (section 12). |
+| `string_length_exceeded`, `container_elements_exceeded` | A limit is set and the input goes past it (section 12). |
 | `too_little_data` | The bytes end before the target or before an item that the walk reads. |
 | `syntax_error`, `indefinite_length` | A head that the walk reads is not well-formed, or uses indefinite length. |
 | `inadmissible_type_for_tag_content` | A tag on the way has content that its definition does not allow, for example tag 24 over a number. |
@@ -385,14 +385,13 @@ decode check a whole item.
 ## 12. Limits
 
 [basics.md](basics.md) states `cbor::limits`, the defaults, the bounds and
-the macros. A path reads the limits once at each call.
+the macros. The limits are constants of the build.
 
 | Limit | What a path does |
 |---|---|
 | `nesting_depth` | See below. |
 | `string_length` | Every string that the walk reads is checked: a key it compares and the target. A string that it only skips does not count. |
 | `container_elements` | Every array and map that the walk reads is checked: the containers on the way and the target. A container that it only skips does not count. |
-| `input_bytes` | The typed forms over bytes, `lazy::copy` and `lazy::view` check the size of the bytes they get. A read from a lazy that exists does not check it again. |
 
 `nesting_depth_exceeded` comes when:
 
@@ -408,7 +407,7 @@ compile-time path has at most the default nesting depth of segments, or it
 does not compile.
 
 ```cpp
-cbor::limits = {.string_length = 2};
+// built with -DCBOR_STRING_LENGTH_DEFAULT=2
 // {"long": "xyz", "n": 1}
 cbor::at_path<"$.n", int>(bytes);                       // string_length_exceeded, the key "long" is read
 // {"a": "xyz", "n": 1}

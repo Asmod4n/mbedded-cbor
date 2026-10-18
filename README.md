@@ -96,18 +96,22 @@ it converts to `std::error_code`.
 
 ## 5. Set limits for input from the network
 
-```cpp
-cbor::limits = {.nesting_depth = 16, .string_length = 4096, .container_elements = 100};
+```sh
+g++ -DCBOR_NESTING_DEPTH_DEFAULT=16 -DCBOR_STRING_LENGTH_DEFAULT=4096 -DCBOR_CONTAINER_ELEMENTS_DEFAULT=100 ...
+```
 
+```cpp
 // bytes holds a CBOR array of 101 elements
 auto const n = cbor::lazy::copy(bytes).value().size();
 // n.error() == cbor::error::container_elements_exceeded
 ```
 
-The limits hold for every later call in every thread. A field that you
-leave out gets its default: nesting depth 128, no limit on string
-length, element count and input size. A count in the input reserves no
-memory.
+The limits are constants of the build. Every translation unit of one
+program uses the same values. A limit that you do not set gets its
+default: nesting depth 128, no limit on string length and element
+count. A check whose limit is not set is not in the program. You bound
+the size of the input before it reaches the library. A count in the
+input reserves no memory.
 
 ## 6. Read a stream of items
 

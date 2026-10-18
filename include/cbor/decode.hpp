@@ -154,7 +154,7 @@ template <bool Checked>
 std::expected<item *, error> tree_decoder<Checked>::bignum_decode(item &node, std::uint64_t const tag,
                                                                                std::size_t const depth)
 {
-    auto const next = heads::raw_head_read(d.encoded, validity::offset{}, d.checks);
+    auto const next = heads::raw_head_read<Checked>(d.encoded, validity::offset{});
     if (!next || next->major != major_type::byte_string ||
         !validity::check_definite_length(next->major, next->info).has_value())
         return nullptr;
@@ -262,10 +262,9 @@ std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const s
             return &node;
         }
         std::span<std::byte const> const encoded = bytes_item->via.bin;
-        tree_decoder inner{
-            decoded,
-            {std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size()), d.checks},
-            depth_max};
+        tree_decoder inner{decoded,
+                           {std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size())},
+                           depth_max};
         auto const data_item =
             inner.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 2);
         if (!data_item) [[unlikely]]
@@ -288,16 +287,13 @@ struct decoded_tree {
 
 template <bool Checked>
 std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const encoded,
-                                                         validity::limit_checks<Checked> const checks,
-                                                         std::size_t const depth_max)
+                                                        std::size_t const depth_max)
 {
-    if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
-        return std::unexpected(r.error());
     auto decoded = std::make_unique<zone>(
         validity::checked_mul(encoded.size(), sizeof(item) + 1)
             .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
             .value_or(validity::initial_size_limit));
-    tree_decoder<Checked> tree{*decoded, {encoded, checks}, depth_max};
+    tree_decoder<Checked> tree{*decoded, {encoded}, depth_max};
     auto const built = tree.item_decode(std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0);
     if (!built) [[unlikely]]
         return std::unexpected(built.error());
@@ -307,17 +303,12 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
 
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
-    return validity::limits_apply(
-        limits.load(),
-        [encoded]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
-            -> std::expected<owning<item>, error> {
-            auto const decoded = decode_tree(encoded, checks, depth_max);
-            if (!decoded) [[unlikely]]
-                return std::unexpected(decoded.error());
-            if (auto const one = validity::check_one_data_item(decoded->rest); !one) [[unlikely]]
-                return std::unexpected(one.error());
-            return decoded->tree;
-        });
+    auto const decoded = decode_tree<true>(encoded, limits::nesting_depth);
+    if (!decoded) [[unlikely]]
+        return std::unexpected(decoded.error());
+    if (auto const one = validity::check_one_data_item(decoded->rest); !one) [[unlikely]]
+        return std::unexpected(one.error());
+    return decoded->tree;
 }
 
 }

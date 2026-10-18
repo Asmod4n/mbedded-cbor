@@ -18,7 +18,7 @@ A row marked "not checked" was not compared with the code.
 | n_item, n_map, n_array | Bytes of one item, one map, one array. |
 | n_out | Bytes of the encoded output. |
 | i | Data items in the input. |
-| d | Nesting depth. The nesting depth in force bounds it: cbor::limits.nesting_depth, at most nesting_depth_limit. |
+| d | Nesting depth. The nesting depth of the build bounds it: cbor::limits::nesting_depth, at most nesting_depth_limit. |
 | s | Shared values (tag 28) in the input. |
 | m | Elements of an array. |
 | k | Entries of a map. |
@@ -182,7 +182,7 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy::type()` | O(1) | O(1) | |
 | `lazy::key_find<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
 | `lazy::key_find<Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to the end) | O(1) | No allocation. |
-| `lazy::find(string_view, limit_values)`, `find(int64_t, limit_values)` (private) | container_resolve + O(n_map) | O(1) | |
+| `lazy::find(string_view)`, `find(int64_t)` (private) | container_resolve + O(n_map) | O(1) | |
 | `lazy::value_of(expected<...>)` | O(1) | O(1) | |
 | `lazy::size()`, `empty()` | container_resolve | O(1) | The count of the head of an array or a map. |
 | `lazy::at(string_view)` :425 | as find | O(1) | |

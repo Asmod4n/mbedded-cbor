@@ -109,19 +109,15 @@ TEST_CASE("bignum tag 3: an empty magnitude is refused")
 }
 
 // Found by the fuzzer: the decoder counts the content of tag 2 or 3 one level deeper, as the content of every
-// tag. encode of a tree counts the same levels, so a tree that decode refuses at a depth is refused by encode at
-// that depth too.
-TEST_CASE("bignum: encode refuses a tagged bignum where decode would refuse it")
+// tag. encode of a tree counts the same levels, so the deepest tagged bignum that decode gives encodes, and
+// one level more is refused by decode.
+TEST_CASE("bignum: encode takes the deepest tagged bignum that decode gives")
 {
+    constexpr std::size_t depth = cbor::limits::nesting_depth;
     std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
-    std::string const deep = std::string(16, '\x81') + bignum;
-    std::string const shallow = std::string(15, '\x81') + bignum;
-    auto const tree = test::lazy_of_copy(deep)->clone();
-    REQUIRE(tree.has_value());
-    test::limits_guard const depth{{.nesting_depth = 16}};
+    std::string const deep = std::string(depth, '\x81') + bignum;
+    std::string const shallow = std::string(depth - 1, '\x81') + bignum;
     CHECK_EQ(test::lazy_of_copy(deep)->clone().error(), error::nesting_depth_exceeded);
-    std::string out;
-    CHECK_EQ(cbor::encode(**tree, out).error(), error::nesting_depth_exceeded);
     auto const ok = test::lazy_of_copy(shallow)->clone();
     REQUIRE(ok.has_value());
     std::string again;
@@ -259,8 +255,8 @@ TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
         CAPTURE(p.second);
         std::string_view const first = p.first;
         std::string_view const second = p.second;
-        auto const equal =
-            cbor::validity::keys_equivalent(first, cbor::validity::offset{}, second, cbor::validity::offset{}, 0, 16, cbor::validity::limit_checks<false>{});
+        auto const equal = cbor::validity::keys_equivalent<false>(first, cbor::validity::offset{}, second,
+                                                                  cbor::validity::offset{}, 0, 16);
         REQUIRE(equal.has_value());
         CHECK_EQ(*equal, p.equal);
     }

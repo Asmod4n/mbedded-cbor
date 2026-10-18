@@ -101,24 +101,24 @@ The library starts no thread and holds no lock.
 
 ## 4. Limits
 
-A limit stops input that is too large or too deep. `cbor::limits` is one
-object for the whole process and for every thread.
+A limit stops input that is too deep or that holds a string or a
+container that is too large. A limit is a constant of the build: a macro
+sets it, and `cbor::limits` gives its value.
 
-| Field | Counts | Default | Error |
-|---|---|---|---|
-| `nesting_depth` | the arrays, maps and tags around a value | 128, at most 512 | `nesting_depth_exceeded` |
-| `string_length` | the bytes of one text or byte string | no limit | `string_length_exceeded` |
-| `container_elements` | the elements of one array, or the pairs of one map | no limit | `container_elements_exceeded` |
-| `input_bytes` | the size of the input of one call | no limit | `input_bytes_exceeded` |
+| Macro | Constant | Counts | Default | Error |
+|---|---|---|---|---|
+| `CBOR_NESTING_DEPTH_DEFAULT` | `cbor::limits::nesting_depth` | the arrays, maps and tags around a value | 128, at most 512 | `nesting_depth_exceeded` |
+| `CBOR_STRING_LENGTH_DEFAULT` | `cbor::limits::string_length` | the bytes of one text or byte string | no limit | `string_length_exceeded` |
+| `CBOR_CONTAINER_ELEMENTS_DEFAULT` | `cbor::limits::container_elements` | the elements of one array, or the pairs of one map | no limit | `container_elements_exceeded` |
 
-```cpp
-cbor::limits.string_length = 1024;                     // one field
-cbor::limits = {.nesting_depth = 16, .input_bytes = 65536};
-// string_length and container_elements are now back at their defaults
+```sh
+g++ -DCBOR_NESTING_DEPTH_DEFAULT=16 -DCBOR_STRING_LENGTH_DEFAULT=1024 ...
 ```
 
-An assignment of `{...}` sets every field. A field that it does not name
-gets its default, not its old value.
+Every translation unit of one program uses the same values. A limit that
+the build does not set gets its default. A check whose limit is not set
+is not in the program. The library does not bound the size of the input:
+the program bounds it before it calls the library.
 
 The error comes at the read that meets the value. A count in the input
 reserves no memory: memory grows only with the values that a call reads.

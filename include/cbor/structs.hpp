@@ -1463,11 +1463,7 @@ private:
 #if defined(__cpp_exceptions)
         try {
 #endif
-            auto value = validity::limits_apply(
-                limits.load(),
-                [&]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks) {
-                    return read(encoded, depth_max, std::move(target), checks);
-                });
+            auto value = read<true>(encoded, limits::nesting_depth, std::move(target));
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
             return ref<T>(std::move(owner), std::move(*value));
@@ -1479,12 +1475,9 @@ private:
     }
 
     template <bool Checked>
-    static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max, T out,
-                                        validity::limit_checks<Checked> const checks)
+    static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max, T out)
     {
-        if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        value_sharing::sharing_decoder<Checked> d{{encoded, checks}, {}};
+        value_sharing::sharing_decoder<Checked> d{{encoded}, {}};
         if (auto const r = generic::generic_read(d, out, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (!d.encoded.empty()) [[unlikely]]

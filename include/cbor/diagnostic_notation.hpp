@@ -697,7 +697,7 @@ class extended_diagnostic_notation
                                                                             validity::offset const at, nesting const n)
     {
         std::size_t depth = n.depth;
-        auto h = heads::raw_head_read(encoded, at, validity::limit_checks<false>{});
+        auto h = heads::raw_head_read<false>(encoded, at);
         for (;;) {
             if (auto const r = validity::check_nesting_depth(depth, n.depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -707,7 +707,7 @@ class extended_diagnostic_notation
                 break;
             if (auto const r = head_append(out, major_type::tag, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            h = heads::raw_head_read(encoded, h->at, validity::limit_checks<false>{});
+            h = heads::raw_head_read<false>(encoded, h->at);
             ++depth;
         }
         bool const indefinite =
@@ -723,7 +723,7 @@ class extended_diagnostic_notation
         case major_type::text_string: {
             std::string content;
             if (!indefinite) {
-                heads::decoder<false> d{validity::subspan(encoded, next), validity::limit_checks<false>{}};
+                heads::decoder<false> d{validity::subspan(encoded, next)};
                 auto const s = d.byte_string_decode(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
@@ -731,7 +731,7 @@ class extended_diagnostic_notation
                 next = validity::next(next, s->size());
             } else {
                 while (!heads::break_at(encoded, next)) {
-                    auto const chunk = heads::raw_head_read(encoded, next, validity::limit_checks<false>{});
+                    auto const chunk = heads::raw_head_read<false>(encoded, next);
                     if (!chunk) [[unlikely]]
                         return std::unexpected(chunk.error());
                     if (error const c =
@@ -1105,22 +1105,15 @@ class extended_diagnostic_notation
 
 inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
 {
-    return validity::limits_apply(
-        limits.load(),
-        [encoded]<bool Checked>(std::size_t const depth_max, validity::limit_checks<Checked> const checks)
-            -> std::expected<std::string, error> {
-            if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            heads::decoder<Checked> d{encoded, checks};
-            std::string out;
-            if (auto const r =
-                    extended_diagnostic_notation::diagnostic_write(out, d, encoded, 0, depth_max);
-                !r) [[unlikely]]
-                return std::unexpected(r.error());
-            if (!d.encoded.empty()) [[unlikely]]
-                return std::unexpected(error::syntax_error);
-            return out;
-        });
+    heads::decoder<true> d{encoded};
+    std::string out;
+    if (auto const r =
+            extended_diagnostic_notation::diagnostic_write(out, d, encoded, 0, limits::nesting_depth);
+        !r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (!d.encoded.empty()) [[unlikely]]
+        return std::unexpected(error::syntax_error);
+    return out;
 }
 
 }

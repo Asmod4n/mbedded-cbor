@@ -40,20 +40,13 @@ TEST_CASE("doc internals: a lazy reads heads when a step needs them")
 // where the bytes end.
 TEST_CASE("doc internals: a skip keeps a count")
 {
-    std::string const deep = preferred(M("a"s, A(A(A(A(1)))), "b"s, 2));
-    test::limits_guard const g{{.nesting_depth = 2}};
+    value deeper = V(1);
+    for (std::size_t i = 0; i <= cbor::limits::nesting_depth; ++i)
+        deeper = A(deeper);
+    std::string const deep = preferred(M("a"s, deeper, "b"s, 2));
     CHECK_EQ(cbor::at_path<"$.b", int>(deep), 2);
     CHECK_EQ(cbor::item_size(deep), deep.size());
     CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\x82\x01"s).error(), error::too_little_data);
-}
-
-// The section "The limits are read once" states that a field is atomic, so a thread reads the assignment of another.
-TEST_CASE("doc internals: a limit is one atomic field")
-{
-    test::limits_guard const g{{.string_length = 2}};
-    std::size_t seen = 0;
-    std::jthread([&seen] { seen = cbor::limits.string_length; }).join();
-    CHECK_EQ(seen, 2u);
 }
 
 // The section "Tags 28 and 29" states that a lazy keeps no marks and reads a tag 29 as a tag over its index.

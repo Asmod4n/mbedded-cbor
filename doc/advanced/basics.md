@@ -40,8 +40,7 @@ the compiler cannot see a wrong use, the library throws
 `std::logic_error`:
 
 - an empty owner, or a null `std::shared_ptr<std::string const>`;
-- a `cbor::lazy{}` that holds no item;
-- a limit above its bound (section 4);
+- a `cbor::lazy{}` that holds no item.
 
 ## 3. Every error value
 
@@ -68,7 +67,7 @@ the compiler cannot see a wrong use, the library throws
 | `nodelist_too_long` | One step of a query selects more nodes than the item has bytes. |
 | `duplicate_key` | A deterministic check finds a key twice in one map. |
 | `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `packed` decode. |
-| `string_length_exceeded`, `container_elements_exceeded`, `input_bytes_exceeded` | A limit is in force and the input goes past it (section 4). |
+| `string_length_exceeded`, `container_elements_exceeded` | A limit is set and the input goes past it (section 4). |
 
 ```cpp
 // [1, 2] without its last byte
@@ -87,58 +86,42 @@ cbor::lazy::copy(bytes)->get<std::uint8_t>().error();    // number_out_of_range
 
 ## 4. Limits
 
-`cbor::limits` holds the limits that are in force. Each call reads it once
-at its start. An assignment changes the limits for every later call in
-every thread. A call that runs keeps the limits that it read.
+The limits are constants of the build. A macro sets each limit, and the
+library sets each macro that the build does not set. `cbor::limits` gives
+the values. No call reads a limit at run time, and a check whose limit is
+not set is not in the program.
 
-| Field | Default | Bound | Error |
-|---|---|---|---|
-| `nesting_depth` | 128 | 512 | `nesting_depth_exceeded` |
-| `string_length` | `SIZE_MAX` | `SIZE_MAX` | `string_length_exceeded` |
-| `container_elements` | `SIZE_MAX` | `SIZE_MAX` | `container_elements_exceeded` |
-| `input_bytes` | `SIZE_MAX` | `SIZE_MAX` | `input_bytes_exceeded` |
-
-A limit is checked by the step that reads the item. `lazy::copy` checks
-only `input_bytes`. So a string that is too long gives
-`string_length_exceeded` at `get`, not at `lazy::copy`.
-`input_bytes` is the size of the bytes that a call over bytes gets.
-
-A field reads as a `std::size_t`. An assignment to a field above its bound
-throws `std::logic_error` and does not change the field. An assignment of
-`cbor::limit_values` sets all four fields. A field that the designated
-initializers do not name gets its default, not its old value.
-
-```cpp
-std::size_t const depth = cbor::limits.nesting_depth;   // 128
-cbor::limits.string_length = 64;
-cbor::limits = {.string_length = 2, .container_elements = 8};  // nesting_depth is 128 again
-cbor::limits.nesting_depth = 513;                       // throws std::logic_error
-```
-
-Each default is a macro. A program defines the macro before it includes
-the library, or with `-D` on the command line:
-
-| Macro | Field |
-|---|---|
-| `CBOR_NESTING_DEPTH_DEFAULT` | `nesting_depth` |
-| `CBOR_STRING_LENGTH_DEFAULT` | `string_length` |
-| `CBOR_CONTAINER_ELEMENTS_DEFAULT` | `container_elements` |
-| `CBOR_INPUT_BYTES_DEFAULT` | `input_bytes` |
+| Macro | Constant | Default | Bound | Error |
+|---|---|---|---|---|
+| `CBOR_NESTING_DEPTH_DEFAULT` | `cbor::limits::nesting_depth` | 128 | 512 | `nesting_depth_exceeded` |
+| `CBOR_STRING_LENGTH_DEFAULT` | `cbor::limits::string_length` | `SIZE_MAX` | `SIZE_MAX` | `string_length_exceeded` |
+| `CBOR_CONTAINER_ELEMENTS_DEFAULT` | `cbor::limits::container_elements` | `SIZE_MAX` | `SIZE_MAX` | `container_elements_exceeded` |
 
 ```sh
-g++ -DCBOR_NESTING_DEPTH_DEFAULT=32 ...
+g++ -DCBOR_NESTING_DEPTH_DEFAULT=32 -DCBOR_STRING_LENGTH_DEFAULT=4096 ...
 ```
 
-A default above the bound does not compile. All translation units of one
+```cpp
+std::size_t const depth = cbor::limits::nesting_depth;   // 32
+```
+
+A value above the bound does not compile. All translation units of one
 program use the same values: a different value is a violation of the one
 definition rule.
+
+The library does not bound the size of the input. The program bounds it
+before it calls the library.
+
+A limit is checked by the step that reads the item. `lazy::copy` checks
+no limit. So a string that is too long gives `string_length_exceeded` at
+`get`, not at `lazy::copy`.
 
 The limits count what a call reads or decodes. An item that a path or a
 lazy only skips does not count. `item_size`, `decode` and
 `diagnostic_notation` read every item, so every item counts there.
 
 ```cpp
-cbor::limits = {.string_length = 2};
+// built with -DCBOR_STRING_LENGTH_DEFAULT=2
 // {"a": "xyz", "n": 1}
 cbor::lazy::copy(bytes)->at("n")->get<std::int64_t>();        // 1: "xyz" is only skipped
 cbor::lazy::copy(bytes)->at("a")->get<std::string_view>();    // string_length_exceeded
@@ -156,7 +139,7 @@ An item that a call only skips can be deeper than the limit, and so can
 the item of `item_size`: neither keeps a stack.
 
 ```cpp
-cbor::limits = {.nesting_depth = 2};
+// built with -DCBOR_NESTING_DEPTH_DEFAULT=2
 // [[1]]
 cbor::diagnostic_notation(bytes);   // "[[1]]"
 // [[[1]]]
@@ -204,8 +187,8 @@ The target of the encoder chooses the memory of the bytes
 
 ## 7. Threads
 
-The library starts no thread and holds no lock. The only global is
-`cbor::limits`, and each field is atomic.
+The library starts no thread and holds no lock. It has no global that
+changes: the limits are constants.
 
 A call over bytes, for example `at_path<Path, T>(encoded)` and
 `item_size`, has no shared state. Two lazy values from two calls of

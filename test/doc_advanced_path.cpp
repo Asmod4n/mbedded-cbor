@@ -259,33 +259,13 @@ TEST_CASE("doc advanced path: the errors")
     CHECK_THROWS_AS((void)test::at_path("$", cbor::lazy{}), std::logic_error);
 }
 
-// The section "Limits" shows each limit as a path meets it, and that an item the path only skips does not count.
+// The section "Limits" shows that the nesting depth bounds a descendant segment. The examples with a limit
+// set are in test/limits/, built with the flags that the examples name.
 TEST_CASE("doc advanced path: the limits")
 {
-    std::string const deep = preferred(A(A(A(1))));
-    {
-        test::limits_guard const g{{.nesting_depth = 2}};
-        CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(deep).error(), error::nesting_depth_exceeded);
-        CHECK_EQ(test::at_path("$", *test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
-    }
-    std::string const bytes = preferred(M("long"s, "xyz"s, "n"s, 1));
-    {
-        test::limits_guard const g{{.string_length = 2}};
-        CHECK_EQ(cbor::at_path<"$.n", int>(bytes).error(), error::string_length_exceeded);
-        std::string const skipped = preferred(M("a"s, "xyz"s, "n"s, 1));
-        CHECK_EQ(cbor::at_path<"$.n", int>(skipped), 1);
-        CHECK_EQ(cbor::at_path<"$.a", std::string_view>(std::string(skipped)).error(),
-                 error::string_length_exceeded);
-    }
-    {
-        test::limits_guard const g{{.container_elements = 1}};
-        CHECK_EQ(cbor::at_path<"$.n", int>(bytes).error(), error::container_elements_exceeded);
-    }
-    {
-        test::limits_guard const g{{.input_bytes = 4}};
-        CHECK_EQ(cbor::at_path<"$.n", int>(bytes).error(), error::input_bytes_exceeded);
-        CHECK_EQ(test::lazy_of_copy(bytes).error(), error::input_bytes_exceeded);
-    }
+    std::string const deep = test::repeat("\x81"sv, cbor::limits::nesting_depth + 1) + '\x01';
+    CHECK_EQ(test::query("$..[0]", *test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(test::at_path("$", *test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
 }
 
 // The section "Threads" shows that a lazy is read from another thread, and that a tag 29 is a plain tag there too.
@@ -420,35 +400,12 @@ TEST_CASE("doc advanced path: bytes after the target are not read")
     CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\x01"s).error(), error::too_little_data);
 }
 
-// The section "Limits" states the defaults, the nesting of a path itself, that input_bytes is not checked again on
-// a lazy that exists, and that cbor::limits is one object for every thread.
+// The section "Limits" states the defaults of a build that sets no limit.
 TEST_CASE("doc advanced path: limits in detail")
 {
-    CHECK((cbor::limit_values{}.string_length == SIZE_MAX));
-    CHECK((cbor::limit_values{}.container_elements == SIZE_MAX));
-    CHECK((cbor::limit_values{}.input_bytes == SIZE_MAX));
-    CHECK((cbor::limit_values{}.nesting_depth == CBOR_NESTING_DEPTH_DEFAULT));
-    auto const one = *test::lazy_of_copy(preferred(A(1)));
-    auto const big = *test::lazy_of_copy(preferred(M("pad"s, "0123456789"s, "a"s, A(1, 2))));
-    auto const a = *big.at("a");
-    {
-        test::limits_guard const g{{.nesting_depth = 2}};
-        CHECK_EQ(test::query("$[?@ == [[[1]]]]", one).error(), error::nesting_depth_exceeded);
-        CHECK_EQ(test::query("$[?@[?@[?@]]]", one).error(), error::nesting_depth_exceeded);
-        CHECK_EQ(test::query("$[?(((@)))]", one).error(), error::nesting_depth_exceeded);
-        CHECK_EQ(test::query("$[?length(value(value(@))) == 1]", one).error(), error::nesting_depth_exceeded);
-    }
-    {
-        test::limits_guard const g{{.input_bytes = 4}};
-        CHECK_EQ(a.at_path<"$[1]", int>(), 2);
-        CHECK(*test::query("$[*]", a) == A(1, 2));
-    }
-    {
-        test::limits_guard const g{{.string_length = 2}};
-        std::size_t seen = 0;
-        std::jthread([&seen] { seen = cbor::limits.string_length; }).join();
-        CHECK_EQ(seen, 2u);
-    }
+    CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
+    CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
+    CHECK_EQ(cbor::limits::nesting_depth, std::size_t{CBOR_NESTING_DEPTH_DEFAULT});
 }
 
 // The section "Path syntax" states that an index counts from 0, because a task that names "element 2" leaves the base

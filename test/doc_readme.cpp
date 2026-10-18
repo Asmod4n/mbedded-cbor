@@ -3,7 +3,6 @@
 #include <doctest/doctest.h>
 
 #include "reference.hpp"
-#include "limits_guard.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -65,19 +64,6 @@ TEST_CASE("doc readme: handle bad input")
     std::string const why = std::error_code(name.error()).message();
     CHECK_EQ(why, "too little data");
     CHECK_EQ(cbor::at_path<"$.user.id", std::int64_t>(cut), 42);
-}
-
-// Step 5 sets limits; an array of 101 elements is over a limit of 100.
-TEST_CASE("doc readme: set limits")
-{
-    test::limits_guard const guard{{.nesting_depth = 16, .string_length = 4096, .container_elements = 100}};
-
-    test::array a;
-    for (int i = 0; i < 101; ++i)
-        a.push_back(test::V(i));
-    std::string const bytes = test::preferred(test::value{std::move(a)});
-    auto const n = test::lazy_of_copy(bytes).value().size();
-    CHECK_EQ(n.error(), cbor::error::container_elements_exceeded);
 }
 
 // Step 6 reads a CBOR sequence item by item and prints each item in diagnostic notation.

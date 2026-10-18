@@ -52,8 +52,6 @@ TEST_CASE("doc advanced basics: a wrong use throws std::logic_error")
 {
     CHECK_THROWS_AS((void)cbor::lazy::view(std::shared_ptr<void const>{}, ""sv), std::logic_error);
     CHECK_THROWS_AS((void)cbor::lazy{}.at(0), std::logic_error);
-    CHECK_THROWS_AS(cbor::limits.nesting_depth = 513, std::logic_error);
-    CHECK_EQ(cbor::limits.nesting_depth, std::size_t{CBOR_NESTING_DEPTH_DEFAULT});
 }
 
 // The section "Every error value" gives one example for the errors that a lazy gives most often.
@@ -79,60 +77,16 @@ TEST_CASE("doc advanced basics: the errors of structs")
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01\xff"sv), "[_ 1]");
 }
 
-// The section "Limits" states how a field reads, how an assignment of limit_values sets every field, and that a
-// value above the bound throws and leaves the field as it was.
+// The section "Limits" states that each limit is a constant of the build, and the value of each in a build
+// that sets none. The examples with a limit set are in test/limits/, built with the flags that the examples
+// name.
 TEST_CASE("doc advanced basics: limits")
 {
-    test::limits_guard const g{{}};
-    std::size_t const depth = cbor::limits.nesting_depth;
+    std::size_t const depth = cbor::limits::nesting_depth;
+    CHECK_EQ(depth, std::size_t{CBOR_NESTING_DEPTH_DEFAULT});
     CHECK_EQ(depth, 128u);
-    cbor::limits.string_length = 64;
-    CHECK_EQ(cbor::limits.string_length, 64u);
-    cbor::limits.nesting_depth = 16;
-    cbor::limits = {.string_length = 2, .container_elements = 8};
-    CHECK_EQ(cbor::limits.nesting_depth, 128u);
-    CHECK_EQ(cbor::limits.string_length, 2u);
-    CHECK_EQ(cbor::limits.container_elements, 8u);
-    CHECK_EQ(cbor::limits.input_bytes, SIZE_MAX);
-    CHECK_THROWS_AS(cbor::limits.nesting_depth = 513, std::logic_error);
-    CHECK_EQ(cbor::limits.nesting_depth, 128u);
-    CHECK_EQ(test::lazy_of_copy("\x63xyz"s)->get<std::string_view>().error(), error::string_length_exceeded);
-    CHECK_EQ(test::lazy_of_copy("\x89\x01\x01\x01\x01\x01\x01\x01\x01\x01"s)->size().error(),
-             error::container_elements_exceeded);
-}
-
-// A user expected a string limit at lazy::copy. The section "Limits" states that the step that reads the string
-// checks it.
-TEST_CASE("doc advanced basics: a string limit is checked at get")
-{
-    test::limits_guard const g{{.string_length = 2}};
-    auto const l = test::lazy_of_copy(preferred(V("xyz"s)));
-    REQUIRE(l.has_value());
-    CHECK_EQ(l->get<std::string_view>().error(), error::string_length_exceeded);
-}
-
-// The section "Limits" states that the limits count what a call reads, and that a skip does not count.
-TEST_CASE("doc advanced basics: a skip does not count")
-{
-    test::limits_guard const g{{.string_length = 2}};
-    std::string const bytes = preferred(M("a"s, "xyz"s, "n"s, 1));
-    CHECK_EQ(test::lazy_of_copy(bytes)->at("n")->get<std::int64_t>(), 1);
-    CHECK_EQ(test::lazy_of_copy(bytes)->at("a")->get<std::string_view>().error(), error::string_length_exceeded);
-    CHECK_EQ(cbor::item_size(bytes).error(), error::string_length_exceeded);
-    CHECK_EQ(test::value_of(*test::lazy_of_copy(bytes)).error(), error::string_length_exceeded);
-}
-
-// The section "Nesting depth" states that the top-level item has the depth 0, and that item_size keeps no stack.
-TEST_CASE("doc advanced basics: nesting depth")
-{
-    std::string const two = preferred(A(A(1)));
-    std::string const three = preferred(A(A(A(1))));
-    test::limits_guard const g{{.nesting_depth = 2}};
-    CHECK_EQ(cbor::diagnostic_notation(two), "[[1]]");
-    CHECK_EQ(cbor::diagnostic_notation(three).error(), error::nesting_depth_exceeded);
-    CHECK_EQ(cbor::item_size(three), 4u);
-    CHECK(*test::value_of(*test::lazy_of_copy(two)) == A(A(1)));
-    CHECK_EQ(test::value_of(*test::lazy_of_copy(three)).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
+    CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
 }
 
 #ifdef __cpp_impl_reflection

@@ -56,9 +56,6 @@ TEST_CASE("doc basics: the errors that a program meets most often")
     CHECK_EQ(cbor::at_path<"$", int>("\xff"s).error(), error::syntax_error);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s).error(), error::indefinite_length);
     CHECK_EQ(test::at_path("$.a[", *test::lazy_of_copy(preferred(M("a"s, 1)))).error(), error::invalid_path);
-    std::string const three = preferred(A(1, 2, 3));
-    test::limits_guard const g{{.container_elements = 2}};
-    CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
 }
 
 // The section "Errors" says that a wrong use that the compiler cannot see throws std::logic_error.
@@ -132,46 +129,18 @@ TEST_CASE("doc basics: threads")
     CHECK_EQ(second_read, 42);
 }
 
-// The section "Limits" sets one field and then all four, and states that a field that the braces do not name gets
-// its default, because a user expects the old value there.
+// The section "Limits" states the default of each limit for a build that sets none.
 TEST_CASE("doc basics: limits")
 {
-    test::limits_guard const g{{}};
-    CHECK_EQ(cbor::limits.nesting_depth, 128u);
-    CHECK_EQ(cbor::limits.string_length, SIZE_MAX);
-    CHECK_EQ(cbor::limits.container_elements, SIZE_MAX);
-    CHECK_EQ(cbor::limits.input_bytes, SIZE_MAX);
-    CHECK_THROWS_AS(cbor::limits.nesting_depth = 513, std::logic_error);
-    cbor::limits.container_elements = 8;
-    cbor::limits.string_length = 1024;
-    cbor::limits = {.nesting_depth = 16, .input_bytes = 65536};
-    CHECK_EQ(cbor::limits.nesting_depth, 16u);
-    CHECK_EQ(cbor::limits.input_bytes, 65536u);
-    CHECK_EQ(cbor::limits.string_length, SIZE_MAX);
-    CHECK_EQ(cbor::limits.container_elements, SIZE_MAX);
+    CHECK_EQ(cbor::limits::nesting_depth, 128u);
+    CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
+    CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
 }
 
-// The table of the section "Limits" names the error of each field. The test exceeds each field once.
-TEST_CASE("doc basics: the error of each limit")
+// The table of the section "Limits" names the error of the nesting depth. The examples of the size limits are
+// in test/limits/sizes_2.cpp, which is built with them.
+TEST_CASE("doc basics: the error of the nesting depth")
 {
-    {
-        std::string const deep = preferred(A(A(A(1))));
-        test::limits_guard const g{{.nesting_depth = 2}};
-        CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(deep).error(), error::nesting_depth_exceeded);
-    }
-    {
-        std::string const text = preferred(V("xyz"s));
-        test::limits_guard const g{{.string_length = 2}};
-        CHECK_EQ(test::lazy_of_copy(text)->get<std::string_view>().error(), error::string_length_exceeded);
-    }
-    {
-        std::string const three = preferred(A(1, 2, 3));
-        test::limits_guard const g{{.container_elements = 2}};
-        CHECK_EQ(test::lazy_of_copy(three)->size().error(), error::container_elements_exceeded);
-    }
-    {
-        std::string const three = preferred(A(1, 2, 3));
-        test::limits_guard const g{{.input_bytes = 2}};
-        CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::input_bytes_exceeded);
-    }
+    std::string const deep = test::repeat("\x81"sv, cbor::limits::nesting_depth + 1) + '\x01';
+    CHECK_EQ(test::lazy_of_copy(deep)->clone().error(), error::nesting_depth_exceeded);
 }

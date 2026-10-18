@@ -153,8 +153,6 @@ not compile on a temporary view.
 
 `path` checks once:
 
-- the count of input bytes against the limit in force
-  ([basics.md](basics.md), section 4);
 - that the message is at least as long as the table and the root;
 - that the start of the table holds the keys of `T` and of each struct
   inside it, so a message of another layout gives `incorrect_type`;

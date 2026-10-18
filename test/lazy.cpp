@@ -976,8 +976,8 @@ TEST_CASE("validity: keys_equivalent follows RFC 8949 5.6.1")
         std::string_view const second = p.second;
         CAPTURE(p.first);
         CAPTURE(p.second);
-        auto const equal =
-            cbor::validity::keys_equivalent(first, cbor::validity::offset{}, second, cbor::validity::offset{}, 1, 16, cbor::validity::limit_checks<false>{});
+        auto const equal = cbor::validity::keys_equivalent<false>(first, cbor::validity::offset{}, second,
+                                                                  cbor::validity::offset{}, 1, 16);
         REQUIRE(equal.has_value());
         CHECK_EQ(*equal, p.equal);
     }
@@ -1217,16 +1217,6 @@ TEST_CASE("lazy size refuses a count that the bytes cannot hold")
     auto const pair = test::lazy_of_copy("\x82\x01\x02"s);
     REQUIRE(pair.has_value());
     CHECK_EQ(pair->size().value(), 2);
-}
-
-// cbor::limits = {} was ambiguous between the deleted copy assignment
-// and the assignment of limit_values. It now sets every limit to its
-// default.
-TEST_CASE("cbor::limits = {} sets the defaults")
-{
-    test::limits_guard const guard{{.nesting_depth = 4}};
-    cbor::limits = {};
-    CHECK_EQ(cbor::limits.load().nesting_depth, cbor::limit_values{}.nesting_depth);
 }
 
 // Found by fuzz-path on the input d0. RFC 8949 3.4: a tag is followed by its content, so d0 alone ends before
@@ -1712,18 +1702,16 @@ TEST_CASE("lazy: a moved-from query is a wrong use")
     CHECK_EQ(l.at_path(moved_nodes)->size(), 1u);
 }
 
-// The nesting depth limit can change between compile and an apply. Each apply checks the deepest
-// recursion of the parse against the limit in force, for the run time and for the literal form.
-TEST_CASE("lazy: an apply checks the depth of the query against the limit in force")
+// The parse of a query counts the recursion of its filters against the nesting depth of the build, so a query
+// with one filter in another as often as the depth allows does not compile, and one filter does.
+TEST_CASE("lazy: the compile of a query checks its depth against the nesting depth of the build")
 {
     std::string const doc = encoded(A(1));
     cbor::lazy const l = *test::lazy_of_copy(doc);
-    auto const e = *cbor::jsonpath::compile<cbor::nodelist>("$[?@[?@[?@.a]]]");
-    {
-        test::limits_guard const low{{.nesting_depth = 3}};
-        CHECK_EQ(l.at_path(e).error(), error::nesting_depth_exceeded);
-        CHECK_EQ((l.at_path<"$[?@[?@[?@.a]]]", cbor::nodelist>().error()), error::nesting_depth_exceeded);
-    }
+    constexpr std::size_t depth = cbor::limits::nesting_depth;
+    std::string const deep = "$" + test::repeat("[?@", depth) + ".a" + std::string(depth, ']');
+    CHECK_EQ(cbor::jsonpath::compile<cbor::nodelist>(deep).error(), error::nesting_depth_exceeded);
+    auto const e = *cbor::jsonpath::compile<cbor::nodelist>("$[?@.a]");
     CHECK(l.at_path(e)->empty());
 }
 

@@ -906,10 +906,9 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target)
 {
-    std::size_t const depth_max = limits.load().nesting_depth;
     decltype(auto) message = encoding::message_of(target, 0);
     encoding::encoder<std::remove_reference_t<decltype(message)>> out(message);
-    if (auto const r = encoding::item_encode(out, root, 0, depth_max); !r) [[unlikely]]
+    if (auto const r = encoding::item_encode(out, root, 0, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const r = out.flush(); !r) [[unlikely]]
         return std::unexpected(validity::writer_error(r.error()));
@@ -920,12 +919,10 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
 
 inline std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root)
 {
-    std::size_t const depth_max = limits.load().nesting_depth;
     iov_writer writer;
     encoding::encoder<iov_writer> out(writer);
-    if (auto const r = encoding::item_encode(out, root, 0, depth_max); !r) [[unlikely]]
+    if (auto const r = encoding::item_encode(out, root, 0, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     return out.release();
 }
-
 }
