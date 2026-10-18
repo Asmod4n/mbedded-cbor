@@ -330,50 +330,17 @@ inline value text_value(std::string_view const t)
     return {s};
 }
 
-// The value of a decoded item tree. A bignum of at most 8 bytes is an integer, as a dynamic language reads it. A
-// float is a double. Tags 28 and 29 are plain tags.
-inline value value_of(cbor::item const &it)
+inline value value_of(cbor::item const &it);
+
+template <cbor::type K>
+value tag_value(cbor::item const &it)
 {
-    switch (it.type) {
-    case cbor::type::text_string:
-        return text_value(it.text_string().value());
-    case cbor::type::byte_string:
-        return {bytes{std::string(reinterpret_cast<char const *>(it.byte_string().value().data()), it.byte_string().value().size())}};
-    case cbor::type::half_float:
-    case cbor::type::single_float:
-    case cbor::type::double_float:
-        return {it.floating_point().value()};
-    case cbor::type::false_value:
-    case cbor::type::true_value:
-    case cbor::type::null:
-    case cbor::type::undefined:
-    case cbor::type::simple_value:
-        return {simple{std::to_underlying(it.simple_value().value())}};
-    case cbor::type::unsigned_integer:
-        return {it.argument().value()};
-    case cbor::type::negative_integer:
-        return {negative{it.argument().value()}};
-    case cbor::type::array: {
-        array a;
-        a.reserve(it.array().value().size());
-        for (cbor::item const &child : it.array().value())
-            a.push_back(value_of(child));
-        return {std::move(a)};
-    }
-    case cbor::type::map: {
-        map m;
-        m.reserve(it.map().value().size() / 2);
-        for (std::size_t i = 0; i + 1 < it.map().value().size(); i += 2)
-            m.push_back(entry{value_of(it.map().value()[i]), value_of(it.map().value()[i + 1])});
-        return {std::move(m)};
-    }
-    default:
-        break;
-    }
-    std::uint64_t const number = it.tag_number().value();
-    cbor::item const &inner = *it.tag_content().value();
-    if ((number == 2 || number == 3) && inner.type == cbor::type::byte_string) {
-        std::string m(reinterpret_cast<char const *>(inner.byte_string().value().data()), inner.byte_string().value().size());
+    std::pair<std::uint64_t, cbor::item const *> const tag = it.get<K>().value();
+    std::uint64_t const number = tag.first;
+    cbor::item const *const content = tag.second;
+    auto const magnitude = content->get<cbor::type::byte_string>();
+    if ((number == 2 || number == 3) && magnitude) {
+        std::string m(reinterpret_cast<char const *>(magnitude->data()), magnitude->size());
         m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
         if (m.size() <= sizeof(std::uint64_t)) {
             std::uint64_t n = 0;
@@ -383,7 +350,66 @@ inline value value_of(cbor::item const &it)
         }
         return {bignum{number == 3, std::move(m)}};
     }
-    return {tagged{number, value_of(inner)}};
+    return {tagged{number, value_of(*content)}};
+}
+
+// The value of a decoded item tree. A bignum of at most 8 bytes is an integer, as a dynamic language reads it. A
+// float is a double. Tags 28 and 29 are plain tags.
+inline value value_of(cbor::item const &it)
+{
+    switch (it.type) {
+    case cbor::type::text_string:
+        return text_value(it.get<cbor::type::text_string>().value());
+    case cbor::type::byte_string: {
+        std::span<std::byte const> const b = it.get<cbor::type::byte_string>().value();
+        return {bytes{std::string(reinterpret_cast<char const *>(b.data()), b.size())}};
+    }
+    case cbor::type::half_float:
+        return {it.get<cbor::type::half_float>().value()};
+    case cbor::type::single_float:
+        return {it.get<cbor::type::single_float>().value()};
+    case cbor::type::double_float:
+        return {it.get<cbor::type::double_float>().value()};
+    case cbor::type::false_value:
+        return {simple{std::to_underlying(it.get<cbor::type::false_value>().value())}};
+    case cbor::type::true_value:
+        return {simple{std::to_underlying(it.get<cbor::type::true_value>().value())}};
+    case cbor::type::null:
+        return {simple{std::to_underlying(it.get<cbor::type::null>().value())}};
+    case cbor::type::undefined:
+        return {simple{std::to_underlying(it.get<cbor::type::undefined>().value())}};
+    case cbor::type::simple_value:
+        return {simple{std::to_underlying(it.get<cbor::type::simple_value>().value())}};
+    case cbor::type::unsigned_integer:
+        return {it.get<cbor::type::unsigned_integer>().value()};
+    case cbor::type::negative_integer:
+        return {negative{it.get<cbor::type::negative_integer>().value()}};
+    case cbor::type::array: {
+        std::span<cbor::item const> const children = it.get<cbor::type::array>().value();
+        array a;
+        a.reserve(children.size());
+        for (cbor::item const &child : children)
+            a.push_back(value_of(child));
+        return {std::move(a)};
+    }
+    case cbor::type::map: {
+        std::span<cbor::item const> const children = it.get<cbor::type::map>().value();
+        map m;
+        m.reserve(children.size() / 2);
+        for (std::size_t i = 0; i + 1 < children.size(); i += 2)
+            m.push_back(entry{value_of(children[i]), value_of(children[i + 1])});
+        return {std::move(m)};
+    }
+    case cbor::type::tag:
+        return tag_value<cbor::type::tag>(it);
+    case cbor::type::unsigned_bignum:
+        return tag_value<cbor::type::unsigned_bignum>(it);
+    case cbor::type::negative_bignum:
+        return tag_value<cbor::type::negative_bignum>(it);
+    case cbor::type::typed_array:
+        return tag_value<cbor::type::typed_array>(it);
+    }
+    std::unreachable();
 }
 
 inline std::expected<value, error> value_of(cbor::lazy const &l)
