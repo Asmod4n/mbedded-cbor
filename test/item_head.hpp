@@ -19,24 +19,31 @@ inline std::uint64_t argument_of(cbor::item const &node)
 {
     switch (node.type) {
     case cbor::type::byte_string:
-        return node.byte_string().value().size();
+        return node.get<cbor::type::byte_string>().value().size();
     case cbor::type::text_string:
-        return node.text_string().value().size();
+        return node.get<cbor::type::text_string>().value().size();
     case cbor::type::array:
-        return node.array().value().size();
+        return node.get<cbor::type::array>().value().size();
     case cbor::type::map:
-        return node.map().value().size() / 2;
+        return node.get<cbor::type::map>().value().size() / 2;
     case cbor::type::tag:
+        return node.get<cbor::type::tag>().value().first;
     case cbor::type::unsigned_bignum:
+        return node.get<cbor::type::unsigned_bignum>().value().first;
     case cbor::type::negative_bignum:
+        return node.get<cbor::type::negative_bignum>().value().first;
     case cbor::type::typed_array:
-        return node.tag_number().value();
+        return node.get<cbor::type::typed_array>().value().first;
     case cbor::type::false_value:
+        return std::to_underlying(node.get<cbor::type::false_value>().value());
     case cbor::type::true_value:
+        return std::to_underlying(node.get<cbor::type::true_value>().value());
     case cbor::type::null:
+        return std::to_underlying(node.get<cbor::type::null>().value());
     case cbor::type::undefined:
+        return std::to_underlying(node.get<cbor::type::undefined>().value());
     case cbor::type::simple_value:
-        return std::to_underlying(node.simple_value().value());
+        return std::to_underlying(node.get<cbor::type::simple_value>().value());
     case cbor::type::half_float:
     case cbor::type::single_float:
     case cbor::type::double_float: {
@@ -47,17 +54,22 @@ inline std::uint64_t argument_of(cbor::item const &node)
             bits = bits << 8 | static_cast<std::uint8_t>(c);
         return bits;
     }
-    default:
-        return node.argument().value();
+    case cbor::type::unsigned_integer:
+        return node.get<cbor::type::unsigned_integer>().value();
+    case cbor::type::negative_integer:
+        return node.get<cbor::type::negative_integer>().value();
     }
+    std::unreachable();
 }
 
 // The children of an array or a map as pointers, so that a test reads each child as it read it before.
 inline std::vector<cbor::item const *> children_of(cbor::item const &container)
 {
-    REQUIRE((container.type == cbor::type::array || container.type == cbor::type::map));
+    auto const array = container.get<cbor::type::array>();
+    auto const map = container.get<cbor::type::map>();
+    REQUIRE((array || map));
     std::vector<cbor::item const *> children;
-    for (cbor::item const &child : container.type == cbor::type::array ? container.array().value() : container.map().value())
+    for (cbor::item const &child : array ? *array : *map)
         children.push_back(&child);
     return children;
 }
@@ -94,15 +106,33 @@ inline cbor::major_type major_of(cbor::type const t)
 // is compared by its width and its bits, so a NaN keeps its payload; a bignum is compared by its magnitude
 // without leading zeros (RFC 8949 3.4.3). The tests compare encode(item) with its input by this, and not by the
 // bytes, because the encoder writes its own form.
+inline bool item_values_equal(cbor::item const &a, cbor::item const &b);
+
+template <cbor::type K>
+std::string_view bignum_digits(cbor::item const &n)
+{
+    std::span<std::byte const> const magnitude = n.get<K>().value().second->template get<cbor::type::byte_string>().value();
+    std::string_view const s(reinterpret_cast<char const *>(magnitude.data()), magnitude.size());
+    return s.substr(std::min(s.find_first_not_of('\0'), s.size()));
+}
+
+template <cbor::type K>
+bool tag_values_equal(cbor::item const &a, cbor::item const &b)
+{
+    std::pair<std::uint64_t, cbor::item const *> const x = a.get<K>().value();
+    std::pair<std::uint64_t, cbor::item const *> const y = b.get<K>().value();
+    return x.first == y.first && item_values_equal(*x.second, *y.second);
+}
+
 inline bool item_values_equal(cbor::item const &a, cbor::item const &b)
 {
     if (a.type != b.type)
         return false;
     switch (a.type) {
     case cbor::type::byte_string:
-        return std::ranges::equal(a.byte_string().value(), b.byte_string().value());
+        return std::ranges::equal(a.get<cbor::type::byte_string>().value(), b.get<cbor::type::byte_string>().value());
     case cbor::type::text_string:
-        return a.text_string().value() == b.text_string().value();
+        return a.get<cbor::type::text_string>().value() == b.get<cbor::type::text_string>().value();
     case cbor::type::array:
     case cbor::type::map: {
         auto const x = children_of(a);
@@ -110,17 +140,13 @@ inline bool item_values_equal(cbor::item const &a, cbor::item const &b)
         return std::ranges::equal(x, y, [](cbor::item const *l, cbor::item const *r) { return item_values_equal(*l, *r); });
     }
     case cbor::type::unsigned_bignum:
-    case cbor::type::negative_bignum: {
-        auto const digits = [](cbor::item const &n) {
-            std::string_view const s(reinterpret_cast<char const *>(n.tag_content().value()->byte_string().value().data()),
-                                     n.tag_content().value()->byte_string().value().size());
-            return s.substr(std::min(s.find_first_not_of('\0'), s.size()));
-        };
-        return digits(a) == digits(b);
-    }
+        return bignum_digits<cbor::type::unsigned_bignum>(a) == bignum_digits<cbor::type::unsigned_bignum>(b);
+    case cbor::type::negative_bignum:
+        return bignum_digits<cbor::type::negative_bignum>(a) == bignum_digits<cbor::type::negative_bignum>(b);
     case cbor::type::tag:
+        return tag_values_equal<cbor::type::tag>(a, b);
     case cbor::type::typed_array:
-        return a.tag_number().value() == b.tag_number().value() && item_values_equal((*a.tag_content().value()), (*b.tag_content().value()));
+        return tag_values_equal<cbor::type::typed_array>(a, b);
     default:
         return argument_of(a) == argument_of(b);
     }
