@@ -885,6 +885,11 @@ TEST_CASE("path: a typed read of each type")
     check_path<"$", cbor::typed_array>("\x43\x01\x02\x03"s, {}, std::unexpected(error::incorrect_type));
     check_path<"$", cbor::typed_array>("\xd8\x4c\x41\x01"s, {}, std::unexpected(error::incorrect_type));
     check_path<"$", cbor::typed_array>("\xd8\x41\x43\x01\x02\x03"s, {}, std::unexpected(error::inadmissible_type_for_tag_content));
+    // A key step on a typed array reads its content first, as lazy::at does, so a content of 3 bytes for 4-byte
+    // elements gives the same error on both paths, and a well-formed typed array gives not_indexable.
+    check_path<"$.a", std::int64_t>("\xd8\x51\x43\x00\x00\x00"s, {"a"sv}, std::unexpected(error::inadmissible_type_for_tag_content));
+    check_path<"$.a", std::int64_t>("\xd8\x51\x44\x00\x00\x80\x3f"s, {"a"sv}, std::unexpected(error::not_indexable));
+    check_path<"$.a", std::int64_t>("\xd8\x51\x51\x1c\xd8"s, {"a"sv}, std::unexpected(error::inadmissible_type_for_tag_content));
 }
 
 // RFC 8949 3.4.3: the content of a bignum is a byte string. A magnitude that fits 64 bits is the integer.
