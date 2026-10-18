@@ -22,7 +22,7 @@ trap 'rm -rf "$build"' EXIT
 flags="-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG"
 export GLIBC_TUNABLES=glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456
 
-docs="cwt senml floats ints strings records twitter"
+docs=${DOCS:-"cwt senml floats ints strings records twitter"}
 arms=${ARMS:-"S READ LC_PREALLOC LC_READ MP_REUSE MP_READ FB_REUSE FB_READ"}
 [ -n "${JSONCONS_INCLUDE:-}" ] && arms="$arms JC_CLEAR JC_READ"
 [ -n "${VG_INCLUDE:-}" ] && arms="$arms VG_RAW VG_READ"
