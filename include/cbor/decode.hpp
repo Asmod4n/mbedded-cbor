@@ -111,10 +111,13 @@ std::expected<void, error> tree_decoder<Checked>::scalar_decode(item &node, head
         auto const string = d.byte_string_decode(h.argument);
         if (!string) [[unlikely]]
             return std::unexpected(string.error());
+        std::span<char> const own(std::pmr::polymorphic_allocator<char>(&decoded.memory).allocate(string->size()),
+                                  string->size());
+        std::ranges::copy(*string, own.begin());
         if (h.major == major_type::text_string)
-            node.via.str = *string;
+            node.via.str = std::string_view(own.data(), own.size());
         else
-            node.via.bin = std::as_bytes(std::span(*string));
+            node.via.bin = std::as_bytes(own);
         return {};
     }
     case major_type::simple_float:
@@ -283,10 +286,7 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
         validity::checked_mul(encoded.size(), sizeof(item) + 1)
             .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
             .value_or(validity::initial_size_limit));
-    std::span<char> const owned(std::pmr::polymorphic_allocator<char>(&decoded->memory).allocate(encoded.size()),
-                                encoded.size());
-    std::ranges::copy(encoded, owned.begin());
-    tree_decoder<Checked> tree{*decoded, {std::string_view(owned.data(), owned.size()), checks}, depth_max};
+    tree_decoder<Checked> tree{*decoded, {encoded, checks}, depth_max};
     auto const built = tree.item_decode(std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0);
     if (!built) [[unlikely]]
         return std::unexpected(built.error());

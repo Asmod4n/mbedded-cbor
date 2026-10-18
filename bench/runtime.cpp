@@ -24,7 +24,7 @@
                                  [](char const c) { return std::uint64_t(std::uint8_t(c)); });
 }
 
-#if defined(ARM_READ) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
+#if defined(ARM_READ) || defined(ARM_MB_TREE) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
 // The sum of a decoded item tree: the argument of each head and the bytes of each string. A reference of tag 29
 // adds its index and is not followed.
 static std::uint64_t item_tree_sum(cbor::item const &it)
@@ -60,6 +60,88 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
         return std::to_underlying(it.simple_value().value());
     default:
         return it.argument().value();
+    }
+}
+#endif
+
+
+#if defined(ARM_LAZY_READ)
+// The fair arm: a walk over lazy views that reads every item and every string byte, copies nothing and builds no
+// tree; it sums as item_tree_sum does.
+static std::uint64_t lazy_tree_sum(cbor::lazy const &l)
+{
+    auto const t = l.type();
+    if (!t) [[unlikely]]
+        std::abort();
+    switch (*t) {
+    case cbor::type::text_string: {
+        auto const v = l.get<std::string_view>();
+        if (!v) [[unlikely]]
+            std::abort();
+        return (**v).size() + bytes_sum(**v);
+    }
+    case cbor::type::byte_string: {
+        auto const v = l.get<std::span<std::byte const>>();
+        if (!v) [[unlikely]]
+            std::abort();
+        return (**v).size() + bytes_sum(std::string_view(reinterpret_cast<char const *>((**v).data()), (**v).size()));
+    }
+    case cbor::type::array: {
+        auto const e = l.elements();
+        if (!e) [[unlikely]]
+            std::abort();
+        std::uint64_t s = e->size();
+        for (auto const &c : *e) {
+            if (!c) [[unlikely]]
+                std::abort();
+            s += lazy_tree_sum(*c);
+        }
+        return s;
+    }
+    case cbor::type::map: {
+        auto const e = l.entries();
+        if (!e) [[unlikely]]
+            std::abort();
+        std::uint64_t s = e->size();
+        for (auto const &kv : *e) {
+            if (!kv) [[unlikely]]
+                std::abort();
+            s += lazy_tree_sum(kv->first) + lazy_tree_sum(kv->second);
+        }
+        return s;
+    }
+    case cbor::type::half_float:
+    case cbor::type::single_float:
+    case cbor::type::double_float: {
+        auto const v = l.get<double>();
+        if (!v) [[unlikely]]
+            std::abort();
+        return std::bit_cast<std::uint64_t>(*v);
+    }
+    case cbor::type::false_value:
+    case cbor::type::true_value:
+    case cbor::type::null:
+    case cbor::type::undefined:
+    case cbor::type::simple_value: {
+        auto const v = l.get<cbor::simple_value>();
+        if (!v) [[unlikely]]
+            std::abort();
+        return std::to_underlying(*v);
+    }
+    case cbor::type::unsigned_integer: {
+        auto const v = l.get<std::uint64_t>();
+        if (!v) [[unlikely]]
+            std::abort();
+        return *v;
+    }
+    case cbor::type::negative_integer: {
+        auto const v = l.get<std::int64_t>();
+        if (!v) [[unlikely]]
+            std::abort();
+        return std::uint64_t(-1 - *v);
+    }
+    default:
+        std::abort();
     }
 }
 #endif
@@ -154,7 +236,27 @@ static void vg_encode(vg_out &o, bench::value const &x)
 #define ARM_MP_REUSE 1
 #define ARM_MP_NATIVE 1
 #endif
-#if defined(ARM_MP_REUSE) || defined(ARM_MP_FRESH) || defined(ARM_MP_READ)
+#if defined(ARM_MP_TREE)
+#include <msgpack.hpp>
+static std::uint64_t mp_tree_sum(msgpack::object const &o)
+{
+    switch (o.type) {
+    case msgpack::type::NIL: return 22;
+    case msgpack::type::BOOLEAN: return 20u + o.via.boolean;
+    case msgpack::type::POSITIVE_INTEGER: return o.via.u64;
+    case msgpack::type::NEGATIVE_INTEGER: return std::uint64_t(-1 - o.via.i64);
+    case msgpack::type::FLOAT32: return std::bit_cast<std::uint32_t>(float(o.via.f64));
+    case msgpack::type::FLOAT64: return std::bit_cast<std::uint64_t>(o.via.f64);
+    case msgpack::type::STR: return bytes_sum(std::string_view(o.via.str.ptr, o.via.str.size));
+    case msgpack::type::BIN: return bytes_sum(std::string_view(o.via.bin.ptr, o.via.bin.size));
+    case msgpack::type::ARRAY: { std::uint64_t s = o.via.array.size; for (std::uint32_t i = 0; i < o.via.array.size; ++i) s += mp_tree_sum(o.via.array.ptr[i]); return s; }
+    case msgpack::type::MAP: { std::uint64_t s = o.via.map.size; for (std::uint32_t i = 0; i < o.via.map.size; ++i) s += mp_tree_sum(o.via.map.ptr[i].key) + mp_tree_sum(o.via.map.ptr[i].val); return s; }
+    case msgpack::type::EXT: return std::uint8_t(o.via.ext.type());
+    default: std::abort();
+    }
+}
+#endif
+#if defined(ARM_MP_REUSE) || defined(ARM_MP_FRESH) || defined(ARM_MP_READ) || defined(ARM_MP_TREE)
 #define ARM_MP 1
 #include <msgpack.hpp>
 static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x)
@@ -911,11 +1013,26 @@ static std::uint64_t op()
         std::abort();
     benchmark::ClobberMemory();
     return buf.size();
+#elif defined(ARM_MB_TREE)
+    auto const r = cbor::decode(in);
+    if (!r)
+        std::abort();
+    return item_tree_sum(**r);
 #elif defined(ARM_READ)
     auto const r = cbor::lazy::view(*held)->clone();
     if (!r)
         std::abort();
     return item_tree_sum(**r);
+#elif defined(ARM_ITEM_SIZE)
+    auto const n = cbor::item_size(in);
+    if (!n) [[unlikely]]
+        std::abort();
+    return *n;
+#elif defined(ARM_LAZY_READ)
+    auto const l = cbor::lazy::view(*held);
+    if (!l) [[unlikely]]
+        std::abort();
+    return lazy_tree_sum(*l);
 #elif defined(ARM_MB_DECODE)
     auto r = bench::value_of(*cbor::lazy::view(*held));
     if (!r) [[unlikely]]
@@ -1094,6 +1211,9 @@ static std::uint64_t op()
     mp_pack(pk, tree);
     benchmark::ClobberMemory();
     return mpbuf.size();
+#elif defined(ARM_MP_TREE)
+    msgpack::object_handle const h = msgpack::unpack(alt.data(), alt.size());
+    return mp_tree_sum(h.get());
 #elif defined(ARM_MP_READ)
     struct reader : msgpack::null_visitor {
         std::uint64_t sum = 0;
