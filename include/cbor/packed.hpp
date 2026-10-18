@@ -95,6 +95,8 @@ class reflection
     static constexpr std::size_t item_head = heads::initial_byte_size + sizeof(std::uint32_t);
     static constexpr std::size_t dynamic_type_sizes = heads::initial_byte_size + item_head;
     static constexpr std::size_t shared_first = 16;
+    static constexpr std::size_t fillers_written = shared_first;
+    static constexpr std::size_t shared_start_written = fillers_written + 1;
     static constexpr std::size_t root_and_end_entries = 2;
 
     template <class T>
@@ -692,11 +694,6 @@ class reflection
         return std::define_static_array(types);
     }
 
-    template <class Root>
-    static consteval std::size_t shared_first_of()
-    {
-        return std::max(shared_first, packing_table_of<Root>().size() + 1);
-    }
 
     static constexpr std::uint64_t straight_argument_count =
         std::to_underlying(validity::tag_number::straight_argument_last) -
@@ -731,14 +728,21 @@ class reflection
         return encoded.size();
     }
 
-    template <class Root>
     static consteval std::span<char const> packing_prefix_of()
     {
         std::vector<char> encoded;
         heads::head_append(encoded, major_type::tag,
-                           std::to_underlying(validity::tag_number::basic_packed_cbor));
-        heads::head_append(encoded, major_type::array, 2);
+                           std::to_underlying(validity::tag_number::split_basic_packed_cbor));
+        heads::head_append(encoded, major_type::array, 3);
         fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
+        return std::define_static_array(encoded);
+    }
+
+    template <class Root>
+    static consteval std::span<char const> arguments_of()
+    {
+        std::vector<char> encoded;
+        heads::head_append(encoded, major_type::array, packing_table_of<Root>().size());
         template for (constexpr std::meta::info type : packing_table_of<Root>()) {
             constexpr auto keys = record_keys<typename[:type:]>();
             encoded.insert(encoded.end(), keys.begin(), keys.end());
@@ -865,7 +869,7 @@ class reflection
     template <class Root>
     static consteval std::size_t directory_at()
     {
-        return packing_prefix_of<Root>().size() + item_head;
+        return packing_prefix_of().size() + item_head;
     }
 
     template <class Root, class E, bool Exact, class R>
@@ -890,7 +894,7 @@ class reflection
         using U = std::remove_cv_t<V>;
         std::size_t const j = c.index++;
         std::size_t const item = c.position;
-        std::size_t const m = j + shared_first_of<Root>() - shared_first;
+        std::size_t const m = j + shared_start_written - shared_first;
         heads::u32_write(out, directory_at<Root>() + sizeof(std::uint32_t) * (j + 1), item);
         field[1] =
             heads::initial_byte(static_cast<major_type>(m & 1),
@@ -1274,9 +1278,9 @@ class reflection
     template <class T>
     static std::expected<cbor::directory, error> directory_read(std::string_view const encoded)
     {
-        static constexpr auto prefix = packing_prefix_of<T>();
-        constexpr std::size_t keys_and_directory = packing_table_of<T>().size() + 1;
-        static_assert(prefix.size() >= 8, "The packing prefix must hold the eight bytes that are compared and read.");
+        static constexpr auto prefix = packing_prefix_of();
+        constexpr std::size_t directory_items = 1;
+        constexpr std::size_t count_at = prefix.size() - sizeof(std::uint32_t);
         constexpr std::size_t header = directory_at<T>();
         constexpr auto least_size =
             validity::checked_add(header, sizeof(std::uint32_t) * root_and_end_entries)
@@ -1286,10 +1290,8 @@ class reflection
         constexpr std::size_t least = *least_size;
         if (!validity::pending_items_fit(least, encoded.size())) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (!std::ranges::equal(std::span(encoded).template first<4>(),
-                                std::span(prefix).template first<4>()) ||
-            !std::ranges::equal(std::span(encoded).template subspan<8, prefix.size() - 8>(),
-                                std::span(prefix).template subspan<8>()) ||
+        if (!std::ranges::equal(std::span(encoded).template first<count_at>(),
+                                std::span(prefix).template first<count_at>()) ||
             encoded[prefix.size()] !=
                 heads::initial_byte(major_type::byte_string,
                                     std::to_underlying(rfc8949::additional_information::four_byte_argument)))
@@ -1305,20 +1307,18 @@ class reflection
         if (!validity::pending_items_fit(length, encoded.size() - header - fixed_size<T, T>())) [[unlikely]]
             return std::unexpected(error::too_little_data);
         std::size_t const items = count - root_and_end_entries;
-        std::size_t const table =
-            heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded)
-                                                    .subspan(sizeof(std::uint32_t))
-                                                    .template first<sizeof(std::uint32_t)>());
-        if (table < keys_and_directory || table - keys_and_directory < items) [[unlikely]]
+        std::size_t const table = heads::unsigned_read<std::uint32_t>(
+            std::span<char const>(encoded).subspan(count_at).template first<sizeof(std::uint32_t)>());
+        if (table < directory_items || table - directory_items < items) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         std::size_t const shared_start = table - items;
-        std::size_t const fillers = shared_start - keys_and_directory;
+        std::size_t const fillers = shared_start - directory_items;
         std::size_t const after = header + length;
         if (!validity::pending_items_fit(fillers, encoded.size() - after - fixed_size<T, T>())) [[unlikely]]
             return std::unexpected(error::too_little_data);
         static constexpr char undefined = static_cast<char>(
             heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
-        constexpr std::size_t written = shared_first_of<T>() - keys_and_directory;
+        constexpr std::size_t written = fillers_written;
         static constexpr auto written_fillers = [] {
             std::array<char, written> a{};
             a.fill(undefined);
@@ -1339,7 +1339,74 @@ class reflection
             return std::unexpected(r);
         if (!validity::pending_items_fit(dir.root, encoded.size() - fixed_size<T, T>())) [[unlikely]]
             return std::unexpected(error::too_little_data);
+        static constexpr auto arguments = arguments_of<T>();
+        std::string_view const given{std::span(encoded).subspan(dir.items_end, dir.root - dir.items_end)};
+        if (!std::ranges::equal(given, arguments)) [[unlikely]]
+            if (error const r = arguments_check<T>(given).error_or(error{}); r != error{}) [[unlikely]]
+                return std::unexpected(r);
         return dir;
+    }
+
+    template <class T>
+    static std::expected<void, error> arguments_check(std::string_view const given)
+    {
+        static constexpr auto arguments = arguments_of<T>();
+        constexpr std::size_t types = packing_table_of<T>().size();
+        heads::decoder<false> message{given};
+        heads::decoder<false> own{std::string_view(arguments.data(), arguments.size())};
+        auto const entries = message.head_decode();
+        if (!entries) [[unlikely]]
+            return std::unexpected(entries.error());
+        if (entries->major != major_type::array || entries->argument < types) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        if (auto const r = own.head_decode(); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        for (std::uint64_t i = 0; i < entries->argument; ++i) {
+            auto const function = message.head_decode();
+            if (!function) [[unlikely]]
+                return std::unexpected(function.error());
+            if (function->major != major_type::tag ||
+                function->argument != std::to_underlying(validity::tag_number::record_function)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            auto const keys = message.head_decode();
+            if (!keys) [[unlikely]]
+                return std::unexpected(keys.error());
+            if (keys->major != major_type::array) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            bool const known = i < types;
+            if (known) {
+                if (auto const r = own.head_decode(); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                auto const own_keys = own.head_decode();
+                if (!own_keys) [[unlikely]]
+                    return std::unexpected(own_keys.error());
+                if (own_keys->argument != keys->argument) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+            }
+            for (std::uint64_t k = 0; k < keys->argument; ++k) {
+                auto const key = message.head_decode();
+                if (!key) [[unlikely]]
+                    return std::unexpected(key.error());
+                if (key->major != major_type::text_string) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                auto const text = message.byte_string_decode(key->argument);
+                if (!text) [[unlikely]]
+                    return std::unexpected(text.error());
+                if (!known)
+                    continue;
+                auto const own_key = own.head_decode();
+                if (!own_key) [[unlikely]]
+                    return std::unexpected(own_key.error());
+                auto const own_text = own.byte_string_decode(own_key->argument);
+                if (!own_text) [[unlikely]]
+                    return std::unexpected(own_text.error());
+                if (*text != *own_text) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+            }
+        }
+        if (!message.encoded.empty()) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return {};
     }
 
     template <fixed_string Path>
@@ -1773,8 +1840,7 @@ class reflection
         decode_cursor c{encoded, *dir, 0, dir->items_at, dir->items_end};
         if (auto const r = c.template value_read<T>(out, field, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
-        if (c.index != dir->count - root_and_end_entries || c.at != dir->items_end ||
-            dir->items_end != dir->root) [[unlikely]]
+        if (c.index != dir->count - root_and_end_entries || c.at != dir->items_end) [[unlikely]]
             return std::unexpected(error::syntax_error);
         return {};
     }
@@ -1785,9 +1851,13 @@ class reflection
     template <class T>
     static std::expected<std::size_t, std::errc> encoded_size(second_item<T> const &second)
     {
-        constexpr auto fixed_part =
-            validity::checked_add(directory_at<T>(), shared_first_of<T>() - 1 - packing_table_of<T>().size())
-                .and_then([](std::size_t const head) { return validity::checked_add(head, fixed_size<T, T>()); });
+        constexpr auto fixed_part = validity::checked_add(directory_at<T>(), fillers_written)
+                                        .and_then([](std::size_t const head) {
+                                            return validity::checked_add(head, arguments_of<T>().size());
+                                        })
+                                        .and_then([](std::size_t const head) {
+                                            return validity::checked_add(head, fixed_size<T, T>());
+                                        });
         static_assert(fixed_part.has_value(), "The fixed part of an encoded item must fit in std::size_t.");
         constexpr std::size_t fixed = *fixed_part;
         if (second.overflow) [[unlikely]]
@@ -1810,22 +1880,25 @@ class reflection
     template <bool Exact, class T>
     CBOR_ALWAYS_INLINE static std::size_t encoded_write(std::span<char> const encoded, T const &value, second_item<T> const &second)
     {
-        static constexpr auto prefix = packing_prefix_of<T>();
-        constexpr std::size_t fillers = shared_first_of<T>() - 1 - packing_table_of<T>().size();
+        static constexpr auto prefix = packing_prefix_of();
+        static constexpr auto arguments = arguments_of<T>();
         std::size_t const size = encoded.size() - (Exact ? 0 : heads::head_padding);
         std::ranges::copy(prefix, encoded.template first<prefix.size()>().begin());
-        heads::u32_write(encoded, 4, shared_first_of<T>() + second.items);
+        heads::u32_write(encoded, prefix.size() - sizeof(std::uint32_t), shared_start_written + second.items);
         std::size_t const entries = second.items + root_and_end_entries;
         heads::item_head_write(encoded, prefix.size(), major_type::byte_string,
                                sizeof(std::uint32_t) * entries);
         std::size_t const data = directory_at<T>() + sizeof(std::uint32_t) * entries;
-        std::ranges::fill(encoded.subspan(data, fillers),
-                          heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
+        std::ranges::fill(
+            encoded.subspan(data, fillers_written),
+            heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
         std::size_t const at = size - fixed_size<T, T>();
         auto const root = encoded.subspan(at).template first<fixed_size<T, T>()>();
         zero_initialized_copy<T, T>(root);
         encode_cursor const end =
-            value_encode<T, T, Exact>(encoded, root, value, encode_cursor{data + fillers, 0});
+            value_encode<T, T, Exact>(encoded, root, value, encode_cursor{data + fillers_written, 0});
+        std::ranges::copy(arguments,
+                          encoded.subspan(end.position).template first<arguments.size()>().begin());
         heads::u32_write(encoded, directory_at<T>(), at);
         heads::u32_write(encoded, directory_at<T>() + sizeof(std::uint32_t) * (entries - 1), end.position);
         return size;

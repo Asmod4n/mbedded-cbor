@@ -63,13 +63,13 @@ concept schema_path_compiles = requires(std::string_view const s, Index const...
     cbor::packed<T>::template at_path<Path>(s, i...);
 };
 
-// The section "The message" states that a message is one tag 113 of Packed CBOR, and that item_size of a message is
-// its size.
+// The section "The message" states that a message is one tag 1113 of Packed CBOR, d9 04 59 (RFC 8949 3.4),
+// and that item_size of a message is its size.
 TEST_CASE("doc advanced schema: the message")
 {
     auto const bytes = cbor::packed<car>::encode(sample);
     REQUIRE(bytes.has_value());
-    CHECK_EQ(bytes->substr(0, 2), "\xd8\x71"s);
+    CHECK_EQ(bytes->substr(0, 3), "\xd9\x04\x59"s);
     CHECK_EQ(cbor::item_size(*bytes), bytes->size());
 }
 

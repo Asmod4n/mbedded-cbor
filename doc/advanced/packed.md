@@ -23,13 +23,15 @@ auto const bytes = *cbor::packed<car>::encode(sample);   // a std::string
 
 ## 1. The message
 
-A message is one tag 113 (Basic-Packed-CBOR, draft-ietf-cbor-packed-19)
-on an array of a table and a rump.
+A message is one tag 1113 (Split-Basic-Packed-CBOR,
+draft-ietf-cbor-packed-19) on an array of the shared items, the arguments
+and a rump.
 
-- The table holds the keys of each struct as a tag 114 (the record
-  function), a directory, and the parts of variable size: texts, byte
-  strings and lists. The directory holds the offset of the root, the
+- The shared items are a directory and the parts of variable size: texts,
+  byte strings and lists. The directory holds the offset of the root, the
   offset of each part, and the offset where the parts end.
+- The arguments hold the keys of each struct as a tag 114 (the record
+  function).
 - The rump is the root struct. It starts with the tag of its struct. Each
   field has a head of fixed width, so a number takes the same count of
   bytes for every value.
@@ -155,8 +157,8 @@ not compile on a temporary view.
 `path` checks once:
 
 - that the message is at least as long as the table and the root;
-- that the start of the table holds the keys of `T` and of each struct
-  inside it, so a message of another layout gives `incorrect_type`;
+- that the arguments hold the keys of `T` and of each struct inside it,
+  so a message of another layout gives `incorrect_type`;
 - that the directory lies inside the message;
 - that the root lies behind the parts and inside the message;
 - the tag of the struct of the root.

@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <format>
 #include <functional>
 #include <iterator>
 #include <limits>
@@ -107,8 +108,8 @@ TEST_CASE("fixed_size: a struct is a record of its values under the tag of its c
     CHECK_EQ(cbor::packed<wheel>::fixed_size<std::array<wheel, 4>>(), 1u + 4u * 19u);
 }
 
-// A part of variable size is a shared item in the table of tag 113. The record holds the reference c6 1a <N> or
-// c6 3a <N>: tag 6 with an argument of fixed width (draft-ietf-cbor-packed-19 2.2), so 6 bytes.
+// A part of variable size is a shared item in the shared table of tag 1113. The record holds the reference c6
+// 1a <N> or c6 3a <N>: tag 6 with an argument of fixed width (draft-ietf-cbor-packed-19 2.2), so 6 bytes.
 TEST_CASE("fixed_size: a part of variable size takes 6 bytes")
 {
     CHECK_EQ(cbor::packed<wheel>::fixed_size<std::string>(), 6u);
@@ -284,8 +285,8 @@ auto at_path(std::shared_ptr<std::string const> const &owner, Index const... ind
     return root->template at_path<Path>(indexes...);
 }
 
-// The schema encoding is one CBOR item, tag 113 over the table and the two parts. Every byte is well-formed, so
-// the generic decoder finds its end at the end of the message.
+// The schema encoding is one CBOR item, tag 1113 over the shared table, the argument table and the rump.
+// Every byte is well-formed, so the generic decoder finds its end at the end of the message.
 void check_one_item(std::string const &bytes)
 {
     auto const end = cbor::item_size(bytes);
@@ -295,63 +296,66 @@ void check_one_item(std::string const &bytes)
 
 } // namespace
 
-// draft-ietf-cbor-packed-19 3.1 and 4.2: tag 113 holds an array of the table and the rump. The table holds
-// the record function 114 over the keys at index 0, the directory at index 1, f7 up to index 15, and the
-// shared items from index 16 on, each with a head of fixed width. The directory is a byte string of u32
-// offsets: the start of the root first, then the start of each shared item, then the end of the shared items.
-// The rump is the class tag 1507 = d9 05 e3 (RFC 8949 3.4), then the record d8 80 with the count 9a 00 00 00
-// 03, every number in the width of its type, and the string as 6(0) = c6 1a 00 00 00 00, which 2.2 resolves
-// to index 16. The table head counts 17 entries. The string starts at byte 53 (35) and ends where the root
-// starts, at 60 (3c). The bytes are written from the draft and RFC 8949 3 by hand.
+// draft-ietf-cbor-packed-19 3.1 and 4.2: tag 1113 = d9 04 59 holds an array of three: the shared items, the
+// arguments and the rump. The shared items are the directory at index 0, f7 at the indexes 1 to 16, and the
+// items from index 17 on, each with a head of fixed width; the head 9a counts 18. The directory is a byte
+// string of u32 offsets: the start of the root first, then the start of each item, then the end of the items.
+// The arguments are one record function 114 over the keys per type, in table order: 81 d8 72 83 62 "id" 62
+// "ok" 64 "name". The rump is the class tag 1507 = d9 05 e3 (RFC 8949 3.4), the record d8 80 with the count
+// 9a 00 00 00 03, every number in the width of its type, and the string as 6(-1) = c6 3a 00 00 00 00,
+// which 2.2 resolves to index 17. The string starts at byte 42 (2a), the arguments at 49 (31), the root at 64
+// (40). The bytes are written from the draft and RFC 8949 3 by hand.
 TEST_CASE("encode: a struct with a number, a bool and a string")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x11\xd8\x72\x83\x62id\x62ok\x64name"
-                    "\x5a\x00\x00\x00\x0c\x00\x00\x00\x3c\x00\x00\x00\x35\x00\x00\x00\x3c"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+    CHECK_EQ(bytes, "\xd9\x04\x59\x83\x9a\x00\x00\x00\x12"
+                    "\x5a\x00\x00\x00\x0c\x00\x00\x00\x40\x00\x00\x00\x2a\x00\x00\x00\x31"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
                     "\x7a\x00\x00\x00\x02"
                     "ab"
-                    "\xd9\x05\xe3\xd8\x80\x9a\x00\x00\x00\x03\x19\x00\x05\xf5\xc6\x1a\x00\x00\x00\x00"s);
+                    "\x81\xd8\x72\x83\x62id\x62ok\x64name"
+                    "\xd9\x05\xe3\xd8\x80\x9a\x00\x00\x00\x03\x19\x00\x05\xf5\xc6\x3a\x00\x00\x00\x00"s);
     check_one_item(bytes);
 }
 
 // A negative int16 is major type 1 with -1 - n in two bytes (RFC 8949 3.1). A float stays binary32 (fa). The
-// list of uint16 is shared item 16, a typed array of RFC 8746: tag 69 (uint16, little endian) = d8 45 over a
-// byte string of four bytes. The empty optional is shared item 17, an empty array. Item 17 is 6(-1) = c6 3a
-// 00 00 00 00, because 2.2 maps a negative N to index 16 - 2N - 1. The directory holds the root start 70
-// (46), the item starts 54 (36) and 65 (41), and the end of the items 70 (46). The rump starts with the class
-// tag 1508 = d9 05 e4.
+// list of uint16 is item 17, a typed array of RFC 8746: tag 69 (uint16, little endian) = d8 45 over a byte
+// string of four bytes, named by 6(-1) = c6 3a 00 00 00 00. The empty optional is item 18, an empty array,
+// named by 6(1) = c6 1a 00 00 00 01 (2.2 maps N to 16 + 2N and a negative N to 16 - 2N - 1). The directory
+// holds the root start 74 (4a), the item starts 46 (2e) and 57 (39), and the end of the items 62 (3e). The
+// rump starts with the class tag 1508 = d9 05 e4.
 TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
 {
     std::string const bytes = schema_bytes(measures{-5, 1.5f, {7, 8}, std::nullopt});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x84\x61t\x61\x66\x61v\x61o"
-                    "\x5a\x00\x00\x00\x10\x00\x00\x00\x46\x00\x00\x00\x36\x00\x00\x00\x41\x00\x00\x00\x46"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+    CHECK_EQ(bytes, "\xd9\x04\x59\x83\x9a\x00\x00\x00\x13"
+                    "\x5a\x00\x00\x00\x10\x00\x00\x00\x4a\x00\x00\x00\x2e\x00\x00\x00\x39\x00\x00\x00\x3e"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
                     "\xd8\x45\x5a\x00\x00\x00\x04\x07\x00\x08\x00"
                     "\x9a\x00\x00\x00\x00"
+                    "\x81\xd8\x72\x84\x61t\x61\x66\x61v\x61o"
                     "\xd9\x05\xe4\xd8\x80\x9a\x00\x00\x00\x04\x39\x00\x04\xfa\x3f\xc0\x00\x00"
-                    "\xc6\x1a\x00\x00\x00\x00\xc6\x3a\x00\x00\x00\x00"s);
+                    "\xc6\x3a\x00\x00\x00\x00\xc6\x1a\x00\x00\x00\x01"s);
     check_one_item(bytes);
 }
 
-// Two record functions take index 0 and 1, the directory index 2. The list is item 16; its elements are
-// records of fixed size, each the class tag 1509 = d9 05 e5 over d8 81 for the second type. The strings of
-// the elements follow the list as items 17 and 18, in the order the encoder meets them: 6(-1) and 6(1). The
-// directory holds the root start 111 (6f), the item starts 61 (3d), 98 (62) and 104 (68), and the end of the
-// items 111 (6f). The root is the class tag 1510 = d9 05 e6 over d8 80.
+// Two record functions stand in the arguments, people at 0 and named at 1. The list is item 17; its elements
+// are records of fixed size, each the class tag 1509 = d9 05 e5 over d8 81 for the second type. The strings
+// of the elements follow the list as items 18 and 19, in the order the encoder meets them: 6(1) and 6(-2).
+// The directory holds the root start 116 (74), the item starts 50 (32), 87 (57) and 93 (5d), and the end of
+// the items 100 (64). The root is the class tag 1510 = d9 05 e6 over d8 80.
 TEST_CASE("encode: a list of structs that hold strings")
 {
     std::string const bytes = schema_bytes(people{{{"x"}, {"yz"}}});
-    CHECK_EQ(
-        bytes,
-        "\xd8\x71\x82\x9a\x00\x00\x00\x13\xd8\x72\x81\x66people\xd8\x72\x81\x61n"
-        "\x5a\x00\x00\x00\x14\x00\x00\x00\x6f\x00\x00\x00\x3d\x00\x00\x00\x62\x00\x00\x00\x68\x00\x00\x00\x6f"
-        "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-        "\x9a\x00\x00\x00\x02"
-        "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x00"
-        "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x01"
-        "\x7a\x00\x00\x00\x01x\x7a\x00\x00\x00\x02yz"
-        "\xd9\x05\xe6\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
+    CHECK_EQ(bytes, "\xd9\x04\x59\x83\x9a\x00\x00\x00\x14"
+                    "\x5a\x00\x00\x00\x14\x00\x00\x00\x74\x00\x00\x00\x32\x00\x00\x00\x57\x00\x00\x00\x5d"
+                    "\x00\x00\x00\x64"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\x9a\x00\x00\x00\x02"
+                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x01"
+                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"
+                    "\x7a\x00\x00\x00\x01x\x7a\x00\x00\x00\x02yz"
+                    "\x82\xd8\x72\x81\x66people\xd8\x72\x81\x61n"
+                    "\xd9\x05\xe6\xd8\x80\x9a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x00"s);
     check_one_item(bytes);
 }
 
@@ -366,8 +370,10 @@ TEST_CASE("path: a message shorter than the least size is too_little_data, a for
     std::string const bytes = schema_bytes(login{5, true, "ab"});
     CHECK_EQ(at_path<login, "$.id">(bytes), 5u);
     CHECK_EQ(at_path<login, "$.id">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
+    std::size_t const key = bytes.find("\x62id"s);
+    REQUIRE_NE(key, std::string::npos);
     std::string other = bytes;
-    other.replace(8, 2, "ID");
+    other.replace(key + 1, 2, "ID");
     CHECK_EQ(cbor::packed<login>::decode(std::string(other)).error(), error::incorrect_type);
     CHECK_EQ(at_path<login, "$.id">(other).error(), error::incorrect_type);
 }
@@ -1287,17 +1293,18 @@ struct [[=cbor::tag(1518)]] guarded {
 
 } // namespace
 
-// cbor::skip holds in the schema form too: the member has no key in the table and takes no place in the
-// record. The directory holds the root start 41 (29) twice: as the start of the root and as the end of the
-// items, because there are no items. The record is the class tag 1518 = d9 05 ee, 7 bytes of record head and
-// the integer.
+// cbor::skip holds in the schema form too: the member has no key in the arguments and takes no place in the
+// record. There are no items, so the end of the items is the end of the fillers, 38 (26); the arguments
+// 81 d8 72 81 62 "id" follow, and the root starts at 45 (2d). The record is the class tag 1518 = d9 05 ee, 7
+// bytes of record head and the integer.
 TEST_CASE("schema: cbor::skip leaves a public member out")
 {
     CHECK_EQ(cbor::packed<guarded>::fixed_size(), 12u);
     std::string const bytes = *cbor::packed<guarded>::encode(guarded{7, 42});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x10\xd8\x72\x81\x62id\x5a\x00\x00\x00\x08\x00\x00\x00\x29"
-                    "\x00\x00\x00\x29"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+    CHECK_EQ(bytes, "\xd9\x04\x59\x83\x9a\x00\x00\x00\x11"
+                    "\x5a\x00\x00\x00\x08\x00\x00\x00\x2d\x00\x00\x00\x26"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\x81\xd8\x72\x81\x62id"
                     "\xd9\x05\xee\xd8\x80\x9a\x00\x00\x00\x01\x18\x07"s);
     auto const decoded_back = *cbor::packed<guarded>::decode(std::string(bytes));
     guarded const &back = *decoded_back;
@@ -1305,21 +1312,23 @@ TEST_CASE("schema: cbor::skip leaves a public member out")
     CHECK_EQ(back.secret, 0u);
 }
 
-// The key of an annotation takes the place of the member name in the table. The expectation is counted from
-// the draft and RFC 8949 3 by hand: the keys with the text heads 69 and 63, a directory with the root start
-// 52 (34) as its first and last entry, f7 up to index 15, then the class tag 65536, which needs the 4-byte
-// argument da 00 01 00 00 (RFC 8949 3 and 4.1), the record head of 7 bytes, the integer with its fixed width
-// of 18 and 1 byte, and the simple value. The test exists because a tag number above 65535 makes the head of
-// the class tag 5 bytes long, and every offset behind it moves by that.
+// The key of an annotation takes the place of the member name in the arguments. The expectation is counted
+// from the draft and RFC 8949 3 by hand: a directory with the root start 56 (38) and the end of the items 38
+// (26), f7 at the indexes 1 to 16, the keys with the text heads 69 and 63, then the class tag 65536, which
+// needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and 4.1), the record head of 7 bytes, the integer with
+// its fixed width of 18 and 1 byte, and the simple value. The test exists because a tag number above 65535
+// makes the head of the class tag 5 bytes long, and every offset behind it moves by that.
 TEST_CASE("schema: an annotation gives the key of a member")
 {
     CHECK_EQ(cbor::packed<keyed>::fixed_size(), 15u);
     CHECK_EQ(cbor::packed<keyed>::member_offset<^^keyed::m0>(), 12u);
     CHECK_EQ(cbor::packed<keyed>::member_offset<^^keyed::m1>(), 14u);
     std::string const bytes = *cbor::packed<keyed>::encode(keyed{7, true});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x10\xd8\x72\x82\x69x-user-id\x63"
-                    "EOF\x5a\x00\x00\x00\x08\x00\x00\x00\x34\x00\x00\x00\x34"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+    CHECK_EQ(bytes, "\xd9\x04\x59\x83\x9a\x00\x00\x00\x11"
+                    "\x5a\x00\x00\x00\x08\x00\x00\x00\x38\x00\x00\x00\x26"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\x81\xd8\x72\x82\x69x-user-id\x63"
+                    "EOF"
                     "\xda\x00\x01\x00\x00\xd8\x80\x9a\x00\x00\x00\x02\x18\x07\xf5"s);
     auto const decoded_back = *cbor::packed<keyed>::decode(std::string(bytes));
     keyed const &back = *decoded_back;
@@ -1603,13 +1612,14 @@ C chain_of(std::uint8_t const v)
 
 } // namespace
 
-// draft-ietf-cbor-packed-19 2.3 Table 2 gives tags 128..135 to the first 8 table indexes only. The test exists
-// because a root with 20 struct types needs record functions at indexes 8 to 19, which a record reaches with the
-// straight reference 6([N, rump]) at index 8 + N. chain19 is index 19, so N = 11 (0b): c6 82 0b, then the rump
-// 9a 00 00 00 03. The directory takes index 20, so the shared items start at 21 and no f7 is left. Table 1 maps
-// index 21 to 6(-3) = c6 3a 00 00 00 02 and index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4
-// entries. A record of index 8 or more is one byte longer, so its size depends on the root. The class tag of chainK
-// is 1600 + K, 3 bytes in front of each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
+// draft-ietf-cbor-packed-19 2.3 Table 2 gives tags 128..135 to the first 8 table indexes only. The test
+// exists because a root with 20 struct types needs record functions at indexes 8 to 19, which a record
+// reaches with the straight reference 6([N, rump]) at index 8 + N. chain19 is index 19, so N = 11 (0b): c6 82
+// 0b, then the rump 9a 00 00 00 03. The record functions stand in the arguments of tag 1113, so the shared
+// items start at 17 for any count of types. Table 1 maps index 17 to 6(-1) = c6 3a 00 00 00 00 and index 18
+// to 6(1) = c6 1a 00 00 00 01. The shared table head counts 17 + 4 entries. A record of index 8 or more is
+// one byte longer, so its size depends on the root. The class tag of chainK is 1600 + K, 3 bytes in front of
+// each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
 TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
 {
     CHECK_EQ(cbor::packed<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
@@ -1621,9 +1631,10 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
     chain0 const value = chain_of<chain0>(0);
     std::string const bytes = *cbor::packed<chain0>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
-    CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x19"s);
-    CHECK_EQ(bytes.substr(bytes.size() - 25),
-             "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x03"s);
+    CHECK_EQ(bytes.substr(0, 9), "\xd9\x04\x59\x83\x9a\x00\x00\x00\x15"s);
+    CHECK_EQ(
+        bytes.substr(bytes.size() - 25),
+        "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x00\xc6\x1a\x00\x00\x00\x01"s);
     CHECK_EQ(bytes.substr(bytes.size() - cbor::packed<chain0>::fixed_size() + 8u * 12u, 6), "\xd9\x06\x48\xc6\x82\x00"s);
 
     auto const decoded_back = *cbor::packed<chain0>::decode(std::string(bytes));
@@ -1642,17 +1653,19 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
              "yz"s);
 }
 
-// draft-ietf-cbor-packed-19 2.2 Table 1: with 17 struct types the directory is index 17 and the first shared item
-// is index 18, which is 6(1) = c6 1a 00 00 00 01. The test exists because a reference below index 18 then names
-// no shared item: 6(0) is index 16, a record function, and the reader refuses it.
-TEST_CASE("schema: a root with 17 struct types starts its shared items at index 18")
+// draft-ietf-cbor-packed-19 3.1: tag 1113 keeps the record functions in the arguments, so with 17 struct
+// types the first shared item is still index 17, which 2.2 Table 1 names 6(-1) = c6 3a 00 00 00 00. The test
+// exists because a reference below index 17 names no item: 6(0) = c6 1a 00 00 00 00 is index 16, an f7, and
+// the reader refuses it.
+TEST_CASE("schema: a root with 17 struct types starts its shared items at index 17")
 {
     chain3 const value = chain_of<chain3>(3);
     std::string const bytes = *cbor::packed<chain3>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
-    CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x16"s);
-    CHECK_EQ(bytes.substr(bytes.size() - 25),
-             "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x1a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"s);
+    CHECK_EQ(bytes.substr(0, 9), "\xd9\x04\x59\x83\x9a\x00\x00\x00\x15"s);
+    CHECK_EQ(
+        bytes.substr(bytes.size() - 25),
+        "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x00\xc6\x1a\x00\x00\x00\x01"s);
 
     auto const decoded_back = *cbor::packed<chain3>::decode(std::string(bytes));
     chain3 const &back = *decoded_back;
@@ -1660,7 +1673,7 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
     CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(bytes), "ab"s);
 
     std::string broken = bytes;
-    broken.at(broken.size() - 7) = '\x00';
+    broken.at(broken.size() - 11) = '\x1a';
     CHECK_EQ(cbor::packed<chain3>::decode(std::string(broken)).error(), error::unpopulated_table_index);
     CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(broken).error(),
              error::unpopulated_table_index);
@@ -1709,114 +1722,99 @@ std::size_t fillers_of(std::string_view const bytes)
     return fillers_behind(bytes, head);
 }
 
-// login with one f7 more behind the directory: the table count and every directory entry grow by one. With
-// the reference moved, the name field names index 17, 6(-1) = c6 3a 00 00 00 00 (draft 2.2 Table 1).
-std::string login_with_one_filler_more(bool const reference_moved)
+// login with n f7 behind the directory instead of the 16 of the writer: the table count and every directory
+// entry move by n - 16. With the reference moved, the name field names the first item, index n + 1, which
+// draft 2.2 Table 1 gives as 6(N) with 16 + 2N or 16 - 2N - 1 = n + 1; that needs n + 1 >= 16. Without it the
+// field keeps 6(-1), index 17.
+std::string login_with_fillers(std::size_t const n, bool const reference_moved)
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
     std::size_t const root = bytes.size() - cbor::packed<login>::fixed_size();
     std::size_t const head = directory_head(bytes, root);
-    REQUIRE_NE(head, std::string_view::npos);
+    REQUIRE_EQ(head, 9u);
+    REQUIRE_EQ(fillers_behind(bytes, head), 16u);
     std::uint32_t const length = u32_read(bytes, head + 1);
+    auto const moved = [n](std::uint32_t const x) { return static_cast<std::uint32_t>(x + n - 16); };
     std::string f = bytes;
-    f.replace(4, 4, u32_bytes(u32_read(bytes, 4) + 1));
+    f.replace(5, 4, u32_bytes(moved(u32_read(bytes, 5))));
     for (std::size_t at = head + 5; at < head + 5 + length; at += 4)
-        f.replace(at, 4, u32_bytes(u32_read(bytes, at) + 1));
-    f.insert(head + 5 + length, 1, '\xf7');
-    if (reference_moved)
-        f.at(root + 1 + cbor::packed<login>::member_offset<^^login::name>() + 1) = '\x3a';
+        f.replace(at, 4, u32_bytes(moved(u32_read(bytes, at))));
+    std::size_t const fillers = head + 5 + length;
+    f.replace(fillers, 16, std::string(n, '\xf7'));
+    if (reference_moved) {
+        REQUIRE_GE(n + 1, 16u);
+        std::size_t const m = n + 1 - 16;
+        std::size_t const field = f.size() - cbor::packed<login>::fixed_size() +
+                                  cbor::packed<login>::member_offset<^^login::name>();
+        f.replace(field + 1, 5,
+                  (m % 2 == 0 ? "\x1a"s : "\x3a"s) + u32_bytes(static_cast<std::uint32_t>(m / 2)));
+    }
     return f;
 }
 
 } // namespace
 
-// draft-ietf-cbor-packed-19 2.2 Table 1: 6(0) names index 16, so the writer puts the first shared item at
-// index 16 when the record functions and the directory fit below it, and f7 fills the indexes between: 16 -
-// (types + 1) fillers for up to 15 types, none for 15 types and more. With 16 types the directory is index
-// 16, and the first item is index 17. The reader takes the start of the shared items from the message, as the
-// table count minus the items of the directory, and checks that every index between the directory and that
-// start is f7. The test exists because a reader that assumed 16 would read the wrong item where the table
-// holds 16 types or more, and one that assumed the count of its own writer would refuse a message that
-// another writer filled with more f7.
+// draft-ietf-cbor-packed-19 3.1: tag 1113 keeps the record functions in the arguments, so the shared items
+// are the directory at index 0, f7 at the indexes 1 to 16 and the items from 17 on, for any count of types.
+// The reader takes the start of the items from the message, as the shared table count minus the items of the
+// directory, and checks that every index between the directory and that start is f7. With 15 f7 the first
+// item is index 16 = 6(0); with 17 it is index 18 = 6(1) (2.2 Table 1). With 0 or 1 f7 the first item is
+// index 1 or 2, which a reference of fixed width cannot name, so 6(-1) names no item. The test exists because
+// a reader that assumed the start of its own writer would read the wrong item, or refuse a message that
+// another writer filled otherwise.
 TEST_CASE("schema: the reader takes the start of the shared items from the message")
 {
-    std::string const fourteen = schema_bytes(login{5, true, "ab"});
-    CHECK_EQ(fillers_of<login>(fourteen), 14u);
+    CHECK_EQ(fillers_of<login>(schema_bytes(login{5, true, "ab"})), 16u);
+    CHECK_EQ(fillers_of<chain4>(*cbor::packed<chain4>::encode(chain_of<chain4>(4))), 16u);
+    CHECK_EQ(fillers_of<chain0>(*cbor::packed<chain0>::encode(chain_of<chain0>(0))), 16u);
 
-    std::string const one = *cbor::packed<chain6>::encode(chain_of<chain6>(6));
-    CHECK_EQ(fillers_of<chain6>(one), 1u);
-    auto const one_back = *cbor::packed<chain6>::decode(std::string(one));
-    chain6 const &one_value = *one_back;
-    CHECK_EQ(*cbor::packed<chain6>::encode(one_value), one);
-    CHECK_EQ(at_path<chain6, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(one),
-             "ab"s);
-
-    std::string const none = *cbor::packed<chain5>::encode(chain_of<chain5>(5));
-    CHECK_EQ(fillers_of<chain5>(none), 0u);
-    auto const none_back = *cbor::packed<chain5>::decode(std::string(none));
-    chain5 const &none_value = *none_back;
-    CHECK_EQ(*cbor::packed<chain5>::encode(none_value), none);
-    CHECK_EQ(
-        at_path<chain5, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(none),
-        "ab"s);
-
-    std::string const sixteen = *cbor::packed<chain4>::encode(chain_of<chain4>(4));
-    CHECK_EQ(fillers_of<chain4>(sixteen), 0u);
-    CHECK_EQ(u32_read(sixteen, 4), 17u + 4u);
-    auto const sixteen_back = *cbor::packed<chain4>::decode(std::string(sixteen));
-    chain4 const &sixteen_value = *sixteen_back;
-    CHECK_EQ(*cbor::packed<chain4>::encode(sixteen_value), sixteen);
-    CHECK_EQ(
-        at_path<chain4, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(
-            sixteen),
-        "ab"s);
-
-    std::string const fifteen = login_with_one_filler_more(true);
-    check_one_item(fifteen);
-    CHECK_EQ(
-        fillers_behind(fifteen, directory_head(fifteen, fifteen.size() - cbor::packed<login>::fixed_size())),
-        15u);
-    auto const decoded = cbor::packed<login>::decode(std::string(fifteen));
-    REQUIRE(decoded.has_value());
-    CHECK_EQ((*decoded)->name, "ab"s);
-    CHECK_EQ((*decoded)->id, 5u);
-    CHECK_EQ(at_path<login, "$.name">(fifteen), "ab"s);
-    CHECK_EQ(at_path<login, "$.id">(fifteen), 5u);
-    std::size_t const first_filler = fifteen.find("\xf7"s);
-    REQUIRE_NE(first_filler, std::string::npos);
-    for (std::size_t at = first_filler; at < first_filler + 15; ++at) {
-        CAPTURE(at);
-        std::string defined = fifteen;
-        defined.at(at) = '\xf6';
-        CHECK_EQ(cbor::packed<login>::path(std::string(defined)).error(), error::incorrect_type);
-        CHECK_EQ(cbor::packed<login>::decode(std::string(defined)).error(), error::incorrect_type);
+    for (std::size_t const n : {15uz, 17uz}) {
+        CAPTURE(n);
+        std::string const filled = login_with_fillers(n, true);
+        check_one_item(filled);
+        CHECK_EQ(fillers_behind(filled, 9), n);
+        auto const decoded = cbor::packed<login>::decode(std::string(filled));
+        REQUIRE(decoded.has_value());
+        CHECK_EQ((*decoded)->name, "ab"s);
+        CHECK_EQ((*decoded)->id, 5u);
+        CHECK_EQ(at_path<login, "$.name">(filled), "ab"s);
+        CHECK_EQ(at_path<login, "$.id">(filled), 5u);
+        for (std::size_t at = 9 + 5 + 12; at < 9 + 5 + 12 + n; ++at) {
+            CAPTURE(at);
+            std::string defined = filled;
+            defined.at(at) = '\xf6';
+            CHECK_EQ(cbor::packed<login>::path(std::string(defined)).error(), error::incorrect_type);
+            CHECK_EQ(cbor::packed<login>::decode(std::string(defined)).error(), error::incorrect_type);
+        }
     }
 
-    std::string const filler_named = login_with_one_filler_more(false);
-    CHECK_EQ(cbor::packed<login>::decode(std::string(filler_named)).error(), error::unpopulated_table_index);
-    CHECK_EQ(at_path<login, "$.name">(filler_named).error(), error::unpopulated_table_index);
-    CHECK_EQ(at_path<login, "$.id">(filler_named), 5u);
+    for (std::size_t const n : {0uz, 1uz, 15uz}) {
+        CAPTURE(n);
+        std::string const unnamed = login_with_fillers(n, false);
+        CHECK_EQ(cbor::packed<login>::decode(std::string(unnamed)).error(), error::unpopulated_table_index);
+        CHECK_EQ(at_path<login, "$.name">(unnamed).error(), error::unpopulated_table_index);
+        CHECK_EQ(at_path<login, "$.id">(unnamed), 5u);
+    }
 }
 
-// The table count of tag 113 counts the record functions, the directory, the fillers and the shared items. A
-// count one higher claims one f7 more than the message holds, so the byte where it would stand is the head of
-// the item. A count one lower takes the last f7 for the first item, and the reference of the name then names
-// no item. A count below the record functions, the directory and the items leaves no place for them, and a
-// count past the message claims f7 that are not there. The test exists because each count decides where the
-// reader looks for the items.
+// The shared table count of tag 1113 counts the directory, the fillers and the items. A count one higher
+// claims one f7 more than the message holds, so the byte where it would stand is the head of the item. A
+// count one lower takes the last f7 for the first item, and the reference of the name then names no item. A
+// count below the directory and the items leaves no place for them, and a count past the message claims f7
+// that are not there. The test exists because each count decides where the reader looks for the items.
 TEST_CASE("schema: a table count that does not match the message is an error")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
     auto const counted = [&bytes](std::uint32_t const count) {
         std::string f = bytes;
-        f.replace(4, 4, u32_bytes(count));
+        f.replace(5, 4, u32_bytes(count));
         return f;
     };
-    std::uint32_t const count = u32_read(bytes, 4);
-    REQUIRE_EQ(count, 17u);
+    std::uint32_t const count = u32_read(bytes, 5);
+    REQUIRE_EQ(count, 18u);
     for (auto const &[forged, path_error, decode_error] : std::vector<std::tuple<std::string, error, error>>{
              {counted(count + 1), error::incorrect_type, error::incorrect_type},
-             {counted(2), error::incorrect_type, error::incorrect_type},
+             {counted(1), error::incorrect_type, error::incorrect_type},
              {counted(0), error::incorrect_type, error::incorrect_type},
              {counted(0xffffffffu), error::too_little_data, error::too_little_data}}) {
         CHECK_EQ(cbor::packed<login>::path(std::string(forged)).error(), path_error);
@@ -1829,16 +1827,18 @@ TEST_CASE("schema: a table count that does not match the message is an error")
     CHECK_EQ(at_path<login, "$.id">(lower), 5u);
 }
 
-// The first directory entry is the root start. It must lie behind the end of the items, and the record of
-// fixed size must fit behind it. login has its root at 60 (3c), its first item at 53 (35), its directory head
-// at 22 and its size 80. The test exists because a root start from the wire that pointed into the header, the
-// fillers or the items would read a record that is not there, and one near the end would read past it.
+// The first directory entry is the root start. It must lie behind the end of the items, the arguments must
+// fill the bytes between, and the record of fixed size must fit behind it. login has its directory head at 9,
+// its first item at 42 (2a), the end of its items and the start of its arguments at 49 (31), its root at 64
+// (40) and its size
+// 84. The test exists because a root start from the wire that pointed into the header, the fillers, the items
+// or the arguments would read a record that is not there, and one near the end would read past it.
 TEST_CASE("schema: a root start out of range is an error")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
     std::size_t const head = directory_head(bytes, bytes.size() - cbor::packed<login>::fixed_size());
-    REQUIRE_EQ(head, 22u);
-    REQUIRE_EQ(bytes.size(), 80u);
+    REQUIRE_EQ(head, 9u);
+    REQUIRE_EQ(bytes.size(), 84u);
     auto const rooted = [&bytes, head](std::uint32_t const root) {
         std::string f = bytes;
         f.replace(head + 5, 4, u32_bytes(root));
@@ -1846,13 +1846,14 @@ TEST_CASE("schema: a root start out of range is an error")
     };
     for (auto const &[root, e] :
          std::vector<std::pair<std::uint32_t, error>>{{0u, error::syntax_error},
-                                                      {22u, error::syntax_error},
-                                                      {45u, error::syntax_error},
-                                                      {53u, error::syntax_error},
-                                                      {59u, error::syntax_error},
-                                                      {61u, error::too_little_data},
-                                                      {80u, error::too_little_data},
-                                                      {81u, error::too_little_data},
+                                                      {9u, error::syntax_error},
+                                                      {30u, error::syntax_error},
+                                                      {42u, error::syntax_error},
+                                                      {48u, error::syntax_error},
+                                                      {56u, error::too_little_data},
+                                                      {65u, error::too_little_data},
+                                                      {84u, error::too_little_data},
+                                                      {85u, error::too_little_data},
                                                       {0x7fffffffu, error::too_little_data},
                                                       {0xffffffffu, error::too_little_data}}) {
         CAPTURE(root);
@@ -1864,9 +1865,9 @@ TEST_CASE("schema: a root start out of range is an error")
 }
 
 // A root start behind a gap: a second copy of the root follows the message, and the first directory entry
-// names it. path reads only up to its target, so it reads the copy. decode reads the whole message, and the
-// gap between the end of the items and the root is no part of the table of tag 113, so decode refuses it. The
-// test exists because the reader takes the root from the directory, never from the end of its input.
+// names it. The bytes between the end of the items and the root are then the arguments and the old root,
+// which is no argument array that ends at the root. The test exists because the reader takes the root from
+// the directory, never from the end of its input, and checks what stands before it.
 TEST_CASE("schema: the root is where the first directory entry says")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
@@ -1875,36 +1876,35 @@ TEST_CASE("schema: the root is where the first directory entry says")
     std::size_t const head = directory_head(bytes, root);
     REQUIRE_NE(head, std::string_view::npos);
     std::string moved = bytes + bytes.substr(root);
-    moved.replace(moved.size() - fixed + cbor::packed<login>::member_offset<^^login::id>() + 2, 1, "\x07");
     moved.replace(head + 5, 4, u32_bytes(static_cast<std::uint32_t>(bytes.size())));
-    CHECK_EQ(at_path<login, "$.id">(moved), 7u);
-    CHECK_EQ(at_path<login, "$.name">(moved), "ab"s);
+    CHECK_EQ(cbor::packed<login>::path(std::string(moved)).error(), error::syntax_error);
+    CHECK_EQ(cbor::packed<login>::at_path<"$.id">(moved).error(), error::syntax_error);
     CHECK_EQ(cbor::packed<login>::decode(std::string(moved)).error(), error::syntax_error);
 }
 
-// The last directory entry is the end of the items. It must not lie before the first item or behind the root
-// start, and the last item ends there. The directory holds at least the root start and the end of the items.
-// The test exists because the end of the items bounds the range of every item that a path reads.
+// The last directory entry is the end of the items and the start of the arguments. It must not lie before the
+// first item or behind the root start, and the last item ends there. The directory holds at least the root
+// start and the end of the items. The test exists because the end of the items bounds the range of every item
+// that a path reads and the place where the arguments are read.
 TEST_CASE("schema: an end of the items out of range is an error")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
     std::size_t const head = directory_head(bytes, bytes.size() - cbor::packed<login>::fixed_size());
-    REQUIRE_EQ(head, 22u);
+    REQUIRE_EQ(head, 9u);
     auto const ended = [&bytes, head](std::uint32_t const end) {
         std::string f = bytes;
         f.replace(head + 5 + 8, 4, u32_bytes(end));
         return f;
     };
-    for (std::uint32_t const end : {0u, 52u, 61u, 80u, 0xffffffffu}) {
+    for (std::uint32_t const end : {0u, 41u, 65u, 84u, 0xffffffffu}) {
         CAPTURE(end);
         std::string const f = ended(end);
         CHECK_EQ(cbor::packed<login>::path(std::string(f)).error(), error::syntax_error);
         CHECK_EQ(cbor::packed<login>::decode(std::string(f)).error(), error::syntax_error);
         CHECK_EQ(cbor::packed<login>::at_path<"$.id">(f).error(), error::syntax_error);
     }
-    std::string const cut = ended(59u);
-    CHECK_EQ(at_path<login, "$.name">(cut).error(), error::too_little_data);
-    CHECK_EQ(at_path<login, "$.id">(cut), 5u);
+    std::string const cut = ended(48u);
+    CHECK_EQ(cbor::packed<login>::path(std::string(cut)).error(), error::incorrect_type);
     CHECK_FALSE(cbor::packed<login>::decode(std::string(cut)).has_value());
 
     for (std::uint32_t const length : {0u, 4u}) {
@@ -1914,6 +1914,346 @@ TEST_CASE("schema: an end of the items out of range is an error")
         CHECK_EQ(cbor::packed<login>::path(std::string(f)).error(), error::incorrect_type);
         CHECK_EQ(cbor::packed<login>::decode(std::string(f)).error(), error::incorrect_type);
     }
+}
+
+namespace
+{
+
+// login with other arguments: the bytes between the end of the items (49) and the root, which then starts
+// behind them. The first directory entry names the new root start.
+std::string login_with_arguments(std::string_view const arguments)
+{
+    std::string const bytes = schema_bytes(login{5, true, "ab"});
+    REQUIRE_EQ(bytes.substr(49, 15), "\x81\xd8\x72\x83\x62id\x62ok\x64name"s);
+    std::string f = bytes.substr(0, 49) + std::string(arguments) + bytes.substr(64);
+    f.replace(14, 4, u32_bytes(static_cast<std::uint32_t>(49 + arguments.size())));
+    return f;
+}
+
+} // namespace
+
+// draft-ietf-cbor-packed-19 3.1: the second array of tag 1113 holds the arguments, one record function 114
+// over the keys per type in table order. A writer may give its heads in any width of RFC 8949 3 (here 98 01
+// for the array of one, 98 03 for the keys, 78 02 for a text of two bytes), and it may append types that this
+// reader does not know. Both are read on the cold path, which compares each key as text. The test exists
+// because the fast path compares bytes, and a message that differs only in its encoding must still read.
+TEST_CASE("schema: the arguments of another encoding and of more types read on the cold path")
+{
+    std::string const widths =
+        login_with_arguments("\x98\x01\xd8\x72\x98\x03\x78\x02id\x78\x02ok\x78\x04name"sv);
+    check_one_item(widths);
+    std::string const more = login_with_arguments("\x82\xd8\x72\x83\x62id\x62ok\x64name\xd8\x72\x81\x61x"sv);
+    check_one_item(more);
+    for (std::string const &f : {widths, more}) {
+        auto const decoded = cbor::packed<login>::decode(std::string(f));
+        REQUIRE(decoded.has_value());
+        CHECK_EQ((*decoded)->name, "ab"s);
+        CHECK_EQ(at_path<login, "$.name">(f), "ab"s);
+        CHECK_EQ(cbor::packed<login>::at_path<"$.id">(f), 5u);
+    }
+}
+
+// Each argument array here differs from the keys of login in one way: a key renamed, a key missing, a key
+// more (another generation, which comes with the generation field), a key that is no text (RFC 8949 3.1 major
+// type 0), a key that is no text in a type this reader does not know, no record function, a map in place of
+// the array, no entry for login, and an entry count past the bytes. The test exists because the keys say what
+// the values of a record mean, so a reader that read values under other keys would give wrong values.
+TEST_CASE("schema: arguments that do not give the keys of the type are an error")
+{
+    for (auto const &[arguments, e] : std::vector<std::pair<std::string, error>>{
+             {"\x81\xd8\x72\x83\x62id\x62OK\x64name"s, error::incorrect_type},
+             {"\x81\xd8\x72\x82\x62id\x62ok"s, error::incorrect_type},
+             {"\x81\xd8\x72\x84\x62id\x62ok\x64name\x61x"s, error::incorrect_type},
+             {"\x81\xd8\x72\x83\x62id\x01\x64name"s, error::incorrect_type},
+             {"\x82\xd8\x72\x83\x62id\x62ok\x64name\xd8\x72\x81\x01"s, error::incorrect_type},
+             {"\x81\x83\x62id\x62ok\x64name"s, error::incorrect_type},
+             {"\xa1\xd8\x72\x83\x62id\x62ok\x64name"s, error::incorrect_type},
+             {"\x80"s, error::incorrect_type},
+             {"\x82\xd8\x72\x83\x62id\x62ok\x64name"s, error::too_little_data}}) {
+        CAPTURE(arguments);
+        std::string const f = login_with_arguments(arguments);
+        CHECK_EQ(cbor::packed<login>::path(std::string(f)).error(), e);
+        CHECK_EQ(cbor::packed<login>::decode(std::string(f)).error(), e);
+        CHECK_EQ(cbor::packed<login>::at_path<"$.id">(f).error(), e);
+    }
+    std::string const behind = login_with_arguments("\x81\xd8\x72\x83\x62id\x62ok\x64name\x00"sv);
+    CHECK_EQ(cbor::packed<login>::path(std::string(behind)).error(), error::syntax_error);
+    CHECK_EQ(cbor::packed<login>::decode(std::string(behind)).error(), error::syntax_error);
+}
+
+namespace
+{
+
+// A text form of a CBOR item in the generic data model of RFC 8949 2: a map is a set of pairs, so its pairs
+// are sorted; a number keeps its value, not its width.
+std::string canonical(cbor::item const &x)
+{
+    using cbor::type;
+    auto const joined = [](std::vector<std::string> parts, bool const sorted) {
+        if (sorted)
+            std::ranges::sort(parts);
+        std::string out;
+        for (std::string const &p : parts)
+            out += (out.empty() ? "" : ",") + p;
+        return out;
+    };
+    switch (x.type) {
+    case type::unsigned_integer:
+        return std::to_string(*x.get<type::unsigned_integer>());
+    case type::negative_integer:
+        return "-1-" + std::to_string(*x.get<type::negative_integer>());
+    case type::text_string:
+        return "\"" + std::string(*x.get<type::text_string>()) + "\"";
+    case type::byte_string: {
+        std::string out = "h'";
+        for (std::byte const b : *x.get<type::byte_string>())
+            out += std::format("{:02x}", std::to_integer<unsigned>(b));
+        return out + "'";
+    }
+    case type::array: {
+        std::vector<std::string> parts;
+        for (cbor::item const &e : *x.get<type::array>())
+            parts.push_back(canonical(e));
+        return "[" + joined(parts, false) + "]";
+    }
+    case type::map: {
+        auto const m = *x.get<type::map>();
+        std::vector<std::string> parts;
+        for (std::size_t i = 0; i + 1 < m.size(); i += 2)
+            parts.push_back(canonical(m[i]) + ":" + canonical(m[i + 1]));
+        return "{" + joined(parts, true) + "}";
+    }
+    case type::tag: {
+        auto const t = *x.get<type::tag>();
+        return std::to_string(t.first) + "(" + canonical(*t.second) + ")";
+    }
+    case type::unsigned_bignum: {
+        auto const t = *x.get<type::unsigned_bignum>();
+        return std::to_string(t.first) + "(" + canonical(*t.second) + ")";
+    }
+    case type::negative_bignum: {
+        auto const t = *x.get<type::negative_bignum>();
+        return std::to_string(t.first) + "(" + canonical(*t.second) + ")";
+    }
+    case type::typed_array: {
+        auto const t = *x.get<type::typed_array>();
+        return std::to_string(t.first) + "(" + canonical(*t.second) + ")";
+    }
+    case type::half_float:
+        return std::format("{}", *x.get<type::half_float>());
+    case type::single_float:
+        return std::format("{}", *x.get<type::single_float>());
+    case type::double_float:
+        return std::format("{}", *x.get<type::double_float>());
+    case type::false_value:
+        return "false";
+    case type::true_value:
+        return "true";
+    case type::null:
+        return "null";
+    case type::undefined:
+        return "undefined";
+    default:
+        return "simple(" + std::to_string(std::to_underlying(*x.get<type::simple_value>())) + ")";
+    }
+}
+
+struct packed_tables {
+    std::span<cbor::item const> shared;
+    std::span<cbor::item const> arguments;
+};
+
+std::string unpacked(cbor::item const &x, packed_tables const &t);
+
+// draft-ietf-cbor-packed-19 4.2: the record function 114 over the keys, applied to an array of values, is the
+// map of each key to its value; a value that is undefined is absent, and there are not more values than keys.
+std::string record_unpacked(std::uint64_t const argument, cbor::item const &rump, packed_tables const &t)
+{
+    using cbor::type;
+    REQUIRE_LT(argument, t.arguments.size());
+    auto const function = t.arguments[static_cast<std::size_t>(argument)].get<type::tag>();
+    REQUIRE(function.has_value());
+    REQUIRE_EQ(function->first, 114u);
+    auto const keys = function->second->get<type::array>();
+    auto const values = rump.get<type::array>();
+    REQUIRE(keys.has_value());
+    REQUIRE(values.has_value());
+    REQUIRE_LE(values->size(), keys->size());
+    std::vector<std::string> parts;
+    for (std::size_t i = 0; i < values->size(); ++i)
+        if ((*values)[i].type != type::undefined)
+            parts.push_back(canonical((*keys)[i]) + ":" + unpacked((*values)[i], t));
+    std::ranges::sort(parts);
+    std::string out;
+    for (std::string const &p : parts)
+        out += (out.empty() ? "" : ",") + p;
+    return "{" + out + "}";
+}
+
+// draft-ietf-cbor-packed-19 2.2 Table 1 and 2.3 Table 2: 6(N) names shared item 16 + 2N, or 16 - 2N - 1 for a
+// negative N; 128 + i(rump) and 6([N, rump]) apply argument i or 8 + N to the rump. Every other item is
+// unpacked in its parts.
+std::string unpacked(cbor::item const &x, packed_tables const &t)
+{
+    using cbor::type;
+    if (x.type == type::tag) {
+        auto const [number, content] = *x.get<type::tag>();
+        if (number == 6 && content->type == type::array) {
+            auto const pair = *content->get<type::array>();
+            REQUIRE_EQ(pair.size(), 2u);
+            return record_unpacked(8 + *pair[0].get<type::unsigned_integer>(), pair[1], t);
+        }
+        if (number == 6) {
+            std::uint64_t const index = content->type == type::unsigned_integer
+                                            ? 16 + 2 * *content->get<type::unsigned_integer>()
+                                            : 16 + 2 * *content->get<type::negative_integer>() + 1;
+            REQUIRE_LT(index, t.shared.size());
+            return unpacked(t.shared[static_cast<std::size_t>(index)], t);
+        }
+        if (number >= 128 && number <= 135)
+            return record_unpacked(number - 128, *content, t);
+        return std::to_string(number) + "(" + unpacked(*content, t) + ")";
+    }
+    if (x.type == type::array) {
+        std::string out;
+        for (cbor::item const &e : *x.get<type::array>())
+            out += (out.empty() ? "" : ",") + unpacked(e, t);
+        return "[" + out + "]";
+    }
+    return canonical(x);
+}
+
+// draft-ietf-cbor-packed-19 3.1: tag 1113 over the shared items, the arguments and the rump.
+std::string message_unpacked(std::string const &bytes)
+{
+    using cbor::type;
+    auto const tree = cbor::decode(std::string_view(bytes));
+    REQUIRE(tree.has_value());
+    auto const setup = (*tree)->get<type::tag>();
+    REQUIRE(setup.has_value());
+    REQUIRE_EQ(setup->first, 1113u);
+    auto const parts = *setup->second->get<type::array>();
+    REQUIRE_EQ(parts.size(), 3u);
+    return unpacked(parts[2], packed_tables{*parts[0].get<type::array>(), *parts[1].get<type::array>()});
+}
+
+// The data item of chainK in the generic data model, written from the definition of the chain types: the
+// class tag 1600 + K over the map of v and next, and chain19 over v, text and words.
+std::string chain_canonical(std::size_t const k)
+{
+    std::string const v = "\"v\":" + std::to_string(k);
+    if (k == 19)
+        return "1619({\"text\":\"ab\"," + v + ",\"words\":[\"x\",\"yz\"]})";
+    return std::to_string(1600 + k) + "({\"next\":" + chain_canonical(k + 1) + "," + v + "})";
+}
+
+template <class T>
+std::string structs_canonical(T const &value)
+{
+    auto const encoded = cbor::structs<T>::encode(value);
+    REQUIRE(encoded.has_value());
+    auto const tree = cbor::decode(std::string_view(*encoded));
+    REQUIRE(tree.has_value());
+    return canonical(**tree);
+}
+
+} // namespace
+
+namespace packed_mirror
+{
+
+struct login {
+    std::uint16_t id;
+    bool ok;
+    std::string name;
+};
+
+struct named {
+    std::string n;
+};
+
+struct people {
+    std::vector<named> people;
+};
+
+struct engine {
+    std::uint16_t horsepower;
+    std::uint32_t cc;
+};
+
+struct car {
+    std::uint8_t seats;
+    engine motor;
+    bool hasNavSystem;
+};
+
+struct doubles {
+    std::vector<double> v;
+};
+
+} // namespace packed_mirror
+
+template <>
+struct cbor::describe_members<packed_mirror::login> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1507, 0};
+    static constexpr std::tuple members{CBOR_MEMBER(packed_mirror::login, id),
+                                        CBOR_MEMBER(packed_mirror::login, ok),
+                                        CBOR_MEMBER(packed_mirror::login, name)};
+};
+
+template <>
+struct cbor::describe_members<packed_mirror::named> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1509, 0};
+    static constexpr std::tuple members{CBOR_MEMBER(packed_mirror::named, n)};
+};
+
+template <>
+struct cbor::describe_members<packed_mirror::people> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1510, 0};
+    static constexpr std::tuple members{CBOR_MEMBER(packed_mirror::people, people)};
+};
+
+template <>
+struct cbor::describe_members<packed_mirror::engine> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1501, 0};
+    static constexpr std::tuple members{CBOR_MEMBER(packed_mirror::engine, horsepower),
+                                        CBOR_MEMBER(packed_mirror::engine, cc)};
+};
+
+template <>
+struct cbor::describe_members<packed_mirror::car> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1502, 0};
+    static constexpr std::tuple members{CBOR_MEMBER(packed_mirror::car, seats),
+                                        CBOR_MEMBER(packed_mirror::car, motor),
+                                        CBOR_MEMBER(packed_mirror::car, hasNavSystem)};
+};
+
+template <>
+struct cbor::describe_members<packed_mirror::doubles> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1531, 0};
+    static constexpr std::tuple members{CBOR_MEMBER(packed_mirror::doubles, v)};
+};
+
+// draft-ietf-cbor-packed-19 1 and 3: an unpacker that knows only the draft turns a packed message into the
+// item it stands for. That item is the item that cbor::structs writes for the same value, in the generic data
+// model. The unpacker here is test code. cbor::structs takes a tag only from a description, so each packed
+// type has a described mirror with the same tag and members. The types hold numbers, texts, lists of numbers,
+// lists of structs and inner structs; chain0 has 20 types and reaches arguments 8 to 19 through 6([N, rump]),
+// and its item is written from the definition of the types. An optional is left out, because packed writes an
+// empty optional as an empty array until the optional takes its place as an absent value. The test exists
+// because others must read what packed writes.
+TEST_CASE("schema: a generic unpacker gives the item that cbor::structs writes")
+{
+    namespace m = packed_mirror;
+    CHECK_EQ(message_unpacked(schema_bytes(login{5, true, "ab"})),
+             structs_canonical(m::login{5, true, "ab"}));
+    CHECK_EQ(message_unpacked(schema_bytes(people{{{"x"}, {"yz"}}})),
+             structs_canonical(m::people{{{"x"}, {"yz"}}}));
+    CHECK_EQ(message_unpacked(schema_bytes(car{4, {300, 1800}, true})),
+             structs_canonical(m::car{4, {300, 1800}, true}));
+    CHECK_EQ(message_unpacked(schema_bytes(doubles{{1.0, 2.0}})), structs_canonical(m::doubles{{1.0, 2.0}}));
+    CHECK_EQ(message_unpacked(*cbor::packed<chain0>::encode(chain_of<chain0>(0))), chain_canonical(0));
+    CHECK_EQ(message_unpacked(schema_bytes(login{5, true, "ab"})), R"(1507({"id":5,"name":"ab","ok":true}))");
 }
 
 #endif
@@ -2388,55 +2728,47 @@ TEST_CASE("attack: overlapping items are an error")
     CHECK_EQ(at_path<login, "$.id">(into_root), 5u);
 }
 
-// Each item of a packed message starts with an RFC 8949 head: a typed array with the tag head d8 56 and the head
-// 5a of its byte string, a text with the head 7a. A four-byte argument is read big endian (RFC 8949 Section 3).
-// A directory entry is forged so that the head of the last item no longer fits before the root record. The test
-// exists because the read of that head must stop at the bytes that are left and give too_little_data.
-TEST_CASE("attack: an item head that does not fit before the root is too_little_data")
+// Each item of a packed message starts with an RFC 8949 head: a typed array with the tag head d8 56 and the
+// head 5a of its byte string, a text with the head 7a. A four-byte argument is read big endian (RFC 8949
+// Section 3). A directory entry is forged so that the head of the last item no longer fits before the end of
+// the items, the last directory entry. The test exists because the read of that head must stop at the bytes
+// of the items and give too_little_data.
+TEST_CASE("attack: an item head that does not fit before the end of the items is too_little_data")
 {
-    auto const big_endian = [](std::size_t const x) {
-        return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
-                           static_cast<char>(x)};
+    auto const items_end = [](std::string_view const bytes) {
+        std::uint32_t const length = u32_read(bytes, 10);
+        return u32_read(bytes, 14 + length - 4);
     };
     std::string const array = schema_bytes(doubles{{1.0, 2.0}});
     std::size_t const head = array.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(head, std::string::npos);
-    std::size_t const entry = array.find(big_endian(head));
-    REQUIRE_LT(entry, head);
+    REQUIRE_EQ(u32_read(array, 18), head);
     std::string cut_array = array;
-    cut_array.replace(entry, 4, big_endian(array.size() - cbor::packed<doubles>::fixed_size() - 3));
+    cut_array.replace(18, 4, u32_bytes(items_end(array) - 3));
     CHECK_EQ(at_path<doubles, "$.v[0]">(cut_array).error(), error::too_little_data);
 
     std::string const text = schema_bytes(login{5, true, "ab"});
-    std::size_t const name = text.find("\x7a\x00\x00\x00\x02" "ab"sv);
+    std::size_t const name = text.find("\x7a\x00\x00\x00\x02"
+                                       "ab"sv);
     REQUIRE_NE(name, std::string::npos);
-    std::size_t const name_entry = text.find(big_endian(name));
-    REQUIRE_LT(name_entry, name);
+    REQUIRE_EQ(u32_read(text, 18), name);
     std::string cut_text = text;
-    cut_text.replace(name_entry, 4, big_endian(text.size() - cbor::packed<login>::fixed_size() - 3));
+    cut_text.replace(18, 4, u32_bytes(items_end(text) - 3));
     CHECK_EQ(at_path<login, "$.name">(cut_text).error(), error::too_little_data);
 }
 
-// The directory is a byte string with a four-byte argument (RFC 8949 Section 3.1, major type 2). Its length is
-// forged far past the end of the message, and the count in the prefix is forged to match it. The test exists
-// because the read of the directory must stop at the bytes that are left and give too_little_data.
+// The directory is a byte string with a four-byte argument (RFC 8949 Section 3.1, major type 2). Its length
+// is forged far past the end of the message, and the shared table count is forged to match it. The test
+// exists because the read of the directory must stop at the bytes that are left and give too_little_data.
 TEST_CASE("attack: a directory longer than the message is too_little_data")
 {
-    auto const big_endian = [](std::size_t const x) {
-        return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
-                           static_cast<char>(x)};
-    };
     std::string const bytes = schema_bytes(login{5, true, "ab"});
-    std::size_t const directory = bytes.find("\x5a\x00\x00\x00\x0c"sv, 8);
-    REQUIRE_NE(directory, std::string::npos);
-    std::size_t const forged_length = 0x00fffff0;
-    std::size_t const first =
-        (std::size_t{static_cast<std::uint8_t>(bytes[4])} << 24 | std::size_t{static_cast<std::uint8_t>(bytes[5])} << 16 |
-         std::size_t{static_cast<std::uint8_t>(bytes[6])} << 8 | std::size_t{static_cast<std::uint8_t>(bytes[7])}) -
-        1;
+    REQUIRE_EQ(bytes.substr(9, 5), "\x5a\x00\x00\x00\x0c"s);
+    std::uint32_t const forged_length = 0x00fffff0;
+    std::uint32_t const first = u32_read(bytes, 5) - 1;
     std::string forged = bytes;
-    forged.replace(4, 4, big_endian(first + forged_length / 4 - 2));
-    forged.replace(directory + 1, 4, big_endian(forged_length));
+    forged.replace(5, 4, u32_bytes(first + forged_length / 4 - 2));
+    forged.replace(10, 4, u32_bytes(forged_length));
     CHECK_EQ(cbor::packed<login>::path(std::string(forged)).error(), error::too_little_data);
     CHECK_EQ(cbor::packed<login>::decode(std::string(forged)).error(), error::too_little_data);
 }

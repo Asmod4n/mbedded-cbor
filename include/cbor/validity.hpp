@@ -71,7 +71,7 @@ class validity
 {
     enum class tag_number : std::uint64_t {
         reference = 6,
-        basic_packed_cbor = 113,
+        split_basic_packed_cbor = 1113,
         record_function = 114,
         straight_argument_first = 128,
         straight_argument_last = 135

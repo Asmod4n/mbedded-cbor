@@ -27,8 +27,9 @@ void u32_append(std::string &out, std::uint32_t const value)
         out += static_cast<char>(value >> shift);
 }
 
-// draft-ietf-cbor-packed-19 2.2: item j sits at table index 16 + j. An even j is 6(j / 2), an odd j is
-// 6(-(j + 1) / 2), so its argument is (j - 1) / 2 under major type 1.
+// draft-ietf-cbor-packed-19 2.2: 6(N) names shared index 16 + 2N, and 6(N) with a negative N names 16 - 2N
+// - 1. So shared index 16 + j is 6(j / 2) for an even j and 6(-(j + 1) / 2) for an odd j, whose argument is
+// (j - 1) / 2 under major type 1.
 void reference_append(std::string &out, std::uint32_t const item)
 {
     out += '\xc6';
@@ -38,21 +39,20 @@ void reference_append(std::string &out, std::uint32_t const item)
 
 // A chain of nodes, each with one child, as an attacker writes it by hand. Item k is the list of children of
 // the node at depth k: one node that refers to item k + 1, and the last item is empty. Each record carries
-// the class tag 1515 = d9 05 eb of node. The directory holds the root start, the start of each item and the
-// end of the items, which is the root start. The encoder of this library cannot write it, because gcc does
-// not inline a recursive encoder.
+// the class tag 1515 = d9 05 eb of node. Tag 1113 holds the directory at shared index 0, f7 at 1 to 16 and
+// item k at 17 + k, then the record function of node as the one argument, then the root. The directory holds
+// the root start, the start of each item and the end of the items. The encoder of this library cannot write
+// it, because gcc does not inline a recursive encoder.
 std::string node_chain(std::size_t const levels)
 {
     auto const items = static_cast<std::uint32_t>(levels + 1);
-    std::string out = "\xd8\x71\x82\x9a"s;
-    u32_append(out, 16 + items);
-    out += "\xd8\x72\x81\x68"
-           "children"
-           "\x5a"s;
+    std::string out = "\xd9\x04\x59\x83\x9a"s;
+    u32_append(out, 17 + items);
+    out += "\x5a"s;
     u32_append(out, 4 * (items + 2));
     std::size_t const directory = out.size();
     out.append(4 * (items + 2), '\0');
-    out.append(14, '\xf7');
+    out.append(16, '\xf7');
     auto const entry_write = [&out, directory](std::uint32_t const j) {
         std::string offset;
         u32_append(offset, static_cast<std::uint32_t>(out.size()));
@@ -65,13 +65,15 @@ std::string node_chain(std::size_t const levels)
         u32_append(out, last ? 0 : 1);
         if (!last) {
             out += "\xd9\x05\xeb\xd8\x80\x9a\x00\x00\x00\x01"s;
-            reference_append(out, k + 1);
+            reference_append(out, k + 2);
         }
     }
-    entry_write(0);
     entry_write(items + 1);
+    out += "\x81\xd8\x72\x81\x68"
+           "children"s;
+    entry_write(0);
     out += "\xd9\x05\xeb\xd8\x80\x9a\x00\x00\x00\x01"s;
-    reference_append(out, 0);
+    reference_append(out, 1);
     return out;
 }
 
