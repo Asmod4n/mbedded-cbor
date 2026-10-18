@@ -1,0 +1,144 @@
+{
+ "time": "2026-10-18-083131Z",
+ "what": "perf record -e cpu-clock -F 4000 of tree_and_walk, g++-16, documents floats and twitter, arms B (cbor::decode of 50e0d19 + item_tree_sum) and MP (msgpack::unpack + mp_tree_sum, one hot msgpack buffer). Share of cpu-clock samples per function, functions at 1 % or more.",
+ "flags": "-std=c++23 -O2 -g -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -DDOCTEST_CONFIG_DISABLE",
+ "min_time": "3s",
+ "container": "podman, localhost/mbedded-cbor-tw-perf, seccomp=unconfined",
+ "hardware_counters": "none on this VM",
+ "sizeof_bytes": {
+  "cbor::item": 24,
+  "msgpack::object": 24,
+  "msgpack::object_kv": 48
+ },
+ "findings": [
+  "msgpack::unpack resolves to the v2 parse code (msgpack::v2::detail::context<parse_helper<create_object_visitor>>), not the v1 unpack.hpp context.",
+  "B floats: content_decode 71.3 %, item_tree_sum 27.6 %. MP floats: parse 69.3 % (two clones), mp_tree_sum 29.7 %.",
+  "B twitter: content_decode 42.6 %, bytes_sum 26.8 %, item_tree_sum 13.9 %, memmove 10.0 % (with plt), unresolved libstdc++ code about 6.1 % (not resolved; not checked whether it is monotonic_buffer_resource::do_allocate).",
+  "MP twitter: bytes_sum 31.3 %, parse 35.5 %, visit_str 12.2 %, mp_tree_sum 10.3 %, memmove 7.1 % (with plt).",
+  "B floats hot instructions: a jmp after vcvtsh2ss in the float path 10.2 %, the rest spread over the head decode and the type_of switch (no single hot spot over 4.4 %)."
+ ],
+ "top": {
+  "floats.B": [
+   {
+    "percent_of_samples": "71.33%",
+    "object": "p.floats.B",
+    "symbol": "cbor::tree_decoder<false>::content_decode(cbor::item*, cbor::heads::head, unsigned long) [clone .isra.0]"
+   },
+   {
+    "percent_of_samples": "27.55%",
+    "object": "p.floats.B",
+    "symbol": "item_tree_sum(cbor::item const&)"
+   }
+  ],
+  "floats.MP": [
+   {
+    "percent_of_samples": "61.77%",
+    "object": "p.floats.MP",
+    "symbol": "msgpack::v2::detail::context<msgpack::v2::detail::parse_helper<msgpack::v2::detail::create_object_visitor> >::execute(char const*, unsigned long, unsigned long&"
+   },
+   {
+    "percent_of_samples": "29.65%",
+    "object": "p.floats.MP",
+    "symbol": "mp_tree_sum(msgpack::v2::object const&)"
+   },
+   {
+    "percent_of_samples": "7.54%",
+    "object": "p.floats.MP",
+    "symbol": "msgpack::v2::detail::context<msgpack::v2::detail::parse_helper<msgpack::v2::detail::create_object_visitor> >::after_visit_proc(bool, unsigned long&)"
+   }
+  ],
+  "twitter.B": [
+   {
+    "percent_of_samples": "42.55%",
+    "object": "p.twitter.B",
+    "symbol": "cbor::tree_decoder<false>::content_decode(cbor::item*, cbor::heads::head, unsigned long) [clone .isra.0]"
+   },
+   {
+    "percent_of_samples": "26.84%",
+    "object": "p.twitter.B",
+    "symbol": "bytes_sum(std::basic_string_view<char, std::char_traits<char> >)"
+   },
+   {
+    "percent_of_samples": "13.86%",
+    "object": "p.twitter.B",
+    "symbol": "item_tree_sum(cbor::item const&)"
+   },
+   {
+    "percent_of_samples": "8.69%",
+    "object": "libc.so.6",
+    "symbol": "__memmove_avx512_unaligned_erms"
+   },
+   {
+    "percent_of_samples": "1.85%",
+    "object": "libstdc++.so.6.0.36",
+    "symbol": "0x000000000018cfc0"
+   },
+   {
+    "percent_of_samples": "1.49%",
+    "object": "libstdc++.so.6.0.36",
+    "symbol": "0x000000000018cffa"
+   },
+   {
+    "percent_of_samples": "1.43%",
+    "object": "libstdc++.so.6.0.36",
+    "symbol": "0x000000000018d015"
+   },
+   {
+    "percent_of_samples": "1.33%",
+    "object": "p.twitter.B",
+    "symbol": "memmove@plt"
+   },
+   {
+    "percent_of_samples": "1.30%",
+    "object": "libstdc++.so.6.0.36",
+    "symbol": "0x000000000018cfdf"
+   }
+  ],
+  "twitter.MP": [
+   {
+    "percent_of_samples": "31.34%",
+    "object": "p.twitter.MP",
+    "symbol": "bytes_sum(std::basic_string_view<char, std::char_traits<char> >)"
+   },
+   {
+    "percent_of_samples": "25.64%",
+    "object": "p.twitter.MP",
+    "symbol": "msgpack::v2::detail::context<msgpack::v2::detail::parse_helper<msgpack::v2::detail::create_object_visitor> >::execute(char const*, unsigned long, unsigned long&"
+   },
+   {
+    "percent_of_samples": "12.16%",
+    "object": "p.twitter.MP",
+    "symbol": "msgpack::v2::detail::create_object_visitor::visit_str(char const*, unsigned int) [clone .isra.0]"
+   },
+   {
+    "percent_of_samples": "10.25%",
+    "object": "p.twitter.MP",
+    "symbol": "mp_tree_sum(msgpack::v2::object const&)"
+   },
+   {
+    "percent_of_samples": "9.85%",
+    "object": "p.twitter.MP",
+    "symbol": "msgpack::v2::detail::context<msgpack::v2::detail::parse_helper<msgpack::v2::detail::create_object_visitor> >::after_visit_proc(bool, unsigned long&)"
+   },
+   {
+    "percent_of_samples": "5.61%",
+    "object": "libc.so.6",
+    "symbol": "__memmove_avx512_unaligned_erms"
+   },
+   {
+    "percent_of_samples": "1.47%",
+    "object": "p.twitter.MP",
+    "symbol": "memcpy@plt"
+   },
+   {
+    "percent_of_samples": "1.09%",
+    "object": "p.twitter.MP",
+    "symbol": "msgpack::v2::detail::create_object_visitor::start_map(unsigned int) [clone .isra.0]"
+   }
+  ]
+ },
+ "sources_sha256": {
+  "bench/runtime.cpp": "9ecb8bfc57ba2d0f6d47ead8b75a72c314212e887213c131bd453acd6013bde2",
+  "prof.sh": "83b88537378c8f196b53bf13b160e38f415f367d943099a70d3e7bb40922b1a0"
+ }
+}
