@@ -1433,6 +1433,20 @@ class reflection
                    column_head_argument<M>(n);
     }
 
+    template <class Root, class S>
+    static bool column_heads_valid(std::string_view const encoded, reference const record)
+    {
+        bool valid = true;
+        template for (constexpr std::meta::info m : data_members<S>()) {
+            using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
+            std::size_t const at = record.data + affine_at(column_offset<Root, S, m>(), record.length);
+            valid = valid && column_head_valid<Root, M>(encoded, at, record.length);
+            if constexpr (is_column_struct<M>)
+                valid = valid && column_heads_valid<Root, M>(encoded, reference{at, record.length});
+        }
+        return valid;
+    }
+
     template <class Root, major_type Major, class E>
     CBOR_ALWAYS_INLINE static std::expected<reference, error>
     item_reference_read(std::string_view const encoded, std::size_t const item, std::size_t const end,
@@ -1667,7 +1681,7 @@ class reflection
         }
     }
 
-    template <class Root, class S, fixed_string Path, std::size_t At>
+    template <class Root, class S, fixed_string Path, std::size_t At, bool Checked>
     CBOR_ALWAYS_INLINE static auto column_walk(std::string_view const encoded, reference const record, std::size_t const i,
                                                cbor::directory const floor,
                                                std::array<std::size_t, index_slots<Path>()> const &indexes)
@@ -1675,17 +1689,21 @@ class reflection
     {
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
+            if constexpr (Checked)
+                if (!column_heads_valid<Root, S>(encoded, record)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
             return typename cbor::schema<Root>::template accessor<column_element<S>>(encoded, record, i, floor);
         } else {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::meta::info m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
             using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
             std::size_t const at = record.data + affine_at(column_offset<Root, S, m>(), record.length);
-            if (!column_head_valid<Root, M>(encoded, at, record.length)) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
+            if constexpr (Checked)
+                if (!column_head_valid<Root, M>(encoded, at, record.length)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
             constexpr std::size_t head = column_head_size<Root, M>();
             if constexpr (is_column_struct<M>) {
-                return column_walk<Root, M, Path, end>(encoded, reference{at, record.length}, i, floor, indexes);
+                return column_walk<Root, M, Path, end, Checked>(encoded, reference{at, record.length}, i, floor, indexes);
             } else if constexpr (is_typed_column<M>) {
                 using E = column_element_t<M>;
                 return static_cast<M>(typed_array_element_read<E>(
@@ -1767,10 +1785,12 @@ class reflection
                     return std::unexpected(r.error());
                 return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor, *r);
             } else if constexpr (is_column_vector<U>) {
-                auto const r = reference_read<Root, major_type::array, std::remove_cv_t<std::ranges::range_value_t<U>>>(
-                    encoded, field, floor, 0);
+                using S = std::remove_cv_t<std::ranges::range_value_t<U>>;
+                auto const r = reference_read<Root, major_type::array, S>(encoded, field, floor, 0);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
+                if (!column_heads_valid<Root, S>(encoded, *r)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
                 return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor, *r);
             } else if constexpr (is_list<U>) {
                 auto const r = reference_read<Root, major_type::array>(
@@ -1852,7 +1872,7 @@ class reflection
                     if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
                         [[unlikely]]
                         return std::unexpected(c);
-                    return column_walk<Root, S, Path, close + 1>(encoded, *r, i, floor, indexes);
+                    return column_walk<Root, S, Path, close + 1, true>(encoded, *r, i, floor, indexes);
                 } else {
                     auto const r =
                         reference_read<Root, major_type::array>(encoded, field, floor, fixed_size<E, Root>());
@@ -2662,7 +2682,7 @@ public:
                     if (error const c = validity::check_index(at, self.items.length).error_or(error{});
                         c != error{}) [[unlikely]]
                         return std::expected<X, error>(std::unexpect, c);
-                    return reflection::column_walk<T, E, Path, close + 1>(self.encoded, self.items, at, self.dir, i);
+                    return reflection::column_walk<T, E, Path, close + 1, false>(self.encoded, self.items, at, self.dir, i);
                 } else if constexpr (reflection::is_list<U> && path.size() > 1) {
                     using E = std::ranges::range_value_t<U>;
                     constexpr std::size_t close = reflection::index_end(path, 1);
@@ -2754,7 +2774,7 @@ public:
                         self.encoded, std::span<char const>(self.encoded).subspan(self.encoded.size() - root).template first<root>(),
                         self.dir, i);
                 } else {
-                    return reflection::column_walk<T, S, Path, 1>(self.encoded, self.record, self.index, self.dir, i);
+                    return reflection::column_walk<T, S, Path, 1, false>(self.encoded, self.record, self.index, self.dir, i);
                 }
             }();
             if constexpr (requires { result->owner; })
