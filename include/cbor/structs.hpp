@@ -499,8 +499,8 @@ class generic
     static std::expected<void, error> generic_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                    std::size_t const depth, std::size_t const depth_max)
     {
-        using slot = typename value_sharing::sharing_decoder<Checked>::slot;
-        std::size_t const first_mark = d.slots.size();
+        using marked_value = typename value_sharing::sharing_decoder<Checked>::marked_value;
+        std::size_t const first_mark = d.marked_values.size();
         for (;;) {
             heads::decoder<Checked> look = d;
             auto const h = look.head_decode();
@@ -510,7 +510,7 @@ class generic
                 break;
             if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
                 d.encoded = look.encoded;
-                d.slots.push_back(slot::open);
+                d.marked_values.push_back(marked_value::open);
                 continue;
             }
             if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
@@ -521,17 +521,17 @@ class generic
             if (error const e = validity::check_tag_content(h->argument, n->major).error_or(error{});
                 e != error{}) [[unlikely]]
                 return std::unexpected(e);
-            auto const index = value_sharing::check_sharedref_index(n->argument, d.slots.size());
+            auto const index = value_sharing::check_sharedref_index(n->argument, d.marked_values.size());
             if (!index) [[unlikely]]
                 return std::unexpected(index.error());
-            if (d.slots[std::to_underlying(*index)] == slot::in_skipped_member) [[unlikely]]
+            if (d.marked_values[std::to_underlying(*index)] == marked_value::in_skipped_member) [[unlikely]]
                 return std::unexpected(error::sharedref_not_complete);
             return std::unexpected(error::incorrect_type);
         }
-        if (auto const r = generic_value_read(d, out, depth + (d.slots.size() - first_mark), depth_max); !r)
+        if (auto const r = generic_value_read(d, out, depth + (d.marked_values.size() - first_mark), depth_max); !r)
             [[unlikely]]
             return r;
-        std::ranges::fill(std::span(d.slots).subspan(first_mark, d.slots.size() - first_mark), slot::value_member);
+        std::ranges::fill(std::span(d.marked_values).subspan(first_mark, d.marked_values.size() - first_mark), marked_value::value_member);
         return {};
     }
 

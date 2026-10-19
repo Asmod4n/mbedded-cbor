@@ -1583,7 +1583,7 @@ class reflection
     }
 
     template <fixed_string Path>
-    static consteval std::size_t index_slots()
+    static consteval std::size_t index_arguments()
     {
         return static_cast<std::size_t>(std::ranges::count_if(Path.view() | std::views::pairwise, [](auto const pair) {
             return std::get<0>(pair) == '[' && std::get<1>(pair) == ']';
@@ -1591,9 +1591,9 @@ class reflection
     }
 
     template <fixed_string Path, std::size_t At>
-    static consteval std::size_t index_slot()
+    static consteval std::size_t index_argument()
     {
-        return index_slots<Path>() - static_cast<std::size_t>(std::ranges::count_if(
+        return index_arguments<Path>() - static_cast<std::size_t>(std::ranges::count_if(
                                           Path.view() | std::views::drop(At) | std::views::pairwise, [](auto const pair) {
                                               return std::get<0>(pair) == '[' && std::get<1>(pair) == ']';
                                           }));
@@ -1692,7 +1692,7 @@ class reflection
 
     template <class Root, class S, fixed_string Path, std::size_t At>
     CBOR_ALWAYS_INLINE static auto fixed_walk(std::string_view const encoded, std::size_t const at, cbor::directory const floor,
-                                              std::array<std::size_t, index_slots<Path>()> const &indexes)
+                                              std::array<std::size_t, index_arguments<Path>()> const &indexes)
         -> std::expected<typename decltype(fixed_path_result<Root, S, Path, At>())::type, error>
     {
         constexpr std::string_view path = Path.view();
@@ -1712,7 +1712,7 @@ class reflection
                 constexpr std::size_t close = index_end(path, end);
                 std::size_t j;
                 if constexpr (close == end + 1)
-                    j = std::get<index_slot<Path, end>()>(indexes);
+                    j = std::get<index_argument<Path, end>()>(indexes);
                 else
                     j = index_of<S>(std::string_view(std::span(path).subspan(end + 1, close - end - 1)));
                 if (error const c = validity::check_index(j, fixed_length<M>::value).error_or(error{}); c != error{}) [[unlikely]]
@@ -1727,7 +1727,7 @@ class reflection
     template <class Root, class T, fixed_string Path, std::size_t At>
     CBOR_ALWAYS_INLINE static auto
     path_walk(std::string_view const encoded, std::span<char const, fixed_size<T, Root>()> const field,
-              cbor::directory const floor, std::array<std::size_t, index_slots<Path>()> const &indexes)
+              cbor::directory const floor, std::array<std::size_t, index_arguments<Path>()> const &indexes)
         -> std::expected<typename decltype(path_result<Root, T, Path, At>())::type, error>
     {
         using U = std::remove_cv_t<T>;
@@ -1837,7 +1837,7 @@ class reflection
                 if (!std::ranges::equal(field.template first<head>(), expected)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
                 if constexpr (close == At + 1) {
-                    std::size_t const i = std::get<index_slot<Path, At>()>(indexes);
+                    std::size_t const i = std::get<index_argument<Path, At>()>(indexes);
                     if (error const c = validity::check_index(i, n).error_or(error{}); c != error{})
                         [[unlikely]]
                         return std::unexpected(c);
@@ -1856,7 +1856,7 @@ class reflection
                 using E = std::ranges::range_value_t<U>;
                 std::size_t i;
                 if constexpr (close == At + 1)
-                    i = std::get<index_slot<Path, At>()>(indexes);
+                    i = std::get<index_argument<Path, At>()>(indexes);
                 else
                     i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
                 if constexpr (is_typed_array<U>) {
@@ -2636,7 +2636,7 @@ public:
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(((Path.view().starts_with('@') && reflection::path_valid<U, Path, 1>()) ||
                       (Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>())) &&
-                     sizeof...(Index) == reflection::index_slots<Path>() && std::is_lvalue_reference_v<Self>)
+                     sizeof...(Index) == reflection::index_arguments<Path>() && std::is_lvalue_reference_v<Self>)
         CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
             validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
@@ -2710,7 +2710,7 @@ public:
 
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(std::same_as<U, T> && Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>() &&
-                     sizeof...(Index) == reflection::index_slots<Path>())
+                     sizeof...(Index) == reflection::index_arguments<Path>())
         auto view(this Self &&self, Index const... indexes)
         {
             using X = typename decltype(reflection::path_result<T, T, Path, 1>())::type;
@@ -2872,7 +2872,7 @@ public:
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(((Path.view().starts_with('@') && reflection::path_valid<S, Path, 1>()) ||
                       (Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>())) &&
-                     sizeof...(Index) == reflection::index_slots<Path>() && std::is_lvalue_reference_v<Self>)
+                     sizeof...(Index) == reflection::index_arguments<Path>() && std::is_lvalue_reference_v<Self>)
         CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
             validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
@@ -2912,7 +2912,7 @@ public:
 
     template <fixed_string Path, std::convertible_to<std::size_t>... Index>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && Path.view().starts_with('$') &&
-                 reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_slots<Path>() &&
+                 reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
                  value_holds_no_view<typename decltype(reflection::path_result<T, T, Path, 1>())::type>)
     static auto at_path(std::string_view const encoded, Index const... indexes)
     {
