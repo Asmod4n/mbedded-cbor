@@ -11,7 +11,7 @@ public:
     template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
         requires(((Path.view().starts_with('@') && reflection::path_valid<S, Path, 1>()) ||
                   (Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>())) &&
-                 sizeof...(Index) == /* the count of [] in Path */ && std::is_lvalue_reference_v<Self>)
+                 sizeof...(Index) == reflection::index_arguments<Path>() && std::is_lvalue_reference_v<Self>)
     auto at_path(this Self &&self, Index const... indexes);
 };
 ```

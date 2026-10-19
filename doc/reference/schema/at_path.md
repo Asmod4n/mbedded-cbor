@@ -3,7 +3,7 @@
 ```cpp
 template <fixed_string Path, std::convertible_to<std::size_t>... Index>
     requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && Path.view().starts_with('$') &&
-             reflection::path_valid<T, Path, 1>() && sizeof...(Index) == /* the count of [] in Path */ &&
+             reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
              value_holds_no_view<typename decltype(reflection::path_result<T, T, Path, 1>())::type>)
 static auto at_path(std::string_view const encoded, Index const... indexes);
 ```

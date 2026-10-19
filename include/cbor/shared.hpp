@@ -40,13 +40,13 @@ private:
 
 template <bool Checked>
 struct value_sharing::sharing_decoder : heads::decoder<Checked> {
-    enum class slot : std::uint8_t { in_skipped_member, open, value_member };
+    enum class marked_value : std::uint8_t { in_skipped_member, open, value_member };
 
-    std::vector<slot> slots;
+    std::vector<marked_value> marked_values;
 
     void mark(heads::decoder<Checked> const &)
     {
-        slots.push_back(slot::in_skipped_member);
+        marked_values.push_back(marked_value::in_skipped_member);
     }
 };
 
