@@ -2727,7 +2727,8 @@ TEST_CASE("encode and decode: every kind of member in a vector of structs")
     }
 }
 
-// The bytes of a column come from the wire, so every head of a column record is compared before a value is read.
+// The bytes of a column come from the wire, so every head of a column record is compared before a value is read. An
+// accessor of a vector or of one element compares every head once, so its later reads compare none.
 // The head of the first column gives the count; a later column that claims another count, a column head of another
 // type, or a count whose columns do not fit in the item is refused.
 TEST_CASE("at_path and decode: a broken column is an error")
@@ -2739,6 +2740,10 @@ TEST_CASE("at_path and decode: a broken column is an error")
     other_type[second + 1] = '\x56';
     CHECK_EQ(at_path<cloud, "$.points[0].y">(other_type).error(), error::incorrect_type);
     CHECK_EQ(cbor::schema<cloud>::decode(std::string(other_type)).error(), error::incorrect_type);
+    auto const opened = cbor::schema<cloud>::path(std::string(other_type));
+    REQUIRE(opened.has_value());
+    CHECK_EQ(opened->at_path<"$.points">().error(), error::incorrect_type);
+    CHECK_EQ(opened->at_path<"$.points[0]">().error(), error::incorrect_type);
     std::string other_count = bytes;
     other_count[second + 6] = '\x04';
     CHECK_EQ(at_path<cloud, "$.points[0].y">(other_count).error(), error::incorrect_type);
