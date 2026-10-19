@@ -30,8 +30,8 @@ and is applied to any number of items. `T` of a `compile` that is
 not `nodelist` needs a singular path, else the result is
 `not_singular_query`. `nodelist` is `std::vector<lazy>`. A
 compile-time path that is not valid leaves no form to call: the compiler
-reports that no function matches. `packed<T>::at_path` reads a member of
-a packed message ([packed.md](packed.md)).
+reports that no function matches. `schema<T>::at_path` reads a member of
+a packed message ([schema.md](schema.md)).
 
 A wrong use that the compiler cannot see throws `std::logic_error`:
 

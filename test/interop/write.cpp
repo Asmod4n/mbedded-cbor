@@ -1,6 +1,6 @@
 // Writes every interop case as one line "name TAB section TAB written TAB expected" to stdout. written and
 // expected are hex. written comes from a public writer of the library: cbor::encoder, cbor::encode(item),
-// structs<T>::encode or packed<T>::encode. expected holds the same value in bytes that do not come from the
+// structs<T>::encode or schema<T>::encode. expected holds the same value in bytes that do not come from the
 // writer under test: the input of a re-encode, or bytes written by hand from RFC 8949 and RFC 8746. A dash
 // stands for a case with no expected bytes; the decoders must then only accept the written bytes. A writer
 // that refuses a value gives "!" and the error in place of written, so the driver reports it.
@@ -566,16 +566,16 @@ struct [[= cbor::tag(1702)]] sensor {
     std::int64_t offset;
 };
 
-// packed<T>::encode. A generic decoder does not know Packed CBOR, so it gives the tags 113 and 114 with their
+// schema<T>::encode. A generic decoder does not know Packed CBOR, so it gives the tags 113 and 114 with their
 // content (RFC 8949 3.4); the written bytes have no expectation and must only be accepted.
 void packed_cases()
 {
     char const *const s = "draft-ietf-cbor-packed-19";
     result_print("packed/car", s,
-               cbor::packed<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nullopt}),
+               cbor::schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nullopt}),
                "-");
     result_print("packed/sensor", s,
-               cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}, {std::byte{9}}, -5}), "-");
+               cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}, {std::byte{9}}, -5}), "-");
 }
 
 } // namespace

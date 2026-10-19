@@ -63,10 +63,10 @@ the compiler cannot see a wrong use, the library throws
 | `incorrect_type` | A typed read finds another kind of item than T takes. |
 | `number_out_of_range` | The number does not fit T. |
 | `cyclic_data_structure` | An encode without sharing meets a cycle. |
-| `unpopulated_table_index` | A reference in a `packed<T>` message names an entry that its table does not have. |
+| `unpopulated_table_index` | A reference in a `schema<T>` message names an entry that its table does not have. |
 | `nodelist_too_long` | One step of a query selects more nodes than the item has bytes. |
 | `duplicate_key` | A deterministic check finds a key twice in one map. |
-| `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `packed` decode. |
+| `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `schema` decode. |
 | `string_length_exceeded`, `container_elements_exceeded` | A limit is set and the input goes past it (section 4). |
 
 ```cpp
@@ -150,12 +150,12 @@ cbor::item_size(bytes);             // 4
 ## 6. Memory
 
 The caller sets the bound of the memory of a decode. `structs<T>::decode`
-and `packed<T>::decode` take a target as their third argument. The target
+and `schema<T>::decode` take a target as their third argument. The target
 holds `std::pmr` containers with a `std::pmr::memory_resource`. The decode
 reads into the target and makes each element with the allocator of its
 container. When the resource refuses, the decode returns
 `error::not_enough_memory`. A `std::bad_alloc` does not leave
-`structs<T>::decode` or `packed<T>::decode`.
+`structs<T>::decode` or `schema<T>::decode`.
 
 ```cpp
 using texts = std::pmr::vector<std::pmr::string>;
@@ -246,7 +246,7 @@ auto const a = cbor::lazy::view(shared).value();   // shares the bytes, no copy
 auto const b = cbor::lazy::copy(std::move(bytes)).value();   // moves the string, no copy
 ```
 
-`structs<T>::decode`, `packed<T>::decode`, `packed<T>::path`, `at_path`
+`structs<T>::decode`, `schema<T>::decode`, `schema<T>::path`, `at_path`
 for a view result ([path.md](path.md)) and `cbor::sequence` take the same
 forms. The library takes no other pointer to bytes.
 

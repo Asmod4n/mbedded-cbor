@@ -74,9 +74,9 @@ struct [[=cbor::tag(1900)]] series {
 // The section "A number array" reads a std::vector<double> member as an RFC 8746 typed array with no copy.
 TEST_CASE("doc advanced comparison: a number array")
 {
-    std::string const bytes = *cbor::packed<series>::encode(series{{1.5, 2.5, 3.5}});
+    std::string const bytes = *cbor::schema<series>::encode(series{{1.5, 2.5, 3.5}});
     // begin numbers
-    auto const root = cbor::packed<series>::path(std::string(bytes));
+    auto const root = cbor::schema<series>::path(std::string(bytes));
     auto const values = root->view<"$.values">();
     double const sum = std::accumulate(values->begin(), values->end(), 0.0);
     // end numbers

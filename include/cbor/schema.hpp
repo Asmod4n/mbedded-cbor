@@ -75,7 +75,7 @@ template <class Root>
 consteval bool tags_registered();
 
 template <class T>
-class packed;
+class schema;
 
 template <class E>
 class typed_array_view;
@@ -1379,7 +1379,7 @@ class reflection
             else if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U>)
                 return std::type_identity<std::string_view>{};
             else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> && !std::same_as<U, uint128>)
-                return std::type_identity<typename cbor::packed<Root>::template accessor<U>>{};
+                return std::type_identity<typename cbor::schema<Root>::template accessor<U>>{};
             else
                 return std::type_identity<U>{};
         } else if constexpr (path[At] == '.') {
@@ -1455,21 +1455,21 @@ class reflection
                     fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, *r);
+                return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor, *r);
             } else if constexpr (is_typed_array<U>) {
                 using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
                 auto const r = reference_read<Root, major_type::array, E>(encoded, field, floor, sizeof(E));
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, *r);
+                return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor, *r);
             } else if constexpr (is_list<U>) {
                 auto const r = reference_read<Root, major_type::array>(
                     encoded, field, floor, fixed_size<std::ranges::range_value_t<U>, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, *r);
+                return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor, *r);
             } else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> && !std::same_as<U, uint128>) {
-                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor);
+                return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor);
             } else {
                 if (!fixed_head_valid<U>(field)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
@@ -1748,7 +1748,7 @@ class reflection
     }
 
     template <class>
-    friend class cbor::packed;
+    friend class cbor::schema;
 
     template <class T>
     static std::expected<std::size_t, std::errc> encoded_size(second_item<T> const &second)
@@ -1823,7 +1823,7 @@ class typed_array_view
     }
 
     template <class>
-    friend class packed;
+    friend class schema;
 
 public:
     typed_array_view(typed_array_view const &) = default;
@@ -2174,11 +2174,11 @@ consteval std::size_t reflection::member_offset()
 }
 
 template <class T>
-class packed
+class schema
 {
     static_assert(!reflection::table_tag_taken_by_standard_type<T>(),
-                  "cbor::packed takes a tag that no standard type has.");
-    static_assert(!reflection::table_tag_invalid<T>(), "cbor::packed takes a tag that the IANA registry calls always invalid.");
+                  "cbor::schema takes a tag that no standard type has.");
+    static_assert(!reflection::table_tag_invalid<T>(), "cbor::schema takes a tag that the IANA registry calls always invalid.");
 
     template <class X>
     static constexpr bool value_holds_no_view = std::is_trivially_copyable_v<X> && !std::same_as<X, std::string_view> &&
@@ -2231,7 +2231,7 @@ public:
         {
         }
 
-        friend class packed;
+        friend class schema;
 
         friend class reflection;
 
@@ -2245,7 +2245,7 @@ public:
                      sizeof...(Index) == reflection::index_slots<Path>() && std::is_lvalue_reference_v<Self>)
         CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
-            validity::throw_logic_error_if_empty(self.owner, "cbor::packed::accessor::at_path: the accessor was moved from");
+            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
             auto result = [&] {
                 std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
                 constexpr std::string_view path = Path.view();
@@ -2307,7 +2307,7 @@ public:
         {
             using X = typename decltype(reflection::path_result<T, T, Path, 1>())::type;
             using E = typename decltype([]<class V>(std::type_identity<accessor<V>>) {
-                static_assert(reflection::is_typed_array<V>, "cbor::packed::accessor::view: the path does not end at a typed array");
+                static_assert(reflection::is_typed_array<V>, "cbor::schema::accessor::view: the path does not end at a typed array");
                 return std::type_identity<std::remove_cv_t<std::ranges::range_value_t<V>>>{};
             }(std::type_identity<X>{}))::type;
             auto const list = self.template at_path<Path>(indexes...);
@@ -2328,7 +2328,7 @@ public:
     static std::expected<accessor<>, error> path(std::shared_ptr<Encoded const> encoded)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        validity::throw_logic_error_if_null(encoded, "cbor::packed::path: the encoded data item is null");
+        validity::throw_logic_error_if_null(encoded, "cbor::schema::path: the encoded data item is null");
         std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
         return path_with_owner(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
@@ -2392,7 +2392,7 @@ public:
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
-        validity::throw_logic_error_if_null(encoded, "cbor::packed::decode: the encoded data item is null");
+        validity::throw_logic_error_if_null(encoded, "cbor::schema::decode: the encoded data item is null");
         std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
         return decode_with_owner(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
@@ -2497,7 +2497,7 @@ private:
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         validity::throw_logic_error_if_empty(
-            owner, "cbor::packed::path: the owner of the encoded data item is empty");
+            owner, "cbor::schema::path: the owner of the encoded data item is empty");
         auto const dir = reflection::directory_read<T>(encoded);
         if (!dir) [[unlikely]]
             return std::unexpected(dir.error());
@@ -2512,7 +2512,7 @@ private:
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         validity::throw_logic_error_if_empty(owner,
-                                             "cbor::packed::decode: the owner of the encoded data item is empty");
+                                             "cbor::schema::decode: the owner of the encoded data item is empty");
 #if defined(__cpp_exceptions)
         try {
 #endif

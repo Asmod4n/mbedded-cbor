@@ -16,7 +16,7 @@ cmake --install build --prefix /usr/local
 find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
 
-# packed: C++26 reflection, g++ 16; structs: also C++23 with the Boost headers
+# schema: C++26 reflection, g++ 16; structs: also C++23 with the Boost headers
 target_compile_features(app PRIVATE cxx_std_26)
 target_compile_options(app PRIVATE -freflection)
 ```
@@ -140,7 +140,7 @@ again with more bytes.
 ## 7. Packed: fields at fixed offsets
 
 A CBOR message carries its keys and its structure in every message. To
-read one field, a reader walks over the items before it. `cbor::packed`
+read one field, a reader walks over the items before it. `cbor::schema`
 removes that walk. It writes a struct as Packed CBOR
 (draft-ietf-cbor-packed-19): the struct gives the layout, so a field of
 fixed size sits at an offset that the compiler knows, and a read goes
@@ -155,12 +155,12 @@ struct [[=cbor::tag(1900)]] series {
     std::vector<double> values;
 };
 
-std::string const bytes = cbor::packed<series>::encode({"m", {1.5, 2.5, 3.5}}).value();
+std::string const bytes = cbor::schema<series>::encode({"m", {1.5, 2.5, 3.5}}).value();
 
-auto const second = cbor::packed<series>::at_path<"$.values[1]">(bytes);
+auto const second = cbor::schema<series>::at_path<"$.values[1]">(bytes);
 // *second == 2.5, read at its offset
 
-auto const root = cbor::packed<series>::path(bytes).value();
+auto const root = cbor::schema<series>::path(bytes).value();
 auto const values = root.view<"$.values">();  // *values: a random-access range of double
 double const sum = std::ranges::fold_left(*values, 0.0, std::plus{});  // 7.5
 ```
@@ -206,7 +206,7 @@ std::size_t const size = bytes.size();
 - [doc/path.md](doc/path.md): JSONPath (RFC 9535) on CBOR. `match()`
   and `search()` are not supported.
 - [doc/structs.md](doc/structs.md) and
-  [doc/packed.md](doc/packed.md): every type and annotation.
+  [doc/schema.md](doc/schema.md): every type and annotation.
 
 ## Tests
 
@@ -218,7 +218,7 @@ and the
 [JSONPath Compliance Test Suite](https://github.com/jsonpath-standard/jsonpath-compliance-test-suite).
 They run with g++ 16 and clang 23, also with AddressSanitizer and
 UndefinedBehaviorSanitizer. Fuzz targets cover decode, encode, encoder,
-item_size, lazy, path and packed (CMake option `CBOR_FUZZ`).
+item_size, lazy, path and schema (CMake option `CBOR_FUZZ`).
 
 ## License
 

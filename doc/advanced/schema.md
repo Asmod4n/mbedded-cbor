@@ -1,6 +1,6 @@
 # Packed in detail
 
-This page adds the details to [../packed.md](../packed.md). The examples
+This page adds the details to [../schema.md](../schema.md). The examples
 use these structs:
 
 ```cpp
@@ -18,7 +18,7 @@ struct [[=cbor::tag(1701)]] car {
 };
 
 car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nullopt};
-auto const bytes = *cbor::packed<car>::encode(sample);   // a std::string
+auto const bytes = *cbor::schema<car>::encode(sample);   // a std::string
 ```
 
 ## 1. The message
@@ -43,7 +43,7 @@ message.
 
 The tag numbers of the root and of every struct inside it differ.
 `cbor::tags_registered<T>()` is true when this holds. A struct with no
-tag, or two structs with one tag, leave no `packed<T>` to call: the
+tag, or two structs with one tag, leave no `schema<T>` to call: the
 program does not compile.
 
 `[[=cbor::key("x")]]`, `[[=cbor::skip{}]]` and `[[=cbor::allowlist{}]]`
@@ -54,9 +54,9 @@ with `[[=cbor::allow{}]]` choose the keys and the members as in
 
 | Call | Result |
 |---|---|
-| `packed<T>::encode(value)` | `std::expected<std::string, error>` |
-| `packed<T>::encode(value, target)` | `std::expected<std::size_t, error>`, the count of bytes appended |
-| `packed<T>::decode(bytes)` | `std::expected<owning_ref<T>, error>`, the whole struct |
+| `schema<T>::encode(value)` | `std::expected<std::string, error>` |
+| `schema<T>::encode(value, target)` | `std::expected<std::size_t, error>`, the count of bytes appended |
+| `schema<T>::decode(bytes)` | `std::expected<owning_ref<T>, error>`, the whole struct |
 
 `decode` takes the same four forms as `structs<T>::decode`: a moved
 `std::string`, a `std::string_view` that it copies, an owner with its
@@ -67,17 +67,17 @@ section 6).
 
 ## 4. One value with no accessor
 
-`packed<T>::at_path<Path>(encoded, index...)` reads one value. It makes
+`schema<T>::at_path<Path>(encoded, index...)` reads one value. It makes
 every check of an accessor and keeps nothing. It exists only where the
 value holds no view into the message: a number, a `bool`, an enum, or an
 optional of one.
 
 ```cpp
-cbor::packed<car>::at_path<"$.seats">(bytes);                      // 5
-cbor::packed<car>::at_path<"$.tires[1].diameter">(bytes);          // 18
-cbor::packed<car>::at_path<"$.tires[].pressure">(bytes, 0uz);      // 2.5f
-cbor::packed<car>::at_path<"$.track[2]">(bytes);                   // 3.0
-cbor::packed<car>::at_path<"$.tires[].diameter">(bytes, 5uz);      // error::index_out_of_bounds
+cbor::schema<car>::at_path<"$.seats">(bytes);                      // 5
+cbor::schema<car>::at_path<"$.tires[1].diameter">(bytes);          // 18
+cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0uz);      // 2.5f
+cbor::schema<car>::at_path<"$.track[2]">(bytes);                   // 3.0
+cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz);      // error::index_out_of_bounds
 ```
 
 A path is a string literal. It names members with `.name` and elements
@@ -91,8 +91,8 @@ such as a `std::vector` of structs, does not compile.
 
 ## 5. The accessor
 
-`packed<T>::path(...)` opens a message and gives the root accessor,
-`packed<T>::accessor<T>`. The forms are those of `decode`:
+`schema<T>::path(...)` opens a message and gives the root accessor,
+`schema<T>::accessor<T>`. The forms are those of `decode`:
 
 | Call | Owner |
 |---|---|
@@ -105,7 +105,7 @@ holds the same owner, so an accessor of a list outlives the temporary
 root that gave it.
 
 ```cpp
-auto const root = cbor::packed<car>::path(bytes);
+auto const root = cbor::schema<car>::path(bytes);
 root->at_path<"$.make">();                  // "Volvo", a std::string_view
 auto const tires = root->at_path<"$.tires">();
 tires->size();                              // 2
@@ -172,7 +172,7 @@ Each `at_path` checks at each read:
 `view` checks the tag and the length of the typed array once. After that,
 each element read checks only its index.
 
-`packed<T>::at_path` with no accessor makes the checks of `path` and of
+`schema<T>::at_path` with no accessor makes the checks of `path` and of
 `at_path` in one call.
 
 ## 8. Errors
@@ -188,9 +188,9 @@ each element read checks only its index.
 | a refused allocation in `decode` | `not_enough_memory` |
 
 ```cpp
-cbor::packed<car>::decode(std::string_view(bytes).substr(0, 3));     // too_little_data
-cbor::packed<car>::decode(*cbor::packed<tire>::encode(tire{1, 1}));  // too_little_data
-cbor::packed<tire>::decode(bytes);                                   // incorrect_type
+cbor::schema<car>::decode(std::string_view(bytes).substr(0, 3));     // too_little_data
+cbor::schema<car>::decode(*cbor::schema<tire>::encode(tire{1, 1}));  // too_little_data
+cbor::schema<tire>::decode(bytes);                                   // incorrect_type
 ```
 
 ## 9. Cost
@@ -200,7 +200,7 @@ cbor::packed<tire>::decode(bytes);                                   // incorrec
 | `path(std::shared_ptr<std::string const>)` | independent of the size of the message | none |
 | `path(std::string_view)` | the copy of the message | the copy |
 | `accessor::at_path`, `view` | one step for each part of the path | none |
-| `packed<T>::at_path` | the directory and one step for each part of the path | none |
+| `schema<T>::at_path` | the directory and one step for each part of the path | none |
 | `decode` | the size of the message | the result |
 | `encode` | the size of the message | the message |
 
