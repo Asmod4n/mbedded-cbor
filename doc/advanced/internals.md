@@ -16,7 +16,7 @@ runs the JSONPath Compliance Test Suite.
 
 ## 2. A lazy reads heads
 
-`lazy::copy` and `lazy::view` read no head. A step reads the heads that it needs when it
+`lazy::take_ownership` and `lazy::view` read no head. A step reads the heads that it needs when it
 is called: the heads from the start of its map or array to the target,
 and the head of the target. It reads no byte after the head of the
 target. So a target that the input does not hold gives `too_little_data`

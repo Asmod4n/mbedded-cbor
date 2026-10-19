@@ -147,8 +147,8 @@ struct person {
     int age;
 };
 
-auto const bytes = cbor::structs<person>::encode(person{"ann", 30});
-auto const back = cbor::structs<person>::decode(*bytes);
+auto bytes = cbor::structs<person>::encode(person{"ann", 30});
+auto const back = cbor::structs<person>::decode(std::move(*bytes));
 // (*back)->name is "ann", (*back)->age is 30
 ```
 
@@ -217,7 +217,7 @@ for (int const x : v)
 elements() gives a forward range. Each element is a std::expected<cbor::lazy, cbor::error>.
 
 ```cpp
-auto const doc = cbor::lazy::copy(bytes); // [1, 2, 3]
+auto const doc = cbor::lazy::take_ownership(std::move(bytes)); // [1, 2, 3]
 std::int64_t sum = 0;
 for (auto const e : *doc->elements())
     sum += e->get<std::int64_t>().value_or(0);
@@ -279,11 +279,11 @@ bool const same = v[0] == v[1];
 Tags 28 and 29 are plain tags in a lazy and in a tree decode; `cbor::structs` decode resolves them. The encoder writes them only for a cycle that it finds itself ([runtime.md](runtime.md)).
 
 ```cpp
-// bytes: [28("x"), 29(0)]
-auto const second = cbor::lazy::copy(bytes)->at(1);
+// owner: a std::shared_ptr<std::string const> with [28("x"), 29(0)]
+auto const second = cbor::lazy::view(owner)->at(1);
 // second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0
 
-auto const v = cbor::structs<std::vector<std::string>>::decode(bytes);
+auto const v = cbor::structs<std::vector<std::string>>::decode(owner);
 // v.error() is cbor::error::incorrect_type
 ```
 
@@ -348,7 +348,7 @@ struct [[=cbor::tag(1900)]] series {
     std::vector<double> values;
 };
 
-auto const root = cbor::schema<series>::path(bytes);
+auto const root = cbor::schema<series>::path(std::move(bytes));
 auto const values = root->view<"$.values">();
 double const sum = std::accumulate(values->begin(), values->end(), 0.0);
 ```

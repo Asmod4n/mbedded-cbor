@@ -31,18 +31,16 @@ holds its own copy of every value.
 | Call | Owner |
 |---|---|
 | `decode(std::string)` with an rvalue | the library moves the string into a new `std::shared_ptr<std::string const>` |
-| `decode(std::string_view)` | the library copies the bytes into a new `std::shared_ptr<std::string const>` |
 | `decode(std::shared_ptr<std::string const>)` | the caller, no copy |
 | `decode(std::shared_ptr<std::string const>, target)` | the caller, and `decode` reads into `target` (section 8) |
 
-A `std::string` lvalue and a `char const *` take the copying form.
+No form copies the bytes. A `std::string` lvalue, a `std::string_view`
+alone and a `char const *` do not compile.
 
 ```cpp
 // bytes: "abc"
-cbor::structs<std::string_view>::decode(bytes);                 // a copy of bytes
-auto const owner = std::make_shared<std::string const>(bytes);
+auto const owner = std::make_shared<std::string const>(std::move(bytes));
 cbor::structs<std::string_view>::decode(owner);         // a view into *owner
-cbor::structs<std::string_view>::decode(std::move(bytes));      // no copy
 ```
 
 An empty owner throws `std::logic_error`. A `std::string` or a
@@ -220,7 +218,7 @@ item. An integer alternative accepts an integer that it can hold.
 using id = std::variant<std::uint8_t, std::int64_t, std::string>;
 ```
 
-| bytes | `cbor::structs<id>::decode(bytes)` |
+| bytes | `cbor::structs<id>::decode(std::move(bytes))` |
 |---|---|
 | `42` | index 0, the `std::uint8_t` 42 |
 | `-1` | index 1, the `std::int64_t` -1 |
@@ -239,7 +237,7 @@ before it gives `sharedref_index_not_marked`. Nothing is decoded twice.
 
 ```cpp
 // [28("x"), 29(0)]
-cbor::structs<std::vector<std::string>>::decode(bytes);   // incorrect_type
+cbor::structs<std::vector<std::string>>::decode(std::move(bytes));   // incorrect_type
 ```
 
 `encode` writes no shared value.

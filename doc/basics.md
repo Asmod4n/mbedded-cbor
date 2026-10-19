@@ -59,11 +59,11 @@ A text or a byte string comes back as a view into the bytes, with no
 copy. The view sits in a `cbor::owning_ref`. The `owning_ref` holds the
 bytes, so the view stays valid while the `owning_ref` lives.
 
-Bytes go into the library in two forms only. A `std::string_view` or a
-`std::string` is copied into storage that the library owns; an rvalue
-`std::string` is moved there with no copy. A
+Bytes go into the library in two forms only, and no form copies them. An
+rvalue `std::string` is moved into storage that the library owns. A
 `std::shared_ptr<std::string const>` is read in place, and every result
-keeps it alive. The library takes no other pointer to bytes.
+keeps it alive. A read that gives a number also takes a
+`std::string_view`, because its result points into nothing.
 
 ```cpp
 // bytes: {"name": "ann"}
@@ -89,10 +89,10 @@ writes them. A `cbor::lazy` and every result from it belong to the thread
 that made them, so each thread makes its own lazy.
 
 ```cpp
-// bytes: {"id": 42}
-std::jthread first([&bytes] { use(cbor::at_path<"$.id", std::int64_t>(bytes)); });
-std::jthread second([&bytes] {
-    if (auto const doc = cbor::lazy::copy(bytes))   // the lazy of this thread
+// owner: a std::shared_ptr<std::string const> with {"id": 42}
+std::jthread first([&owner] { use(cbor::at_path<"$.id", std::int64_t>(*owner)); });
+std::jthread second([&owner] {
+    if (auto const doc = cbor::lazy::view(owner))   // the lazy of this thread
         use(doc->at_path<"$.id", std::int64_t>());
 });
 ```

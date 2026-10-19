@@ -378,7 +378,7 @@ the bytes after the target. So these faults are not found:
 | `01 02`, a byte after the item | `at_path<"$", int>` | `1` |
 | `82 01` | `at_path<"$[1]", int>` | `too_little_data` |
 
-`lazy::copy` does not read the whole item either: it accepts `82 01` and
+`lazy::take_ownership` and `lazy::view` do not read the whole item either: it accepts `82 01` and
 `01 02`. A step into `82 01` gives `too_little_data`. `item_size` and a
 decode check a whole item.
 

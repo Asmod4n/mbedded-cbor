@@ -50,7 +50,7 @@ the lazy holds the bytes.
 
 ```cpp
 // bytes: {"cars": [{"hp": 5}, {"hp": 7, "make": "kia"}]}
-auto const cars = cbor::lazy::copy(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
+auto const cars = cbor::lazy::take_ownership(std::move(bytes)).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
 if (cars) {
     cars->at_path<"$[1].hp", std::int64_t>();          // 7
     cars->at_path<"$[1].make", std::string_view>();    // "kia"

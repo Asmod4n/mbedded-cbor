@@ -28,7 +28,7 @@ struct [[=cbor::tag(1700)]] sensor {
     std::vector<double> readings;
 };
 
-auto const bytes = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
+auto bytes = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
 if (!bytes)
     return std::unexpected(bytes.error());
 auto const id = cbor::schema<sensor>::at_path<"$.id">(*bytes);                // 7
@@ -63,11 +63,14 @@ text does not compile here: section 4 reads a text.
 
 ## 4. Read a text, a list or a struct
 
-`schema<T>::path(bytes)` opens the message and gives an accessor. An
-accessor reads every kind of member.
+`schema<T>::path(std::move(bytes))` opens the message and gives an
+accessor. The bytes move into the accessor, with no copy. A
+`std::shared_ptr<std::string const>` is read in place. An accessor reads
+every kind of member.
 
 ```cpp
-auto const root = cbor::schema<sensor>::path(*bytes);
+auto const owner = std::make_shared<std::string const>(std::move(*bytes));
+auto const root = cbor::schema<sensor>::path(owner);
 if (!root)
     return std::unexpected(root.error());
 root->at_path<"$.name">();                      // "t1", a std::string_view
@@ -123,7 +126,7 @@ temporary accessor does not compile.
 ## 5. Read the whole struct
 
 ```cpp
-auto const back = cbor::schema<sensor>::decode(*bytes);
+auto const back = cbor::schema<sensor>::decode(owner);
 if (back)
     use((*back)->readings.size());   // 2
 ```
