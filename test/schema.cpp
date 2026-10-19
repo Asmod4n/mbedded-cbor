@@ -2765,4 +2765,35 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     CHECK_EQ(cbor::schema<gauges>::decode(std::string(two)).error(), error::incorrect_type);
 }
 
+// The accessor of a fixed-size vector is a random access range of element accessors, so a loop, a page through
+// std::views::drop and std::views::take, and a count work as with any std range. A page reads only its elements.
+TEST_CASE("at_path: a fixed-size vector is a range of its elements")
+{
+    auto const owner = std::make_shared<std::string const>(schema_bytes(
+        gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}, {true, color::black, {0, 9}, {0, 0}}}}));
+    auto const root = cbor::schema<gauges>::path(owner);
+    REQUIRE(root.has_value());
+    auto const g = root->at_path<"$.g">();
+    REQUIRE(g.has_value());
+    CHECK(std::ranges::random_access_range<decltype(*g)>);
+    CHECK(std::ranges::sized_range<decltype(*g)>);
+    std::vector<int> xs;
+    for (auto const e : *g)
+        xs.push_back(*e.at_path<"@.at.x">());
+    CHECK_EQ(xs, (std::vector<int>{3, -6, 9}));
+    CHECK_EQ(std::ranges::size(*g), 3u);
+    auto page = *g | std::views::drop(1) | std::views::take(1);
+    CHECK_EQ(std::ranges::distance(page), 1);
+    auto const first = *std::ranges::begin(page);
+    CHECK_EQ(first.at_path<"@.range[1]">(), 8u);
+    auto const third = g->begin()[2];
+    CHECK_EQ(third.at_path<"@.on">(), true);
+    std::string const empty = schema_bytes(gauges{});
+    auto const none = cbor::schema<gauges>::path(std::string(empty));
+    REQUIRE(none.has_value());
+    auto const nothing = none->at_path<"$.g">();
+    REQUIRE(nothing.has_value());
+    CHECK(std::ranges::empty(*nothing));
+}
+
 #endif

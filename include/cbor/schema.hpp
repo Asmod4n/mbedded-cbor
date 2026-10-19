@@ -2730,6 +2730,122 @@ public:
         {
             return items.length;
         }
+
+        class iterator
+        {
+            using element = std::remove_cv_t<std::ranges::range_value_t<U>>;
+            static constexpr std::size_t width = reflection::fixed_width<element>();
+
+            std::shared_ptr<void const> owner;
+            std::string_view encoded;
+            std::size_t at = 0;
+            cbor::directory dir{};
+
+            iterator(std::shared_ptr<void const> o, std::string_view const b, std::size_t const a, cbor::directory const d)
+                : owner(std::move(o)), encoded(b), at(a), dir(d)
+            {
+            }
+
+            friend class accessor;
+
+        public:
+            using value_type = accessor<fixed_element<element>>;
+            using difference_type = std::ptrdiff_t;
+
+            iterator() = default;
+
+            value_type operator*() const
+            {
+                value_type e(encoded, at, dir);
+                e.owner = owner;
+                return e;
+            }
+
+            value_type operator[](difference_type const n) const
+            {
+                return *(*this + n);
+            }
+
+            iterator &operator++()
+            {
+                at += width;
+                return *this;
+            }
+
+            iterator operator++(int)
+            {
+                iterator const was = *this;
+                at += width;
+                return was;
+            }
+
+            iterator &operator--()
+            {
+                at -= width;
+                return *this;
+            }
+
+            iterator operator--(int)
+            {
+                iterator const was = *this;
+                at -= width;
+                return was;
+            }
+
+            iterator &operator+=(difference_type const n)
+            {
+                at = static_cast<std::size_t>(static_cast<difference_type>(at) + n * static_cast<difference_type>(width));
+                return *this;
+            }
+
+            iterator &operator-=(difference_type const n)
+            {
+                return *this += -n;
+            }
+
+            friend iterator operator+(iterator i, difference_type const n)
+            {
+                return i += n;
+            }
+
+            friend iterator operator+(difference_type const n, iterator i)
+            {
+                return i += n;
+            }
+
+            friend iterator operator-(iterator i, difference_type const n)
+            {
+                return i -= n;
+            }
+
+            friend difference_type operator-(iterator const &a, iterator const &b)
+            {
+                return (static_cast<difference_type>(a.at) - static_cast<difference_type>(b.at)) /
+                       static_cast<difference_type>(width);
+            }
+
+            friend bool operator==(iterator const &a, iterator const &b)
+            {
+                return a.at == b.at;
+            }
+
+            friend auto operator<=>(iterator const &a, iterator const &b)
+            {
+                return a.at <=> b.at;
+            }
+        };
+
+        iterator begin() const
+            requires(reflection::is_fixed_vector<U>)
+        {
+            return iterator(owner, encoded, items.data, dir);
+        }
+
+        iterator end() const
+            requires(reflection::is_fixed_vector<U>)
+        {
+            return iterator(owner, encoded, items.data + items.length * iterator::width, dir);
+        }
     };
 
     template <class S>
