@@ -2631,6 +2631,28 @@ TEST_CASE("schema: a struct reference into the block of its struct is incorrect_
     CHECK_EQ(cbor::packed<order_top>::decode(std::string(forged)).error(), error::incorrect_type);
 }
 
+// A path reads a record by the size that its type gives, and checks the whole head of the record: the class tag,
+// the record function and the count 9a + u32 (RFC 8949 3). The count of the record of first is forged from 3 to 4.
+// The directory end of the record of first is forged one byte later; a path does not read it, and decode, which
+// checks that each item starts where the one before it ends, refuses it. The test exists because the record head
+// is now the check of the length of a record on a path.
+TEST_CASE("schema: a path checks the head of a record and reads it by its own size")
+{
+    std::string const bytes = *cbor::packed<order_top>::encode(order_sample(std::nullopt));
+    std::size_t const first = item_start(bytes, 24);
+    REQUIRE_EQ(bytes.substr(first + 5, 5), "\x9a\x00\x00\x00\x03"s);
+    std::string counted = bytes;
+    counted.at(first + 9) = '\x04';
+    CHECK_EQ(at_path<order_top, "$.inner.first.a">(counted).error(), error::incorrect_type);
+    CHECK_EQ(at_path<order_top, "$.inner.m">(counted), "m"s);
+    CHECK_EQ(cbor::packed<order_top>::decode(std::string(counted)).error(), error::incorrect_type);
+
+    std::string ended = bytes;
+    ended.replace(14 + 4 * (25 - 16), 4, u32_bytes(static_cast<std::uint32_t>(item_start(bytes, 25) + 1)));
+    CHECK_EQ(at_path<order_top, "$.inner.first.b">(ended), "b1"s);
+    CHECK_FALSE(cbor::packed<order_top>::decode(std::string(ended)).has_value());
+}
+
 // Every byte of the message is changed in three ways, and every path and decode give a value or an error. The test
 // exists because the address sanitizer of the debug builds then shows any read outside the message.
 TEST_CASE("attack: a changed byte of a message with structs at three levels reads nothing outside it")

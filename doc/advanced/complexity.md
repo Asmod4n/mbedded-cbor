@@ -348,7 +348,7 @@ All rows marked "compile time" have no run-time cost.
 | `reflection::member_named`, `step_end`, `index_end`, `index_of` :763-784 | O(c·len), O(L), O(L), O(digits) compile time | O(1) | |
 | `reflection::fixed_value_read<T>` :794 | O(1) | O(1) | |
 | `reflection::fixed_head_valid<T>` :846 | O(1) | O(1) | |
-| `reflection::class_tag_valid` :872 | O(1) | O(1) | |
+| `reflection::record_head_valid` :1362 | O(1) | O(1) | |
 | `reflection::shared_index_read` :889 | O(1) | O(1) | Not opened. |
 | `reflection::item_reference_read` :904 | O(1) | O(1) | checked_mul. |
 | `reflection::directory_entry` :944 | O(1) | O(1) | |

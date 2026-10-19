@@ -161,14 +161,16 @@ not compile on a temporary view.
   so a message of another layout gives `incorrect_type`;
 - that the directory lies inside the message;
 - that the root lies behind the parts and inside the message;
-- the tag of the struct of the root.
+- the head of the record of the root.
 
 Each `at_path` checks at each read:
 
 - the index of each step against the count of the list;
 - that each offset that it reads from the directory lies inside the
   message;
-- the tag of the struct of each struct on the path;
+- the head of the record of each struct on the path: the tag of its
+  struct, its record function and its count of values; the record is
+  read by the size of its struct;
 - that each part of variable size of a struct names its place in the
   order of the writer, and that each inner struct names a place behind
   those parts;
