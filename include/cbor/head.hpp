@@ -52,7 +52,7 @@ class heads
     static V unsigned_read(std::span<char const, sizeof(V)> const field)
     {
         std::array<char, sizeof(V)> big;
-        std::ranges::copy(field, big.begin());
+        std::copy(field.begin(), field.end(), big.begin());
         return std::byteswap(std::bit_cast<V>(big));
     }
 
