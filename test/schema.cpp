@@ -423,18 +423,19 @@ TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
     check_one_item(bytes);
 }
 
-// Two record functions take index 0 and 1, the directory index 2. The list is item 16, a record of columns d8 81
-// (the second type) over one column; the column of the text member is an array of two 6(N) references. The strings
+// Two record functions take index 0 and 1, the directory index 2. The list is item 16; its elements are records
+// of fixed size, each the class tag 1509 = d9 05 e5 over d8 81 for the second type. The strings of the elements
 // follow the list as items 17 and 18, in the order the encoder meets them: 6(-1) and 6(1). The items start at
-// 53 (35), 77 (4d) and 83 (53). The root is the class tag 1510 = d9 05 e6 over d8 80.
+// 53 (35), 90 (5a) and 96 (60). The root is the class tag 1510 = d9 05 e6 over d8 80.
 TEST_CASE("encode: a list of structs that hold strings")
 {
     std::string const bytes = schema_bytes(people{{{"x"}, {"yz"}}});
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x13\xd8\x72\x81\x66people\xd8\x72\x81\x61n"
-                    "\x5a\x00\x00\x00\x0c\x00\x00\x00\x35\x00\x00\x00\x4d\x00\x00\x00\x53"
+                    "\x5a\x00\x00\x00\x0c\x00\x00\x00\x35\x00\x00\x00\x5a\x00\x00\x00\x60"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-                    "\xd8\x81\x9a\x00\x00\x00\x01"
-                    "\x9a\x00\x00\x00\x02\xc6\x3a\x00\x00\x00\x00\xc6\x1a\x00\x00\x00\x01"
+                    "\x9a\x00\x00\x00\x02"
+                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x00"
+                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x01"
                     "\x7a\x00\x00\x00\x01x\x7a\x00\x00\x00\x02yz"
                     "\xd9\x05\xe6\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
     check_one_item(bytes);
@@ -1256,7 +1257,7 @@ TEST_CASE("path: a path compiles where it names a part of the type")
     CHECK(path_reads<garage, "@.tires">);
     using A = cbor::schema<garage>::accessor<>;
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.names[0]">()), std::expected<std::string_view, cbor::error>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), std::expected<cbor::schema<garage>::accessor<cbor::column_element<tire>>, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), std::expected<cbor::schema<garage>::accessor<tire>, cbor::error>>);
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires">()),
                        std::expected<cbor::schema<garage>::accessor<std::vector<tire>>, cbor::error>>);
 }
@@ -2258,24 +2259,23 @@ TEST_CASE("attack: a directory longer than the message is too_little_data")
     CHECK_EQ(cbor::schema<login>::decode(std::string(forged)).error(), error::too_little_data);
 }
 
-// A vector of structs is a record of columns, and the head of each column comes from the wire. The tag of the
-// airPressure column is forged from 85 (float32) to 86 (float64). The test exists because a path into a column must
-// check the head of the column it reaches: the diameter column stays readable, the forged one is refused.
-TEST_CASE("attack: a forged column head in a vector of structs is incorrect_type")
+// A record inside a list carries its class tag like the root. The tag of the second tire is forged. The test exists
+// because a path into a list must check the tag of the record it reaches, not only the tag of the root.
+TEST_CASE("attack: a forged class tag of a record in a list is incorrect_type")
 {
     std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
-    std::size_t const column = bytes.find("\xd8\x55\x5a"s);
-    REQUIRE_NE(column, std::string::npos);
+    std::size_t const second = bytes.find("\xd9\x05\xe7"s, bytes.find("\xd9\x05\xe7"s) + 1);
+    REQUIRE_NE(second, std::string::npos);
     std::string forged = bytes;
-    forged.at(column + 1) = '\x56';
-    CHECK_EQ(at_path<probe, "$.tires[1].diameter">(forged), at_path<probe, "$.tires[1].diameter">(bytes));
-    CHECK_EQ(at_path<probe, "$.tires[1].airPressure">(forged).error(), error::incorrect_type);
+    forged.at(second + 2) = '\xe8';
+    CHECK_EQ(at_path<probe, "$.tires[0].diameter">(forged), 17u);
+    CHECK_EQ(at_path<probe, "$.tires[1].diameter">(forged).error(), error::incorrect_type);
     auto lot = *cbor::schema<probe>::path(std::string(forged));
     for (int pass = 0; pass < 2; ++pass) {
         CHECK_EQ(lot.at_path<"$.tires[].diameter">(0uz), 17u);
-        CHECK_EQ(lot.at_path<"$.tires[].airPressure">(0uz).error(), error::incorrect_type);
+        CHECK_EQ(lot.at_path<"$.tires[].diameter">(1uz).error(), error::incorrect_type);
+        CHECK_EQ(lot.at_path<"$.tires[].airPressure">(1uz).error(), error::incorrect_type);
     }
-    CHECK_EQ(cbor::schema<probe>::decode(std::string(forged)).error(), error::incorrect_type);
 }
 
 namespace
@@ -2526,239 +2526,6 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     CHECK_EQ((*decoded)->name, name);
     CHECK_EQ(cbor::schema<login>::decode(std::string()).error(), error::too_little_data);
     CHECK_EQ(cbor::schema<login>::path(std::string()).error(), error::too_little_data);
-}
-
-
-namespace
-{
-
-struct [[=cbor::tag(1630)]] point {
-    float x;
-    float y;
-};
-
-struct [[=cbor::tag(1631)]] cloud {
-    std::vector<point> points;
-};
-
-struct [[=cbor::tag(1632)]] motor {
-    std::uint16_t cc;
-    std::uint16_t hp;
-};
-
-struct [[=cbor::tag(1633)]] coupe {
-    motor engine;
-    std::string make;
-};
-
-struct [[=cbor::tag(1634)]] fleet {
-    std::vector<coupe> cars;
-};
-
-struct [[=cbor::tag(1635)]] every_kind {
-    bool flag;
-    color shade;
-    cbor::int128 big;
-    std::float16_t half;
-    double wide;
-    std::array<std::uint8_t, 3> triple;
-    char code[2];
-    std::optional<sorted_inner> maybe_inner;
-    std::optional<std::uint32_t> maybe;
-    std::string name;
-    std::vector<std::uint16_t> numbers;
-    std::map<std::uint16_t, std::string> owners;
-    sorted_inner inner;
-    std::array<sorted_inner, 2> pair;
-    std::vector<point> path;
-};
-
-struct [[=cbor::tag(1636)]] every_kind_list {
-    std::vector<every_kind> items;
-};
-
-every_kind every_kind_sample(std::uint16_t const i)
-{
-    every_kind e{};
-    e.flag = i % 2 == 0;
-    e.shade = i % 2 == 0 ? color::black : color::white;
-    e.big = cbor::int128{-1} - static_cast<cbor::int128>(i);
-    e.half = static_cast<std::float16_t>(i) + static_cast<std::float16_t>(0.5f);
-    e.wide = -2.25 * i;
-    e.triple = {static_cast<std::uint8_t>(i), 2, 3};
-    e.code[0] = 'a';
-    e.code[1] = static_cast<char>('a' + i);
-    if (i != 1)
-        e.maybe_inner = sorted_inner{static_cast<std::int8_t>(i), -1};
-    if (i != 2)
-        e.maybe = 1000u + i;
-    e.name = std::string(i, 'n');
-    e.numbers.assign(i, static_cast<std::uint16_t>(i + 7));
-    for (std::uint16_t k = 0; k < i; ++k)
-        e.owners[k] = std::string(k + 1, 'o');
-    e.inner = {static_cast<std::int8_t>(-i), static_cast<std::int8_t>(i)};
-    e.pair = {{{1, 2}, {3, static_cast<std::int8_t>(i)}}};
-    for (std::uint16_t k = 0; k < i; ++k)
-        e.path.push_back({static_cast<float>(k), -static_cast<float>(i)});
-    return e;
-}
-
-bool same(every_kind const &a, every_kind const &b)
-{
-    auto const inner_same = [](sorted_inner const &l, sorted_inner const &r) { return l.x == r.x && l.y == r.y; };
-    return a.flag == b.flag && a.shade == b.shade && a.big == b.big && a.half == b.half && a.wide == b.wide &&
-           a.triple == b.triple && std::ranges::equal(a.code, b.code) &&
-           a.maybe_inner.has_value() == b.maybe_inner.has_value() &&
-           (!a.maybe_inner || inner_same(*a.maybe_inner, *b.maybe_inner)) && a.maybe == b.maybe && a.name == b.name &&
-           a.numbers == b.numbers && a.owners == b.owners && inner_same(a.inner, b.inner) &&
-           inner_same(a.pair[0], b.pair[0]) && inner_same(a.pair[1], b.pair[1]) &&
-           std::ranges::equal(a.path, b.path, [](point const &l, point const &r) { return l.x == r.x && l.y == r.y; });
-}
-
-} // namespace
-
-// Owner decision 2026-10-19: cbor::schema writes a vector of structs as columns, one RFC 8746 typed array per member
-// of a fixed-width number. A column has the bytes of the C++ array of that member, so a loop over it reads at the
-// speed of a loop over native memory. The column record is the record function d8 81 (point is entry 1 of the
-// table, draft-ietf-cbor-packed-19 3.1 and 4.2) over an array of the two columns, 9a 00 00 00 02. It carries no class
-// tag, because it is not one point. Each column is tag 85 (float32, little endian, RFC 8746 2.1) = d8 55 over a byte
-// string of 8 bytes. 1.0f is 3f800000, 2.0f is 40000000, 0.5f is 3f000000, -1.0f is bf800000 (IEEE 754), written
-// low byte first. The table holds cloud (index 0) and point (index 1); the directory holds one offset, 47 (2f).
-// The bytes are written from the draft and the RFCs by hand.
-TEST_CASE("encode: a vector of structs is a record of columns")
-{
-    std::string const bytes = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x11\xd8\x72\x81\x66points\xd8\x72\x82\x61x\x61y"
-                    "\x5a\x00\x00\x00\x04\x00\x00\x00\x2f"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-                    "\xd8\x81\x9a\x00\x00\x00\x02"
-                    "\xd8\x55\x5a\x00\x00\x00\x08\x00\x00\x80\x3f\x00\x00\x00\x40"
-                    "\xd8\x55\x5a\x00\x00\x00\x08\x00\x00\x00\x3f\x00\x00\x80\xbf"
-                    "\xd9\x06\x5f\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
-    check_one_item(bytes);
-}
-
-// An inner struct of the element is a column record itself, under the reference of its own type (motor is entry 2,
-// d8 82). A member of variable size is a column of 6(N) references, one per element, so the text of every element
-// is found through the directory. "make" (64 ...) sorts before "engine" (66 ...), so the text column comes first.
-// The shared items stand in the order the columns are written: the column record is item 16, "ab" item 17 =
-// 6(-1) = c6 3a 00 00 00 00 and "c" item 18 = 6(1) = c6 1a 00 00 00 01 (draft-ietf-cbor-packed-19 2.2). 1000 is
-// 03e8, 2000 is 07d0; tag 69 (uint16, little endian) is d8 45. The offsets are 69 (45), 122 (7a) and 129 (81).
-TEST_CASE("encode: an inner struct and a text in a vector of structs")
-{
-    std::string const bytes = schema_bytes(fleet{{{{1000, 90}, "ab"}, {{2000, 150}, "c"}}});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x13"
-                    "\xd8\x72\x81\x64" "cars"
-                    "\xd8\x72\x82\x64" "make\x66" "engine"
-                    "\xd8\x72\x82\x62" "cc\x62" "hp"
-                    "\x5a\x00\x00\x00\x0c\x00\x00\x00\x45\x00\x00\x00\x7a\x00\x00\x00\x81"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-                    "\xd8\x81\x9a\x00\x00\x00\x02"
-                    "\x9a\x00\x00\x00\x02\xc6\x3a\x00\x00\x00\x00\xc6\x1a\x00\x00\x00\x01"
-                    "\xd8\x82\x9a\x00\x00\x00\x02"
-                    "\xd8\x45\x5a\x00\x00\x00\x04\xe8\x03\xd0\x07"
-                    "\xd8\x45\x5a\x00\x00\x00\x04\x5a\x00\x96\x00"
-                    "\x7a\x00\x00\x00\x02" "ab"
-                    "\x7a\x00\x00\x00\x01" "c"
-                    "\xd9\x06\x62\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
-    check_one_item(bytes);
-}
-
-// A path into a column reads one element: the place of a column follows from the count of elements alone.
-TEST_CASE("at_path: a member of one element of a vector of structs")
-{
-    std::string const bytes = schema_bytes(fleet{{{{1000, 90}, "ab"}, {{2000, 150}, "c"}, {{3000, 7}, ""}}});
-    CHECK_EQ(at_path<fleet, "$.cars[1].engine.cc">(bytes), 2000u);
-    CHECK_EQ(at_path<fleet, "$.cars[].engine.hp">(bytes, 2uz), 7u);
-    CHECK_EQ(at_path<fleet, "$.cars[0].make">(bytes), "ab"s);
-    CHECK_EQ(at_path<fleet, "$.cars[2].make">(bytes), ""s);
-    CHECK_EQ(at_path<fleet, "$.cars[3].engine.cc">(bytes).error(), error::index_out_of_bounds);
-    CHECK_EQ(at_path<fleet, "$.cars[].make">(bytes, 3uz).error(), error::index_out_of_bounds);
-    std::string const points = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
-    CHECK_EQ(at_path<cloud, "$.points[1].y">(points), -1.0f);
-    CHECK_EQ(at_path<cloud, "$.points[0].x">(points), 1.0f);
-    std::string const empty = schema_bytes(cloud{});
-    CHECK_EQ(at_path<cloud, "$.points[0].x">(empty).error(), error::index_out_of_bounds);
-}
-
-// An accessor of the vector knows the count; an accessor of one element reads its members from the columns.
-TEST_CASE("at_path: an accessor of a vector of structs and of one element")
-{
-    auto const owner = std::make_shared<std::string const>(schema_bytes(fleet{{{{1000, 90}, "ab"}, {{2000, 150}, "c"}}}));
-    auto const root = cbor::schema<fleet>::path(owner);
-    REQUIRE(root.has_value());
-    auto const cars = root->at_path<"$.cars">();
-    REQUIRE(cars.has_value());
-    CHECK_EQ(cars->size(), 2u);
-    CHECK_EQ(cars->at_path<"@[1].engine.cc">(), 2000u);
-    CHECK_EQ(cars->at_path<"@[]">(2uz).error(), error::index_out_of_bounds);
-    auto const second = cars->at_path<"@[]">(1uz);
-    REQUIRE(second.has_value());
-    CHECK_EQ(second->at_path<"@.make">(), "c"sv);
-    CHECK_EQ(second->at_path<"@.engine.hp">(), 150u);
-    auto const first = root->at_path<"$.cars[0]">();
-    REQUIRE(first.has_value());
-    CHECK_EQ(first->at_path<"@.engine.cc">(), 1000u);
-}
-
-// A decode gives every member of every element back, for every kind of member, also for no element and one.
-TEST_CASE("encode and decode: every kind of member in a vector of structs")
-{
-    for (std::uint16_t const n : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{3}}) {
-        every_kind_list list;
-        for (std::uint16_t i = 0; i < n; ++i)
-            list.items.push_back(every_kind_sample(i));
-        std::string const bytes = schema_bytes(list);
-        check_one_item(bytes);
-        auto const back = cbor::schema<every_kind_list>::decode(std::string(bytes));
-        REQUIRE(back.has_value());
-        REQUIRE_EQ((*back)->items.size(), n);
-        for (std::uint16_t i = 0; i < n; ++i)
-            CHECK(same((*back)->items[i], list.items[i]));
-        if (n == 3) {
-            CHECK_EQ(at_path<every_kind_list, "$.items[2].name">(bytes), "nn"s);
-            CHECK_EQ(at_path<every_kind_list, "$.items[2].wide">(bytes), -4.5);
-            CHECK_EQ(at_path<every_kind_list, "$.items[1].shade">(bytes), color::white);
-            CHECK_EQ(at_path<every_kind_list, "$.items[2].path[1].y">(bytes), -2.0f);
-            CHECK_EQ(at_path<every_kind_list, "$.items[2].inner.x">(bytes), 2);
-            CHECK_EQ(at_path<every_kind_list, "$.items[0].pair[1].y">(bytes), 3);
-            CHECK_EQ(at_path<every_kind_list, "$.items[1].flag">(bytes), false);
-        }
-    }
-}
-
-// The bytes of a column come from the wire, so every head of a column record is compared before a value is read. An
-// accessor of a vector or of one element compares every head once, so its later reads compare none.
-// The head of the first column gives the count; a later column that claims another count, a column head of another
-// type, or a count whose columns do not fit in the item is refused.
-TEST_CASE("at_path and decode: a broken column is an error")
-{
-    std::string const bytes = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
-    std::size_t const second = bytes.rfind("\xd8\x55\x5a\x00\x00\x00\x08"s);
-    REQUIRE_NE(second, std::string::npos);
-    std::string other_type = bytes;
-    other_type[second + 1] = '\x56';
-    CHECK_EQ(at_path<cloud, "$.points[0].y">(other_type).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<cloud>::decode(std::string(other_type)).error(), error::incorrect_type);
-    auto const opened = cbor::schema<cloud>::path(std::string(other_type));
-    REQUIRE(opened.has_value());
-    CHECK_EQ(opened->at_path<"$.points">().error(), error::incorrect_type);
-    CHECK_EQ(opened->at_path<"$.points[0]">().error(), error::incorrect_type);
-    std::string other_count = bytes;
-    other_count[second + 6] = '\x04';
-    CHECK_EQ(at_path<cloud, "$.points[0].y">(other_count).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<cloud>::decode(std::string(other_count)).error(), error::incorrect_type);
-    std::string first_count = bytes;
-    std::size_t const first = bytes.find("\xd8\x55\x5a\x00\x00\x00\x08"s);
-    first_count[first + 6] = '\x10';
-    CHECK_EQ(at_path<cloud, "$.points[1].x">(first_count).error(), error::too_little_data);
-    CHECK_EQ(at_path<cloud, "$.points[0].y">(first_count).error(), error::too_little_data);
-    CHECK_EQ(cbor::schema<cloud>::decode(std::string(first_count)).error(), error::too_little_data);
-    std::string record = bytes;
-    std::size_t const head = bytes.find("\xd8\x81\x9a\x00\x00\x00\x02"s);
-    record[head + 6] = '\x03';
-    CHECK_EQ(at_path<cloud, "$.points[0].x">(record).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<cloud>::decode(std::string(record)).error(), error::incorrect_type);
 }
 
 #endif
