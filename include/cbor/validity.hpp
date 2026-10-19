@@ -74,7 +74,8 @@ class validity
         basic_packed_cbor = 113,
         record_function = 114,
         straight_argument_first = 128,
-        straight_argument_last = 135
+        straight_argument_last = 135,
+        fixed_array = 32873
     };
 
 public:
@@ -350,6 +351,14 @@ public:
         return std::size_t{1} << (f + ll);
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_whole_elements(std::size_t const size,
+                                                                                        std::size_t const element)
+    {
+        if (size % element != 0) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return {};
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag,
                                                                                      std::size_t const size)
     {
@@ -357,9 +366,7 @@ public:
             tag > std::to_underlying(rfc8746::tag_number::typed_array_last) ||
             tag == std::to_underlying(rfc8746::tag_number::typed_array_reserved)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        if (size % typed_array_element_size(tag) != 0) [[unlikely]]
-            return std::unexpected(error::inadmissible_type_for_tag_content);
-        return {};
+        return check_whole_elements(size, typed_array_element_size(tag));
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>

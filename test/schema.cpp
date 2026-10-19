@@ -1257,7 +1257,7 @@ TEST_CASE("path: a path compiles where it names a part of the type")
     CHECK(path_reads<garage, "@.tires">);
     using A = cbor::schema<garage>::accessor<>;
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.names[0]">()), std::expected<std::string_view, cbor::error>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), std::expected<cbor::schema<garage>::accessor<tire>, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), std::expected<cbor::schema<garage>::accessor<cbor::fixed_element<tire>>, cbor::error>>);
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires">()),
                        std::expected<cbor::schema<garage>::accessor<std::vector<tire>>, cbor::error>>);
 }
@@ -2259,23 +2259,24 @@ TEST_CASE("attack: a directory longer than the message is too_little_data")
     CHECK_EQ(cbor::schema<login>::decode(std::string(forged)).error(), error::too_little_data);
 }
 
-// A record inside a list carries its class tag like the root. The tag of the second tire is forged. The test exists
-// because a path into a list must check the tag of the record it reaches, not only the tag of the root.
-TEST_CASE("attack: a forged class tag of a record in a list is incorrect_type")
+// A vector of fixed-size structs refers to the description of its element in the header. The reference of the
+// tires is forged to name another table entry. The test exists because a path into the vector must check that
+// reference, while a path that does not touch the vector stays readable.
+TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
 {
     std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
-    std::size_t const second = bytes.find("\xd9\x05\xe7"s, bytes.find("\xd9\x05\xe7"s) + 1);
-    REQUIRE_NE(second, std::string::npos);
+    std::size_t const head = bytes.find("\xd9\x80\x69\x82"s);
+    REQUIRE_NE(head, std::string::npos);
     std::string forged = bytes;
-    forged.at(second + 2) = '\xe8';
-    CHECK_EQ(at_path<probe, "$.tires[0].diameter">(forged), 17u);
+    forged.at(head + 4) = static_cast<char>(forged.at(head + 4) + 1);
     CHECK_EQ(at_path<probe, "$.tires[1].diameter">(forged).error(), error::incorrect_type);
+    CHECK_EQ(at_path<probe, "$.text">(forged), at_path<probe, "$.text">(bytes));
     auto lot = *cbor::schema<probe>::path(std::string(forged));
     for (int pass = 0; pass < 2; ++pass) {
-        CHECK_EQ(lot.at_path<"$.tires[].diameter">(0uz), 17u);
-        CHECK_EQ(lot.at_path<"$.tires[].diameter">(1uz).error(), error::incorrect_type);
+        CHECK_EQ(lot.at_path<"$.tires[].diameter">(0uz).error(), error::incorrect_type);
         CHECK_EQ(lot.at_path<"$.tires[].airPressure">(1uz).error(), error::incorrect_type);
     }
+    CHECK_EQ(cbor::schema<probe>::decode(std::string(forged)).error(), error::incorrect_type);
 }
 
 namespace
@@ -2526,6 +2527,242 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     CHECK_EQ((*decoded)->name, name);
     CHECK_EQ(cbor::schema<login>::decode(std::string()).error(), error::too_little_data);
     CHECK_EQ(cbor::schema<login>::path(std::string()).error(), error::too_little_data);
+}
+
+
+namespace
+{
+
+struct [[=cbor::tag(1630)]] point {
+    float x;
+    float y;
+};
+
+struct [[=cbor::tag(1631)]] cloud {
+    std::vector<point> points;
+};
+
+struct [[=cbor::tag(1638)]] gauge {
+    bool on;
+    color shade;
+    sorted_inner at;
+    std::array<std::uint16_t, 2> range;
+};
+
+struct [[=cbor::tag(1639)]] gauges {
+    std::vector<gauge> g;
+};
+
+template <int K>
+struct [[=cbor::tag(1700 + K)]] filler_type {
+    std::int8_t v;
+};
+
+struct [[=cbor::tag(1690)]] fifteen_entries {
+    filler_type<0> d0;
+    filler_type<1> d1;
+    filler_type<2> d2;
+    filler_type<3> d3;
+    filler_type<4> d4;
+    filler_type<5> d5;
+    filler_type<6> d6;
+    filler_type<7> d7;
+    filler_type<8> d8;
+    filler_type<9> d9;
+    filler_type<10> e0;
+    filler_type<11> e1;
+    std::vector<point> p;
+};
+
+struct [[=cbor::tag(1691)]] eighteen_entries {
+    filler_type<0> d0;
+    filler_type<1> d1;
+    filler_type<2> d2;
+    filler_type<3> d3;
+    filler_type<4> d4;
+    filler_type<5> d5;
+    filler_type<6> d6;
+    filler_type<7> d7;
+    filler_type<8> d8;
+    filler_type<9> d9;
+    filler_type<10> e0;
+    filler_type<11> e1;
+    filler_type<12> e2;
+    filler_type<13> e3;
+    filler_type<14> e4;
+    std::vector<point> p;
+};
+
+bool same(gauge const &a, gauge const &b)
+{
+    return a.on == b.on && a.shade == b.shade && a.at.x == b.at.x && a.at.y == b.at.y && a.range == b.range;
+}
+
+} // namespace
+
+// Owner decision 2026-10-19: a vector of structs whose members all have a fixed width is one byte string of its
+// elements, little endian and without padding, under tag 32873 (the first unassigned number of the first-come
+// range of the IANA registry, provisional). The header, the table of tag 113 (draft-ietf-cbor-packed-19 3.1),
+// describes the element once: [class tag, [[key, RFC 8746 tag], ...]]. The description of point stands at table
+// index 2, after the two record entries: 82 19 06 5e 82 82 61 78 18 55 82 61 79 18 55 (tag 85 is float32 little
+// endian, RFC 8746 2.1). The vector refers to it with simple(2) = e2 (draft Table 1), so a reader that unpacks
+// finds the description in its place. The directory takes index 3, the fillers 4 to 15. The vector is item 16 at
+// 61 (3d): d9 80 69 82 e2 and a byte string of 16 bytes. 1.0f is 3f800000, 2.0f is 40000000, 0.5f is 3f000000,
+// -1.0f is bf800000 (IEEE 754), low byte first. The bytes are written from the draft and the RFCs by hand.
+TEST_CASE("encode: a vector of fixed-size structs is one byte string under tag 32873")
+{
+    std::string const bytes = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
+    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x11\xd8\x72\x81\x66points\xd8\x72\x82\x61x\x61y"
+                    "\x82\x19\x06\x5e\x82\x82\x61x\x18\x55\x82\x61y\x18\x55"
+                    "\x5a\x00\x00\x00\x04\x00\x00\x00\x3d"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\xd9\x80\x69\x82\xe2\x5a\x00\x00\x00\x10"
+                    "\x00\x00\x80\x3f\x00\x00\x00\x3f\x00\x00\x00\x40\x00\x00\x80\xbf"
+                    "\xd9\x06\x5f\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
+    check_one_item(bytes);
+}
+
+// The description names every leaf in the key order of RFC 8949 4.2.1: "at" (62 61 74) before "on" (62 6f 6e),
+// "range" before "shade". An inner struct is described in place with its own class tag 1622 = 19 06 56; a
+// std::array takes [key, tag, count]. bool takes uint8 (tag 64), the enum color the tag of its underlying uint16
+// (69, little endian), int8 the tag 72. An element is at.x, at.y, on, range[0], range[1], shade: 9 bytes. The table
+// holds gauges, gauge and sorted_inner, so the description is index 3 and the reference simple(3) = e3.
+TEST_CASE("encode: a fixed-size struct with bool, enum, an inner struct and an array")
+{
+    std::string const bytes = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
+    CHECK_NE(bytes.find("\x82\x19\x06\x66\x84"
+                        "\x82\x62" "at\x82\x19\x06\x56\x82\x82\x61x\x18\x48\x82\x61y\x18\x48"
+                        "\x82\x62" "on\x18\x40"
+                        "\x83\x65" "range\x18\x45\x02"
+                        "\x82\x65" "shade\x18\x45"s),
+             std::string::npos);
+    CHECK_NE(bytes.find("\xd9\x80\x69\x82\xe3\x5a\x00\x00\x00\x09\x03\xfe\x01\x01\x00\x03\x02\x01\x00"s), std::string::npos);
+    check_one_item(bytes);
+}
+
+// A path reads one leaf of one element at an offset the compiler knows, after the vector was checked once.
+TEST_CASE("at_path: a leaf of one element of a fixed-size vector")
+{
+    std::string const bytes = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}});
+    CHECK_EQ(at_path<gauges, "$.g[0].on">(bytes), true);
+    CHECK_EQ(at_path<gauges, "$.g[1].on">(bytes), false);
+    CHECK_EQ(at_path<gauges, "$.g[0].shade">(bytes), color::white);
+    CHECK_EQ(at_path<gauges, "$.g[0].at.x">(bytes), 3);
+    CHECK_EQ(at_path<gauges, "$.g[1].at.y">(bytes), 5);
+    CHECK_EQ(at_path<gauges, "$.g[0].range[1]">(bytes), 0x0203u);
+    CHECK_EQ(at_path<gauges, "$.g[].range[]">(bytes, 1uz, 0uz), 7u);
+    CHECK_EQ(at_path<gauges, "$.g[2].on">(bytes).error(), error::index_out_of_bounds);
+    CHECK_EQ(at_path<gauges, "$.g[].range[]">(bytes, 0uz, 2uz).error(), error::index_out_of_bounds);
+    std::string const points = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
+    CHECK_EQ(at_path<cloud, "$.points[1].y">(points), -1.0f);
+    CHECK_EQ(at_path<cloud, "$.points[0].x">(points), 1.0f);
+    CHECK_EQ(at_path<cloud, "$.points[0].x">(schema_bytes(cloud{})).error(), error::index_out_of_bounds);
+}
+
+// An accessor of the vector gives its size; an accessor of one element or of its inner struct reads the leaves
+// relative to it.
+TEST_CASE("at_path: an accessor of a fixed-size vector and of one element")
+{
+    auto const owner = std::make_shared<std::string const>(
+        schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}}));
+    auto const root = cbor::schema<gauges>::path(owner);
+    REQUIRE(root.has_value());
+    auto const g = root->at_path<"$.g">();
+    REQUIRE(g.has_value());
+    CHECK_EQ(g->size(), 2u);
+    CHECK_EQ(g->at_path<"@[1].at.x">(), -6);
+    CHECK_EQ(g->at_path<"@[]">(2uz).error(), error::index_out_of_bounds);
+    auto const second = g->at_path<"@[]">(1uz);
+    REQUIRE(second.has_value());
+    CHECK(std::same_as<std::remove_cvref_t<decltype(*second)>, cbor::schema<gauges>::accessor<cbor::fixed_element<gauge>>>);
+    CHECK_EQ(second->at_path<"@.range[0]">(), 7u);
+    CHECK_EQ(second->at_path<"@.shade">(), color::black);
+    auto const inner = root->at_path<"$.g[0].at">();
+    REQUIRE(inner.has_value());
+    CHECK_EQ(inner->at_path<"@.y">(), -2);
+}
+
+// A decode gives every leaf of every element back, also for no element and one.
+TEST_CASE("encode and decode: a fixed-size vector round trip")
+{
+    for (std::size_t const n : {0uz, 1uz, 3uz}) {
+        gauges value;
+        for (std::size_t i = 0; i < n; ++i)
+            value.g.push_back({i % 2 == 0, i % 2 == 0 ? color::black : color::white,
+                               {static_cast<std::int8_t>(-static_cast<int>(i)), static_cast<std::int8_t>(i)},
+                               {static_cast<std::uint16_t>(i), static_cast<std::uint16_t>(i * 300)}});
+        std::string const bytes = schema_bytes(value);
+        check_one_item(bytes);
+        auto const back = cbor::schema<gauges>::decode(std::string(bytes));
+        REQUIRE(back.has_value());
+        REQUIRE_EQ((*back)->g.size(), n);
+        for (std::size_t i = 0; i < n; ++i)
+            CHECK(same((*back)->g[i], value.g[i]));
+    }
+}
+
+// The table index of the description depends on how many record entries come before it. With 14 record entries the
+// description is index 14, simple(14) = ee, and no filler is left. With 17 record entries the description is index
+// 17, beyond the 16 one-byte references, so the reference is 6(-1) = c6 20 (draft Table 1: 16 - 2N - 1 = 17).
+TEST_CASE("encode and decode: the reference to a description at every table index")
+{
+    fifteen_entries fifteen{};
+    fifteen.p = {{1.0f, 2.0f}};
+    fifteen.e1.v = 9;
+    std::string const a = schema_bytes(fifteen);
+    check_one_item(a);
+    CHECK_NE(a.find("\xd9\x80\x69\x82\xee\x5a"s), std::string::npos);
+    CHECK_EQ(a.find('\xf7'), std::string::npos);
+    auto const a_back = cbor::schema<fifteen_entries>::decode(std::string(a));
+    REQUIRE(a_back.has_value());
+    REQUIRE_EQ((*a_back)->p.size(), 1u);
+    CHECK_EQ((*a_back)->p[0].y, 2.0f);
+    CHECK_EQ((*a_back)->e1.v, 9);
+    CHECK_EQ(at_path<fifteen_entries, "$.p[0].x">(a), 1.0f);
+    eighteen_entries eighteen{};
+    eighteen.p = {{3.0f, 4.0f}};
+    eighteen.e4.v = -3;
+    std::string const b = schema_bytes(eighteen);
+    check_one_item(b);
+    CHECK_NE(b.find("\xd9\x80\x69\x82\xc6\x20\x5a"s), std::string::npos);
+    auto const b_back = cbor::schema<eighteen_entries>::decode(std::string(b));
+    REQUIRE(b_back.has_value());
+    CHECK_EQ((*b_back)->p[0].y, 4.0f);
+    CHECK_EQ((*b_back)->e4.v, -3);
+    CHECK_EQ(at_path<eighteen_entries, "$.p[0].y">(b), 4.0f);
+}
+
+// The bytes of the vector come from the wire. The head of the vector, the description in the header, the length
+// of the byte string and every bool are checked before a value is read.
+TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
+{
+    std::string const bytes = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
+    std::size_t const head = bytes.find("\xd9\x80\x69\x82\xe2\x5a"s);
+    REQUIRE_NE(head, std::string::npos);
+    std::string reference = bytes;
+    reference[head + 4] = '\xe3';
+    CHECK_EQ(at_path<cloud, "$.points[0].x">(reference).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<cloud>::decode(std::string(reference)).error(), error::incorrect_type);
+    std::string description = bytes;
+    description[description.find("\x18\x55"s) + 1] = '\x56';
+    CHECK_EQ(cbor::schema<cloud>::path(std::string(description)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<cloud>::decode(std::string(description)).error(), error::incorrect_type);
+    std::string partial = bytes;
+    partial[head + 9] = '\x0f';
+    CHECK_EQ(at_path<cloud, "$.points[0].x">(partial).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::schema<cloud>::decode(std::string(partial)).error(), error::inadmissible_type_for_tag_content);
+    std::string longer = bytes;
+    longer[head + 9] = '\x18';
+    CHECK_EQ(at_path<cloud, "$.points[0].x">(longer).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<cloud>::decode(std::string(longer)).error(), error::too_little_data);
+    std::string const flags = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
+    std::size_t const element = flags.find("\x03\xfe\x01\x01\x00"s);
+    REQUIRE_NE(element, std::string::npos);
+    std::string two = flags;
+    two[element + 2] = '\x02';
+    CHECK_EQ(at_path<gauges, "$.g[0].on">(two).error(), error::incorrect_type);
+    CHECK_EQ(at_path<gauges, "$.g[0].shade">(two), color::white);
+    CHECK_EQ(cbor::schema<gauges>::decode(std::string(two)).error(), error::incorrect_type);
 }
 
 #endif
