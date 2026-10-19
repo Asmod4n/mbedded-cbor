@@ -59,9 +59,12 @@ for arm, v in sorted(runs.items()):
 json.dump({'what': 'README table: carsales, compare.cpp', 'commit': commit, 'flags': flags, 'compiler': compiler,
            'kernel': kernel, 'cpu': cpu.strip(), 'nice': nice, 'rounds': rounds, 'min_time': min_time,
            'results': res}, open(file, 'w'), indent=1)
+scale = {'ns': 1, 'us': 1e3, 'ms': 1e6, 's': 1e9}
 def show(arm):
     r = res[arm]
-    return f"{r['median']:.4g} {r['unit']} (±{r['spread'] * 100:.0f} %)"
+    t = r['median'] * scale[r['unit']]
+    value = next(f"{t / f:.1f} {u}" for f, u in [(1e9, 's'), (1e6, 'ms'), (1e3, 'µs'), (1, 'ns')] if t >= f or u == 'ns')
+    return f"{value} (±{r['spread'] * 100:.0f} %)"
 print(f"\n{'task':<14} {'mbedded-cbor':<20} {'FlatBuffers+Verifier':<22} Cap'n Proto")
 for task, a, b, c in [('one field', 'MB_FIELD', 'FB_FIELD_V', 'CP_FIELD'), ('whole message', 'MB_READ', 'FB_READ_V', 'CP_READ'),
                       ('write', 'MB_ENCODE', 'FB_ENCODE', 'CP_ENCODE')]:
