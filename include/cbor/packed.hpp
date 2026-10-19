@@ -538,6 +538,10 @@ class reflection
              std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unprivileged()))
             if (!annotated(m, ^^cbor::skip) && (!only_allowed || annotated(m, ^^cbor::allow)))
                 members.push_back(m);
+        std::ranges::sort(members, {}, [](std::meta::info const m) {
+            std::string_view const key = key_of(m);
+            return key_encoded(major_type::text_string, key.size(), key);
+        });
         return std::define_static_array(members);
     }
 
@@ -2504,7 +2508,7 @@ private:
     }
 
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<void const> owner,
-                                                     std::string_view const encoded, T target)
+                                                     std::string_view const encoded, T &&target)
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
     {
         validity::throw_logic_error_if_empty(owner,
