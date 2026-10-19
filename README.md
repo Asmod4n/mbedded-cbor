@@ -93,9 +93,12 @@ FetchContent_MakeAvailable(mbedded-cbor)
 
 ### Read a message
 
+The bytes move into the library, or the library reads them in place
+through a `std::shared_ptr`. Neither form copies them.
+
 ```cpp
-// bytes: {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
-auto const doc = cbor::lazy::copy(bytes).value();
+// bytes: a std::string with {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
+auto const doc = cbor::lazy::take_ownership(std::move(bytes)).value();
 
 int sum = 0;
 if (auto const samples = doc.at("samples"))
@@ -107,8 +110,8 @@ if (auto const samples = doc.at("samples"))
 ### Read one value by its path
 
 ```cpp
-// bytes: {"user": {"id": 42, "name": "ann"}}
-auto const doc = cbor::lazy::copy(bytes).value();
+// owner: a std::shared_ptr<std::string const> with {"user": {"id": 42, "name": "ann"}}
+auto const doc = cbor::lazy::view(owner).value();
 
 auto const id = doc.at_path<"$.user.id", std::int64_t>();          // 42
 auto const name = doc.at_path<"$.user.name", std::string_view>();  // "ann", no copy
