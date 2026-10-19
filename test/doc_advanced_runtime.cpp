@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <ranges>
@@ -23,9 +24,9 @@ using cbor::error;
 // Each test in this file is one example of doc/advanced/runtime.md. The tests exist so that every example in the
 // document compiles and gives the result that the document states.
 
-// The section "lazy::copy and lazy::view" lists the three forms, and states that a form does not check that the bytes
-// are one complete item.
-TEST_CASE("doc advanced runtime: lazy::copy and lazy::view in every form")
+// The section "lazy::take_ownership and lazy::view" lists the three forms, and states that a form does not check that
+// the bytes are one complete item.
+TEST_CASE("doc advanced runtime: lazy::take_ownership and lazy::view in every form")
 {
     std::string bytes = "\x78\x28"s + std::string(40, 'x');
     char const *const data = bytes.data();
@@ -100,6 +101,24 @@ TEST_CASE("doc advanced runtime: elements and entries")
     CHECK_EQ((*it)->get<std::int64_t>(), 1);
 }
 
+// A user read that the iterator stands at the end after an error. It gives the error at each later position instead,
+// and the view gives exactly size() values.
+TEST_CASE("doc advanced runtime: an error repeats at each later position")
+{
+    auto const owner = std::make_shared<std::string const>("\x83\x1c\x00\x00"s);
+    auto const bad = *cbor::lazy::view(owner);
+    std::vector<bool> read;
+    for (auto const e : *bad.elements())
+        read.push_back(e.has_value());
+    CHECK(read == std::vector<bool>{true, false, false});
+    auto const first = *bad.elements()->begin();
+    REQUIRE(first.has_value());
+    CHECK_FALSE(first->get<std::int64_t>().has_value());
+    auto it = bad.elements()->begin();
+    ++it;
+    CHECK_EQ((*it).error(), error::syntax_error);
+}
+
 // A user did not know that an algorithm takes the view directly and that -> works on each element.
 TEST_CASE("doc advanced runtime: an algorithm over elements")
 {
@@ -135,21 +154,53 @@ TEST_CASE("doc advanced runtime: get")
     CHECK_EQ(test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(0)->get<std::int64_t>(), 1);
 }
 
-// The section "decode" shows the item of an array, its children, an error, and type().
-TEST_CASE("doc advanced runtime: decode")
+// The section "clone and decode" shows the item of an array, its children, an error, and type().
+TEST_CASE("doc advanced runtime: clone and decode")
 {
-    auto const i = test::lazy_of_copy(preferred(A(1, M("a"s, 2))))->clone();
-    REQUIRE(i.has_value());
-    CHECK_EQ((*i)->type, cbor::type::array);
-    CHECK_EQ(children_of(*(*i)).size(), 2u);
-    CHECK_EQ(test::lazy_of_copy("\x82\x01"s)->clone().error(), error::too_little_data);
+    auto const owner = std::make_shared<std::string const>(preferred(A(1, M("a"s, 2))));
+    auto const tree = cbor::lazy::view(owner)->clone();
+    REQUIRE(tree.has_value());
+    CHECK_EQ((*tree)->type, cbor::type::array);
+    CHECK_EQ((*tree)->get<cbor::type::array>()->size(), 2u);
+    CHECK_EQ((*tree)->get<cbor::type::map>().error(), error::incorrect_type);
+    cbor::item const &pairs = (*(*tree)->get<cbor::type::array>())[1];
+    CHECK_EQ(pairs.get<cbor::type::map>()->size(), 2u);
+    CHECK_EQ(pairs.get<cbor::type::map>()->front().get<cbor::type::text_string>(), "a"sv);
+    CHECK_EQ(pairs.get<cbor::type::map>()->back().get<cbor::type::unsigned_integer>(), 2u);
+    auto const cut = std::make_shared<std::string const>("\x82\x01"s);
+    CHECK_EQ(cbor::lazy::view(cut)->clone().error(), error::too_little_data);
     CHECK_EQ(test::lazy_of_copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->clone().error(), error::too_little_data);
     CHECK_EQ(*test::lazy_of_copy("\xc2\x41\x05"s)->type(), cbor::type::unsigned_integer);
     CHECK_EQ(*test::lazy_of_copy("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s)->type(), cbor::type::unsigned_bignum);
     CHECK_EQ(*test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::tag);
-    auto const tree = test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->clone();
+    auto const tags = test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->clone();
+    REQUIRE(tags.has_value());
+    CHECK_EQ(children_of(*(*tags))[1]->type, cbor::type::tag);
+}
+
+// The section "clone and decode" says that the tree holds a copy of each string, so that it stays valid after the
+// input ends, that a larger bignum holds a copy of its magnitude, and that only cbor::decode refuses a byte after the
+// item.
+TEST_CASE("doc advanced runtime: the tree copies its strings")
+{
+    std::string input = "\x82\x63" "abc\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s;
+    auto const tree = cbor::decode(input);
     REQUIRE(tree.has_value());
-    CHECK_EQ(children_of(*(*tree))[1]->type, cbor::type::tag);
+    auto const text = (*(*tree)->get<cbor::type::array>())[0].get<cbor::type::text_string>();
+    REQUIRE(text.has_value());
+    CHECK_NE(static_cast<void const *>(text->data()), static_cast<void const *>(input.data() + 2));
+    auto const big = (*(*tree)->get<cbor::type::array>())[1].get<cbor::type::unsigned_bignum>();
+    REQUIRE(big.has_value());
+    auto const magnitude = big->second->get<cbor::type::byte_string>();
+    REQUIRE(magnitude.has_value());
+    CHECK_EQ(magnitude->size(), 9u);
+    std::less<void const *> const before;
+    void const *const held = magnitude->data();
+    CHECK((before(held, input.data()) || !before(held, input.data() + input.size())));
+    input.assign(input.size(), '\0');
+    CHECK_EQ(*text, "abc"sv);
+    CHECK_EQ(cbor::decode("\x01\x02"sv).error(), error::syntax_error);
+    CHECK(test::lazy_of_copy("\x01\x02"s)->clone().has_value());
 }
 
 // The section "encode" shows the calls of the encoder, each kind of target, and encode of an item.
@@ -204,6 +255,10 @@ TEST_CASE("doc advanced runtime: cbor::sequence")
     for (auto const e : cbor::sequence{owner})
         items.push_back(*e);
     CHECK(items == std::vector{"\x01"sv, "\x61" "a"sv, "\x82\x01\x02"sv});
+    std::vector<std::string_view> beside;
+    for (auto const e : cbor::sequence{owner, std::string_view(*owner).substr(1)})
+        beside.push_back(*e);
+    CHECK(beside == std::vector{"\x61" "a"sv, "\x82\x01\x02"sv});
     cbor::sequence const s{std::make_shared<std::string const>("\x01\x19\x01"s)};
     auto it = s.begin();
     ++it;
@@ -247,10 +302,18 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(test::lazy_of_copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::not_indexable);
 }
 
-// The section "Tag 55799" shows that only a leading tag 55799 is read as its content.
+// The section "Tag 55799" shows that only a leading tag 55799 is read as its content, and only by a lazy.
 TEST_CASE("doc advanced runtime: tag 55799")
 {
-    CHECK_EQ(test::lazy_of_copy("\xd9\xd9\xf7\x82\x01\x02"s)->at(1)->get<std::int64_t>(), 2);
+    auto const owner = std::make_shared<std::string const>("\xd9\xd9\xf7\x82\x01\x02"s);
+    CHECK_EQ(cbor::lazy::view(owner)->at(1)->get<std::int64_t>(), 2);
+    auto const content = cbor::lazy::view(owner)->clone();
+    REQUIRE(content.has_value());
+    CHECK_EQ((*content)->type, cbor::type::array);
+    auto const kept = cbor::decode(*owner);
+    REQUIRE(kept.has_value());
+    CHECK_EQ((*kept)->type, cbor::type::tag);
+    CHECK_EQ((*kept)->get<cbor::type::tag>()->first, 55799u);
     auto const tree = test::lazy_of_copy("\x81\xd9\xd9\xf7\x01"s)->clone();
     REQUIRE(tree.has_value());
     cbor::item const *const inner = children_of(*(*tree))[0];
@@ -267,8 +330,9 @@ TEST_CASE("doc advanced runtime: tag 55799")
 // encoder over an iov_writer keeps a string that the caller moved in as a piece of its own.
 TEST_CASE("doc advanced runtime: encode_iov")
 {
-    std::string const wire = "\x82\x01\x63" "abc"s;
-    auto const tree = test::lazy_of_copy(wire)->clone();
+    std::string const bytes = "\x82\x01\x63" "abc"s;
+    std::string const wire = bytes;
+    auto const tree = cbor::decode(bytes);
     REQUIRE(tree.has_value());
     auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces.has_value());

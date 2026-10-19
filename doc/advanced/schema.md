@@ -47,9 +47,16 @@ The tag numbers of the root and of every struct inside it differ.
 tag, or two structs with one tag, leave no `schema<T>` to call: the
 program does not compile.
 
-`[[=cbor::key("x")]]`, `[[=cbor::skip{}]]` and `[[=cbor::allowlist{}]]`
-with `[[=cbor::allow{}]]` choose the keys and the members as in
-[structs.md](structs.md), section 4. Only public members are written.
+Annotations choose the keys and the members. They work with
+`cbor::schema` only; `cbor::structs` refuses them.
+
+| Annotation | On | Effect |
+|---|---|---|
+| `[[=cbor::key("x")]]` | a member | `x` is the key in place of the name |
+| `[[=cbor::skip{}]]` | a member | the member is not written |
+| `[[=cbor::allowlist{}]]` | a struct | only the members with `[[=cbor::allow{}]]` are written |
+
+Only public members are written.
 
 ## 3. Encode and decode
 
@@ -57,11 +64,12 @@ with `[[=cbor::allow{}]]` choose the keys and the members as in
 |---|---|
 | `schema<T>::encode(value)` | `std::expected<std::string, error>` |
 | `schema<T>::encode(value, target)` | `std::expected<std::size_t, error>`, the count of bytes appended |
-| `schema<T>::decode(owner)` | `std::expected<owning_ref<T>, error>`, the whole struct |
+| `schema<T>::decode(owner)` | `std::expected<ref<T>, error>`, the whole struct |
 
-`decode` takes the same three forms as `structs<T>::decode`: a moved
-`std::string`, an owner with its bytes, and an owner with its bytes and a
-target ([structs.md](structs.md), section 2). No form copies the bytes. A target of `std::pmr`
+`decode` takes the same forms as `structs<T>::decode`: a moved
+`std::string`, a `std::shared_ptr<std::string const>`, a
+`std::shared_ptr<void const>` with a view of the bytes, and each of the
+last two with a target ([structs.md](structs.md), section 2). No form copies the bytes. A target of `std::pmr`
 containers sets the memory of the result ([basics.md](basics.md),
 section 6).
 
@@ -98,6 +106,7 @@ such as a `std::vector` of structs, does not compile.
 |---|---|
 | `path(std::string)` with an rvalue | the library moves the string |
 | `path(std::shared_ptr<std::string const>)` | the caller, no copy |
+| `path(std::shared_ptr<void const> owner, part)` | the caller: `part` is a `std::string_view` into memory that `owner` keeps alive |
 
 An accessor holds the owner. Every value and every accessor that it gives
 holds the same owner, so an accessor of a list outlives the temporary
@@ -197,7 +206,7 @@ cbor::schema<tire>::decode(owner);                                   // incorrec
 | Call | Time | Memory |
 |---|---|---|
 | `path(std::shared_ptr<std::string const>)` | independent of the size of the message | none |
-| `path(std::string_view)` | the copy of the message | the copy |
+| `path(std::string&&)` | independent of the size of the message | one allocation for the owner |
 | `accessor::at_path`, `view` | one step for each part of the path | none |
 | `schema<T>::at_path` | the directory and one step for each part of the path | none |
 | `decode` | the size of the message | the result |

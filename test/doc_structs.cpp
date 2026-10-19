@@ -144,6 +144,14 @@ TEST_CASE("doc structs: input from other programs")
     CHECK_EQ(cbor::structs<std::string>::decode(cut.substr(0, cut.size() - 1)).error(), error::too_little_data);
 }
 
+// A user expected that a std::vector of a number type reads a plain array. The section "Types" and the table of the
+// section "Input from other programs" state that it reads only its typed array.
+TEST_CASE("doc structs: a vector of numbers reads only a typed array")
+{
+    CHECK_EQ(cbor::structs<std::vector<int>>::decode(preferred(A(1, 2))).error(), error::incorrect_type);
+    CHECK_EQ((cbor::structs<std::array<std::uint16_t, 2>>::decode(preferred(A(1, 2))).error()), error::incorrect_type);
+}
+
 } // namespace doc_structs
 
 #endif

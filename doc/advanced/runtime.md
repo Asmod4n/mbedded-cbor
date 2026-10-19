@@ -106,8 +106,18 @@ std::ranges::count_if(*people.elements(), [](std::expected<cbor::lazy, cbor::err
 `elements()` of a map and `entries()` of an array give `not_indexable`.
 An array or a map of indefinite length gives `indefinite_length`.
 
-An element that cannot be read gives its error, and the iterator then
-stands at the end. A view gives at most `size()` values.
+An element that cannot be skipped gives its error at the next
+position, and the iterator gives the same error at each later position.
+A view gives exactly `size()` values.
+
+```cpp
+// 83 1c 00 00: an array of three elements; 1c is no valid head
+auto const bad = *cbor::lazy::view(owner);
+for (auto const e : *bad.elements())
+    e.has_value();                        // true, then false, then false
+```
+
+The first element is a lazy at `1c`, and a read of it gives its error.
 
 An iterator holds the top-level item. It stays valid after the lazy and the
 view that gave it end. An iterator belongs to one thread
@@ -122,9 +132,9 @@ view that gave it end. An iterator belongs to one thread
 | `bool` | `false`, `true` | `bool` |
 | `std::nullptr_t` | `null` | `nullptr` |
 | `cbor::simple_value` | a simple value | the value |
-| `std::string_view` | a text string | `owning_ref<std::string_view>` |
-| `std::span<std::byte const>` | a byte string | `owning_ref<std::span<std::byte const>>` |
-| `cbor::typed_array` | a typed array (RFC 8746) | `owning_ref<cbor::typed_array>` |
+| `std::string_view` | a text string | `ref<std::string_view>` |
+| `std::span<std::byte const>` | a byte string | `ref<std::span<std::byte const>>` |
+| `cbor::typed_array` | a typed array (RFC 8746) | `ref<cbor::typed_array>` |
 
 | bytes | Call | Result |
 |---|---|---|
@@ -137,33 +147,39 @@ view that gave it end. An iterator belongs to one thread
 
 `get` passes a tag 28 and a tag 29 to their content, as it passes every tag that it does not interpret.
 
-## 5. decode
+## 5. clone and decode
 
-`lazy::clone()` gives `std::expected<std::shared_ptr<cbor::item const>,
-error>`. It reads the whole item at the lazy, checks every head and builds
-one `cbor::item` for each data item. An item is an aggregate of 24 bytes:
-`type` (a `cbor::type`), `additional_information` (RFC 8949 3) and a union
-`via`. The type says which member of `via` holds the value. A string in it
-is a view into the bytes.
+`lazy::clone()` gives `std::expected<cbor::owning<cbor::item>, error>`.
+It reads the whole item at the lazy, checks every head and builds one
+`cbor::item` for each data item. `cbor::decode(encoded)` does the same
+for the one top-level item in a `std::string_view`. The tree copies each
+text and byte string into its own memory zone. It does not view the
+input, and it stays valid after the input ends.
 
-| `type` | Member of `via` |
+An item has two data members: `type` (a `cbor::type`) and
+`additional_information` (RFC 8949 3). `get<K>()` gives the value as
+`std::expected<cbor::item_alternative_t<K>, error>`, where `K` is a
+`cbor::type`. A `K` that is not the `type` of the item gives
+`incorrect_type`.
+
+| `type` | `get<type>()` gives |
 |---|---|
-| `unsigned_integer`, `negative_integer` | `u64`, the argument |
-| `byte_string`, `text_string` | `bin` (`std::span<std::byte const>`), `str` (`std::string_view`) |
-| `array` | `array`, a `std::span<cbor::item const>` of the elements |
-| `map` | `map`, a `std::span<cbor::item const>` with each key and its value one after the other |
-| `tag`, `unsigned_bignum`, `negative_bignum`, `typed_array` | `tag`: `number` and `content`, the item of the content |
-| `half_float`, `single_float`, `double_float` | `f64`, the value as a `double` |
-| `false_value`, `true_value`, `null`, `undefined`, `simple_value` | `simple_value` |
+| `unsigned_integer`, `negative_integer` | `std::uint64_t`, the argument |
+| `byte_string`, `text_string` | `std::span<std::byte const>`, `std::string_view` |
+| `array` | `std::span<cbor::item const>`, the elements |
+| `map` | `std::span<cbor::item const>`, each key and its value one after the other |
+| `tag`, `unsigned_bignum`, `negative_bignum`, `typed_array` | `std::pair<std::uint64_t, cbor::item const *>`, the tag number and the item of the content |
+| `half_float`, `single_float`, `double_float` | `double` |
+| `false_value`, `true_value`, `null`, `undefined`, `simple_value` | `cbor::simple_value` |
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
 // [1, {"a": 2}]
-auto const i = cbor::lazy::view(owner)->decode();
-(*i)->type;               // type::array
-(*i)->via.array.size();   // 2
+auto const tree = cbor::lazy::view(owner)->clone();
+(*tree)->type;                                   // cbor::type::array
+(*tree)->get<cbor::type::array>()->size();       // 2
 // 82 01, an array of two elements with one element
-cbor::lazy::view(owner)->decode();                       // too_little_data
+cbor::lazy::view(owner)->clone().error();        // too_little_data
 ```
 
 A tag 28 stays a tag item over the value it marks. A tag 29 stays a tag
@@ -176,31 +192,33 @@ root of the embedded item, decoded as a top-level item of its own. It throws
 elements than bytes are left gives `too_little_data` before it reads an
 element.
 
-`type()` of a lazy and of an item gives `std::expected<cbor::type, error>`:
-the major type, or for a tag 2, 3 or a typed array of RFC 8746 the kind of
-that tag. A lazy and an item keep tags 28 and 29 as tags.
+`type()` of a lazy gives `std::expected<cbor::type, error>`: the major
+type, or for a tag 2, 3 or a typed array of RFC 8746 the kind of that
+tag. The data member `type` of an item holds the same value. A lazy and
+an item keep tags 28 and 29 as tags.
 
 A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value
-as a basic integer (RFC 8949 3.4.3). `decode()` makes it an
+as a basic integer (RFC 8949 3.4.3). `clone` and `decode` make it an
 `unsigned_integer` or `negative_integer` item, and `type()` of a lazy
 gives that type. A larger bignum stays `unsigned_bignum` or
 `negative_bignum`. A key 2(h'01') is the same key as 1.
 
 Such a bignum is a number everywhere: `type()`, `get<int>`, `get<double>`,
 a path and a key lookup read it as the integer, and no read gives it as a
-tag. A bignum larger than 64 bits stays a tag item. Its content is the
-magnitude as raw bytes, a span into the input. The library has no type
-for big numbers and depends on no library for them.
+tag. A bignum larger than 64 bits stays a tag item. Its content is a
+byte string item that holds a copy of the magnitude. The library has no
+type for big numbers and depends on no library for them.
 
 The decode reads every head of the item, so every limit counts each head.
-It reads no byte after the item.
+`lazy::clone` reads no byte after the item. `cbor::decode` gives
+`syntax_error` for a byte after the item.
 
 ## 6. encode
 
 `cbor::encoder` writes one data item per call, in the order of the bytes:
 `unsigned_integer`, `negative_integer`, `byte_string`, `text_string`,
-`array`, `map`, `tag`, `shareable`, `sharedref`, `simple_value`,
-`floating_point` and `typed_array`.
+`array`, `map`, `tag`, `simple_value`, `floating_point` and
+`typed_array`.
 An integer and a float take the width of their type; a count, a length and
 a tag number take the shortest head. The encoder counts nothing: the counts
 of `array` and `map` are yours.
@@ -228,10 +246,10 @@ e.text_string("a");
 e.finish();   // 5: out holds 82 18 01 61 61
 ```
 
-Tags 28 and 29 exist only to write cycles. The encoder writes them only
-for a cycle that it finds itself. A user of the encoder does not write them:
-`shareable()` and `sharedref()` are private. A value that two places hold
-without a cycle is written in full at each place.
+Tags 28 and 29 mark shared values. `shareable()` and `sharedref()` of
+the encoder are private, and no function of the library calls them.
+`tag(28)` and `tag(29)` write them as any other tag. `cbor::structs`
+encode writes no tag 28 and no tag 29.
 
 `cbor::encode(item, target)` writes an item with the additional
 information that each item keeps. Each integer, length and tag number
@@ -257,8 +275,9 @@ for (auto const e : cbor::sequence{owner})   // owner: std::shared_ptr<std::stri
   stream can read them again with more bytes.
 - An item that is not well-formed gives its error, and the sequence ends
   there.
-- The sequence takes only a `std::shared_ptr<std::string const>`, and
-  keeps it alive.
+- The sequence takes a `std::shared_ptr<std::string const>`, or a
+  `std::shared_ptr<void const>` and a `std::string_view` of the bytes
+  that it keeps alive. It keeps the owner alive.
 
 Each element is a top-level item of its own. A tag 29 in one element does
 not reach a tag 28 in another. `lazy::view(owner, *e)` reads an element
@@ -291,7 +310,7 @@ well-formed and allocates nothing. The nesting depth does not limit it.
 Tag 28 marks a value as shared. Tag 29 with the index n stands for the
 value of the n-th tag 28 ([value-sharing](http://cbor.schmorp.de/value-sharing)).
 
-- A lazy, `decode`, `at_path`, `query` and `diagnostic_notation` read tag 28
+- A lazy, `clone`, `decode`, `at_path`, `query` and `diagnostic_notation` read tag 28
   as a tag over its content and tag 29 as a tag over its content. They
   resolve nothing, check no index and give no error of their own. A step
   and `get` pass both tags, as they pass every tag that they do not
@@ -311,17 +330,20 @@ cbor::diagnostic_notation(*owner);                           // "[28(1), 29(0)]"
 
 ## 11. Tag 55799
 
-Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR. `lazy::take_ownership`, `lazy::view`, `decode`
-and a path read one leading tag 55799 as its content, in
-every width of the argument. A second tag 55799, and a tag 55799 inside an
-item, stay tags.
+Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR. `lazy::take_ownership`
+and `lazy::view` read one leading tag 55799 as its content, in every
+width of the argument. So `clone` of that lazy gives the content.
+`cbor::decode` keeps a leading tag 55799 as a tag item. A second tag
+55799, and a tag 55799 inside an item, stay tags.
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
 // 55799([1, 2])
 cbor::lazy::view(owner)->at(1)->get<std::int64_t>();   // 2
+cbor::lazy::view(owner)->clone();                      // the array item [1, 2]
+cbor::decode(*owner);                                  // the tag item 55799([1, 2])
 // [55799(1)]
-cbor::lazy::view(owner)->decode();                     // an array that holds the tag item 55799(1)
+cbor::lazy::view(owner)->clone();                      // an array that holds the tag item 55799(1)
 ```
 
 `e.tag(55799)` writes `d9 d9 f7`.
@@ -330,12 +352,13 @@ cbor::lazy::view(owner)->decode();                     // an array that holds th
 
 `cbor::encode_iov(item)` writes a decoded item into a list of pieces, not
 into one buffer. It gives
-`std::expected<cbor::owning_ref<std::span<std::string_view const>>, error>`:
+`std::expected<cbor::ref<std::span<std::string_view const>>, error>`:
 the pieces in order, and their storage, which lives as long as the
 result. Use the pieces with `writev` or a socket, or join them.
 
 ```cpp
-auto const pieces = cbor::encode_iov(**cbor::lazy::take_ownership(std::move(bytes))->decode());
+auto const tree = cbor::decode(bytes);
+auto const pieces = cbor::encode_iov(**tree);
 for (std::string_view const piece : **pieces)
     send(piece);
 ```
@@ -346,7 +369,7 @@ The encoder writes into blocks of 16 KiB and copies each byte once; a
 `cbor::encoder` over a `cbor::iov_writer` writes item by item. A text or a
 byte string of 32 bytes or more that you hand over with its owner is not
 copied: `std::string&&` and `std::vector<std::byte>&&` are moved into the
-result, a `std::shared_ptr` or a `cbor::owning_ref` is kept. `finish()`
+result, a `std::shared_ptr` or a `cbor::ref` is kept. `finish()`
 gives the pieces.
 
 ```cpp

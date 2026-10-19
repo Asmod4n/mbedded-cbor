@@ -20,6 +20,12 @@ using cbor::error;
 namespace doc_runtime
 {
 
+template <class R>
+concept dereferences = requires(R &&r) { *std::forward<R>(r); };
+
+template <class R>
+concept arrows = requires(R &&r) { std::forward<R>(r).operator->(); };
+
 // The section "Loop over an array or a map" shows this function whole, because a loop over std::expected values is
 // the place where a new user leaves out a check.
 std::expected<std::int64_t, cbor::error> sum(std::string_view bytes)
@@ -68,6 +74,12 @@ TEST_CASE("doc runtime: read step by step")
     auto const viewed = cbor::lazy::view(owner);
     REQUIRE(viewed.has_value());
     CHECK_EQ(viewed->top_level.encoded.data(), owner->data());
+    auto const part = cbor::lazy::view(owner, std::string_view(*owner).substr(1));
+    REQUIRE(part.has_value());
+    CHECK_EQ(part->top_level.encoded.data(), owner->data() + 1);
+    auto const key = part->get<std::string_view>();
+    REQUIRE(key.has_value());
+    CHECK_EQ(**key, "cars"sv);
     auto const keyed = test::lazy_of_copy(preferred(M(7, "seven"s)));
     auto const seven = keyed->at(cbor::key{7})->get<std::string_view>();
     REQUIRE(seven.has_value());
@@ -84,6 +96,10 @@ TEST_CASE("doc runtime: read a value as a type")
     CHECK_EQ(doc->at("age")->get<std::int64_t>(), 300);
     CHECK_EQ(doc->at("age")->get<std::uint8_t>().error(), error::number_out_of_range);
     CHECK_EQ(doc->at("name")->get<std::int64_t>().error(), error::incorrect_type);
+    CHECK(doc_runtime::dereferences<cbor::ref<std::string_view> const &>);
+    CHECK_FALSE(doc_runtime::dereferences<cbor::ref<std::string_view>>);
+    CHECK(doc_runtime::arrows<cbor::ref<std::string_view> const &>);
+    CHECK_FALSE(doc_runtime::arrows<cbor::ref<std::string_view>>);
     CHECK_EQ(test::lazy_of_copy(preferred(V(1.5)))->get<double>(), 1.5);
     CHECK_EQ(test::lazy_of_copy(preferred(V(42)))->get<double>(), 42.0);
     CHECK_EQ(test::lazy_of_copy(preferred(V(simple{21})))->get<bool>(), true);

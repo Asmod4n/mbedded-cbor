@@ -13,9 +13,11 @@
 #include <optional>
 #include <set>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -75,6 +77,16 @@ struct senml {
 struct tagged_person {
     std::string name;
     std::int64_t age;
+};
+
+} // namespace doc_advanced_structs
+
+namespace doc_advanced_structs
+{
+
+template <class Part>
+concept decodes_beside = requires(std::shared_ptr<void const> const &o, Part p) {
+    cbor::structs<std::string_view>::decode(o, std::forward<Part>(p));
 };
 
 } // namespace doc_advanced_structs
@@ -142,6 +154,18 @@ TEST_CASE("doc advanced structs: the forms of decode")
 
     CHECK_THROWS_AS((void)cbor::structs<std::string_view>::decode(std::shared_ptr<std::string const>{}),
                     std::logic_error);
+
+    std::string_view const part(*owner);
+    auto const beside = cbor::structs<std::string_view>::decode(owner, part);
+    REQUIRE(beside.has_value());
+    CHECK_EQ(static_cast<void const *>((*beside)->data()), static_cast<void const *>(owner->data() + 1));
+    auto const into = cbor::structs<std::string>::decode(owner, part, std::string());
+    REQUIRE(into.has_value());
+    CHECK_EQ(**into, "abc");
+    CHECK_THROWS_AS((void)cbor::structs<std::string_view>::decode(std::shared_ptr<void const>{}, part),
+                    std::logic_error);
+    CHECK(decodes_beside<std::string_view const &>);
+    CHECK_FALSE(decodes_beside<std::string const &>);
 }
 
 // The section "Every type" gives the CBOR item of each kind of C++ type.
@@ -163,6 +187,19 @@ TEST_CASE("doc advanced structs: the item of each type")
                  std::chrono::sys_seconds{std::chrono::seconds{1700000000}})),
              "1(1700000000)");
     CHECK_EQ(cbor::structs<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::structs<std::vector<std::uint16_t>>::decode(preferred(A(1, 2))).error(), error::incorrect_type);
+    CHECK_EQ((cbor::structs<std::array<double, 2>>::decode(preferred(A(1.5, 2.5))).error()), error::incorrect_type);
+}
+
+// The section "Every type" says that encode throws for a date that does not exist, because the value is a wrong use
+// and no CBOR item stands for it.
+TEST_CASE("doc advanced structs: encode of an invalid date throws")
+{
+    using namespace std::chrono;
+    CHECK_THROWS_AS((void)cbor::structs<year_month_day>::encode(year_month_day{year{2026}, month{2}, day{30}}),
+                    std::logic_error);
+    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<year_month_day>::encode(year_month_day{year{1970}, month{1}, day{2}})),
+             "100(1)");
 }
 
 // The section "Structs and keys" shows a description of a class with a private member and an integer key, and
@@ -229,6 +266,10 @@ TEST_CASE("doc advanced structs: a tag 29 into a plain member is incorrect_type"
     CHECK_EQ(**marked, std::vector<std::string>{"x", "y"});
     CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s).error(),
              error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x81\xd8\x1d\x00"s).error(),
+             error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::structs<person>::decode("\xa3\x61z\xd8\x1c\x01\x64name\xd8\x1d\x00\x63" "age\x01"s).error(),
+             error::sharedref_not_complete);
 }
 
 // The section "A memory budget" shows a std::pmr target, and that a refused allocation is the error

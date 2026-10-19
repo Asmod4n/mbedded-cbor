@@ -38,8 +38,8 @@ p.home->city;   // "Graz"
 ```
 
 `encode` returns a `std::expected<std::string, cbor::error>` with the
-bytes. `decode` returns a `std::expected<cbor::owning_ref<person>,
-cbor::error>`: `*back` is the `owning_ref`, and `**back` is the
+bytes. `decode` returns a `std::expected<cbor::ref<person>,
+cbor::error>`: `*back` is the `ref`, and `**back` is the
 `person`. A struct is a map with the names of its members as keys.
 `cbor::diagnostic_notation` prints the bytes as text.
 
@@ -63,6 +63,9 @@ cbor::error>`: `*back` is the `owning_ref`, and `**back` is the
 | an enum with a fixed underlying type | an integer |
 | a struct | a map |
 
+`decode` reads a `std::vector` or a `std::array` of a number type only
+from its typed array. A plain array of numbers gives `incorrect_type`.
+
 An enum needs a fixed underlying type, for example
 `enum class color : std::uint8_t { red, green };`. Without it, `decode`
 does not compile.
@@ -71,10 +74,14 @@ does not compile.
 
 The key of a member is its name. A description changes it. A
 description is a specialization of `cbor::describe_members` after the
-struct, outside every namespace. It gives the tag of the struct, its
-generation, and one `cbor::member` for each member. The entry
+struct, outside every namespace. It gives the tag of the struct and one
+`cbor::member` for each member. The entry
 `cbor::member{key, &type::member}` gives the key. A key is a text or an
 integer. `CBOR_MEMBER(type, member)` takes the name as the key.
+`cbor::structs` takes no annotation: `[[=cbor::key("x")]]`,
+`[[=cbor::skip{}]]`, `[[=cbor::allow{}]]` and `[[=cbor::allowlist{}]]`
+on a type that it reads do not compile. They work with
+[cbor::schema](schema.md) only.
 
 ```cpp
 struct header {
@@ -112,6 +119,7 @@ older program.
 | a value of another type, for example a text for `int` | `incorrect_type` |
 | a number that the type cannot hold | `number_out_of_range` |
 | an array of another count for a `std::array` or a `std::tuple` | `incorrect_type` |
+| a plain array for a `std::vector` of a number type | `incorrect_type` |
 | bytes after the value | `syntax_error` |
 | the input ends inside the value | `too_little_data` |
 
