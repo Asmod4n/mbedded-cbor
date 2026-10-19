@@ -156,22 +156,25 @@ struct [[=cbor::tag(1506)]] größe {
 } // namespace
 
 // The offset points at the head of a value. The keys are in the table, so the 3 bytes of the class tag and the 7
-// bytes of the record head come first. wheel: diameter at 10, airPressure behind its 3 bytes at 13, snowTires
-// behind its 5 bytes at 18.
+// bytes of the record head come first. The values follow the key order of RFC 8949 4.2.1, a shorter key first:
+// diameter (68 ...) at 10, snowTires (69 ...) behind its 3 bytes at 13, airPressure (6b ...) behind 1 byte at 14.
 TEST_CASE("member_offset: the head of each value, behind the class tag and the head of the record")
 {
     CHECK_EQ(cbor::packed<wheel>::member_offset<^^wheel::diameter>(), 10u);
-    CHECK_EQ(cbor::packed<wheel>::member_offset<^^wheel::airPressure>(), 13u);
-    CHECK_EQ(cbor::packed<wheel>::member_offset<^^wheel::snowTires>(), 18u);
-    CHECK_EQ(cbor::packed<wheel const>::member_offset<^^wheel::snowTires>(), 18u);
+    CHECK_EQ(cbor::packed<wheel>::member_offset<^^wheel::snowTires>(), 13u);
+    CHECK_EQ(cbor::packed<wheel>::member_offset<^^wheel::airPressure>(), 14u);
+    CHECK_EQ(cbor::packed<wheel const>::member_offset<^^wheel::airPressure>(), 14u);
 }
 
-// A nested struct is a record at the offset of its member, so offsets add up. car: 10, seats 2, so the engine record
-// with its own class tag is at 12; inside it horsepower at 10.
+// A nested struct is a record at the offset of its member, so offsets add up. car in key order: motor (65 6d ...)
+// at 10, seats (65 73 ...) behind the engine record, hasNavSystem (6c ...) behind the 2 bytes of seats. engine in key
+// order: cc (62 ...) at 10, horsepower (6a ...) behind its 5 bytes at 15.
 TEST_CASE("member_offset: offsets of nested structs add up")
 {
-    CHECK_EQ(cbor::packed<car>::member_offset<^^car::motor>(), 12u);
-    CHECK_EQ(cbor::packed<engine>::member_offset<^^engine::horsepower>(), 10u);
+    CHECK_EQ(cbor::packed<car>::member_offset<^^car::motor>(), 10u);
+    CHECK_EQ(cbor::packed<engine>::member_offset<^^engine::cc>(), 10u);
+    CHECK_EQ(cbor::packed<engine>::member_offset<^^engine::horsepower>(), 15u);
+    CHECK_EQ(cbor::packed<car>::member_offset<^^car::seats>(), 10u + cbor::packed<engine>::fixed_size());
     CHECK_EQ(cbor::packed<car>::member_offset<^^car::hasNavSystem>(), 12u + cbor::packed<engine>::fixed_size());
 }
 
@@ -182,9 +185,11 @@ TEST_CASE("member_offset: the record head has one width for any count and any na
     CHECK_EQ(cbor::packed<thirty>::member_offset<^^thirty::m00>(), 10u);
     CHECK_EQ(cbor::packed<thirty>::member_offset<^^thirty::m29>(), 10u + 29u * 2u);
     CHECK_EQ(cbor::packed<thirty>::fixed_size(), 10u + 30u * 2u);
-    CHECK_EQ(cbor::packed<long_name>::member_offset<^^long_name::a_member_name_of_twenty_nine_b>(), 10u);
+    CHECK_EQ(cbor::packed<long_name>::member_offset<^^long_name::b>(), 10u);
+    CHECK_EQ(cbor::packed<long_name>::member_offset<^^long_name::a_member_name_of_twenty_nine_b>(), 12u);
     CHECK_EQ(cbor::packed<empty>::fixed_size(), 10u);
-    CHECK_EQ(cbor::packed<größe>::member_offset<^^größe::b>(), 12u);
+    CHECK_EQ(cbor::packed<größe>::member_offset<^^größe::b>(), 10u);
+    CHECK_EQ(cbor::packed<größe>::member_offset<^^größe::höhe>(), 12u);
 }
 
 #endif
@@ -313,21 +318,108 @@ TEST_CASE("encode: a struct with a number, a bool and a string")
     check_one_item(bytes);
 }
 
-// A negative int16 is major type 1 with -1 - n in two bytes (RFC 8949 3.1). A float stays binary32 (fa). The list
-// of uint16 is shared item 16, a typed array of RFC 8746: tag 69 (uint16, little endian) = d8 45 over a byte string
-// of four bytes. The empty optional is shared item 17, an empty
-// array. Item 17 is 6(-1) = c6 3a 00 00 00 00, because 2.2 maps a negative N to index 16 - 2N - 1. The items start
-// at 46 (2e) and 57 (39). The rump starts with the class tag 1508 = d9 05 e4.
+struct [[=cbor::tag(1620)]] unsorted {
+    std::int8_t zz;
+    std::int8_t b;
+    std::int8_t aa;
+};
+
+struct [[=cbor::tag(1620)]] unsorted_other_order {
+    std::int8_t aa;
+    std::int8_t zz;
+    std::int8_t b;
+};
+
+struct [[=cbor::tag(1621)]] renamed {
+    [[=cbor::key("a")]] std::int8_t last;
+    std::int8_t first;
+};
+
+// packed is deterministic: RFC 8949 4.2.1 sorts the keys of a map "in the bytewise lexicographic order of their
+// deterministic encodings", so a shorter key comes first. The encodings are 61 62 ("b"), 62 61 61 ("aa") and
+// 62 7a 7a ("zz"); the key list of tag 114 and the values of the record follow that order, whatever the order of
+// declaration. The bytes are written from the RFC by hand.
+TEST_CASE("encode: members stand in the key order of RFC 8949 4.2.1, not in the order of declaration")
+{
+    std::string const bytes = schema_bytes(unsorted{3, 1, 2});
+    CHECK_NE(bytes.find("\xd8\x72\x83\x61" "b\x62" "aa\x62zz"s), std::string::npos);
+    CHECK_NE(bytes.find("\xd9\x06\x54\xd8\x80\x9a\x00\x00\x00\x03\x18\x01\x18\x02\x18\x03"s), std::string::npos);
+    CHECK_EQ(at_path<unsorted, "$.zz">(bytes), 3);
+    CHECK_EQ(at_path<unsorted, "$.b">(bytes), 1);
+    CHECK_EQ(at_path<unsorted, "$.aa">(bytes), 2);
+}
+
+// The same members declared in another order give the same bytes, so a peer gets one encoding for one value.
+TEST_CASE("encode: the order of declaration does not change the bytes")
+{
+    CHECK_EQ(schema_bytes(unsorted{3, 1, 2}), schema_bytes(unsorted_other_order{2, 3, 1}));
+}
+
+// A key given by cbor::key takes part in the order: "a" (61 61) comes before "first" (65 ...).
+TEST_CASE("encode: a key given by cbor::key is sorted by that key")
+{
+    std::string const bytes = schema_bytes(renamed{7, 9});
+    CHECK_NE(bytes.find("\xd8\x72\x82\x61" "a\x65" "first"s), std::string::npos);
+    CHECK_EQ(at_path<renamed, "$.a">(bytes), 7);
+    CHECK_EQ(at_path<renamed, "$.first">(bytes), 9);
+    auto const back = cbor::packed<renamed>::decode(std::string(bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ((*back)->last, 7);
+    CHECK_EQ((*back)->first, 9);
+}
+
+struct [[=cbor::tag(1622)]] sorted_inner {
+    std::int8_t y;
+    std::int8_t x;
+};
+
+struct [[=cbor::tag(1623)]] sorted_outer {
+    std::int8_t z;
+    sorted_inner a;
+    std::int8_t B;
+};
+
+// The order holds at every depth: the outer keys are "B" (61 42), "a" (61 61) and "z"
+// (61 7a), keys of one length ordered by their bytes; the inner record holds x before y. A decode gives every value
+// back to its member, so the order of the bytes never mixes up members.
+TEST_CASE("encode and decode: the key order holds in an inner struct")
+{
+    sorted_outer const value{5, {2, 1}, 4};
+    std::string const bytes = schema_bytes(value);
+    check_one_item(bytes);
+    CHECK_NE(bytes.find("\xd8\x72\x83\x61" "B\x61" "a\x61z"s), std::string::npos);
+    CHECK_NE(bytes.find("\xd8\x72\x82\x61x\x61y"s), std::string::npos);
+    CHECK_EQ(at_path<sorted_outer, "$.a.y">(bytes), 2);
+    CHECK_EQ(at_path<sorted_outer, "$.a.x">(bytes), 1);
+    CHECK_EQ(at_path<sorted_outer, "$.B">(bytes), 4);
+    auto const back = cbor::packed<sorted_outer>::decode(std::string(bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ((*back)->z, 5);
+    CHECK_EQ((*back)->a.y, 2);
+    CHECK_EQ((*back)->a.x, 1);
+    CHECK_EQ((*back)->B, 4);
+    auto const unsorted_back = cbor::packed<unsorted>::decode(schema_bytes(unsorted{3, 1, 2}));
+    REQUIRE(unsorted_back.has_value());
+    CHECK_EQ((*unsorted_back)->zz, 3);
+    CHECK_EQ((*unsorted_back)->b, 1);
+    CHECK_EQ((*unsorted_back)->aa, 2);
+}
+
+// A negative int16 is major type 1 with -1 - n in two bytes (RFC 8949 3.1). A float stays binary32 (fa). The values
+// stand in the key order of RFC 8949 4.2.1: f, o, t, v. The empty optional is shared item 16, an empty array. The
+// list of uint16 is shared item 17, a typed array of RFC 8746: tag 69 (uint16, little endian) = d8 45 over a byte
+// string of four bytes. Item 17 is 6(-1) = c6 3a 00 00 00 00, because 2.2 maps a negative N to index 16 - 2N - 1.
+// The items start at 46 (2e) and 51 (33). The rump starts with the class tag 1508 = d9 05 e4.
 TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
 {
     std::string const bytes = schema_bytes(measures{-5, 1.5f, {7, 8}, std::nullopt});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x84\x61t\x61\x66\x61v\x61o"
-                    "\x5a\x00\x00\x00\x08\x00\x00\x00\x2e\x00\x00\x00\x39"
+    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x84\x61\x66\x61o\x61t\x61v"
+                    "\x5a\x00\x00\x00\x08\x00\x00\x00\x2e\x00\x00\x00\x33"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-                    "\xd8\x45\x5a\x00\x00\x00\x04\x07\x00\x08\x00"
                     "\x9a\x00\x00\x00\x00"
-                    "\xd9\x05\xe4\xd8\x80\x9a\x00\x00\x00\x04\x39\x00\x04\xfa\x3f\xc0\x00\x00"
-                    "\xc6\x1a\x00\x00\x00\x00\xc6\x3a\x00\x00\x00\x00"s);
+                    "\xd8\x45\x5a\x00\x00\x00\x04\x07\x00\x08\x00"
+                    "\xd9\x05\xe4\xd8\x80\x9a\x00\x00\x00\x04\xfa\x3f\xc0\x00\x00"
+                    "\xc6\x1a\x00\x00\x00\x00\x39\x00\x04\xc6\x3a\x00\x00\x00\x00"s);
     check_one_item(bytes);
 }
 
@@ -1303,13 +1395,13 @@ TEST_CASE("schema: cbor::skip leaves a public member out")
 TEST_CASE("schema: an annotation gives the key of a member")
 {
     CHECK_EQ(cbor::packed<keyed>::fixed_size(), 15u);
-    CHECK_EQ(cbor::packed<keyed>::member_offset<^^keyed::m0>(), 12u);
-    CHECK_EQ(cbor::packed<keyed>::member_offset<^^keyed::m1>(), 14u);
+    CHECK_EQ(cbor::packed<keyed>::member_offset<^^keyed::m1>(), 12u);
+    CHECK_EQ(cbor::packed<keyed>::member_offset<^^keyed::m0>(), 13u);
     std::string const bytes = *cbor::packed<keyed>::encode(keyed{7, true});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x10\xd8\x72\x82\x69x-user-id\x63"
-                    "EOF\x5a\x00\x00\x00\x00"
+    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x10\xd8\x72\x82\x63"
+                    "EOF\x69x-user-id\x5a\x00\x00\x00\x00"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-                    "\xda\x00\x01\x00\x00\xd8\x80\x9a\x00\x00\x00\x02\x18\x07\xf5"s);
+                    "\xda\x00\x01\x00\x00\xd8\x80\x9a\x00\x00\x00\x02\xf5\x18\x07"s);
     auto const decoded_back = *cbor::packed<keyed>::decode(std::string(bytes));
     keyed const &back = *decoded_back;
     CHECK_EQ(back.m0, 7u);
@@ -2087,7 +2179,8 @@ TEST_CASE("attack: a directory entry out of range is an error")
     }
 }
 
-// Two directory entries are forged to the same offset, so two items would share their bytes. The text item of login
+// Two directory entries are forged to the same offset, so two items would share their bytes. In key order the items
+// of probe are text, maybe and tires; each pair of neighbours is forged once. The text item of login
 // is the last item; its length is forged to reach into the root record behind it. The test exists because a text
 // that reached into the root would give the bytes of the root's fields as text.
 TEST_CASE("attack: overlapping items are an error")
@@ -2098,7 +2191,11 @@ TEST_CASE("attack: overlapping items are an error")
     std::string same = bytes;
     same.replace(head + 9, 4, bytes.substr(head + 5, 4));
     CHECK_FALSE(at_path<probe, "$.text">(same).has_value());
-    CHECK_FALSE(at_path<probe, "$.tires[0].diameter">(same).has_value());
+    CHECK_FALSE(at_path<probe, "$.maybe">(same).has_value());
+    std::string next = bytes;
+    next.replace(head + 13, 4, bytes.substr(head + 9, 4));
+    CHECK_FALSE(at_path<probe, "$.maybe">(next).has_value());
+    CHECK_FALSE(at_path<probe, "$.tires[0].diameter">(next).has_value());
 
     std::string const one = schema_bytes(login{5, true, "ab"});
     std::size_t const text = one.find("\x7a\x00\x00\x00\x02" "ab"s);
