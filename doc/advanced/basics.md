@@ -62,12 +62,13 @@ the compiler cannot see a wrong use, the library throws
 | `invalid_path` | The path text is not valid ([path.md](path.md)). |
 | `incorrect_type` | A typed read finds another kind of item than T takes. |
 | `number_out_of_range` | The number does not fit T. |
-| `cyclic_data_structure` | An encode without sharing meets a cycle. |
+| `cyclic_data_structure` | No call of the library gives it. A writer of the program can give it. |
 | `unpopulated_table_index` | A reference in a `schema<T>` message names an entry that its table does not have. |
 | `nodelist_too_long` | One step of a query selects more nodes than the item has bytes. |
 | `duplicate_key` | A deterministic check finds a key twice in one map. |
 | `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `schema` decode. |
 | `string_length_exceeded`, `container_elements_exceeded` | A limit is set and the input goes past it (section 4). |
+| `not_singular_query` | `jsonpath::compile<T>` gets a path that is not singular, and `T` is not `nodelist` ([path.md](path.md), section 10). |
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
@@ -178,8 +179,9 @@ members use the default resource.
 |---|---|
 | `at_path<Path, T>(encoded)` for a scalar T | nothing |
 | `item_size`, the iterator of `cbor::sequence` | nothing |
-| a step of a lazy (`at`, `find`, `get`) | nothing |
-| `lazy::take_ownership`, `lazy::view` | the shared state of the top-level item, once; `lazy::take_ownership` also the `std::shared_ptr<std::string const>` that holds the bytes |
+| a step of a lazy (`at`, `get`) | nothing |
+| `lazy::view` | nothing |
+| `lazy::take_ownership` | one allocation: the `std::shared_ptr<std::string const>` that holds the bytes |
 | `lazy::clone` | its items |
 | `diagnostic_notation`, the encoder into a `std::string` | the string |
 | the encoder into a span | nothing |
@@ -227,11 +229,18 @@ std::optional<cbor::lazy> keep;
 keep->at(1)->get<std::string_view>();   // "b"
 ```
 
-- `*r` gives the `T const &`, and `r->` reaches its members.
-- `*` and `->` do not compile on a temporary `owning_ref`.
-- `==` compares the value with a `T` or with another `owning_ref`, as
+A text or a byte string comes back in a `cbor::ref<T>`. The `ref` holds
+the owner of the bytes.
+
+- `*r` gives the value. A view comes back by value, any other `T` as
+  `T const &`. `r->` reaches the members of the value.
+- `*` and `->` do not compile on a temporary `ref`.
+- `==` compares the value with a `T` or with another `ref`, as
   `std::optional` does. `==` takes a temporary, because it gives a `bool`.
-- A copy of an `owning_ref` shares the owner. It does not copy the bytes.
+- A copy of a `ref` shares the owner. It does not copy the bytes.
+- `r.clone()` copies the value out: a `std::string` for a
+  `std::string_view`, a `std::vector<std::byte>` for a
+  `std::span<std::byte const>`, and a `cbor::owning<T>` for any other `T`.
 
 The owner of the bytes comes from one of these:
 
@@ -250,13 +259,15 @@ auto const a = cbor::lazy::view(shared).value();   // shares the bytes, no copy
 auto const b = cbor::lazy::take_ownership(std::move(bytes)).value();   // moves the string, no copy
 ```
 
-`structs<T>::decode`, `schema<T>::decode`, `schema<T>::path`, `at_path`
-for a view result ([path.md](path.md)) and `cbor::sequence` take the same
-forms. The library takes no other pointer to bytes.
+`structs<T>::decode`, `schema<T>::decode`, `schema<T>::path` and
+`at_path` for a view result ([path.md](path.md)) take the same forms.
+`cbor::sequence` takes the two forms with a `std::shared_ptr`, and no
+rvalue `std::string`. The library takes no other pointer to bytes.
 
-The view form reads bytes that a larger object holds when that object
-holds them in a `std::string`. The aliasing constructor of
-`std::shared_ptr` makes the owner from the object.
+A larger object can hold the bytes. Two forms read them in place. The
+aliasing constructor of `std::shared_ptr` makes an owner of the string
+from the object. Or the object is the owner, and a view of its bytes
+goes beside it.
 
 ```cpp
 struct page {
@@ -265,8 +276,10 @@ struct page {
 auto const p = std::make_shared<page const>(message());
 std::shared_ptr<std::string const> const owner(p, &p->bytes);   // shares the count of p
 cbor::lazy::view(owner)->get<std::string_view>();               // "xyz", a view into p->bytes
+cbor::lazy::view(p, std::string_view(p->bytes))->get<std::string_view>();   // the same view
 ```
 
-An empty owner throws `std::logic_error`. A `std::string` or a
-`std::string_view` beside an owner does not compile, because the owner
-may not hold it.
+An empty owner throws `std::logic_error`. A `std::string_view` beside an
+owner compiles, and the library does not check that the owner holds its
+bytes. A `std::string` beside an owner does not compile, because it is
+not a borrowed range: its bytes can end before the owner ends.

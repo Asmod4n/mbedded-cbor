@@ -9,14 +9,17 @@ Every example of a document in `doc/` is a doctest case. The cases of
 `doc/<name>.md` are in `test/doc_<name>.cpp`, and their names start with
 `doc <name>:`. The cases of `doc/advanced/<name>.md` are in
 `test/doc_advanced_<name>.cpp`, and their names start with
-`doc advanced <name>:`. A test builds the input that a comment of the
-document shows as text with `encoded()` of `test/reference.hpp`. A claim
+`doc advanced <name>:`. The cases of this page are in
+`test/doc_internals.cpp`, and their names start with `doc internals:`. A
+test builds the input that a comment of the document shows as text with
+`preferred()` of `test/reference.hpp`. A claim
 about allocations has its test in `test/allocation.cpp`. `test/cts.cpp`
 runs the JSONPath Compliance Test Suite.
 
 ## 2. A lazy reads heads
 
-`lazy::take_ownership` and `lazy::view` read no head. A step reads the heads that it needs when it
+`lazy::take_ownership` and `lazy::view` read one head at most: a leading
+tag 55799, which they skip. A step reads the heads that it needs when it
 is called: the heads from the start of its map or array to the target,
 and the head of the target. It reads no byte after the head of the
 target. So a target that the input does not hold gives `too_little_data`
@@ -55,16 +58,18 @@ constant arrays.
 `lazy::clone` builds one `cbor::item` for each data item in a
 `std::pmr::monotonic_buffer_resource` that the result owns. The children
 of an array or a map stand by value in one block of that resource, so a
-container holds a `std::span<cbor::item const>`. The first block is sized
-from the length of the input. A count is checked against the bytes that
+container holds a `std::span<cbor::item const>`. A text or a byte string
+is copied into the resource. The first block is sized from the length of
+the input, up to a bound. A count is checked against the bytes that
 are left before an element is read, and the sum of all open counts never
 exceeds the bytes that are left.
 
 A tag 28 and a tag 29 are tag items over their content. The resource
 holds one sorted table: each tag 24 item with the root of its embedded
 item. `cbor::encoded_cbor_data_item` searches the table. The result is a
-`std::shared_ptr` whose deleter owns the resource, and the function finds
-the resource through `std::get_deleter`. `encode` of an item
+`cbor::owning<cbor::item>`. Its `std::shared_ptr` has a deleter that owns
+the resource, and the function finds the resource through
+`std::get_deleter`. `encode` of an item
 writes each head with the additional information that the item keeps, a
 float at the width of its type,
 and does not follow a tag 29.

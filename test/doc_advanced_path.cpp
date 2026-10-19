@@ -76,6 +76,65 @@ TEST_CASE("doc advanced path: a view with its owner")
     }(std::string_view(*owner))));
 }
 
+// The table of the section "The forms" names a copy form, an owner beside a view, the move of an rvalue std::string
+// and the run-time forms over bytes. A user who reads the table calls each of them.
+TEST_CASE("doc advanced path: every form of the table")
+{
+    std::string encoded = preferred(M("name"s, std::string(40, 'a'), "key"s, bytes{"\x01\x02"}, "n"s, 7));
+    CHECK_EQ(cbor::at_path<"$.name", std::string>(encoded), std::string(40, 'a'));
+    CHECK_EQ(cbor::at_path<"$.key", std::vector<std::byte>>(encoded), std::vector{std::byte{1}, std::byte{2}});
+    auto const owner = std::make_shared<std::string const>(encoded);
+    std::shared_ptr<void const> const any = owner;
+    auto const beside = cbor::at_path<"$.name", std::string_view>(any, std::string_view(*owner));
+    REQUIRE(beside.has_value());
+    CHECK_EQ((**beside).data(), owner->data() + 8);
+    CHECK_FALSE(([]<class S>(S const &s) {
+        return requires(std::shared_ptr<void const> o) { cbor::at_path<"$.name", std::string_view>(o, s); };
+    }(encoded)));
+    char const *const data = encoded.data();
+    auto const moved = cbor::at_path<"$.name", std::string_view>(std::move(encoded));
+    REQUIRE(moved.has_value());
+    CHECK_EQ((**moved).data(), data + 8);
+
+    auto const n = cbor::jsonpath::compile<std::int64_t>("$.n");
+    REQUIRE(n.has_value());
+    CHECK_EQ(cbor::at_path(std::string_view(*owner), *n), 7);
+    auto const name = cbor::jsonpath::compile<std::string_view>("$.name");
+    REQUIRE(name.has_value());
+    auto const a = cbor::at_path(any, std::string_view(*owner), *name);
+    REQUIRE(a.has_value());
+    CHECK_EQ((**a).data(), owner->data() + 8);
+    auto const b = cbor::at_path(owner, *name);
+    REQUIRE(b.has_value());
+    CHECK_EQ((**b).data(), owner->data() + 8);
+    auto const c = cbor::at_path(std::string(*owner), *name);
+    REQUIRE(c.has_value());
+    CHECK_EQ(**c, std::string(40, 'a'));
+    auto const node = cbor::jsonpath::compile<cbor::lazy>("$.n");
+    REQUIRE(node.has_value());
+    CHECK_EQ(cbor::at_path(owner, *node)->get<std::int64_t>(), 7);
+    auto const all = cbor::jsonpath::compile<cbor::nodelist>("$.*");
+    REQUIRE(all.has_value());
+    CHECK_EQ(cbor::at_path(any, std::string_view(*owner), *all)->size(), 3u);
+}
+
+// The section "The forms" states that no free form takes a lazy, because a user who has a lazy tries one.
+TEST_CASE("doc advanced path: no free form takes a lazy")
+{
+    CHECK_FALSE(([]<class L>(L const &l) { return requires { cbor::at_path<"$.a", int>(l); }; }(cbor::lazy{})));
+    CHECK_FALSE(
+        ([]<class L>(L const &l) { return requires { cbor::at_path<"$.a", std::string_view>(l); }; }(cbor::lazy{})));
+}
+
+// The section "Any item as a node" names clone() as a way to read a node on.
+TEST_CASE("doc advanced path: clone of a node")
+{
+    auto const l = *test::lazy_of_copy(preferred(M("a"s, A(1, 2, 3))));
+    auto const node = l.at_path<"$.a">();
+    REQUIRE(node.has_value());
+    CHECK(node->clone().has_value());
+}
+
 // The section "The forms" shows that a lazy is a start point for every typed form.
 TEST_CASE("doc advanced path: a typed read from a lazy")
 {

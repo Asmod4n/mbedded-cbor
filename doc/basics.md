@@ -56,14 +56,23 @@ program, not of the input.
 ## 2. Results that point into the bytes
 
 A text or a byte string comes back as a view into the bytes, with no
-copy. The view sits in a `cbor::owning_ref`. The `owning_ref` holds the
-bytes, so the view stays valid while the `owning_ref` lives.
+copy. The view sits in a `cbor::ref`. The `ref` holds the bytes, so the
+view stays valid while the `ref` lives.
 
-Bytes go into the library in two forms only, and no form copies them. An
-rvalue `std::string` is moved into storage that the library owns. A
-`std::shared_ptr<std::string const>` is read in place, and every result
-keeps it alive. A read that gives a number also takes a
-`std::string_view`, because its result points into nothing.
+Bytes go into the library in three forms, and no form copies them:
+
+- An rvalue `std::string` is moved into storage that the library owns.
+- A `std::shared_ptr<std::string const>` is read in place, and every
+  result keeps it alive.
+- A `std::shared_ptr<void const>` and a `std::string_view` beside it are
+  read in place. The owner keeps the bytes of the view alive. The
+  library does not check that it holds them. A `std::string` lvalue
+  beside an owner does not compile.
+
+A read that gives a number also takes a `std::string_view`, because its
+result points into nothing. A read with `std::string` or
+`std::vector<std::byte>` as the type also takes a `std::string_view`. It
+copies the text or the bytes of the value into the result.
 
 ```cpp
 // bytes: {"name": "ann"}
@@ -76,9 +85,9 @@ if (name) {
 }
 ```
 
-`*name` is the `owning_ref`, and `**name` is the `std::string_view`.
+`*name` is the `ref`, and `**name` is the `std::string_view`.
 `text` stays valid after `owner` ends, because `name` holds the bytes.
-Keep a result in a variable: `*` on a temporary `owning_ref` does not
+Keep a result in a variable: `*` and `->` on a temporary `ref` do not
 compile. A `cbor::lazy`, a result of `structs` and an accessor of
 `schema` hold the bytes in the same way.
 

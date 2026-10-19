@@ -15,6 +15,7 @@
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 using namespace std::string_literals;
@@ -57,13 +58,28 @@ TEST_CASE("doc advanced basics: a wrong use throws std::logic_error")
 // The section "Every error value" gives one example for the errors that a lazy gives most often.
 TEST_CASE("doc advanced basics: the error values")
 {
+    auto const owner_of = [](std::string bytes) { return std::make_shared<std::string const>(std::move(bytes)); };
     std::string const pair = preferred(A(1, 2));
-    CHECK_EQ(test::lazy_of_copy(pair.substr(0, pair.size() - 1))->at(1).error(), error::too_little_data);
-    CHECK_EQ(test::lazy_of_copy("\x9f\x01\xff"s)->at(0).error(), error::indefinite_length);
-    CHECK_EQ(test::lazy_of_copy(preferred(M("a"s, 1)))->at("b").error(), error::key_not_found);
-    CHECK_EQ(test::lazy_of_copy(preferred(V(1)))->at(0).error(), error::not_indexable);
-    CHECK_EQ(test::lazy_of_copy(preferred(V("a"s)))->get<std::int64_t>().error(), error::incorrect_type);
-    CHECK_EQ(test::lazy_of_copy(preferred(V(256)))->get<std::uint8_t>().error(), error::number_out_of_range);
+    auto owner = owner_of(pair.substr(0, pair.size() - 1));
+    CHECK_EQ(cbor::lazy::view(owner)->at(1).error(), error::too_little_data);
+    owner = owner_of("\x9f\x01\xff"s);
+    CHECK_EQ(cbor::lazy::view(owner)->at(0).error(), error::indefinite_length);
+    owner = owner_of(preferred(M("a"s, 1)));
+    CHECK_EQ(cbor::lazy::view(owner)->at("b").error(), error::key_not_found);
+    owner = owner_of(preferred(V(1)));
+    CHECK_EQ(cbor::lazy::view(owner)->at(0).error(), error::not_indexable);
+    owner = owner_of(preferred(V("a"s)));
+    CHECK_EQ(cbor::lazy::view(owner)->get<std::int64_t>().error(), error::incorrect_type);
+    owner = owner_of(preferred(V(256)));
+    CHECK_EQ(cbor::lazy::view(owner)->get<std::uint8_t>().error(), error::number_out_of_range);
+}
+
+// The row not_singular_query of the section "Every error value" names the call that gives it.
+TEST_CASE("doc advanced basics: not_singular_query")
+{
+    CHECK_EQ(cbor::jsonpath::compile<cbor::lazy>("$.a[*]").error(), error::not_singular_query);
+    CHECK_EQ(cbor::jsonpath::compile<std::int64_t>("$..a").error(), error::not_singular_query);
+    CHECK(cbor::jsonpath::compile<cbor::nodelist>("$.a[*]").has_value());
 }
 
 // The table of the section "Every error value" says which errors structs gives besides the errors of a lazy.
@@ -122,11 +138,11 @@ TEST_CASE("doc advanced basics: threads")
     CHECK_EQ(second, 2);
 }
 
-// A user moved a lazy out of the std::expected of lazy::copy. The section "Threads" shows the move.
+// A user moved a lazy out of the std::expected of lazy::take_ownership. The section "Threads" shows the move.
 TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thread")
 {
-    std::string const bytes = preferred(A(1, 2));
-    auto l = test::lazy_of_copy(bytes);
+    std::string bytes = preferred(A(1, 2));
+    auto l = cbor::lazy::take_ownership(std::move(bytes));
     std::int64_t read = 0;
     std::jthread([&read](cbor::lazy const &v) { read = *v.at(1)->get<std::int64_t>(); }, std::move(*l)).join();
     CHECK_EQ(read, 2);
@@ -164,6 +180,14 @@ TEST_CASE("doc advanced basics: owners")
     auto const copy = *name;
     CHECK(copy == *name);
     CHECK_EQ((*copy).data(), (**name).data());
+    CHECK(std::is_same_v<decltype(**name), std::string_view>);
+    std::string const own = name->clone();
+    CHECK_EQ(own, "xyz");
+    auto const array = test::lazy_of_copy("\xd8\x45\x44\x07\x00\x08\x00"s)->get<cbor::typed_array>();
+    REQUIRE(array.has_value());
+    cbor::owning<cbor::typed_array> const held = array->clone();
+    CHECK_EQ(held->bytes.size(), 4u);
+    CHECK_NE(held->bytes.data(), (*array)->bytes.data());
 
     struct page {
         std::string bytes;
@@ -171,19 +195,36 @@ TEST_CASE("doc advanced basics: owners")
     auto const message = [] { return preferred(V("xyz"s)); };
     auto const p = std::make_shared<page const>(message());
     std::shared_ptr<std::string const> const owner(p, &p->bytes);
+    auto const aliased = cbor::lazy::view(owner)->get<std::string_view>();
+    REQUIRE(aliased.has_value());
+    CHECK_EQ(**aliased, "xyz"sv);
+    CHECK_EQ((**aliased).data(), p->bytes.data() + 1);
     auto const view = cbor::lazy::view(p, std::string_view(p->bytes))->get<std::string_view>();
     REQUIRE(view.has_value());
     CHECK_EQ(**view, "xyz"sv);
     CHECK_EQ((**view).data(), p->bytes.data() + 1);
+    CHECK_FALSE(([]<class S>(S const &s) {
+        return requires(std::shared_ptr<void const> o) { cbor::lazy::view(o, s); };
+    }(p->bytes)));
 }
 
-// The section "Owners" states that an lvalue string is copied, and that a shared_ptr or an rvalue avoids the copy.
-TEST_CASE("doc advanced basics: an owner avoids the copy")
+// The section "Owners" states that cbor::sequence takes the two forms with a std::shared_ptr and no rvalue
+// std::string.
+TEST_CASE("doc advanced basics: the forms of cbor::sequence")
+{
+    CHECK(std::is_constructible_v<cbor::sequence, std::shared_ptr<std::string const>>);
+    CHECK(std::is_constructible_v<cbor::sequence, std::shared_ptr<void const>, std::string_view>);
+    CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::string &&>);
+    CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::shared_ptr<void const>, std::string const &>);
+}
+
+// The section "Owners" states that a std::string lvalue and a std::string_view alone do not compile, and that a
+// shared_ptr or an rvalue reads the bytes with no copy.
+TEST_CASE("doc advanced basics: no form copies the bytes")
 {
     auto const message = [] { return preferred(V("xyz"s)); };
-    std::string const lvalue = message();
-    auto const copied = test::lazy_of_copy(lvalue)->get<std::string_view>();
-    CHECK_NE((**copied).data(), lvalue.data() + 1);
+    CHECK_FALSE(([]<class S>(S &s) { return requires { cbor::lazy::take_ownership(s); }; }(*std::make_unique<std::string>())));
+    CHECK_FALSE(([]<class S>(S const &s) { return requires { cbor::lazy::view(s); }; }(std::string_view())));
 
     auto const shared = std::make_shared<std::string const>(message());
     auto const a = cbor::lazy::view(shared).value();
