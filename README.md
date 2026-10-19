@@ -44,17 +44,20 @@ is at `i × sizeof(element)`, and a loop runs over raw bytes.
 
 ## Performance
 
-The carsales message of 1000 cars, g++ 16 `-O2 -march=native`, median of
-5 runs. Every library checks its input.
+The carsales message of 1000 cars on an AMD Ryzen 9 5950X, g++ 16.2
+`-O2 -march=native`, median of 7 runs. Every library checks its input.
 
 | Task | mbedded-cbor | FlatBuffers + Verifier | Cap'n Proto |
 |---|---|---|---|
-| Read one field | 18 ns | 75 µs | 249 ns |
-| Read the whole message | 75 µs | 108 µs | 187 µs |
-| Write the message | 28 µs | 278 µs | 97 µs |
+| Read one field | 11.6 ns | 34.6 µs | 144 ns |
+| Read the whole message | 59.4 µs | 52.8 µs | 114 µs |
+| Write the message | 17.3 µs | 157 µs | 62.0 µs |
 
-The run and its context: [bench/results/2026-10-19-182349Z.json](bench/results/2026-10-19-182349Z.json).
-The code of every library, task by task: [doc/comparison.md](doc/comparison.md).
+`bench/readme-table.sh` measures this table on your machine. The run
+and its context:
+[bench/results/readme-2026-10-19-183938Z.json](bench/results/readme-2026-10-19-183938Z.json).
+The code of every library, task by task:
+[doc/comparison.md](doc/comparison.md).
 
 ## Requirements
 
