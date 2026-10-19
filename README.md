@@ -16,7 +16,7 @@ cmake --install build --prefix /usr/local
 find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
 
-# packed and structs: C++26 reflection, g++ 16
+# schema: C++26 reflection, g++ 16; structs: also C++23 with the Boost headers
 target_compile_features(app PRIVATE cxx_std_26)
 target_compile_options(app PRIVATE -freflection)
 ```
@@ -40,16 +40,17 @@ the same flags.
 
 `cbor::lazy` reads the bytes in place and builds no tree. Each call
 reads only up to the item that it looks for. No reflection needed.
-`lazy::from(bytes)` copies the bytes once. `std::move` or a
+`lazy::copy(bytes)` copies the bytes once. `std::move` or a
 `std::shared_ptr` avoids the copy
 ([doc/advanced/basics.md](doc/advanced/basics.md#8-owners)).
 
 ```cpp
 // bytes holds the CBOR of {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
-auto const doc = cbor::lazy::from(bytes).value();
+auto const doc = cbor::lazy::copy(bytes).value();
 
-bool const has_samples = doc.contains("samples").value();  // true
 std::uint64_t const pairs = doc.size().value();            // 3
+auto const missing = doc.at("unit");
+// missing.error() == cbor::error::key_not_found
 
 int sum = 0;
 if (auto const samples = doc.at("samples"))
@@ -64,25 +65,25 @@ The read side needs only C++23. It works with g++ 16 and with clang 23.
 
 ```cpp
 // bytes is a std::string with the CBOR of {"user": {"id": 42, "name": "ann"}}
-auto const doc = cbor::lazy::from(bytes).value();
+auto const doc = cbor::lazy::copy(bytes).value();
 
-auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);         // *id == 42
-auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);  // **name == "ann"
-auto const age = cbor::at_path<"$.user.age", int>(doc);
+auto const id = doc.at_path<"$.user.id", std::int64_t>();         // *id == 42
+auto const name = doc.at_path<"$.user.name", std::string_view>();  // **name == "ann"
+auto const age = doc.at_path<"$.user.age", int>();
 // age.error() == cbor::error::key_not_found
 ```
 
 `id` is a `std::expected<std::int64_t, cbor::error>`. `name` holds a
-`cbor::owning_ref<std::string_view>`: a view into the bytes, with no
-copy. The owning_ref keeps the bytes alive, so the view stays valid.
+`cbor::ref<std::string_view>`: a view into the bytes, with no
+copy. The ref keeps the bytes alive, so the view stays valid.
 
 ## 4. Handle bad input
 
 ```cpp
 std::string const cut = bytes.substr(0, bytes.size() - 1);  // the last byte is missing
 
-auto const doc = cbor::lazy::from(cut).value();
-auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
+auto const doc = cbor::lazy::copy(cut).value();
+auto const name = doc.at_path<"$.user.name", std::string_view>();
 // name.error() == cbor::error::too_little_data
 
 std::string const why = std::error_code(name.error()).message();  // "too little data"
@@ -95,18 +96,22 @@ it converts to `std::error_code`.
 
 ## 5. Set limits for input from the network
 
-```cpp
-cbor::limits = {.nesting_depth = 16, .string_length = 4096, .container_elements = 100};
+```sh
+g++ -DCBOR_NESTING_DEPTH_DEFAULT=16 -DCBOR_STRING_LENGTH_DEFAULT=4096 -DCBOR_CONTAINER_ELEMENTS_DEFAULT=100 ...
+```
 
+```cpp
 // bytes holds a CBOR array of 101 elements
-auto const n = cbor::lazy::from(bytes).value().size();
+auto const n = cbor::lazy::copy(bytes).value().size();
 // n.error() == cbor::error::container_elements_exceeded
 ```
 
-The limits hold for every later call in every thread. A field that you
-leave out gets its default: nesting depth 128, no limit on string
-length, element count and input size. A count in the input reserves no
-memory.
+The limits are constants of the build. Every translation unit of one
+program uses the same values. A limit that you do not set gets its
+default: nesting depth 128, no limit on string length and element
+count. A check whose limit is not set is not in the program. You bound
+the size of the input before it reaches the library. A count in the
+input reserves no memory.
 
 ## 6. Read a stream of items
 
@@ -114,7 +119,7 @@ A CBOR sequence (RFC 8742) is items one after the other, for example a
 log.
 
 ```cpp
-// log holds three CBOR items, one after the other: 1, "a", [1, 2]
+// log is a std::shared_ptr<std::string const> with three CBOR items: 1, "a", [1, 2]
 for (auto const &item : cbor::sequence{log})
     if (item)
         std::println("{}", cbor::diagnostic_notation(*item).value());
@@ -135,7 +140,7 @@ again with more bytes.
 ## 7. Packed: fields at fixed offsets
 
 A CBOR message carries its keys and its structure in every message. To
-read one field, a reader walks over the items before it. `cbor::packed`
+read one field, a reader walks over the items before it. `cbor::schema`
 removes that walk. It writes a struct as Packed CBOR
 (draft-ietf-cbor-packed-19): the struct gives the layout, so a field of
 fixed size sits at an offset that the compiler knows, and a read goes
@@ -150,12 +155,12 @@ struct [[=cbor::tag(1900)]] series {
     std::vector<double> values;
 };
 
-std::string const bytes = cbor::packed<series>::encode({"m", {1.5, 2.5, 3.5}}).value();
+std::string const bytes = cbor::schema<series>::encode({"m", {1.5, 2.5, 3.5}}).value();
 
-auto const second = cbor::packed<series>::at_path<"$.values[1]">(bytes);
+auto const second = cbor::schema<series>::at_path<"$.values[1]">(bytes);
 // *second == 2.5, read at its offset
 
-auto const root = cbor::packed<series>::path(bytes).value();
+auto const root = cbor::schema<series>::path(bytes).value();
 auto const values = root.view<"$.values">();  // *values: a random-access range of double
 double const sum = std::ranges::fold_left(*values, 0.0, std::plus{});  // 7.5
 ```
@@ -177,8 +182,8 @@ for these reasons:
 
 `cbor::structs` puts any CBOR into the members of a C++ struct or
 class, and writes it back as deterministic CBOR (RFC 8949 4.2.1): the
-shortest form of every number, and the keys in a fixed order. Needs
-reflection.
+shortest form of every number, and the keys in a fixed order. It reads
+an aggregate through reflection or through Boost.PFR.
 
 ```cpp
 struct reading {
@@ -190,9 +195,9 @@ struct reading {
 std::string const bytes = cbor::structs<reading>::encode({"t1", 21.5, {3, 4, 5}}).value();
 
 std::string const text = cbor::diagnostic_notation(bytes).value();
-// text is {"value": 21.5, "sensor": "t1", "samples": [3, 4, 5]}
+// text is {"value": 21.5, "sensor": "t1", "samples": 69(h'030004000500')}
 std::size_t const size = bytes.size();
-// size == 32; the same data as JSON with no spaces has 46 bytes
+// size == 37; the same data as JSON with no spaces has 46 bytes
 ```
 
 ## Next
@@ -201,7 +206,7 @@ std::size_t const size = bytes.size();
 - [doc/path.md](doc/path.md): JSONPath (RFC 9535) on CBOR. `match()`
   and `search()` are not supported.
 - [doc/structs.md](doc/structs.md) and
-  [doc/packed.md](doc/packed.md): every type and annotation.
+  [doc/schema.md](doc/schema.md): every type and annotation.
 
 ## Tests
 
@@ -213,7 +218,7 @@ and the
 [JSONPath Compliance Test Suite](https://github.com/jsonpath-standard/jsonpath-compliance-test-suite).
 They run with g++ 16 and clang 23, also with AddressSanitizer and
 UndefinedBehaviorSanitizer. Fuzz targets cover decode, encode, encoder,
-item_size, lazy, path and packed (CMake option `CBOR_FUZZ`).
+item_size, lazy, path and schema (CMake option `CBOR_FUZZ`).
 
 ## License
 

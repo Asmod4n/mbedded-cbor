@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -14,7 +14,7 @@ template <class F>
 std::string encoded(F const &f)
 {
     string_writer w;
-    cbor::encoder<string_writer> e{w};
+    cbor::encoding::encoder<string_writer> e{w};
     REQUIRE(f(e).has_value());
     REQUIRE(e.flush().has_value());
     return w.encoded;
@@ -81,7 +81,7 @@ TEST_CASE("simple_value_encode: one byte for each simple value")
 TEST_CASE("simple_value_encode: a value from 24 to 31 is refused")
 {
     string_writer w;
-    cbor::encoder<string_writer> e{w};
+    cbor::encoding::encoder<string_writer> e{w};
     CHECK_EQ(e.simple_value_encode(static_cast<cbor::simple_value>(24)).error(), std::errc::invalid_argument);
     CHECK_EQ(e.simple_value_encode(static_cast<cbor::simple_value>(31)).error(), std::errc::invalid_argument);
     CHECK(e.simple_value_encode(static_cast<cbor::simple_value>(32)).has_value());

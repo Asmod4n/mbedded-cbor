@@ -21,26 +21,32 @@
 #include <utility>
 #include <vector>
 
-#include "binding.hpp"
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
-#include "owning_ref.hpp"
+#include "item.hpp"
+#include "ref.hpp"
 
 namespace cbor
 {
 
-enum class sharedrefs { off, on };
+template <class Target>
+class encoder;
 
-template <sharedrefs Sharing = sharedrefs::off, class Binding, class Writer>
-std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value);
+class iov_writer;
 
-template <sharedrefs Sharing = sharedrefs::off, class Binding>
-std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(Binding &binding,
-                                                                               typename Binding::value const &value);
+template <class Target>
+std::expected<std::size_t, error> encode(item const &root, Target &&target);
+
+std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
 
 class encoding
 {
+public:
+    template <class Writer>
+    struct encoder;
+
+private:
     struct string_sink {
         std::string encoded;
 
@@ -124,40 +130,35 @@ class encoding
             return span_message<typename U::element_type>{target, 0};
         else if constexpr (byte_container<U>)
             return container_message<U>{target};
+        else if constexpr (std::same_as<U, iov_writer>)
+            return (target);
         else
             return target.allocate(hint);
     }
 
-    template <sharedrefs Sharing, class Binding, class Writer>
-    static std::expected<std::size_t, error> encode_from(Binding &binding, Writer &writer,
-                                                         typename Binding::value const &value, std::size_t depth,
-                                                         bool embedded, std::size_t depth_max);
-
     template <class Writer>
-    friend struct encoder;
+    static std::expected<void, error> item_encode(encoder<Writer> &out, item const &node, std::size_t depth,
+                                                  std::size_t depth_max);
 
-    template <class, class, pass>
-    friend class walker;
+    template <class Target>
+    friend std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
-    template <sharedrefs Sharing, class Binding>
-    friend std::expected<owning_ref<std::span<std::string_view const>>, error>
-    encode_iov(Binding &binding, typename Binding::value const &value);
+    friend std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
 
-    template <sharedrefs Sharing, class Binding, class Writer>
-    friend std::expected<void, error> encode(Binding &binding, Writer &&target,
-                                                       typename Binding::value const &value);
-
-#ifdef __cpp_impl_reflection
     template <class>
-    friend class packed;
+    friend class cbor::encoder;
 
     template <class>
     friend class structs;
+
+#ifdef __cpp_impl_reflection
+    template <class>
+    friend class schema;
 #endif
 };
 
 template <class Writer>
-struct encoder {
+struct encoding::encoder {
     static constexpr bool direct = std::same_as<Writer, encoding::span_message<char>>;
     static constexpr bool blocks = requires(Writer &w, std::size_t const n) {
         { w.block_next(n) } -> std::same_as<std::span<char>>;
@@ -321,10 +322,15 @@ struct encoder {
         return head_encode(major, heads::preferred_argument_info(argument), argument);
     }
 
-    std::expected<void, std::errc> byte_string_encode(std::string_view bytes)
+    std::expected<void, std::errc> byte_string_encode(std::string_view const bytes)
     {
         if (auto const r = head_encode(major_type::byte_string, bytes.size()); !r) [[unlikely]]
             return r;
+        return payload_encode(bytes);
+    }
+
+    std::expected<void, std::errc> payload_encode(std::string_view const bytes)
+    {
         std::span<char> const out = block;
         std::size_t const at = used;
         if (bytes.size() <= out.size() - at) {
@@ -404,7 +410,7 @@ struct encoder {
         return text_string_encode(std::string_view(*text));
     }
 
-    std::expected<void, std::errc> text_string_encode(owning_ref<std::string_view> const text)
+    std::expected<void, std::errc> text_string_encode(ref<std::string_view> const text)
     {
         if constexpr (blocks)
             if ((*text).size() >= ref_size)
@@ -433,7 +439,7 @@ struct encoder {
         return byte_string_encode(chars_of(*bytes));
     }
 
-    std::expected<void, std::errc> byte_string_encode(owning_ref<std::span<std::byte const>> const bytes)
+    std::expected<void, std::errc> byte_string_encode(ref<std::span<std::byte const>> const bytes)
     {
         if constexpr (blocks)
             if ((*bytes).size() >= ref_size)
@@ -459,7 +465,7 @@ struct encoder {
         return {};
     }
 
-    owning_ref<std::span<std::string_view const>> release()
+    ref<std::span<std::string_view const>> release()
         requires blocks
     {
         std::ignore = flush();
@@ -571,7 +577,7 @@ class iov_writer
         piece_open = false;
     }
 
-    owning_ref<std::span<std::string_view const>> release()
+    ref<std::span<std::string_view const>> release()
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a second release");
         released = true;
@@ -580,459 +586,343 @@ class iov_writer
     }
 
     template <class>
-    friend struct encoder;
-
-    template <sharedrefs Sharing, class Binding>
-    friend std::expected<owning_ref<std::span<std::string_view const>>, error>
-    encode_iov(Binding &binding, typename Binding::value const &value);
+    friend struct encoding::encoder;
 };
 
-enum class pass { plain, count, write };
-
-
-struct discarding_writer {
-    std::expected<void, std::errc> append(std::string_view)
-    {
-        return {};
-    }
-
-    std::expected<void, std::errc> done(std::size_t)
-    {
-        return {};
-    }
-};
-
-template <class Binding>
-struct sharing {
-    std::unordered_map<typename Binding::identity, std::uint64_t> seen;
-    std::unordered_map<typename Binding::identity, std::uint64_t> numbers;
-    std::uint64_t next = 0;
-    std::unordered_map<typename Binding::identity, typename Binding::value> replaced;
-};
-
-template <class Binding, class Writer, pass Pass>
-class walker
+template <class Target>
+class encoder
 {
-    Binding &binding;
-    encoder<Writer> out;
-    sharing<Binding> *shared;
-    std::size_t depth;
-    bool embedded;
-    std::size_t depth_max;
-    error failure{};
+    static constexpr bool pieces = std::same_as<Target, iov_writer>;
 
-    friend class encoding;
+    using message_type = decltype(encoding::message_of(std::declval<Target &>(), 0));
 
-    walker(Binding &h, Writer &w, sharing<Binding> *s, std::size_t const d, bool const e, std::size_t const m)
-        : binding(h), out{w}, shared(s), depth(d), embedded(e), depth_max(m)
+    message_type message;
+    encoding::encoder<std::remove_reference_t<message_type>> out;
+    bool usable = true;
+
+    void throw_logic_error_if_unusable() const
+    {
+        validity::throw_logic_error_if(!usable, "cbor::encoder: a call after an error or after finish");
+    }
+
+    std::expected<void, error> written(std::expected<void, std::errc> const r)
+    {
+        if (!r) [[unlikely]] {
+            usable = false;
+            return std::unexpected(validity::writer_error(r.error()));
+        }
+        return {};
+    }
+
+    std::expected<void, error> refused(error const e)
+    {
+        usable = false;
+        return std::unexpected(e);
+    }
+
+    template <class T>
+    static constexpr bool integer_argument =
+        std::unsigned_integral<T> && !std::same_as<T, bool> && !std::same_as<T, char> && !std::same_as<T, wchar_t> &&
+        !std::same_as<T, char8_t> && !std::same_as<T, char16_t> && !std::same_as<T, char32_t>;
+
+public:
+    explicit encoder(Target &target)
+        requires(!pieces && !requires { typename Target::element_type; })
+        : message(encoding::message_of(target, 0)), out(message)
     {
     }
 
-    void keep(std::expected<void, std::errc> const r)
+    explicit encoder(Target const target)
+        requires requires { typename Target::element_type; }
+        : message(encoding::message_of(target, 0)), out(message)
     {
-        if (!r && failure == decltype(failure){}) [[unlikely]]
-            failure = validity::writer_error(r.error());
     }
 
-    void keep_error(error const e)
+    explicit encoder(Target &target)
+        requires pieces
+        : message(encoding::message_of(target, 0)), out(message)
     {
-        if (failure == decltype(failure){})
-            failure = e;
     }
 
-    void head(major_type const major, std::uint64_t const argument)
+    encoder(encoder const &) = delete;
+    encoder &operator=(encoder const &) = delete;
+
+    template <class T>
+        requires integer_argument<T>
+    std::expected<void, error> unsigned_integer(T const value)
     {
-        keep(out.head_encode(major, argument));
+        throw_logic_error_if_unusable();
+        return written(out.fixed_width_head_encode(major_type::unsigned_integer, value));
     }
 
-    void key(typename Binding::value const &item)
+    template <class T>
+        requires integer_argument<T>
+    std::expected<void, error> negative_integer(T const argument)
     {
-        if (leaf(item)) [[likely]]
-            return;
-        if constexpr (Pass == pass::plain)
-            child(item, std::false_type{});
-        else
-            child(item, binding.key_identity(item));
+        throw_logic_error_if_unusable();
+        return written(out.fixed_width_head_encode(major_type::negative_integer, argument));
     }
 
-    CBOR_ALWAYS_INLINE bool leaf(typename Binding::value const &item)
+    std::expected<void, error> byte_string(std::span<std::byte const> const bytes)
     {
-        if constexpr (Pass == pass::plain && !requires { binding.embed_of(item); }) {
-            kind const k = binding.kind_of(item);
-            switch (k) {
-            case kind::floating_point:
-                if constexpr (requires { binding.float_of(item); }) {
-                    if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
-                        return false;
-                    keep(out.float_encode(binding.float_of(item)));
-                    return true;
-                }
-                return false;
-            case kind::unsigned_integer:
-                if constexpr (requires { binding.unsigned_of(item); }) {
-                    if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
-                        return false;
-                    keep(out.fixed_width_head_encode(major_type::unsigned_integer, std::uint64_t{binding.unsigned_of(item)}));
-                    return true;
-                }
-                return false;
-            case kind::negative_integer:
-                if constexpr (requires { binding.unsigned_of(item); }) {
-                    if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
-                        return false;
-                    keep(out.fixed_width_head_encode(major_type::negative_integer, std::uint64_t{binding.unsigned_of(item) - 1}));
-                    return true;
-                }
-                return false;
-            case kind::text_string:
-                if constexpr (requires { binding.text_of(item); }) {
-                    if (!validity::check_nesting_depth(depth, depth_max)) [[unlikely]]
-                        return false;
-                    keep(out.text_string_encode(binding.text_of(item)));
-                    return true;
-                }
-                return false;
-            default:
-                return false;
-            }
-        } else {
-            return false;
-        }
+        throw_logic_error_if_unusable();
+        return written(out.byte_string_encode(encoding::encoder<std::remove_reference_t<message_type>>::chars_of(bytes)));
     }
 
-    void value(typename Binding::value const &item)
+    template <class V>
+        requires std::same_as<V, std::vector<std::byte>>
+    std::expected<void, error> byte_string(V &&bytes)
     {
-        if (leaf(item)) [[likely]]
-            return;
-        if constexpr (Pass == pass::plain)
-            child(item, std::false_type{});
-        else
-            child(item, binding.value_identity(item));
+        throw_logic_error_if_unusable();
+        return written(out.byte_string_encode(std::move(bytes)));
     }
 
-    template <class Identity>
-    void child(typename Binding::value const &item, Identity const &identity)
+    std::expected<void, error> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes)
     {
-        if (failure != decltype(failure){}) [[unlikely]]
-            return;
-        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]] {
-            keep_error(r.error());
-            return;
-        }
-        if constexpr (requires { binding.embed_of(item); }) {
-            bool const outer = embedded;
-            embedded = false;
-            if (!outer && binding.embed_of(item)) {
-                if constexpr (Pass != pass::count) {
-                    encoding::string_sink inner;
-                    auto const r = encoding::encode_from<Pass == pass::plain ? sharedrefs::off : sharedrefs::on>(
-                        binding, inner, item, depth, true, depth_max);
-                    if (!r) [[unlikely]] {
-                        if (failure == decltype(failure){})
-                            failure = r.error();
-                        return;
-                    }
-                    head(major_type::tag, std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item));
-                    keep(out.byte_string_encode(inner.encoded));
-                }
-                return;
-            }
-        }
-        if constexpr (Pass == pass::count) {
-            if (identity && ++shared->seen.try_emplace(*identity, 0).first->second > 1)
-                return;
-        }
-        if constexpr (Pass == pass::write) {
-            if (identity && !shared->numbers.empty()) {
-                auto const number = shared->numbers.find(*identity);
-                if (number != shared->numbers.end()) {
-                    if (number->second < shared->next) {
-                        head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
-                        head(major_type::unsigned_integer, number->second);
-                        return;
-                    }
-                    number->second = shared->next++;
-                    head(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable));
-                }
-            }
-        }
-        ++depth;
-        describe(item, identity);
-        --depth;
+        throw_logic_error_if_unusable();
+        return written(out.byte_string_encode(bytes));
     }
 
-    template <class Identity>
-    typename Binding::value content_of(typename Binding::value const &item, Identity const &identity)
+    std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes)
     {
-        if constexpr (Pass == pass::plain) {
-            return binding.before_encode(item);
-        } else {
-            if (!identity)
-                return binding.before_encode(item);
-            if constexpr (Pass == pass::count)
-                return shared->replaced.emplace(*identity, binding.before_encode(item)).first->second;
-            else if (auto const found = shared->replaced.find(*identity); found != shared->replaced.end()) [[likely]]
-                return found->second;
-            else
-                return binding.before_encode(item);
-        }
+        throw_logic_error_if_unusable();
+        return written(out.byte_string_encode(bytes));
     }
 
-    template <class Identity>
-    void describe(typename Binding::value const &item, Identity const &identity)
+    std::expected<void, error> text_string(std::string_view const text)
     {
-        kind const k = binding.kind_of(item);
-        if constexpr (Pass == pass::count)
-            if (k != kind::array && k != kind::map && k != kind::registered)
-                return;
-        switch (k) {
-        case kind::unsigned_integer:
-            if constexpr (requires { binding.unsigned_of(item); }) {
-                keep(out.fixed_width_head_encode(major_type::unsigned_integer, std::uint64_t{binding.unsigned_of(item)}));
-                return;
-            }
-            break;
-        case kind::negative_integer:
-            if constexpr (requires { binding.unsigned_of(item); }) {
-                keep(out.fixed_width_head_encode(major_type::negative_integer, std::uint64_t{binding.unsigned_of(item) - 1}));
-                return;
-            }
-            break;
-        case kind::unsigned_bignum:
-            if constexpr (requires { binding.magnitude_of(item); }) {
-                bignum(false, binding.magnitude_of(item));
-                return;
-            }
-            break;
-        case kind::negative_bignum:
-            if constexpr (requires { binding.magnitude_of(item); }) {
-                bignum(true, binding.magnitude_of(item));
-                return;
-            }
-            break;
-        case kind::byte_string:
-            if constexpr (requires { binding.bytes_of(item); }) {
-                keep(out.byte_string_encode(binding.bytes_of(item)));
-                return;
-            }
-            break;
-        case kind::text_string:
-            if constexpr (requires { binding.text_of(item); }) {
-                keep(out.text_string_encode(binding.text_of(item)));
-                return;
-            }
-            break;
-        case kind::floating_point:
-            if constexpr (requires { binding.float_of(item); }) {
-                keep(out.float_encode(binding.float_of(item)));
-                return;
-            }
-            break;
-        case kind::simple_value:
-            if constexpr (requires { binding.simple_of(item); }) {
-                simple(binding.simple_of(item));
-                return;
-            }
-            break;
-        case kind::array:
-            if constexpr (requires { binding.array_size(item); }) {
-                std::uint64_t const size = binding.array_size(item);
-                head(major_type::array, size);
-                for (std::uint64_t i = 0; i < size; ++i)
-                    value(binding.array_at(item, i));
-                return;
-            }
-            break;
-        case kind::map:
-            if constexpr (requires { binding.map_size(item); }) {
-                std::uint64_t const size = binding.map_size(item);
-                head(major_type::map, size);
-                std::uint64_t written = 0;
-                binding.map_for_each(item,
-                             [this, &written](typename Binding::value const &map_key, typename Binding::value const &v) {
-                                 key(map_key);
-                                 value(v);
-                                 ++written;
-                             });
-                if (written != size) [[unlikely]]
-                    validity::throw_logic_error(
-                        "cbor::encode: the binding gave a map size that differs from the entries of map_for_each");
-                return;
-            }
-            break;
-        case kind::typed_array:
-            if constexpr (requires { binding.typed_array_of(item); }) {
-                if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]] {
-                    keep_error(r.error());
-                    return;
-                }
-                cbor::typed_array const a = binding.typed_array_of(item);
-                if (auto const r = validity::typed_array_check(a.tag, a.bytes.size()); !r) [[unlikely]] {
-                    keep_error(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
-                    return;
-                }
-                head(major_type::tag, a.tag);
-                keep(out.byte_string_encode(
-                    std::string_view(reinterpret_cast<char const *>(a.bytes.data()), a.bytes.size())));
-                return;
-            }
-            break;
-        case kind::registered:
-            if constexpr (requires { binding.registered_tag(item); }) {
-                head(major_type::tag, binding.registered_tag(item));
-                if constexpr (Pass == pass::plain)
-                    value(binding.before_encode(item));
-                else
-                    value(content_of(item, identity));
-                return;
-            }
-            break;
-        case kind::unsupported:
-            break;
-        }
-        keep_error(error::unsupported_value);
+        throw_logic_error_if_unusable();
+        return written(out.text_string_encode(text));
     }
 
-    void bignum(bool const negative, std::string_view const absolute)
+    template <class S>
+        requires std::same_as<S, std::string>
+    std::expected<void, error> text_string(S &&text)
     {
-        std::string_view const m = heads::magnitude_without_leading_zeros(absolute);
-        if (!negative) {
-            if (m.size() <= sizeof(std::uint64_t)) {
-                head(major_type::unsigned_integer, heads::magnitude_value(m));
-                return;
-            }
-            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]] {
-                keep_error(r.error());
-                return;
-            }
-            head(major_type::tag, std::to_underlying(rfc8949::tag_number::unsigned_bignum));
-            keep(out.byte_string_encode(m));
-            return;
-        }
-        if (m.empty()) [[unlikely]] {
-            keep_error(error::unsupported_value);
-            return;
-        }
-        std::string const n = heads::magnitude_minus_one(m);
-        if (n.size() <= sizeof(std::uint64_t)) {
-            head(major_type::negative_integer, heads::magnitude_value(n));
-            return;
-        }
-        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]] {
-            keep_error(r.error());
-            return;
-        }
-        head(major_type::tag, std::to_underlying(rfc8949::tag_number::negative_bignum));
-        keep(out.byte_string_encode(n));
+        throw_logic_error_if_unusable();
+        return written(out.text_string_encode(std::move(text)));
     }
 
-    void simple(std::uint8_t const v)
+    std::expected<void, error> text_string(std::shared_ptr<std::string const> const &text)
     {
-        if (!validity::check_simple_value(heads::preferred_argument_info(v), v)) [[unlikely]] {
-            keep_error(error::reserved_simple_value);
-            return;
-        }
-        head(major_type::simple_float, v);
+        throw_logic_error_if_unusable();
+        return written(out.text_string_encode(text));
+    }
+
+    std::expected<void, error> text_string(ref<std::string_view> const &text)
+    {
+        throw_logic_error_if_unusable();
+        return written(out.text_string_encode(text));
+    }
+
+    std::expected<void, error> array(std::uint64_t const count)
+    {
+        throw_logic_error_if_unusable();
+        return written(out.head_encode(major_type::array, count));
+    }
+
+    std::expected<void, error> map(std::uint64_t const count)
+    {
+        throw_logic_error_if_unusable();
+        return written(out.head_encode(major_type::map, count));
+    }
+
+    std::expected<void, error> tag(std::uint64_t const number)
+    {
+        throw_logic_error_if_unusable();
+        return written(out.head_encode(major_type::tag, number));
+    }
+
+private:
+    std::expected<void, error> shareable()
+    {
+        throw_logic_error_if_unusable();
+        return written(out.head_encode(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable)));
+    }
+
+    std::expected<void, error> sharedref(std::uint64_t const index)
+    {
+        throw_logic_error_if_unusable();
+        if (auto const r = written(out.head_encode(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref)));
+            !r) [[unlikely]]
+            return r;
+        return written(out.head_encode(major_type::unsigned_integer, index));
     }
 
 public:
-    walker(walker const &) = delete;
-    walker &operator=(walker const &) = delete;
+
+    std::expected<void, error> simple_value(cbor::simple_value const value)
+    {
+        throw_logic_error_if_unusable();
+        std::uint8_t const info = heads::preferred_argument_info(std::to_underlying(value));
+        if (!validity::check_simple_value(info, std::to_underlying(value))) [[unlikely]]
+            return refused(error::reserved_simple_value);
+        return written(out.head_encode(major_type::simple_float, info, std::to_underlying(value)));
+    }
+
+    template <std::floating_point T>
+        requires(std::numeric_limits<T>::is_iec559 &&
+                 (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
+                  (sizeof(T) == sizeof(std::uint16_t) &&
+                   std::numeric_limits<T>::digits == heads::half_precision.significand_bits + 1)))
+    std::expected<void, error> floating_point(T const value)
+    {
+        throw_logic_error_if_unusable();
+        if constexpr (sizeof(T) == sizeof(std::uint16_t))
+            return written(out.fixed_width_head_encode(major_type::simple_float, std::bit_cast<std::uint16_t>(value)));
+        else
+            return written(out.fixed_width_float_encode(value));
+    }
+
+    std::expected<void, error> typed_array(cbor::typed_array const value)
+    {
+        throw_logic_error_if_unusable();
+        if (auto const r = validity::typed_array_check(value.tag, value.bytes.size()); !r) [[unlikely]]
+            return refused(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
+        if (auto const r = written(out.head_encode(major_type::tag, value.tag)); !r) [[unlikely]]
+            return r;
+        return byte_string(value.bytes);
+    }
+
+    auto finish()
+        -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>
+    {
+        throw_logic_error_if_unusable();
+        usable = false;
+        if constexpr (pieces) {
+            return out.release();
+        } else {
+            if (auto const r = written(out.flush()); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (auto const r = written(message.done(out.written)); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return out.written;
+        }
+    }
 };
 
-template <class Binding>
-bool cycle_find(Binding &binding, typename Binding::value const &item,
-                std::vector<typename Binding::identity> &path, std::size_t const depth_max)
-{
-    auto const identity = binding.value_identity(item);
-    if (identity && std::ranges::find(path, *identity) != path.end())
-        return true;
-    if (!validity::check_nesting_depth(path.size(), depth_max)) [[unlikely]]
-        return false;
-    if (identity)
-        path.push_back(*identity);
-    bool found = false;
-    switch (binding.kind_of(item)) {
-    case kind::array:
-        if constexpr (requires { binding.array_size(item); })
-            for (std::uint64_t i = 0; !found && i < binding.array_size(item); ++i)
-                found = cycle_find(binding, binding.array_at(item, i), path, depth_max);
-        break;
-    case kind::map:
-        if constexpr (requires { binding.map_size(item); })
-            binding.map_for_each(item,
-                                 [&](typename Binding::value const &k, typename Binding::value const &v) {
-                                     found = found || cycle_find(binding, k, path, depth_max) ||
-                                             cycle_find(binding, v, path, depth_max);
-                                 });
-        break;
-    default:
-        break;
-    }
-    if (identity)
-        path.pop_back();
-    return found;
-}
+template <class Target>
+encoder(Target &) -> encoder<Target>;
 
-template <sharedrefs Sharing, class Binding, class Writer>
-std::expected<std::size_t, error> encoding::encode_from(Binding &binding, Writer &writer, typename Binding::value const &value,
-                                                        std::size_t const depth, bool const embedded,
-                                                        std::size_t const depth_max)
+template <class Element>
+encoder(std::span<Element>) -> encoder<std::span<Element>>;
+
+template <class Writer>
+std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item const &node, std::size_t const depth,
+                                                 std::size_t const depth_max)
 {
-    if constexpr (Sharing == sharedrefs::off) {
-        walker<Binding, Writer, pass::plain> walk{binding, writer, nullptr, depth, embedded, depth_max};
-        walk.value(value);
-        walk.keep(walk.out.flush());
-        if (walk.failure != decltype(walk.failure){}) [[unlikely]] {
-            if constexpr (requires { binding.value_identity(value); }) {
-                std::vector<typename Binding::identity> path;
-                if (walk.failure == error{error::nesting_depth_exceeded} &&
-                    cycle_find(binding, value, path, depth_max))
-                    return std::unexpected(error{error::cyclic_data_structure});
+    if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+        return r;
+    major_type const major = heads::major_type_of(node.type);
+    std::uint64_t argument = node.via.u64;
+    std::uint8_t info = node.additional_information;
+    switch (node.type) {
+    case cbor::type::byte_string:
+        argument = node.via.bin.size();
+        break;
+    case cbor::type::text_string:
+        argument = node.via.str.size();
+        break;
+    case cbor::type::array:
+        argument = node.via.array.size();
+        break;
+    case cbor::type::map:
+        validity::throw_logic_error_if(node.via.map.size() % rfc8949::data_items_per_pair != 0,
+                                       "cbor::encode: a map holds a key and a value for each entry");
+        argument = node.via.map.size() / rfc8949::data_items_per_pair;
+        break;
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum:
+        if (node.via.tag.content->type == cbor::type::byte_string) {
+            std::string_view const magnitude =
+                heads::magnitude_without_leading_zeros(encoder<Writer>::chars_of(node.via.tag.content->via.bin));
+            if (validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
+                std::expected<void, std::errc> const fits =
+                    out.head_encode(node.type == cbor::type::negative_bignum ? major_type::negative_integer
+                                                                            : major_type::unsigned_integer,
+                                    heads::magnitude_value(magnitude));
+                if (!fits) [[unlikely]]
+                    return std::unexpected(validity::writer_error(fits.error()));
+                return {};
             }
-            return std::unexpected(walk.failure);
         }
-        return walk.out.written;
-    } else {
-        sharing<Binding> shared;
-        discarding_writer nothing;
-        walker<Binding, discarding_writer, pass::count> count{binding, nothing, &shared, depth, embedded, depth_max};
-        count.value(value);
-        if (count.failure != decltype(count.failure){}) [[unlikely]]
-            return std::unexpected(count.failure);
-        for (auto const &[identity, times] : shared.seen)
-            if (times > 1)
-                shared.numbers.emplace(identity, std::numeric_limits<std::uint64_t>::max());
-        walker<Binding, Writer, pass::write> write{binding, writer, &shared, depth, embedded, depth_max};
-        write.value(value);
-        write.keep(write.out.flush());
-        if (write.failure != decltype(write.failure){}) [[unlikely]]
-            return std::unexpected(write.failure);
-        return write.out.written;
+        argument = node.via.tag.number;
+        break;
+    case cbor::type::tag:
+    case cbor::type::typed_array:
+        argument = node.via.tag.number;
+        break;
+    case cbor::type::false_value:
+    case cbor::type::true_value:
+    case cbor::type::null:
+    case cbor::type::undefined:
+    case cbor::type::simple_value:
+        argument = std::to_underlying(node.via.simple_value);
+        break;
+    case cbor::type::half_float:
+        info = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+        argument = heads::float_encode(rfc8949::simple_float_information::half_precision_float, node.via.f64);
+        break;
+    case cbor::type::single_float:
+        info = std::to_underlying(rfc8949::simple_float_information::single_precision_float);
+        argument = heads::float_encode(rfc8949::simple_float_information::single_precision_float, node.via.f64);
+        break;
+    case cbor::type::double_float:
+        info = std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+        argument = heads::float_encode(rfc8949::simple_float_information::double_precision_float, node.via.f64);
+        break;
+    case cbor::type::unsigned_integer:
+    case cbor::type::negative_integer:
+        break;
     }
-}
-
-template <sharedrefs Sharing, class Binding, class Writer>
-std::expected<void, error> encode(Binding &binding, Writer &&target, typename Binding::value const &value)
-{
-    decltype(auto) message = encoding::message_of(target, 0);
-    auto const size = encoding::encode_from<Sharing>(binding, message, value, 0, false, limits.nesting_depth);
-    if (!size) [[unlikely]]
-        return std::unexpected(size.error());
-    if (auto const r = message.done(*size); !r) [[unlikely]]
-        return std::unexpected(validity::writer_error(r.error()));
+    std::expected<void, std::errc> written = out.head_encode(major, info, argument);
+    if (!written) [[unlikely]]
+        return std::unexpected(validity::writer_error(written.error()));
+    switch (major) {
+    case major_type::byte_string:
+        written = out.payload_encode(encoder<Writer>::chars_of(node.via.bin));
+        break;
+    case major_type::text_string:
+        written = out.payload_encode(node.via.str);
+        break;
+    case major_type::array:
+    case major_type::map:
+        for (item const &child : major == major_type::array ? node.via.array : node.via.map)
+            if (auto const r = item_encode(out, child, depth + 1, depth_max); !r) [[unlikely]]
+                return r;
+        break;
+    case major_type::tag:
+        return item_encode(out, *node.via.tag.content, depth + 1, depth_max);
+    case major_type::unsigned_integer:
+    case major_type::negative_integer:
+    case major_type::simple_float:
+        break;
+    }
+    if (!written) [[unlikely]]
+        return std::unexpected(validity::writer_error(written.error()));
     return {};
 }
 
-template <sharedrefs Sharing, class Binding>
-std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(Binding &binding,
-                                                                               typename Binding::value const &value)
+template <class Target>
+std::expected<std::size_t, error> encode(item const &root, Target &&target)
 {
-    iov_writer writer;
-    if (auto const size = encoding::encode_from<Sharing>(binding, writer, value, 0, false, limits.nesting_depth); !size)
-        [[unlikely]]
-        return std::unexpected(size.error());
-    return writer.release();
+    decltype(auto) message = encoding::message_of(target, 0);
+    encoding::encoder<std::remove_reference_t<decltype(message)>> out(message);
+    if (auto const r = encoding::item_encode(out, root, 0, limits::nesting_depth); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    if (auto const r = out.flush(); !r) [[unlikely]]
+        return std::unexpected(validity::writer_error(r.error()));
+    if (auto const r = message.done(out.written); !r) [[unlikely]]
+        return std::unexpected(validity::writer_error(r.error()));
+    return out.written;
 }
 
+inline std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root)
+{
+    iov_writer writer;
+    encoding::encoder<iov_writer> out(writer);
+    if (auto const r = encoding::item_encode(out, root, 0, limits::nesting_depth); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return out.release();
+}
 }

@@ -1,26 +1,26 @@
 #pragma once
 
 #include "common.hpp"
+#include "../test/owned_copy.hpp"
 
 namespace fuzz
 {
 
 inline void lazy_channels(std::string_view const input)
 {
-    test_binding binding;
-    auto const eager = cbor::lazy_decode(binding, *cbor::lazy::from(input));
+    auto const eager = test::decoded(input);
     (void)cbor::item_size(input);
-    auto const decoded = cbor::lazy::from(std::string{input});
+    auto const decoded = test::lazy_of_copy(std::string{input});
     if (!decoded)
         return;
     cbor::lazy const &root = *decoded;
-    auto const whole = cbor::lazy_decode(binding, root);
+    auto const whole = test::value_of(root);
     if (eager && whole)
         require(same(*eager, *whole));
     if (whole) {
         string_writer w;
-        if (cbor::encode(binding, w, *whole)) {
-            auto const again = cbor::lazy_decode(binding, *cbor::lazy::from(w.encoded));
+        if (test::encode(w, *whole)) {
+            auto const again = test::decoded(w.encoded);
             require(again.has_value() && same_number(*whole, *again));
         }
     }
@@ -31,10 +31,10 @@ inline void lazy_channels(std::string_view const input)
                 for (auto const e : *elements) {
                     if (!e || i >= a->size())
                         break;
-                    if (auto const d = cbor::lazy_decode(binding, *e))
+                    if (auto const d = test::value_of(*e))
                         require(same(*d, a->at(i)));
                     if (auto const at = root.at(i))
-                        if (auto const d = cbor::lazy_decode(binding, *at))
+                        if (auto const d = test::value_of(*at))
                             require(same(*d, a->at(i)));
                     ++i;
                 }
@@ -46,9 +46,9 @@ inline void lazy_channels(std::string_view const input)
                 for (auto const e : *entries) {
                     if (!e || i >= m->size())
                         break;
-                    if (auto const k = cbor::lazy_decode(binding, e->first))
+                    if (auto const k = test::value_of(e->first))
                         require(same(*k, m->at(i).key));
-                    if (auto const v = cbor::lazy_decode(binding, e->second))
+                    if (auto const v = test::value_of(e->second))
                         require(same(*v, m->at(i).val));
                     ++i;
                 }

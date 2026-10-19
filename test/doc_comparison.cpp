@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -52,7 +52,7 @@ TEST_CASE("doc comparison: write a struct and read it back")
 {
     // begin struct
     auto const bytes = cbor::structs<person>::encode(person{"ann", 30});
-    auto const back = cbor::structs<person>::decode(*bytes);
+    auto const back = cbor::structs<person>::decode(std::string(*bytes));
     // (*back)->name is "ann", (*back)->age is 30
     // end struct
     REQUIRE(back.has_value());

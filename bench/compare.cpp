@@ -1,4 +1,5 @@
 #include <benchmark/benchmark.h>
+#include "../test/owned_copy.hpp"
 #include <cbor/cbor.hpp>
 #include <capnp/message.h>
 #include <capnp/serialize.h>
@@ -15,15 +16,17 @@
 #include <string>
 #include <vector>
 
-static std::shared_ptr<void const> const keep = std::make_shared<int const>(0);
+static std::shared_ptr<std::string const> held;
 static std::string msg, fbmsg;
 static std::vector<capnp::word> cpmsg;
 
+#if defined(DS_CARS) || defined(DS_RECORDS)
 static double bytes_sum(std::string_view const s)
 {
     return double(std::transform_reduce(s.begin(), s.end(), std::uint64_t{0}, std::plus<>{},
                                         [](char const c) { return std::uint64_t(std::uint8_t(c)); }));
 }
+#endif
 
 static std::string file_read(char const *path)
 {
@@ -31,12 +34,14 @@ static std::string file_read(char const *path)
     return {std::istreambuf_iterator<char>(in), {}};
 }
 
+#if defined(OP_CP_DECODE) || defined(OP_CP_READ) || defined(OP_CP_FIELD)
 static capnp::FlatArrayMessageReader cp_reader()
 {
     capnp::ReaderOptions opt;
     opt.traversalLimitInWords = std::uint64_t(1) << 40;
     return capnp::FlatArrayMessageReader(kj::arrayPtr(cpmsg.data(), cpmsg.size()), opt);
 }
+#endif
 
 static void cp_store(capnp::MallocMessageBuilder &mb)
 {
@@ -68,7 +73,7 @@ struct [[=cbor::tag(1500)]] Car {
 };
 struct [[=cbor::tag(1503)]] ParkingLot { std::vector<Car> cars; };
 using T = ParkingLot;
-using S = cbor::packed<T>;
+using S = cbor::schema<T>;
 static std::string json_text;
 static nlohmann::json json;
 
@@ -158,7 +163,10 @@ static bool fb_verify()
 }
 
 using FbT = fbcar::ParkingLotT;
+#if defined(OP_FB_DECODE)
 static std::unique_ptr<FbT> fb_unpack() { return std::unique_ptr<FbT>(fbcar::GetParkingLot(fbmsg.data())->UnPack()); }
+#endif
+#if defined(OP_FB_DECODE)
 static double sum(FbT const &l)
 {
     double s = 0;
@@ -172,7 +180,9 @@ static double sum(FbT const &l)
     }
     return s;
 }
+#endif
 
+#if defined(OP_CP_DECODE)
 static T cp_copy()
 {
     auto rd = cp_reader();
@@ -194,6 +204,7 @@ static T cp_copy()
     }
     return lot;
 }
+#endif
 
 template <class V> static double num(V const &v)
 {
@@ -206,9 +217,10 @@ template <class V> static double text(V const &v)
     return bytes_sum(*v);
 }
 
+#if defined(OP_MB_READ)
 static double mb_read()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const cars = opened->at_path<"$.cars">();
     if (!cars) [[unlikely]] std::abort();
@@ -233,7 +245,9 @@ static double mb_read()
     }
     return s;
 }
+#endif
 
+#if defined(OP_FB_READ) || defined(OP_FB_READ_V)
 static double fb_read()
 {
     double s = 0;
@@ -247,7 +261,9 @@ static double fb_read()
     }
     return s;
 }
+#endif
 
+#if defined(OP_CP_READ)
 static double cp_read()
 {
     auto rd = cp_reader();
@@ -264,19 +280,26 @@ static double cp_read()
     }
     return s;
 }
+#endif
 
+#if defined(OP_MB_FIELD)
 static double mb_field()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     return num(opened->at_path<"$.cars[500].engine.cc">());
 }
+#endif
+#if defined(OP_FB_FIELD) || defined(OP_FB_FIELD_V)
 static double fb_field() { return fbcar::GetParkingLot(fbmsg.data())->cars()->Get(500)->engine()->cc(); }
+#endif
+#if defined(OP_CP_FIELD)
 static double cp_field()
 {
     auto rd = cp_reader();
     return rd.getRoot<carsales::ParkingLot>().getCars()[500].getEngine().getCc();
 }
+#endif
 #endif
 
 #if defined(DS_FLOATS)
@@ -284,7 +307,7 @@ static double cp_field()
 #include "floats.capnp.h"
 struct [[=cbor::tag(1510)]] Floats { std::vector<double> values; };
 using T = Floats;
-using S = cbor::packed<T>;
+using S = cbor::schema<T>;
 
 static double scalar(cbor::lazy const &e)
 {
@@ -294,7 +317,7 @@ static double scalar(cbor::lazy const &e)
 
 static T load()
 {
-    auto const l = cbor::lazy::from(keep, std::string_view(*new std::string(file_read(DOC_PATH))));
+    static auto const l = test::lazy_of_copy(file_read(DOC_PATH));
     T f;
     auto const els = l->elements();
     for (auto const &e : *els) {
@@ -337,9 +360,14 @@ static bool fb_verify()
     return fbfloats::VerifyFloatsBuffer(v);
 }
 using FbT = fbfloats::FloatsT;
+#if defined(OP_FB_DECODE)
 static std::unique_ptr<FbT> fb_unpack() { return std::unique_ptr<FbT>(fbfloats::GetFloats(fbmsg.data())->UnPack()); }
+#endif
+#if defined(OP_FB_DECODE)
 static double sum(FbT const &f) { return std::accumulate(f.values.begin(), f.values.end(), 0.0); }
+#endif
 
+#if defined(OP_CP_DECODE)
 static T cp_copy()
 {
     auto rd = cp_reader();
@@ -349,10 +377,12 @@ static T cp_copy()
     for (double const x : v) f.values.push_back(x);
     return f;
 }
+#endif
 
+#if defined(OP_MB_READ)
 static double mb_read()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->at_path<"$.values">();
     if (!v) [[unlikely]] std::abort();
@@ -364,12 +394,16 @@ static double mb_read()
     }
     return s;
 }
+#endif
+#if defined(OP_FB_READ) || defined(OP_FB_READ_V)
 static double fb_read()
 {
     double s = 0;
     for (double const x : *fbfloats::GetFloats(fbmsg.data())->values()) s += x;
     return s;
 }
+#endif
+#if defined(OP_CP_READ)
 static double cp_read()
 {
     auto rd = cp_reader();
@@ -377,12 +411,16 @@ static double cp_read()
     for (double const x : rd.getRoot<cpfloats::Floats>().getValues()) s += x;
     return s;
 }
+#endif
+#if defined(OP_MB_FIELD)
 static double mb_field()
 {
     auto const x = S::at_path<"$.values[30000]">(msg);
     if (!x) [[unlikely]] std::abort();
     return *x;
 }
+#endif
+#if defined(OP_FB_FIELD) || defined(OP_FB_FIELD_V)
 static double fb_field()
 {
     auto const *v = fbfloats::GetFloats(fbmsg.data())->values();
@@ -392,9 +430,11 @@ static double fb_field()
     if (std::bit_cast<std::uint64_t>(x) == 0) [[unlikely]] std::abort();
     return x;
 }
+#endif
+#if defined(OP_MB_READ_PATH)
 static double mb_read_path()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->at_path<"$.values">();
     if (!v) [[unlikely]] std::abort();
@@ -406,9 +446,11 @@ static double mb_read_path()
     }
     return s;
 }
+#endif
+#if defined(OP_MB_READ_VIEW)
 static double mb_read_view()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
@@ -417,41 +459,51 @@ static double mb_read_view()
         s += (*v)[i];
     return s;
 }
+#endif
+#if defined(OP_MB_FIELD_VIEW)
 static double mb_field_view()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
     return (*v)[30000];
 }
+#endif
+#if defined(OP_MB_FIELD_VIEW_MOVED)
 static double mb_field_view_moved()
 {
-    auto opened = S::path(keep, msg);
+    auto opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = std::move(*opened).view<"$.values">();
     if (!v) [[unlikely]] std::abort();
     return (*v)[30000];
 }
+#endif
+#if defined(OP_MB_FRONT)
 static double mb_front()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
     return v->front();
 }
+#endif
+#if defined(OP_MB_BACK)
 static double mb_back()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
     return v->back();
 }
+#endif
+#if defined(OP_MB_READ_FOR)
 static double mb_read_for()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
@@ -459,20 +511,25 @@ static double mb_read_for()
     for (double const x : *v) s += x;
     return s;
 }
+#endif
+#if defined(OP_MB_READ_FOLD)
 static double mb_read_fold()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->view<"$.values">();
     if (!v) [[unlikely]] std::abort();
     return std::ranges::fold_left(*v, 0.0, std::plus<>{});
 }
+#endif
 
+#if defined(OP_CP_FIELD)
 static double cp_field()
 {
     auto rd = cp_reader();
     return rd.getRoot<cpfloats::Floats>().getValues()[30000];
 }
+#endif
 #endif
 
 #if defined(DS_RECORDS)
@@ -482,7 +539,7 @@ struct [[=cbor::tag(1521)]] User { std::string_view name; std::uint64_t follower
 struct [[=cbor::tag(1520)]] Record { std::int64_t id; std::string_view text; User user; double ratio; std::vector<std::string_view> tags; std::int64_t neg; };
 struct [[=cbor::tag(1522)]] Records { std::vector<Record> records; };
 using T = Records;
-using S = cbor::packed<T>;
+using S = cbor::schema<T>;
 
 template <class V> static V must(std::expected<V, cbor::error> const &r)
 {
@@ -498,7 +555,7 @@ static std::string_view must_text(cbor::lazy const &l)
 
 static T load()
 {
-    auto const l = cbor::lazy::from(keep, std::string_view(*new std::string(file_read(DOC_PATH))));
+    static auto const l = test::lazy_of_copy(file_read(DOC_PATH));
     T rs;
     auto const els = l->elements();
     for (auto const &e : *els) {
@@ -576,7 +633,10 @@ static bool fb_verify()
     return fbrecords::VerifyRecordsBuffer(v);
 }
 using FbT = fbrecords::RecordsT;
+#if defined(OP_FB_DECODE)
 static std::unique_ptr<FbT> fb_unpack() { return std::unique_ptr<FbT>(fbrecords::GetRecords(fbmsg.data())->UnPack()); }
+#endif
+#if defined(OP_FB_DECODE)
 static double sum(FbT const &rs)
 {
     double s = 0;
@@ -586,9 +646,13 @@ static double sum(FbT const &rs)
     }
     return s;
 }
+#endif
 
+#if defined(OP_CP_DECODE) || defined(OP_CP_READ) || defined(OP_CP_FIELD)
 static std::string_view view(capnp::Text::Reader const t) { return {t.begin(), t.size()}; }
+#endif
 
+#if defined(OP_CP_DECODE)
 static T cp_copy()
 {
     auto rd = cp_reader();
@@ -605,6 +669,7 @@ static T cp_copy()
     }
     return rs;
 }
+#endif
 
 template <class V> static double num(V const &v)
 {
@@ -617,9 +682,10 @@ template <class V> static double text(V const &v)
     return bytes_sum(*v);
 }
 
+#if defined(OP_MB_READ)
 static double mb_read()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->at_path<"$.records">();
     if (!v) [[unlikely]] std::abort();
@@ -634,6 +700,8 @@ static double mb_read()
     }
     return s;
 }
+#endif
+#if defined(OP_FB_READ) || defined(OP_FB_READ_V)
 static double fb_read()
 {
     double s = 0;
@@ -643,6 +711,8 @@ static double fb_read()
     }
     return s;
 }
+#endif
+#if defined(OP_CP_READ)
 static double cp_read()
 {
     auto rd = cp_reader();
@@ -654,18 +724,25 @@ static double cp_read()
     }
     return s;
 }
+#endif
+#if defined(OP_MB_FIELD)
 static double mb_field()
 {
-    auto const opened = S::path(keep, msg);
+    auto const opened = S::path(held);
     if (!opened) [[unlikely]] std::abort();
     return text(opened->at_path<"$.records[1000].user.name">());
 }
+#endif
+#if defined(OP_FB_FIELD) || defined(OP_FB_FIELD_V)
 static double fb_field() { return bytes_sum(fbrecords::GetRecords(fbmsg.data())->records()->Get(1000)->user()->name()->string_view()); }
+#endif
+#if defined(OP_CP_FIELD)
 static double cp_field()
 {
     auto rd = cp_reader();
     return bytes_sum(view(rd.getRoot<cprecords::Records>().getRecords()[1000].getUser().getName()));
 }
+#endif
 #endif
 
 #if defined(OP_MB_ENCODE) || defined(OP_FB_ENCODE) || defined(OP_CP_ENCODE)
@@ -684,7 +761,7 @@ static double op()
 #elif defined(OP_CP_ENCODE)
     return double(cp_encode(*encoded_source, false));
 #elif defined(OP_MB_DECODE)
-    auto const l = S::decode(keep, msg);
+    auto const l = S::decode(held);
     if (!l) [[unlikely]] std::abort();
     benchmark::DoNotOptimize(&**l);
     return double((**l).OP_FIRST.size());
@@ -739,7 +816,7 @@ static double op()
 static double check()
 {
 #if defined(OP_MB_DECODE)
-    auto const l = S::decode(keep, msg);
+    auto const l = S::decode(held);
     return sum(**l);
 #elif defined(OP_FB_DECODE)
     return sum(*fb_unpack());
@@ -765,6 +842,7 @@ int main(int argc, char **argv)
     encoded_source = &data;
 #endif
     if (!S::encode(data, msg)) std::abort();
+    held = std::make_shared<std::string const>(msg);
     foreign_build(data);
     if (!fb_verify()) std::abort();
     char text[64];

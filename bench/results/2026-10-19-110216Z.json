@@ -1,0 +1,323 @@
+{
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+ "resolved_march": "-march= \t\tsapphirerapids",
+ "compilers": {
+  "g++-16": "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "clang++-23": "clang version 23.1.3"
+ },
+ "cxx_library": {
+  "cmp.g++-16.head.carsales.MB_FIELD": "libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fd122259000)",
+  "cmp.g++-16.base.carsales.MB_FIELD": "libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f4231e38000)",
+  "rpm": "libstdc++6-16.2.1+git9713-1.1.x86_64\nlibc++1-23.1.3-1.1.x86_64"
+ },
+ "libc": "glibc-2.44-3.1.x86_64 / libc.so.6 => /lib64/libc.so.6 (0x00007fd3a4a23000)",
+ "kernel": "Linux 59731783b3aa 6.18.44-fc-v139 #1 SMP PREEMPT_DYNAMIC @0 x86_64 x86_64 x86_64 GNU/Linux",
+ "scheduler": "EEVDF (Linux >= 6.6); sched_autogroup_enabled=1",
+ "virtualization": "hypervisor ",
+ "container": "podman, image localhost/mbedded-cbor-tw-compare, uid 0",
+ "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+ "cpu_flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+ "user": "uid=1000(ubuntu) gid=0(root) groups=0(root)",
+ "priority": "nice -10",
+ "threads": 1,
+ "pinned": false,
+ "start": "2026-10-19T10:58:41Z",
+ "end": "2026-10-19T11:01:37Z",
+ "steal_percent": {
+  "round 1": 0.368,
+  "round 2": 0.265,
+  "round 3": 0.309,
+  "round 4": 0.323,
+  "round 5": 0.266
+ },
+ "binaries": {
+  "cmp.g++-16.base.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    18.004153600885388,
+    14.535597484105873,
+    14.546611016693737,
+    15.829586390301161,
+    20.320560812683137
+   ],
+   "median": 15.829586390301161,
+   "spread": 0.3979859331481148
+  },
+  "cmp.g++-16.base.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    83263.01267710177,
+    87047.35276614467,
+    77062.6457895934,
+    90972.57095926414,
+    94000.52400852805
+   ],
+   "median": 87047.35276614467,
+   "spread": 0.21979362433494276
+  },
+  "cmp.g++-16.base.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    7.151271566756846,
+    6.984039262558093,
+    7.281594172818457,
+    9.032129952596097,
+    11.911833130299025
+   ],
+   "median": 7.281594172818457,
+   "spread": 0.7055793477793242
+  },
+  "cmp.g++-16.base.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    51171.377096915,
+    53783.97968089648,
+    57423.32439095935,
+    46912.440843958444,
+    54732.05956931284
+   ],
+   "median": 53783.97968089648,
+   "spread": 0.22405322251218007
+  },
+  "cmp.g++-16.base.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    20.62568213335794,
+    25.143838535777448,
+    20.44511874821269,
+    22.221574276379037,
+    21.508064565646954
+   ],
+   "median": 21.508064565646954,
+   "spread": 0.22982110524427846
+  },
+  "cmp.g++-16.base.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    174107.1451678166,
+    197082.01820976732,
+    153189.3286958324,
+    160317.84695828526,
+    162298.86554532222
+   ],
+   "median": 162298.86554532222,
+   "spread": 0.28652576447467015
+  },
+  "cmp.g++-16.base2.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    15.698729941199563,
+    22.7221505641816,
+    15.608753764193528,
+    19.554205655685863,
+    15.255488580803036
+   ],
+   "median": 15.698729941199563,
+   "spread": 0.48944102601698036
+  },
+  "cmp.g++-16.base2.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    96622.45394408425,
+    103990.84690000108,
+    96334.21925651206,
+    82486.7908599436,
+    76848.04545735627
+   ],
+   "median": 96334.21925651206,
+   "spread": 0.3532009341435576
+  },
+  "cmp.g++-16.base2.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    7.550926078964444,
+    7.256759974746908,
+    9.26778340920242,
+    6.777645640787806,
+    8.052681493462995
+   ],
+   "median": 7.550926078964444,
+   "spread": 0.3674045384475382
+  },
+  "cmp.g++-16.base2.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    58925.541131015605,
+    64311.862268895035,
+    88256.27828015883,
+    65910.76932573109,
+    61859.73834354093
+   ],
+   "median": 64311.862268895035,
+   "spread": 0.4977593177112958
+  },
+  "cmp.g++-16.base2.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    20.684156798050036,
+    20.08258348341375,
+    26.08451399039684,
+    25.394785909837797,
+    23.133238034466682
+   ],
+   "median": 23.133238034466682,
+   "spread": 0.29886247015679523
+  },
+  "cmp.g++-16.base2.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    167065.94272493635,
+    178036.89744015964,
+    190399.34083102556,
+    160559.09040544965,
+    173109.91440080575
+   ],
+   "median": 173109.91440080575,
+   "spread": 0.18585213923560628
+  },
+  "cmp.g++-16.head.carsales.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    15.797776629492015,
+    18.679102579784267,
+    14.736156284948109,
+    16.30224672394109,
+    16.31970671361451
+   ],
+   "median": 16.30224672394109,
+   "spread": 0.26756952210554297
+  },
+  "cmp.g++-16.head.carsales.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    73094.98849665119,
+    81498.49853587194,
+    107455.33260000002,
+    94098.81873438128,
+    80251.31284018514
+   ],
+   "median": 81498.49853587194,
+   "spread": 0.4700779740176446
+  },
+  "cmp.g++-16.head.floats.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    6.601536019245198,
+    7.789617312787996,
+    7.991076674842127,
+    7.427733368946967,
+    6.749605350231948
+   ],
+   "median": 7.427733368946967,
+   "spread": 0.21048747617918862
+  },
+  "cmp.g++-16.head.floats.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    57658.7141025684,
+    49929.304252777256,
+    56509.64982888379,
+    55391.61332719214,
+    56557.45138351895
+   ],
+   "median": 56509.64982888379,
+   "spread": 0.15480708104121454
+  },
+  "cmp.g++-16.head.records.MB_FIELD": {
+   "unit": "ns",
+   "rounds": [
+    20.409137702147532,
+    20.005812260661372,
+    21.59910096190043,
+    23.397819271760795,
+    22.383124222454565
+   ],
+   "median": 21.59910096190043,
+   "spread": 0.16955107680228165
+  },
+  "cmp.g++-16.head.records.MB_READ": {
+   "unit": "ns",
+   "rounds": [
+    162643.9855119785,
+    165679.7476609013,
+    167908.49200042398,
+    201921.75298210175,
+    174100.78448979923
+   ],
+   "median": 167908.49200042398,
+   "spread": 0.24149535776858166
+  }
+ },
+ "against_base": [
+  {
+   "bench": "compare.cpp",
+   "compiler": "g++-16",
+   "cell": "carsales.MB_FIELD",
+   "unit": "ns",
+   "base": 15.829586390301161,
+   "head": 16.30224672394109,
+   "head_over_base": 1.0298592977722734,
+   "aa_base2_over_base": 0.9917334258852288,
+   "beyond_noise": true
+  },
+  {
+   "bench": "compare.cpp",
+   "compiler": "g++-16",
+   "cell": "carsales.MB_READ",
+   "unit": "ns",
+   "base": 87047.35276614467,
+   "head": 81498.49853587194,
+   "head_over_base": 0.936254761874495,
+   "aa_base2_over_base": 1.106687523459982,
+   "beyond_noise": false
+  },
+  {
+   "bench": "compare.cpp",
+   "compiler": "g++-16",
+   "cell": "floats.MB_FIELD",
+   "unit": "ns",
+   "base": 7.281594172818457,
+   "head": 7.427733368946967,
+   "head_over_base": 1.0200696705501708,
+   "aa_base2_over_base": 1.0369880413208663,
+   "beyond_noise": false
+  },
+  {
+   "bench": "compare.cpp",
+   "compiler": "g++-16",
+   "cell": "floats.MB_READ",
+   "unit": "ns",
+   "base": 53783.97968089648,
+   "head": 56509.64982888379,
+   "head_over_base": 1.0506781045984115,
+   "aa_base2_over_base": 1.1957438376717584,
+   "beyond_noise": false
+  },
+  {
+   "bench": "compare.cpp",
+   "compiler": "g++-16",
+   "cell": "records.MB_FIELD",
+   "unit": "ns",
+   "base": 21.508064565646954,
+   "head": 21.59910096190043,
+   "head_over_base": 1.004232663333124,
+   "aa_base2_over_base": 1.0755611209860083,
+   "beyond_noise": false
+  },
+  {
+   "bench": "compare.cpp",
+   "compiler": "g++-16",
+   "cell": "records.MB_READ",
+   "unit": "ns",
+   "base": 162298.86554532222,
+   "head": 167908.49200042398,
+   "head_over_base": 1.0345635592476479,
+   "aa_base2_over_base": 1.0666119804297987,
+   "beyond_noise": false
+  }
+ ],
+ "limits_set_standalone": [],
+ "failed_build": {},
+ "failed_run": [],
+ "what": "compare.cpp OP_MB_FIELD and OP_MB_READ on carsales, records, floats; base = 81440f3, base2 = 81440f3 built again (A/A), head = 7351a67 (records as in 81440f3 plus std::copy in heads::unsigned_read); 5 rounds, 1 s min_time, uid 1000, nice -10, one binary at a time"
+}

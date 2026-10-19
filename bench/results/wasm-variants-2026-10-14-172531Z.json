@@ -1,0 +1,3079 @@
+{
+ "context": {
+  "commit": "a29625231293ec320b6d00da6476b37e7d4be95c",
+  "dirty": false,
+  "browser": "chromium 141.0.7390.37 headless shell, playwright 1.56.1, default launch flags",
+  "isolated": true,
+  "wasm_flags": "clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -fno-exceptions",
+  "wasm_bytes": {
+   "showcase-O2": 617025,
+   "showcase-O2s": 327928,
+   "showcase-O2s_aa": 327928,
+   "showcase-O3s": 332520,
+   "showcase-Oss": 291488,
+   "showcase-Ozs": 274193,
+   "showcase-O2s-lto": 303236,
+   "showcase-O3s-lto": 306762,
+   "showcase-O2s-simd": 326012,
+   "showcase-O3s-simd": 330527,
+   "showcase-O2s-wopt3": 331853,
+   "showcase-O2s-woptz": 325796,
+   "showcase-O3s-simd-wopt3": 330498
+  },
+  "inputs": {
+   "cbor_bytes": 402814,
+   "json_bytes": 492596
+  },
+  "method": "each repetition of each arm runs in a fresh page; arms alternate; a loop arm doubles its iteration count until one batch takes at least 200 ms; a first_* arm times one call in a fresh page; the CBOR bytes are in wasm memory and the JSON text is a JS string before the timer starts",
+  "kernel": "6.18.44-fc-v114",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpus": 4,
+  "user": "ubuntu",
+  "priority": 0,
+  "node": "v22.22.0",
+  "repetitions": 7,
+  "compiler": "clang 23, wasm-opt from binaryen, both Debian sid packages in image mbedded-cbor-wasm",
+  "container": "host; Chromium runs outside podman",
+  "variants_built_by": "tools/wasm/variants.sh",
+  "sizes_raw_gzip9_brotli": {
+   "showcase-O2": [
+    617025,
+    191840,
+    155538
+   ],
+   "showcase-O2s-bulk": [
+    327928,
+    131698,
+    105760
+   ],
+   "showcase-O2s-lto": [
+    303236,
+    124296,
+    100567
+   ],
+   "showcase-O2s-simd": [
+    326012,
+    130824,
+    105036
+   ],
+   "showcase-O2s-wopt3": [
+    331853,
+    131423,
+    105015
+   ],
+   "showcase-O2s-woptz": [
+    325796,
+    131277,
+    104934
+   ],
+   "showcase-O2s": [
+    327928,
+    131693,
+    105760
+   ],
+   "showcase-O3s-lto": [
+    306762,
+    124425,
+    100775
+   ],
+   "showcase-O3s-simd-wopt3": [
+    330498,
+    130934,
+    105062
+   ],
+   "showcase-O3s-simd": [
+    330527,
+    130614,
+    104894
+   ],
+   "showcase-O3s": [
+    332520,
+    131228,
+    105388
+   ],
+   "showcase-Oss": [
+    291488,
+    121824,
+    99391
+   ],
+   "showcase-Ozs": [
+    274193,
+    117371,
+    95725
+   ]
+  },
+  "not_built": {
+   "O2s-nortti": "lazy.hpp uses std::get_deleter, which libc++ does not declare under -fno-rtti",
+   "O2s-bulk": "identical to O2s; clang-23 enables bulk-memory by default"
+  },
+  "chosen": "showcase-O2s-lto"
+ },
+ "summary": {
+  "showcase-O2:cbor_value_literal": {
+   "median_ns_per_op": 394.4587707511715,
+   "min": 360.0740432743166,
+   "max": 467.1096801756036,
+   "check": "1186275104"
+  },
+  "showcase-O2:cbor_value_runtime": {
+   "median_ns_per_op": 772.3808288560008,
+   "min": 747.7664947508345,
+   "max": 858.2496643061432,
+   "check": "1186275104"
+  },
+  "showcase-O2:cbor_ids_literal": {
+   "median_ns_per_op": 168984.37500003638,
+   "min": 156513.6718750182,
+   "max": 178649.90234375,
+   "check": "50623067168"
+  },
+  "showcase-O2:first_cbor": {
+   "median_ns_per_op": 1129999.9998882413,
+   "min": 1010000.0002421439,
+   "max": 1555000.000167638,
+   "check": "1186275104"
+  },
+  "showcase-O2s:cbor_value_literal": {
+   "median_ns_per_op": 399.5132446288352,
+   "min": 348.4964370730204,
+   "max": 502.9869079589133,
+   "check": "1186275104"
+  },
+  "showcase-O2s:cbor_value_runtime": {
+   "median_ns_per_op": 789.7567749024504,
+   "min": 704.4696807856354,
+   "max": 1074.8481750493256,
+   "check": "1186275104"
+  },
+  "showcase-O2s:cbor_ids_literal": {
+   "median_ns_per_op": 170715.33203125,
+   "min": 155900.87890632276,
+   "max": 175434.5703125182,
+   "check": "50623067168"
+  },
+  "showcase-O2s:first_cbor": {
+   "median_ns_per_op": 1055000.000167638,
+   "min": 885000.0002421439,
+   "max": 1379999.9998882413,
+   "check": "1186275104"
+  },
+  "showcase-O2s_aa:cbor_value_literal": {
+   "median_ns_per_op": 388.4410858150389,
+   "min": 366.8451309204457,
+   "max": 509.15718078670125,
+   "check": "1186275104"
+  },
+  "showcase-O2s_aa:cbor_value_runtime": {
+   "median_ns_per_op": 796.6995239261365,
+   "min": 731.9068908691052,
+   "max": 998.439788817862,
+   "check": "1186275104"
+  },
+  "showcase-O2s_aa:cbor_ids_literal": {
+   "median_ns_per_op": 167822.26562509095,
+   "min": 153840.3320312227,
+   "max": 180903.32031260914,
+   "check": "50623067168"
+  },
+  "showcase-O2s_aa:first_cbor": {
+   "median_ns_per_op": 1064999.9999441206,
+   "min": 1015000.0001303852,
+   "max": 1339999.9998509884,
+   "check": "1186275104"
+  },
+  "showcase-O3s:cbor_value_literal": {
+   "median_ns_per_op": 403.91921997073865,
+   "min": 346.88472747790297,
+   "max": 494.16065216068006,
+   "check": "1186275104"
+  },
+  "showcase-O3s:cbor_value_runtime": {
+   "median_ns_per_op": 789.6804809561786,
+   "min": 723.7720489499111,
+   "max": 981.4453124992184,
+   "check": "1186275104"
+  },
+  "showcase-O3s:cbor_ids_literal": {
+   "median_ns_per_op": 164775.3906249818,
+   "min": 159848.63281232718,
+   "max": 200498.04687505457,
+   "check": "50623067168"
+  },
+  "showcase-O3s:first_cbor": {
+   "median_ns_per_op": 1120000.0001117587,
+   "min": 1010000.0002421439,
+   "max": 1490000.0002235174,
+   "check": "1186275104"
+  },
+  "showcase-Oss:cbor_value_literal": {
+   "median_ns_per_op": 476.4842987059481,
+   "min": 420.5608367913172,
+   "max": 535.8028411865945,
+   "check": "1186275104"
+  },
+  "showcase-Oss:cbor_value_runtime": {
+   "median_ns_per_op": 1065.006256103729,
+   "min": 888.5765075667962,
+   "max": 1177.8640747071022,
+   "check": "1186275104"
+  },
+  "showcase-Oss:cbor_ids_literal": {
+   "median_ns_per_op": 213955.07812485448,
+   "min": 180512.6953124727,
+   "max": 236181.6406246362,
+   "check": "50623067168"
+  },
+  "showcase-Oss:first_cbor": {
+   "median_ns_per_op": 1089999.9998509884,
+   "min": 915000.0000372529,
+   "max": 1395000.0000186265,
+   "check": "1186275104"
+  },
+  "showcase-Ozs:cbor_value_literal": {
+   "median_ns_per_op": 494.76623535227304,
+   "min": 420.19844055207756,
+   "max": 514.1067504883523,
+   "check": "1186275104"
+  },
+  "showcase-Ozs:cbor_value_runtime": {
+   "median_ns_per_op": 1179.046630857883,
+   "min": 1059.9327087401634,
+   "max": 1507.9307556149502,
+   "check": "1186275104"
+  },
+  "showcase-Ozs:cbor_ids_literal": {
+   "median_ns_per_op": 225634.7656248181,
+   "min": 196884.76562532742,
+   "max": 273662.10937498184,
+   "check": "50623067168"
+  },
+  "showcase-Ozs:first_cbor": {
+   "median_ns_per_op": 1024999.9999068677,
+   "min": 904999.999795109,
+   "max": 1149999.9999068677,
+   "check": "1186275104"
+  },
+  "showcase-O2s-lto:cbor_value_literal": {
+   "median_ns_per_op": 401.4587402343395,
+   "min": 337.46719360383537,
+   "max": 459.56611633357625,
+   "check": "1186275104"
+  },
+  "showcase-O2s-lto:cbor_value_runtime": {
+   "median_ns_per_op": 637.9508972162995,
+   "min": 597.3625183104402,
+   "max": 726.5758514405363,
+   "check": "1186275104"
+  },
+  "showcase-O2s-lto:cbor_ids_literal": {
+   "median_ns_per_op": 161701.6601562682,
+   "min": 153564.453125,
+   "max": 190913.08593760914,
+   "check": "50623067168"
+  },
+  "showcase-O2s-lto:first_cbor": {
+   "median_ns_per_op": 540000.0000372529,
+   "min": 504999.9998882413,
+   "max": 750000,
+   "check": "1186275104"
+  },
+  "showcase-O3s-lto:cbor_value_literal": {
+   "median_ns_per_op": 389.5568847660513,
+   "min": 358.83426666272203,
+   "max": 414.9723052981891,
+   "check": "1186275104"
+  },
+  "showcase-O3s-lto:cbor_value_runtime": {
+   "median_ns_per_op": 824.6040344239702,
+   "min": 610.3706359859018,
+   "max": 1230.7739257817475,
+   "check": "1186275104"
+  },
+  "showcase-O3s-lto:cbor_ids_literal": {
+   "median_ns_per_op": 163149.41406267282,
+   "min": 157170.41015614086,
+   "max": 252656.2500002001,
+   "check": "50623067168"
+  },
+  "showcase-O3s-lto:first_cbor": {
+   "median_ns_per_op": 645000.0000186265,
+   "min": 470000.00020489097,
+   "max": 975000.0000931323,
+   "check": "1186275104"
+  },
+  "showcase-O2s-simd:cbor_value_literal": {
+   "median_ns_per_op": 401.6113281251066,
+   "min": 379.738807678276,
+   "max": 505.4569244382634,
+   "check": "1186275104"
+  },
+  "showcase-O2s-simd:cbor_value_runtime": {
+   "median_ns_per_op": 830.7647705079191,
+   "min": 774.8603820800781,
+   "max": 1181.4498901365766,
+   "check": "1186275104"
+  },
+  "showcase-O2s-simd:cbor_ids_literal": {
+   "median_ns_per_op": 183564.4531252001,
+   "min": 157260.74218741816,
+   "max": 203132.32421881368,
+   "check": "50623067168"
+  },
+  "showcase-O2s-simd:first_cbor": {
+   "median_ns_per_op": 1004999.9998882413,
+   "min": 854999.9999813735,
+   "max": 1535000.0001490116,
+   "check": "1186275104"
+  },
+  "showcase-O3s-simd:cbor_value_literal": {
+   "median_ns_per_op": 412.7979278569782,
+   "min": 393.56231689424703,
+   "max": 509.4051361087537,
+   "check": "1186275104"
+  },
+  "showcase-O3s-simd:cbor_value_runtime": {
+   "median_ns_per_op": 805.225372314311,
+   "min": 764.7895812983307,
+   "max": 929.3746948237924,
+   "check": "1186275104"
+  },
+  "showcase-O3s-simd:cbor_ids_literal": {
+   "median_ns_per_op": 169409.17968759095,
+   "min": 153317.87109380457,
+   "max": 199663.0859373454,
+   "check": "50623067168"
+  },
+  "showcase-O3s-simd:first_cbor": {
+   "median_ns_per_op": 1049999.9998137355,
+   "min": 955000.0000745058,
+   "max": 1410000.0001490116,
+   "check": "1186275104"
+  },
+  "showcase-O2s-wopt3:cbor_value_literal": {
+   "median_ns_per_op": 393.7816619874468,
+   "min": 366.76883697506213,
+   "max": 492.20085144074943,
+   "check": "1186275104"
+  },
+  "showcase-O2s-wopt3:cbor_value_runtime": {
+   "median_ns_per_op": 777.1492004398084,
+   "min": 747.1656799316052,
+   "max": 1136.493682862394,
+   "check": "1186275104"
+  },
+  "showcase-O2s-wopt3:cbor_ids_literal": {
+   "median_ns_per_op": 187297.3632812318,
+   "min": 160871.58203117724,
+   "max": 214077.14843780923,
+   "check": "50623067168"
+  },
+  "showcase-O2s-wopt3:first_cbor": {
+   "median_ns_per_op": 1050000.0002793968,
+   "min": 930000.0001676381,
+   "max": 1229999.9999813735,
+   "check": "1186275104"
+  },
+  "showcase-O2s-woptz:cbor_value_literal": {
+   "median_ns_per_op": 422.9068756105292,
+   "min": 396.61407470692467,
+   "max": 958.3473205552195,
+   "check": "1186275104"
+  },
+  "showcase-O2s-woptz:cbor_value_runtime": {
+   "median_ns_per_op": 859.4799041743429,
+   "min": 789.1178131105291,
+   "max": 1049.804687498934,
+   "check": "1186275104"
+  },
+  "showcase-O2s-woptz:cbor_ids_literal": {
+   "median_ns_per_op": 180183.10546881368,
+   "min": 165783.69140620454,
+   "max": 232749.02343746362,
+   "check": "50623067168"
+  },
+  "showcase-O2s-woptz:first_cbor": {
+   "median_ns_per_op": 955000.0000745058,
+   "min": 815000.0004097819,
+   "max": 2955000.000074506,
+   "check": "1186275104"
+  },
+  "showcase-O3s-simd-wopt3:cbor_value_literal": {
+   "median_ns_per_op": 400.14266967780543,
+   "min": 362.28179931629967,
+   "max": 621.1376190181638,
+   "check": "1186275104"
+  },
+  "showcase-O3s-simd-wopt3:cbor_value_runtime": {
+   "median_ns_per_op": 797.9869842529297,
+   "min": 777.9979705810902,
+   "max": 979.2137145989699,
+   "check": "1186275104"
+  },
+  "showcase-O3s-simd-wopt3:cbor_ids_literal": {
+   "median_ns_per_op": 165898.43750011822,
+   "min": 156147.4609375182,
+   "max": 199440.91796878638,
+   "check": "50623067168"
+  },
+  "showcase-O3s-simd-wopt3:first_cbor": {
+   "median_ns_per_op": 1064999.9999441206,
+   "min": 854999.9999813735,
+   "max": 1300000.0002793968,
+   "check": "1186275104"
+  }
+ },
+ "runs": {
+  "showcase-O2:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 394.4587707511715,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 467.1096801756036,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 371.62780761734734,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 369.4295883178711,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 360.0740432743166,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 400.6147384645331,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 463.90533447304705,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 858.2496643061432,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 806.5414428699569,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 770.1492309575286,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 765.228271483842,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 844.383239746449,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 747.7664947508345,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 772.3808288560008,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 178649.90234375,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 158149.41406256368,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 167768.55468742724,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 170214.84375004546,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 168984.37500003638,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 175024.41406259095,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 156513.6718750182,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O2:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1555000.000167638,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1125000,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1010000.0002421439,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1444999.999832362,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1044999.9999254942,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1129999.9998882413,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1155000.0002607703,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 430.2215576172941,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 432.25765228260826,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 502.9869079589133,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 392.97103881885675,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 348.5679626464844,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 399.5132446288352,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 348.4964370730204,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 789.7567749024504,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1074.8481750493256,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 911.3502502442473,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 937.3474121101566,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 704.4696807856354,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 779.1709899915844,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 774.0974426262426,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 169919.43359380457,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 155900.87890632276,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 172219.23828128638,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 171166.99218740905,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 170715.33203125,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 157192.38281235448,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 175434.5703125182,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1379999.9998882413,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1070000.0002980232,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 885000.0002421439,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1055000.000167638,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 910000.0001490116,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 964999.9998509884,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1160000.0001490116,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s_aa:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 388.4410858150389,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 397.9587554931996,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 366.8451309204457,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 381.8464279174982,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 383.8920593262074,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 424.90959167551523,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 509.15718078670125,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s_aa:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 998.439788817862,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 985.3172302243252,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 796.6995239261365,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 731.9068908691052,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 773.6206054680395,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 740.5948638909977,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 799.9229431145949,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s_aa:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 167500.0000000182,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 167822.26562509095,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 179101.56249990905,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 180903.32031260914,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 171196.28906243632,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 153840.3320312227,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 165517.57812499092,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s_aa:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1100000.0000931323,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1015000.0001303852,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1199999.9997206032,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1020000.0000186265,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1064999.9999441206,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1044999.9999254942,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1339999.9998509884,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 494.16065216068006,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 369.8158264162643,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 407.3047637938032,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 403.91921997073865,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 367.3219680786488,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 346.88472747790297,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 492.20085144074943,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 779.9243927006927,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 792.808532715128,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 814.1517639170814,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 981.4453124992184,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 789.6804809561786,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 778.6369323721232,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 723.7720489499111,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 159848.63281232718,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 168413.0859373454,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 173923.33984366816,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 200498.04687505457,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 162028.8085937318,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 164775.3906249818,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 160432.1289062227,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1045000.0003911555,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1190000.000409782,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1095000.000204891,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1165000.000037253,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1010000.0002421439,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1120000.0001117587,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1490000.0002235174,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-Oss:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 439.4245147700815,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 507.0400238036399,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 535.8028411865945,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 484.54284667975855,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 420.5608367913172,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 451.76506042476916,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 476.4842987059481,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-Oss:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1177.8640747071022,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1082.8590393074933,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1013.2980346675424,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1065.006256103729,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1139.5645141600853,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 911.6744995125714,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 888.5765075667962,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-Oss:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 214716.79687510914,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 214086.91406259095,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 205815.42968739086,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 236181.6406246362,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 197390.13671892282,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 213955.07812485448,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 180512.6953124727,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-Oss:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1395000.0000186265,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1089999.9998509884,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1035000.0001490116,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1224999.999627471,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 915000.0000372529,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 930000.0001676381,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1305000.000167638,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-Ozs:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 514.1067504883523,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 464.6873474127844,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 495.7389831545811,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 494.76623535227304,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 488.7580871582031,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 499.219894408931,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 420.19844055207756,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-Ozs:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1096.4393615733316,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1507.9307556149502,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1127.5100708001419,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1059.9327087401634,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1182.2700500481176,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1208.6486816418328,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1179.046630857883,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-Ozs:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 232968.74999959982,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 273662.10937498184,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 199628.90624992724,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 215200.19531226353,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 225634.7656248181,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 196884.76562532742,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 268579.1015624091,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-Ozs:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1000000,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 904999.999795109,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1029999.999795109,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1024999.9999068677,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 924999.9998137355,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1149999.9999068677,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1135000.0002421439,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-lto:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 417.30880737311793,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 361.67621612515075,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 401.9355773925426,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 352.3206710815963,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 401.4587402343395,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 337.46719360383537,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 459.56611633357625,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-lto:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 624.3038177489168,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 645.685195922674,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 726.5758514405363,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 611.6485595706322,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 647.2110748294568,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 637.9508972162995,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 597.3625183104402,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-lto:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 153564.453125,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 155861.81640628638,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 173649.90234364086,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 161701.6601562682,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 190913.08593760914,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 157548.82812507276,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 172551.26953114086,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-lto:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 719999.9997392297,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 530000.0002607703,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 750000,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 580000.0000745058,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 529999.999795109,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 504999.9998882413,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 540000.0000372529,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-lto:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 371.52290344222297,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 393.1045532228339,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 389.5568847660513,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 389.15634155323175,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 393.36681365975676,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 414.9723052981891,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 358.83426666272203,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-lto:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 702.8675079352454,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1077.585220337518,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1230.7739257817475,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 834.7511291511012,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 824.6040344239702,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 692.2149658201704,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 610.3706359859018,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-lto:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 180178.22265642282,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 159423.828125,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 161274.4140622908,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 169204.10156239994,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 252656.2500002001,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 157170.41015614086,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 163149.41406267282,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-lto:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 470000.00020489097,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 544999.9999254942,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 555000.0001676381,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 839999.9998509884,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 975000.0000931323,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 815000.0004097819,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 645000.0000186265,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-simd:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 381.6127777103162,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 408.6875915527699,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 398.93150329550764,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 401.6113281251066,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 505.4569244382634,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 379.738807678276,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 456.428527831676,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-simd:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 978.3172607420454,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 774.8603820800781,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 795.0019836435729,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1181.4498901365766,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1010.5133056654836,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 811.2525939942827,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 830.7647705079191,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-simd:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 161079.1015623363,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 203132.32421881368,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 189187.01171855902,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 184450.68359369543,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 157260.74218741816,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 183564.4531252001,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 167431.64062495454,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-simd:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 854999.9999813735,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 905000.0002607703,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1535000.0001490116,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1169999.9999254942,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1064999.9999441206,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1004999.9998882413,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 895000.0000186265,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-simd:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 402.0786285399147,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 412.7979278569782,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 509.4051361087537,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 393.56231689424703,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 414.02816772473375,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 456.6764831541725,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 401.0200500488281,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-simd:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 805.225372314311,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 769.1192626957388,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 929.3746948237924,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 859.2414855943531,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 784.5497131349077,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 764.7895812983307,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 813.3888244632459,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-simd:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 172082.51953115905,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 169409.17968759095,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 160256.34765628638,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 199663.0859373454,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 174614.25781243632,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 158884.27734375908,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 153317.87109380457,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-simd:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1049999.9998137355,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1410000.0001490116,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 955000.0000745058,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1089999.9998509884,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 964999.9998509884,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1069999.999832362,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 955000.0000745058,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-wopt3:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 366.76883697506213,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 386.09504699671504,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 492.20085144074943,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 393.7816619874468,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 424.4995117188566,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 366.79267883288344,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 456.0756683344991,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-wopt3:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 902.252197265696,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 747.1656799316052,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 767.6506042475495,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1136.493682862394,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 777.1492004398084,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 802.3452758783023,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 764.8944854734552,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-wopt3:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 214077.14843780923,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 160871.58203117724,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 195566.40624978172,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 187297.3632812318,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 196923.82812490905,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 164758.30078115905,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 181911.62109383184,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-wopt3:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1095000.000204891,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1229999.9999813735,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1050000.0002793968,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 979999.9999813735,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1125000,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1000000,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 930000.0001676381,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-woptz:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 424.7856140136008,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 413.0172729492898,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 423.66981506347656,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 422.9068756105292,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 958.3473205552195,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 396.61407470692467,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 422.5826263430932,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-woptz:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 878.2768249506745,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 870.59974670467,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 859.4799041743429,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 790.5387878412995,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 789.1178131105291,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 1049.804687498934,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 839.4813537595525,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-woptz:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 175710.44921874092,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 188862.3046875182,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 179707.0312500182,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 181874.99999999092,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 180183.10546881368,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 232749.02343746362,
+    "iterations": 1024,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 165783.69140620454,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O2s-woptz:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 955000.0000745058,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 925000.0002793968,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 929999.9997019768,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 2955000.000074506,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1305000.000167638,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1635000.0002421439,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 815000.0004097819,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-simd-wopt3:cbor_value_literal": [
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 415.802001953125,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 387.47787475568174,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 362.28179931629967,
+    "iterations": 1048576,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 397.68218994140625,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 447.61657714786907,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 621.1376190181638,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_literal",
+    "ns_per_op": 400.14266967780543,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-simd-wopt3:cbor_value_runtime": [
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 777.9979705810902,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 815.2961730960584,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 797.9869842529297,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 785.6178283702775,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 862.1978759766336,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 979.2137145989699,
+    "iterations": 262144,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_value_runtime",
+    "ns_per_op": 792.140960693466,
+    "iterations": 524288,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-simd-wopt3:cbor_ids_literal": [
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 165898.43750011822,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 166760.2539064319,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 173093.26171880457,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 199440.91796878638,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 161442.87109386822,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 156147.4609375182,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   },
+   {
+    "arm": "cbor_ids_literal",
+    "ns_per_op": 159213.86718764552,
+    "iterations": 2048,
+    "check": "50623067168",
+    "isolated": true
+   }
+  ],
+  "showcase-O3s-simd-wopt3:first_cbor": [
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1080000.0000745058,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1095000.000204891,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1064999.9999441206,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 1300000.0002793968,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 854999.9999813735,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 895000.0000186265,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   },
+   {
+    "arm": "first_cbor",
+    "ns_per_op": 945000.0002980232,
+    "iterations": 1,
+    "check": "1186275104",
+    "isolated": true
+   }
+  ]
+ }
+}

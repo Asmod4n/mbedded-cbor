@@ -1,0 +1,578 @@
+{
+ "time": "2026-10-13-215952Z",
+ "commit_a": {
+  "given": "577bab6",
+  "id": "577bab6090a7941408198c1f6c5a236e2344145c"
+ },
+ "commit_b": {
+  "given": "da52578",
+  "id": "da52578ce4740e3009a403d4a3e2711820735a31"
+ },
+ "bench_sources_commit": "unknown",
+ "what": "READ, lazy path (MB_PATH), at_path (MB_AT_PATH) and struct decode (MB_STRUCT); a = commit a, aa = commit a built again, b = commit b",
+ "documents": "twitter, floats, records; MB_STRUCT on twitter only",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+ "pie": "-fPIE -pie",
+ "elf_type_count": {
+  "Type: DYN": 21
+ },
+ "rounds": 10,
+ "min_time": "0.2s",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.0",
+  "clang version 23.1.2"
+ ],
+ "gxx_binary": {
+  "binary": "a.gxx.twitter.MB_AT_PATH",
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (SUSE Linux) 16.2.0",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang.twitter.MB_AT_PATH",
+  "comment": "String dump of section '.comment':\n  [     0]  clang version 23.1.2",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "libc": "ldd (GNU libc) 2.44",
+ "kernel": "6.18.44-fc-v114",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "unknown",
+ "container": "yes",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 1000,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpus_in_machine": 4,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; builds used 3 of 4 cpus",
+ "gate": [
+  "gate: vmstat 1 5",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 12161648 20244 3820228  0    0   243  1119  677    1 32  2 65  1  0  0",
+  " 0  0      0 12157644 20244 3820344  0    0     0     0  656  711  2  1 97  0  0  0",
+  " 0  0      0 12162400 20244 3820344  0    0     0     0  375  416  1  0 99  0  0  0",
+  " 1  0      0 12171448 20244 3820348  0    0     0    84  411  440  2  0 99  0  0  0",
+  " 0  0      0 12180256 20244 3820460  0    0    68    32  537  631  2  0 98  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "    PID USER     %CPU  NI COMMAND",
+  "      1 ubuntu    0.7   0 bash",
+  "     15 ubuntu    0.0   0 bash",
+  "     16 ubuntu    0.0   0 ps",
+  "     17 ubuntu    0.0   0 head",
+  "gate: busy 1.8% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 2.3614038382391067
+ },
+ "rounds_detail": [
+  {
+   "round": 1,
+   "wall_s": 14.176192998886108,
+   "steal_ticks": 21,
+   "steal_percent_of_cpu_time": 0.3696532300651294
+  },
+  {
+   "round": 2,
+   "wall_s": 14.11534309387207,
+   "steal_ticks": 21,
+   "steal_percent_of_cpu_time": 0.3712214954923104
+  },
+  {
+   "round": 3,
+   "wall_s": 13.977485418319702,
+   "steal_ticks": 18,
+   "steal_percent_of_cpu_time": 0.32148597963922126
+  },
+  {
+   "round": 4,
+   "wall_s": 14.31410837173462,
+   "steal_ticks": 18,
+   "steal_percent_of_cpu_time": 0.31402651779483604
+  },
+  {
+   "round": 5,
+   "wall_s": 14.051223993301392,
+   "steal_ticks": 25,
+   "steal_percent_of_cpu_time": 0.44420753375977257
+  },
+  {
+   "round": 6,
+   "wall_s": 13.916024208068848,
+   "steal_ticks": 19,
+   "steal_percent_of_cpu_time": 0.34068495606957144
+  },
+  {
+   "round": 7,
+   "wall_s": 13.961517810821533,
+   "steal_ticks": 20,
+   "steal_percent_of_cpu_time": 0.35676061362825545
+  },
+  {
+   "round": 8,
+   "wall_s": 13.877774238586426,
+   "steal_ticks": 21,
+   "steal_percent_of_cpu_time": 0.3778337531486146
+  },
+  {
+   "round": 9,
+   "wall_s": 13.673943042755127,
+   "steal_ticks": 24,
+   "steal_percent_of_cpu_time": 0.4381960927515063
+  },
+  {
+   "round": 10,
+   "wall_s": 13.920326471328735,
+   "steal_ticks": 20,
+   "steal_percent_of_cpu_time": 0.35829451809387314
+  }
+ ],
+ "steal_percent_of_cpu_time_max": 0.44420753375977257,
+ "failed": [],
+ "cells": {
+  "clang.twitter.MB_AT_PATH": {
+   "a": {
+    "repetitions_ns": [
+     78985.50190725659,
+     78593.44366747726,
+     76708.64804993765,
+     77189.60782695499,
+     78440.38364794088,
+     78507.06416330683,
+     79252.6489099659,
+     70111.75424422658,
+     81509.24334469654,
+     73543.52674811106
+    ],
+    "median_ns": 78473.72390562386,
+    "spread": 0.16256174479343444,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     73697.8725614491,
+     65602.12780919987,
+     79872.6606222176,
+     83255.36416984699,
+     78121.02519279941,
+     79126.92388900825,
+     76741.96734341583,
+     78317.80630150293,
+     75477.82745038552,
+     79507.90773558301
+    ],
+    "median_ns": 78219.41574715117,
+    "spread": 0.26909548440243536,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     78675.73556802433,
+     78637.76600972089,
+     75912.23867316374,
+     72074.47772649619,
+     77466.4387952177,
+     82977.25739303012,
+     77211.3844690137,
+     76396.24701407542,
+     72261.92958441979,
+     77171.24572533443
+    ],
+    "median_ns": 77191.31509717407,
+    "spread": 0.15127101868024795,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9967593208807252,
+   "b_over_a_ratio": 0.9836581119816351,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "clang.twitter.MB_PATH": {
+   "a": {
+    "repetitions_ns": [
+     73061.40305832739,
+     75423.15938936557,
+     77051.5839316449,
+     77283.02579591048,
+     81780.12441137742,
+     76403.17694663825,
+     77562.26311489084,
+     68862.57681938914,
+     77280.0487737171,
+     69945.28283924112
+    ],
+    "median_ns": 76727.38043914158,
+    "spread": 0.18758443538742475,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     75632.58818805861,
+     80427.69576327292,
+     75816.35734347928,
+     76877.49806076041,
+     79898.24826457308,
+     70763.73485490911,
+     83787.52574727098,
+     74319.42584634706,
+     76411.80752566423,
+     79232.86860117933
+    ],
+    "median_ns": 76644.65279321233,
+    "spread": 0.18404612078581328,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     74252.00802272346,
+     78218.6528654361,
+     74749.24218748693,
+     76993.32058735563,
+     78485.31232966145,
+     78053.35843315137,
+     74641.38847603947,
+     76977.18926126175,
+     77286.31299142494,
+     78686.94093040634
+    ],
+    "median_ns": 77139.81678939029,
+    "spread": 0.059728120838505205,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9989217975974709,
+   "b_over_a_ratio": 1.0053753477296914,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "clang.twitter.MB_STRUCT": {
+   "a": {
+    "error": "clang++-23: warning: argument unused during compilation: '-freflection' [-Wunused-command-line-argument]\n/tmp/mbedded-cbor-desktop.oWpSix/runtime.cpp:561:20: error: implicit instantiation of undefined template 'cbor::structs<bench_struct::timeline>'\n  561 |     auto const v = cbor::structs<bench_struct::timeline>::decode(*held);\n      |                    ^\n/tmp/mbedded-cbor-desktop.oWpSix/src/a/include/cbor/owning_ref.hpp:15:7: note: template is declared here\n   15 | class structs;\n      |       ^\n1 error generated."
+   },
+   "aa": {
+    "error": "clang++-23: warning: argument unused during compilation: '-freflection' [-Wunused-command-line-argument]\n/tmp/mbedded-cbor-desktop.oWpSix/runtime.cpp:561:20: error: implicit instantiation of undefined template 'cbor::structs<bench_struct::timeline>'\n  561 |     auto const v = cbor::structs<bench_struct::timeline>::decode(*held);\n      |                    ^\n/tmp/mbedded-cbor-desktop.oWpSix/src/aa/include/cbor/owning_ref.hpp:15:7: note: template is declared here\n   15 | class structs;\n      |       ^\n1 error generated."
+   },
+   "b": {
+    "error": "clang++-23: warning: argument unused during compilation: '-freflection' [-Wunused-command-line-argument]\n/tmp/mbedded-cbor-desktop.oWpSix/runtime.cpp:561:20: error: implicit instantiation of undefined template 'cbor::structs<bench_struct::timeline>'\n  561 |     auto const v = cbor::structs<bench_struct::timeline>::decode(*held);\n      |                    ^\n/tmp/mbedded-cbor-desktop.oWpSix/src/b/include/cbor/owning_ref.hpp:15:7: note: template is declared here\n   15 | class structs;\n      |       ^\n1 error generated."
+   }
+  },
+  "clang.twitter.READ": {
+   "a": {
+    "repetitions_ns": [
+     293567.56503146124,
+     303324.4216100946,
+     310848.154799644,
+     286219.2087683176,
+     318699.3076091628,
+     310643.05660321517,
+     263926.4901564439,
+     312507.2675633539,
+     319025.9571571326,
+     244799.5613567845
+    ],
+    "median_ns": 306983.7391066549,
+    "spread": 0.3032129444552656,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     351131.4931788924,
+     302212.00621889846,
+     288154.20163375925,
+     317235.17791288556,
+     316488.06979276845,
+     335725.72434818343,
+     295767.3512637075,
+     276060.3497281309,
+     316040.6695275998,
+     301760.6649496209
+    ],
+    "median_ns": 309126.33787324914,
+    "spread": 0.27193743514667323,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     258679.48048167513,
+     308178.7711333576,
+     287281.66833531135,
+     287830.80126835423,
+     303697.45464156556,
+     320837.5679148345,
+     276868.7851535483,
+     296319.9298784179,
+     302442.95397450624,
+     301329.91080820403
+    ],
+    "median_ns": 298824.920343311,
+    "spread": 0.2402899809347756,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 1.006979518761578,
+   "b_over_a_ratio": 0.9734226353907648,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "gxx.twitter.MB_AT_PATH": {
+   "a": {
+    "repetitions_ns": [
+     61772.63413629828,
+     59564.43752667483,
+     66098.9482438811,
+     61373.03617721041,
+     66691.38907388659,
+     63261.76973066691,
+     63725.67116719038,
+     65143.462594462326,
+     65104.88345374185,
+     61272.29232808573
+    ],
+    "median_ns": 63493.720448928645,
+    "spread": 0.1196511180688995,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     67243.92573651523,
+     62827.353190267146,
+     62522.07731938939,
+     67370.4737313713,
+     64769.896071275194,
+     64964.109833228504,
+     69015.45095701747,
+     65022.017368072404,
+     66821.24004476746,
+     63047.353230689296
+    ],
+    "median_ns": 64993.06360065045,
+    "spread": 0.1038572919523637,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     66277.07065089642,
+     69630.02372037826,
+     65243.417564284005,
+     66988.0795787217,
+     66425.94750676725,
+     69458.99930134264,
+     65106.646349564086,
+     66115.44519417416,
+     70563.23287020792,
+     64208.034239820336
+    ],
+    "median_ns": 66351.50907883183,
+    "spread": 0.09897824634609731,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 1.023614038382391,
+   "b_over_a_ratio": 1.0450089963180196,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "gxx.twitter.MB_PATH": {
+   "a": {
+    "repetitions_ns": [
+     63219.97048128356,
+     61896.0362515458,
+     66717.94062690964,
+     66938.68675924811,
+     67448.6911267943,
+     65497.972897773405,
+     70085.21697422415,
+     66458.61549690059,
+     63294.66572563638,
+     64155.632928963205
+    ],
+    "median_ns": 65978.294197337,
+    "spread": 0.13230541434668752,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     67028.90162253505,
+     69765.22410191392,
+     66302.14849123111,
+     64578.30338712527,
+     61528.95344816768,
+     64329.7379841336,
+     71005.21302311601,
+     62175.852822439345,
+     67954.1535948215,
+     64389.88939158941
+    ],
+    "median_ns": 65440.22593917819,
+    "spread": 0.1540130140996332,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     64100.6411674678,
+     65181.549367490945,
+     67157.579837735,
+     62212.65259825255,
+     68041.53924323487,
+     67472.31490229956,
+     66633.26475867444,
+     62062.423367371644,
+     63032.64910777381,
+     65623.87309276937
+    ],
+    "median_ns": 65402.71123013015,
+    "spread": 0.09634035462119339,
+    "check": "1227",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9918447685757155,
+   "b_over_a_ratio": 0.9912761768971274,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "gxx.twitter.MB_STRUCT": {
+   "a": {
+    "repetitions_ns": [
+     140107.00961963832,
+     144104.226238047,
+     169328.84939472537,
+     151268.05263130678,
+     176458.8356376833,
+     139184.5252724201,
+     145599.7666660062,
+     138152.45812047142,
+     148477.15629711235,
+     125007.4683099856
+    ],
+    "median_ns": 144851.9964520266,
+    "spread": 0.4115863477861328,
+    "check": "5194987",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     140430.9095684417,
+     154371.07427434146,
+     168226.3988846715,
+     157020.23154014803,
+     151698.68497962618,
+     143033.6825313456,
+     140614.85498709802,
+     138902.9114045509,
+     138164.1792455789,
+     142657.10584096675
+    ],
+    "median_ns": 142845.39418615616,
+    "spread": 0.21758331141430465,
+    "check": "5194987",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     145821.7901603874,
+     156110.6017255378,
+     144252.08448596668,
+     151899.0392369355,
+     121700.58489775188,
+     143002.08127221797,
+     129556.26205408823,
+     145206.18120775977,
+     145088.04797458375,
+     146870.71321164817
+    ],
+    "median_ns": 145147.11459117176,
+    "spread": 0.2827432329655266,
+    "check": "5194987",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9861472239594917,
+   "b_over_a_ratio": 1.0020373770909186,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "gxx.twitter.READ": {
+   "a": {
+    "repetitions_ns": [
+     332594.77195035404,
+     337328.98598096886,
+     314285.87167625414,
+     344773.985916148,
+     310273.13619103684,
+     331036.7788821936,
+     299024.9172154918,
+     349233.5346996734,
+     328925.9841266064,
+     344347.766908846
+    ],
+    "median_ns": 331815.77541627386,
+    "spread": 0.16790780498067592,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     331488.4825933714,
+     340834.40068810945,
+     336744.28505142604,
+     271224.51619063556,
+     325472.97318682587,
+     368792.1360959285,
+     354647.3201961553,
+     316867.22259880713,
+     313028.30172267003,
+     261133.34698898857
+    ],
+    "median_ns": 328480.72789009864,
+    "spread": 0.4122751473463848,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     354982.8196718679,
+     322475.49771542154,
+     343311.13287676574,
+     286577.37343595445,
+     381247.44961252395,
+     328257.4924845262,
+     347011.5104297024,
+     343615.37010752456,
+     349274.42558848375,
+     327924.6159709538
+    ],
+    "median_ns": 343463.2514921451,
+    "spread": 0.3303473510190671,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9899490989480796,
+   "b_over_a_ratio": 1.0351022372618033,
+   "same_check": true,
+   "difference_over_noise": true
+  }
+ }
+}

@@ -1,5 +1,8 @@
-#include "binding.hpp"
+#include "reference.hpp"
+#include "owned_copy.hpp"
+#include "item_head.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -37,6 +40,27 @@ std::size_t allocated_bytes = 0;
     std::free(p);
 }
 
+// A memory resource of the C++ library may take its blocks through the aligned form, so that form counts too.
+[[gnu::noinline]] void *operator new(std::size_t const size, std::align_val_t const alignment)
+{
+    ++allocations;
+    allocated_bytes += size;
+    auto const step = static_cast<std::size_t>(alignment);
+    if (void *const p = std::aligned_alloc(step, (size + step - 1) / step * step))
+        return p;
+    throw std::bad_alloc();
+}
+
+[[gnu::noinline]] void operator delete(void *const p, std::align_val_t) noexcept
+{
+    std::free(p);
+}
+
+[[gnu::noinline]] void operator delete(void *const p, std::size_t, std::align_val_t) noexcept
+{
+    std::free(p);
+}
+
 [[gnu::noinline]] void operator delete(void *const p, std::size_t) noexcept
 {
     std::free(p);
@@ -47,50 +71,119 @@ std::size_t allocated_bytes = 0;
 TEST_CASE("path: a key is compared without an allocation")
 {
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
-    auto const root = *cbor::lazy::from(std::string(bytes));
+    auto const root = *test::lazy_of_copy(std::string(bytes));
     auto const map = *root.at(1);
-    test_binding binding;
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(binding, map).has_value());
+    REQUIRE(map.at_path<"$[[1, \"x\"]]">().has_value());
     std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]">(binding, map);
+    auto const found = map.at_path<"$[[1, \"x\"]]">();
     std::size_t const after = allocations;
     REQUIRE(found.has_value());
     CHECK_EQ(after, before);
-    CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
+    CHECK_EQ(found->get<std::uint64_t>(), 1u);
 }
 
-// A top-level item with a shared value (tag 28) reads its marks once, at the first tag 29, and keeps them for
-// every later read from any thread. The key [1, 29(0)] refers to the shared value "x". The first read builds the
-// marks, so a second read allocates nothing.
-TEST_CASE("path: a second read of a top-level item with shared values allocates nothing")
-{
-    std::string const bytes = "\x82\xd8\x1c\x61x\xa2\x82\x01\xd8\x1d\x00\x01\xa1\x61k\xd8\x1d\x00\x02"s;
-    auto const root = *cbor::lazy::from(std::string(bytes));
-    auto const map = *root.at(1);
-    test_binding binding;
-    REQUIRE(cbor::at_path<"$[[1, \"x\"]]">(binding, map).has_value());
-    std::size_t const before = allocations;
-    auto const found = cbor::at_path<"$[[1, \"x\"]]">(binding, map);
-    std::size_t const after = allocations;
-    REQUIRE(found.has_value());
-    CHECK_EQ(after, before);
-    CHECK_EQ(std::get<std::uint64_t>(found->kind), 1u);
-}
-
-// The count in the head of an array is not trusted. The item of an array is its count and a view on its bytes, so a
-// head that claims many elements makes decode take no room for them. Here the array claims 4096 elements and its
-// first element is not well-formed, so decode fails before it builds anything but the array.
+// The count in the head of an array is not trusted. The decode takes memory in proportion to the bytes of the input:
+// at most one item for each byte, in at most two blocks. Here the array claims 4096 elements and its
+// first element is not well-formed, so decode fails after it reserved room for the claimed elements, which the
+// bytes left allow.
 TEST_CASE("decode: the room kept for the elements of an array is bounded by the bytes left")
 {
     std::string bytes = "\x99\x10\x00\xff"s;
     bytes.resize(4099);
-    auto const root = *cbor::lazy::from(std::string(bytes));
+    auto const root = *test::lazy_of_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
-    auto const r = root.decode();
+    auto const r = root.clone();
     std::size_t const after = allocated_bytes;
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), error::syntax_error);
-    CHECK_LE(after - before, 2 * bytes.size());
+    CHECK_LE(after - before, 4 * sizeof(cbor::item) * bytes.size());
+}
+
+// An array that claims 2^63 elements with one byte after its head is refused with too_little_data, and the
+// decode takes memory in proportion to the input and not to the claimed count: one fixed block for the items.
+TEST_CASE("decode: a claimed count of 2^63 with one byte left allocates in proportion to the input")
+{
+    std::string const bytes = "\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s;
+    auto const root = *test::lazy_of_copy(std::string(bytes));
+    std::size_t const before = allocated_bytes;
+    auto const r = root.clone();
+    std::size_t const after = allocated_bytes;
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::too_little_data);
+    CHECK_LE(after - before, 8192u);
+}
+
+namespace
+{
+
+std::string array_of_ones(std::size_t const count)
+{
+    std::string bytes = "\x99"s;
+    bytes += static_cast<char>(count >> 8);
+    bytes += static_cast<char>(count & 0xff);
+    bytes.append(count, '\x01');
+    return bytes;
+}
+
+std::size_t decode_allocations(std::string const &bytes)
+{
+    auto const root = *test::lazy_of_copy(std::string(bytes));
+    std::size_t const before = allocations;
+    auto const r = root.clone();
+    std::size_t const after = allocations;
+    REQUIRE(r.has_value());
+    return after - before;
+}
+
+} // namespace
+
+// The items of a decode live in a memory resource that takes few large blocks, sized from the input length. An
+// allocation for each item would make the count grow with the items, so the count for 4000 items must equal the
+// count for 40 items.
+TEST_CASE("decode: the count of allocations does not grow with the count of items")
+{
+    std::size_t const few = decode_allocations(array_of_ones(40));
+    std::size_t const many = decode_allocations(array_of_ones(4000));
+    CHECK_EQ(many, few);
+}
+
+// Each array claims 4096 elements, and the input has room for only one such claim. A reservation for each claim
+// would take 100 times 4096 pointers. The sum of the open reservations must stay within the bytes left, so the
+// second claim gives too_little_data, and the memory stays in proportion to the input.
+TEST_CASE("decode: nested arrays that each claim a large count do not multiply the reserved memory")
+{
+    std::string bytes;
+    for (int i = 0; i < 100; ++i)
+        bytes += "\x99\x10\x00"s;
+    bytes.append(4200, '\x01');
+    auto const root = *test::lazy_of_copy(std::string(bytes));
+    std::size_t const before = allocated_bytes;
+    auto const r = root.clone();
+    std::size_t const after = allocated_bytes;
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::too_little_data);
+    CHECK_LE(after - before, 4 * sizeof(cbor::item) * bytes.size());
+}
+
+// A wide array of small arrays fills many blocks of the memory resource. Under the address sanitizer the walk
+// reads every item, so an item in a block that moved or was freed would be found.
+TEST_CASE("decode: a wide array of nested arrays is read whole after the decode")
+{
+    std::size_t const count = 30000;
+    std::string bytes = "\x99"s;
+    bytes += static_cast<char>(count >> 8);
+    bytes += static_cast<char>(count & 0xff);
+    for (std::size_t i = 0; i < count; ++i)
+        bytes += "\x82\x01\x02"s;
+    auto r = test::lazy_of_copy(std::string(bytes))->clone();
+    REQUIRE(r.has_value());
+    auto const outer = children_of(*(*r));
+    REQUIRE_EQ(outer.size(), count);
+    std::uint64_t sum = 0;
+    for (cbor::item const *const inner : outer)
+        for (cbor::item const *const leaf : children_of(*inner))
+            sum += argument_of(*leaf);
+    CHECK_EQ(sum, 3 * count);
 }
 
 // The typed read of a path walks the bytes of the caller and builds no top-level item: a text with the owner of the
@@ -102,7 +195,7 @@ TEST_CASE("path: a typed read allocates nothing")
     std::string const numbers = "\x83\x01\x39\x03\xe7\x03"s;
     std::string const marked = "\xa1\x61\x61\xd8\x1c\x82\x01\x02"s;
     std::size_t const before = allocations;
-    auto const name = cbor::at_path<"$.statuses[1].user.screen_name", std::string_view>(doc, *doc);
+    auto const name = cbor::at_path<"$.statuses[1].user.screen_name", std::string_view>(doc);
     auto const number = cbor::at_path<"$[1]", std::int64_t>(std::string_view(numbers));
     auto const shared = cbor::at_path<"$.a[1]", std::uint64_t>(std::string_view(marked));
     std::size_t const after = allocations;
@@ -115,42 +208,29 @@ TEST_CASE("path: a typed read allocates nothing")
     CHECK_EQ(*shared, 2u);
 }
 
-// A tag 29 on the walk names a mark, and only a top-level item keeps the marks. The typed read then goes through lazy
-// and allocates as lazy does. This test records that it allocates; the count depends on the C++ library.
-TEST_CASE("path: a typed read through tag 29 allocates")
-{
-    std::string const doc = "\x82\xd8\x1c\x82\x07\x08\xd8\x1d\x00"s;
-    std::size_t const before = allocations;
-    auto const first = cbor::at_path<"$[1][0]", std::uint64_t>(std::string_view(doc));
-    std::size_t const after = allocations;
-    CHECK_GT(after, before);
-    REQUIRE(first.has_value());
-    CHECK_EQ(*first, 7u);
-}
-
 // A typed read enters tag 24 in the bytes it walks, so the embedded item costs no allocation.
 TEST_CASE("path: a typed read through tag 24 allocates nothing")
 {
     std::string const doc = "\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s;
-    auto const root = *cbor::lazy::from(std::string(doc));
+    auto const root = *test::lazy_of_copy(std::string(doc));
     std::size_t const before = allocations;
     auto const from_bytes = cbor::at_path<"$.a[1]", int>(std::string_view(doc));
-    auto const from_lazy = cbor::at_path<"$.a[1]", int>(root);
+    auto const from_lazy = root.at_path<"$.a[1]", int>();
     std::size_t const after = allocations;
     CHECK_EQ(after, before);
     CHECK_EQ(from_bytes, 2);
     CHECK_EQ(from_lazy, 2);
 }
 
-// A key that is not a text goes through lazy, as tag 29 does. This test records that the form over bytes then
-// allocates.
-TEST_CASE("path: a typed read with a key that is not text allocates")
+// A key that is not a text goes through lazy, as tag 29 does. Since lazy holds its owner inline (owner decision
+// 2026-10-17), that walk allocates nothing either.
+TEST_CASE("path: a typed read with a key that is not text allocates nothing")
 {
     std::string const doc = "\xa1\x41\x01\x07"s;
     std::size_t const before = allocations;
     auto const value = cbor::at_path<"$[h'01']", int>(std::string_view(doc));
     std::size_t const after = allocations;
-    CHECK_GT(after, before);
+    CHECK_EQ(after, before);
     CHECK_EQ(value, 7);
 }
 
@@ -158,13 +238,58 @@ TEST_CASE("path: a typed read with a key that is not text allocates")
 // children.
 TEST_CASE("path: a filter with a literal allocates for each child")
 {
-    test_binding binding;
-    auto const three = *cbor::lazy::from(encoded(A(1, 2, 3)));
-    auto const six = *cbor::lazy::from(encoded(A(4, 5, 6, 7, 8, 9)));
+    auto const three = *test::lazy_of_copy(encoded(A(1, 2, 3)));
+    auto const six = *test::lazy_of_copy(encoded(A(4, 5, 6, 7, 8, 9)));
     std::size_t const before = allocations;
-    (void)cbor::query(binding, "$[?@ == 1]", three);
+    (void)test::query("$[?@ == 1]", three);
     std::size_t const middle = allocations;
-    (void)cbor::query(binding, "$[?@ == 1]", six);
+    (void)test::query("$[?@ == 1]", six);
     std::size_t const after = allocations;
     CHECK_GT(after - middle, middle - before);
+}
+
+// The public encoder over a span of the caller writes into that memory only: a whole data item of every kind of
+// head, a string and a float allocates nothing.
+TEST_CASE("encoder: the span target allocates nothing")
+{
+    std::array<char, 64> buffer{};
+    std::array<std::byte, 2> const bytes{std::byte{1}, std::byte{2}};
+    std::size_t const before = allocations;
+    cbor::encoder e{std::span<char>(buffer)};
+    bool const all = e.array(5).has_value() && e.unsigned_integer(std::uint32_t{7}).has_value() &&
+                     e.text_string("abc"sv).has_value() && e.byte_string(std::span<std::byte const>(bytes)).has_value() &&
+                     e.floating_point(1.5).has_value() && e.typed_array(cbor::typed_array{64, bytes}).has_value();
+    auto const size = e.finish();
+    std::size_t const after = allocations;
+    CHECK(all);
+    REQUIRE(size.has_value());
+    CHECK_EQ(after, before);
+}
+
+// Each tag 24 is decoded by an inner decoder. If each inner decoder took its own block for strings, N small tag 24
+// items would take N blocks of validity::bump_chunk_size from an input of a few bytes each. The bytes taken must stay
+// in proportion to the input, so the inner decoders share the one block of the zone.
+TEST_CASE("decode: many tag 24 items with a string share one block for their strings")
+{
+    constexpr std::size_t count = 1000;
+    std::string bytes = "\x99\x03\xe8"s;
+    for (std::size_t i = 0; i < count; ++i)
+        bytes += "\xd8\x18\x42\x61x"s;
+    std::size_t const before = allocated_bytes;
+    auto const tree = cbor::decode(bytes);
+    std::size_t const after = allocated_bytes;
+    REQUIRE(tree.has_value());
+    CHECK_LT(after - before, count * cbor::validity::bump_chunk_size / 8);
+}
+
+// A small message must not take a whole block for its strings: the block is bounded by the bytes left of the input,
+// because no later string can be longer than those bytes.
+TEST_CASE("decode: the block for the strings of a small message stays in proportion to the message")
+{
+    std::string const bytes = "\x82\x61x\x62yz"s;
+    std::size_t const before = allocated_bytes;
+    auto const tree = cbor::decode(bytes);
+    std::size_t const after = allocated_bytes;
+    REQUIRE(tree.has_value());
+    CHECK_LT(after - before, cbor::validity::bump_chunk_size);
 }
