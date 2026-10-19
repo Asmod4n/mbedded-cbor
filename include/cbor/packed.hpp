@@ -1531,6 +1531,9 @@ class reflection
                                 .error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
+        if (directory_entry<Root>(encoded, static_cast<std::size_t>(std::to_underlying(*i)) + 2) !=
+            item + record_size<U, Root>()) [[unlikely]]
+            return std::unexpected(error::syntax_error);
         if (!record_head_valid<Root, U>(
                 std::span<char const>(encoded).subspan(item).template first<record_size<U, Root>()>()))
             [[unlikely]]

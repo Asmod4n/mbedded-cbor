@@ -170,7 +170,8 @@ Each `at_path` checks at each read:
   message;
 - the head of the record of each struct on the path: the tag of its
   struct, its record function and its count of values; the record is
-  read by the size of its struct;
+  read by the size of its struct, and the directory must end its item
+  there;
 - that each part of variable size of a struct names its place in the
   order of the writer, and that each inner struct names a place behind
   those parts;

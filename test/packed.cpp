@@ -2631,12 +2631,12 @@ TEST_CASE("schema: a struct reference into the block of its struct is incorrect_
     CHECK_EQ(cbor::packed<order_top>::decode(std::string(forged)).error(), error::incorrect_type);
 }
 
-// A path reads a record by the size that its type gives, and checks the whole head of the record: the class tag,
-// the record function and the count 9a + u32 (RFC 8949 3). The count of the record of first is forged from 3 to 4.
-// The directory end of the record of first is forged one byte later; a path does not read it, and decode, which
-// checks that each item starts where the one before it ends, refuses it. The test exists because the record head
-// is now the check of the length of a record on a path.
-TEST_CASE("schema: a path checks the head of a record and reads it by its own size")
+// A path reads a record at the size that its type gives, checks the whole head of the record: the class tag, the
+// record function and the count 9a + u32 (RFC 8949 3), and checks that the directory ends the record item where
+// that size ends it. The count of the record of first is forged from 3 to 4. The directory end of the record of
+// first is forged one byte later. The test exists because a verified path refuses a record whose head or whose
+// directory end differs from its type, as decode does.
+TEST_CASE("schema: a path checks the head of a record and the end that the directory gives it")
 {
     std::string const bytes = *cbor::packed<order_top>::encode(order_sample(std::nullopt));
     std::size_t const first = item_start(bytes, 24);
@@ -2649,7 +2649,8 @@ TEST_CASE("schema: a path checks the head of a record and reads it by its own si
 
     std::string ended = bytes;
     ended.replace(14 + 4 * (25 - 16), 4, u32_bytes(static_cast<std::uint32_t>(item_start(bytes, 25) + 1)));
-    CHECK_EQ(at_path<order_top, "$.inner.first.b">(ended), "b1"s);
+    CHECK_EQ(at_path<order_top, "$.inner.first.b">(ended).error(), error::syntax_error);
+    CHECK_EQ(at_path<order_top, "$.inner.m">(ended), "m"s);
     CHECK_FALSE(cbor::packed<order_top>::decode(std::string(ended)).has_value());
 }
 
