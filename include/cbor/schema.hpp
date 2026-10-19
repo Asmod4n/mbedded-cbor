@@ -80,6 +80,9 @@ class schema;
 template <class E>
 class typed_array_view;
 
+template <class S>
+struct column_element {};
+
 struct directory {
     std::size_t at;
     std::size_t count;
@@ -200,6 +203,30 @@ class reflection
         requires is_list<U>;
         requires is_typed_array_element<std::remove_cv_t<std::ranges::range_value_t<U>>>;
     };
+
+    template <class U>
+    static constexpr bool is_column_struct = std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; };
+
+    template <class U>
+    static constexpr bool is_column_vector = requires {
+        requires is_list<U> && !is_typed_array<U>;
+        requires is_column_struct<std::remove_cv_t<std::ranges::range_value_t<U>>>;
+    };
+
+    template <class M>
+    static consteval auto column_element_of()
+    {
+        if constexpr (has_fixed_underlying_type<M>)
+            return std::type_identity<std::underlying_type_t<M>>{};
+        else
+            return std::type_identity<M>{};
+    }
+
+    template <class M>
+    using column_element_t = typename decltype(column_element_of<M>())::type;
+
+    template <class M>
+    static constexpr bool is_typed_column = !is_column_struct<M> && is_typed_array_element<column_element_t<M>>;
 
     template <class U>
 #ifdef __SIZEOF_INT128__
@@ -746,6 +773,137 @@ class reflection
         return std::define_static_array(encoded);
     }
 
+    struct reference {
+        std::size_t data;
+        std::size_t length;
+    };
+
+    struct affine {
+        std::size_t constant;
+        std::size_t coefficient;
+    };
+
+    template <class S>
+    static consteval bool columns_present()
+    {
+        bool present = !data_members<S>().empty();
+        template for (constexpr auto m : data_members<S>()) {
+            using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
+            if constexpr (is_column_struct<M>)
+                present = present && columns_present<M>();
+        }
+        return present;
+    }
+
+    template <class Root, class S>
+    static consteval std::span<char const> column_record_head()
+    {
+        static_assert(columns_present<S>(), "a vector of structs takes a struct with at least one column");
+        std::vector<char> encoded;
+        straight_reference_encode<Root, S>(encoded);
+        fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
+        auto const count = heads::big_endian(static_cast<std::uint32_t>(data_members<S>().size()));
+        std::ranges::copy(count, encoded.end() - sizeof(std::uint32_t));
+        return std::define_static_array(encoded);
+    }
+
+    template <class Root, class M>
+    static consteval std::span<char const> column_head_prefix()
+    {
+        std::vector<char> encoded;
+        if constexpr (is_column_struct<M>) {
+            constexpr auto head = column_record_head<Root, M>();
+            encoded.assign(head.begin(), head.end() - sizeof(std::uint32_t));
+        } else if constexpr (is_typed_column<M>) {
+            heads::head_append(encoded, major_type::tag, typed_array_tag<column_element_t<M>>());
+            encoded.push_back(heads::initial_byte(major_type::byte_string,
+                                                  std::to_underlying(rfc8949::additional_information::four_byte_argument)));
+        } else {
+            encoded.push_back(heads::initial_byte(major_type::array,
+                                                  std::to_underlying(rfc8949::additional_information::four_byte_argument)));
+        }
+        return std::define_static_array(encoded);
+    }
+
+    template <class Root, class M>
+    static consteval std::size_t column_head_size()
+    {
+        return column_head_prefix<Root, M>().size() + sizeof(std::uint32_t);
+    }
+
+    template <class M>
+    static constexpr std::size_t column_head_argument(std::size_t const n)
+    {
+        if constexpr (is_column_struct<M>)
+            return data_members<M>().size();
+        else if constexpr (is_typed_column<M>)
+            return n * sizeof(column_element_t<M>);
+        else
+            return n;
+    }
+
+    template <class Root, class M>
+    static consteval affine column_size()
+    {
+        constexpr std::size_t head = column_head_size<Root, M>();
+        if constexpr (is_column_struct<M>) {
+            affine size{head, 0};
+            template for (constexpr auto m : data_members<M>()) {
+                constexpr affine c = column_size<Root, std::remove_cv_t<typename[:std::meta::type_of(m):]>>();
+                size.constant += c.constant;
+                size.coefficient += c.coefficient;
+            }
+            return size;
+        } else if constexpr (is_typed_column<M>) {
+            return {head, sizeof(column_element_t<M>)};
+        } else {
+            return {head, fixed_size<M, Root>()};
+        }
+    }
+
+    template <class Root, class S, std::meta::info Member>
+    static consteval affine column_offset()
+    {
+        affine at{column_record_head<Root, S>().size(), 0};
+        bool before = true;
+        template for (constexpr auto m : data_members<S>()) {
+            before = before && m != Member;
+            if (before) {
+                constexpr affine c = column_size<Root, std::remove_cv_t<typename[:std::meta::type_of(m):]>>();
+                at.constant += c.constant;
+                at.coefficient += c.coefficient;
+            }
+        }
+        return at;
+    }
+
+    template <class Root, class S>
+    static consteval std::size_t first_column_argument_at()
+    {
+        constexpr std::meta::info m = data_members<S>()[0];
+        using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
+        constexpr std::size_t at = column_record_head<Root, S>().size();
+        if constexpr (is_column_struct<M>)
+            return at + first_column_argument_at<Root, M>();
+        else
+            return at + column_head_prefix<Root, M>().size();
+    }
+
+    template <class S>
+    static consteval auto first_column_of()
+    {
+        using M = std::remove_cv_t<typename[:std::meta::type_of(data_members<S>()[0]):]>;
+        if constexpr (is_column_struct<M>)
+            return first_column_of<M>();
+        else
+            return std::type_identity<M>{};
+    }
+
+    static constexpr std::size_t affine_at(affine const a, std::size_t const n)
+    {
+        return a.constant + a.coefficient * n;
+    }
+
     template <class U>
     static constexpr auto float_bits(U const value)
     {
@@ -793,7 +951,15 @@ class reflection
         template <class E, class R>
         void elements_add(R const &range)
         {
-            if constexpr (is_typed_array_element<std::remove_cv_t<E>>) {
+            if constexpr (is_column_struct<std::remove_cv_t<E>>) {
+                constexpr affine size = column_size<Root, std::remove_cv_t<E>>();
+                items += 1;
+                bytes_add(size.constant);
+                block_add(std::ranges::size(range), size.coefficient);
+                for (auto const &e : range)
+                    add<E>(e);
+                return;
+            } else if constexpr (is_typed_array_element<std::remove_cv_t<E>>) {
                 items += 1;
                 bytes_add(typed_array_head);
                 block_add(std::ranges::size(range), sizeof(E));
@@ -951,6 +1117,11 @@ class reflection
                     at += sizeof(E);
                 }
             }
+        } else if constexpr (is_column_vector<U>) {
+            using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+            reference const record{item, std::ranges::size(value)};
+            c.position = item + affine_at(column_size<Root, E>(), record.length);
+            c = columns_write<Root, E, Exact>(out, value, [](E const &e) -> E const & { return e; }, record, c);
         } else {
             using E = std::ranges::range_value_t<U>;
             std::size_t const length = std::ranges::size(value);
@@ -959,6 +1130,50 @@ class reflection
             c = elements_encode<Root, E, Exact>(out, data, value, c);
         }
         return c;
+    }
+
+    template <class Root, class S, bool Exact, class R, class P>
+    CBOR_ALWAYS_INLINE static encode_cursor columns_write(std::span<char> const out, R const &range, P const &project,
+                                                          reference const record, encode_cursor c)
+    {
+        static constexpr auto head = column_record_head<Root, S>();
+        std::ranges::copy(head, out.subspan(record.data).template first<head.size()>().begin());
+        template for (constexpr std::meta::info m : data_members<S>())
+            c = column_write<Root, S, m, Exact>(out, range, project, record, c);
+        return c;
+    }
+
+    template <class Root, class S, std::meta::info Member, bool Exact, class R, class P>
+    CBOR_ALWAYS_INLINE static encode_cursor column_write(std::span<char> const out, R const &range, P const &project,
+                                                         reference const record, encode_cursor c)
+    {
+        using M = std::remove_cv_t<typename[:std::meta::type_of(Member):]>;
+        std::size_t const at = record.data + affine_at(column_offset<Root, S, Member>(), record.length);
+        auto const member = [&project](auto const &e) -> M const & { return project(e).[:Member:]; };
+        if constexpr (is_column_struct<M>) {
+            return columns_write<Root, M, Exact>(out, range, member, reference{at, record.length}, c);
+        } else {
+            static constexpr auto prefix = column_head_prefix<Root, M>();
+            std::ranges::copy(prefix, out.subspan(at).template first<prefix.size()>().begin());
+            heads::u32_write(out, at + prefix.size(), column_head_argument<M>(record.length));
+            std::size_t k = at + column_head_size<Root, M>();
+            if constexpr (is_typed_column<M>) {
+                using E = column_element_t<M>;
+                for (auto const &e : range) {
+                    typed_array_element_write<E>(out.subspan(k).template first<sizeof(E)>(), static_cast<E>(member(e)));
+                    k += sizeof(E);
+                }
+            } else {
+                constexpr std::size_t size = fixed_size<M, Root>();
+                for (auto const &e : range) {
+                    auto const field = out.subspan(k).template first<size>();
+                    zero_initialized_copy<Root, M>(field);
+                    c = value_encode<Root, M, Exact>(out, field, member(e), c);
+                    k += size;
+                }
+            }
+            return c;
+        }
     }
 
     template <class Root, class T, bool Exact>
@@ -1159,11 +1374,6 @@ class reflection
         return std::ranges::equal(field.template first<n>(), expected);
     }
 
-    struct reference {
-        std::size_t data;
-        std::size_t length;
-    };
-
     static constexpr char reference_tag_byte =
         heads::initial_byte(major_type::tag, std::to_underlying(validity::tag_number::reference));
 
@@ -1182,12 +1392,55 @@ class reflection
         return m - fillers;
     }
 
-    template <major_type Major, class E>
+    template <class Root, class S>
+    CBOR_ALWAYS_INLINE static std::expected<reference, error> column_record_read(std::string_view const encoded, std::size_t const item,
+                                                                                 std::size_t const end)
+    {
+        constexpr std::size_t argument = first_column_argument_at<Root, S>();
+        static constexpr auto head = column_record_head<Root, S>();
+        static_assert(argument >= head.size(), "The head of the first column follows the head of the record.");
+        if (!validity::pending_items_fit(item + argument + sizeof(std::uint32_t), end)) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        if (!std::ranges::equal(std::span<char const>(encoded).subspan(item).template first<head.size()>(), head)) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        std::size_t n = heads::unsigned_read<std::uint32_t>(
+            std::span<char const>(encoded).subspan(item + argument).template first<sizeof(std::uint32_t)>());
+        using F = typename decltype(first_column_of<S>())::type;
+        if constexpr (is_typed_column<F>) {
+            if (error const r = validity::typed_array_check(typed_array_tag<column_element_t<F>>(), n).error_or(error{});
+                r != error{}) [[unlikely]]
+                return std::unexpected(r);
+            n /= sizeof(column_element_t<F>);
+        }
+        if (error const r = validity::check_argument<true>(major_type::array, n).error_or(error{}); r != error{}) [[unlikely]]
+            return std::unexpected(r);
+        constexpr affine size = column_size<Root, S>();
+        auto const total = validity::checked_mul(n, size.coefficient).and_then([](std::size_t const elements) {
+            return validity::checked_add(elements, size.constant);
+        });
+        if (!total || !validity::pending_items_fit(*total, end - item)) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return reference{item, n};
+    }
+
+    template <class Root, class M>
+    CBOR_ALWAYS_INLINE static bool column_head_valid(std::string_view const encoded, std::size_t const at, std::size_t const n)
+    {
+        static constexpr auto prefix = column_head_prefix<Root, M>();
+        return std::ranges::equal(std::span<char const>(encoded).subspan(at).template first<prefix.size()>(), prefix) &&
+               heads::unsigned_read<std::uint32_t>(
+                   std::span<char const>(encoded).subspan(at + prefix.size()).template first<sizeof(std::uint32_t)>()) ==
+                   column_head_argument<M>(n);
+    }
+
+    template <class Root, major_type Major, class E>
     CBOR_ALWAYS_INLINE static std::expected<reference, error>
     item_reference_read(std::string_view const encoded, std::size_t const item, std::size_t const end,
                         std::size_t const element)
     {
-        if constexpr (is_typed_array_element<E>) {
+        if constexpr (is_column_struct<E>) {
+            return column_record_read<Root, E>(encoded, item, end);
+        } else if constexpr (is_typed_array_element<E>) {
             static_assert(validity::typed_array_element_size(typed_array_tag<E>()) == sizeof(E),
                           "The elements of the typed array tag of E are sizeof(E) bytes.");
             if (!validity::pending_items_fit(item + typed_array_head, end)) [[unlikely]]
@@ -1262,7 +1515,7 @@ class reflection
         std::size_t const end = j + 1 < dir.count ? directory_entry(encoded, dir, j + 1) : items_end;
         if (item < items_at || end > items_end) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        return item_reference_read<Major, E>(encoded, item, end, element);
+        return item_reference_read<Root, Major, E>(encoded, item, end, element);
     }
 
     template <class T>
@@ -1390,8 +1643,59 @@ class reflection
             constexpr std::size_t close = index_end(path, At);
             if constexpr (requires { fixed_length<U>::value; })
                 return path_result<Root, typename fixed_length<U>::element, Path, close + 1>();
+            else if constexpr (is_column_vector<U>)
+                return column_path_result<Root, std::remove_cv_t<std::ranges::range_value_t<U>>, Path, close + 1>();
             else
                 return path_result<Root, std::ranges::range_value_t<U>, Path, close + 1>();
+        }
+    }
+
+    template <class Root, class S, fixed_string Path, std::size_t At>
+    static consteval auto column_path_result()
+    {
+        constexpr std::string_view path = Path.view();
+        if constexpr (At == path.size()) {
+            return std::type_identity<typename cbor::schema<Root>::template accessor<column_element<S>>>{};
+        } else {
+            constexpr std::size_t end = step_end(path, At);
+            constexpr std::meta::info m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
+            using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
+            if constexpr (is_column_struct<M>)
+                return column_path_result<Root, M, Path, end>();
+            else
+                return path_result<Root, M, Path, end>();
+        }
+    }
+
+    template <class Root, class S, fixed_string Path, std::size_t At>
+    CBOR_ALWAYS_INLINE static auto column_walk(std::string_view const encoded, reference const record, std::size_t const i,
+                                               cbor::directory const floor,
+                                               std::array<std::size_t, index_slots<Path>()> const &indexes)
+        -> std::expected<typename decltype(column_path_result<Root, S, Path, At>())::type, error>
+    {
+        constexpr std::string_view path = Path.view();
+        if constexpr (At == path.size()) {
+            return typename cbor::schema<Root>::template accessor<column_element<S>>(encoded, record, i, floor);
+        } else {
+            constexpr std::size_t end = step_end(path, At);
+            constexpr std::meta::info m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
+            using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
+            std::size_t const at = record.data + affine_at(column_offset<Root, S, m>(), record.length);
+            if (!column_head_valid<Root, M>(encoded, at, record.length)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            constexpr std::size_t head = column_head_size<Root, M>();
+            if constexpr (is_column_struct<M>) {
+                return column_walk<Root, M, Path, end>(encoded, reference{at, record.length}, i, floor, indexes);
+            } else if constexpr (is_typed_column<M>) {
+                using E = column_element_t<M>;
+                return static_cast<M>(typed_array_element_read<E>(
+                    std::span<char const>(encoded).subspan(at + head + i * sizeof(E)).template first<sizeof(E)>()));
+            } else {
+                return path_walk<Root, M, Path, end>(
+                    encoded,
+                    std::span<char const>(encoded).subspan(at + head + i * fixed_size<M, Root>()).template first<fixed_size<M, Root>()>(),
+                    floor, indexes);
+            }
         }
     }
 
@@ -1459,6 +1763,12 @@ class reflection
             } else if constexpr (is_typed_array<U>) {
                 using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
                 auto const r = reference_read<Root, major_type::array, E>(encoded, field, floor, sizeof(E));
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor, *r);
+            } else if constexpr (is_column_vector<U>) {
+                auto const r = reference_read<Root, major_type::array, std::remove_cv_t<std::ranges::range_value_t<U>>>(
+                    encoded, field, floor, 0);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return typename cbor::schema<Root>::template accessor<U>(encoded, field, floor, *r);
@@ -1534,19 +1844,29 @@ class reflection
                         [[unlikely]]
                         return std::unexpected(c);
                     return typed_array_element_read<F>(std::span<char const>(encoded).subspan(r->data + i * sizeof(F)).template first<sizeof(F)>());
+                } else if constexpr (is_column_vector<U>) {
+                    using S = std::remove_cv_t<E>;
+                    auto const r = reference_read<Root, major_type::array, S>(encoded, field, floor, 0);
+                    if (!r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
+                        [[unlikely]]
+                        return std::unexpected(c);
+                    return column_walk<Root, S, Path, close + 1>(encoded, *r, i, floor, indexes);
+                } else {
+                    auto const r =
+                        reference_read<Root, major_type::array>(encoded, field, floor, fixed_size<E, Root>());
+                    if (!r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
+                        [[unlikely]]
+                        return std::unexpected(c);
+                    return path_walk<Root, E, Path, close + 1>(encoded,
+                                                               std::span<char const>(encoded)
+                                                                   .subspan(r->data + i * fixed_size<E, Root>())
+                                                                   .template first<fixed_size<E, Root>()>(),
+                                                               floor, indexes);
                 }
-                auto const r =
-                    reference_read<Root, major_type::array>(encoded, field, floor, fixed_size<E, Root>());
-                if (!r) [[unlikely]]
-                    return std::unexpected(r.error());
-                if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
-                    [[unlikely]]
-                    return std::unexpected(c);
-                return path_walk<Root, E, Path, close + 1>(encoded,
-                                                           std::span<char const>(encoded)
-                                                               .subspan(r->data + i * fixed_size<E, Root>())
-                                                               .template first<fixed_size<E, Root>()>(),
-                                                           floor, indexes);
             }
         }
     }
@@ -1569,11 +1889,14 @@ class reflection
                 return std::unexpected(error::unpopulated_table_index);
             if (directory_entry(encoded, dir, *j) != at) [[unlikely]]
                 return std::unexpected(error::syntax_error);
-            auto const r = item_reference_read<Major, E>(encoded, at, end, element);
+            auto const r = item_reference_read<Root, Major, E>(encoded, at, end, element);
             if (!r) [[unlikely]]
                 return r;
             index += 1;
-            at = r->data + r->length * element;
+            if constexpr (is_column_struct<E>)
+                at = r->data + affine_at(column_size<Root, E>(), r->length);
+            else
+                at = r->data + r->length * element;
             return r;
         }
 
@@ -1700,6 +2023,17 @@ class reflection
                         out.push_back(typed_array_element_read<E>(from.subspan(i * sizeof(E)).template first<sizeof(E)>()));
                 }
                 return {};
+            } else if constexpr (is_column_vector<U>) {
+                using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+                auto const r = reference_take<Root, major_type::array, E>(field, 0);
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
+                    return std::unexpected(c.error());
+                out.clear();
+                for (std::size_t i = 0; i < r->length; ++i)
+                    out.push_back(element_make<E>(out));
+                return columns_read<Root, E>(out, [](E &e) -> E & { return e; }, *r, depth + 1, depth_max);
             } else if constexpr (std::ranges::sized_range<U>) {
                 using E = std::ranges::range_value_t<U>;
                 auto const r = reference_take<Root, major_type::array>(field, fixed_size<E, Root>());
@@ -1722,6 +2056,51 @@ class reflection
                 if (!fixed_head_valid<U>(field)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
                 out = fixed_value_read<U>(field);
+                return {};
+            }
+        }
+
+        template <class Root, class S, class R, class P>
+        std::expected<void, error> columns_read(R &out, P const &project, reference const record, std::size_t const depth,
+                                                std::size_t const depth_max)
+        {
+            std::expected<void, error> done;
+            template for (constexpr std::meta::info m : data_members<S>()) {
+                if (done)
+                    done = column_read<Root, S, m>(out, project, record, depth, depth_max);
+            }
+            return done;
+        }
+
+        template <class Root, class S, std::meta::info Member, class R, class P>
+        std::expected<void, error> column_read(R &out, P const &project, reference const record, std::size_t const depth,
+                                               std::size_t const depth_max)
+        {
+            using M = std::remove_cv_t<typename[:std::meta::type_of(Member):]>;
+            std::size_t const place = record.data + affine_at(column_offset<Root, S, Member>(), record.length);
+            if (!column_head_valid<Root, M>(encoded, place, record.length)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            auto const member = [&project](auto &e) -> M & { return project(e).[:Member:]; };
+            std::size_t k = place + column_head_size<Root, M>();
+            if constexpr (is_column_struct<M>) {
+                return columns_read<Root, M>(out, member, reference{place, record.length}, depth, depth_max);
+            } else if constexpr (is_typed_column<M>) {
+                using E = column_element_t<M>;
+                for (auto &e : out) {
+                    member(e) = static_cast<M>(
+                        typed_array_element_read<E>(std::span<char const>(encoded).subspan(k).template first<sizeof(E)>()));
+                    k += sizeof(E);
+                }
+                return {};
+            } else {
+                constexpr std::size_t size = fixed_size<M, Root>();
+                for (auto &e : out) {
+                    if (auto const r = value_read<Root>(member(e), std::span<char const>(encoded).subspan(k).template first<size>(),
+                                                        depth, depth_max);
+                        !r) [[unlikely]]
+                        return r;
+                    k += size;
+                }
                 return {};
             }
         }
@@ -2271,6 +2650,19 @@ public:
                         return std::expected<E, error>(std::unexpect, c);
                     return std::expected<E, error>(reflection::typed_array_element_read<E>(
                         std::span<char const>(self.encoded).subspan(self.items.data + at * sizeof(E)).template first<sizeof(E)>()));
+                } else if constexpr (reflection::is_column_vector<U> && path.size() > 1) {
+                    using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+                    constexpr std::size_t close = reflection::index_end(path, 1);
+                    using X = typename decltype(reflection::column_path_result<T, E, Path, close + 1>())::type;
+                    std::size_t at;
+                    if constexpr (close == 2)
+                        at = std::get<0>(i);
+                    else
+                        at = reflection::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
+                    if (error const c = validity::check_index(at, self.items.length).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::expected<X, error>(std::unexpect, c);
+                    return reflection::column_walk<T, E, Path, close + 1>(self.encoded, self.items, at, self.dir, i);
                 } else if constexpr (reflection::is_list<U> && path.size() > 1) {
                     using E = std::ranges::range_value_t<U>;
                     constexpr std::size_t close = reflection::index_end(path, 1);
@@ -2321,6 +2713,54 @@ public:
             requires(listed)
         {
             return items.length;
+        }
+    };
+
+    template <class S>
+        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    class accessor<column_element<S>>
+    {
+        std::shared_ptr<void const> owner;
+        std::string_view encoded;
+        reflection::reference record;
+        std::size_t index;
+        cbor::directory dir;
+
+        accessor(std::string_view const b, reflection::reference const r, std::size_t const i, cbor::directory const d)
+            : encoded(b), record(r), index(i), dir(d)
+        {
+        }
+
+        friend class schema;
+
+        friend class reflection;
+
+        template <class>
+        friend class accessor;
+
+    public:
+        template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
+            requires(((Path.view().starts_with('@') && reflection::path_valid<S, Path, 1>()) ||
+                      (Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>())) &&
+                     sizeof...(Index) == reflection::index_slots<Path>() && std::is_lvalue_reference_v<Self>)
+        CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
+        {
+            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
+            auto result = [&] {
+                std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
+                if constexpr (Path.view().starts_with('$')) {
+                    constexpr std::size_t root = reflection::fixed_size<T, T>();
+                    return reflection::path_walk<T, T, Path, 1>(
+                        self.encoded, std::span<char const>(self.encoded).subspan(self.encoded.size() - root).template first<root>(),
+                        self.dir, i);
+                } else {
+                    return reflection::column_walk<T, S, Path, 1>(self.encoded, self.record, self.index, self.dir, i);
+                }
+            }();
+            if constexpr (requires { result->owner; })
+                if (result)
+                    result->owner = self.owner;
+            return result;
         }
     };
 
