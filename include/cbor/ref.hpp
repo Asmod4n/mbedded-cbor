@@ -26,7 +26,7 @@ namespace cbor
 {
 
 template <class T>
-class packed;
+class schema;
 
 template <class T>
 class structs;
@@ -73,7 +73,7 @@ class CBOR_OWNER ref
     }
 
     template <class>
-    friend class packed;
+    friend class schema;
 
     template <class>
     friend class structs;

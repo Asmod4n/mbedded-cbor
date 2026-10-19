@@ -797,7 +797,7 @@ class heads
 
 #ifdef __cpp_impl_reflection
     template <class>
-    friend class packed;
+    friend class schema;
 #endif
 };
 

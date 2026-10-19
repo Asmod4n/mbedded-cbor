@@ -9,9 +9,9 @@ This page states them.
 | Read one value | `cbor::at_path` | [path.md](path.md) |
 | Walk through arrays and maps | `cbor::lazy` | [runtime.md](runtime.md) |
 | Write a struct and read it back | `cbor::structs` | [structs.md](structs.md) |
-| Read one field of a large message | `cbor::packed` | [packed.md](packed.md) |
+| Read one field of a large message | `cbor::schema` | [schema.md](schema.md) |
 
-The library needs C++23. `structs` and `packed` need g++ 16 with
+The library needs C++23. `structs` and `schema` need g++ 16 with
 `-std=c++26 -freflection`. Every example includes `<cbor/cbor.hpp>`.
 A comment shows the CBOR in `bytes` as text, in the diagnostic notation
 of RFC 8949, which looks like JSON.
@@ -80,7 +80,7 @@ if (name) {
 `text` stays valid after `owner` ends, because `name` holds the bytes.
 Keep a result in a variable: `*` on a temporary `owning_ref` does not
 compile. A `cbor::lazy`, a result of `structs` and an accessor of
-`packed` hold the bytes in the same way.
+`schema` hold the bytes in the same way.
 
 ## 3. Threads
 

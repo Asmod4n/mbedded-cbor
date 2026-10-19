@@ -46,7 +46,7 @@
 #include "head.hpp"
 #include "lazy.hpp"
 #include "ref.hpp"
-#include "packed.hpp"
+#include "schema.hpp"
 #include "shared.hpp"
 
 namespace cbor

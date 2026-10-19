@@ -255,13 +255,13 @@ struct[[= cbor::tag(1591)]] names {
 // array (RFC 8746), a tag over a byte string of 4 bytes for each element.
 TEST_CASE("limits sizes 2: the string and container limits of packed")
 {
-    CHECK(cbor::packed<note>::decode(*cbor::packed<note>::encode(note{"ab", {}})).has_value());
-    CHECK_EQ(cbor::packed<note>::decode(*cbor::packed<note>::encode(note{"abc", {}})).error(),
+    CHECK(cbor::schema<note>::decode(*cbor::schema<note>::encode(note{"ab", {}})).has_value());
+    CHECK_EQ(cbor::schema<note>::decode(*cbor::schema<note>::encode(note{"abc", {}})).error(),
              error::string_length_exceeded);
-    CHECK_EQ(cbor::packed<note>::decode(*cbor::packed<note>::encode(note{"ab", {1}})).error(),
+    CHECK_EQ(cbor::schema<note>::decode(*cbor::schema<note>::encode(note{"ab", {1}})).error(),
              error::string_length_exceeded);
-    CHECK(cbor::packed<names>::decode(*cbor::packed<names>::encode(names{{"a", "b"}})).has_value());
-    CHECK_EQ(cbor::packed<names>::decode(*cbor::packed<names>::encode(names{{"a", "b", "c"}})).error(),
+    CHECK(cbor::schema<names>::decode(*cbor::schema<names>::encode(names{{"a", "b"}})).has_value());
+    CHECK_EQ(cbor::schema<names>::decode(*cbor::schema<names>::encode(names{{"a", "b", "c"}})).error(),
              error::container_elements_exceeded);
 }
 

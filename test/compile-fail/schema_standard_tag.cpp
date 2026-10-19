@@ -24,5 +24,5 @@ struct [[=cbor::tag{1500}]] root {
 int main()
 {
     root const value{};
-    return cbor::packed<root>::encode(value).has_value() ? 0 : 1;
+    return cbor::schema<root>::encode(value).has_value() ? 0 : 1;
 }

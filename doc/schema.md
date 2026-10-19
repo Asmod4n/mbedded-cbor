@@ -2,21 +2,21 @@
 
 A plain CBOR message carries its keys and its structure in every
 message. To read one field, a reader walks over the items before it.
-`cbor::packed<T>` removes that walk. It writes a struct as Packed CBOR
+`cbor::schema<T>` removes that walk. It writes a struct as Packed CBOR
 (draft-ietf-cbor-packed): the struct is the layout, a field of fixed size
 sits at an offset that the compiler computes, and a read goes to that
 offset directly. FlatBuffers and Cap'n Proto work the same way, but the
 message stays CBOR: a decoder of Packed CBOR reads it as a map with the
 names of the members as keys.
 
-| | `packed` | [`structs`](structs.md) |
+| | `schema` | [`structs`](structs.md) |
 |---|---|---|
 | Wire form | Packed CBOR, laid out by the struct | any CBOR |
 | Read one field | at its offset | walks the items before it |
 | Use it for | messages that your programs write and read | CBOR that any program writes, mapped into the members of a struct or class |
 
-`packed` needs C++26 reflection: g++ 16 with `-std=c++26 -freflection`.
-clang has no reflection yet, so a clang build has no `cbor::packed`.
+`schema` needs C++26 reflection: g++ 16 with `-std=c++26 -freflection`.
+clang has no reflection yet, so a clang build has no `cbor::schema`.
 [basics.md](basics.md) states how errors come back.
 
 ## 1. Write a message and read one field
@@ -28,11 +28,11 @@ struct [[=cbor::tag(1700)]] sensor {
     std::vector<double> readings;
 };
 
-auto const bytes = cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
+auto const bytes = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
 if (!bytes)
     return std::unexpected(bytes.error());
-auto const id = cbor::packed<sensor>::at_path<"$.id">(*bytes);                // 7
-auto const second = cbor::packed<sensor>::at_path<"$.readings[1]">(*bytes);   // 2.5
+auto const id = cbor::schema<sensor>::at_path<"$.id">(*bytes);                // 7
+auto const second = cbor::schema<sensor>::at_path<"$.readings[1]">(*bytes);   // 2.5
 ```
 
 `encode` returns a `std::expected<std::string, cbor::error>`, and
@@ -49,13 +49,13 @@ structs. Only public members are written.
 
 ## 3. Read one value
 
-`packed<T>::at_path<Path>(bytes)` reads a number, a `bool`, an enum, or a
+`schema<T>::at_path<Path>(bytes)` reads a number, a `bool`, an enum, or a
 `std::optional` of one. A path names members with `.name` and elements
 with `[n]`. `[]` takes the index from the next argument:
 
 ```cpp
 std::size_t const i = 1;
-cbor::packed<sensor>::at_path<"$.readings[]">(*bytes, i);   // 2.5, the element i
+cbor::schema<sensor>::at_path<"$.readings[]">(*bytes, i);   // 2.5, the element i
 ```
 
 A path to a member that `T` does not have does not compile. A path to a
@@ -63,11 +63,11 @@ text does not compile here: section 4 reads a text.
 
 ## 4. Read a text, a list or a struct
 
-`packed<T>::path(bytes)` opens the message and gives an accessor. An
+`schema<T>::path(bytes)` opens the message and gives an accessor. An
 accessor reads every kind of member.
 
 ```cpp
-auto const root = cbor::packed<sensor>::path(*bytes);
+auto const root = cbor::schema<sensor>::path(*bytes);
 if (!root)
     return std::unexpected(root.error());
 root->at_path<"$.name">();                      // "t1", a std::string_view
@@ -94,7 +94,7 @@ temporary accessor does not compile.
 ## 5. Read the whole struct
 
 ```cpp
-auto const back = cbor::packed<sensor>::decode(*bytes);
+auto const back = cbor::schema<sensor>::decode(*bytes);
 if (back)
     use((*back)->readings.size());   // 2
 ```
@@ -116,4 +116,4 @@ message, and a field with a wrong head gives an error.
 
 More: the bytes of a message, every check, the accessor in detail, the
 typed array view, a memory budget and the cost of each call are in
-[advanced/packed.md](advanced/packed.md).
+[advanced/schema.md](advanced/schema.md).

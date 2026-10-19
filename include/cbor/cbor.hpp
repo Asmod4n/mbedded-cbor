@@ -20,5 +20,5 @@
 #include "query.hpp"
 #include "diagnostic_notation.hpp"
 #include "ref.hpp"
-#include "packed.hpp"
+#include "schema.hpp"
 #include "structs.hpp"

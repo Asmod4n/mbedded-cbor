@@ -73,7 +73,7 @@ struct [[=cbor::tag(1500)]] Car {
 };
 struct [[=cbor::tag(1503)]] ParkingLot { std::vector<Car> cars; };
 using T = ParkingLot;
-using S = cbor::packed<T>;
+using S = cbor::schema<T>;
 static std::string json_text;
 static nlohmann::json json;
 
@@ -307,7 +307,7 @@ static double cp_field()
 #include "floats.capnp.h"
 struct [[=cbor::tag(1510)]] Floats { std::vector<double> values; };
 using T = Floats;
-using S = cbor::packed<T>;
+using S = cbor::schema<T>;
 
 static double scalar(cbor::lazy const &e)
 {
@@ -539,7 +539,7 @@ struct [[=cbor::tag(1521)]] User { std::string_view name; std::uint64_t follower
 struct [[=cbor::tag(1520)]] Record { std::int64_t id; std::string_view text; User user; double ratio; std::vector<std::string_view> tags; std::int64_t neg; };
 struct [[=cbor::tag(1522)]] Records { std::vector<Record> records; };
 using T = Records;
-using S = cbor::packed<T>;
+using S = cbor::schema<T>;
 
 template <class V> static V must(std::expected<V, cbor::error> const &r)
 {

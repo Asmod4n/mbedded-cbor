@@ -341,14 +341,14 @@ double const sum = std::accumulate(values.begin(), values.end(), 0.0);
 
 ### mbedded-cbor
 
-cbor::packed writes a std::vector<double> as an RFC 8746 typed array. view gives a typed_array_view, a random access range over the bytes of the input, with no copy.
+cbor::schema writes a std::vector<double> as an RFC 8746 typed array. view gives a typed_array_view, a random access range over the bytes of the input, with no copy.
 
 ```cpp
 struct [[=cbor::tag(1900)]] series {
     std::vector<double> values;
 };
 
-auto const root = cbor::packed<series>::path(bytes);
+auto const root = cbor::schema<series>::path(bytes);
 auto const values = root->view<"$.values">();
 double const sum = std::accumulate(values->begin(), values->end(), 0.0);
 ```
@@ -512,7 +512,7 @@ because their snippets show that the feature is absent.
 `bench/results/2026-10-09-025729Z.json` holds the only measurement in
 bench/results that runs mbedded-cbor, FlatBuffers and Cap'n Proto on the
 same data with the commit of a recent tree (f2b1e56). The operations are
-in `bench/compare.cpp`. The mbedded-cbor arm uses `cbor::packed`
+in `bench/compare.cpp`. The mbedded-cbor arm uses `cbor::schema`
 (Packed CBOR), not the at_path and lazy forms of sections 2 and 4.
 FlatBuffers runs without its Verifier. The build is g++-16 16.2.0,
 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie,
@@ -523,7 +523,7 @@ One field, `$.cars[500].engine.cc` of cars (the carsales data):
 
 | Library | ns | Spread |
 |---|---|---|
-| mbedded-cbor packed | 13.0 | 0.50 |
+| mbedded-cbor schema | 13.0 | 0.50 |
 | FlatBuffers | 2.4 | 0.24 |
 | Cap'n Proto | 189.5 | 0.41 |
 
@@ -531,7 +531,7 @@ One element, `$.values[30000]` of floats (60000 binary64):
 
 | Library | ns | Spread |
 |---|---|---|
-| mbedded-cbor packed | 6.0 | 0.19 |
+| mbedded-cbor schema | 6.0 | 0.19 |
 | FlatBuffers | 1.3 | 0.50 |
 | Cap'n Proto | 136.5 | 0.44 |
 
@@ -540,7 +540,7 @@ section 6:
 
 | Library | ns | Spread |
 |---|---|---|
-| mbedded-cbor packed | 36063 | 0.23 |
+| mbedded-cbor schema | 36063 | 0.23 |
 | FlatBuffers | 34761 | 0.24 |
 | Cap'n Proto | 37714 | 0.23 |
 
@@ -557,7 +557,7 @@ number for them.
 
 `test/interop/run.sh` writes values with every public writer:
 `cbor::encoder`, `cbor::encode(item)`, `structs<T>::encode` and
-`packed<T>::encode`. The values are the examples of RFC 8949 Appendix A,
+`schema<T>::encode`. The values are the examples of RFC 8949 Appendix A,
 the cbor-wg test vectors, the bench corpora, every integer and float
 width, tags 28 and 29, and typed arrays. Each decoder below reads the
 output. The script then compares the value with the value that was

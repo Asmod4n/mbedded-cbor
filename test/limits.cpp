@@ -102,14 +102,14 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
 // The schema reads into the members of the target that the caller made, so each member keeps its allocator.
 TEST_CASE("schema: a target with std::pmr members decodes with their allocators")
 {
-    auto const encoded = cbor::packed<pmr_names>::encode(
+    auto const encoded = cbor::schema<pmr_names>::encode(
         pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
     REQUIRE(encoded.has_value());
     std::array<std::byte, 4096> buffer{};
     std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(),
                                                std::pmr::null_memory_resource());
     auto const owner = std::make_shared<std::string const>(*encoded);
-    auto const decoded = cbor::packed<pmr_names>::decode(
+    auto const decoded = cbor::schema<pmr_names>::decode(
         owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
     REQUIRE(decoded.has_value());
     CHECK_EQ((**decoded).text, long_text);
@@ -127,7 +127,7 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
 // of schema as not_enough_memory, and std::bad_alloc does not leave the call.
 TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enough_memory")
 {
-    auto const encoded = cbor::packed<pmr_names>::encode(
+    auto const encoded = cbor::schema<pmr_names>::encode(
         pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
     REQUIRE(encoded.has_value());
     auto const owner = std::make_shared<std::string const>(*encoded);
@@ -135,7 +135,7 @@ TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enoug
         CAPTURE(size);
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
-        auto const decoded = cbor::packed<pmr_names>::decode(
+        auto const decoded = cbor::schema<pmr_names>::decode(
             owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
         REQUIRE_FALSE(decoded.has_value());
         CHECK_EQ(decoded.error(), error::not_enough_memory);
