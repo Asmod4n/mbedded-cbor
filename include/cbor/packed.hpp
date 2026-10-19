@@ -1463,17 +1463,17 @@ class reflection
         return item_read<Root, Major, E>(encoded, dir, *j, element);
     }
 
-    static constexpr std::size_t no_slot = std::numeric_limits<std::size_t>::max();
+    static constexpr std::size_t outside_block = std::numeric_limits<std::size_t>::max();
 
-    template <class Root, std::size_t Slot, major_type Major, class E = void>
+    template <class Root, std::size_t BlockIndex, major_type Major, class E = void>
     CBOR_ALWAYS_INLINE static std::expected<reference, error>
-    slot_reference_read(std::string_view const encoded, std::span<char const, dynamic_type_sizes> const field,
+    block_reference_read(std::string_view const encoded, std::span<char const, dynamic_type_sizes> const field,
                         cbor::directory const dir, record_block const block, std::size_t const element)
     {
-        if constexpr (Slot == no_slot) {
+        if constexpr (BlockIndex == outside_block) {
             return reference_read<Root, Major, E>(encoded, field, dir, element);
         } else {
-            std::size_t const j = block.base + Slot;
+            std::size_t const j = block.base + BlockIndex;
             auto const given = shared_index_read(field, dir.shared_start);
             if (!given) [[unlikely]]
                 return std::unexpected(given.error());
@@ -1786,7 +1786,7 @@ class reflection
         }
     }
 
-    template <class Root, class M, fixed_string Path, std::size_t At, std::size_t Slot = no_slot>
+    template <class Root, class M, fixed_string Path, std::size_t At, std::size_t BlockIndex = outside_block>
     CBOR_ALWAYS_INLINE static auto
     path_enter(std::string_view const encoded, std::span<char const, fixed_size<M, Root>()> const field,
                cbor::directory const dir, record_block const block,
@@ -1808,11 +1808,11 @@ class reflection
                 encoded, std::span<char const>(encoded).subspan(*at).template first<record_size<U, Root>()>(), dir,
                 record_block_at<U>(static_cast<std::size_t>(*j) + 1), indexes);
         } else {
-            return path_walk<Root, M, Path, At, Slot>(encoded, field, dir, block, indexes);
+            return path_walk<Root, M, Path, At, BlockIndex>(encoded, field, dir, block, indexes);
         }
     }
 
-    template <class Root, class T, fixed_string Path, std::size_t At, std::size_t Slot = no_slot>
+    template <class Root, class T, fixed_string Path, std::size_t At, std::size_t BlockIndex = outside_block>
     CBOR_ALWAYS_INLINE static auto
     path_walk(std::string_view const encoded, std::span<char const, extent_of<T, Root>()> const field,
               cbor::directory const floor, record_block const block,
@@ -1856,7 +1856,7 @@ class reflection
             } else if constexpr (is_optional<U>) {
                 using E = typename U::value_type;
                 auto const r =
-                    slot_reference_read<Root, Slot, major_type::array>(encoded, field, floor, block, fixed_size<E, Root>());
+                    block_reference_read<Root, BlockIndex, major_type::array>(encoded, field, floor, block, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (r->length > 1) [[unlikely]]
@@ -1872,14 +1872,14 @@ class reflection
                     return std::unexpected(x.error());
                 return std::optional<X>{*x};
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
-                auto const r = slot_reference_read < Root, Slot,
+                auto const r = block_reference_read < Root, BlockIndex,
                            is_text_range<U> ? major_type::text_string
                                             : major_type::byte_string > (encoded, field, floor, block, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return std::string_view(std::span(encoded).subspan(r->data, r->length));
             } else if constexpr (is_map<U>) {
-                auto const r = slot_reference_read<Root, Slot, major_type::map>(
+                auto const r = block_reference_read<Root, BlockIndex, major_type::map>(
                     encoded, field, floor, block,
                     fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
                 if (!r) [[unlikely]]
@@ -1887,12 +1887,12 @@ class reflection
                 return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, block, *r);
             } else if constexpr (is_typed_array<U>) {
                 using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
-                auto const r = slot_reference_read<Root, Slot, major_type::array, E>(encoded, field, floor, block, sizeof(E));
+                auto const r = block_reference_read<Root, BlockIndex, major_type::array, E>(encoded, field, floor, block, sizeof(E));
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, block, *r);
             } else if constexpr (is_list<U>) {
-                auto const r = slot_reference_read<Root, Slot, major_type::array>(
+                auto const r = block_reference_read<Root, BlockIndex, major_type::array>(
                     encoded, field, floor, block, fixed_size<std::ranges::range_value_t<U>, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
@@ -1961,7 +1961,7 @@ class reflection
                 if constexpr (is_typed_array<U>) {
                     using F = std::remove_cv_t<E>;
                     auto const r =
-                        slot_reference_read<Root, Slot, major_type::array, F>(encoded, field, floor, block, sizeof(F));
+                        block_reference_read<Root, BlockIndex, major_type::array, F>(encoded, field, floor, block, sizeof(F));
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
                     if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
@@ -1970,7 +1970,7 @@ class reflection
                     return typed_array_element_read<F>(std::span<char const>(encoded).subspan(r->data + i * sizeof(F)).template first<sizeof(F)>());
                 }
                 auto const r =
-                    slot_reference_read<Root, Slot, major_type::array>(encoded, field, floor, block, fixed_size<E, Root>());
+                    block_reference_read<Root, BlockIndex, major_type::array>(encoded, field, floor, block, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
