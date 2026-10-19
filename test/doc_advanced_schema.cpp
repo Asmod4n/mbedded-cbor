@@ -53,6 +53,17 @@ struct [[=cbor::tag(1702)]] pair_of_tags {
     twin w;
 };
 
+struct [[=cbor::tag(1710)]] [[=cbor::allowlist{}]] chosen {
+    [[=cbor::key("id")]] [[=cbor::allow{}]] std::uint8_t number;
+    [[=cbor::allow{}]] std::uint8_t kept;
+    std::uint8_t secret;
+};
+
+struct [[=cbor::tag(1711)]] skipped {
+    std::uint8_t kept;
+    [[=cbor::skip{}]] std::uint8_t secret;
+};
+
 template <class A>
 concept reads_seats = requires(A &&a) { std::forward<A>(a).template at_path<"$.seats">(); };
 
@@ -81,6 +92,26 @@ TEST_CASE("doc advanced schema: a struct needs a tag of its own")
     CHECK_FALSE(cbor::tags_registered<pair_of_tags>());
 }
 
+// The section "Structs and tags" lists the annotations that choose the keys and the members.
+TEST_CASE("doc advanced schema: annotations choose the keys and the members")
+{
+    auto const a = cbor::schema<chosen>::encode(chosen{7, 8, 9});
+    REQUIRE(a.has_value());
+    CHECK_NE(a->find("\x62" "id"sv), std::string::npos);
+    CHECK_NE(a->find("\x64" "kept"sv), std::string::npos);
+    CHECK_EQ(a->find("number"sv), std::string::npos);
+    CHECK_EQ(a->find("secret"sv), std::string::npos);
+    auto const back = cbor::schema<chosen>::decode(std::string(*a));
+    REQUIRE(back.has_value());
+    CHECK_EQ((*back)->number, 7u);
+    CHECK_EQ((*back)->kept, 8u);
+    CHECK_EQ((*back)->secret, 0u);
+    auto const b = cbor::schema<skipped>::encode(skipped{1, 2});
+    REQUIRE(b.has_value());
+    CHECK_EQ(b->find("secret"sv), std::string::npos);
+    CHECK_EQ(cbor::schema<skipped>::at_path<"$.kept">(*b), 1u);
+}
+
 // The section "Encode and decode" shows the round trip of a struct and the encode that appends to a target.
 TEST_CASE("doc advanced schema: encode and decode")
 {
@@ -97,6 +128,19 @@ TEST_CASE("doc advanced schema: encode and decode")
     REQUIRE(appended.has_value());
     CHECK_EQ(*appended, bytes->size());
     CHECK_EQ(out.substr(1), *bytes);
+
+    auto const owner = std::make_shared<std::string const>(*bytes);
+    std::string_view const part(*owner);
+    auto const beside = cbor::schema<car>::decode(owner, part);
+    REQUIRE(beside.has_value());
+    CHECK_EQ((*beside)->seats, 5u);
+    car target{};
+    auto const into = cbor::schema<car>::decode(owner, part, std::move(target));
+    REQUIRE(into.has_value());
+    CHECK_EQ((*into)->make, "Volvo");
+    auto const shared = cbor::schema<car>::decode(owner);
+    REQUIRE(shared.has_value());
+    CHECK_EQ((*shared)->track.size(), 3u);
 }
 
 // The section "One value with no accessor" shows schema<T>::at_path for a value that holds no view.
@@ -157,6 +201,10 @@ TEST_CASE("doc advanced schema: the accessor holds the owner")
     REQUIRE(copied.has_value());
     CHECK_EQ(*copied->at_path<"$.make">(), "Volvo"sv);
     CHECK_THROWS_AS((void)cbor::schema<car>::path(std::shared_ptr<std::string const>{}), std::logic_error);
+    auto const held = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));
+    auto const beside = cbor::schema<car>::path(held, std::string_view(*held));
+    REQUIRE(beside.has_value());
+    CHECK_EQ(beside->at_path<"$.seats">(), 5u);
     using A = cbor::schema<car>::accessor<>;
     CHECK(reads_seats<A const &>);
     CHECK_FALSE(reads_seats<A>);

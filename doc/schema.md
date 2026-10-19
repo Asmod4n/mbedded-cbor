@@ -44,8 +44,10 @@ Every struct in a message carries `[[=cbor::tag(n)]]`, and each struct
 has its own number. A struct with no tag, or two structs with one
 number, do not compile.
 
-The key of a member is its name. `[[=cbor::key("x")]]` changes it, as in
-structs. Only public members are written.
+The key of a member is its name. `[[=cbor::key("x")]]` changes it.
+`cbor::structs` refuses this annotation; it takes its keys from
+`cbor::describe_members` ([structs.md](structs.md), section 3). Only
+public members are written.
 
 ## 3. Read one value
 
@@ -131,7 +133,7 @@ if (back)
     use((*back)->readings.size());   // 2
 ```
 
-`decode` returns a `std::expected<cbor::owning_ref<sensor>, cbor::error>`,
+`decode` returns a `std::expected<cbor::ref<sensor>, cbor::error>`,
 as `structs` does.
 
 ## 6. Errors

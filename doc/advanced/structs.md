@@ -23,9 +23,9 @@ cbor::structs<std::uint8_t>::encode(2, out);   // 1; out holds the bytes of 1 an
 ## 2. Views into the bytes and their owner
 
 A result can hold views into the bytes: `std::string_view` and
-`std::span<std::byte const>`. So `decode` always returns an
-`owning_ref<T>`, which holds the owner of the bytes. A view in the result
-stays valid while the `owning_ref` lives. A result with no view member
+`std::span<std::byte const>`. So `decode` always returns a
+`ref<T>`, which holds the owner of the bytes. A view in the result
+stays valid while the `ref` lives. A result with no view member
 holds its own copy of every value.
 
 | Call | Owner |
@@ -33,6 +33,8 @@ holds its own copy of every value.
 | `decode(std::string)` with an rvalue | the library moves the string into a new `std::shared_ptr<std::string const>` |
 | `decode(std::shared_ptr<std::string const>)` | the caller, no copy |
 | `decode(std::shared_ptr<std::string const>, target)` | the caller, and `decode` reads into `target` (section 8) |
+| `decode(std::shared_ptr<void const> owner, part)` | the caller: `part` is a `std::string_view` into memory that `owner` keeps alive |
+| `decode(std::shared_ptr<void const> owner, part, target)` | the same, and `decode` reads into `target` |
 
 No form copies the bytes. A `std::string` lvalue, a `std::string_view`
 alone and a `char const *` do not compile.
@@ -43,9 +45,9 @@ auto const owner = std::make_shared<std::string const>(std::move(bytes));
 cbor::structs<std::string_view>::decode(owner);         // a view into *owner
 ```
 
-An empty owner throws `std::logic_error`. A `std::string` or a
-`std::string_view` beside an owner does not compile
-([basics.md](basics.md), section 8).
+A null or an empty owner throws `std::logic_error`. A `std::string`
+lvalue beside an owner does not compile: the bytes beside an owner are a
+view, for example a `std::string_view`.
 
 ## 3. Every type
 
@@ -82,7 +84,9 @@ cbor::structs<std::chrono::sys_seconds>::encode(std::chrono::sys_seconds{std::ch
 
 `decode` takes each of these types only under its own tag. A typed
 array takes only the little-endian tag of its element, and a
-`std::array` only its own count. A `std::set` takes the items of tag 258
+`std::array` only its own count. So a `std::vector` or a `std::array`
+of a number type does not take a plain array: it gives
+`error::incorrect_type`. A `std::set` takes the items of tag 258
 in any order; an item that comes twice gives `error::duplicate_key`.
 `std::chrono::sys_seconds` also takes a float under tag 1 when its value
 is a whole number; any other float gives `error::number_out_of_range`.
@@ -103,6 +107,10 @@ because some values of its underlying type are not values of the enum.
 A `float` takes a binary16, binary32 or binary64 item. A binary64 item
 that a `float` cannot hold exactly gives `error::number_out_of_range`.
 
+`encode` throws `std::logic_error` for a `std::chrono::year_month_day`
+that is not a valid date. When an allocation is refused, `encode` throws
+`std::bad_alloc`, and `decode` returns `error::not_enough_memory`.
+
 ## 4. Structs and keys
 
 A struct is a map. Each public data member is one entry. The keys
@@ -111,11 +119,15 @@ come in the order of RFC 8949 4.2.1: sorted by their encoded bytes.
 An aggregate with no description is read by the names of its members:
 through reflection on a build with `-freflection`, through Boost.PFR on
 other builds. It takes no annotation, so it gives the same bytes on
-every build. An aggregate with a base class needs a description.
+every build: `[[=cbor::key("x")]]`, `[[=cbor::skip{}]]`,
+`[[=cbor::allow{}]]`, `[[=cbor::allowlist{}]]` and `[[=cbor::tag(n)]]`
+on a type that `structs` reads do not compile. They work with
+[cbor::schema](schema.md) only. An aggregate with a base class needs a
+description.
 
 A specialization of `cbor::describe_members<T>` describes a struct or a
-class. It holds `tag`, a `std::optional<cbor::tag>` with the tag and its
-generation, and `members`, a `std::tuple` of `cbor::member` entries.
+class. It holds `tag`, a `std::optional<cbor::tag>` with the tag, and
+`members`, a `std::tuple` of `cbor::member` entries.
 The tag `cbor::untagged` gives a map with no tag, an untagged message in
 the words of RFC 9052 2 (SenML, CTAP2, the COSE header). A decode of
 such a type refuses a tag in front of the map with
@@ -230,10 +242,16 @@ using id = std::variant<std::uint8_t, std::int64_t, std::string>;
 
 `decode` reads tag 28 and tag 29 of the value-sharing registration with
 a table that exists for one call. A tag 28 is allowed on every member and
-keeps the value. A tag 29 needs a member that can share a value; a plain
-member gives `incorrect_type`. A tag 29 that names a tag 28 in a skipped
-member gives `sharedref_not_complete`, and a tag 29 that names no tag 28
-before it gives `sharedref_index_not_marked`. Nothing is decoded twice.
+keeps the value. No member takes a tag 29, so every tag 29 gives an
+error:
+
+| The tag 29 names | Error |
+|---|---|
+| no tag 28 before it | `sharedref_index_not_marked` |
+| a tag 28 in a skipped member | `sharedref_not_complete` |
+| any other tag 28 | `incorrect_type` |
+
+Nothing is decoded twice.
 
 ```cpp
 // [28("x"), 29(0)]
@@ -269,9 +287,15 @@ describes the memory of every API.
 | a binary64 that a `float` cannot hold exactly | `number_out_of_range` |
 | an item of another major type | `incorrect_type` |
 | an array whose count differs from a `std::tuple` or `std::array` | `incorrect_type` |
+| a plain array for a `std::vector` or a `std::array` of a number type | `incorrect_type` |
 | a variant with no alternative that accepts the item | `incorrect_type` |
 | a missing key of a member that is not optional | `key_not_found` |
 | a map key that is an array, a map or a tag | `unsupported_value` |
 | bytes after the item | `syntax_error` |
 | the input ends inside the item | `too_little_data` |
 | a refused allocation | `not_enough_memory` |
+
+| `encode` of | Result |
+|---|---|
+| a `std::chrono::year_month_day` that is not a valid date | throws `std::logic_error` |
+| any value, when an allocation is refused | throws `std::bad_alloc` |

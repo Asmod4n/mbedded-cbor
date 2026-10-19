@@ -19,13 +19,14 @@ if (hp)
 ```
 
 `cbor::lazy::take_ownership(std::move(bytes))` makes a lazy, a position
-in the bytes. Bytes go into the library in two forms only, and neither
-form copies them:
+in the bytes. Bytes go into the library in three forms, and no form
+copies them:
 
 | Form | The bytes |
 |---|---|
 | `lazy::take_ownership(std::move(bytes))` | `bytes` is a `std::string`; it moves into storage that the lazy owns |
 | `lazy::view(owner)` | `owner` is a `std::shared_ptr<std::string const>`; no copy, and every result keeps `owner` alive |
+| `lazy::view(owner, part)` | `part` is a `std::string_view` into memory that `owner`, a `std::shared_ptr<void const>`, keeps alive |
 
 ```cpp
 auto const owner = std::make_shared<std::string const>(std::move(bytes));
@@ -60,8 +61,12 @@ so that they stay short. A program checks each result as above, or uses
 | an integer type, for example `int` or `std::uint64_t` | an integer that fits `T` |
 | `double` | a float, or an integer that a `double` holds exactly |
 | `bool` | `false` or `true` |
-| `std::string_view` | a text, as a `cbor::owning_ref<std::string_view>` |
-| `std::span<std::byte const>` | a byte string, as a `cbor::owning_ref<std::span<std::byte const>>` |
+| `std::string_view` | a text, as a `cbor::ref<std::string_view>` |
+| `std::span<std::byte const>` | a byte string, as a `cbor::ref<std::span<std::byte const>>` |
+
+A `cbor::ref` views the bytes and keeps their owner alive. Bind it to a
+variable before you read it: `*` and `->` of a temporary `cbor::ref` do
+not compile.
 
 Another kind of value gives `incorrect_type`. A number that does not fit
 `T` gives `number_out_of_range`.
@@ -153,6 +158,6 @@ e.unsigned_integer(std::uint8_t{5});
 e.finish();   // out holds {"a": 5}
 ```
 
-More: `operator[]`, a map with a key twice, `decode`, the encoder, CBOR sequences,
+More: `operator[]`, a map with a key twice, `clone` and `decode`, the encoder, CBOR sequences,
 `item_size`, shared values and tag 55799 are in
 [advanced/runtime.md](advanced/runtime.md).
