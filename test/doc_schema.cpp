@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -130,5 +131,35 @@ TEST_CASE("doc schema: errors")
 }
 
 } // namespace doc_packed
+
+namespace doc_packed
+{
+
+struct [[=cbor::tag(1703)]] point {
+    float x;
+    float y;
+};
+
+struct [[=cbor::tag(1704)]] track {
+    std::vector<point> points;
+};
+
+} // namespace doc_packed
+
+TEST_CASE("doc schema: a list of fixed-size structs is a range of elements")
+{
+    using namespace doc_packed;
+    auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
+    REQUIRE(message.has_value());
+    auto const lane = cbor::schema<track>::path(std::move(*message));
+    REQUIRE(lane.has_value());
+    auto const points = lane->at_path<"$.points">();
+    REQUIRE(points.has_value());
+    std::vector<float> seen;
+    for (auto const p : *points | std::views::drop(1) | std::views::take(1))
+        seen.push_back(*p.at_path<"@.y">());
+    CHECK_EQ(seen, (std::vector<float>{4}));
+    CHECK_EQ(lane->at_path<"$.points[2].x">(), 5.0f);
+}
 
 #endif

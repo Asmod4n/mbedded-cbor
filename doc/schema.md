@@ -87,6 +87,35 @@ if (readings)
 `view<Path>()` gives a list of numbers as a range with `size()` and
 `at(i)`.
 
+A list of structs whose members all have a fixed width (numbers, `bool`,
+enums, `std::array`s of them and inner structs of the same kind) is one
+byte string of its elements: little endian, no padding, under tag 32873.
+The table at the start of the message describes the element once: its
+class tag and the key and RFC 8746 type of each member. The accessor of
+such a list is a range of element accessors, so a page is
+`std::views::drop` and `std::views::take`:
+
+```cpp
+struct [[=cbor::tag(1703)]] point {
+    float x;
+    float y;
+};
+
+struct [[=cbor::tag(1704)]] track {
+    std::vector<point> points;
+};
+
+auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
+auto const lane = cbor::schema<track>::path(std::move(*message));
+auto const points = lane->at_path<"$.points">();
+for (auto const p : *points | std::views::drop(1) | std::views::take(1))
+    use(*p.at_path<"@.y">());                   // 4
+lane->at_path<"$.points[2].x">();               // 5
+```
+
+A list of structs with a text, a list or another part of variable size
+inside stays a list of records, each under the tag of its class.
+
 The accessor holds the bytes. A `std::string_view` from it stays valid
 while the accessor lives. Keep the accessor in a variable: `at_path` on a
 temporary accessor does not compile.
