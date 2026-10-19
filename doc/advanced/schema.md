@@ -18,8 +18,8 @@ struct [[=cbor::tag(1701)]] car {
 };
 
 car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nullopt};
-auto const bytes = *cbor::schema<car>::encode(sample);   // a std::string
-auto const owner = std::make_shared<std::string const>(bytes);
+auto const owner = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));
+std::string_view const bytes = *owner;                    // the message, read in place
 ```
 
 ## 1. The message
@@ -61,8 +61,7 @@ with `[[=cbor::allow{}]]` choose the keys and the members as in
 
 `decode` takes the same three forms as `structs<T>::decode`: a moved
 `std::string`, an owner with its bytes, and an owner with its bytes and a
-target. No form copies the bytes
-([structs.md](structs.md), section 2). A target of `std::pmr`
+target ([structs.md](structs.md), section 2). No form copies the bytes. A target of `std::pmr`
 containers sets the memory of the result ([basics.md](basics.md),
 section 6).
 

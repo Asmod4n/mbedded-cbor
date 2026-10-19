@@ -34,7 +34,7 @@ the bytes, a `std::shared_ptr`, and the result holds it
 ([basics.md](basics.md), section 2).
 
 ```cpp
-auto const owner = std::make_shared<std::string const>(bytes);
+auto const owner = std::make_shared<std::string const>(std::move(bytes));
 auto const name = cbor::at_path<"$.user.name", std::string_view>(owner);
 if (name)
     use(**name);   // "ann"
