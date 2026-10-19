@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <memory>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -82,7 +83,8 @@ TEST_CASE("doc schema: read a text, a list or a struct")
     std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::vector<double> used;
     auto const use = [&used](double const r) { used.push_back(r); };
-    auto const root = cbor::schema<sensor>::path(std::string(bytes));
+    auto const owner = std::make_shared<std::string const>(bytes);
+    auto const root = cbor::schema<sensor>::path(owner);
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.name">(), "t1"sv);
     auto const readings = root->view<"$.readings">();
@@ -104,7 +106,8 @@ TEST_CASE("doc schema: read the whole struct")
     std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::size_t used = 0;
     auto const use = [&used](std::size_t const n) { used = n; };
-    auto const back = cbor::schema<sensor>::decode(std::string(bytes));
+    auto const owner = std::make_shared<std::string const>(bytes);
+    auto const back = cbor::schema<sensor>::decode(owner);
     if (back)
         use((*back)->readings.size());
     CHECK_EQ(used, 2u);

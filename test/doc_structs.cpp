@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 using namespace std::string_literals;
@@ -42,12 +43,12 @@ struct person {
 // a new user meets two std::expected values and a ref in it.
 std::expected<std::string, cbor::error> round_trip()
 {
-    auto const bytes = cbor::structs<person>::encode(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});
+    auto bytes = cbor::structs<person>::encode(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});
     if (!bytes)
         return std::unexpected(bytes.error());
     auto const text = cbor::diagnostic_notation(*bytes);
 
-    auto const back = cbor::structs<person>::decode(std::string(*bytes));
+    auto const back = cbor::structs<person>::decode(std::move(*bytes));
     if (!back)
         return std::unexpected(back.error());
     person const &p = **back;

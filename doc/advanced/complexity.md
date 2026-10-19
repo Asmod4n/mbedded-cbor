@@ -175,8 +175,8 @@ Assumption, not checked in this pass: item_skip is O(bytes skipped).
 | `lazy_entries::end()` :178 | O(1) | O(1) | |
 | `lazy_entries::size()`, `empty()` (view_interface) | O(1) | O(1) | The count of the head. |
 | `lazy::view(shared_ptr<string const>)` | O(1) | O(1) | One lazy::top_level_item. |
-| `lazy::copy<Encoded>(Encoded&&)` | O(1) | O(1) | Moves; two allocations. |
-| `lazy::copy(string_view)` :231 | O(n) | O(n) | Copies the input. |
+| `lazy::take_ownership<Encoded>(Encoded&&)` | O(1) | O(1) | Moves; two allocations. |
+| `lazy::view(shared_ptr<void const>, Encoded const&)` | O(1) | O(1) | One lazy::top_level_item. |
 | `lazy::tree_decoder::item_decode(size_t depth, optional<size_t> mark)` | O(n) heads and string views; a tag 29 that names a mark before the start of the lazy adds one item_skip over the top-level item, O(N_top), once | one item per data item in a deque; one pointer per child in one vector; a scratch vector of pointers for the open containers; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. An empty container allocates nothing. |
 | `lazy::clone()` | as item_decode | as item_decode, plus one make_shared | |
 | `lazy::type()` | O(1) | O(1) | |
@@ -379,9 +379,7 @@ All rows marked "compile time" have no run-time cost.
 | `schema::accessor::size()` :1926 | O(1) | O(1) | |
 | `schema::path(shared_ptr<string const>)` | O(1) in n | O(1) | |
 | `schema::at_path<Path>(string_view, Index...)` :1957 | O(q + p) | O(1) | |
-| `schema::path(string_view)` :1967 | O(n) | O(n) | Copies. |
 | `schema::path<Encoded>(Encoded&&)` :1977 | O(1) | O(1) | One make_shared. |
-| `schema::decode(string_view)` :1987 | O(n); + k log k ordered | O(n) copy + O(n) output | |
 | `schema::decode<Encoded>(Encoded&&)` :1999 | as decode(owner, view) | O(1) + output | |
 | `schema::decode(shared_ptr<string const>)` | O(n); + k log k ordered | O(n) output | |
 | `schema::encode(T const&)` :2023 | O(i + n) | O(n) | One std::string. |
@@ -403,7 +401,6 @@ All rows marked "compile time" have no run-time cost.
 | `generic::generic_size<U>` :492 | O(i) | O(1) heap | |
 | `generic::bytes_write` :603 | O(len) | O(1) | |
 | `generic::generic_write<U>` :610 | O(n) | O(1) heap | |
-| `structs::decode(string_view)` :790 | O(n) + read | O(n) copy + read | Copies. |
 | `structs::decode<Encoded>(Encoded&&)` :732 | as read | one make_shared + read | |
 | `structs::decode(shared_ptr<string const>)` | as read | as read | |
 | `structs::encode(T const&)` :755 | O(i + n) | O(n) | |
@@ -426,7 +423,7 @@ Above linear in the input:
 Allocation on a success path:
 
 - `value_sharing::sharing_decoder::mark`, `lazy::tree_decoder::item_decode`.
-- `lazy::copy`, `lazy::view`, `schema::path`, `schema::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::clone`.
+- `lazy::take_ownership`, `lazy::view`, `schema::path`, `schema::decode`, `structs::decode`, `container_resolve` (tag 24), `lazy::clone`.
 - jsonpath: every parser, `compile`, a `nodelist` read, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `string_sink`, `container_message`.
 - diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.

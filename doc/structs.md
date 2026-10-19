@@ -24,13 +24,13 @@ struct person {
     std::optional<address> home;
 };
 
-auto const bytes = cbor::structs<person>::encode(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});
+auto bytes = cbor::structs<person>::encode(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});
 if (!bytes)
     return std::unexpected(bytes.error());
 cbor::diagnostic_notation(*bytes);
 // {"age": 30, "home": {"zip": "8010", "city": "Graz"}, "name": "ann", "tags": ["admin"]}
 
-auto const back = cbor::structs<person>::decode(*bytes);
+auto const back = cbor::structs<person>::decode(std::move(*bytes));
 if (!back)
     return std::unexpected(back.error());
 person const &p = **back;
@@ -116,10 +116,11 @@ older program.
 | the input ends inside the value | `too_little_data` |
 
 ```cpp
-// bytes: {"age": 30, "name": "ann", "tags": [], "id": 7}
-cbor::structs<person>::decode(bytes);   // a person; "id" is skipped, home is empty
-// bytes: {"name": "ann"}
-cbor::structs<person>::decode(bytes);   // key_not_found: "age" is missing
+// owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
+// {"age": 30, "name": "ann", "tags": [], "id": 7}
+cbor::structs<person>::decode(owner);   // a person; "id" is skipped, home is empty
+// {"name": "ann"}
+cbor::structs<person>::decode(owner);   // key_not_found: "age" is missing
 ```
 
 A count in the input reserves no memory, and the limits of

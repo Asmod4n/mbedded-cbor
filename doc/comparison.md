@@ -35,8 +35,8 @@ struct person {
     int age;
 };
 
-auto const bytes = cbor::structs<person>::encode(person{"ann", 30});
-auto const back = cbor::structs<person>::decode(*bytes);
+auto bytes = cbor::structs<person>::encode(person{"ann", 30});
+auto const back = cbor::structs<person>::decode(std::move(*bytes));
 // (*back)->name is "ann", (*back)->age is 30
 ```
 

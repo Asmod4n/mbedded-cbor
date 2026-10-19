@@ -19,6 +19,7 @@ struct [[=cbor::tag(1701)]] car {
 
 car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nullopt};
 auto const bytes = *cbor::schema<car>::encode(sample);   // a std::string
+auto const owner = std::make_shared<std::string const>(bytes);
 ```
 
 ## 1. The message
@@ -56,11 +57,11 @@ with `[[=cbor::allow{}]]` choose the keys and the members as in
 |---|---|
 | `schema<T>::encode(value)` | `std::expected<std::string, error>` |
 | `schema<T>::encode(value, target)` | `std::expected<std::size_t, error>`, the count of bytes appended |
-| `schema<T>::decode(bytes)` | `std::expected<owning_ref<T>, error>`, the whole struct |
+| `schema<T>::decode(owner)` | `std::expected<owning_ref<T>, error>`, the whole struct |
 
-`decode` takes the same four forms as `structs<T>::decode`: a moved
-`std::string`, a `std::string_view` that it copies, an owner with its
-bytes, and an owner with its bytes and a target
+`decode` takes the same three forms as `structs<T>::decode`: a moved
+`std::string`, an owner with its bytes, and an owner with its bytes and a
+target. No form copies the bytes
 ([structs.md](structs.md), section 2). A target of `std::pmr`
 containers sets the memory of the result ([basics.md](basics.md),
 section 6).
@@ -97,7 +98,6 @@ such as a `std::vector` of structs, does not compile.
 | Call | Owner |
 |---|---|
 | `path(std::string)` with an rvalue | the library moves the string |
-| `path(std::string_view)` | the library copies the bytes |
 | `path(std::shared_ptr<std::string const>)` | the caller, no copy |
 
 An accessor holds the owner. Every value and every accessor that it gives
@@ -105,7 +105,7 @@ holds the same owner, so an accessor of a list outlives the temporary
 root that gave it.
 
 ```cpp
-auto const root = cbor::schema<car>::path(bytes);
+auto const root = cbor::schema<car>::path(owner);
 root->at_path<"$.make">();                  // "Volvo", a std::string_view
 auto const tires = root->at_path<"$.tires">();
 tires->size();                              // 2
@@ -188,9 +188,9 @@ each element read checks only its index.
 | a refused allocation in `decode` | `not_enough_memory` |
 
 ```cpp
-cbor::schema<car>::decode(std::string_view(bytes).substr(0, 3));     // too_little_data
+cbor::schema<car>::decode(std::string(owner->substr(0, 3)));         // too_little_data
 cbor::schema<car>::decode(*cbor::schema<tire>::encode(tire{1, 1}));  // too_little_data
-cbor::schema<tire>::decode(bytes);                                   // incorrect_type
+cbor::schema<tire>::decode(owner);                                   // incorrect_type
 ```
 
 ## 9. Cost
