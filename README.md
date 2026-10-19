@@ -1,11 +1,70 @@
 # mbedded-cbor
 
-A header-only C++ library for CBOR (RFC 8949). The steps below go from a
-first read to input from the network.
+A header-only C++ library for CBOR. It reads a message in place, goes to
+one value without decoding the rest, and writes C++ structs as Packed
+CBOR with every field at an offset that the compiler knows.
 
-## 1. Add the library
+It implements CBOR (RFC 8949), CBOR sequences (RFC 8742), typed arrays
+(RFC 8746), JSONPath (RFC 9535) and Packed CBOR
+(draft-ietf-cbor-packed-19). Every message it writes is standard CBOR,
+and every other CBOR decoder can read it.
 
-Install it, then use `find_package`:
+## Features
+
+- **Reads in place.** No tree, no copy. A text comes back as a view into
+  the message.
+- **Reads only what you ask for.** A path reads the heads of the items on
+  its way and skips the rest by their length.
+- **Fixed offsets.** `cbor::schema` lays out a struct at compile time. A
+  read of a field of fixed size is one jump.
+- **Raw arrays.** A list of numbers, and a list of structs whose fields
+  all have a fixed width, is one block of little-endian bytes. The block
+  is checked once.
+- **Errors as values.** Bad input gives a `std::expected` with a
+  `cbor::error`. A read never throws on input.
+- **Limits.** Nesting depth, string length and element count are
+  constants of the build. A count in the input reserves no memory.
+
+## How a read works
+
+<img src="doc/img/path-read.svg" alt="lazy::at_path reads the heads on its way, skips a text by its length, and stops at the value" width="100%">
+
+A path compares the keys it meets. It skips a value that it does not
+need by the length in its head, and it touches no byte after the value.
+
+<img src="doc/img/walk-or-jump.svg" alt="a CBOR walk visits every item before the field; cbor::schema jumps to the field in one step" width="100%">
+
+With `cbor::schema`, the struct is the layout. The offset of a field
+comes from the compiler, so the read does not walk.
+
+<img src="doc/img/fixed-vector.svg" alt="a vector of fixed-size structs: the head is checked once, element i is at i times 8" width="100%">
+
+A vector of fixed-size structs is checked once. After that, element `i`
+is at `i × sizeof(element)`, and a loop runs over raw bytes.
+
+## Performance
+
+The carsales message of 1000 cars, g++ 16 `-O2 -march=native`, median of
+5 runs. Every library checks its input.
+
+| Task | mbedded-cbor | FlatBuffers + Verifier | Cap'n Proto |
+|---|---|---|---|
+| Read one field | 18 ns | 75 µs | 249 ns |
+| Read the whole message | 75 µs | 108 µs | 187 µs |
+| Write the message | 28 µs | 278 µs | 97 µs |
+
+The run and its context: [bench/results/2026-10-19-182349Z.json](bench/results/2026-10-19-182349Z.json).
+The code of every library, task by task: [doc/comparison.md](doc/comparison.md).
+
+## Requirements
+
+- g++ 16 or clang 23, C++23.
+- `cbor::schema` needs C++26 reflection: g++ 16 with `-std=c++26
+  -freflection`.
+- `cbor::structs` uses the Boost.PFR headers where reflection is not
+  available. Nothing else is needed.
+
+## Installation
 
 ```sh
 cmake -S mbedded-cbor -B build -DBUILD_TESTING=OFF
@@ -15,13 +74,9 @@ cmake --install build --prefix /usr/local
 ```cmake
 find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
-
-# schema: C++26 reflection, g++ 16; structs: also C++23 with the Boost headers
-target_compile_features(app PRIVATE cxx_std_26)
-target_compile_options(app PRIVATE -freflection)
 ```
 
-Or use `FetchContent` without an install:
+Or without an install:
 
 ```cmake
 include(FetchContent)
@@ -31,194 +86,69 @@ FetchContent_Declare(mbedded-cbor
 FetchContent_MakeAvailable(mbedded-cbor)
 ```
 
-The target also defines `_GLIBCXX_ASSERTIONS` and
-`_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST`. These turn on the
-checks of libstdc++ and libc++. `pkg-config --cflags mbedded-cbor` gives
-the same flags.
+## Usage
 
-## 2. Read a message
-
-`cbor::lazy` reads the bytes in place and builds no tree. Each call
-reads only up to the item that it looks for. No reflection needed.
-`lazy::copy(bytes)` copies the bytes once. `std::move` or a
-`std::shared_ptr` avoids the copy
-([doc/advanced/basics.md](doc/advanced/basics.md#8-owners)).
+### Read a message
 
 ```cpp
-// bytes holds the CBOR of {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
+// bytes: {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
 auto const doc = cbor::lazy::copy(bytes).value();
-
-std::uint64_t const pairs = doc.size().value();            // 3
-auto const missing = doc.at("unit");
-// missing.error() == cbor::error::key_not_found
 
 int sum = 0;
 if (auto const samples = doc.at("samples"))
     for (auto const &x : samples->elements().value())
         if (x)
-            sum += x->get<int>().value_or(0);  // sum is 12
+            sum += x->get<int>().value_or(0);   // 12
 ```
 
-## 3. Read one value by its path
-
-The read side needs only C++23. It works with g++ 16 and with clang 23.
+### Read one value by its path
 
 ```cpp
-// bytes is a std::string with the CBOR of {"user": {"id": 42, "name": "ann"}}
+// bytes: {"user": {"id": 42, "name": "ann"}}
 auto const doc = cbor::lazy::copy(bytes).value();
 
-auto const id = doc.at_path<"$.user.id", std::int64_t>();         // *id == 42
-auto const name = doc.at_path<"$.user.name", std::string_view>();  // **name == "ann"
-auto const age = doc.at_path<"$.user.age", int>();
-// age.error() == cbor::error::key_not_found
+auto const id = doc.at_path<"$.user.id", std::int64_t>();          // 42
+auto const name = doc.at_path<"$.user.name", std::string_view>();  // "ann", no copy
+auto const age = doc.at_path<"$.user.age", int>();                 // cbor::error::key_not_found
 ```
 
-`id` is a `std::expected<std::int64_t, cbor::error>`. `name` holds a
-`cbor::ref<std::string_view>`: a view into the bytes, with no
-copy. The ref keeps the bytes alive, so the view stays valid.
-
-## 4. Handle bad input
+### Write structs, read one field
 
 ```cpp
-std::string const cut = bytes.substr(0, bytes.size() - 1);  // the last byte is missing
-
-auto const doc = cbor::lazy::copy(cut).value();
-auto const name = doc.at_path<"$.user.name", std::string_view>();
-// name.error() == cbor::error::too_little_data
-
-std::string const why = std::error_code(name.error()).message();  // "too little data"
-```
-
-A read stops at the item that it looks for: `$.user.id` still reads 42 from
-`cut`, because the missing byte comes after it. A read never throws for bad
-input. Every error is a `cbor::error`, and
-it converts to `std::error_code`.
-
-## 5. Set limits for input from the network
-
-```sh
-g++ -DCBOR_NESTING_DEPTH_DEFAULT=16 -DCBOR_STRING_LENGTH_DEFAULT=4096 -DCBOR_CONTAINER_ELEMENTS_DEFAULT=100 ...
-```
-
-```cpp
-// bytes holds a CBOR array of 101 elements
-auto const n = cbor::lazy::copy(bytes).value().size();
-// n.error() == cbor::error::container_elements_exceeded
-```
-
-The limits are constants of the build. Every translation unit of one
-program uses the same values. A limit that you do not set gets its
-default: nesting depth 128, no limit on string length and element
-count. A check whose limit is not set is not in the program. You bound
-the size of the input before it reaches the library. A count in the
-input reserves no memory.
-
-## 6. Read a stream of items
-
-A CBOR sequence (RFC 8742) is items one after the other, for example a
-log.
-
-```cpp
-// log is a std::shared_ptr<std::string const> with three CBOR items: 1, "a", [1, 2]
-for (auto const &item : cbor::sequence{log})
-    if (item)
-        std::println("{}", cbor::diagnostic_notation(*item).value());
-```
-
-```
-1
-"a"
-[1, 2]
-```
-
-Each item is a `std::expected<std::string_view, cbor::error>`: the
-bytes of one item. A last item that is not complete gives
-`cbor::error::too_little_data`. The iterator then keeps the bytes that
-are left in its member `encoded`, so a reader of a stream can read them
-again with more bytes.
-
-## 7. Packed: fields at fixed offsets
-
-A CBOR message carries its keys and its structure in every message. To
-read one field, a reader walks over the items before it. `cbor::schema`
-removes that walk. It writes a struct as Packed CBOR
-(draft-ietf-cbor-packed-19): the struct gives the layout, so a field of
-fixed size sits at an offset that the compiler knows, and a read goes
-to that offset directly. FlatBuffers and Cap'n Proto work the same way.
-The result is still CBOR, and a decoder of Packed CBOR reads it as a
-map. Each struct
-needs its own tag number. Needs reflection.
-
-```cpp
-struct [[=cbor::tag(1900)]] series {
-    std::string unit;
-    std::vector<double> values;
+struct [[=cbor::tag(1703)]] point {
+    float x;
+    float y;
 };
 
-std::string const bytes = cbor::schema<series>::encode({"m", {1.5, 2.5, 3.5}}).value();
-
-auto const second = cbor::schema<series>::at_path<"$.values[1]">(bytes);
-// *second == 2.5, read at its offset
-
-auto const root = cbor::schema<series>::path(bytes).value();
-auto const values = root.view<"$.values">();  // *values: a random-access range of double
-double const sum = std::ranges::fold_left(*values, 0.0, std::plus{});  // 7.5
-```
-
-`values` is stored as a typed array (RFC 8746): tag 86, float64
-little-endian, followed by one byte string with all elements. Every
-range of integers or floats is stored this way. A typed array is fast
-for these reasons:
-
-- The elements have no head each. Element `i` sits at offset `i * 8`
-  from the start of the byte string.
-- On a little-endian machine, the encode copies the whole range as one
-  block of bytes.
-- The read checks the tag and the length once. After that, a read of an
-  element checks only the index against the size.
-- `view` gives the elements in place, with no copy.
-
-## 8. Structs: any CBOR into a struct
-
-`cbor::structs` puts any CBOR into the members of a C++ struct or
-class, and writes it back as deterministic CBOR (RFC 8949 4.2.1): the
-shortest form of every number, and the keys in a fixed order. It reads
-an aggregate through reflection or through Boost.PFR.
-
-```cpp
-struct reading {
-    std::string sensor;
-    double value;
-    std::vector<std::uint16_t> samples;
+struct [[=cbor::tag(1704)]] track {
+    std::vector<point> points;
 };
 
-std::string const bytes = cbor::structs<reading>::encode({"t1", 21.5, {3, 4, 5}}).value();
+auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
+auto const lane = cbor::schema<track>::path(std::move(*message));
 
-std::string const text = cbor::diagnostic_notation(bytes).value();
-// text is {"value": 21.5, "sensor": "t1", "samples": 69(h'030004000500')}
-std::size_t const size = bytes.size();
-// size == 37; the same data as JSON with no spaces has 46 bytes
+lane->at_path<"$.points[2].x">();                                   // 5
+
+auto const points = lane->at_path<"$.points">();
+for (auto const p : *points | std::views::drop(1) | std::views::take(1))
+    use(*p.at_path<"@.y">());                                       // 4
 ```
 
-## Next
+## Documentation
 
 - [doc/basics.md](doc/basics.md): errors, limits, memory, threads.
-- [doc/path.md](doc/path.md): JSONPath (RFC 9535) on CBOR. `match()`
-  and `search()` are not supported.
-- [doc/structs.md](doc/structs.md) and
-  [doc/schema.md](doc/schema.md): every type and annotation.
+- [doc/path.md](doc/path.md): JSONPath on CBOR.
+- [doc/schema.md](doc/schema.md): structs as Packed CBOR.
+- [doc/structs.md](doc/structs.md): any CBOR into a struct.
+- [doc/comparison.md](doc/comparison.md): other libraries, task by task.
 
-## Tests
+## Testing
 
-The tests run the examples of RFC 8949 Appendix A
-([hildjj/test-vectors](https://github.com/hildjj/test-vectors)), the
-test vectors of the IETF CBOR working group
-([cbor-wg/cbor-test-vectors](https://github.com/cbor-wg/cbor-test-vectors))
-and the
-[JSONPath Compliance Test Suite](https://github.com/jsonpath-standard/jsonpath-compliance-test-suite).
-They run with g++ 16 and clang 23, also with AddressSanitizer and
-UndefinedBehaviorSanitizer. Fuzz targets cover decode, encode, encoder,
-item_size, lazy, path and schema (CMake option `CBOR_FUZZ`).
+The tests run the examples of RFC 8949 Appendix A, the test vectors of
+the IETF CBOR working group and the JSONPath Compliance Test Suite. They
+run with g++ 16 and clang 23, with AddressSanitizer and
+UndefinedBehaviorSanitizer. Fuzz targets cover decode, encode, the
+encoder, item_size, lazy, path and schema.
 
 ## License
 
