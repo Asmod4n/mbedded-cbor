@@ -1,4 +1,5 @@
-#include "binding.hpp"
+#include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -22,16 +23,16 @@ TEST_CASE("doc internals: encoded builds the input that a comment shows")
     CHECK_EQ(cbor::diagnostic_notation(preferred(A(1, 2.5, "a"s, simple{21}))), R"([1, 2.5, "a", true])");
 }
 
-// The section "A lazy reads heads" states that lazy::from reads no head and that a step reads the head of its
+// The section "A lazy reads heads" states that lazy::copy and lazy::view read no head and that a step reads the head of its
 // target.
 TEST_CASE("doc internals: a lazy reads heads when a step needs them")
 {
-    auto const broken = cbor::lazy::from("\xff"s);
+    auto const broken = test::lazy_of_copy("\xff"s);
     REQUIRE(broken.has_value());
     CHECK_EQ(broken->get<std::int64_t>().error(), error::syntax_error);
-    auto const cut = cbor::lazy::from("\x82\x01"s);
+    auto const cut = test::lazy_of_copy("\x82\x01"s);
     REQUIRE(cut.has_value());
-    CHECK_EQ(cut->at(0)->get<std::int64_t>(), 1);
+    CHECK_EQ(cut->at(0).error(), error::too_little_data);
     CHECK_EQ(cut->at(1).error(), error::too_little_data);
 }
 
@@ -39,34 +40,27 @@ TEST_CASE("doc internals: a lazy reads heads when a step needs them")
 // where the bytes end.
 TEST_CASE("doc internals: a skip keeps a count")
 {
-    std::string const deep = preferred(M("a"s, A(A(A(A(1)))), "b"s, 2));
-    test::limits_guard const g{{.nesting_depth = 2}};
+    value deeper = V(1);
+    for (std::size_t i = 0; i <= cbor::limits::nesting_depth; ++i)
+        deeper = A(deeper);
+    std::string const deep = preferred(M("a"s, deeper, "b"s, 2));
     CHECK_EQ(cbor::at_path<"$.b", int>(deep), 2);
     CHECK_EQ(cbor::item_size(deep), deep.size());
     CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\x82\x01"s).error(), error::too_little_data);
 }
 
-// The section "The limits are read once" states that a field is atomic, so a thread reads the assignment of another.
-TEST_CASE("doc internals: a limit is one atomic field")
-{
-    test::limits_guard const g{{.string_length = 2}};
-    std::size_t seen = 0;
-    std::jthread([&seen] { seen = cbor::limits.string_length; }).join();
-    CHECK_EQ(seen, 2u);
-}
-
-// The section "The marks of tag 28" states that a later tag 29 reuses the marks that the first one found.
+// The section "Tags 28 and 29" states that a lazy keeps no marks and reads a tag 29 as a tag over its index.
 TEST_CASE("doc internals: two references to one mark")
 {
-    auto const l = *cbor::lazy::from("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s);
-    CHECK_EQ(l.at(1)->get<std::int64_t>(), 1);
-    CHECK_EQ(l.at(2)->get<std::int64_t>(), 1);
-    CHECK_EQ(cbor::at_path<"$[2]", int>("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s), 1);
+    auto const l = *test::lazy_of_copy("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s);
+    CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);
+    CHECK_EQ(l.at(2)->get<std::int64_t>(), 0);
+    CHECK_EQ(cbor::at_path<"$[2]", int>("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s), 0);
 }
 
 // The section "A compile-time path" states that the compiler parses the path.
 TEST_CASE("doc internals: the compiler parses a compile-time path")
 {
-    static_assert(cbor::is_valid_path_v<"$.a[0]">);
-    static_assert(!cbor::is_valid_path_v<"$.a[">);
+    CHECK((cbor::is_valid_path_v<"$.a[0]">));
+    CHECK((!cbor::is_valid_path_v<"$.a[">));
 }

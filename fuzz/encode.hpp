@@ -10,15 +10,14 @@ inline void encode_from_input(std::string_view const input)
     source in{input};
     refusal r;
     test::value const v = value_from(in, r, 0);
-    test_binding binding;
     string_writer w;
-    auto const written = cbor::encode(binding, w, v);
+    auto const written = test::encode(w, v);
     if (!written) {
         require(r.reserved_simple || r.zero_negative);
         return;
     }
     require(!r.reserved_simple && !r.zero_negative);
-    auto const back = cbor::lazy_decode(binding, *cbor::lazy::from(w.encoded));
+    auto const back = test::decoded(w.encoded);
     require(back.has_value() && same_number(v, *back));
     auto const end = cbor::item_size(w.encoded);
     require(end.has_value() && *end == w.encoded.size());

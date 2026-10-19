@@ -1,4 +1,5 @@
-#include "binding.hpp"
+#include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -50,7 +51,7 @@ TEST_CASE("doc path: the types of a number")
     CHECK_EQ(cbor::at_path<"$", std::int64_t>(preferred(V("a"s))).error(), error::incorrect_type);
     CHECK_EQ(cbor::at_path<"$", std::uint8_t>(preferred(V(256))).error(), error::number_out_of_range);
     CHECK_FALSE((doc_path_compiles<"$", float>));
-    CHECK_FALSE((doc_path_compiles<"$", std::string>));
+    CHECK((doc_path_compiles<"$", std::string>));
     CHECK_FALSE((doc_path_compiles<"$.a[", int>));
 }
 
@@ -62,13 +63,13 @@ TEST_CASE("doc path: read a text")
     std::string_view used;
     auto const use = [&used](std::string_view const v) { used = v; };
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const name = cbor::at_path<"$.user.name", std::string_view>(owner, *owner);
+    auto const name = cbor::at_path<"$.user.name", std::string_view>(owner);
     if (name)
         use(**name);
     CHECK_EQ(used, "ann"sv);
     CHECK_GE(used.data(), owner->data());
     CHECK_LT(used.data(), owner->data() + owner->size());
-    auto const key = cbor::at_path<"$.user.key", std::span<std::byte const>>(owner, *owner);
+    auto const key = cbor::at_path<"$.user.key", std::span<std::byte const>>(owner);
     REQUIRE(key.has_value());
     CHECK_EQ((*key)->size(), 2u);
     CHECK_FALSE((doc_path_compiles<"$.user.name", std::string_view>));
@@ -78,40 +79,39 @@ TEST_CASE("doc path: read a text")
 TEST_CASE("doc path: start at a lazy")
 {
     std::string const bytes = preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
-    auto const cars = cbor::lazy::from(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
+    auto const cars = test::lazy_of_copy(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
     REQUIRE(cars.has_value());
     if (cars) {
-        CHECK_EQ(cbor::at_path<"$[1].hp", std::int64_t>(*cars), 7);
-        auto const make = cbor::at_path<"$[1].make", std::string_view>(*cars);
+        CHECK_EQ(cars->at_path<"$[1].hp", std::int64_t>(), 7);
+        auto const make = cars->at_path<"$[1].make", std::string_view>();
         REQUIRE(make.has_value());
         CHECK_EQ(**make, "kia"sv);
     }
 }
 
-// The section "Path syntax" gives each row of its table. The paths that select many values go through query with a
-// binding, as the section states.
+// The section "Path syntax" gives each row of its table. The paths that select many values go through query, as the
+// section states.
 TEST_CASE("doc path: path syntax")
 {
     value const doc = M("store"s, M("book"s, A(M("title"s, "A"s, "price"s, 8), M("title"s, "B"s, "price"s, 12),
                                               M("title"s, "C"s, "price"s, 9, "isbn"s, "x"s)),
                                     "bicycle"s, M("price"s, 20)));
     std::string const bytes = preferred(doc);
-    auto const l = *cbor::lazy::from(bytes);
-    test_binding b;
-    CHECK(*cbor::query(b, "$", l) == A(doc));
+    auto const l = *test::lazy_of_copy(bytes);
+    CHECK(*test::query("$", l) == A(doc));
     CHECK_EQ(cbor::at_path<"$.store.bicycle.price", int>(bytes), 20);
     CHECK_EQ(cbor::at_path<"$['store']['bicycle']['price']", int>(bytes), 20);
     auto const owner = std::make_shared<std::string const>(bytes);
-    CHECK(*cbor::at_path<"$.store.book[0].title", std::string_view>(owner, *owner) == "A"sv);
-    CHECK(*cbor::at_path<"$.store.book[-1].title", std::string_view>(owner, *owner) == "C"sv);
-    CHECK(*cbor::query(b, "$.store.book[*].price", l) == A(8, 12, 9));
-    CHECK(*cbor::query(b, "$..price", l) == A(8, 12, 9, 20));
-    CHECK(*cbor::query(b, "$.store.book[?@.price < 10].title", l) == A("A"s, "C"s));
-    CHECK(*cbor::query(b, "$.store.book[0:2].title", l) == A("A"s, "B"s));
+    CHECK(*cbor::at_path<"$.store.book[0].title", std::string_view>(owner) == "A"sv);
+    CHECK(*cbor::at_path<"$.store.book[-1].title", std::string_view>(owner) == "C"sv);
+    CHECK(*test::query("$.store.book[*].price", l) == A(8, 12, 9));
+    CHECK(*test::query("$..price", l) == A(8, 12, 9, 20));
+    CHECK(*test::query("$.store.book[?@.price < 10].title", l) == A("A"s, "C"s));
+    CHECK(*test::query("$.store.book[0:2].title", l) == A("A"s, "B"s));
     CHECK_FALSE((doc_path_compiles<"$.store.book[*].price", int>));
     CHECK_FALSE((doc_path_compiles<"$..price", int>));
-    CHECK(*cbor::query(b, "$.store.book[?@.price != 8 && @.title >= 'B' || !@.price].title", l) == A("B"s, "C"s));
-    CHECK(*cbor::query(b, "$.store.book[?length(@.title) == 1 && count(@.*) == 3 && value(@.price) == 9].title",
+    CHECK(*test::query("$.store.book[?@.price != 8 && @.title >= 'B' || !@.price].title", l) == A("B"s, "C"s));
+    CHECK(*test::query("$.store.book[?length(@.title) == 1 && count(@.*) == 3 && value(@.price) == 9].title",
                        l) == A("C"s));
     CHECK_EQ(cbor::at_path<"$[1]", std::int64_t>(preferred(M(1, 7))), 7);
 }
@@ -141,11 +141,13 @@ TEST_CASE("doc path: tell a missing field from broken input")
     CHECK(read(whole.substr(0, 5)) == std::pair{std::int64_t{-1}, std::optional<error>{error::too_little_data}});
 }
 
-// The section "Errors" states that a path reads up to its value, and that item_size checks the whole value.
+// The section "Errors" states that a path reads up to its value, that a count larger than the bytes left is
+// too_little_data, and that item_size checks the whole value.
 TEST_CASE("doc path: a path does not read past its value")
 {
     std::string const cut = "\x82\x01"s;
-    CHECK_EQ(cbor::at_path<"$[0]", int>(cut), 1);
+    CHECK_EQ(cbor::at_path<"$[0]", int>(cut).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01\xff"s), 1);
     CHECK_EQ(cbor::item_size(cut).error(), error::too_little_data);
     std::string const whole = preferred(A(1, 2));
     CHECK_EQ(cbor::item_size(whole), whole.size());
@@ -154,9 +156,8 @@ TEST_CASE("doc path: a path does not read past its value")
 // The section "What is not supported" names match and search, which a user of other JSONPath libraries tries.
 TEST_CASE("doc path: what is not supported")
 {
-    test_binding b;
-    auto const l = *cbor::lazy::from(preferred(A("abc"s)));
-    CHECK_EQ(cbor::query(b, "$[?match(@, 'a.c')]", l).error(), error::invalid_path);
-    CHECK_EQ(cbor::query(b, "$[?search(@, 'b')]", l).error(), error::invalid_path);
-    CHECK_EQ(cbor::query(b, "$[?foo(@)]", l).error(), error::invalid_path);
+    auto const l = *test::lazy_of_copy(preferred(A("abc"s)));
+    CHECK_EQ(test::query("$[?match(@, 'a.c')]", l).error(), error::invalid_path);
+    CHECK_EQ(test::query("$[?search(@, 'b')]", l).error(), error::invalid_path);
+    CHECK_EQ(test::query("$[?foo(@)]", l).error(), error::invalid_path);
 }

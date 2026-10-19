@@ -1,4 +1,5 @@
-#include "binding.hpp"
+#include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -31,7 +32,7 @@ TEST_CASE("doc advanced comparison: iterate an array")
 {
     std::string const bytes = preferred(A(1, 2, 3));
     // begin iterate
-    auto const doc = cbor::lazy::from(bytes); // [1, 2, 3]
+    auto const doc = test::lazy_of_copy(bytes); // [1, 2, 3]
     std::int64_t sum = 0;
     for (auto const e : *doc->elements())
         sum += e->get<std::int64_t>().value_or(0);
@@ -39,21 +40,23 @@ TEST_CASE("doc advanced comparison: iterate an array")
     CHECK_EQ(sum, 6);
 }
 
-// The section "Shared values" reads tag 29 as the item that tag 28 marks, through a lazy and through structs.
+// The section "Shared values" shows that a lazy reads tag 29 as a plain tag over its index, and that structs refuses
+// a tag 29 into a member that cannot share.
 TEST_CASE("doc advanced comparison: shared values")
 {
     std::string const bytes = "\x82\xd8\x1c\x61x\xd8\x1d\x00"s;
     // begin shared
-    auto const second = cbor::lazy::from(bytes)->at(1)->get<std::string_view>();
-    // **second is "x"
+    auto const second = test::lazy_of_copy(bytes)->at(1);
+    // second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0
     // end shared
-    CHECK_EQ(**second, "x"sv);
+    CHECK_EQ(second->type(), cbor::type::tag);
+    CHECK_EQ(second->get<std::uint64_t>(), 0u);
 #ifdef __cpp_impl_reflection
     // begin shared-structs
-    auto const v = cbor::structs<std::vector<std::string>>::decode(bytes);
-    // **v is {"x", "x"}
+    auto const v = cbor::structs<std::vector<std::string>>::decode(std::string(bytes));
+    // v.error() is cbor::error::incorrect_type
     // end shared-structs
-    CHECK_EQ(**v, std::vector<std::string>{"x", "x"});
+    CHECK_EQ(v.error(), error::incorrect_type);
 #endif
 }
 
@@ -71,9 +74,9 @@ struct [[=cbor::tag(1900)]] series {
 // The section "A number array" reads a std::vector<double> member as an RFC 8746 typed array with no copy.
 TEST_CASE("doc advanced comparison: a number array")
 {
-    std::string const bytes = *cbor::packed<series>::encode(series{{1.5, 2.5, 3.5}});
+    std::string const bytes = *cbor::schema<series>::encode(series{{1.5, 2.5, 3.5}});
     // begin numbers
-    auto const root = cbor::packed<series>::path(bytes);
+    auto const root = cbor::schema<series>::path(std::string(bytes));
     auto const values = root->view<"$.values">();
     double const sum = std::accumulate(values->begin(), values->end(), 0.0);
     // end numbers

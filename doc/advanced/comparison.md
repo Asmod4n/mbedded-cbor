@@ -217,7 +217,7 @@ for (int const x : v)
 elements() gives a forward range. Each element is a std::expected<cbor::lazy, cbor::error>.
 
 ```cpp
-auto const doc = cbor::lazy::from(bytes); // [1, 2, 3]
+auto const doc = cbor::lazy::copy(bytes); // [1, 2, 3]
 std::int64_t sum = 0;
 for (auto const e : *doc->elements())
     sum += e->get<std::int64_t>().value_or(0);
@@ -276,15 +276,15 @@ bool const same = v[0] == v[1];
 
 ### mbedded-cbor
 
-A lazy and structs read tag 29 as the value that tag 28 marks. encode writes tags 28 and 29 with cbor::sharedrefs::on ([runtime.md](runtime.md)).
+Tags 28 and 29 are plain tags in a lazy and in a tree decode; `cbor::structs` decode resolves them. The encoder writes them only for a cycle that it finds itself ([runtime.md](runtime.md)).
 
 ```cpp
 // bytes: [28("x"), 29(0)]
-auto const second = cbor::lazy::from(bytes)->at(1)->get<std::string_view>();
-// **second is "x"
+auto const second = cbor::lazy::copy(bytes)->at(1);
+// second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0
 
 auto const v = cbor::structs<std::vector<std::string>>::decode(bytes);
-// **v is {"x", "x"}
+// v.error() is cbor::error::incorrect_type
 ```
 
 ### nlohmann/json
@@ -341,14 +341,14 @@ double const sum = std::accumulate(values.begin(), values.end(), 0.0);
 
 ### mbedded-cbor
 
-cbor::packed writes a std::vector<double> as an RFC 8746 typed array. view gives a typed_array_view, a random access range over the bytes of the input, with no copy.
+cbor::schema writes a std::vector<double> as an RFC 8746 typed array. view gives a typed_array_view, a random access range over the bytes of the input, with no copy.
 
 ```cpp
 struct [[=cbor::tag(1900)]] series {
     std::vector<double> values;
 };
 
-auto const root = cbor::packed<series>::path(bytes);
+auto const root = cbor::schema<series>::path(bytes);
 auto const values = root->view<"$.values">();
 double const sum = std::accumulate(values->begin(), values->end(), 0.0);
 ```
@@ -512,7 +512,7 @@ because their snippets show that the feature is absent.
 `bench/results/2026-10-09-025729Z.json` holds the only measurement in
 bench/results that runs mbedded-cbor, FlatBuffers and Cap'n Proto on the
 same data with the commit of a recent tree (f2b1e56). The operations are
-in `bench/compare.cpp`. The mbedded-cbor arm uses `cbor::packed`
+in `bench/compare.cpp`. The mbedded-cbor arm uses `cbor::schema`
 (Packed CBOR), not the at_path and lazy forms of sections 2 and 4.
 FlatBuffers runs without its Verifier. The build is g++-16 16.2.0,
 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie,
@@ -523,7 +523,7 @@ One field, `$.cars[500].engine.cc` of cars (the carsales data):
 
 | Library | ns | Spread |
 |---|---|---|
-| mbedded-cbor packed | 13.0 | 0.50 |
+| mbedded-cbor schema | 13.0 | 0.50 |
 | FlatBuffers | 2.4 | 0.24 |
 | Cap'n Proto | 189.5 | 0.41 |
 
@@ -531,7 +531,7 @@ One element, `$.values[30000]` of floats (60000 binary64):
 
 | Library | ns | Spread |
 |---|---|---|
-| mbedded-cbor packed | 6.0 | 0.19 |
+| mbedded-cbor schema | 6.0 | 0.19 |
 | FlatBuffers | 1.3 | 0.50 |
 | Cap'n Proto | 136.5 | 0.44 |
 
@@ -540,15 +540,42 @@ section 6:
 
 | Library | ns | Spread |
 |---|---|---|
-| mbedded-cbor packed | 36063 | 0.23 |
+| mbedded-cbor schema | 36063 | 0.23 |
 | FlatBuffers | 34761 | 0.24 |
 | Cap'n Proto | 37714 | 0.23 |
 
 The A/A difference of a cell lies between 0.07 and 10.9 percent (field
 `aa_percent` of the file). The mbedded-cbor sum reads each element
-through `at_path<"@[]">(i)`, not through the `view` of section 6.
+through `i.at_path<"@[]">()`, not through the `view` of section 6.
 
 bench/results has no measurement of nlohmann/json, libcbor, the plain
 at_path form, the lazy elements form, structs, shared values or broken
 input against another library in this image. This document gives no
 number for them.
+
+## 10. Other decoders read what mbedded-cbor writes
+
+`test/interop/run.sh` writes values with every public writer:
+`cbor::encoder`, `cbor::encode(item)`, `structs<T>::encode` and
+`schema<T>::encode`. The values are the examples of RFC 8949 Appendix A,
+the cbor-wg test vectors, the bench corpora, every integer and float
+width, tags 28 and 29, and typed arrays. Each decoder below reads the
+output. The script then compares the value with the value that was
+written. `test/run.sh full` runs it. The decoders are the packages of
+Debian sid.
+
+| Decoder | Version | Reads all output | Does not support |
+|---|---|---|---|
+| TinyCBOR | 7.0 | yes | |
+| cbor2 (Python) | 6.1.2 | yes | |
+| jsoncons | 1.5.0 | no | simple values other than 20 to 23 |
+| CBOR::XS (Perl) | 1.87 | no | simple values other than 20 to 23; undefined as a map key |
+| libcbor | 0.10.2 | no | tags 6 to 20, so no Packed CBOR; simple values other than 20 to 23 |
+| nlohmann/json | 3.11.3 | no | a tag on an item that is not a byte string; undefined and simple values other than 20 to 22, so no Packed CBOR; map keys that are not text |
+
+RFC 8949 section 5.2 lets a decoder refuse a value that it does not
+support. Where a decoder supports a value, it reads the same value that
+mbedded-cbor wrote. libcbor 0.14.0 reads tag 6 and so reads Packed CBOR.
+A decoder that does not know a tag gives the tag number and its content
+(RFC 8949 section 3.4). jsoncons gives the content without the tag
+number.

@@ -12,14 +12,17 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdfloat>
 #include <string>
 #include <string_view>
 #include <utility>
 
-#include "binding.hpp"
-#include "error.hpp"
+#if __has_include(<stdfloat>)
+#include <stdfloat>
+#endif
+
 #include "rfc8746.hpp"
+#include "rfc9535.hpp"
+#include "error.hpp"
 #include "rfc8949.hpp"
 #include "validity.hpp"
 
@@ -31,9 +34,15 @@ __extension__ typedef __int128 int128;
 __extension__ typedef unsigned __int128 uint128;
 #endif
 
-enum class pass;
-
 struct lazy;
+struct item;
+
+template <class>
+class owning;
+
+template <bool>
+struct tree_decoder;
+
 
 std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
@@ -43,7 +52,7 @@ class heads
     static V unsigned_read(std::span<char const, sizeof(V)> const field)
     {
         std::array<char, sizeof(V)> big;
-        std::ranges::copy(field, big.begin());
+        std::copy(field.begin(), field.end(), big.begin());
         return std::byteswap(std::bit_cast<V>(big));
     }
 
@@ -221,17 +230,16 @@ class heads
     template <bool Checked>
     struct decoder {
         std::string_view encoded;
-        [[no_unique_address]] validity::limit_checks<Checked> checks;
 
         CBOR_ALWAYS_INLINE std::expected<head, error> head_decode()
         {
-            if (encoded.empty()) [[unlikely]]
+            if (!validity::pending_items_fit(initial_byte_size, encoded.size())) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             auto const initial = static_cast<std::uint8_t>(encoded.front());
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
             if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-                if (error const r = validity::check_argument(major, info, checks).error_or(error{});
+                if (error const r = validity::check_argument<Checked>(major, info).error_or(error{});
                     r != error{}) [[unlikely]]
                     return std::unexpected(r);
                 encoded.remove_prefix(initial_byte_size);
@@ -250,7 +258,7 @@ class heads
                               rfc8949::additional_information::eight_byte_argument)) >= sizeof(std::uint64_t),
                           "An eight-byte argument must cover the bytes of one std::uint64_t.");
             std::size_t const size = argument_size(info);
-            if (encoded.size() < initial_byte_size + size) [[unlikely]]
+            if (!validity::pending_items_fit(initial_byte_size + size, encoded.size())) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             std::span<char const> const rest = std::span(encoded).subspan(initial_byte_size, size);
             std::uint64_t argument;
@@ -268,7 +276,7 @@ class heads
                 argument = unsigned_read<std::uint64_t>(rest.first<sizeof(std::uint64_t)>());
                 break;
             }
-            if (error const r = validity::check_argument(major, argument, checks).error_or(error{});
+            if (error const r = validity::check_argument<Checked>(major, argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
             encoded.remove_prefix(initial_byte_size + size);
@@ -299,7 +307,7 @@ class heads
                                  std::numeric_limits<std::uint8_t>::digits * size) &
                                 (std::numeric_limits<std::uint64_t>::digits - 1));
                 }
-                if (!validity::check_argument(major, argument, checks)) [[unlikely]]
+                if (!validity::check_argument<Checked>(major, argument)) [[unlikely]]
                     return std::nullopt;
                 encoded.remove_prefix(initial_byte_size + size);
                 return head{major, info, argument};
@@ -309,13 +317,45 @@ class heads
 
         constexpr std::expected<std::string_view, error> byte_string_decode(std::uint64_t const length)
         {
-            if (encoded.size() < length) [[unlikely]]
+            if (!validity::pending_items_fit(length, encoded.size())) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             std::string_view const string{std::span(encoded).first(length)};
             encoded.remove_prefix(length);
             return string;
         }
+
+        std::expected<std::optional<std::uint64_t>, error> bignum_decode(std::uint64_t const tag)
+        {
+            auto const r = head_decode();
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            if (error const c = validity::check_tag_content(tag, r->major).error_or(error{}); c != error{})
+                [[unlikely]]
+                return std::unexpected(c);
+            if (error const c = validity::check_definite_length(r->major, r->info).error_or(error{}); c != error{})
+                [[unlikely]]
+                return std::unexpected(c);
+            auto const bytes = byte_string_decode(r->argument);
+            if (!bytes) [[unlikely]]
+                return std::unexpected(bytes.error());
+            std::string_view const magnitude = magnitude_without_leading_zeros(*bytes);
+            if (!validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t)))
+                return std::nullopt;
+            return magnitude_value(magnitude);
+        }
     };
+
+    static constexpr bool is_typed_array(head const h)
+    {
+        return h.major == major_type::tag && validity::typed_array_check(h.argument, 0).has_value();
+    }
+
+    static constexpr bool is_bignum(major_type const major, std::uint64_t const argument)
+    {
+        return major == major_type::tag &&
+               (argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
+                argument == std::to_underlying(rfc8949::tag_number::negative_bignum));
+    }
 
     struct precision {
         int significand_bits;
@@ -437,12 +477,15 @@ class heads
         constexpr precision d = double_precision;
         constexpr precision f = single_precision;
         std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
-        if (info == rfc8949::simple_float_information::single_precision_float && is_nan(d, bits)) [[unlikely]]
+        if (info != rfc8949::simple_float_information::double_precision_float && is_nan(d, bits)) [[unlikely]] {
+            precision const p =
+                info == rfc8949::simple_float_information::half_precision_float ? half_precision : f;
             return bits >> (d.significand_bits + std::bit_width(d.exponent_max))
-                               << (f.significand_bits + std::bit_width(f.exponent_max)) |
-                   std::uint64_t{f.exponent_max} << f.significand_bits |
+                               << (p.significand_bits + std::bit_width(p.exponent_max)) |
+                   std::uint64_t{p.exponent_max} << p.significand_bits |
                    (bits & ((std::uint64_t{1} << d.significand_bits) - 1u)) >>
-                       (d.significand_bits - f.significand_bits);
+                       (d.significand_bits - p.significand_bits);
+        }
         switch (info) {
         case rfc8949::simple_float_information::half_precision_float:
             return float_encode_binary16(static_cast<float>(value));
@@ -524,18 +567,98 @@ class heads
         return h.major == major_type::simple_float && h.info == std::to_underlying(simple_value::null);
     }
 
+    static constexpr cbor::type type_of(major_type const major, std::uint8_t const info, std::uint64_t const argument)
+    {
+        switch (major) {
+        case major_type::unsigned_integer:
+            return cbor::type::unsigned_integer;
+        case major_type::negative_integer:
+            return cbor::type::negative_integer;
+        case major_type::byte_string:
+            return cbor::type::byte_string;
+        case major_type::text_string:
+            return cbor::type::text_string;
+        case major_type::array:
+            return cbor::type::array;
+        case major_type::map:
+            return cbor::type::map;
+        case major_type::tag:
+            if (argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum))
+                return cbor::type::unsigned_bignum;
+            if (argument == std::to_underlying(rfc8949::tag_number::negative_bignum))
+                return cbor::type::negative_bignum;
+            if (argument >= std::to_underlying(rfc8746::tag_number::typed_array_first) &&
+                argument <= std::to_underlying(rfc8746::tag_number::typed_array_last) &&
+                argument != std::to_underlying(rfc8746::tag_number::typed_array_reserved))
+                return cbor::type::typed_array;
+            return cbor::type::tag;
+        case major_type::simple_float:
+            break;
+        }
+        switch (info) {
+        case std::to_underlying(simple_value::false_value):
+            return cbor::type::false_value;
+        case std::to_underlying(simple_value::true_value):
+            return cbor::type::true_value;
+        case std::to_underlying(simple_value::null):
+            return cbor::type::null;
+        case std::to_underlying(simple_value::undefined):
+            return cbor::type::undefined;
+        case std::to_underlying(rfc8949::simple_float_information::half_precision_float):
+            return cbor::type::half_float;
+        case std::to_underlying(rfc8949::simple_float_information::single_precision_float):
+            return cbor::type::single_float;
+        case std::to_underlying(rfc8949::simple_float_information::double_precision_float):
+            return cbor::type::double_float;
+        default:
+            return cbor::type::simple_value;
+        }
+    }
+
+    static constexpr major_type major_type_of(cbor::type const t)
+    {
+        switch (t) {
+        case cbor::type::unsigned_integer:
+            return major_type::unsigned_integer;
+        case cbor::type::negative_integer:
+            return major_type::negative_integer;
+        case cbor::type::byte_string:
+            return major_type::byte_string;
+        case cbor::type::text_string:
+            return major_type::text_string;
+        case cbor::type::array:
+            return major_type::array;
+        case cbor::type::map:
+            return major_type::map;
+        case cbor::type::tag:
+        case cbor::type::unsigned_bignum:
+        case cbor::type::negative_bignum:
+        case cbor::type::typed_array:
+            return major_type::tag;
+        case cbor::type::false_value:
+        case cbor::type::true_value:
+        case cbor::type::null:
+        case cbor::type::undefined:
+        case cbor::type::simple_value:
+        case cbor::type::half_float:
+        case cbor::type::single_float:
+        case cbor::type::double_float:
+            return major_type::simple_float;
+        }
+        validity::throw_logic_error("cbor::item: the type is not a member of cbor::type");
+    }
+
     static constexpr bool is_tag_passed(std::uint64_t const tag)
     {
         return tag != std::to_underlying(rfc8949::tag_number::unsigned_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::negative_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item) &&
-               tag != std::to_underlying(rfc8949::tag_number::sharedref) &&
                !validity::typed_array_check(tag, 0).has_value();
     }
 
     static constexpr std::expected<head, error> typed_array_element_decode(std::uint64_t const tag,
                                                                            std::string_view const elements,
-                                                                           std::uint64_t const position)
+                                                                           validity::index const position)
     {
         std::size_t const size = validity::typed_array_element_size(tag);
         bool const floating = (tag >> std::to_underlying(rfc8746::bit_field::f) & 1) != 0;
@@ -543,7 +666,7 @@ class heads
         bool const little_endian = (tag >> std::to_underlying(rfc8746::bit_field::e) & 1) != 0;
         if (size > sizeof(std::uint64_t)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        auto const element = std::span(elements).subspan(static_cast<std::size_t>(position) * size, size);
+        auto const element = validity::element_span(elements, position, size);
         std::uint64_t bits = 0;
         for (std::size_t i = 0; i < size; ++i)
             bits = bits << std::numeric_limits<std::uint8_t>::digits |
@@ -568,62 +691,72 @@ class heads
         major_type major;
         std::uint8_t info;
         std::uint64_t argument;
-        std::size_t at;
+        validity::offset at;
     };
 
     template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<raw_head, error>
-    raw_head_read(std::string_view const encoded, std::size_t const at,
-                  validity::limit_checks<Checked> const checks)
+    raw_head_read(std::string_view const encoded, validity::offset const at)
     {
-        if (at >= encoded.size()) [[unlikely]]
+        std::string_view const rest = validity::subspan(encoded, at);
+        if (rest.empty()) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        auto const initial = static_cast<std::uint8_t>(encoded[at]);
+        auto const initial = static_cast<std::uint8_t>(rest.front());
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
         std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-            if (error const r = validity::check_argument(major, info, checks).error_or(error{}); r != error{})
-                [[unlikely]]
+            if (error const r = validity::check_argument<Checked>(major, info).error_or(error{});
+                r != error{}) [[unlikely]]
                 return std::unexpected(r);
-            return raw_head{major, info, info, at + initial_byte_size};
+            return raw_head{major, info, info, validity::next(at, initial_byte_size)};
         }
         if (error const r = validity::check_additional_information(major, info).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
         if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
-            return raw_head{major, info, info, at + initial_byte_size};
+            return raw_head{major, info, info, validity::next(at, initial_byte_size)};
         std::size_t const size = argument_size(info);
-        if (encoded.size() - at - initial_byte_size < size) [[unlikely]]
+        if (!validity::pending_items_fit(size, rest.size() - initial_byte_size)) [[unlikely]]
             return std::unexpected(error::too_little_data);
         std::uint64_t argument = 0;
-        for (char const c : std::span(encoded).subspan(at + initial_byte_size, size))
+        for (char const c : validity::subspan(encoded, validity::next(at, initial_byte_size)).substr(0, size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
-        if (error const r = validity::check_argument(major, argument, checks).error_or(error{}); r != error{})
-            [[unlikely]]
+        if (error const r = validity::check_argument<Checked>(major, argument).error_or(error{});
+            r != error{}) [[unlikely]]
             return std::unexpected(r);
-        return raw_head{major, info, argument, at + initial_byte_size + size};
+        return raw_head{major, info, argument, validity::next(at, initial_byte_size + size)};
     }
 
     static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
-        auto const h = raw_head_read(encoded, 0, validity::limit_checks<false>{});
+        auto const h = raw_head_read<false>(encoded, validity::offset{});
         if (h && h->major == major_type::tag &&
             h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))
-            return std::string_view(std::span(encoded).subspan(h->at));
+            return validity::subspan(encoded, h->at);
         return encoded;
     }
 
-    static constexpr bool break_at(std::string_view const encoded, std::size_t const at)
+    static constexpr validity::offset self_described_cbor_content_at(std::string_view const encoded, validity::offset at)
     {
-        return at < encoded.size() &&
-               encoded[at] ==
+        for (;;) {
+            auto const h = raw_head_read<false>(encoded, at);
+            if (!h || h->major != major_type::tag ||
+                h->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))
+                return at;
+            at = h->at;
+        }
+    }
+
+    static constexpr bool break_at(std::string_view const encoded, validity::offset const at)
+    {
+        std::string_view const rest = validity::subspan(encoded, at);
+        return !rest.empty() &&
+               rest.front() ==
                    initial_byte(major_type::simple_float,
                                 std::to_underlying(rfc8949::simple_float_information::break_stop_code));
     }
 
     friend class validity;
-
-    friend class decoding;
 
     friend class encoding;
 
@@ -635,13 +768,17 @@ class heads
 
     friend class jsonpath;
 
-    template <class Writer>
-    friend struct encoder;
-
-    template <class, class, pass>
-    friend class walker;
+    template <class>
+    friend class encoder;
 
     friend struct lazy;
+
+    template <bool>
+    friend struct tree_decoder;
+
+    friend std::expected<owning<item>, error> decode(std::string_view encoded);
+
+    friend struct item;
 
     friend struct lazy_elements;
 
@@ -649,68 +786,19 @@ class heads
 
     friend std::expected<std::size_t, error> item_size(std::string_view encoded);
 
-    friend std::expected<lazy, error> decode(std::shared_ptr<std::string const> const &encoded);
-
     friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
-    template <class Binding>
-    friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l);
-
-    template <class Binding>
-    friend std::expected<typename Binding::value, error> lazy_decode(Binding &binding, lazy const &l,
-                                                                     limit_values loaded);
-
-#ifdef __cpp_impl_reflection
     friend class reflection;
 
     friend class generic;
 
     template <class>
-    friend class packed;
-
-    template <class>
     friend class structs;
+
+#ifdef __cpp_impl_reflection
+    template <class>
+    friend class schema;
 #endif
 };
-
-template <std::invocable MarksRead, class Projection, bool Checked>
-std::expected<void, error>
-validity::check_tag_content(std::uint64_t const tag, std::string_view const encoded,
-                            std::size_t const content_at, MarksRead const marks_read,
-                            Projection const offset_of, limit_checks<Checked> const checks)
-{
-    std::size_t at = content_at;
-    std::size_t references_followed = 0;
-    for (;;) {
-        auto const c = heads::raw_head_read(encoded, at, checks);
-        if (!c) [[unlikely]]
-            return std::unexpected(c.error());
-        if (c->major == major_type::tag && c->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-            at = c->at;
-            continue;
-        }
-        if (c->major != major_type::tag || c->argument != std::to_underlying(rfc8949::tag_number::sharedref))
-            return check_tag_content(tag, c->major, c->info);
-        auto const n = heads::raw_head_read(encoded, c->at, checks);
-        if (!n) [[unlikely]]
-            return std::unexpected(n.error());
-        if (error const e = check_tag_content(c->argument, n->major, n->info).error_or(error{}); e != error{})
-            [[unlikely]]
-            return std::unexpected(e);
-        auto const &marks = std::invoke(marks_read);
-        auto const index = check_sharedref_index(
-            n->argument, static_cast<std::size_t>(std::ranges::distance(
-                             std::ranges::begin(marks), std::ranges::upper_bound(marks, at, {}, offset_of))));
-        if (!index) [[unlikely]]
-            return std::unexpected(index.error());
-        if (auto const ends = check_sharedref_chain_ends(++references_followed, std::ranges::size(marks)); !ends)
-            [[unlikely]]
-            return std::unexpected(ends.error());
-        std::size_t const marked = std::invoke(offset_of, marks[*index]);
-        if (marked >= at) [[unlikely]]
-            return std::unexpected(error::sharedref_not_complete);
-        at = marked;
-    }
-}
 
 }

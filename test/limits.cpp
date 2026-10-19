@@ -1,4 +1,5 @@
-#include "binding.hpp"
+#include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <array>
 #include <cstddef>
@@ -17,317 +18,32 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each limit is read at the bound, one below and one above it. The expectation is the decision of the owner of
-// 2026-10-09: a value up to the limit passes, a value above it fails with the error of that limit.
-
-namespace
-{
-
-std::string text_of_length(std::size_t const n)
-{
-    if (n < 24)
-        return std::string(1, static_cast<char>(0x60 + n)) + std::string(n, 'a');
-    return "\x78"s + static_cast<char>(n) + std::string(n, 'a');
-}
-
-std::string bytes_of_length(std::size_t const n)
-{
-    return std::string(1, static_cast<char>(0x40 + n)) + std::string(n, 'b');
-}
-
-std::string array_of(std::size_t const n)
-{
-    return std::string(1, static_cast<char>(0x80 + n)) + std::string(n, '\x00');
-}
-
-std::string map_of(std::size_t const n)
-{
-    return std::string(1, static_cast<char>(0xa0 + n)) + std::string(2 * n, '\x00');
-}
-
-} // namespace
-
-// The defaults hold where no macro overrides them: the nesting depth 128, every other limit none.
+// A build that sets no limit has the nesting depth 128 and no size limit. The builds with limits set are in
+// test/limits/, one binary for each set of flags, so each limit is tested by a build that the limit holds.
 TEST_CASE("limits: the defaults")
 {
-    CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, 128u);
-    CHECK_EQ(std::size_t{cbor::limits.string_length}, std::numeric_limits<std::size_t>::max());
-    CHECK_EQ(std::size_t{cbor::limits.container_elements}, std::numeric_limits<std::size_t>::max());
-    CHECK_EQ(std::size_t{cbor::limits.input_bytes}, std::numeric_limits<std::size_t>::max());
+    CHECK_EQ(cbor::limits::nesting_depth, 128u);
+    CHECK_EQ(cbor::limits::string_length, std::numeric_limits<std::size_t>::max());
+    CHECK_EQ(cbor::limits::container_elements, std::numeric_limits<std::size_t>::max());
 }
 
-// A value above the hard bound is a fault of the caller, so operator= throws std::logic_error and the value before
-// stays. The aggregate form checks the same bound.
-TEST_CASE("limits: operator= above the bound throws std::logic_error")
-{
-    CHECK_THROWS_AS(cbor::limits.nesting_depth = cbor::validity::nesting_depth_limit + 1, std::logic_error);
-    CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, cbor::validity::nesting_depth_default);
-    CHECK_THROWS_AS((cbor::limits = {.nesting_depth = cbor::validity::nesting_depth_limit + 1}), std::logic_error);
-    CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, cbor::validity::nesting_depth_default);
-    CHECK_EQ(std::size_t{cbor::limits.string_length}, std::numeric_limits<std::size_t>::max());
-    {
-        test::limits_guard const at{{.nesting_depth = cbor::validity::nesting_depth_limit}};
-        CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, cbor::validity::nesting_depth_limit);
-    }
-    {
-        test::limits_guard const all{
-            {.nesting_depth = 1, .string_length = 3, .container_elements = 4, .input_bytes = 5}};
-        CHECK_EQ(std::size_t{cbor::limits.nesting_depth}, 1u);
-        CHECK_EQ(std::size_t{cbor::limits.string_length}, 3u);
-        CHECK_EQ(std::size_t{cbor::limits.container_elements}, 4u);
-        CHECK_EQ(std::size_t{cbor::limits.input_bytes}, 5u);
-    }
-    CHECK_EQ(std::size_t{cbor::limits.input_bytes}, std::numeric_limits<std::size_t>::max());
-}
-
-// The length of each string head is checked, in the immediate form, in the form with a one-byte argument, and in
-// every reader: the well-formedness walk, the lazy item, the decoder of a binding and the diagnostic notation.
-TEST_CASE("limits: string_length on each string head")
-{
-    test_binding binding;
-    for (std::size_t const limit : {3uz, 30uz}) {
-        test::limits_guard const guard{{.string_length = limit}};
-        for (std::size_t const n : {limit - 1, limit, limit + 1}) {
-            CAPTURE(n);
-            for (std::string const &encoded : {text_of_length(n), "\x82"s + text_of_length(n) + "\x00"s}) {
-                bool const passes = n <= limit;
-                auto const size = cbor::item_size(encoded);
-                auto const decoded = cbor::lazy_decode(binding, *cbor::lazy::from(encoded));
-                auto const notation = cbor::diagnostic_notation(encoded);
-                CHECK_EQ(size.has_value(), passes);
-                CHECK_EQ(decoded.has_value(), passes);
-                CHECK_EQ(notation.has_value(), passes);
-                if (!passes) {
-                    CHECK_EQ(size.error(), error::string_length_exceeded);
-                    CHECK_EQ(decoded.error(), error::string_length_exceeded);
-                    CHECK_EQ(notation.error(), error::string_length_exceeded);
-                }
-            }
-            auto const text = cbor::lazy::from(text_of_length(n))->get<std::string_view>();
-            CHECK_EQ(text.has_value(), n <= limit);
-        }
-    }
-    test::limits_guard const guard{{.string_length = 3}};
-    CHECK(cbor::item_size(bytes_of_length(3)).has_value());
-    CHECK_EQ(cbor::item_size(bytes_of_length(4)).error(), error::string_length_exceeded);
-}
-
-// The count of each array and map head is checked; a map counts its pairs.
-TEST_CASE("limits: container_elements on each array and map head")
-{
-    test_binding binding;
-    test::limits_guard const guard{{.container_elements = 2}};
-    for (std::size_t const n : {1uz, 2uz, 3uz}) {
-        CAPTURE(n);
-        bool const passes = n <= 2;
-        for (std::string const &encoded : {array_of(n), map_of(n), "\x81"s + array_of(n)}) {
-            auto const size = cbor::item_size(encoded);
-            auto const decoded = cbor::lazy_decode(binding, *cbor::lazy::from(encoded));
-            auto const notation = cbor::diagnostic_notation(encoded);
-            CHECK_EQ(size.has_value(), passes);
-            CHECK_EQ(decoded.has_value(), passes);
-            CHECK_EQ(notation.has_value(), passes);
-            if (!passes) {
-                CHECK_EQ(size.error(), error::container_elements_exceeded);
-                CHECK_EQ(decoded.error(), error::container_elements_exceeded);
-                CHECK_EQ(notation.error(), error::container_elements_exceeded);
-            }
-        }
-        CHECK_EQ(cbor::lazy::from(array_of(n))->elements().has_value(), passes);
-        CHECK_EQ(cbor::lazy::from(map_of(n))->entries().has_value(), passes);
-    }
-}
-
-// The size of the input is checked once, where the input enters the library.
-TEST_CASE("limits: input_bytes on entry")
-{
-    test::limits_guard const guard{{.input_bytes = 3}};
-    for (std::string const &encoded : {"\x81\x01"s, "\x82\x01\x02"s, "\x83\x01\x02\x03"s}) {
-        CAPTURE(encoded.size());
-        bool const passes = encoded.size() <= 3;
-        auto const size = cbor::item_size(encoded);
-        auto const lazy = cbor::lazy::from(encoded);
-        auto const notation = cbor::diagnostic_notation(encoded);
-        auto const first = cbor::at_path<"$[0]", std::int64_t>(encoded);
-        CHECK_EQ(size.has_value(), passes);
-        CHECK_EQ(lazy.has_value(), passes);
-        CHECK_EQ(notation.has_value(), passes);
-        CHECK_EQ(first.has_value(), passes);
-        if (!passes) {
-            CHECK_EQ(size.error(), error::input_bytes_exceeded);
-            CHECK_EQ(lazy.error(), error::input_bytes_exceeded);
-            CHECK_EQ(notation.error(), error::input_bytes_exceeded);
-            CHECK_EQ(first.error(), error::input_bytes_exceeded);
-        }
-    }
-}
-
-// The owner decided on 2026-10-10 that a limit costs nothing when none is set. So each entry reads
-// cbor::limits once and calls the instantiation without the checks of string_length, container_elements and
-// input_bytes when all three are SIZE_MAX, and the checked instantiation when any one of them is set. The
-// nesting depth is not part of the choice, because it is always checked.
-TEST_CASE("limits: the unchecked instantiation is chosen exactly when string_length, container_elements and "
-          "input_bytes are SIZE_MAX")
-{
-    constexpr std::size_t none = std::numeric_limits<std::size_t>::max();
-    auto const checked = [](cbor::limit_values const v) {
-        return cbor::validity::limits_apply(
-            v, []<bool Checked>(std::size_t, cbor::validity::limit_checks<Checked>) { return Checked; });
-    };
-    CHECK_FALSE(checked(cbor::limits.load()));
-    CHECK_FALSE(checked(
-        {.nesting_depth = 1, .string_length = none, .container_elements = none, .input_bytes = none}));
-    CHECK_FALSE(checked({.nesting_depth = cbor::validity::nesting_depth_limit,
-                         .string_length = none,
-                         .container_elements = none,
-                         .input_bytes = none}));
-    CHECK(checked(
-        {.nesting_depth = 128, .string_length = none - 1, .container_elements = none, .input_bytes = none}));
-    CHECK(checked(
-        {.nesting_depth = 128, .string_length = none, .container_elements = none - 1, .input_bytes = none}));
-    CHECK(checked(
-        {.nesting_depth = 128, .string_length = none, .container_elements = none, .input_bytes = none - 1}));
-    CHECK(checked({.nesting_depth = 128, .string_length = 0, .container_elements = 0, .input_bytes = 0}));
-    {
-        test::limits_guard const guard{{.container_elements = 7}};
-        CHECK(checked(cbor::limits.load()));
-    }
-    CHECK_FALSE(checked(cbor::limits.load()));
-    // The depth passed to the instantiation is the nesting depth that was read.
-    CHECK_EQ(cbor::validity::limits_apply(
-                 {.nesting_depth = 5, .string_length = none, .container_elements = none, .input_bytes = none},
-                 []<bool Checked>(std::size_t const depth_max, cbor::validity::limit_checks<Checked>) {
-                     return depth_max;
-                 }),
-             5u);
-}
-
-// A head that claims 2^64 - 1 bytes or elements over no content: the unchecked instantiation reads it and
-// finds too little data; the checked one refuses the claim at the head. The same input shows which
-// instantiation ran.
-TEST_CASE("limits: a head above SIZE_MAX - 1 is refused by the checked instantiation only")
+// With no size limit, no check of a size exists. A head that claims 2^64 - 1 bytes or elements over no
+// content is read and finds too little data, where test/limits/sizes_2.cpp refuses the same heads at the
+// head.
+TEST_CASE("limits: with no size limit a head of 2^64 - 1 finds too little data")
 {
     std::string const text = "\x7b\xff\xff\xff\xff\xff\xff\xff\xff"s;
     std::string const array = "\x9b\xff\xff\xff\xff\xff\xff\xff\xff"s;
-    constexpr std::size_t none = std::numeric_limits<std::size_t>::max();
     CHECK_EQ(cbor::item_size(text).error(), error::too_little_data);
     CHECK_EQ(cbor::item_size(array).error(), error::too_little_data);
-    {
-        test::limits_guard const guard{{.string_length = none - 1}};
-        CHECK_EQ(cbor::item_size(text).error(), error::string_length_exceeded);
-        CHECK_EQ(cbor::item_size(array).error(), error::too_little_data);
-        CHECK_EQ(cbor::diagnostic_notation(text).error(), error::string_length_exceeded);
-    }
-    {
-        test::limits_guard const guard{{.container_elements = none - 1}};
-        CHECK_EQ(cbor::item_size(text).error(), error::too_little_data);
-        CHECK_EQ(cbor::item_size(array).error(), error::container_elements_exceeded);
-        CHECK_EQ(cbor::diagnostic_notation(array).error(), error::container_elements_exceeded);
-    }
-    {
-        test::limits_guard const guard{{.input_bytes = none - 1}};
-        CHECK_EQ(cbor::item_size(text).error(), error::too_little_data);
-        CHECK_EQ(cbor::item_size(array).error(), error::too_little_data);
-    }
-}
-
-// The nesting depth is checked in both instantiations: 100(100(100(0))) holds an integer at depth 3.
-TEST_CASE("limits: nesting_depth is checked in the unchecked and in the checked instantiation")
-{
-    std::string const tags = "\xd8\x64\xd8\x64\xd8\x64\x00"s;
-    for (std::size_t const string_length : {std::numeric_limits<std::size_t>::max(), 100uz}) {
-        CAPTURE(string_length);
-        for (std::size_t const depth : {2uz, 3uz, 4uz}) {
-            CAPTURE(depth);
-            test::limits_guard const guard{{.nesting_depth = depth, .string_length = string_length}};
-            auto const decoded = cbor::lazy::from(tags)->decode();
-            auto const notation = cbor::diagnostic_notation(tags);
-            CHECK_EQ(decoded.has_value(), depth >= 3);
-            CHECK_EQ(notation.has_value(), depth >= 3);
-            if (depth < 3) {
-                CHECK_EQ(decoded.error(), error::nesting_depth_exceeded);
-                CHECK_EQ(notation.error(), error::nesting_depth_exceeded);
-            }
-        }
-    }
-}
-
-// An iterator of elements() or entries() only skips the items it passes, and the owner decided on 2026-10-10 that
-// limits count only what is read or decoded. So a string longer than the limit does not stop the walk, and the read
-// of that string does.
-TEST_CASE("limits: the iterators of elements() and entries() skip without counting")
-{
-    std::string const encoded = "\x82\x62"
-                                "ab\x01"s;
-    std::string const map = "\xa2\x62"
-                            "ab\x01\x02\x03"s;
-    auto const l = cbor::lazy::from(encoded);
-    auto const m = cbor::lazy::from(map);
-    REQUIRE(l.has_value());
-    REQUIRE(m.has_value());
-    test::limits_guard const guard{{.string_length = 1}};
-    auto const elements = l->elements();
-    REQUIRE(elements.has_value());
-    auto it = elements->begin();
-    CHECK_EQ((*it)->get<std::string_view>().error(), error::string_length_exceeded);
-    ++it;
-    REQUIRE(it != std::default_sentinel);
-    CHECK_EQ((*it)->get<int>(), 1);
-    auto const entries = m->entries();
-    REQUIRE(entries.has_value());
-    auto pair = entries->begin();
-    REQUIRE((*pair).has_value());
-    CHECK_EQ((*pair)->first.get<std::string_view>().error(), error::string_length_exceeded);
-    CHECK_EQ((*pair)->second.get<int>(), 1);
-    ++pair;
-    CHECK_EQ((*pair)->second.get<int>(), 3);
-}
-
-// RFC 8949 does not bound what a decoder skips; the bytes bound it (check_pending_items). The owner decided on
-// 2026-10-10 that string_length and container_elements count only the heads that a path or a lazy reads: the
-// containers on the way, the keys it compares and the target. An item that it only skips does not count, in each
-// form: the typed read over bytes, the typed read from a lazy, a binding, query and the lazy chain.
-TEST_CASE("limits: an item that a path or a lazy only skips does not count")
-{
-    test_binding binding;
-    std::string const strings = "\xa2\x61""a\x63xyz\x61""n\x01"s;
-    std::string const arrays = "\xa2\x61""a\x83\x01\x02\x03\x61""n\x01"s;
-    for (auto const &[limits, doc, wanted] :
-         {std::tuple{cbor::limit_values{.string_length = 2}, strings, error::string_length_exceeded},
-          std::tuple{cbor::limit_values{.container_elements = 2}, arrays, error::container_elements_exceeded}}) {
-        test::limits_guard const guard{limits};
-        auto const l = *cbor::lazy::from(doc);
-        CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
-        CHECK_EQ(cbor::at_path<"$.n", int>(l), 1);
-        CHECK_EQ(l.at("n")->get<int>(), 1);
-        CHECK(cbor::at_path(binding, "$.n", l) == V(1));
-        CHECK(cbor::query(binding, "$.n", l) == A(1));
-        CHECK_EQ(cbor::at_path(binding, "$.a", l).error(), wanted);
-        CHECK_EQ(cbor::lazy_decode(binding, *l.at("a")).error(), wanted);
-    }
-    test::limits_guard const guard{{.string_length = 2, .container_elements = 2}};
-    std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;
-    auto const l = *cbor::lazy::from("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
-    CHECK_EQ(cbor::at_path<"$[1]", int>(l), 5);
-    CHECK_EQ(l.at(1)->get<int>(), 5);
-    CHECK_EQ(cbor::at_path<"$[0][1]", int>(l).error(), error::container_elements_exceeded);
-    CHECK_EQ(cbor::at_path<"$[0][0]", std::int64_t>(l).error(), error::string_length_exceeded);
-    CHECK_EQ(cbor::item_size(two).error(), error::string_length_exceeded);
+    CHECK_EQ(cbor::diagnostic_notation(text).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation(array).error(), error::too_little_data);
 }
 
 #ifdef __cpp_impl_reflection
 
 namespace
 {
-
-struct [[=cbor::tag(1590)]] note {
-    std::string text;
-    std::vector<std::int32_t> numbers;
-};
-
-struct [[=cbor::tag(1591)]] names {
-    std::vector<std::string> list;
-};
 
 struct[[= cbor::tag(1592)]] pmr_names {
     std::pmr::string text;
@@ -347,35 +63,6 @@ std::string long_texts_encoded(std::size_t const n)
 
 } // namespace
 
-// schema checks the string and container limits on each head it reads, and the size of the input on entry.
-TEST_CASE("limits: the string and container limits of schema")
-{
-    auto const encoded = cbor::packed<note>::encode(note{"abc", {1, 2}});
-    REQUIRE(encoded.has_value());
-    // The list of std::int32_t is a typed array (RFC 8746), a tag over a byte string of 8 bytes.
-    constexpr std::size_t typed_array_bytes = 2 * sizeof(std::int32_t);
-    for (std::size_t const limit : {typed_array_bytes - 1, typed_array_bytes, typed_array_bytes + 1}) {
-        test::limits_guard const guard{{.string_length = limit}};
-        auto const decoded = cbor::packed<note>::decode(*encoded);
-        CHECK_EQ(decoded.has_value(), limit >= typed_array_bytes);
-        if (limit < typed_array_bytes)
-            CHECK_EQ(decoded.error(), error::string_length_exceeded);
-    }
-    auto const list = cbor::packed<names>::encode(names{{"a", "b"}});
-    REQUIRE(list.has_value());
-    for (std::size_t const limit : {1uz, 2uz, 3uz}) {
-        test::limits_guard const guard{{.container_elements = limit}};
-        auto const decoded = cbor::packed<names>::decode(*list);
-        CHECK_EQ(decoded.has_value(), limit >= 2);
-        if (limit < 2)
-            CHECK_EQ(decoded.error(), error::container_elements_exceeded);
-    }
-    {
-        test::limits_guard const guard{{.input_bytes = encoded->size() - 1}};
-        CHECK_EQ(cbor::packed<note>::decode(*encoded).error(), error::input_bytes_exceeded);
-    }
-}
-
 // The memory of a decode is bounded by the caller with the standard: the target holds a std::pmr allocator
 // over a resource with a budget, every element is made with the allocator of its container, and the refusal
 // of the resource reaches the caller of structs as not_enough_memory. A monotonic_buffer_resource over a
@@ -390,7 +77,7 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
         std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(),
                                                    std::pmr::null_memory_resource());
         auto const decoded = cbor::structs<texts>::decode(std::make_shared<std::string const>(encoded),
-                                                           encoded, texts(&budget));
+                                                           texts(&budget));
         REQUIRE(decoded.has_value());
         CHECK_EQ((**decoded).size(), 3u);
         CHECK_EQ((**decoded).get_allocator().resource(), &budget);
@@ -406,7 +93,7 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
         auto const decoded = cbor::structs<texts>::decode(std::make_shared<std::string const>(encoded),
-                                                           encoded, texts(&budget));
+                                                           texts(&budget));
         REQUIRE_FALSE(decoded.has_value());
         CHECK_EQ(decoded.error(), error::not_enough_memory);
     }
@@ -415,15 +102,15 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
 // The schema reads into the members of the target that the caller made, so each member keeps its allocator.
 TEST_CASE("schema: a target with std::pmr members decodes with their allocators")
 {
-    auto const encoded = cbor::packed<pmr_names>::encode(
+    auto const encoded = cbor::schema<pmr_names>::encode(
         pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
     REQUIRE(encoded.has_value());
     std::array<std::byte, 4096> buffer{};
     std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(),
                                                std::pmr::null_memory_resource());
     auto const owner = std::make_shared<std::string const>(*encoded);
-    auto const decoded = cbor::packed<pmr_names>::decode(
-        owner, *owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
+    auto const decoded = cbor::schema<pmr_names>::decode(
+        owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
     REQUIRE(decoded.has_value());
     CHECK_EQ((**decoded).text, long_text);
     CHECK_EQ((**decoded).text.get_allocator().resource(), &budget);
@@ -440,7 +127,7 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
 // of schema as not_enough_memory, and std::bad_alloc does not leave the call.
 TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enough_memory")
 {
-    auto const encoded = cbor::packed<pmr_names>::encode(
+    auto const encoded = cbor::schema<pmr_names>::encode(
         pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
     REQUIRE(encoded.has_value());
     auto const owner = std::make_shared<std::string const>(*encoded);
@@ -448,8 +135,8 @@ TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enoug
         CAPTURE(size);
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
-        auto const decoded = cbor::packed<pmr_names>::decode(
-            owner, *owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
+        auto const decoded = cbor::schema<pmr_names>::decode(
+            owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
         REQUIRE_FALSE(decoded.has_value());
         CHECK_EQ(decoded.error(), error::not_enough_memory);
     }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <algorithm>
-#include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <span>
 #include <type_traits>
 #if defined(__cpp_exceptions)
 #include <stdexcept>
@@ -21,16 +22,18 @@
 #include <stdckdint.h>
 #endif
 
-#include "binding.hpp"
-#include "error.hpp"
 #include "rfc8746.hpp"
+#include "rfc9535.hpp"
+#include "error.hpp"
 #include "rfc8949.hpp"
 
 #ifdef _MSC_VER
 #define CBOR_ALWAYS_INLINE [[msvc::forceinline]]
+#define CBOR_NEVER_INLINE [[msvc::noinline]]
 #define CBOR_ASSUME(condition) __assume(condition)
 #else
 #define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
+#define CBOR_NEVER_INLINE [[gnu::noinline]]
 #define CBOR_ASSUME(condition) [[assume(condition)]]
 #endif
 
@@ -46,22 +49,22 @@
 #define CBOR_CONTAINER_ELEMENTS_DEFAULT SIZE_MAX
 #endif
 
-#ifndef CBOR_INPUT_BYTES_DEFAULT
-#define CBOR_INPUT_BYTES_DEFAULT SIZE_MAX
-#endif
-
 namespace cbor
 {
 
-enum class pass;
-
 struct lazy;
+struct item;
 
-struct limit_values {
-    std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
-    std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
-    std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
-    std::size_t input_bytes = CBOR_INPUT_BYTES_DEFAULT;
+template <class>
+class owning;
+
+template <bool>
+struct tree_decoder;
+
+struct limits {
+    static constexpr std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
+    static constexpr std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
+    static constexpr std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
 };
 
 class validity
@@ -72,17 +75,22 @@ class validity
         record_function = 114,
         straight_argument_first = 128,
         straight_argument_last = 135,
-        inverted_argument_first = 136,
-        inverted_argument_last = 143,
-        split_basic_packed_cbor = 1113
+        fixed_array = 32873
     };
 
 public:
+    enum class offset : std::size_t {};
+
+    enum class index : std::uint64_t {};
+
+    static constexpr offset npos{std::numeric_limits<std::size_t>::max()};
+
     static constexpr std::size_t nesting_depth_limit = 512;
 
-    static constexpr std::size_t nesting_depth_default = CBOR_NESTING_DEPTH_DEFAULT;
-
     static constexpr std::size_t size_limit = std::numeric_limits<std::size_t>::max();
+
+    static constexpr std::size_t initial_size_limit = std::size_t{1} << 20;
+    static constexpr std::size_t bump_chunk_size = std::size_t{1} << 13;
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_limit(std::uint64_t const value,
                                                                                std::size_t const limit,
@@ -100,50 +108,53 @@ public:
     }
 
     template <bool Checked>
-    struct limit_checks {
-        std::size_t string_length;
-        std::size_t container_elements;
-        std::size_t input_bytes;
-        std::size_t argument_max = std::min(string_length, container_elements);
-    };
-
-    template <bool Checked>
-        requires(!Checked)
-    struct limit_checks<Checked> {
-    };
-
-    template <class F>
-    static decltype(auto) limits_apply(limit_values v, F &&f);
-
-    template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_input_bytes(std::size_t const size, limit_checks<Checked> const checks)
+    check_argument(major_type const major, std::uint64_t const argument)
     {
-        if constexpr (Checked)
-            return check_limit(size, checks.input_bytes, error::input_bytes_exceeded);
+        if constexpr (Checked &&
+                      (limits::string_length != size_limit || limits::container_elements != size_limit)) {
+            if (argument <= std::min(limits::string_length, limits::container_elements)) [[likely]]
+                return {};
+            if constexpr (limits::string_length != size_limit) {
+                if (major == major_type::byte_string || major == major_type::text_string)
+                    return check_limit(argument, limits::string_length, error::string_length_exceeded);
+            }
+            if constexpr (limits::container_elements != size_limit) {
+                if (major == major_type::array || major == major_type::map)
+                    return check_limit(argument, limits::container_elements,
+                                       error::container_elements_exceeded);
+            }
+        }
         return {};
     }
 
-    template <bool Checked>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_argument(major_type const major, std::uint64_t const argument, limit_checks<Checked> const checks)
+    static constexpr bool pending_items_fit(std::uint64_t const pending, std::size_t const bytes_left)
     {
-        if constexpr (Checked) {
-            if (argument <= checks.argument_max) [[likely]]
-                return {};
-            if (major == major_type::byte_string || major == major_type::text_string)
-                return check_limit(argument, checks.string_length, error::string_length_exceeded);
-            if (major == major_type::array || major == major_type::map)
-                return check_limit(argument, checks.container_elements, error::container_elements_exceeded);
-        }
-        return {};
+        return pending <= bytes_left;
     }
 
     static constexpr std::expected<void, error> check_pending_items(std::uint64_t const pending,
                                                                     std::size_t const bytes_left)
     {
-        if (pending > bytes_left) [[unlikely]]
+        if (!pending_items_fit(pending, bytes_left)) [[unlikely]]
             return std::unexpected(error::too_little_data);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_pending_items(major_type const major, std::uint8_t const info, std::uint64_t const argument,
+                        std::size_t const bytes_left)
+    {
+        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
+            return {};
+        if (major == major_type::array)
+            return check_pending_items(argument, bytes_left);
+        if (major == major_type::map) {
+            auto const items = checked_mul(argument, std::uint64_t{rfc8949::data_items_per_pair});
+            if (!items) [[unlikely]]
+                return std::unexpected(error::too_little_data);
+            return check_pending_items(*items, bytes_left);
+        }
         return {};
     }
 
@@ -242,20 +253,10 @@ public:
         return {};
     }
 
-    template <class First, class Second, bool Checked>
-    static std::expected<bool, error> keys_equivalent(First &first, std::size_t first_at, Second &second,
-                                                      std::size_t second_at, std::size_t depth,
-                                                      std::size_t depth_max, limit_checks<Checked> checks);
-
-    template <class Message, bool Checked>
-    static std::expected<void, error>
-    check_sorted_keys_unique(Message &message, std::size_t first_key, std::uint64_t count, std::size_t depth,
-                             std::size_t depth_max, limit_checks<Checked> checks);
-
-    template <std::invocable MarksRead, class Projection, bool Checked>
-    static std::expected<void, error> check_tag_content(std::uint64_t tag, std::string_view encoded,
-                                                        std::size_t content_at, MarksRead marks_read,
-                                                        Projection offset_of, limit_checks<Checked> checks);
+    template <bool Checked, class First, class Second>
+    static std::expected<bool, error> keys_equivalent(First &first, offset first_at, Second &second,
+                                                      offset second_at, std::size_t depth,
+                                                      std::size_t depth_max);
 
     static constexpr error writer_error(std::errc const e) noexcept
     {
@@ -301,6 +302,14 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_one_data_item(std::string_view const rest)
+    {
+        if (!rest.empty()) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_simple_value(std::uint8_t const info, std::uint64_t const argument)
     {
         if (info == std::to_underlying(rfc8949::simple_float_information::simple_value_follows) &&
@@ -310,21 +319,10 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_tag_content(std::uint64_t const tag, major_type const content, std::uint8_t const info)
+    check_tag_content(std::uint64_t const tag, major_type const content)
     {
         major_type admitted;
         switch (tag) {
-        case std::to_underlying(rfc8949::tag_number::standard_date_time_string):
-            admitted = major_type::text_string;
-            break;
-        case std::to_underlying(rfc8949::tag_number::epoch_based_date_time):
-            if (content != major_type::unsigned_integer && content != major_type::negative_integer &&
-                (content != major_type::simple_float ||
-                 info < std::to_underlying(rfc8949::simple_float_information::half_precision_float) ||
-                 info > std::to_underlying(rfc8949::simple_float_information::double_precision_float)))
-                [[unlikely]]
-                return std::unexpected(error::inadmissible_type_for_tag_content);
-            return {};
         case std::to_underlying(rfc8949::tag_number::unsigned_bignum):
         case std::to_underlying(rfc8949::tag_number::negative_bignum):
         case std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item):
@@ -353,6 +351,14 @@ public:
         return std::size_t{1} << (f + ll);
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_whole_elements(std::size_t const size,
+                                                                                        std::size_t const element)
+    {
+        if (size % element != 0) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return {};
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag,
                                                                                      std::size_t const size)
     {
@@ -360,27 +366,15 @@ public:
             tag > std::to_underlying(rfc8746::tag_number::typed_array_last) ||
             tag == std::to_underlying(rfc8746::tag_number::typed_array_reserved)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        if (size % typed_array_element_size(tag) != 0) [[unlikely]]
-            return std::unexpected(error::inadmissible_type_for_tag_content);
-        return {};
-    }
-
-    CBOR_ALWAYS_INLINE static constexpr std::expected<std::size_t, error>
-    check_sharedref_index(std::uint64_t const argument, std::size_t const marked)
-    {
-        if (!std::in_range<std::size_t>(argument)) [[unlikely]]
-            return std::unexpected(error::sharedref_index_out_of_range);
-        if (argument >= marked) [[unlikely]]
-            return std::unexpected(error::sharedref_index_not_marked);
-        return static_cast<std::size_t>(argument);
+        return check_whole_elements(size, typed_array_element_size(tag));
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_sharedref_chain_ends(std::size_t const references_followed, std::size_t const marked)
+    check_typed_array_content(std::uint64_t const tag, major_type const content, std::size_t const size)
     {
-        if (references_followed > marked) [[unlikely]]
-            return std::unexpected(error::sharedref_not_complete);
-        return {};
+        if (auto const r = check_tag_content(tag, content); !r) [[unlikely]]
+            return r;
+        return typed_array_check(tag, size);
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
@@ -393,21 +387,63 @@ public:
         return {};
     }
 
+    CBOR_ALWAYS_INLINE static constexpr offset element_offset(offset const start, std::size_t const element_size,
+                                                              index const i)
+    {
+        return offset{std::to_underlying(start) + static_cast<std::size_t>(std::to_underlying(i)) * element_size};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr offset next(offset const at, std::size_t const size)
+    {
+        return offset{std::to_underlying(at) + size};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr offset distance(std::string_view const whole, std::string_view const rest)
+    {
+        return offset{whole.size() - rest.size()};
+    }
+
+    template <class Bytes>
+        requires std::ranges::contiguous_range<Bytes const> && std::ranges::sized_range<Bytes const>
+    CBOR_ALWAYS_INLINE static constexpr auto subspan(Bytes const &encoded, offset const at)
+    {
+        using view = std::conditional_t<std::is_convertible_v<Bytes const &, std::string_view>, std::string_view,
+                                        std::span<std::ranges::range_value_t<Bytes> const>>;
+        view const whole(encoded);
+        if (std::to_underlying(at) > whole.size()) [[unlikely]]
+            throw_logic_error("cbor::validity: the offset is after the end of its input");
+        return view(std::views::drop(whole, static_cast<std::ranges::range_difference_t<view>>(std::to_underlying(at))));
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::span<char const> element_span(std::string_view const elements,
+                                                                           index const i, std::size_t const size)
+    {
+        return std::span(elements).subspan(static_cast<std::size_t>(std::to_underlying(i)) * size, size);
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<std::string_view, error>
+    substr(std::string_view const encoded, offset const at, std::size_t const size)
+    {
+        if (std::to_underlying(at) > encoded.size() || encoded.size() - std::to_underlying(at) < size) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return encoded.substr(std::to_underlying(at), size);
+    }
+
     template <std::integral I>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<std::uint64_t, error>
-    check_index(I const index, std::uint64_t const length)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<index, error>
+    check_index(I const i, std::uint64_t const length)
     {
         if constexpr (std::is_signed_v<I>) {
-            if (index < 0) {
-                std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(index);
+            if (i < 0) {
+                std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(i);
                 if (back > length) [[unlikely]]
                     return std::unexpected(error::index_out_of_bounds);
-                return length - back;
+                return index{length - back};
             }
         }
-        if (static_cast<std::uint64_t>(index) >= length) [[unlikely]]
+        if (static_cast<std::uint64_t>(i) >= length) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
-        return static_cast<std::uint64_t>(index);
+        return index{static_cast<std::uint64_t>(i)};
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_count(std::size_t const count,
@@ -441,6 +477,15 @@ public:
         return {};
     }
 
+    template <std::signed_integral T>
+    static constexpr std::expected<T, error> check_whole_number(double const value)
+    {
+        constexpr double low = static_cast<double>(std::numeric_limits<T>::min());
+        if (!(value >= low && value < -low && value == std::trunc(value))) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
+        return static_cast<T>(value);
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_magnitude_size(std::size_t const size, std::size_t const width)
     {
@@ -451,124 +496,40 @@ public:
 
     friend class heads;
 
-    friend class decoding;
-
     friend struct lazy;
 
-    friend class well_formedness;
+    template <bool>
+    friend struct tree_decoder;
 
-    friend class value_sharing;
+    friend std::expected<owning<item>, error> decode(std::string_view encoded);
+
+    friend class well_formedness;
 
     friend class extended_diagnostic_notation;
 
     friend class jsonpath;
 
-    template <class, class, pass>
-    friend class walker;
-
-#ifdef __cpp_impl_reflection
     friend class reflection;
 
     friend class generic;
 
     template <class>
-    friend class packed;
-
-    template <class>
     friend class structs;
+
+#ifdef __cpp_impl_reflection
+    template <class>
+    friend class schema;
 #endif
 };
 
-template <std::size_t Bound, error Exceeded>
-class limit
-{
-    std::atomic<std::size_t> value;
-
-public:
-    constexpr explicit limit(std::size_t const initial) noexcept
-        : value(initial)
-    {
-    }
-
-    limit(limit const &) = delete;
-
-    limit &operator=(limit const &) = delete;
-
-    limit &operator=(std::size_t const v)
-    {
-        if (!validity::check_limit(v, Bound, Exceeded)) [[unlikely]]
-            validity::throw_logic_error("cbor::limits: the value is above the bound of the limit");
-        value.store(v, std::memory_order_relaxed);
-        return *this;
-    }
-
-    operator std::size_t() const noexcept
-    {
-        return value.load(std::memory_order_relaxed);
-    }
-};
-
-class resource_limits
-{
-public:
-    limit<validity::nesting_depth_limit, error::nesting_depth_exceeded> nesting_depth;
-    limit<validity::size_limit, error::string_length_exceeded> string_length;
-    limit<validity::size_limit, error::container_elements_exceeded> container_elements;
-    limit<validity::size_limit, error::input_bytes_exceeded> input_bytes;
-
-    constexpr explicit resource_limits() noexcept
-        : resource_limits(limit_values{})
-    {
-    }
-
-    constexpr explicit resource_limits(limit_values const v) noexcept
-        : nesting_depth(v.nesting_depth), string_length(v.string_length),
-          container_elements(v.container_elements), input_bytes(v.input_bytes)
-    {
-    }
-
-    resource_limits(resource_limits const &) = delete;
-
-    resource_limits &operator=(resource_limits const &) = delete;
-
-    limit_values load() const noexcept
-    {
-        return {nesting_depth, string_length, container_elements, input_bytes};
-    }
-
-    resource_limits &operator=(limit_values const v)
-    {
-        nesting_depth = v.nesting_depth;
-        string_length = v.string_length;
-        container_elements = v.container_elements;
-        input_bytes = v.input_bytes;
-        return *this;
-    }
-};
-
-static_assert(
-    validity::check_nesting_depth(limit_values{}.nesting_depth, validity::nesting_depth_limit).has_value(),
-    "CBOR_NESTING_DEPTH_DEFAULT is at most validity::nesting_depth_limit.");
-static_assert(validity::check_limit(limit_values{}.string_length, validity::size_limit, error::string_length_exceeded)
+static_assert(validity::check_nesting_depth(limits::nesting_depth, validity::nesting_depth_limit).has_value(),
+              "CBOR_NESTING_DEPTH_DEFAULT is at most validity::nesting_depth_limit.");
+static_assert(validity::check_limit(limits::string_length, validity::size_limit,
+                                    error::string_length_exceeded)
                   .has_value(),
               "CBOR_STRING_LENGTH_DEFAULT fits in std::size_t.");
-static_assert(validity::check_limit(limit_values{}.container_elements, validity::size_limit,
+static_assert(validity::check_limit(limits::container_elements, validity::size_limit,
                                     error::container_elements_exceeded)
                   .has_value(),
               "CBOR_CONTAINER_ELEMENTS_DEFAULT fits in std::size_t.");
-static_assert(validity::check_limit(limit_values{}.input_bytes, validity::size_limit, error::input_bytes_exceeded)
-                  .has_value(),
-              "CBOR_INPUT_BYTES_DEFAULT fits in std::size_t.");
-
-inline constinit resource_limits limits{};
-
-template <class F>
-CBOR_ALWAYS_INLINE inline decltype(auto) validity::limits_apply(limit_values const v, F &&f)
-{
-    if (v.string_length == size_limit && v.container_elements == size_limit && v.input_bytes == size_limit)
-        return std::forward<F>(f)(v.nesting_depth, limit_checks<false>{});
-    return std::forward<F>(f)(v.nesting_depth,
-                              limit_checks<true>{v.string_length, v.container_elements, v.input_bytes});
-}
-
 }

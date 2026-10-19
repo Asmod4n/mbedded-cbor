@@ -1,0 +1,356 @@
+{
+ "purpose": "Two remedies for the cost of check_pending_items on the packed read path: (b) CBOR_ALWAYS_INLINE on check_pending_items; (a) the bool form pending_items_fit at the packed and head sites.",
+ "commit": "db62f4c",
+ "bench_code": "bench/compare.cpp at 5d1db85 (each op compiles only its own functions)",
+ "commits": {
+  "before": "4eecd93",
+  "branch": "0208c1a",
+  "inl": "0208c1a with CBOR_ALWAYS_INLINE on check_pending_items (scratch)",
+  "bh": "0208c1a with pending_items_fit in validity, packed and head; equal to db62f4c"
+ },
+ "cells": {
+  "cars.MB_FIELD": "path() then at_path $.cars[500].engine.cc",
+  "records.MB_FIELD": "path() then at_path $.records[1000].user.name",
+  "floats.MB_READ_PATH": "path() then at_path $.values[] for each index"
+ },
+ "flags": "-std=gnu++26 -freflection -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+ "resolved_march": "sapphirerapids",
+ "pie": true,
+ "compilers": {
+  "g++-16": "g++-16 (SUSE Linux) 16.2.0",
+  "clang++-23": "not built in this run; every clang++-23 cell failed in 2026-10-12-004307Z: call to deleted constructor of capnp::word"
+ },
+ "cxx_library": "libstdc++6-16.2.0+git9497-3.1",
+ "c_library": "glibc-2.44-2.1",
+ "benchmark": "benchmark-devel-1.9.5-2.3",
+ "image": "localhost/mbedded-cbor-tw-compare, podman, --network none, --cap-add=SYS_NICE",
+ "kernel": "6.18.44-fc-v114",
+ "scheduler": "not read (no /sys/kernel/debug/sched)",
+ "virtualization": "docker (systemd-detect-virt) on a Firecracker VM",
+ "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 vcpus",
+ "cpu_flags_sha256_16": "39a8dd34f3afdd38",
+ "uid": 1000,
+ "threads": 1,
+ "pinned": false,
+ "priority": "1 (process ID) old priority 0, new priority -10",
+ "cpu_left_to_the_machine": "each bench process is single-threaded; 3 of 4 cpus stay to the rest of the machine",
+ "processes": 10,
+ "min_time": "0.2s",
+ "method": "10 rounds; each round runs every binary once in turn; median of the 10 real_time values per binary",
+ "gate": "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------\n r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu\n 0  0      0 8468348  56688 6717172    0    0   329  2406  995    1 63  3 32  2  1  0\n 0  0      0 8500924  56688 6717100    0    0     0     0  470  492  1  0 98  0  0  0\n 0  0      0 8541084  56688 6717108    0    0     0    24  809  947  4  1 94  0  0  0\n",
+ "rounds": [
+  {
+   "round": 1,
+   "wall_s": 5.789674997329712,
+   "steal_ticks": 10
+  },
+  {
+   "round": 2,
+   "wall_s": 5.504158020019531,
+   "steal_ticks": 9
+  },
+  {
+   "round": 3,
+   "wall_s": 5.661027908325195,
+   "steal_ticks": 16
+  },
+  {
+   "round": 4,
+   "wall_s": 5.204322099685669,
+   "steal_ticks": 6
+  },
+  {
+   "round": 5,
+   "wall_s": 5.365032196044922,
+   "steal_ticks": 8
+  },
+  {
+   "round": 6,
+   "wall_s": 5.475543022155762,
+   "steal_ticks": 11
+  },
+  {
+   "round": 7,
+   "wall_s": 5.61398983001709,
+   "steal_ticks": 8
+  },
+  {
+   "round": 8,
+   "wall_s": 5.637886047363281,
+   "steal_ticks": 9
+  },
+  {
+   "round": 9,
+   "wall_s": 5.6837241649627686,
+   "steal_ticks": 18
+  },
+  {
+   "round": 10,
+   "wall_s": 5.429784059524536,
+   "steal_ticks": 18
+  }
+ ],
+ "arms": {
+  "g++-16.cars.MB_FIELD.before": {
+   "repetitions_ns": [
+    17.489650431648013,
+    18.636926904756407,
+    18.2191811192946,
+    18.56206704988504,
+    25.996871516592496,
+    22.160023400010687,
+    18.413321881348903,
+    17.957023731459945,
+    18.018912146917557,
+    18.745786157997184
+   ],
+   "median_ns": 18.487694465616972,
+   "spread": 0.460155867502356
+  },
+  "g++-16.cars.MB_FIELD.before_AA": {
+   "repetitions_ns": [
+    18.283106588309565,
+    23.07455651908701,
+    18.370468650041563,
+    19.01444044735912,
+    22.416418271959206,
+    19.53024124253027,
+    20.144027738132408,
+    17.81974926433488,
+    17.8518129259699,
+    22.618566957568962
+   ],
+   "median_ns": 19.272340844944694,
+   "spread": 0.2726605603870125
+  },
+  "g++-16.cars.MB_FIELD.bh": {
+   "repetitions_ns": [
+    19.15791749321798,
+    21.55025948880388,
+    18.182549841373426,
+    19.77078961363669,
+    17.879308520473426,
+    18.531984033074956,
+    17.97915168993775,
+    17.478923660870294,
+    18.6024652219507,
+    19.138618051137104
+   ],
+   "median_ns": 18.56722462751283,
+   "spread": 0.2192754118943927
+  },
+  "g++-16.cars.MB_FIELD.branch": {
+   "repetitions_ns": [
+    37.67087720126559,
+    29.907731878763663,
+    31.81026063442079,
+    29.798850034926513,
+    32.054752703402045,
+    38.86199884953003,
+    32.087078769410866,
+    31.908230873999894,
+    30.99425440157989,
+    31.912461393961987
+   ],
+   "median_ns": 31.91034613398094,
+   "spread": 0.2840191321194188
+  },
+  "g++-16.cars.MB_FIELD.inl": {
+   "repetitions_ns": [
+    32.414807822703814,
+    29.879410258964768,
+    29.040143904290613,
+    30.57566360074356,
+    29.053092951925066,
+    28.588506992647897,
+    29.80466541592536,
+    33.378907726625854,
+    29.38132274856582,
+    29.093086616416997
+   ],
+   "median_ns": 29.59299408224559,
+   "spread": 0.1618761765255775
+  },
+  "g++-16.floats.MB_READ_PATH.before": {
+   "repetitions_ns": [
+    313849.64352304727,
+    307544.10612707963,
+    292868.73319399415,
+    313178.1810434433,
+    321725.8198690131,
+    313448.94356690405,
+    298461.3928570326,
+    414090.2089138991,
+    332206.6576968838,
+    296797.7239194547
+   ],
+   "median_ns": 313313.5623051737,
+   "spread": 0.386901463275416
+  },
+  "g++-16.floats.MB_READ_PATH.before_AA": {
+   "repetitions_ns": [
+    322022.0416667137,
+    316314.66776746005,
+    318871.7376705248,
+    304942.58359956666,
+    308493.8008893355,
+    419900.78458923206,
+    337335.0633244574,
+    302597.7241015068,
+    316310.04152664257,
+    419151.1321164081
+   ],
+   "median_ns": 317593.2027189924,
+   "spread": 0.3693500348353343
+  },
+  "g++-16.floats.MB_READ_PATH.bh": {
+   "repetitions_ns": [
+    303724.59016396163,
+    329094.2022247487,
+    300006.24470318854,
+    301972.75703044096,
+    337846.99442583503,
+    295361.6935895134,
+    318587.31053396774,
+    299982.56443108834,
+    350226.36304308,
+    305810.18346554996
+   ],
+   "median_ns": 304767.3868147558,
+   "spread": 0.1800214584210565
+  },
+  "g++-16.floats.MB_READ_PATH.branch": {
+   "repetitions_ns": [
+    342427.3271245296,
+    333487.08508120285,
+    355026.2957250329,
+    483499.52631580987,
+    379932.426289271,
+    343518.24217919825,
+    415180.3821427858,
+    331708.9752650448,
+    324778.2736593893,
+    422589.64983704174
+   ],
+   "median_ns": 349272.26895211556,
+   "spread": 0.45443416716882523
+  },
+  "g++-16.floats.MB_READ_PATH.inl": {
+   "repetitions_ns": [
+    334491.5197138122,
+    325613.89850113675,
+    339600.8991695406,
+    381677.21733784355,
+    324994.3480280576,
+    583062.2991073228,
+    411375.79447081406,
+    334721.1904764389,
+    340728.3970767739,
+    334816.41518435976
+   ],
+   "median_ns": 337208.6571769502,
+   "spread": 0.7653064225567735
+  },
+  "g++-16.records.MB_FIELD.before": {
+   "repetitions_ns": [
+    33.28032367960809,
+    32.05069706201898,
+    32.47319874666002,
+    33.534641643978844,
+    32.1908465273686,
+    32.15924354055244,
+    36.466647335208776,
+    32.303369207700236,
+    32.621238976674356,
+    34.53646829661841
+   ],
+   "median_ns": 32.54721886166719,
+   "spread": 0.13567826768728072
+  },
+  "g++-16.records.MB_FIELD.before_AA": {
+   "repetitions_ns": [
+    35.658993998584094,
+    36.29042743006044,
+    35.2505737036402,
+    34.28896363029402,
+    41.88828279659086,
+    32.23261410513939,
+    33.77500070751457,
+    33.842960639904454,
+    33.08392781280654,
+    36.13126545926006
+   ],
+   "median_ns": 34.76976866696711,
+   "spread": 0.277702989166701
+  },
+  "g++-16.records.MB_FIELD.bh": {
+   "repetitions_ns": [
+    31.51631901493442,
+    33.01728036968053,
+    30.844807301430798,
+    42.854573831475314,
+    32.532926789463886,
+    34.91180795870841,
+    32.31013063723783,
+    31.85489466640519,
+    33.43907367425347,
+    32.98877409329971
+   ],
+   "median_ns": 32.7608504413818,
+   "spread": 0.3665889733703129
+  },
+  "g++-16.records.MB_FIELD.branch": {
+   "repetitions_ns": [
+    44.38315841244149,
+    48.36585478975769,
+    46.24881662079188,
+    48.809990658772435,
+    44.52285501641645,
+    46.446205120523196,
+    43.395147024483855,
+    44.17368233968935,
+    43.03569209459028,
+    43.530850203202746
+   ],
+   "median_ns": 44.453006714428966,
+   "spread": 0.12989669295660666
+  },
+  "g++-16.records.MB_FIELD.inl": {
+   "repetitions_ns": [
+    41.895566142509495,
+    46.377679538536775,
+    43.77382232927339,
+    44.70619750517854,
+    41.97856909193873,
+    41.43272431824365,
+    42.024343034370006,
+    41.30458519774092,
+    43.257261504608,
+    44.270889877433795
+   ],
+   "median_ns": 42.640802269489,
+   "spread": 0.11897276952562952
+  }
+ },
+ "ratios": {
+  "cars.MB_FIELD": {
+   "before_AA/before": 1.042,
+   "branch/before": 1.726,
+   "inl/before": 1.601,
+   "bh/before": 1.004
+  },
+  "records.MB_FIELD": {
+   "before_AA/before": 1.068,
+   "branch/before": 1.366,
+   "inl/before": 1.31,
+   "bh/before": 1.007
+  },
+  "floats.MB_READ_PATH": {
+   "before_AA/before": 1.014,
+   "branch/before": 1.115,
+   "inl/before": 1.076,
+   "bh/before": 0.973
+  }
+ },
+ "result": "A/A 1.014 to 1.068. inl stays slow: cars 1.601, records 1.310, floats 1.076. bh is under the floor in each cell: cars 1.004, records 1.007, floats 0.973. bh enters the tree as db62f4c."
+}

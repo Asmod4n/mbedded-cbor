@@ -10,17 +10,18 @@ Every example of a document in `doc/` is a doctest case. The cases of
 `doc <name>:`. The cases of `doc/advanced/<name>.md` are in
 `test/doc_advanced_<name>.cpp`, and their names start with
 `doc advanced <name>:`. A test builds the input that a comment of the
-document shows as text with `encoded()` of `test/binding.hpp`. A claim
+document shows as text with `encoded()` of `test/reference.hpp`. A claim
 about allocations has its test in `test/allocation.cpp`. `test/cts.cpp`
 runs the JSONPath Compliance Test Suite.
 
 ## 2. A lazy reads heads
 
-`lazy::from` reads no head. A step reads the heads that it needs when it
+`lazy::copy` and `lazy::view` read no head. A step reads the heads that it needs when it
 is called: the heads from the start of its map or array to the target,
 and the head of the target. It reads no byte after the head of the
 target. So a target that the input does not hold gives `too_little_data`
-at the step.
+at the step. A map or an array that claims more items than the bytes
+left gives `too_little_data` before the step reads an element.
 
 ## 3. A skip keeps a count
 
@@ -30,31 +31,40 @@ with `too_little_data` when an item claims more than the bytes that are
 left. So the nesting depth does not bound a skip, and `item_size` uses
 the same skip.
 
-## 4. The limits are read once
+## 4. The limits are constants
 
-Each public entry reads `cbor::limits` once and passes the values down.
-Each field holds one `std::atomic<std::size_t>`, read with relaxed
-order. When the three size limits are `SIZE_MAX`, an entry takes the
-form of the code that checks no size.
+Each limit is a `static constexpr` member of `cbor::limits`. A check of
+a string length or an element count stands under `if constexpr` on its
+limit, so a build that sets no size limit has no such check. A skip
+uses `heads::decoder<false>`, which checks no size limit, because the
+limits count only what a call reads.
 
-## 5. The marks of tag 28
+## 5. Tags 28 and 29
 
-The lazy values of one top-level item share one list of the positions of
-its tags 28. The first tag 29 that a top-level item reads finds the tags
-28 before it, once, and keeps their positions. A later tag 29 reuses them.
-The list grows with no lock, so a lazy belongs to one thread. A debug
-build records the thread that reads the list first, and a read of the
-list in another thread throws `std::logic_error`.
-
-A typed read of a path over bytes reads an item again through a lazy
-when it meets a tag 29, so that it finds the marks.
+A lazy keeps no marks of tag 28. It reads tags 28 and 29 as plain tags, so
+a read changes nothing in it and needs no lock. Only `cbor::structs`
+decode resolves them, with a table of the tags 28 of one call.
 
 ## 6. A compile-time path
 
 The compiler parses a compile-time path once. At run time it is a set of
 constant arrays.
 
-## 7. A binding
+## 7. The item tree
 
-`decode.hpp` lists the calls that the library makes on a binding for each
-kind of item. `encode.hpp` lists the calls of an encode.
+`lazy::clone` builds one `cbor::item` for each data item in a
+`std::pmr::monotonic_buffer_resource` that the result owns. The children
+of an array or a map stand by value in one block of that resource, so a
+container holds a `std::span<cbor::item const>`. The first block is sized
+from the length of the input. A count is checked against the bytes that
+are left before an element is read, and the sum of all open counts never
+exceeds the bytes that are left.
+
+A tag 28 and a tag 29 are tag items over their content. The resource
+holds one sorted table: each tag 24 item with the root of its embedded
+item. `cbor::encoded_cbor_data_item` searches the table. The result is a
+`std::shared_ptr` whose deleter owns the resource, and the function finds
+the resource through `std::get_deleter`. `encode` of an item
+writes each head with the additional information that the item keeps, a
+float at the width of its type,
+and does not follow a tag 29.

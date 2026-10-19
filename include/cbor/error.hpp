@@ -35,7 +35,7 @@ enum class error {
     io_error,
     string_length_exceeded,
     container_elements_exceeded,
-    input_bytes_exceeded
+    not_singular_query
 };
 
 class error_category : public std::error_category
@@ -101,8 +101,8 @@ public:
             return "string length exceeded";
         case error::container_elements_exceeded:
             return "container elements exceeded";
-        case error::input_bytes_exceeded:
-            return "input bytes exceeded";
+        case error::not_singular_query:
+            return "not a singular query";
         }
         return "unknown cbor error";
     }

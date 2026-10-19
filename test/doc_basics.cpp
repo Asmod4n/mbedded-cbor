@@ -1,4 +1,5 @@
-#include "binding.hpp"
+#include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -54,11 +55,7 @@ TEST_CASE("doc basics: the errors that a program meets most often")
     CHECK_EQ(cbor::at_path<"$[1]", int>(pair.substr(0, pair.size() - 1)).error(), error::too_little_data);
     CHECK_EQ(cbor::at_path<"$", int>("\xff"s).error(), error::syntax_error);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s).error(), error::indefinite_length);
-    test_binding b;
-    CHECK_EQ(cbor::at_path(b, "$.a[", *cbor::lazy::from(preferred(M("a"s, 1)))).error(), error::invalid_path);
-    std::string const three = preferred(A(1, 2, 3));
-    test::limits_guard const g{{.container_elements = 2}};
-    CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
+    CHECK_EQ(test::at_path("$.a[", *test::lazy_of_copy(preferred(M("a"s, 1)))).error(), error::invalid_path);
 }
 
 // The section "Errors" says that a wrong use that the compiler cannot see throws std::logic_error.
@@ -67,17 +64,36 @@ TEST_CASE("doc basics: a wrong use throws std::logic_error")
     CHECK_THROWS_AS((void)cbor::lazy{}.at(0), std::logic_error);
 }
 
+// The section "Results that point into the bytes" states the two forms in which bytes go into the library: a copy
+// form, where an rvalue std::string is moved, and a view form over a std::shared_ptr<std::string const>.
+TEST_CASE("doc basics: bytes go in as a copy or as a view")
+{
+    std::string const kept = preferred(M("name"s, std::string(40, 'a')));
+    auto const copied = cbor::at_path<"$.name", std::string_view>(std::string(kept));
+    REQUIRE(copied.has_value());
+    CHECK_NE((**copied).data(), kept.data() + 8);
+    std::string moved = kept;
+    char const *const data = moved.data();
+    auto const taken = cbor::at_path<"$.name", std::string_view>(std::move(moved));
+    REQUIRE(taken.has_value());
+    CHECK_EQ((**taken).data(), data + 8);
+    auto const owner = std::make_shared<std::string const>(kept);
+    auto const viewed = cbor::at_path<"$.name", std::string_view>(owner);
+    REQUIRE(viewed.has_value());
+    CHECK_EQ((**viewed).data(), owner->data() + 8);
+}
+
 // The section "Results that point into the bytes" shows the owner rule: the view stays valid after the owner of the
-// caller ends, because the owning_ref holds the bytes.
+// caller ends, because the ref holds the bytes.
 TEST_CASE("doc basics: results that point into the bytes")
 {
     std::string bytes = preferred(M("name"s, "ann"s));
     std::string_view text;
     std::string copy;
-    std::optional<std::expected<cbor::owning_ref<std::string_view>, cbor::error>> kept;
+    std::optional<std::expected<cbor::ref<std::string_view>, cbor::error>> kept;
     {
         auto const owner = std::make_shared<std::string const>(std::move(bytes));
-        auto const name = cbor::at_path<"$.name", std::string_view>(owner, *owner);
+        auto const name = cbor::at_path<"$.name", std::string_view>(owner);
         REQUIRE(name.has_value());
         if (name) {
             text = **name;
@@ -105,54 +121,26 @@ TEST_CASE("doc basics: threads")
         auto const use_second = [&second_read](std::expected<std::int64_t, error> const &v) { second_read = *v; };
         std::jthread first([&bytes, &use_first] { use_first(cbor::at_path<"$.id", std::int64_t>(bytes)); });
         std::jthread second([&bytes, &use_second] {
-            if (auto const doc = cbor::lazy::from(bytes))
-                use_second(cbor::at_path<"$.id", std::int64_t>(*doc));
+            if (auto const doc = test::lazy_of_copy(bytes))
+                use_second(doc->at_path<"$.id", std::int64_t>());
         });
     }
     CHECK_EQ(first_read, 42);
     CHECK_EQ(second_read, 42);
 }
 
-// The section "Limits" sets one field and then all four, and states that a field that the braces do not name gets
-// its default, because a user expects the old value there.
+// The section "Limits" states the default of each limit for a build that sets none.
 TEST_CASE("doc basics: limits")
 {
-    test::limits_guard const g{{}};
-    CHECK_EQ(cbor::limits.nesting_depth, 128u);
-    CHECK_EQ(cbor::limits.string_length, SIZE_MAX);
-    CHECK_EQ(cbor::limits.container_elements, SIZE_MAX);
-    CHECK_EQ(cbor::limits.input_bytes, SIZE_MAX);
-    CHECK_THROWS_AS(cbor::limits.nesting_depth = 513, std::logic_error);
-    cbor::limits.container_elements = 8;
-    cbor::limits.string_length = 1024;
-    cbor::limits = {.nesting_depth = 16, .input_bytes = 65536};
-    CHECK_EQ(cbor::limits.nesting_depth, 16u);
-    CHECK_EQ(cbor::limits.input_bytes, 65536u);
-    CHECK_EQ(cbor::limits.string_length, SIZE_MAX);
-    CHECK_EQ(cbor::limits.container_elements, SIZE_MAX);
+    CHECK_EQ(cbor::limits::nesting_depth, 128u);
+    CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
+    CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
 }
 
-// The table of the section "Limits" names the error of each field. The test exceeds each field once.
-TEST_CASE("doc basics: the error of each limit")
+// The table of the section "Limits" names the error of the nesting depth. The examples of the size limits are
+// in test/limits/sizes_2.cpp, which is built with them.
+TEST_CASE("doc basics: the error of the nesting depth")
 {
-    {
-        std::string const deep = preferred(A(A(A(1))));
-        test::limits_guard const g{{.nesting_depth = 2}};
-        CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(deep).error(), error::nesting_depth_exceeded);
-    }
-    {
-        std::string const text = preferred(V("xyz"s));
-        test::limits_guard const g{{.string_length = 2}};
-        CHECK_EQ(cbor::lazy::from(text)->get<std::string_view>().error(), error::string_length_exceeded);
-    }
-    {
-        std::string const three = preferred(A(1, 2, 3));
-        test::limits_guard const g{{.container_elements = 2}};
-        CHECK_EQ(cbor::lazy::from(three)->size().error(), error::container_elements_exceeded);
-    }
-    {
-        std::string const three = preferred(A(1, 2, 3));
-        test::limits_guard const g{{.input_bytes = 2}};
-        CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::input_bytes_exceeded);
-    }
+    std::string const deep = test::repeat("\x81"sv, cbor::limits::nesting_depth + 1) + '\x01';
+    CHECK_EQ(test::lazy_of_copy(deep)->clone().error(), error::nesting_depth_exceeded);
 }

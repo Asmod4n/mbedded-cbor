@@ -1,4 +1,4 @@
-#include "binding.hpp"
+#include "reference.hpp"
 
 #ifdef __cpp_impl_reflection
 
@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <memory_resource>
@@ -46,24 +47,67 @@ struct reading {
     bool operator==(reading const &) const = default;
 };
 
-struct [[=cbor::allowlist{}]] account {
-    [[=cbor::allow{}]] std::string user;
+class account
+{
     std::string password;
+
+public:
+    account() = default;
+    account(std::string u, std::uint8_t const l, std::string p)
+        : password(std::move(p)), user(std::move(u)), level(l)
+    {
+    }
+    std::string user;
+    std::uint8_t level = 0;
+
+    std::string const &password_of() const
+    {
+        return password;
+    }
 };
 
 // RFC 8428 6: SenML names the labels n and v with the integers 0 and 2.
 struct senml {
     std::string n;
     double v;
-    static constexpr std::array<std::int64_t, 2> keys{0, 2};
 };
-
-using epoch = cbor::tagged<1, std::int64_t>;
 
 struct tagged_person {
     std::string name;
     std::int64_t age;
 };
+
+} // namespace doc_advanced_structs
+
+template <>
+struct cbor::describe_members<doc_advanced_structs::account> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160061, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_advanced_structs::account, user),
+        cbor::member{1, &doc_advanced_structs::account::level},
+    };
+};
+
+template <>
+struct cbor::describe_members<doc_advanced_structs::tagged_person> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800, 0};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_advanced_structs::tagged_person, name),
+        CBOR_MEMBER(doc_advanced_structs::tagged_person, age),
+    };
+};
+
+template <>
+struct cbor::describe_members<doc_advanced_structs::senml> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{0, &doc_advanced_structs::senml::n},
+        cbor::member{2, &doc_advanced_structs::senml::v},
+    };
+};
+
+namespace doc_advanced_structs
+{
 
 // The section "Encode into a buffer of your own" says that encode with a target appends to the bytes that the
 // target holds.
@@ -80,13 +124,13 @@ TEST_CASE("doc advanced structs: encode appends to a target")
 TEST_CASE("doc advanced structs: the forms of decode")
 {
     std::string bytes = preferred(V("abc"s));
-    auto const copied = cbor::structs<std::string_view>::decode(bytes);
+    auto const copied = cbor::structs<std::string_view>::decode(std::string(bytes));
     REQUIRE(copied.has_value());
     CHECK_EQ(**copied, "abc"sv);
     CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(bytes.data() + 1));
 
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const held = cbor::structs<std::string_view>::decode(owner, *owner);
+    auto const held = cbor::structs<std::string_view>::decode(owner);
     REQUIRE(held.has_value());
     CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(owner->data() + 1));
 
@@ -96,7 +140,7 @@ TEST_CASE("doc advanced structs: the forms of decode")
     REQUIRE(taken.has_value());
     CHECK_EQ(static_cast<void const *>((*taken)->data()), static_cast<void const *>(data + 2));
 
-    CHECK_THROWS_AS((void)cbor::structs<std::string_view>::decode(std::shared_ptr<void const>{}, bytes),
+    CHECK_THROWS_AS((void)cbor::structs<std::string_view>::decode(std::shared_ptr<std::string const>{}),
                     std::logic_error);
 }
 
@@ -107,22 +151,26 @@ TEST_CASE("doc advanced structs: the item of each type")
     auto const bytes = cbor::structs<reading>::encode(r);
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes),
-             R"({"id": "x", "pair": [true, null], "state": 1, "value": 2.5, "counts": {"a": -1}, "samples": [1, 2]})");
-    auto const back = cbor::structs<reading>::decode(*bytes);
+             R"({"id": "x", "pair": [true, null], "state": 1, "value": 2.5, "counts": {"a": -1}, "samples": 69(h'01000200')})");
+    auto const back = cbor::structs<reading>::decode(std::string(*bytes));
     REQUIRE(back.has_value());
     CHECK(**back == r);
 
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::set<std::uint8_t>>::encode({3, 1})), "[1, 3]");
+    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::set<std::uint8_t>>::encode({3, 1})), "258([1, 3])");
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}})),
-             "h'0102'");
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<epoch>::encode(epoch{1700000000})), "1(1700000000)");
+             "64(h'0102')");
+    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::chrono::sys_seconds>::encode(
+                 std::chrono::sys_seconds{std::chrono::seconds{1700000000}})),
+             "1(1700000000)");
     CHECK_EQ(cbor::structs<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s).error(), error::number_out_of_range);
 }
 
-// The section "Structs and keys" shows cbor::allowlist with cbor::allow, and integer keys from a static member keys.
+// The section "Structs and keys" shows a description of a class with a private member and an integer key, and
+// a description with cbor::untagged that gives integer keys and no tag.
 TEST_CASE("doc advanced structs: the key of a member")
 {
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<account>::encode(account{"ann", "secret"})), R"({"user": "ann"})");
+    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<account>::encode(account{"ann", 2, "secret"})),
+             R"(160061({1: 2, "user": "ann"}))");
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<senml>::encode(senml{"t", 1.5})), R"({0: "t", 2: 1.5})");
 }
 
@@ -133,19 +181,23 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
     auto const extra = cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "z"s, 2)));
     REQUIRE(extra.has_value());
     CHECK_EQ((*extra)->name, "x");
-    auto const twice = cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "age"s, 2)));
-    REQUIRE(twice.has_value());
-    CHECK_EQ((*twice)->age, 1u);
+    CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "age"s, 2))).error(),
+             error::duplicate_key);
     CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s))).error(), error::key_not_found);
     CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, A(), 0))).error(),
              error::unsupported_value);
 }
 
-// The section "Tags" states that structs writes the tag of a struct through cbor::tagged<N, E>, because a user who
-// knows the schema form expects [[=cbor::tag(n)]] to do this.
+// The section "Tags" states that a struct carries the tag of its description, and that cbor::tagged_item puts a tag on
+// content that is not a struct, here COSE_Sign1 of RFC 9052 4.2: tag 18 on an array.
 TEST_CASE("doc advanced structs: the tag of a struct")
 {
-    auto const bytes = cbor::structs<cbor::tagged<1800, tagged_person>>::encode({{"ann", 30}});
+    using cose_sign1 = cbor::tagged_item<18, std::tuple<std::span<std::byte const>, std::map<std::int64_t, std::int64_t>,
+                                                        std::span<std::byte const>, std::span<std::byte const>>>;
+    auto const sign1 = cbor::structs<cose_sign1>::decode("\xd2\x84\x40\xa0\x40\x40"s);
+    REQUIRE(sign1.has_value());
+    CHECK_EQ(*cbor::structs<cose_sign1>::encode(**sign1), "\xd2\x84\x40\xa0\x40\x40"s);
+    auto const bytes = cbor::structs<tagged_person>::encode({"ann", 30});
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes), R"(1800({"age": 30, "name": "ann"}))");
 }
@@ -168,12 +220,15 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
     CHECK_EQ(std::get<std::uint8_t>(**back), 42u);
 }
 
-// The section "Shared values" says that decode reads tag 28 and tag 29 of the value-sharing registration.
-TEST_CASE("doc advanced structs: a shared value reads as the item it names")
+// The section "Shared values" says that decode accepts a tag 28 on any member, and a tag 29 only where a member can
+// share a value; a plain member gives incorrect_type.
+TEST_CASE("doc advanced structs: a tag 29 into a plain member is incorrect_type")
 {
-    auto const back = cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
-    REQUIRE(back.has_value());
-    CHECK_EQ(**back, std::vector<std::string>{"x", "x"});
+    auto const marked = cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\x61y"s);
+    REQUIRE(marked.has_value());
+    CHECK_EQ(**marked, std::vector<std::string>{"x", "y"});
+    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s).error(),
+             error::incorrect_type);
 }
 
 // The section "A memory budget" shows a std::pmr target, and that a refused allocation is the error
@@ -185,10 +240,10 @@ TEST_CASE("doc advanced structs: a std::pmr target")
         *cbor::structs<std::vector<std::string>>::encode({std::string(40, 'a'), std::string(40, 'b')}));
     std::array<std::byte, 64> small{};
     std::pmr::monotonic_buffer_resource budget(small.data(), small.size(), std::pmr::null_memory_resource());
-    CHECK_EQ(cbor::structs<texts>::decode(owner, *owner, texts(&budget)).error(), error::not_enough_memory);
+    CHECK_EQ(cbor::structs<texts>::decode(owner, texts(&budget)).error(), error::not_enough_memory);
     std::array<std::byte, 1024> large{};
     std::pmr::monotonic_buffer_resource enough(large.data(), large.size(), std::pmr::null_memory_resource());
-    auto const fits = cbor::structs<texts>::decode(owner, *owner, texts(&enough));
+    auto const fits = cbor::structs<texts>::decode(owner, texts(&enough));
     REQUIRE(fits.has_value());
     CHECK_EQ((*fits)->size(), 2u);
     CHECK_EQ((*fits)->front().get_allocator().resource(), &enough);
