@@ -505,6 +505,31 @@ TEST_CASE("validity: check_item_range accepts exactly a range inside the items")
                 }
 }
 
+// A packed writer gives each item its index in a fixed order, so a verified reader expects one index for a
+// block member and an index at or behind the end of the block for an inner struct. The test exists because the
+// path and the decoder use these two checks, so they must accept exactly the equal index and the indexes from
+// the end on, at the bounds of std::uint64_t.
+TEST_CASE("validity: check_reference_index and check_reference_after at the bounds of std::uint64_t")
+{
+    constexpr std::uint64_t max = std::numeric_limits<std::uint64_t>::max();
+    std::array<std::uint64_t, 6> const indexes{0, 1, 2, 17, max - 1, max};
+    for (std::uint64_t const given : indexes)
+        for (std::uint64_t const other : indexes) {
+            CAPTURE(given);
+            CAPTURE(other);
+            auto const equal = validity::check_reference_index(given, other);
+            if (given == other)
+                CHECK(equal.has_value());
+            else
+                CHECK_EQ(equal.error(), error::incorrect_type);
+            auto const after = validity::check_reference_after(given, other);
+            if (given >= other)
+                CHECK(after.has_value());
+            else
+                CHECK_EQ(after.error(), error::incorrect_type);
+        }
+}
+
 // [span.sub]: first(count) and last(count) need count <= size(). A sub-view of a typed array is made only
 // after this check, for every count up to one past the size.
 TEST_CASE("validity: check_count for every count up to one past the size")

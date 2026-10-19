@@ -169,6 +169,9 @@ Each `at_path` checks at each read:
 - that each offset that it reads from the directory lies inside the
   message;
 - the tag of the struct of each struct on the path;
+- that each part of variable size of a struct names its place in the
+  order of the writer, and that each inner struct names a place behind
+  those parts;
 - the head of the field that it reads;
 - that a part of variable size lies inside the message and does not
   overlap another part.
@@ -189,6 +192,7 @@ each element read checks only its index.
 | a typed array whose length is not a multiple of its element size | `inadmissible_type_for_tag_content` |
 | an index past the end of a list | `index_out_of_bounds` |
 | a reference to an entry that the table does not have | `unpopulated_table_index` |
+| a reference to another place than the order of the writer gives | `incorrect_type` |
 | a refused allocation in `decode` | `not_enough_memory` |
 
 ```cpp

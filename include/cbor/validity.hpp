@@ -449,6 +449,22 @@ public:
         return {};
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_reference_index(std::uint64_t const given,
+                                                                                         std::uint64_t const expected)
+    {
+        if (given != expected) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_reference_after(std::uint64_t const given,
+                                                                                         std::uint64_t const end)
+    {
+        if (given < end) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        return {};
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_count(std::size_t const count,
                                                                                std::size_t const size)
     {

@@ -1495,7 +1495,8 @@ TEST_CASE("encode: into the exact span that a writer allocates")
 // CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct is a reference of 6
 // bytes to its record in the shared items, or to an item f7 (undefined, draft-ietf-cbor-packed-19 4.2: an
 // absent value) when it is empty. decode reads it; a path does not step into it. Both forms stay well-formed
-// CBOR items.
+// CBOR items. The block of the root holds the typed array of signature and the empty array of note, so the f7
+// of user follows them.
 TEST_CASE("schema: an optional struct and an optional string, present and absent")
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
@@ -1518,7 +1519,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
         CHECK_EQ(*end, message.size());
     }
     CHECK_EQ(cbor::packed<wheel>::fixed_size<std::optional<passkey_user>>(), 6u);
-    CHECK_NE(none.find("\x5a\x00\x00\x00\x01\x01\xf7"s), std::string::npos);
+    CHECK_NE(none.find("\x5a\x00\x00\x00\x01\x01\x9a\x00\x00\x00\x00\xf7"s), std::string::npos);
     auto const decoded_back2 = *cbor::packed<passkey_login>::decode(std::string(none));
     passkey_login const &back2 = *decoded_back2;
     CHECK_FALSE(back2.user.has_value());
@@ -2399,6 +2400,256 @@ TEST_CASE("schema: a record item of another size is an error")
     filler.at(motor + 1) = '\x1a';
     CHECK_EQ(at_path<car, "$.motor.cc">(filler).error(), error::unpopulated_table_index);
     CHECK_EQ(cbor::packed<car>::decode(std::string(filler)).error(), error::unpopulated_table_index);
+}
+
+namespace
+{
+
+struct [[=cbor::tag(1540)]] order_leaf {
+    std::string a;
+    std::uint8_t x;
+    std::string b;
+};
+
+struct [[=cbor::tag(1541)]] order_middle {
+    order_leaf first;
+    std::vector<order_leaf> leaves;
+    std::string m;
+    std::optional<order_leaf> maybe;
+    std::string n;
+};
+
+struct [[=cbor::tag(1542)]] order_top {
+    order_middle inner;
+    std::string t;
+    std::vector<std::string> list;
+    std::string u;
+};
+
+order_top order_sample(std::optional<order_leaf> const maybe)
+{
+    return {{{"a1", 1, "b1"}, {{"a2", 2, "b2"}, {"a3", 3, "b3"}}, "m", maybe, "n"}, "t", {"l0", "l1"}, "u"};
+}
+
+// draft-ietf-cbor-packed-19 2.2 Table 1: 6(N) with N >= 0 is index 16 + 2N, c6 1a + N; 6(N) with N < 0 is
+// index 16 - 2N - 1, c6 3a + (-1 - N).
+std::uint64_t reference_index(std::string_view const bytes, std::size_t const at)
+{
+    std::uint64_t const negative = bytes.at(at + 1) == '\x3a' ? 1 : 0;
+    return 16 + 2 * std::uint64_t{u32_read(bytes, at + 2)} + negative;
+}
+
+// The directory stands at index 0 behind d9 04 59 83 9a + u32 and its own head 5a + u32, at byte 14. Entry 0 is
+// the root start, entry j - 16 the start of item j.
+std::size_t item_start(std::string_view const bytes, std::uint64_t const j)
+{
+    return u32_read(bytes, 14 + 4 * static_cast<std::size_t>(j - 16));
+}
+
+std::size_t root_start(std::string_view const bytes)
+{
+    return u32_read(bytes, 14);
+}
+
+// RFC 8949 3: a text string with a four-byte length is 7a + u32 and the bytes.
+std::string_view text_at(std::string_view const bytes, std::uint64_t const j)
+{
+    std::size_t const at = item_start(bytes, j);
+    REQUIRE_EQ(bytes.at(at), '\x7a');
+    return bytes.substr(at + 5, u32_read(bytes, at + 1));
+}
+
+template <std::meta::info Member, class U>
+std::uint64_t index_in(std::string_view const bytes, std::size_t const record)
+{
+    return reference_index(bytes, record + cbor::packed<order_top>::member_offset<Member, U>());
+}
+
+// A list item is 9a + u32 and one 6-byte reference per element.
+std::uint64_t element_index(std::string_view const bytes, std::uint64_t const list, std::size_t const i)
+{
+    return reference_index(bytes, item_start(bytes, list) + 5 + 6 * i);
+}
+
+} // namespace
+
+// draft-ietf-cbor-packed-19 3.2 of the plan: each struct has its record and a block of the items of its members of
+// variable size that are not structs, in field order. Block member i of a struct S has index base(S) + i; the root
+// has base 17, any other struct base r(S) + 1, where r(S) is the index of its record. After the block, in field
+// order: a struct member as its record and its own items, and the items that the elements of a list name. The
+// indexes below are counted by hand from that rule:
+//   top block: t 17, list 18, u 19; inner record 20.
+//   middle block (base 21): leaves 21, m 22, n 23; first record 24, its block a 25, b 26.
+//   leaves[0] record 27, block 28, 29; leaves[1] record 30, block 31, 32; maybe f7 at 33.
+//   then the strings of list: l0 34, l1 35.
+// The test exists because a reader takes base + i as the index of a block member, at every depth.
+TEST_CASE("schema: block member i of a struct has index base + i at every depth")
+{
+    std::string const bytes = *cbor::packed<order_top>::encode(order_sample(std::nullopt));
+    check_one_item(bytes);
+    std::size_t const root = root_start(bytes);
+    CHECK_EQ(index_in<^^order_top::t, order_top>(bytes, root), 17u);
+    CHECK_EQ(index_in<^^order_top::list, order_top>(bytes, root), 18u);
+    CHECK_EQ(index_in<^^order_top::u, order_top>(bytes, root), 19u);
+    CHECK_EQ(index_in<^^order_top::inner, order_top>(bytes, root), 20u);
+    CHECK_EQ(text_at(bytes, 17), "t");
+    CHECK_EQ(text_at(bytes, 19), "u");
+
+    std::size_t const inner = item_start(bytes, 20);
+    CHECK_EQ(bytes.substr(inner, 3), "\xd9\x06\x05"s);
+    CHECK_EQ(index_in<^^order_middle::leaves, order_middle>(bytes, inner), 21u);
+    CHECK_EQ(index_in<^^order_middle::m, order_middle>(bytes, inner), 22u);
+    CHECK_EQ(index_in<^^order_middle::n, order_middle>(bytes, inner), 23u);
+    CHECK_EQ(index_in<^^order_middle::first, order_middle>(bytes, inner), 24u);
+    CHECK_EQ(index_in<^^order_middle::maybe, order_middle>(bytes, inner), 33u);
+    CHECK_EQ(text_at(bytes, 22), "m");
+    CHECK_EQ(text_at(bytes, 23), "n");
+
+    std::size_t const first = item_start(bytes, 24);
+    CHECK_EQ(bytes.substr(first, 3), "\xd9\x06\x04"s);
+    CHECK_EQ(index_in<^^order_leaf::a, order_leaf>(bytes, first), 25u);
+    CHECK_EQ(index_in<^^order_leaf::b, order_leaf>(bytes, first), 26u);
+    CHECK_EQ(text_at(bytes, 25), "a1");
+    CHECK_EQ(text_at(bytes, 26), "b1");
+
+    for (std::size_t i = 0; i < 2; ++i) {
+        std::uint64_t const r = element_index(bytes, 21, i);
+        CHECK_EQ(r, 27u + 3 * i);
+        std::size_t const leaf = item_start(bytes, r);
+        CHECK_EQ(bytes.substr(leaf, 3), "\xd9\x06\x04"s);
+        CHECK_EQ(index_in<^^order_leaf::a, order_leaf>(bytes, leaf), r + 1);
+        CHECK_EQ(index_in<^^order_leaf::b, order_leaf>(bytes, leaf), r + 2);
+        CHECK_EQ(text_at(bytes, r + 1), std::format("a{}", i + 2));
+        CHECK_EQ(text_at(bytes, r + 2), std::format("b{}", i + 2));
+    }
+
+    CHECK_EQ(bytes.at(item_start(bytes, 33)), '\xf7');
+    CHECK_EQ(item_start(bytes, 34) - item_start(bytes, 33), 1u);
+    CHECK_EQ(element_index(bytes, 18, 0), 34u);
+    CHECK_EQ(element_index(bytes, 18, 1), 35u);
+    CHECK_EQ(text_at(bytes, 34), "l0");
+    CHECK_EQ(text_at(bytes, 35), "l1");
+    CHECK_EQ(u32_read(bytes, 10), 4u * 21u);
+
+    CHECK_EQ(at_path<order_top, "$.inner.leaves[1].b">(bytes), "b3"s);
+    CHECK_EQ(at_path<order_top, "$.inner.first.a">(bytes), "a1"s);
+    CHECK_EQ(at_path<order_top, "$.inner.n">(bytes), "n"s);
+    CHECK_EQ(at_path<order_top, "$.list[1]">(bytes), "l1"s);
+    CHECK_EQ(at_path<order_top, "$.u">(bytes), "u"s);
+    auto const decoded_back = *cbor::packed<order_top>::decode(std::string(bytes));
+    order_top const &back = *decoded_back;
+    CHECK_EQ(back.inner.leaves.at(1).b, "b3");
+    CHECK_FALSE(back.inner.maybe.has_value());
+    CHECK_EQ(back.list.at(1), "l1");
+    CHECK_EQ(*cbor::packed<order_top>::encode(back), bytes);
+}
+
+// An optional struct that holds a value is a record at the index of its reference, followed by its block, so the
+// items behind it move by the size of that record and its block: maybe record 33, its block 34 and 35, then the
+// strings of list at 36 and 37.
+TEST_CASE("schema: an optional struct with a value is a record followed by its block")
+{
+    std::string const bytes = *cbor::packed<order_top>::encode(order_sample(order_leaf{"a4", 4, "b4"}));
+    check_one_item(bytes);
+    std::size_t const inner = item_start(bytes, 20);
+    CHECK_EQ(index_in<^^order_middle::maybe, order_middle>(bytes, inner), 33u);
+    std::size_t const maybe = item_start(bytes, 33);
+    CHECK_EQ(bytes.substr(maybe, 3), "\xd9\x06\x04"s);
+    CHECK_EQ(index_in<^^order_leaf::a, order_leaf>(bytes, maybe), 34u);
+    CHECK_EQ(index_in<^^order_leaf::b, order_leaf>(bytes, maybe), 35u);
+    CHECK_EQ(element_index(bytes, 18, 0), 36u);
+    CHECK_EQ(text_at(bytes, 37), "l1");
+    auto const b = at_path<order_top, "$.inner.maybe">(bytes);
+    REQUIRE(b.has_value());
+    CHECK(b->has_value());
+    auto const decoded_back = *cbor::packed<order_top>::decode(std::string(bytes));
+    order_top const &back = *decoded_back;
+    REQUIRE(back.inner.maybe.has_value());
+    CHECK_EQ(back.inner.maybe->b, "b4");
+}
+
+namespace
+{
+
+// The reference at byte at names item j instead: c6 1a + N for an even j - 16, c6 3a + N for an odd one.
+std::string reference_forged(std::string bytes, std::size_t const at, std::uint64_t const j)
+{
+    bytes.at(at + 1) = (j - 16) % 2 == 1 ? '\x3a' : '\x1a';
+    bytes.replace(at + 2, 4, u32_bytes(static_cast<std::uint32_t>((j - 16) / 2)));
+    return bytes;
+}
+
+} // namespace
+
+// The plan of draft-ietf-cbor-packed-19 3.2: a verified reader checks that block member i of a struct names
+// base + i. The field t of the root is forged to name the item of u (19 for 17), and in the record of first, three
+// levels down, the field a is forged to name the item of b (26 for 25). The test exists because a reader that
+// followed a block reference wherever it points would give the bytes of another member.
+TEST_CASE("schema: a block reference that does not name base + i is incorrect_type")
+{
+    std::string const bytes = *cbor::packed<order_top>::encode(order_sample(std::nullopt));
+    std::size_t const root = root_start(bytes);
+    std::string const root_forged =
+        reference_forged(bytes, root + cbor::packed<order_top>::member_offset<^^order_top::t>(), 19);
+    CHECK_EQ(at_path<order_top, "$.t">(root_forged).error(), error::incorrect_type);
+    CHECK_EQ(at_path<order_top, "$.u">(root_forged), "u"s);
+    CHECK_EQ(cbor::packed<order_top>::decode(std::string(root_forged)).error(), error::incorrect_type);
+
+    std::size_t const first = item_start(bytes, 24);
+    std::string const deep_forged =
+        reference_forged(bytes, first + cbor::packed<order_top>::member_offset<^^order_leaf::a, order_leaf>(), 26);
+    CHECK_EQ(at_path<order_top, "$.inner.first.a">(deep_forged).error(), error::incorrect_type);
+    CHECK_EQ(at_path<order_top, "$.inner.first.b">(deep_forged), "b1"s);
+    CHECK_EQ(at_path<order_top, "$.inner.n">(deep_forged), "n"s);
+    CHECK_EQ(cbor::packed<order_top>::decode(std::string(deep_forged)).error(), error::incorrect_type);
+}
+
+// The plan of draft-ietf-cbor-packed-19 2.8: decode follows the writer order and checks that each reference names
+// the next index. The second string of list is forged to name the first one (34 for 35); a path does not know the
+// order of the items in a list and reads l0 there. The test exists because decode must not read one item twice.
+TEST_CASE("schema: decode refuses a reference that names an item a second time")
+{
+    std::string const bytes = *cbor::packed<order_top>::encode(order_sample(std::nullopt));
+    std::string const repeated = reference_forged(bytes, item_start(bytes, 18) + 5 + 6, 34);
+    CHECK_EQ(cbor::packed<order_top>::decode(std::string(repeated)).error(), error::incorrect_type);
+    CHECK_EQ(at_path<order_top, "$.list[1]">(repeated), "l0"s);
+    CHECK_EQ(at_path<order_top, "$.list[0]">(repeated), "l0"s);
+}
+
+// The plan of draft-ietf-cbor-packed-19 3.2: a struct reference names an index after the block of its struct.
+// The field inner of the root is forged to name the list item 18, which lies inside the block 17 to 19. The test
+// exists because the size check of a record alone gives another error for an item of another size, and no error
+// for an item of the same size.
+TEST_CASE("schema: a struct reference into the block of its struct is incorrect_type")
+{
+    std::string const bytes = *cbor::packed<order_top>::encode(order_sample(std::nullopt));
+    std::size_t const root = root_start(bytes);
+    std::string const forged =
+        reference_forged(bytes, root + cbor::packed<order_top>::member_offset<^^order_top::inner>(), 18);
+    CHECK_EQ(at_path<order_top, "$.inner.m">(forged).error(), error::incorrect_type);
+    CHECK_EQ(at_path<order_top, "$.t">(forged), "t"s);
+    CHECK_EQ(cbor::packed<order_top>::decode(std::string(forged)).error(), error::incorrect_type);
+}
+
+// Every byte of the message is changed in three ways, and every path and decode give a value or an error. The test
+// exists because the address sanitizer of the debug builds then shows any read outside the message.
+TEST_CASE("attack: a changed byte of a message with structs at three levels reads nothing outside it")
+{
+    std::string const bytes = *cbor::packed<order_top>::encode(order_sample(order_leaf{"a4", 4, "b4"}));
+    std::size_t values = 0;
+    for (std::size_t at = 0; at < bytes.size(); ++at) {
+        for (char const change : {'\x01', '\x80', '\xff'}) {
+            std::string forged = bytes;
+            forged.at(at) = static_cast<char>(forged.at(at) ^ change);
+            values += at_path<order_top, "$.inner.leaves[1].b">(forged).has_value();
+            values += at_path<order_top, "$.inner.first.a">(forged).has_value();
+            values += at_path<order_top, "$.inner.maybe">(forged).has_value();
+            values += at_path<order_top, "$.list[1]">(forged).has_value();
+            values += at_path<order_top, "$.u">(forged).has_value();
+            values += cbor::packed<order_top>::decode(std::string(forged)).has_value();
+        }
+    }
+    CHECK_GT(values, 0u);
 }
 
 namespace

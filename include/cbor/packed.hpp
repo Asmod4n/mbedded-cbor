@@ -569,6 +569,66 @@ class reflection
     template <class T, std::meta::info Member, class Root>
     static consteval std::size_t member_offset();
 
+    template <class U>
+    static constexpr bool is_inline_value =
+        std::is_arithmetic_v<U> || std::is_enum_v<U> || is_wide_integer<U> || is_fixed_string<U>;
+
+    template <class U>
+    static consteval bool holds_references()
+    {
+        if constexpr (is_inline_value<U>)
+            return false;
+        else if constexpr (requires { fixed_length<U>::value; })
+            return holds_references<typename fixed_length<U>::element>();
+        else
+            return true;
+    }
+
+    template <class U>
+    static consteval std::size_t block_items()
+    {
+        if constexpr (is_inline_value<U> || is_record<U> || is_optional_record<U>)
+            return 0;
+        else if constexpr (requires { fixed_length<U>::value; })
+            return fixed_length<U>::value * block_items<typename fixed_length<U>::element>();
+        else
+            return 1;
+    }
+
+    template <class U>
+    static consteval std::size_t block_size()
+    {
+        std::size_t n = 0;
+        template for (constexpr std::meta::info m : data_members<U>())
+            n += block_items<std::remove_cv_t<typename[:std::meta::type_of(m):]>>();
+        return n;
+    }
+
+    template <class U, std::meta::info Member>
+    static consteval std::size_t block_index()
+    {
+        std::size_t n = 0;
+        template for (constexpr std::meta::info m : data_members<U>()) {
+            if constexpr (m == Member)
+                return n;
+            n += block_items<std::remove_cv_t<typename[:std::meta::type_of(m):]>>();
+        }
+        return n;
+    }
+
+    struct record_block {
+        std::size_t base;
+        std::size_t end;
+    };
+
+    template <class U>
+    static constexpr record_block record_block_at(std::size_t const base)
+    {
+        return {base, base + block_size<U>()};
+    }
+
+    enum class record_part { whole, block, after_block, values, references };
+
     static constexpr std::size_t typed_array_head = heads::initial_byte_size + sizeof(std::uint8_t) + item_head;
 
 
@@ -909,7 +969,7 @@ class reflection
         return packing_prefix_of().size() + item_head;
     }
 
-    template <class Root, class E, bool Exact, class R>
+    template <class Root, class E, bool Exact, record_part Part, class R>
     CBOR_ALWAYS_INLINE static encode_cursor elements_encode(std::span<char> const out, std::size_t const data, R const &range,
                                        encode_cursor position)
     {
@@ -917,20 +977,18 @@ class reflection
         std::size_t at = data;
         for (auto const &e : range) {
             auto const field = out.subspan(at).template first<size>();
-            zero_initialized_copy<Root, E>(field);
-            position = value_encode<Root, E, Exact>(out, field, e, position);
+            if constexpr (Part == record_part::values)
+                zero_initialized_copy<Root, E>(field);
+            position = value_encode<Root, E, Exact, Part>(out, field, e, position);
             at += size;
         }
         return position;
     }
 
-    template <class Root, bool Exact, class V>
-    CBOR_ALWAYS_INLINE static encode_cursor reference_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
-                                        V const &value, encode_cursor c)
+    template <class Root>
+    CBOR_ALWAYS_INLINE static void reference_write(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
+                                                   std::size_t const j, std::size_t const item)
     {
-        using U = std::remove_cv_t<V>;
-        std::size_t const j = c.index++;
-        std::size_t const item = c.position;
         std::size_t const m = j + shared_start_written - shared_first;
         heads::u32_write(out, directory_at<Root>() + sizeof(std::uint32_t) * (j + 1), item);
         field[1] =
@@ -938,25 +996,29 @@ class reflection
                                 std::to_underlying(rfc8949::additional_information::four_byte_argument));
         auto const n = heads::big_endian(static_cast<std::uint32_t>(m >> 1));
         std::ranges::copy(n, field.template last<sizeof(std::uint32_t)>().begin());
+    }
+
+    template <class Root>
+    CBOR_ALWAYS_INLINE static std::size_t item_written(std::span<char const> const out,
+                                                       std::span<char const, dynamic_type_sizes> const field)
+    {
+        std::size_t const m =
+            2 * std::size_t{heads::unsigned_read<std::uint32_t>(field.template last<sizeof(std::uint32_t)>())} +
+            (static_cast<unsigned char>(field[1]) >> rfc8949::additional_information_bits);
+        std::size_t const j = m + shared_first - shared_start_written;
+        return heads::unsigned_read<std::uint32_t>(
+            out.subspan(directory_at<Root>() + sizeof(std::uint32_t) * (j + 1)).template first<sizeof(std::uint32_t)>());
+    }
+
+    template <class Root, bool Exact, class U>
+    CBOR_ALWAYS_INLINE static encode_cursor item_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
+                                                        U const &value, encode_cursor c)
+    {
+        std::size_t const j = c.index++;
+        std::size_t const item = c.position;
+        reference_write<Root>(out, field, j, item);
         std::size_t const data = item + item_head;
-        if constexpr (is_record<U>) {
-            auto const record = out.subspan(item).template first<record_size<U, Root>()>();
-            zero_initialized_record_copy<Root, U>(record);
-            c.position = item + record_size<U, Root>();
-            c = record_encode<Root, U, Exact>(out, record, value, c);
-        } else if constexpr (is_optional_record<U>) {
-            using E = typename U::value_type;
-            if (value.has_value()) {
-                auto const record = out.subspan(item).template first<record_size<E, Root>()>();
-                zero_initialized_record_copy<Root, E>(record);
-                c.position = item + record_size<E, Root>();
-                c = record_encode<Root, E, Exact>(out, record, *value, c);
-            } else {
-                out[item] = heads::initial_byte(major_type::simple_float,
-                                                std::to_underlying(simple_value::undefined));
-                c.position = item + heads::initial_byte_size;
-            }
-        } else if constexpr (is_optional<U>) {
+        if constexpr (is_optional<U>) {
             using E = typename U::value_type;
             heads::item_head_write(out, item, major_type::array, value.has_value() ? 1 : 0);
             c.position = data;
@@ -964,7 +1026,7 @@ class reflection
                 c.position += fixed_size<E, Root>();
                 auto const element = out.subspan(data).template first<fixed_size<E, Root>()>();
                 zero_initialized_copy<Root, E>(element);
-                c = value_encode<Root, E, Exact>(out, element, *value, c);
+                c = value_encode<Root, E, Exact, record_part::values>(out, element, *value, c);
             }
         } else if constexpr (is_text_range<U> || is_byte_range<U>) {
             std::size_t const length = std::ranges::size(value);
@@ -982,11 +1044,11 @@ class reflection
             for (auto const &[k, v] : value) {
                 auto const key = out.subspan(at).template first<fixed_size<K, Root>()>();
                 zero_initialized_copy<Root, K>(key);
-                c = value_encode<Root, K, Exact>(out, key, k, c);
+                c = value_encode<Root, K, Exact, record_part::values>(out, key, k, c);
                 at += fixed_size<K, Root>();
                 auto const mapped = out.subspan(at).template first<fixed_size<M, Root>()>();
                 zero_initialized_copy<Root, M>(mapped);
-                c = value_encode<Root, M, Exact>(out, mapped, v, c);
+                c = value_encode<Root, M, Exact, record_part::values>(out, mapped, v, c);
                 at += fixed_size<M, Root>();
             }
         } else if constexpr (is_typed_array<U>) {
@@ -1014,20 +1076,100 @@ class reflection
             std::size_t const length = std::ranges::size(value);
             heads::item_head_write(out, item, major_type::array, length);
             c.position = data + length * fixed_size<E, Root>();
-            c = elements_encode<Root, E, Exact>(out, data, value, c);
+            c = elements_encode<Root, E, Exact, record_part::values>(out, data, value, c);
         }
         return c;
     }
 
-    template <class Root, class T, bool Exact>
+    template <class Root, bool Exact, class U>
+    CBOR_ALWAYS_INLINE static encode_cursor item_references_encode(std::span<char> const out, std::size_t const item,
+                                                                   U const &value, encode_cursor c)
+    {
+        std::size_t const data = item + item_head;
+        if constexpr (is_optional<U>) {
+            using E = typename U::value_type;
+            if constexpr (holds_references<E>())
+                if (value.has_value())
+                    c = value_encode<Root, E, Exact, record_part::references>(
+                        out, out.subspan(data).template first<fixed_size<E, Root>()>(), *value, c);
+        } else if constexpr (is_map<U>) {
+            using K = typename U::key_type;
+            using M = typename U::mapped_type;
+            if constexpr (holds_references<K>() || holds_references<M>()) {
+                std::size_t at = data;
+                for (auto const &[k, v] : value) {
+                    c = value_encode<Root, K, Exact, record_part::references>(
+                        out, out.subspan(at).template first<fixed_size<K, Root>()>(), k, c);
+                    at += fixed_size<K, Root>();
+                    c = value_encode<Root, M, Exact, record_part::references>(
+                        out, out.subspan(at).template first<fixed_size<M, Root>()>(), v, c);
+                    at += fixed_size<M, Root>();
+                }
+            }
+        } else if constexpr (is_list<U> && !is_typed_array<U>) {
+            using E = std::ranges::range_value_t<U>;
+            if constexpr (holds_references<std::remove_cv_t<E>>())
+                c = elements_encode<Root, E, Exact, record_part::references>(out, data, value, c);
+        }
+        return c;
+    }
+
+    template <class Root, bool Exact, record_part Part, class V>
+    CBOR_ALWAYS_INLINE static encode_cursor reference_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
+                                        V const &value, encode_cursor c)
+    {
+        using U = std::remove_cv_t<V>;
+        if constexpr (is_record<U> || is_optional_record<U>) {
+            if constexpr (Part == record_part::block) {
+                return c;
+            } else {
+                std::size_t const j = c.index++;
+                std::size_t const item = c.position;
+                reference_write<Root>(out, field, j, item);
+                if constexpr (is_record<U>) {
+                    auto const record = out.subspan(item).template first<record_size<U, Root>()>();
+                    zero_initialized_record_copy<Root, U>(record);
+                    c.position = item + record_size<U, Root>();
+                    c = record_encode<Root, U, Exact>(out, record, value, c);
+                } else {
+                    using E = typename U::value_type;
+                    if (value.has_value()) {
+                        auto const record = out.subspan(item).template first<record_size<E, Root>()>();
+                        zero_initialized_record_copy<Root, E>(record);
+                        c.position = item + record_size<E, Root>();
+                        c = record_encode<Root, E, Exact>(out, record, *value, c);
+                    } else {
+                        out[item] = heads::initial_byte(major_type::simple_float,
+                                                        std::to_underlying(simple_value::undefined));
+                        c.position = item + heads::initial_byte_size;
+                    }
+                }
+                return c;
+            }
+        } else if constexpr (Part == record_part::block) {
+            return item_encode<Root, Exact>(out, field, value, c);
+        } else if constexpr (Part == record_part::after_block) {
+            return item_references_encode<Root, Exact>(out, item_written<Root>(out, field), value, c);
+        } else {
+            std::size_t const item = c.position;
+            c = item_encode<Root, Exact>(out, field, value, c);
+            return item_references_encode<Root, Exact>(out, item, value, c);
+        }
+    }
+
+    template <class Root, class T, bool Exact, record_part Part>
     CBOR_ALWAYS_INLINE static encode_cursor value_encode(std::span<char> const out, std::span<char, fixed_size<T, Root>()> const field,
                                     T const &value, encode_cursor position)
     {
         using U = std::remove_cv_t<T>;
-        if constexpr (std::same_as<U, bool>) {
+        if constexpr (!holds_references<U>() &&
+                      (Part == record_part::after_block || Part == record_part::references)) {
+        } else if constexpr (holds_references<U>() && !requires { fixed_length<U>::value; } &&
+                             Part == record_part::values) {
+        } else if constexpr (std::same_as<U, bool>) {
             field.front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + value);
         } else if constexpr (std::is_enum_v<U>) {
-            position = value_encode<Root, std::underlying_type_t<U>, Exact>(out, field, std::to_underlying(value), position);
+            position = value_encode<Root, std::underlying_type_t<U>, Exact, Part>(out, field, std::to_underlying(value), position);
 #ifdef __SIZEOF_INT128__
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             uint128 magnitude = static_cast<uint128>(value);
@@ -1074,12 +1216,12 @@ class reflection
                               "The elements must lie inside the field.");
                 std::size_t at = head;
                 for (auto const &e : value) {
-                    position = value_encode<Root, E, Exact>(out, field.subspan(at).template first<fixed_size<E, Root>()>(), e, position);
+                    position = value_encode<Root, E, Exact, Part>(out, field.subspan(at).template first<fixed_size<E, Root>()>(), e, position);
                     at += fixed_size<E, Root>();
                 }
             }
         } else {
-            position = reference_encode<Root, Exact>(out, field, value, position);
+            position = reference_encode<Root, Exact, Part>(out, field, value, position);
         }
         return position;
     }
@@ -1092,7 +1234,14 @@ class reflection
         template for (constexpr auto m : data_members<U>())
         {
             using M = typename[:std::meta::type_of(m):];
-            position = value_encode<Root, M, Exact>(
+            position = value_encode<Root, M, Exact, record_part::block>(
+                out, record.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(),
+                value.[:m:], position);
+        }
+        template for (constexpr auto m : data_members<U>())
+        {
+            using M = typename[:std::meta::type_of(m):];
+            position = value_encode<Root, M, Exact, record_part::after_block>(
                 out, record.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(),
                 value.[:m:], position);
         }
@@ -1345,52 +1494,44 @@ class reflection
         heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined));
 
     template <class Root, class U>
-    CBOR_ALWAYS_INLINE static std::expected<std::span<char const, record_size<U, Root>()>, error>
-    record_at(std::string_view const encoded, std::size_t const item, std::size_t const end)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error>
+    record_start(std::string_view const encoded, cbor::directory const dir, std::uint64_t const j)
     {
-        if (end - item != record_size<U, Root>()) [[unlikely]]
+        auto const range = item_range<Root>(encoded, dir, j);
+        if (!range) [[unlikely]]
+            return std::unexpected(range.error());
+        if (range->second - range->first != record_size<U, Root>()) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        auto const record =
-            std::span<char const>(encoded).subspan(item).template first<record_size<U, Root>()>();
-        if (!class_tag_valid<Root, U>(record)) [[unlikely]]
+        if (!class_tag_valid<Root, U>(
+                std::span<char const>(encoded).subspan(range->first).template first<record_size<U, Root>()>()))
+            [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        return record;
+        return range->first;
     }
 
     template <class Root, class U>
-    CBOR_ALWAYS_INLINE static std::expected<std::optional<std::span<char const, record_size<U, Root>()>>,
-                                            error>
-    record_read(std::string_view const encoded, std::span<char const, dynamic_type_sizes> const field,
-                cbor::directory const dir, bool const absent_allowed)
+    CBOR_ALWAYS_INLINE static std::expected<void, error>
+    block_references_check(std::span<char const, fixed_size<U, Root>()> const field, std::size_t const first,
+                           cbor::directory const dir)
     {
-        using X = std::optional<std::span<char const, record_size<U, Root>()>>;
-        auto const j = shared_index_read(field, dir.shared_start);
-        if (!j) [[unlikely]]
-            return std::unexpected(j.error());
-        auto const range = item_range<Root>(encoded, dir, *j);
-        if (!range) [[unlikely]]
-            return std::unexpected(range.error());
-        if (absent_allowed && range->second - range->first == heads::initial_byte_size &&
-            encoded[range->first] == undefined_byte)
-            return X{};
-        auto const record = record_at<Root, U>(encoded, range->first, range->second);
-        if (!record) [[unlikely]]
-            return std::unexpected(record.error());
-        return X{*record};
-    }
-
-    template <class Root, class M>
-    CBOR_ALWAYS_INLINE static std::expected<std::span<char const, extent_of<M, Root>()>, error>
-    entered(std::string_view const encoded, std::span<char const, fixed_size<M, Root>()> const field,
-            cbor::directory const dir)
-    {
-        if constexpr (is_record<std::remove_cv_t<M>>) {
-            auto const record = record_read<Root, std::remove_cv_t<M>>(encoded, field, dir, false);
-            if (!record) [[unlikely]]
-                return std::unexpected(record.error());
-            return **record;
+        if constexpr (requires { fixed_length<U>::value; }) {
+            using E = typename fixed_length<U>::element;
+            constexpr std::size_t n = fixed_length<U>::value;
+            std::expected<void, error> done;
+            template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, n))) {
+                if (done)
+                    done = block_references_check<Root, E>(
+                        field.template subspan<heads::head_size(n) + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(),
+                        first + i * block_items<E>(), dir);
+            }
+            return done;
         } else {
-            return field;
+            auto const j = shared_index_read(field, dir.shared_start);
+            if (!j) [[unlikely]]
+                return std::unexpected(j.error());
+            if (!validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]
+                return std::unexpected(error::unpopulated_table_index);
+            return validity::check_reference_index(*j, first);
         }
     }
 
@@ -1613,10 +1754,37 @@ class reflection
         }
     }
 
+    template <class Root, class M, fixed_string Path, std::size_t At>
+    CBOR_ALWAYS_INLINE static auto
+    path_enter(std::string_view const encoded, std::span<char const, fixed_size<M, Root>()> const field,
+               cbor::directory const dir, record_block const block,
+               std::array<std::size_t, index_slots<Path>()> const &indexes)
+        -> std::expected<typename decltype(path_result<Root, M, Path, At>())::type, error>
+    {
+        using U = std::remove_cv_t<M>;
+        if constexpr (is_record<U>) {
+            auto const j = shared_index_read(field, dir.shared_start);
+            if (!j) [[unlikely]]
+                return std::unexpected(j.error());
+            if (error const e = validity::check_reference_after(*j, block.end).error_or(error{}); e != error{})
+                [[unlikely]]
+                return std::unexpected(e);
+            auto const at = record_start<Root, U>(encoded, dir, *j);
+            if (!at) [[unlikely]]
+                return std::unexpected(at.error());
+            return path_walk<Root, M, Path, At>(
+                encoded, std::span<char const>(encoded).subspan(*at).template first<record_size<U, Root>()>(), dir,
+                record_block_at<U>(static_cast<std::size_t>(*j) + 1), indexes);
+        } else {
+            return path_walk<Root, M, Path, At>(encoded, field, dir, block, indexes);
+        }
+    }
+
     template <class Root, class T, fixed_string Path, std::size_t At>
     CBOR_ALWAYS_INLINE static auto
     path_walk(std::string_view const encoded, std::span<char const, extent_of<T, Root>()> const field,
-              cbor::directory const floor, std::array<std::size_t, index_slots<Path>()> const &indexes)
+              cbor::directory const floor, record_block const block,
+              std::array<std::size_t, index_slots<Path>()> const &indexes)
         -> std::expected<typename decltype(path_result<Root, T, Path, At>())::type, error>
     {
         using U = std::remove_cv_t<T>;
@@ -1633,12 +1801,23 @@ class reflection
             } else if constexpr (is_optional_record<U>) {
                 using E = typename U::value_type;
                 using X = typename decltype(path_result<Root, E, Path, At>())::type;
-                auto const record = record_read<Root, E>(encoded, field, floor, true);
-                if (!record) [[unlikely]]
-                    return std::unexpected(record.error());
-                if (!record->has_value())
+                auto const j = shared_index_read(field, floor.shared_start);
+                if (!j) [[unlikely]]
+                    return std::unexpected(j.error());
+                if (error const e = validity::check_reference_after(*j, block.end).error_or(error{}); e != error{})
+                    [[unlikely]]
+                    return std::unexpected(e);
+                auto const range = item_range<Root>(encoded, floor, *j);
+                if (!range) [[unlikely]]
+                    return std::unexpected(range.error());
+                if (range->second - range->first == heads::initial_byte_size && encoded[range->first] == undefined_byte)
                     return std::optional<X>{};
-                auto const x = path_walk<Root, E, Path, At>(encoded, **record, floor, indexes);
+                auto const at = record_start<Root, E>(encoded, floor, *j);
+                if (!at) [[unlikely]]
+                    return std::unexpected(at.error());
+                auto const x = path_walk<Root, E, Path, At>(
+                    encoded, std::span<char const>(encoded).subspan(*at).template first<record_size<E, Root>()>(), floor,
+                    record_block_at<E>(static_cast<std::size_t>(*j) + 1), indexes);
                 if (!x) [[unlikely]]
                     return std::unexpected(x.error());
                 return std::optional<X>{*x};
@@ -1656,7 +1835,7 @@ class reflection
                 auto const x = path_walk<Root, E, Path, At>(
                     encoded,
                     std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>(),
-                    floor, indexes);
+                    floor, block, indexes);
                 if (!x) [[unlikely]]
                     return std::unexpected(x.error());
                 return std::optional<X>{*x};
@@ -1673,22 +1852,22 @@ class reflection
                     fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, *r);
+                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, block, *r);
             } else if constexpr (is_typed_array<U>) {
                 using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
                 auto const r = reference_read<Root, major_type::array, E>(encoded, field, floor, sizeof(E));
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, *r);
+                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, block, *r);
             } else if constexpr (is_list<U>) {
                 auto const r = reference_read<Root, major_type::array>(
                     encoded, field, floor, fixed_size<std::ranges::range_value_t<U>, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, *r);
+                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, block, *r);
             } else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> &&
                                  !std::same_as<U, uint128>) {
-                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor);
+                return typename cbor::packed<Root>::template accessor<U>(encoded, field, floor, block);
             } else {
                 if (!fixed_head_valid<U>(field)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
@@ -1698,13 +1877,15 @@ class reflection
             constexpr std::size_t end = step_end(path, At);
             constexpr std::meta::info m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
             using M = typename[:std::meta::type_of(m):];
-            if (!class_tag_valid<Root, U>(field)) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
-            auto const member = entered<Root, M>(
-                encoded, field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(), floor);
-            if (!member) [[unlikely]]
-                return std::unexpected(member.error());
-            return path_walk<Root, M, Path, end>(encoded, *member, floor, indexes);
+            auto const member = field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>();
+            if constexpr (block_items<std::remove_cv_t<M>>() != 0) {
+                if (error const e = block_references_check<Root, std::remove_cv_t<M>>(
+                                        member, block.base + block_index<U, m>(), floor)
+                                        .error_or(error{});
+                    e != error{}) [[unlikely]]
+                    return std::unexpected(e);
+            }
+            return path_enter<Root, M, Path, end>(encoded, member, floor, block, indexes);
         } else {
             constexpr std::size_t close = index_end(path, At);
             if constexpr (requires { fixed_length<U>::value; }) {
@@ -1727,22 +1908,14 @@ class reflection
                     if (error const c = validity::check_index(i, n).error_or(error{}); c != error{})
                         [[unlikely]]
                         return std::unexpected(c);
-                    auto const element = entered<Root, E>(encoded,
-                                                          field.subspan(head + i * fixed_size<E, Root>())
-                                                              .template first<fixed_size<E, Root>()>(),
-                                                          floor);
-                    if (!element) [[unlikely]]
-                        return std::unexpected(element.error());
-                    return path_walk<Root, E, Path, close + 1>(encoded, *element, floor, indexes);
+                    return path_enter<Root, E, Path, close + 1>(
+                        encoded, field.subspan(head + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(),
+                        floor, block, indexes);
                 } else {
                     constexpr std::size_t i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
-                    auto const element = entered<Root, E>(
-                        encoded,
-                        field.template subspan<head + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(),
-                        floor);
-                    if (!element) [[unlikely]]
-                        return std::unexpected(element.error());
-                    return path_walk<Root, E, Path, close + 1>(encoded, *element, floor, indexes);
+                    return path_enter<Root, E, Path, close + 1>(
+                        encoded, field.template subspan<head + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(),
+                        floor, block, indexes);
                 }
             } else {
                 using E = std::ranges::range_value_t<U>;
@@ -1769,14 +1942,11 @@ class reflection
                 if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
                     [[unlikely]]
                     return std::unexpected(c);
-                auto const element = entered<Root, E>(encoded,
-                                                      std::span<char const>(encoded)
-                                                          .subspan(r->data + i * fixed_size<E, Root>())
-                                                          .template first<fixed_size<E, Root>()>(),
-                                                      floor);
-                if (!element) [[unlikely]]
-                    return std::unexpected(element.error());
-                return path_walk<Root, E, Path, close + 1>(encoded, *element, floor, indexes);
+                return path_enter<Root, E, Path, close + 1>(encoded,
+                                                            std::span<char const>(encoded)
+                                                                .subspan(r->data + i * fixed_size<E, Root>())
+                                                                .template first<fixed_size<E, Root>()>(),
+                                                            floor, block, indexes);
             }
         }
     }
@@ -1795,8 +1965,10 @@ class reflection
             auto const j = shared_index_read(field, dir.shared_start);
             if (!j) [[unlikely]]
                 return std::unexpected(j.error());
-            if (*j != index || !validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]
+            if (!validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]
                 return std::unexpected(error::unpopulated_table_index);
+            if (error const e = validity::check_reference_index(*j, index).error_or(error{}); e != error{}) [[unlikely]]
+                return std::unexpected(e);
             if (directory_entry<Root>(encoded, index + 1) != at) [[unlikely]]
                 return std::unexpected(error::syntax_error);
             auto const r = item_reference_read<Major, E>(encoded, at, end, element);
@@ -1808,67 +1980,105 @@ class reflection
         }
 
         template <class Root, class U>
-        CBOR_ALWAYS_INLINE std::expected<std::optional<std::span<char const, record_size<U, Root>()>>, error>
-        record_take(std::span<char const, dynamic_type_sizes> const field, bool const absent_allowed)
+        CBOR_ALWAYS_INLINE std::expected<std::size_t, error> record_take(std::span<char const, dynamic_type_sizes> const field)
         {
-            using X = std::optional<std::span<char const, record_size<U, Root>()>>;
             auto const j = shared_index_read(field, dir.shared_start);
             if (!j) [[unlikely]]
                 return std::unexpected(j.error());
-            if (*j != index || !validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]
+            if (!validity::check_index(*j, dir.count - root_and_end_entries)) [[unlikely]]
                 return std::unexpected(error::unpopulated_table_index);
+            if (error const e = validity::check_reference_index(*j, index).error_or(error{}); e != error{}) [[unlikely]]
+                return std::unexpected(e);
             if (directory_entry<Root>(encoded, index + 1) != at) [[unlikely]]
                 return std::unexpected(error::syntax_error);
             if (!validity::pending_items_fit(heads::initial_byte_size, end - at)) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            if (absent_allowed && encoded[at] == undefined_byte) {
-                index += 1;
-                at += heads::initial_byte_size;
-                return X{};
+            std::size_t const record = at;
+            if constexpr (is_optional_record<U>) {
+                if (encoded[at] == undefined_byte) {
+                    index += 1;
+                    at += heads::initial_byte_size;
+                    return record;
+                }
             }
-            if (!validity::pending_items_fit(record_size<U, Root>(), end - at)) [[unlikely]]
+            using R = typename decltype([] {
+                if constexpr (is_optional_record<U>)
+                    return std::type_identity<typename U::value_type>{};
+                else
+                    return std::type_identity<U>{};
+            }())::type;
+            if (!validity::pending_items_fit(record_size<R, Root>(), end - at)) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            auto const record =
-                std::span<char const>(encoded).subspan(at).template first<record_size<U, Root>()>();
             index += 1;
-            at += record_size<U, Root>();
-            return X{record};
+            at += record_size<R, Root>();
+            return record;
         }
 
-        template <class Root, class M>
-        CBOR_ALWAYS_INLINE std::expected<void, error>
-        field_read(M &out, std::span<char const, fixed_size<M, Root>()> const field, std::size_t const depth,
-                   std::size_t const depth_max)
+        template <class Root, class U, bool Take>
+        CBOR_ALWAYS_INLINE std::expected<reference, error> item_reference(std::span<char const, dynamic_type_sizes> const field)
         {
-            if constexpr (is_record<std::remove_cv_t<M>>) {
-                auto const record = record_take<Root, std::remove_cv_t<M>>(field, false);
-                if (!record) [[unlikely]]
-                    return std::unexpected(record.error());
-                return value_read<Root>(out, **record, depth, depth_max);
-            } else {
-                return value_read<Root>(out, field, depth, depth_max);
-            }
+            constexpr auto major = [] {
+                if constexpr (is_optional<U>)
+                    return major_type::array;
+                else if constexpr (is_text_range<U>)
+                    return major_type::text_string;
+                else if constexpr (is_byte_range<U>)
+                    return major_type::byte_string;
+                else if constexpr (is_map<U>)
+                    return major_type::map;
+                else
+                    return major_type::array;
+            }();
+            using E = std::conditional_t<is_typed_array<U>, std::remove_cv_t<std::ranges::range_value_t<U>>, void>;
+            constexpr std::size_t element = [] {
+                if constexpr (is_optional<U>)
+                    return fixed_size<typename U::value_type, Root>();
+                else if constexpr (is_text_range<U> || is_byte_range<U>)
+                    return std::size_t{1};
+                else if constexpr (is_map<U>)
+                    return fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>();
+                else if constexpr (is_typed_array<U>)
+                    return sizeof(std::remove_cv_t<std::ranges::range_value_t<U>>);
+                else
+                    return fixed_size<std::ranges::range_value_t<U>, Root>();
+            }();
+            if constexpr (Take)
+                return reference_take<Root, major, E>(field, element);
+            else
+                return reference_read<Root, major, E>(encoded, field, dir, element);
         }
 
-        template <class Root, class T>
-        std::expected<void, error> value_read(T &out, std::span<char const, extent_of<T, Root>()> const field,
-                                              std::size_t const depth, std::size_t const depth_max)
+        template <class Root, class U>
+        std::expected<void, error> record_read(U &out, std::span<char const, record_size<U, Root>()> const record,
+                                               std::size_t const depth, std::size_t const depth_max)
+        {
+            if (!class_tag_valid<Root, U>(record)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            std::expected<void, error> done;
+            template for (constexpr std::meta::info m : data_members<U>()) {
+                using M = typename[:std::meta::type_of(m):];
+                if (done)
+                    done = member_read<Root, M, record_part::block>(
+                        out.[:m:], record.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(), depth,
+                        depth_max);
+            }
+            template for (constexpr std::meta::info m : data_members<U>()) {
+                using M = typename[:std::meta::type_of(m):];
+                if (done)
+                    done = member_read<Root, M, record_part::after_block>(
+                        out.[:m:], record.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(), depth,
+                        depth_max);
+            }
+            return done;
+        }
+
+        template <class Root, class T, record_part Part>
+        std::expected<void, error> member_read(T &out, std::span<char const, fixed_size<T, Root>()> const field,
+                                               std::size_t const depth, std::size_t const depth_max)
         {
             using U = std::remove_cv_t<T>;
-            if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
-                if (!class_tag_valid<Root, U>(field)) [[unlikely]]
-                    return std::unexpected(error::incorrect_type);
-                std::expected<void, error> done;
-                template for (constexpr std::meta::info m : data_members<U>()) {
-                    using M = typename[:std::meta::type_of(m):];
-                    if (done)
-                        done =
-                            field_read<Root, M>(out.[:m:],
-                                                         field.template subspan<member_offset<U, m, Root>(),
-                                                                                fixed_size<M, Root>()>(),
-                                                         depth, depth_max);
-                }
-                return done;
+            if constexpr (!holds_references<U>() && Part == record_part::after_block) {
+                return {};
             } else if constexpr (is_fixed_string<U>) {
                 auto const text = field.template last<fixed_length<U>::value>();
                 std::ranges::transform(text, std::ranges::begin(out), [](char const c) {
@@ -1881,56 +2091,86 @@ class reflection
                 std::expected<void, error> done;
                 template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, n))) {
                     if (done)
-                        done = field_read<Root, E>(
+                        done = member_read<Root, E, Part>(
                             std::span(out).template subspan<i, 1>().front(),
                             field.template subspan<heads::head_size(n) + i * fixed_size<E, Root>(),
                                                    fixed_size<E, Root>()>(),
                             depth, depth_max);
                 }
                 return done;
-            } else if constexpr (is_optional_record<U>) {
-                using E = typename U::value_type;
-                auto const record = record_take<Root, E>(field, true);
-                if (!record) [[unlikely]]
-                    return std::unexpected(record.error());
-                if (!record->has_value()) {
-                    out.reset();
-                    return {};
-                }
-                if (auto const nesting = validity::check_nesting_depth(depth + 1, depth_max); !nesting)
-                    [[unlikely]]
-                    return std::unexpected(nesting.error());
-                E element{};
-                if (auto const e = value_read<Root>(element, **record, depth + 1, depth_max); !e) [[unlikely]]
-                    return e;
-                out = std::move(element);
+            } else if constexpr (is_inline_value<U>) {
+                if (!fixed_head_valid<U>(field)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                out = fixed_value_read<U>(field);
                 return {};
-            } else if constexpr (is_optional<U>) {
-                using E = typename U::value_type;
-                auto const r = reference_take<Root, major_type::array>(field, fixed_size<E, Root>());
+            } else if constexpr (is_record<U> || is_optional_record<U>) {
+                if constexpr (Part == record_part::block) {
+                    return {};
+                } else {
+                    auto const record = record_take<Root, U>(field);
+                    if (!record) [[unlikely]]
+                        return std::unexpected(record.error());
+                    if constexpr (is_record<U>) {
+                        return record_read<Root>(
+                            out, std::span<char const>(encoded).subspan(*record).template first<record_size<U, Root>()>(),
+                            depth, depth_max);
+                    } else {
+                        using E = typename U::value_type;
+                        if (encoded[*record] == undefined_byte) {
+                            out.reset();
+                            return {};
+                        }
+                        if (auto const nesting = validity::check_nesting_depth(depth + 1, depth_max); !nesting)
+                            [[unlikely]]
+                            return std::unexpected(nesting.error());
+                        E element{};
+                        if (auto const e = record_read<Root>(
+                                element,
+                                std::span<char const>(encoded).subspan(*record).template first<record_size<E, Root>()>(),
+                                depth + 1, depth_max);
+                            !e) [[unlikely]]
+                            return e;
+                        out = std::move(element);
+                        return {};
+                    }
+                }
+            } else if constexpr (Part == record_part::block) {
+                auto const r = item_reference<Root, U, true>(field);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (r->length > 1) [[unlikely]]
+                return {};
+            } else {
+                auto const r = item_reference<Root, U, Part != record_part::after_block>(field);
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return content_read<Root>(out, *r, depth, depth_max);
+            }
+        }
+
+        template <class Root, class U>
+        std::expected<void, error> content_read(U &out, reference const r, std::size_t const depth,
+                                                std::size_t const depth_max)
+        {
+            if constexpr (is_optional<U>) {
+                using E = typename U::value_type;
+                if (r.length > 1) [[unlikely]]
                     return std::unexpected(error::syntax_error);
-                if (r->length == 0) {
+                if (r.length == 0) {
                     out.reset();
                     return {};
                 }
                 if (auto const nesting = validity::check_nesting_depth(depth + 1, depth_max); !nesting) [[unlikely]]
                     return std::unexpected(nesting.error());
                 E element{};
-                if (auto const e = value_read<Root>(
-                        element, std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>(),
+                if (auto const e = member_read<Root, E, record_part::whole>(
+                        element, std::span<char const>(encoded).subspan(r.data).template first<fixed_size<E, Root>()>(),
                         depth + 1, depth_max);
                     !e) [[unlikely]]
                     return e;
                 out = std::move(element);
                 return {};
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
-                auto const r = reference_take<Root, is_text_range<U> ? major_type::text_string : major_type::byte_string>(field, 1);
-                if (!r) [[unlikely]]
-                    return std::unexpected(r.error());
-                std::string_view const part{std::span(encoded).subspan(r->data, r->length)};
+                std::string_view const part{std::span(encoded).subspan(r.data, r.length)};
                 if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>) {
                     auto const raw = std::as_bytes(std::span(part));
                     if constexpr (std::ranges::view<U>)
@@ -1947,21 +2187,18 @@ class reflection
                 using K = typename U::key_type;
                 using V = typename U::mapped_type;
                 constexpr std::size_t pair = fixed_size<K, Root>() + fixed_size<V, Root>();
-                auto const r = reference_take<Root, major_type::map>(field, pair);
-                if (!r) [[unlikely]]
-                    return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
+                if (auto const c = validity::check_nesting_depth(r.length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
                 out.clear();
-                for (std::size_t i = 0; i < r->length; ++i) {
-                    auto const entry = std::span<char const>(encoded).subspan(r->data + i * pair).template first<pair>();
+                for (std::size_t i = 0; i < r.length; ++i) {
+                    auto const entry = std::span<char const>(encoded).subspan(r.data + i * pair).template first<pair>();
                     K key = element_make<K>(out);
                     V value = element_make<V>(out);
-                    if (auto const e = field_read<Root, K>(key, entry.template first<fixed_size<K, Root>()>(),
-                                                           depth + 1, depth_max);
+                    if (auto const e = member_read<Root, K, record_part::whole>(
+                            key, entry.template first<fixed_size<K, Root>()>(), depth + 1, depth_max);
                         !e) [[unlikely]]
                         return e;
-                    if (auto const e = field_read<Root, V>(
+                    if (auto const e = member_read<Root, V, record_part::whole>(
                             value, entry.template last<fixed_size<V, Root>()>(), depth + 1, depth_max);
                         !e) [[unlikely]]
                         return e;
@@ -1970,46 +2207,35 @@ class reflection
                 return {};
             } else if constexpr (is_typed_array<U>) {
                 using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
-                auto const r = reference_take<Root, major_type::array, E>(field, sizeof(E));
-                if (!r) [[unlikely]]
-                    return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
+                if (auto const c = validity::check_nesting_depth(r.length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
-                auto const from = std::span<char const>(encoded).subspan(r->data, r->length * sizeof(E));
+                auto const from = std::span<char const>(encoded).subspan(r.data, r.length * sizeof(E));
                 if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U> &&
                               requires { out.resize(std::size_t{}); }) {
-                    out.resize(r->length);
+                    out.resize(r.length);
                     std::ranges::copy(std::as_bytes(from), std::as_writable_bytes(std::span(out)).begin());
                 } else {
                     out.clear();
-                    out.reserve(r->length);
-                    for (std::size_t i = 0; i < r->length; ++i)
+                    out.reserve(r.length);
+                    for (std::size_t i = 0; i < r.length; ++i)
                         out.push_back(typed_array_element_read<E>(from.subspan(i * sizeof(E)).template first<sizeof(E)>()));
                 }
                 return {};
-            } else if constexpr (std::ranges::sized_range<U>) {
+            } else {
                 using E = std::ranges::range_value_t<U>;
-                auto const r = reference_take<Root, major_type::array>(field, fixed_size<E, Root>());
-                if (!r) [[unlikely]]
-                    return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
+                if (auto const c = validity::check_nesting_depth(r.length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
                 out.clear();
-                out.reserve(r->length);
-                for (std::size_t i = 0; i < r->length; ++i) {
+                out.reserve(r.length);
+                for (std::size_t i = 0; i < r.length; ++i) {
                     E element = element_make<E>(out);
                     auto const entry =
-                        std::span<char const>(encoded).subspan(r->data + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>();
-                    if (auto const e = field_read<Root, E>(element, entry, depth + 1, depth_max); !e)
+                        std::span<char const>(encoded).subspan(r.data + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>();
+                    if (auto const e = member_read<Root, E, record_part::whole>(element, entry, depth + 1, depth_max); !e)
                         [[unlikely]]
                         return e;
                     out.push_back(std::move(element));
                 }
-                return {};
-            } else {
-                if (!fixed_head_valid<U>(field)) [[unlikely]]
-                    return std::unexpected(error::incorrect_type);
-                out = fixed_value_read<U>(field);
                 return {};
             }
         }
@@ -2024,10 +2250,8 @@ class reflection
             return std::unexpected(dir.error());
         auto const field =
             std::span<char const>(encoded).subspan(dir->root).template first<record_size<T, T>()>();
-        if (!class_tag_valid<T, T>(field)) [[unlikely]]
-            return std::unexpected(error::incorrect_type);
         decode_cursor c{encoded, *dir, 0, dir->items_at, dir->items_end};
-        if (auto const r = c.template value_read<T>(out, field, 0, depth_max); !r) [[unlikely]]
+        if (auto const r = c.template record_read<T>(out, field, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if (c.index != dir->count - root_and_end_entries || c.at != dir->items_end) [[unlikely]]
             return std::unexpected(error::syntax_error);
@@ -2516,26 +2740,28 @@ public:
         std::string_view encoded;
         std::span<char const, reflection::extent_of<U, T>()> field;
         cbor::directory dir;
+        reflection::record_block block;
         [[no_unique_address]] std::conditional_t<listed, reflection::reference, std::monostate> items;
 
         accessor(std::string_view const b, std::span<char const, reflection::extent_of<U, T>()> const f,
-                 cbor::directory const d)
+                 cbor::directory const d, reflection::record_block const k)
             requires(!listed)
-            : encoded(b), field(f), dir(d)
+            : encoded(b), field(f), dir(d), block(k)
         {
         }
 
         accessor(std::string_view const b, std::span<char const, reflection::extent_of<U, T>()> const f,
-                 cbor::directory const d, reflection::reference const r)
+                 cbor::directory const d, reflection::record_block const k, reflection::reference const r)
             requires(listed)
-            : encoded(b), field(f), dir(d), items(r)
+            : encoded(b), field(f), dir(d), block(k), items(r)
         {
         }
 
         accessor(std::shared_ptr<void const> o, std::string_view const b,
-                 std::span<char const, reflection::extent_of<U, T>()> const f, cbor::directory const d)
+                 std::span<char const, reflection::extent_of<U, T>()> const f, cbor::directory const d,
+                 reflection::record_block const k)
             requires(!listed)
-            : owner(std::move(o)), encoded(b), field(f), dir(d)
+            : owner(std::move(o)), encoded(b), field(f), dir(d), block(k)
         {
         }
 
@@ -2558,13 +2784,14 @@ public:
                 std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
                 constexpr std::string_view path = Path.view();
                 if constexpr (path.starts_with('$') && std::same_as<U, T>) {
-                    return reflection::path_walk<T, T, Path, 1>(self.encoded, self.field, self.dir, i);
+                    return reflection::path_walk<T, T, Path, 1>(self.encoded, self.field, self.dir,
+                                                                reflection::record_block_at<T>(0), i);
                 } else if constexpr (path.starts_with('$')) {
                     constexpr std::size_t root = reflection::record_size<T, T>();
                     return reflection::path_walk<T, T, Path, 1>(
                         self.encoded,
                         std::span<char const>(self.encoded).subspan(self.dir.root).template first<root>(),
-                        self.dir, i);
+                        self.dir, reflection::record_block_at<T>(0), i);
                 } else if constexpr (reflection::is_typed_array<U> && path.size() > 1) {
                     using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
                     constexpr std::size_t close = reflection::index_end(path, 1);
@@ -2590,17 +2817,14 @@ public:
                     if (error const c = validity::check_index(at, self.items.length).error_or(error{});
                         c != error{}) [[unlikely]]
                         return std::expected<X, error>(std::unexpect, c);
-                    auto const element = reflection::entered<T, E>(
+                    return std::expected<X, error>(reflection::path_enter<T, E, Path, close + 1>(
                         self.encoded,
                         std::span<char const>(self.encoded)
                             .subspan(self.items.data + at * reflection::fixed_size<E, T>())
                             .template first<reflection::fixed_size<E, T>()>(),
-                        self.dir);
-                    if (!element) [[unlikely]]
-                        return std::expected<X, error>(std::unexpect, element.error());
-                    return reflection::path_walk<T, E, Path, close + 1>(self.encoded, *element, self.dir, i);
+                        self.dir, self.block, i));
                 } else {
-                    return reflection::path_walk<T, U, Path, 1>(self.encoded, self.field, self.dir, i);
+                    return reflection::path_walk<T, U, Path, 1>(self.encoded, self.field, self.dir, self.block, i);
                 }
             
             }();
@@ -2660,10 +2884,12 @@ public:
         auto const dir = reflection::directory_read<T>(encoded);
         if (!dir) [[unlikely]]
             return std::expected<X, error>(std::unexpect, dir.error());
+        auto const root = std::span<char const>(encoded).subspan(dir->root).template first<fixed_size()>();
+        if (!reflection::class_tag_valid<T, T>(root)) [[unlikely]]
+            return std::expected<X, error>(std::unexpect, error::incorrect_type);
         std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
-        return std::expected<X, error>(reflection::path_walk<T, T, Path, 1>(
-            encoded, std::span<char const>(encoded).subspan(dir->root).template first<fixed_size()>(), *dir,
-            i));
+        return std::expected<X, error>(
+            reflection::path_walk<T, T, Path, 1>(encoded, root, *dir, reflection::record_block_at<T>(0), i));
     }
 
     template <owning_range_of_chars Encoded>
@@ -2811,7 +3037,7 @@ private:
         auto const root = std::span<char const>(encoded).subspan(dir->root).template first<fixed_size()>();
         if (!reflection::class_tag_valid<T, T>(root)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        return accessor<>(std::move(owner), encoded, root, *dir);
+        return accessor<>(std::move(owner), encoded, root, *dir, reflection::record_block_at<T>(0));
     }
 
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<void const> owner,
