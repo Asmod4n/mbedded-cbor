@@ -2,7 +2,7 @@
 
 ```cpp
 template <owning_range_of_chars Encoded>
-static std::expected<cbor::lazy, cbor::error> take_ownership(Encoded &&encoded);
+static std::expected<lazy, error> take_ownership(Encoded &&encoded);
 ```
 
 Makes the lazy of the top-level item in `encoded`. The bytes move into a
@@ -16,12 +16,13 @@ compile.
 
 ## Errors
 
-None from the bytes: the call reads no head. A step on the lazy reports
-broken input ([at](at.md), [get](get.md)).
+None from the bytes. The call reads only the first head, to skip one
+tag 55799. A step on the lazy reports broken input ([at](at.md),
+[get](get.md)).
 
 ## Cost
 
-O(1). Two allocations: the owner and the state of the top-level item.
+O(1). One allocation: the owner, which holds the moved container.
 
 ## Example
 
