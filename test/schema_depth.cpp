@@ -37,8 +37,8 @@ void reference_append(std::string &out, std::uint32_t const item)
 }
 
 // A chain of nodes, each with one child, as an attacker writes it by hand. Item k is the list of children of
-// the node at depth k: one node that refers to item k + 1, and the last item is empty. Each record carries
-// the class tag 1515 = d9 05 eb of node. The encoder of this library cannot write it, because gcc does not
+// the node at depth k: a record of columns d8 80 over the one column of children, which holds one reference to
+// item k + 1; the column of the last item is empty. The root record carries the class tag 1515 = d9 05 eb of node. The encoder of this library cannot write it, because gcc does not
 // inline a recursive encoder.
 std::string node_chain(std::size_t const levels)
 {
@@ -57,12 +57,10 @@ std::string node_chain(std::size_t const levels)
         u32_append(offset, static_cast<std::uint32_t>(out.size()));
         out.replace(directory + 4 * k, 4, offset);
         bool const last = k + 1 == items;
-        out += "\x9a"s;
+        out += "\xd8\x80\x9a\x00\x00\x00\x01\x9a"s;
         u32_append(out, last ? 0 : 1);
-        if (!last) {
-            out += "\xd9\x05\xeb\xd8\x80\x9a\x00\x00\x00\x01"s;
+        if (!last)
             reference_append(out, k + 1);
-        }
     }
     out += "\xd9\x05\xeb\xd8\x80\x9a\x00\x00\x00\x01"s;
     reference_append(out, 0);
