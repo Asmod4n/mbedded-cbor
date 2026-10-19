@@ -147,6 +147,7 @@ for (auto const p : *points | std::views::drop(1) | std::views::take(1))
 - [doc/schema.md](doc/schema.md): structs as Packed CBOR.
 - [doc/structs.md](doc/structs.md): any CBOR into a struct.
 - [doc/comparison.md](doc/comparison.md): other libraries, task by task.
+- [doc/reference/](doc/reference/index.md): every function and type, one page each.
 
 ## Testing
 
