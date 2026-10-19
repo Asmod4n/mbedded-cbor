@@ -19,13 +19,20 @@ cbor::at_path<"$.user.age", std::int64_t>(bytes).error();    // key_not_found
 The path is a string literal, and the compiler checks it: a path that is
 not valid does not compile. `bytes` is a `std::string_view`, so a
 `std::string` goes in directly. The call reads the bytes in place. It
-copies nothing and keeps nothing.
+does not copy the bytes and keeps nothing.
 
 For a number or a truth value, `T` is an integer type, `double` or
 `bool`. A `double` also reads an integer that it holds exactly. No other
 value converts: a text read as a number gives `incorrect_type`, and `256`
-read as `std::uint8_t` gives `number_out_of_range`. `float` and
-`std::string` do not compile as `T`.
+read as `std::uint8_t` gives `number_out_of_range`. `float` does not
+compile as `T`.
+
+With `std::string` as `T`, the call copies the text of the value into
+the result. That result needs no owner.
+
+```cpp
+cbor::at_path<"$.user.name", std::string>(bytes);   // "ann", a copy
+```
 
 ## 2. Read a text
 
@@ -80,9 +87,11 @@ The examples select from this value:
 | `$.store.book[?@.price < 10].title` | "A", "C": a filter |
 
 `at_path` reads a path that selects one value: names and indexes only.
-`[*]`, `..`, a filter and a slice such as `[0:2]` select many values, and
-only `lazy.at_path<Path, cbor::nodelist>()` reads them. It gives every match as a
-`cbor::lazy`, in a `cbor::nodelist`, and an empty vector when nothing matches.
+`[*]`, `..`, a filter and a slice such as `[0:2]` select many values.
+Only a read with `cbor::nodelist` as the result reads them, for example
+`lazy.at_path<Path, cbor::nodelist>()`. It gives every match as a
+`cbor::lazy`, in a `cbor::nodelist`, and an empty vector when nothing
+matches.
 
 In a filter, `@` is the current value. A filter compares with `==`,
 `!=`, `<`, `<=`, `>` and `>=`, and joins tests with `&&`, `||` and `!`.

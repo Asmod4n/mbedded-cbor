@@ -13,14 +13,20 @@ Every function is in the namespace `cbor`. A comment shows the CBOR in
 | Form | Path | Result |
 |---|---|---|
 | `at_path<Path, T>(encoded)` | compile time, singular | `std::expected<T, error>`, T a scalar |
-| `at_path<Path, T>(owner)` | compile time, singular | `std::expected<owning_ref<T>, error>`, T a view, `owner` a `std::shared_ptr<std::string const>`, no copy |
-| `at_path<Path, T>(encoded)` | compile time, singular | `std::expected<owning_ref<T>, error>`, T a view; the bytes are copied, an rvalue `std::string` is moved |
-| `at_path<Path, T>(lazy)` | compile time, singular | T a scalar: `std::expected<T, error>`. T a view: `std::expected<owning_ref<T>, error>` |
+| `at_path<Path, T>(encoded)` | compile time, singular | `std::expected<T, error>`, T `std::string` or `std::vector<std::byte>`: a copy of the text or of the bytes of the value |
+| `at_path<Path, T>(owner)` | compile time, singular | `std::expected<ref<T>, error>`, T a view, `owner` a `std::shared_ptr<std::string const>`, read in place |
+| `at_path<Path, T>(owner, view)` | compile time, singular | `std::expected<ref<T>, error>`, T a view, `owner` a `std::shared_ptr<void const>`, `view` a `std::string_view` of bytes that `owner` keeps alive |
+| `at_path<Path, T>(std::move(encoded))` | compile time, singular | `std::expected<ref<T>, error>`, T a view; the rvalue `std::string` is moved into a new owner |
+| `lazy.at_path<Path, T>()` | compile time, singular | T a scalar: `std::expected<T, error>`. T a view: `std::expected<ref<T>, error>` |
 | `lazy.at_path<Path>()` | compile time, singular | `std::expected<lazy, error>`, the node |
 | `lazy.at_path<Path, nodelist>()` | compile time, any | `std::expected<nodelist, error>`, the nodelist |
 | `jsonpath::compile<T>(path)` | run time | `std::expected<jsonpath::query<T>, error>`, the parsed path |
-| `lazy.at_path(e)` | run time, `e` a query | T `lazy`: the node. T `nodelist`: the nodelist. Else as `at_path<Path, T>(lazy)` |
-| `at_path(encoded, e)`, `at_path(owner, e)` | run time, `e` a query | as `at_path<Path, T>(encoded)` and `at_path<Path, T>(owner)` |
+| `lazy.at_path(e)` | run time, `e` a query | T `lazy`: the node. T `nodelist`: the nodelist. Else as `lazy.at_path<Path, T>()` |
+| `at_path(encoded, e)` | run time, `e` a query | T a scalar: as `at_path<Path, T>(encoded)` |
+| `at_path(owner, view, e)`, `at_path(owner, e)`, `at_path(std::move(encoded), e)` | run time, `e` a query | T a view: `std::expected<ref<T>, error>`. T `lazy`: the node. T `nodelist`: the nodelist |
+
+No free form takes a lazy. A lazy reads a path with its member
+`lazy.at_path`.
 
 `encoded` is a `std::string_view`, so a `std::string` or one element of a
 `cbor::sequence` goes in directly. A path is a string literal for the
@@ -35,28 +41,31 @@ a packed message ([schema.md](schema.md)).
 
 A wrong use that the compiler cannot see throws `std::logic_error`:
 
-- a null or empty owner in `at_path<Path, T>(owner)`;
+- a null or empty owner in a form that takes an owner;
 - a `cbor::lazy{}` that holds no item, in every form that takes a lazy.
 
 ### A view and its owner
 
 `T` of a view is one of `std::string_view`, `std::span<std::byte const>`
-and `cbor::typed_array`. The owner is a `std::shared_ptr<void const>`. A
-view type without an owner does not compile. A temporary `std::string` or
-a moved `std::string` beside the owner does not compile: that overload is
-deleted. The function does not check that the owner holds the bytes.
+and `cbor::typed_array`. A view type needs an owner of the bytes. A view
+type with a `std::string_view` alone does not compile. No form copies the
+input bytes: the form with an rvalue `std::string` moves them.
 
-An `owning_ref` compares and reaches its value as `std::optional` does:
+The owner beside a view is a `std::shared_ptr<void const>`. The view is a
+borrowed range of `char`, for example a `std::string_view`. The function
+does not check that the owner holds the bytes. A `std::string` beside the
+owner does not compile, because it is not a borrowed range.
+
+A `ref` compares and reaches its value as `std::optional` does:
 `*name == "ann"` and `name->size()` read the view, `name == "ann"`
-compares it, and two `owning_ref` compare their values.
-`owning_ref<cbor::typed_array>` has no `==`, as `cbor::typed_array` has
-none.
+compares it, and two `ref` compare their values.
+`ref<cbor::typed_array>` has no `==`, as `cbor::typed_array` has none.
 
 ## 2. Any item as a node
 
 The forms without a type give the node as a `cbor::lazy`. The node can be
 any CBOR item: a map, an array, a tag. Read it on with a step, `get`,
-`type()` or `decode()` ([runtime.md](runtime.md)).
+`type()` or `clone()` ([runtime.md](runtime.md)).
 
 ```cpp
 // {"a": [1, 2, 3]}
@@ -98,9 +107,11 @@ does the same. A float is not an integer.
 
 A typed read passes a tag that the path does not read (section 7), so
 `at_path<"$", int>` reads 5 from `1(5)` and
-`at_path<"$", std::string_view>` reads the text of `32("x")`. Any other T
-does not compile, for example `float`, `std::string` or a view without an
-owner. For any other result, read the node of `lazy.at_path<Path>()`.
+`at_path<"$", std::string_view>` reads the text of `32("x")`. The free
+form over bytes also takes `std::string` and `std::vector<std::byte>`, and
+copies the value (section 1). Any other T does not compile, for example
+`float` or a view without an owner. For any other result, read the node of
+`lazy.at_path<Path>()`.
 
 ## 4. Path syntax
 
@@ -232,7 +243,7 @@ l.at_path<"$[-2]">();                  // the node of "y"
 l.at_path<"$[h'01']">();               // the node of "z"
 l.at_path<"$[[1, 2]]">();              // the node of "w"
 l.at_path(*cbor::jsonpath::compile<cbor::lazy>("$[h'01']"));  // the node of "z", path at run time
-l.at_path<"$[h'01']", std::string_view>();      // owning_ref, "z"
+l.at_path<"$[h'01']", std::string_view>();      // ref, "z"
 ```
 
 Keys compare by value (RFC 8949 5.6.1). So `h'01'` and `b64'AQ'` name the
@@ -249,7 +260,7 @@ pair. A wildcard, a descendant segment and a filter take all pairs.
 |---|---|
 | 24, encoded CBOR data item | goes into the byte string and reads the embedded item |
 | 28, shareable | passes it; the value is the content |
-| 29, shared reference | reads the value that the reference names |
+| 29, shared reference | passes it as any other tag; the value is the content, the index. A path does not resolve the reference |
 | 55799, self-described CBOR | passes it, at the top, inside the item and inside tag 24 |
 | 2 and 3, bignum | a typed read into an integer type reads the magnitude |
 | an RFC 8746 typed array tag | an index reads one element; a typed read into `cbor::typed_array` reads the whole array |
@@ -258,7 +269,8 @@ pair. A wildcard, a descendant segment and a filter take all pairs.
 | bytes | Call | Result |
 |---|---|---|
 | `{"a": 24(<<[1, 2]>>)}` | `at_path<"$.a[1]", int>` | `2` |
-| `[28({"k": 7}), 29(0)]` | `at_path<"$[1].k", int>` | `7` |
+| `[28({"k": 7}), 29(0)]` | `at_path<"$[0].k", int>` | `7` |
+| `[28({"k": 7}), 29(0)]` | `at_path<"$[1]", int>` | `0`, the index |
 | `55799({"a": 5})` | `at_path<"$.a", int>` | `5` |
 | `{"a": 24(<<55799([1, 2])>>)}` | `at_path<"$.a[1]", int>` | `2` |
 | `{"v": 1000([1, 2])}` | `at_path<"$.v[1]", int>` | `2` |
@@ -273,8 +285,8 @@ bignum, and an index on a bignum is `not_indexable`. A map key behind tag 28
 or tag 55799 is matched as the key without the tag. A key behind any other
 tag is a different key: `$.k` does not find `1000("k")`.
 
-Tag 29 can point back to a tag 28 anywhere before it. A tag 29 that
-points forward is `sharedref_index_not_marked`.
+A path does not resolve a tag 29. Only `cbor::structs` decode resolves
+tags 28 and 29.
 
 ### Typed arrays
 
@@ -352,16 +364,14 @@ An apply of the query does not parse again.
 | `too_little_data` | The bytes end before the target or before an item that the walk reads. |
 | `syntax_error`, `indefinite_length` | A head that the walk reads is not well-formed, or uses indefinite length. |
 | `inadmissible_type_for_tag_content` | A tag on the way has content that its definition does not allow, for example tag 24 over a number. |
-| `nodelist_too_long` | One step of a nodelist read selects more nodes than the top-level item has bytes. Tag 29 makes this possible. |
+| `nodelist_too_long` | One step of a nodelist read selects more nodes than the top-level item has bytes. |
 
 | bytes | Call | Result |
 |---|---|---|
 | `{"a": [1, 2], "s": "x"}` | `compile<cbor::lazy>("$.a[")` | `invalid_path` |
 | the same | `at_path<"$.s[0]", int>(bytes)` | `not_indexable` |
 | the first 5 bytes of the same | `at_path<"$.a[1]", int>` | `too_little_data` |
-| `{"a": 29(5)}` | `at_path<"$.a", int>` | `sharedref_index_not_marked` |
 | `{"a": 24(5)}` | `at_path<"$.a", int>` | `inadmissible_type_for_tag_content` |
-| `[28([0, 0, 0, 0, 0, 0, 0, 0]), 29(0)]` | `l.at_path<"$[*][*]", cbor::nodelist>()` | `nodelist_too_long` |
 
 ## 11. What the form over bytes checks
 
@@ -378,8 +388,8 @@ the bytes after the target. So these faults are not found:
 | `01 02`, a byte after the item | `at_path<"$", int>` | `1` |
 | `82 01` | `at_path<"$[1]", int>` | `too_little_data` |
 
-`lazy::take_ownership` and `lazy::view` do not read the whole item either: it accepts `82 01` and
-`01 02`. A step into `82 01` gives `too_little_data`. `item_size` and a
+`lazy::take_ownership` and `lazy::view` do not read the whole item
+either: they accept `82 01` and `01 02`. A step into `82 01` gives `too_little_data`. `item_size` and a
 decode check a whole item.
 
 ## 12. Limits
@@ -399,7 +409,7 @@ the macros. The limits are constants of the build.
 - a filter, a group in parentheses, a function call or a literal in the
   path is nested deeper than the depth;
 - a descendant segment goes deeper than the depth;
-- `decode()` of a node reads an item that is deeper than the depth. It
+- `clone()` of a node reads an item that is deeper than the depth. It
   counts the depth from the node.
 
 An item that a typed read only skips can be deeper than the depth. A
@@ -432,11 +442,11 @@ not decode what it passes:
   elements except the last.
 - After the target, it reads nothing.
 
-A typed read of a scalar allocates nothing, also through tag 24. A typed
-read allocates when it meets a tag 29, and the form over bytes allocates
-when a key is not a text: these two cases read the item through a lazy. A
-view result allocates nothing: the owner is a copy of a
-`std::shared_ptr`.
+A typed read of a scalar allocates nothing, also through tag 24 and
+with a key that is not a text. A
+view result from an owner allocates nothing: the owner in the result is
+a copy of a `std::shared_ptr`. The form with an rvalue `std::string`
+allocates the `std::shared_ptr` that holds the string, once.
 
 A `nodelist` read allocates the nodelist. A filter with a literal allocates for each
 child that it tests. `at_path` and the lazy walk read an element

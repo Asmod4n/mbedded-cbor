@@ -10,6 +10,7 @@
 #include <system_error>
 #include <thread>
 #include <utility>
+#include <vector>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -81,6 +82,27 @@ TEST_CASE("doc basics: bytes go in as a copy or as a view")
     auto const viewed = cbor::at_path<"$.name", std::string_view>(owner);
     REQUIRE(viewed.has_value());
     CHECK_EQ((**viewed).data(), owner->data() + 8);
+    std::shared_ptr<void const> const any_owner = owner;
+    auto const beside = cbor::at_path<"$.name", std::string_view>(any_owner, std::string_view(*owner));
+    REQUIRE(beside.has_value());
+    CHECK_EQ((**beside).data(), owner->data() + 8);
+    CHECK_FALSE(([]<class S>(S const &s) {
+        return requires(std::shared_ptr<void const> o) { cbor::at_path<"$.name", std::string_view>(o, s); };
+    }(kept)));
+}
+
+// The section "Results that point into the bytes" says that std::string as the type copies the text of the value
+// into the result, so that a user who wants a copy of their own finds the form.
+TEST_CASE("doc basics: std::string as the type copies the text")
+{
+    std::string const bytes = preferred(M("name"s, std::string(40, 'a')));
+    auto const name = cbor::at_path<"$.name", std::string>(bytes);
+    REQUIRE(name.has_value());
+    CHECK_EQ(*name, std::string(40, 'a'));
+    CHECK_NE(name->data(), bytes.data() + 8);
+    auto const raw = cbor::at_path<"$.key", std::vector<std::byte>>(preferred(M("key"s, test::bytes{"\x01\x02"})));
+    REQUIRE(raw.has_value());
+    CHECK_EQ(*raw, std::vector{std::byte{1}, std::byte{2}});
 }
 
 // The section "Results that point into the bytes" shows the owner rule: the view stays valid after the owner of the
@@ -113,15 +135,15 @@ TEST_CASE("doc basics: results that point into the bytes")
 // lazy of its own.
 TEST_CASE("doc basics: threads")
 {
-    std::string const bytes = preferred(M("id"s, 42));
+    auto const owner = std::make_shared<std::string const>(preferred(M("id"s, 42)));
     std::int64_t first_read = 0;
     std::int64_t second_read = 0;
     {
         auto const use_first = [&first_read](std::expected<std::int64_t, error> const &v) { first_read = *v; };
         auto const use_second = [&second_read](std::expected<std::int64_t, error> const &v) { second_read = *v; };
-        std::jthread first([&bytes, &use_first] { use_first(cbor::at_path<"$.id", std::int64_t>(bytes)); });
-        std::jthread second([&bytes, &use_second] {
-            if (auto const doc = test::lazy_of_copy(bytes))
+        std::jthread first([&owner, &use_first] { use_first(cbor::at_path<"$.id", std::int64_t>(*owner)); });
+        std::jthread second([&owner, &use_second] {
+            if (auto const doc = cbor::lazy::view(owner))
                 use_second(doc->at_path<"$.id", std::int64_t>());
         });
     }

@@ -3,9 +3,11 @@
 
 #include <cstdint>
 #include <expected>
+#include <memory>
 #include <numeric>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using namespace std::string_literals;
@@ -30,9 +32,9 @@ TEST_CASE("doc advanced comparison: read one field by path")
 // The section "Iterate an array" sums the elements of an array through a lazy.
 TEST_CASE("doc advanced comparison: iterate an array")
 {
-    std::string const bytes = preferred(A(1, 2, 3));
+    std::string bytes = preferred(A(1, 2, 3));
     // begin iterate
-    auto const doc = test::lazy_of_copy(bytes); // [1, 2, 3]
+    auto const doc = cbor::lazy::take_ownership(std::move(bytes)); // [1, 2, 3]
     std::int64_t sum = 0;
     for (auto const e : *doc->elements())
         sum += e->get<std::int64_t>().value_or(0);
@@ -44,16 +46,16 @@ TEST_CASE("doc advanced comparison: iterate an array")
 // a tag 29 into a member that cannot share.
 TEST_CASE("doc advanced comparison: shared values")
 {
-    std::string const bytes = "\x82\xd8\x1c\x61x\xd8\x1d\x00"s;
+    auto const owner = std::make_shared<std::string const>("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
     // begin shared
-    auto const second = test::lazy_of_copy(bytes)->at(1);
+    auto const second = cbor::lazy::view(owner)->at(1);
     // second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0
     // end shared
     CHECK_EQ(second->type(), cbor::type::tag);
     CHECK_EQ(second->get<std::uint64_t>(), 0u);
 #ifdef __cpp_impl_reflection
     // begin shared-structs
-    auto const v = cbor::structs<std::vector<std::string>>::decode(std::string(bytes));
+    auto const v = cbor::structs<std::vector<std::string>>::decode(owner);
     // v.error() is cbor::error::incorrect_type
     // end shared-structs
     CHECK_EQ(v.error(), error::incorrect_type);
@@ -74,9 +76,9 @@ struct [[=cbor::tag(1900)]] series {
 // The section "A number array" reads a std::vector<double> member as an RFC 8746 typed array with no copy.
 TEST_CASE("doc advanced comparison: a number array")
 {
-    std::string const bytes = *cbor::schema<series>::encode(series{{1.5, 2.5, 3.5}});
+    std::string bytes = *cbor::schema<series>::encode(series{{1.5, 2.5, 3.5}});
     // begin numbers
-    auto const root = cbor::schema<series>::path(std::string(bytes));
+    auto const root = cbor::schema<series>::path(std::move(bytes));
     auto const values = root->view<"$.values">();
     double const sum = std::accumulate(values->begin(), values->end(), 0.0);
     // end numbers

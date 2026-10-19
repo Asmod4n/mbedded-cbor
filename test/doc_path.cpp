@@ -9,6 +9,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 using namespace std::string_literals;
@@ -55,14 +56,23 @@ TEST_CASE("doc path: the types of a number")
     CHECK_FALSE((doc_path_compiles<"$.a[", int>));
 }
 
+// The section "Read one value" shows that std::string as T copies the text into a result that needs no owner.
+TEST_CASE("doc path: std::string as T copies the text")
+{
+    std::string const bytes = preferred(M("user"s, M("name"s, "ann"s)));
+    auto const name = cbor::at_path<"$.user.name", std::string>(bytes);
+    CHECK_EQ(name, "ann"s);
+    CHECK(std::is_same_v<decltype(name), std::expected<std::string, error> const>);
+}
+
 // The section "Read a text" shows that a text needs an owner, and that the view points into the bytes of that
 // owner.
 TEST_CASE("doc path: read a text")
 {
-    std::string const bytes = preferred(M("user"s, M("name"s, "ann"s, "key"s, test::bytes{"\x01\x02"})));
+    std::string bytes = preferred(M("user"s, M("name"s, "ann"s, "key"s, test::bytes{"\x01\x02"})));
     std::string_view used;
     auto const use = [&used](std::string_view const v) { used = v; };
-    auto const owner = std::make_shared<std::string const>(bytes);
+    auto const owner = std::make_shared<std::string const>(std::move(bytes));
     auto const name = cbor::at_path<"$.user.name", std::string_view>(owner);
     if (name)
         use(**name);
@@ -78,8 +88,8 @@ TEST_CASE("doc path: read a text")
 // The section "Start at a lazy" shows that $ is the value of the lazy and that a text needs no separate owner there.
 TEST_CASE("doc path: start at a lazy")
 {
-    std::string const bytes = preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
-    auto const cars = test::lazy_of_copy(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
+    std::string bytes = preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
+    auto const cars = cbor::lazy::take_ownership(std::move(bytes)).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
     REQUIRE(cars.has_value());
     if (cars) {
         CHECK_EQ(cars->at_path<"$[1].hp", std::int64_t>(), 7);
