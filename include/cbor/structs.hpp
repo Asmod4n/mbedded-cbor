@@ -1020,7 +1020,7 @@ class generic
             if (magnitude <= std::numeric_limits<std::uint64_t>::max())
                 return heads::head_size(static_cast<std::uint64_t>(magnitude));
             std::size_t const digits =
-                sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(magnitude)) /
+                sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(static_cast<std::uint64_t>(magnitude >> std::numeric_limits<std::uint64_t>::digits))) /
                                       std::numeric_limits<std::uint8_t>::digits;
             return heads::initial_byte_size + heads::head_size(digits) + digits;
 #endif
@@ -1209,7 +1209,7 @@ class generic
                                        negative ? major_type::negative_integer : major_type::unsigned_integer,
                                        static_cast<std::uint64_t>(magnitude));
             std::size_t const digits =
-                sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(magnitude)) /
+                sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(static_cast<std::uint64_t>(magnitude >> std::numeric_limits<std::uint64_t>::digits))) /
                                       std::numeric_limits<std::uint8_t>::digits;
             at += heads::head_write(out, at, major_type::tag,
                                     std::to_underlying(negative ? rfc8949::tag_number::negative_bignum

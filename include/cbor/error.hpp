@@ -1,5 +1,9 @@
 #pragma once
 
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 15
+#error "mbedded-cbor needs g++ 15 or later"
+#endif
+
 #include <expected>
 #include <string>
 #include <system_error>
