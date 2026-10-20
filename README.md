@@ -61,11 +61,26 @@ The code of every library, task by task:
 
 ## Requirements
 
-- g++ 16 or clang 23, C++23.
+- g++ 15 or clang 23, C++23.
 - `cbor::schema` needs C++26 reflection: g++ 16 with `-std=c++26
   -freflection`.
-- `cbor::structs` uses the Boost.PFR headers where reflection is not
+- `cbor::structs` uses Boost.PFR 1.84 or later where reflection is not
   available. Nothing else is needed.
+
+### Boost.PFR
+
+CMake looks for Boost 1.84 or later on the system and uses it. If it
+finds none, the library uses its own copy of Boost.PFR 1.92.0 in
+`third_party/boost_pfr`, unchanged from boostorg/pfr, under the Boost
+Software License 1.0. An install then places this copy in
+`include/mbedded-cbor/boost_pfr`, and the CMake package and the
+pkg-config file add it to the include path. The configure output says
+which of the two the build takes.
+
+Every translation unit of a program must see the same Boost.PFR. A
+program that also uses another Boost.PFR of its own breaks the
+one-definition rule. An older Boost.PFR that comes first on the include
+path stops the build with an error that names version 1.84.
 
 ## Installation
 
@@ -101,10 +116,12 @@ through a `std::shared_ptr`. Neither form copies them.
 auto const doc = cbor::lazy::take_ownership(std::move(bytes)).value();
 
 int sum = 0;
-if (auto const samples = doc.at("samples"))
-    for (auto const &x : samples->elements().value())
+if (auto const samples = doc.at("samples")) {
+    auto const elements = samples->elements().value();
+    for (auto const &x : elements)
         if (x)
             sum += x->get<int>().value_or(0);   // 12
+}
 ```
 
 ### Read one value by its path
@@ -153,7 +170,7 @@ for (auto const p : *points | std::views::drop(1) | std::views::take(1))
 
 The tests run the examples of RFC 8949 Appendix A, the test vectors of
 the IETF CBOR working group and the JSONPath Compliance Test Suite. They
-run with g++ 16 and clang 23, with AddressSanitizer and
+run with g++ 15, g++ 16 and clang 23, with AddressSanitizer and
 UndefinedBehaviorSanitizer. Fuzz targets cover decode, encode, the
 encoder, item_size, lazy, path and schema.
 

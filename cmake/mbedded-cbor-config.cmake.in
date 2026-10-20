@@ -1,4 +1,9 @@
 @PACKAGE_INIT@
 
+if("@CBOR_BOOST_PFR@" STREQUAL "system")
+	include(CMakeFindDependencyMacro)
+	find_dependency(Boost 1.84 CONFIG)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/mbedded-cbor-targets.cmake")
 check_required_components(mbedded-cbor)
