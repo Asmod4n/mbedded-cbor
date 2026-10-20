@@ -183,6 +183,16 @@ each element read checks only its index.
 `schema<T>::at_path` with no accessor makes the checks of `path` and of
 `at_path` in one call.
 
+The `unverified_` forms make only the checks of a bound: that each head,
+length, item and directory entry lies inside the message, each index
+against its count, and the limits. They skip the tags of the structs, the
+heads of the fields, the start of the table, the fillers, the tag and the
+length check of a typed array, the check of a `bool` byte and, in
+`unverified_decode`, the order of the items. An accessor from
+`unverified_path` gives only unverified accessors.
+[reference/schema/unverified.md](../reference/schema/unverified.md) has
+the full list.
+
 ## 8. Errors
 
 | Input | Error |

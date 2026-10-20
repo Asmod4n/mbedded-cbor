@@ -16,6 +16,20 @@
 #include <string>
 #include <vector>
 
+#if defined(OP_MB_READ_UNVERIFIED)
+#define OP_MB_READ
+#endif
+#if defined(OP_MB_FIELD_UNVERIFIED)
+#define OP_MB_FIELD
+#endif
+#if defined(OP_MB_READ_UNVERIFIED) || defined(OP_MB_FIELD_UNVERIFIED)
+#define MB_PATH unverified_path
+#define MB_AT_PATH unverified_at_path
+#else
+#define MB_PATH path
+#define MB_AT_PATH at_path
+#endif
+
 static std::shared_ptr<std::string const> held;
 static std::string msg, fbmsg;
 static std::vector<capnp::word> cpmsg;
@@ -220,7 +234,7 @@ template <class V> static double text(V const &v)
 #if defined(OP_MB_READ)
 static double mb_read()
 {
-    auto const opened = S::path(held);
+    auto const opened = S::MB_PATH(held);
     if (!opened) [[unlikely]] std::abort();
     auto const cars = opened->at_path<"$.cars">();
     if (!cars) [[unlikely]] std::abort();
@@ -285,7 +299,7 @@ static double cp_read()
 #if defined(OP_MB_FIELD)
 static double mb_field()
 {
-    auto const opened = S::path(held);
+    auto const opened = S::MB_PATH(held);
     if (!opened) [[unlikely]] std::abort();
     return num(opened->at_path<"$.cars[500].engine.cc">());
 }
@@ -382,7 +396,7 @@ static T cp_copy()
 #if defined(OP_MB_READ)
 static double mb_read()
 {
-    auto const opened = S::path(held);
+    auto const opened = S::MB_PATH(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->at_path<"$.values">();
     if (!v) [[unlikely]] std::abort();
@@ -415,7 +429,7 @@ static double cp_read()
 #if defined(OP_MB_FIELD)
 static double mb_field()
 {
-    auto const x = S::at_path<"$.values[30000]">(msg);
+    auto const x = S::template MB_AT_PATH<"$.values[30000]">(msg);
     if (!x) [[unlikely]] std::abort();
     return *x;
 }
@@ -685,7 +699,7 @@ template <class V> static double text(V const &v)
 #if defined(OP_MB_READ)
 static double mb_read()
 {
-    auto const opened = S::path(held);
+    auto const opened = S::MB_PATH(held);
     if (!opened) [[unlikely]] std::abort();
     auto const v = opened->at_path<"$.records">();
     if (!v) [[unlikely]] std::abort();
@@ -728,7 +742,7 @@ static double cp_read()
 #if defined(OP_MB_FIELD)
 static double mb_field()
 {
-    auto const opened = S::path(held);
+    auto const opened = S::MB_PATH(held);
     if (!opened) [[unlikely]] std::abort();
     return text(opened->at_path<"$.records[1000].user.name">());
 }
