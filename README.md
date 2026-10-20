@@ -101,10 +101,12 @@ through a `std::shared_ptr`. Neither form copies them.
 auto const doc = cbor::lazy::take_ownership(std::move(bytes)).value();
 
 int sum = 0;
-if (auto const samples = doc.at("samples"))
-    for (auto const &x : samples->elements().value())
+if (auto const samples = doc.at("samples")) {
+    auto const elements = samples->elements().value();
+    for (auto const &x : elements)
         if (x)
             sum += x->get<int>().value_or(0);   // 12
+}
 ```
 
 ### Read one value by its path
