@@ -47,7 +47,7 @@ the compiler cannot see a wrong use, the library throws
 | Error | When |
 |---|---|
 | `too_little_data` | The bytes end before the item ends. |
-| `syntax_error` | A head is not well-formed, or a simple value is reserved in the two-byte form. `structs` also gives it for bytes after the item. |
+| `syntax_error` | A head is not well-formed, or a simple value is reserved in the two-byte form. No decode reads the bytes after its item. |
 | `indefinite_length` | A head uses indefinite length. The library does not read indefinite length. `diagnostic_notation` prints it. |
 | `nesting_depth_exceeded` | The item is deeper than the nesting depth (section 5). |
 | `inadmissible_type_for_tag_content` | A tag has content that its definition does not allow. |

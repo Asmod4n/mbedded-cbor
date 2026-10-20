@@ -16,8 +16,8 @@ stays a tag node.
 
 - `too_little_data`: the item is not complete, or a count is larger
   than the bytes that are left.
-- `syntax_error`: a byte follows the item, or a head is not
-  well-formed.
+- `syntax_error`: a head is not well-formed. A byte after the item is
+  not read, so the input can be a CBOR sequence (RFC 8742).
 - `indefinite_length`: a string, an array or a map has an indefinite
   length.
 - `nesting_depth_exceeded`: the item is deeper than the limit.
@@ -36,7 +36,7 @@ nothing.
 // bytes: a std::string with ["hi", 1]
 auto const tree = cbor::decode(bytes);
 (*tree)->get<cbor::type::array>()->size();   // 2
-cbor::decode("\x01\x02"s).error();           // syntax_error
+cbor::decode("\x01\x02"s);                   // the item 1; the byte 02 is not read
 ```
 
 ## See also

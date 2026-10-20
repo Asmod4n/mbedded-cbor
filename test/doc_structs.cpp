@@ -139,7 +139,9 @@ TEST_CASE("doc structs: input from other programs")
     CHECK_EQ(cbor::structs<int>::decode(preferred(V("a"s))).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::uint8_t>::decode(preferred(V(256))).error(), error::number_out_of_range);
     CHECK_EQ((cbor::structs<std::array<int, 2>>::decode(preferred(A(1))).error()), error::incorrect_type);
-    CHECK_EQ(cbor::structs<int>::decode(preferred(V(1)) + preferred(V(2))).error(), error::syntax_error);
+    auto const first = cbor::structs<int>::decode(preferred(V(1)) + preferred(V(2)));
+    REQUIRE(first.has_value());
+    CHECK_EQ(**first, 1);
     std::string const cut = preferred(V("abc"s));
     CHECK_EQ(cbor::structs<std::string>::decode(cut.substr(0, cut.size() - 1)).error(), error::too_little_data);
 }

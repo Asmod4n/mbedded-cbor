@@ -298,7 +298,9 @@ TEST_CASE("doc advanced structs: errors")
     CHECK_EQ((cbor::structs<std::tuple<int, int>>::decode(preferred(A(1))).error()), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::variant<int, std::string>>::decode(preferred(A())).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::string>::decode("\x63" "ab"s).error(), error::too_little_data);
-    CHECK_EQ(cbor::structs<std::uint8_t>::decode("\x01\x02"s).error(), error::syntax_error);
+    auto const first = cbor::structs<std::uint8_t>::decode("\x01\x02"s);
+    REQUIRE(first.has_value());
+    CHECK_EQ(**first, 1u);
 }
 
 } // namespace doc_advanced_structs

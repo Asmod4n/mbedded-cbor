@@ -168,7 +168,9 @@ TEST_CASE("doc reference structs: decode errors")
 {
     CHECK_EQ(cbor::structs<person>::decode(test::preferred(test::M("name"s, "ann"s))).error(),
              cbor::error::key_not_found);
-    CHECK_EQ(cbor::structs<int>::decode(test::preferred(test::V(1)) + "\x01"s).error(), cbor::error::syntax_error);
+    auto const first = cbor::structs<int>::decode(test::preferred(test::V(1)) + "\x01"s);
+    REQUIRE(first.has_value());
+    CHECK_EQ(**first, 1);
     CHECK_EQ(cbor::structs<std::string>::decode("\x63" "ab"s).error(), cbor::error::too_little_data);
     CHECK_EQ(cbor::structs<int>::decode(test::preferred(test::V("x"s))).error(), cbor::error::incorrect_type);
     CHECK_EQ(cbor::structs<std::uint8_t>::decode(test::preferred(test::V(256))).error(),

@@ -187,7 +187,9 @@ TEST_CASE("structs: an unknown key is skipped, a missing key is an error")
     CHECK_EQ(cbor::structs<pair_ab>::decode("\xa1\x61\x61\x01"s).error(), error::key_not_found);
     CHECK_EQ(cbor::structs<pair_ab>::decode("\xa2\x61\x61\x61\x78\x61\x62\x80"s).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::uint8_t>::decode("\x19\x01\x00"s).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::structs<std::uint64_t>::decode("\x00\x00"s).error(), error::syntax_error);
+    auto const zero = cbor::structs<std::uint64_t>::decode("\x00\x00"s);
+    REQUIRE(zero.has_value());
+    CHECK_EQ(**zero, 0u);
 }
 
 // RFC 8949 5.6 names two ways for a repeated key; the owner decided on 2026-10-14 that an eager decode takes

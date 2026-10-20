@@ -120,7 +120,6 @@ older program.
 | a number that the type cannot hold | `number_out_of_range` |
 | an array of another count for a `std::array` or a `std::tuple` | `incorrect_type` |
 | a plain array for a `std::vector` of a number type | `incorrect_type` |
-| bytes after the value | `syntax_error` |
 | the input ends inside the value | `too_little_data` |
 
 ```cpp
