@@ -1,0 +1,46 @@
+name: macos
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        xcode: ['16', '26']
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Select Xcode ${{ matrix.xcode }}
+        run: |
+          app=$(ls -d /Applications/Xcode_${{ matrix.xcode }}*.app 2>/dev/null | grep -viE 'beta|release_candidate' | sort -V | tail -1)
+          if [ -z "$app" ]; then
+            echo "The image has no Xcode ${{ matrix.xcode }}:"
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          sudo xcode-select -s "$app"
+          echo "SDKROOT=$(xcrun --show-sdk-path)" >> "$GITHUB_ENV"
+          clang++ --version
+          echo '#include <version>' | clang++ -std=c++23 -x c++ -E -dM - | grep -E '_LIBCPP_VERSION|__cpp_lib_ranges_fold|__cpp_lib_ranges_chunk_by|__cpp_lib_ranges_starts_ends_with' || true
+      - name: Install doctest, Boost and Ninja
+        run: |
+          brew install doctest boost ninja
+          echo "CPLUS_INCLUDE_PATH=$(brew --prefix)/include" >> "$GITHUB_ENV"
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel "$(sysctl -n hw.ncpu)"
