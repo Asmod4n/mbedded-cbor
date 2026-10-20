@@ -61,7 +61,7 @@ The code of every library, task by task:
 
 ## Requirements
 
-- g++ 16 or clang 23, C++23.
+- g++ 15 or clang 23, C++23.
 - `cbor::schema` needs C++26 reflection: g++ 16 with `-std=c++26
   -freflection`.
 - `cbor::structs` uses the Boost.PFR headers where reflection is not
