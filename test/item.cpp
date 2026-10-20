@@ -167,11 +167,13 @@ TEST_CASE("decode: a string length larger than the input is too_little_data")
     }
 }
 
-// cbor::decode takes exactly one data item (RFC 8949 5.3.1). Bytes after
-// it are a syntax error.
-TEST_CASE("decode: bytes after the data item are a syntax error")
+// Owner decision 2026-10-20: cbor::decode reads the first data item and no byte after it, as a lazy does, so a
+// CBOR sequence (RFC 8742) can be decoded item by item. The bytes 01 02 are the sequence 1, 2.
+TEST_CASE("decode: bytes after the data item are not read")
 {
-    CHECK_EQ(cbor::decode("\x01\x02"s).error(), cbor::error::syntax_error);
+    auto const first = cbor::decode("\x01\x02"s);
+    REQUIRE(first.has_value());
+    CHECK_EQ((*first)->get<cbor::type::unsigned_integer>(), 1u);
 }
 
 // The fault: decode on the lazy inside a temporary expected returned a

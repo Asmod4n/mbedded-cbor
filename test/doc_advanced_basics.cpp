@@ -86,9 +86,9 @@ TEST_CASE("doc advanced basics: not_singular_query")
 TEST_CASE("doc advanced basics: the errors of structs")
 {
 #ifdef __cpp_impl_reflection
-    CHECK_EQ(cbor::structs<std::uint8_t>::decode("\x01\x02"s).error(), error::syntax_error);
-    CHECK_EQ(cbor::structs<std::map<std::string, int>>::decode(preferred(M("a"s, 1)) + "\x00"s).error(),
-             error::syntax_error);
+    CHECK(cbor::structs<std::uint8_t>::decode("\x01\x02"s).has_value());
+    CHECK(cbor::structs<std::map<std::string, int>>::decode(preferred(M("a"s, 1)) + "\x00"s).has_value());
+    CHECK_EQ(cbor::structs<std::uint8_t>::decode("\x1c"s).error(), error::syntax_error);
 #endif
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01\xff"sv), "[_ 1]");
 }

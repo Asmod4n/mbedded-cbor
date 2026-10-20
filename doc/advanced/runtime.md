@@ -210,8 +210,8 @@ byte string item that holds a copy of the magnitude. The library has no
 type for big numbers and depends on no library for them.
 
 The decode reads every head of the item, so every limit counts each head.
-`lazy::clone` reads no byte after the item. `cbor::decode` gives
-`syntax_error` for a byte after the item.
+`lazy::clone` and `cbor::decode` read no byte after the item, so a
+CBOR sequence (RFC 8742) is read item by item.
 
 ## 6. encode
 

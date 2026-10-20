@@ -32,8 +32,8 @@ from `T{}`.
 - `number_out_of_range`: a number that the type cannot hold.
 - `key_not_found`: no key for a member that is not `std::optional`.
 - `duplicate_key`: a key that comes twice.
-- `syntax_error`: bytes after the item. `too_little_data`: the input
-  ends inside the item. `not_enough_memory`: a refused allocation.
+- `too_little_data`: the input ends inside the item. A byte after the
+  item is not read. `not_enough_memory`: a refused allocation.
 - A null or empty owner throws `std::logic_error`.
 
 ## Cost

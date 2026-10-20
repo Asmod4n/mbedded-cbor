@@ -1480,8 +1480,6 @@ private:
         value_sharing::sharing_decoder<Checked> d{{encoded}, {}};
         if (auto const r = generic::generic_read(d, out, 0, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
-        if (!d.encoded.empty()) [[unlikely]]
-            return std::unexpected(error::syntax_error);
         return out;
     }
 };

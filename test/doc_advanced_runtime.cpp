@@ -199,7 +199,7 @@ TEST_CASE("doc advanced runtime: the tree copies its strings")
     CHECK((before(held, input.data()) || !before(held, input.data() + input.size())));
     input.assign(input.size(), '\0');
     CHECK_EQ(*text, "abc"sv);
-    CHECK_EQ(cbor::decode("\x01\x02"sv).error(), error::syntax_error);
+    CHECK(cbor::decode("\x01\x02"sv).has_value());
     CHECK(test::lazy_of_copy("\x01\x02"s)->clone().has_value());
 }
 
