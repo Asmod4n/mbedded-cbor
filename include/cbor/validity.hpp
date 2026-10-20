@@ -177,7 +177,8 @@ public:
     template <class T>
     static void throw_logic_error_if_empty(std::shared_ptr<T> const &owner, char const *const what)
     {
-        if (owner.use_count() == 0) [[unlikely]]
+        std::shared_ptr<void const> const none;
+        if (!owner.owner_before(none) && !none.owner_before(owner)) [[unlikely]]
             throw_logic_error(what);
     }
 
