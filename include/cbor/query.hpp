@@ -291,7 +291,7 @@ class jsonpath
                 at = next;
                 segment s{false, found_selectors.size(), 0};
                 std::vector<selector> chosen;
-                if (text[at] == '[' || std::ranges::starts_with(std::span(text).subspan(at), std::string_view("..["))) {
+                if (text[at] == '[' || std::string_view{std::span(text).subspan(at)}.starts_with(std::string_view("..["))) {
                     s.descendant = text[at] == '.';
                     auto const b =
                         bracketed_parse(text, at + (s.descendant ? std::string_view("..").size() : 0), depth);
@@ -437,7 +437,7 @@ class jsonpath
                  {"<", comparison_op::less},
                  {">", comparison_op::greater}});
             for (auto const &[token, op] : ops)
-                if (std::ranges::starts_with(std::span(text).subspan(at), token))
+                if (std::string_view{std::span(text).subspan(at)}.starts_with(token))
                     return std::pair{op, token.size()};
             return std::nullopt;
         }
@@ -500,7 +500,7 @@ class jsonpath
             std::optional<std::size_t> last;
             for (;;) {
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, chain.at);
-                if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("&&")))
+                if (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view("&&")))
                     return chain;
                 auto const right = basic_parse(
                     text, extended_diagnostic_notation::blank_end(text, next + std::string_view("&&").size()),
@@ -532,7 +532,7 @@ class jsonpath
             std::optional<std::size_t> last;
             for (;;) {
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, chain.at);
-                if (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view("||")))
+                if (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view("||")))
                     return chain;
                 auto const right = logical_and_parse(
                     text, extended_diagnostic_notation::blank_end(text, next + std::string_view("||").size()),

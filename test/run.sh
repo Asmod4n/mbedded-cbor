@@ -3,7 +3,8 @@
 # test/cmake, which install the library and build programs that use it.
 # usage: test/run.sh fast|full|<build>...
 #   fast: gcc-release clang-asan
-#   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx
+#   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release
+#   gcc15-release builds with g++ 15, the floor of the library, in the image of containers/tumbleweed-gcc15.Containerfile.
 #   tsan, gcc-describe and wasm are run by name and not in fast or full.
 #   gcc-describe builds with g++ and no reflection, so the tests take the path of the descriptions and Boost.PFR.
 #   wasm compiles test/describe.cpp for wasm32-wasip1 in the image mbedded-cbor-wasm and does not run it: the
@@ -24,7 +25,7 @@ interop=0
 [ "${1:-fast}" = full ] && interop=1
 case ${1:-fast} in
 fast) set -- gcc-release clang-asan ;;
-full) set -- gcc-asan gcc-release clang-asan clang-release clang-libcxx ;;
+full) set -- gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release ;;
 esac
 
 asan="-Og -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
@@ -32,11 +33,12 @@ tsan="-Og -fsanitize=thread -fno-omit-frame-pointer"
 pch_clang="-Xclang -fno-pch-timestamp -Wlifetime-safety -Wno-lifetime-safety-invalidation"
 
 one() {
-	local n=$1 cxx type flags options=
+	local n=$1 cxx type flags options= img=$image file=
 	case $n in
 	gcc-asan) cxx=g++-16 type=Debug flags=$asan ;;
 	gcc-release) cxx=g++-16 type=Release flags= ;;
 	gcc-describe) cxx=g++-16 type=Release flags= options=-DCBOR_HAS_FREFLECTION=OFF ;;
+	gcc15-release) cxx=g++-15 type=Release flags= img=mbedded-cbor-gcc15 file=tumbleweed-gcc15 ;;
 	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" ;;
 	clang-release) cxx=clang++-23 type=Release flags=$pch_clang ;;
 	clang-libcxx) cxx=clang++-23 type=Release flags="-stdlib=libc++ $pch_clang" ;;
@@ -56,11 +58,14 @@ one() {
 	*) echo "unknown build $n" >&2; return 2 ;;
 	esac
 	mkdir -p "$root/$branch/$n" "$cache"
+	if [ -n "$file" ] && ! podman image exists "$img"; then
+		podman build -q -t "$img" -f "$src/containers/$file.Containerfile" "$src/containers" >/dev/null || return 1
+	fi
 	podman run --rm --network none \
 		-v "$src":/src:ro -v "$root/$branch/$n":/b -v "$cache":/ccache \
 		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=2G -e CMAKE_BUILD_PARALLEL_LEVEL="$parallel_level" \
 		-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
-		"$image" bash -c '
+		"$img" bash -c '
 		s=${EPOCHREALTIME/./}
 		cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE='"$type"' \
 			-DCMAKE_CXX_COMPILER='"$cxx"' -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
