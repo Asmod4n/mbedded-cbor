@@ -37,6 +37,9 @@
 #include <meta>
 #elif __has_include(<boost/pfr.hpp>)
 #include <boost/pfr.hpp>
+#if !defined(BOOST_PFR_CORE_NAME_ENABLED) || !BOOST_PFR_CORE_NAME_ENABLED
+#error "cbor::structs needs Boost.PFR 1.84 or later with boost::pfr::get_name"
+#endif
 #endif
 
 #include "item_size.hpp"
