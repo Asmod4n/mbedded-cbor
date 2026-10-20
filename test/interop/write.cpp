@@ -70,7 +70,7 @@ void case_print(std::string_view const name, std::string_view const section, std
 }
 
 void result_print(std::string_view const name, std::string_view const section,
-                  std::expected<std::string, cbor::error> const &written, std::string_view const expected)
+                  cbor::result<std::string> const &written, std::string_view const expected)
 {
     case_print(name, section, written ? hex_of(*written) : message_of(written.error()), expected);
 }
@@ -83,7 +83,7 @@ std::span<std::byte const> span_of(std::string_view const s)
 // Writes the item again through one call of cbor::encoder per head. Each integer, simple value and float
 // takes the C++ type of the width that it had on the wire, so every native width of the encoder runs.
 template <class Target>
-std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item const &node)
+cbor::result<void> item_walk(cbor::encoder<Target> &e, cbor::item const &node)
 {
     using cbor::type;
     std::uint8_t const info = node.additional_information;
@@ -103,7 +103,7 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
         for (cbor::item const &child : children)
             if (auto const c = item_walk(e, child); !c)
                 return c;
-        return std::expected<void, cbor::error>{};
+        return cbor::result<void>{};
     };
     // A float goes through the encoder at the width and with the bits of the wire, so a NaN keeps its payload.
     auto const bits = [&] {
@@ -114,7 +114,7 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
             v = v << 8 | static_cast<std::uint8_t>(c);
         return v;
     };
-    auto const tagged = [&](std::pair<std::uint64_t, cbor::item const *> const t) -> std::expected<void, cbor::error> {
+    auto const tagged = [&](std::pair<std::uint64_t, cbor::item const *> const t) -> cbor::result<void> {
         if (auto const r = e.tag(t.first); !r)
             return r;
         return item_walk(e, *t.second);
