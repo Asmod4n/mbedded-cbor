@@ -2963,21 +2963,21 @@ public:
 
     template <owning_range_of_chars Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
     {
         return path_with_owner<true>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
     template <owning_range_of_chars Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
     {
         return path_with_owner<true>(std::move(encoded));
     }
 
     template <borrowed_range_of_chars Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         return path_with_owner<true>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
@@ -3029,21 +3029,21 @@ public:
 
     template <owning_range_of_chars Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
     {
         return path_with_owner<false>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
     template <owning_range_of_chars Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<Encoded const> encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<Encoded const> encoded)
     {
         return path_with_owner<false>(std::move(encoded));
     }
 
     template <borrowed_range_of_chars Encoded>
         requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-    static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         return path_with_owner<false>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
@@ -3191,7 +3191,7 @@ private:
     }
 
     template <bool Verified, owning_range_of_chars Encoded>
-    static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<Encoded const> encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<Encoded const> encoded)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::schema::path: the encoded data item is null");
         std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
@@ -3199,7 +3199,7 @@ private:
     }
 
     template <bool Verified>
-    static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<void const> owner, std::string_view const encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         validity::throw_logic_error_if_empty(
             owner, "cbor::schema::path: the owner of the encoded data item is empty");
