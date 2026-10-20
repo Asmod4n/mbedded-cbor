@@ -272,6 +272,11 @@ class reflection
     }
 
 #ifdef __cpp_impl_reflection
+    static consteval bool has_text(cbor::key const k)
+    {
+        return std::meta::reflect_constant(k.text) != std::meta::reflect_constant(static_cast<char const *>(nullptr));
+    }
+
     template <class Root>
     static consteval bool integer_key_used()
     {
@@ -282,7 +287,7 @@ class reflection
                     [](std::meta::info const m) {
                         return std::ranges::any_of(std::meta::annotations_of(m), [](std::meta::info const a) {
                             return std::meta::remove_const(std::meta::type_of(a)) == (^^cbor::key) &&
-                                   std::meta::extract<cbor::key>(a).text == nullptr;
+                                   !has_text(std::meta::extract<cbor::key>(a));
                         });
                     });
             });
@@ -471,7 +476,7 @@ class reflection
     static consteval std::string_view key_of(std::meta::info const r)
     {
         for (std::meta::info const a : std::meta::annotations_of(r))
-            if (std::meta::remove_const(std::meta::type_of(a)) == (^^cbor::key) && std::meta::extract<cbor::key>(a).text != nullptr)
+            if (std::meta::remove_const(std::meta::type_of(a)) == (^^cbor::key) && has_text(std::meta::extract<cbor::key>(a)))
                 return std::meta::extract<cbor::key>(a).text;
         auto const name = std::meta::u8identifier_of(r);
         return std::define_static_string(std::string(name.begin(), name.end()));
