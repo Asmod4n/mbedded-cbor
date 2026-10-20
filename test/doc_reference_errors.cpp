@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -74,4 +75,18 @@ TEST_CASE("doc reference errors: limits")
     CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
     CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
     CHECK_EQ(CBOR_NESTING_DEPTH_DEFAULT, 128);
+}
+
+// result.md: a range-for over the elements of a temporary result reads a living value, and a result converts to
+// std::expected.
+TEST_CASE("doc reference errors: result")
+{
+    auto const doc = *test::lazy_of_copy("\xa1\x61\x6b\x83\x01\x02\x03"s);
+    std::int64_t sum = 0;
+    for (auto const e : *doc.at("k").and_then([](cbor::lazy const &k) { return k.elements(); }))
+        sum += e->get<std::int64_t>().value_or(0);
+    CHECK_EQ(sum, 6);
+    std::expected<cbor::lazy, cbor::error> const plain = doc.at("k");
+    CHECK(plain.has_value());
+    CHECK_THROWS_AS((void)doc.at("x").value(), std::bad_expected_access<cbor::error>);
 }

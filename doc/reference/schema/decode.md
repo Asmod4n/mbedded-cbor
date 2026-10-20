@@ -3,22 +3,22 @@
 ```cpp
 template <owning_range_of_chars Encoded>
     requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-static std::expected<ref<T>, cbor::error> decode(Encoded &&encoded);
+static cbor::result<ref<T>> decode(Encoded &&encoded);
 
 template <owning_range_of_chars Encoded>
-static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<Encoded const> encoded)
+static cbor::result<ref<T>> decode(std::shared_ptr<Encoded const> encoded)
     requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>());
 
 template <owning_range_of_chars Encoded>
-static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<Encoded const> encoded, T target)
+static cbor::result<ref<T>> decode(std::shared_ptr<Encoded const> encoded, T target)
     requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>());
 
 template <borrowed_range_of_chars Encoded>
-static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+static cbor::result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>());
 
 template <borrowed_range_of_chars Encoded>
-static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
+static cbor::result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
     requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>());
 ```
 

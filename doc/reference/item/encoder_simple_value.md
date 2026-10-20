@@ -1,7 +1,7 @@
 # cbor::encoder::simple_value
 
 ```cpp
-std::expected<void, error> simple_value(cbor::simple_value const value);
+cbor::result<void> simple_value(cbor::simple_value const value);
 ```
 
 Writes a simple value (major type 7), for example `false_value`,

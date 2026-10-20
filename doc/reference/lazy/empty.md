@@ -1,7 +1,7 @@
 # cbor::lazy::empty
 
 ```cpp
-std::expected<bool, error> empty() const;
+cbor::result<bool> empty() const;
 ```
 
 Gives `true` when [size](size.md) gives 0, and `false` when it gives

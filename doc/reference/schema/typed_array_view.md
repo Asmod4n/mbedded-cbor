@@ -17,11 +17,11 @@ public:
     std::reverse_iterator<iterator> crend() const;
     E front() const;
     E back() const;
-    std::expected<typed_array_view, error> first(std::size_t const n) const &;
-    std::expected<typed_array_view, error> first(std::size_t const n) &&;
-    std::expected<typed_array_view, error> last(std::size_t const n) const &;
-    std::expected<typed_array_view, error> last(std::size_t const n) &&;
-    std::expected<E, error> at(std::size_t const i) const;
+    cbor::result<typed_array_view> first(std::size_t const n) const &;
+    cbor::result<typed_array_view> first(std::size_t const n) &&;
+    cbor::result<typed_array_view> last(std::size_t const n) const &;
+    cbor::result<typed_array_view> last(std::size_t const n) &&;
+    cbor::result<E> at(std::size_t const i) const;
     E operator[](std::size_t const i) const;
 };
 ```

@@ -4,7 +4,7 @@
 struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
-        using value_type = std::expected<lazy, error>;
+        using value_type = cbor::result<lazy>;
         using difference_type = std::ptrdiff_t;
         iterator() = default;
         value_type operator*() const;
@@ -44,7 +44,7 @@ No allocation.
 auto const people = cbor::lazy::take_ownership(std::move(bytes));
 auto const view = *people->elements();
 view.size();   // 3
-std::ranges::count_if(view, [](std::expected<cbor::lazy, cbor::error> const &e) {
+std::ranges::count_if(view, [](cbor::result<cbor::lazy> const &e) {
     return e && e->at("age")->get<int>().value_or(0) > 30;
 });            // 2
 ```

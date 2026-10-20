@@ -3,7 +3,7 @@
 ```cpp
 template <class T>
     requires path_result<T>
-static std::expected<query<T>, error> compile(std::string_view const path);
+static cbor::result<query<T>> compile(std::string_view const path);
 ```
 
 Parses a JSONPath (RFC 9535) at run time and gives a

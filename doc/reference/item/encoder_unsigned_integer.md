@@ -3,7 +3,7 @@
 ```cpp
 template <class T>
     requires integer_argument<T>
-std::expected<void, error> unsigned_integer(T const value);
+cbor::result<void> unsigned_integer(T const value);
 ```
 
 Writes `value` as an unsigned integer (major type 0). The head takes the

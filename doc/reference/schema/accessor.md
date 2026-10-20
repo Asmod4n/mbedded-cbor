@@ -26,7 +26,7 @@ public:
 
 Reads the part `U` of a message of `T`. A path that starts with `@`
 starts at `U`. A path that starts with `$` starts at the root. The
-result is a `std::expected`: the value of a number, `bool` or enum; a
+result is a `cbor::result`: the value of a number, `bool` or enum; a
 `std::string_view` of a text; the accessor of a struct, a list or a map.
 Every result holds the owner of the bytes.
 

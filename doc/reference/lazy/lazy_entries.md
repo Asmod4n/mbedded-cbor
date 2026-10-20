@@ -4,7 +4,7 @@
 struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
-        using value_type = std::expected<std::pair<lazy, lazy>, error>;
+        using value_type = cbor::result<std::pair<lazy, lazy>>;
         using difference_type = std::ptrdiff_t;
         iterator() = default;
         value_type operator*() const;

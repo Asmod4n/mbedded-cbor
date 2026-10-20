@@ -40,7 +40,7 @@ auto const doc = cbor::lazy::view(owner);   // reads *owner in place
 | `at(cbor::key{7})` | the value of an integer key in a map |
 | `["name"]`, `[1]`, `[cbor::key{7}]` | the same as `at` |
 
-Each step returns a `std::expected<cbor::lazy, cbor::error>`. `and_then`
+Each step returns a `cbor::result<cbor::lazy>`. `and_then`
 passes the lazy to the next step, and the first error reaches the end of
 the chain: `key_not_found`, `index_out_of_bounds`, or `not_indexable`
 when a step meets a value that is not a map or an array.
@@ -48,7 +48,7 @@ when a step meets a value that is not a map or an array.
 To read one value at a known place, a path is shorter:
 `cbor::at_path<"$.cars[1].hp", std::int64_t>(bytes)` ([path.md](path.md)).
 
-The next examples use `->` and `*` on a `std::expected` with no check,
+The next examples use `->` and `*` on a `cbor::result` with no check,
 so that they stay short. A program checks each result as above, or uses
 `and_then`.
 
@@ -83,11 +83,11 @@ doc->at("name")->get<std::int64_t>().error();                 // incorrect_type
 ## 3. Loop over an array or a map
 
 `elements()` gives the elements of an array, and `entries()` gives the
-pairs of a map. Each element is a `std::expected` of its own.
+pairs of a map. Each element is a `cbor::result` of its own.
 
 ```cpp
 // bytes: [1, 2, 3]
-std::expected<std::int64_t, cbor::error> sum(std::string bytes)
+cbor::result<std::int64_t> sum(std::string bytes)
 {
     auto const array = cbor::lazy::take_ownership(std::move(bytes));
     if (!array)
@@ -127,7 +127,7 @@ map->size();          // 2, the pairs of a map or the elements of an array
 map->at("z").error(); // key_not_found, the key is not in the map
 ```
 
-Both return a `std::expected`.
+Both return a `cbor::result`.
 
 ## 5. Print CBOR as text
 
@@ -140,7 +140,7 @@ input in a log or in a test.
 cbor::diagnostic_notation(bytes);   // the text {"cars": [{"hp": 5}, {"hp": 7}]}
 ```
 
-It returns a `std::expected<std::string, cbor::error>`. Bytes that are
+It returns a `cbor::result<std::string>`. Bytes that are
 not CBOR give an error.
 
 ## 6. Write CBOR

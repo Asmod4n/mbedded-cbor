@@ -1,10 +1,10 @@
 # cbor::structs<T>::encode
 
 ```cpp
-static std::expected<std::string, cbor::error> encode(T const &value);
+static cbor::result<std::string> encode(T const &value);
 
 template <class Target>
-static std::expected<std::size_t, cbor::error> encode(T const &value, Target &&target);
+static cbor::result<std::size_t> encode(T const &value, Target &&target);
 ```
 
 Writes `value` as one CBOR item in preferred serialization. A struct is

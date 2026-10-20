@@ -9,50 +9,50 @@ template <fixed_string Path, class T>
               || std::is_same_v<T, std::float128_t>
 #endif
               ))
-std::expected<T, error> at_path(std::string_view encoded);
+cbor::result<T> at_path(std::string_view encoded);
 
 template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
+cbor::result<ref<T>> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
+cbor::result<ref<T>> at_path(std::shared_ptr<Encoded const> owner);
 
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
-std::expected<ref<T>, error> at_path(Encoded &&encoded);
+cbor::result<ref<T>> at_path(Encoded &&encoded);
 
 template <fixed_string Path, copied_value T>
     requires is_singular_query_v<Path>
-std::expected<T, error> at_path(std::string_view encoded);
+cbor::result<T> at_path(std::string_view encoded);
 
 template <scalar_result T>
-std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e);
+cbor::result<T> at_path(std::string_view const encoded, jsonpath::query<T> const &e);
 
 template <view_result T, borrowed_range_of_chars Encoded>
-std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
+cbor::result<ref<T>> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                      jsonpath::query<T> const &e);
 
 template <class T, borrowed_range_of_chars Encoded>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
+cbor::result<T> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                 jsonpath::query<T> const &e);
 
 template <class T, owning_range_of_chars Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
+cbor::result<typename jsonpath::query<T>::result_type> at_path(std::shared_ptr<Encoded const> owner,
                                                                        jsonpath::query<T> const &e);
 
 template <class T, owning_range_of_chars Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<typename jsonpath::query<T>::result_type, error> at_path(Encoded &&encoded,
+cbor::result<typename jsonpath::query<T>::result_type> at_path(Encoded &&encoded,
                                                                        jsonpath::query<T> const &e);
 ```
 

@@ -6,7 +6,7 @@ template <std::floating_point T>
              (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
               (sizeof(T) == sizeof(std::uint16_t) &&
                std::numeric_limits<T>::digits == heads::half_precision.significand_bits + 1)))
-std::expected<void, error> floating_point(T const value);
+cbor::result<void> floating_point(T const value);
 ```
 
 Writes `value` as a float in the width of `T`: 16, 32 or 64 bits. It

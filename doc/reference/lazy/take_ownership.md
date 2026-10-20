@@ -2,7 +2,7 @@
 
 ```cpp
 template <owning_range_of_chars Encoded>
-static std::expected<lazy, error> take_ownership(Encoded &&encoded);
+static cbor::result<lazy> take_ownership(Encoded &&encoded);
 ```
 
 Makes the lazy of the top-level item in `encoded`. The bytes move into a

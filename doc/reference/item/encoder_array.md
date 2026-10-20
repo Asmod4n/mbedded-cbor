@@ -1,7 +1,7 @@
 # cbor::encoder::array
 
 ```cpp
-std::expected<void, error> array(std::uint64_t const count);
+cbor::result<void> array(std::uint64_t const count);
 ```
 
 Writes the head of an array (major type 4) with `count` elements, with the shortest head for `count`. The

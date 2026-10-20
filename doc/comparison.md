@@ -11,7 +11,7 @@ FlatBuffers and Cap'n Proto. Each code example was compiled and run.
 | Write a struct | no extra code (C++26 reflection) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
 | Shared values, tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
 | A list of numbers with no copy | `cbor::schema` | copies | reads each number | direct | direct |
-| Broken input | a `std::expected` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
+| Broken input | a `cbor::result` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
 
 ## Read one field
 
@@ -52,7 +52,7 @@ std::vector<std::uint8_t> const bytes = nlohmann::json::to_cbor(person{"ann", 30
 person const back = nlohmann::json::from_cbor(bytes).get<person>();
 ```
 
-`encode` and `decode` return a `std::expected`, and `*` takes the value
+`encode` and `decode` return a `cbor::result`, and `*` takes the value
 ([structs.md](structs.md)).
 
 ## Broken input

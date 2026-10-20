@@ -9,9 +9,9 @@ template <class T>
 #ifdef __STDCPP_FLOAT128_T__
              || std::is_same_v<T, std::float128_t>
 #endif
-std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+cbor::result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                    std::is_same_v<T, typed_array>,
-                               ref<T>, T>, error> get() const;
+                               ref<T>, T>> get() const;
 ```
 
 Reads the value at the lazy as `T`.

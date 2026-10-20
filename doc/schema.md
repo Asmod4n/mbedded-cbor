@@ -35,8 +35,8 @@ auto const id = cbor::schema<sensor>::at_path<"$.id">(*bytes);                //
 auto const second = cbor::schema<sensor>::at_path<"$.readings[1]">(*bytes);   // 2.5
 ```
 
-`encode` returns a `std::expected<std::string, cbor::error>`, and
-`at_path` returns a `std::expected` of the value of the member.
+`encode` returns a `cbor::result<std::string>`, and
+`at_path` returns a `cbor::result` of the value of the member.
 
 ## 2. Tags
 
@@ -82,7 +82,7 @@ if (readings)
         use(r);                                 // 1.5, then 2.5
 ```
 
-| The path ends at | `at_path` gives, in a `std::expected` |
+| The path ends at | `at_path` gives, in a `cbor::result` |
 |---|---|
 | a number, a `bool` or an enum | the value |
 | a text or a byte string | a `std::string_view` into the message |
@@ -133,7 +133,7 @@ if (back)
     use((*back)->readings.size());   // 2
 ```
 
-`decode` returns a `std::expected<cbor::ref<sensor>, cbor::error>`,
+`decode` returns a `cbor::result<cbor::ref<sensor>>`,
 as `structs` does.
 
 ## 6. Errors

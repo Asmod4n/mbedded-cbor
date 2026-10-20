@@ -20,8 +20,8 @@ and every other CBOR decoder can read it.
 - **Raw arrays.** A list of numbers, and a list of structs whose fields
   all have a fixed width, is one block of little-endian bytes. The block
   is checked once.
-- **Errors as values.** Bad input gives a `std::expected` with a
-  `cbor::error`. A read never throws on input.
+- **Errors as values.** Bad input gives a `cbor::result`, a
+  `std::expected` with a `cbor::error`. A read never throws on input.
 - **Limits.** Nesting depth, string length and element count are
   constants of the build. A count in the input reserves no memory.
 

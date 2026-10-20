@@ -1,12 +1,12 @@
 # cbor::schema::encode
 
 ```cpp
-static std::expected<std::string, cbor::error> encode(T const &value)
+static cbor::result<std::string> encode(T const &value)
     requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>());
 
 template <class Target>
     requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
-static std::expected<std::size_t, cbor::error> encode(T const &value, Target &&target);
+static cbor::result<std::size_t> encode(T const &value, Target &&target);
 ```
 
 Writes `value` as one Packed CBOR message ([wire](wire.md)). The first

@@ -3,7 +3,7 @@
 ```cpp
 template <class T>
     requires integer_argument<T>
-std::expected<void, error> negative_integer(T const argument);
+cbor::result<void> negative_integer(T const argument);
 ```
 
 Writes a negative integer (major type 1) with the argument `argument`.

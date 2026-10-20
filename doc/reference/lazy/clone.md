@@ -1,7 +1,7 @@
 # cbor::lazy::clone
 
 ```cpp
-std::expected<owning<item>, error> clone() const;
+cbor::result<owning<item>> clone() const;
 ```
 
 Decodes the whole item at the lazy into a tree of

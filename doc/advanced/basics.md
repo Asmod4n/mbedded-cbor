@@ -202,7 +202,7 @@ bytes.
 A lazy holds only its owner, its bytes and its offset, and a read changes
 nothing in it. So several threads read one lazy, and the lazy values of
 one top-level item, at the same time. `lazy::take_ownership` gives a
-`std::expected`,
+`cbor::result`,
 and `std::move(*l)` moves the lazy out of it:
 
 ```cpp

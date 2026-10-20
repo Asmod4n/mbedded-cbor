@@ -1,7 +1,7 @@
 # cbor::decode
 
 ```cpp
-std::expected<owning<item>, error> decode(std::string_view encoded);
+cbor::result<owning<item>> decode(std::string_view encoded);
 ```
 
 Decodes the one top-level item in `encoded` into a tree of

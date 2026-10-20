@@ -2,7 +2,7 @@
 
 ```cpp
 template <cbor::type K>
-std::expected<item_alternative_t<K>, error> get() const;
+cbor::result<item_alternative_t<K>> get() const;
 ```
 
 Gives the value of the node when `type` is `K`.

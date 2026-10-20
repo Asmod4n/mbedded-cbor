@@ -2,7 +2,7 @@
 
 ```cpp
 auto finish()
-    -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>;
+    -> cbor::result<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>>;
 ```
 
 Ends the encoder. It writes the buffer of the encoder to the target and

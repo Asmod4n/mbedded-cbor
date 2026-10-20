@@ -37,7 +37,7 @@ The encoder does not write tags 28 and 29.
 
 ## Errors
 
-Each call gives `std::expected<void, error>`. After an error, and after
+Each call gives `cbor::result<void>`. After an error, and after
 [finish](encoder_finish.md), each call throws `std::logic_error`. A copy
 does not compile.
 

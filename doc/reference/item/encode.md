@@ -2,7 +2,7 @@
 
 ```cpp
 template <class Target>
-std::expected<std::size_t, error> encode(item const &root, Target &&target);
+cbor::result<std::size_t> encode(item const &root, Target &&target);
 ```
 
 Writes the tree at `root` and gives the count of bytes written. Each

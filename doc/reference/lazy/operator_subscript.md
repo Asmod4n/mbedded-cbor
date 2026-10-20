@@ -1,14 +1,14 @@
 # cbor::lazy::operator[]
 
 ```cpp
-std::expected<lazy, error> operator[](std::string_view key) const;
-std::expected<lazy, error> operator[](key k) const;
-std::expected<lazy, error> operator[](std::size_t index) const;
+cbor::result<lazy> operator[](std::string_view key) const;
+cbor::result<lazy> operator[](key k) const;
+cbor::result<lazy> operator[](std::size_t index) const;
 ```
 
 Gives the same result as [at](at.md) with the same argument. It does not
 throw for a missing key or a wrong index. The result is a
-`std::expected`, so `l["a"]["b"]` does not compile. A path reads a chain
+`cbor::result`, so `l["a"]["b"]` does not compile. A path reads a chain
 ([at_path](at_path.md)).
 
 ## Errors

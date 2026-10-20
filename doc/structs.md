@@ -38,9 +38,8 @@ person const &p = **back;
 p.home->city;   // "Graz"
 ```
 
-`encode` returns a `std::expected<std::string, cbor::error>` with the
-bytes. `decode` returns a `std::expected<cbor::ref<person>,
-cbor::error>`: `*back` is the `ref`, and `**back` is the
+`encode` returns a `cbor::result<std::string>` with the
+bytes. `decode` returns a `cbor::result<cbor::ref<person>>`: `*back` is the `ref`, and `**back` is the
 `person`. A struct is a map with the names of its members as keys.
 `cbor::diagnostic_notation` prints the bytes as text.
 

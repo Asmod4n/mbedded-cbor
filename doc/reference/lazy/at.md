@@ -1,9 +1,9 @@
 # cbor::lazy::at
 
 ```cpp
-std::expected<lazy, error> at(std::string_view key) const;
-std::expected<lazy, error> at(key k) const;
-std::expected<lazy, error> at(std::size_t index) const;
+cbor::result<lazy> at(std::string_view key) const;
+cbor::result<lazy> at(key k) const;
+cbor::result<lazy> at(std::size_t index) const;
 ```
 
 Gives the lazy of one child. `at(key)` gives the value of the first pair

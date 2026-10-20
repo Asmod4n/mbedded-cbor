@@ -1,7 +1,7 @@
 # cbor::encoded_cbor_data_item
 
 ```cpp
-inline std::expected<std::reference_wrapper<item const>, error>
+inline cbor::result<std::reference_wrapper<item const>>
 encoded_cbor_data_item(owning<item> const &tree, item const &tagged);
 ```
 

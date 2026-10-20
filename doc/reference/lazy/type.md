@@ -1,7 +1,7 @@
 # cbor::lazy::type
 
 ```cpp
-std::expected<cbor::type, error> type() const;
+cbor::result<cbor::type> type() const;
 ```
 
 Gives the kind of the value at the lazy. A tag 2 or 3 whose magnitude

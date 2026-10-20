@@ -1,7 +1,7 @@
 # cbor::lazy::size
 
 ```cpp
-std::expected<std::uint64_t, error> size() const;
+cbor::result<std::uint64_t> size() const;
 ```
 
 Gives the count of the head: the elements of an array, the pairs of a

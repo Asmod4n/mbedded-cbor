@@ -2,19 +2,19 @@
 
 ```cpp
 template <owning_range_of_chars Encoded>
-static std::expected<cbor::ref<T>, cbor::error> decode(Encoded &&encoded);
+static cbor::result<cbor::ref<T>> decode(Encoded &&encoded);
 
 template <owning_range_of_chars Encoded>
-static std::expected<cbor::ref<T>, cbor::error> decode(std::shared_ptr<Encoded const> encoded);
+static cbor::result<cbor::ref<T>> decode(std::shared_ptr<Encoded const> encoded);
 
 template <owning_range_of_chars Encoded>
-static std::expected<cbor::ref<T>, cbor::error> decode(std::shared_ptr<Encoded const> encoded, T &&target);
+static cbor::result<cbor::ref<T>> decode(std::shared_ptr<Encoded const> encoded, T &&target);
 
 template <borrowed_range_of_chars Encoded>
-static std::expected<cbor::ref<T>, cbor::error> decode(std::shared_ptr<void const> owner, Encoded const &encoded);
+static cbor::result<cbor::ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded);
 
 template <borrowed_range_of_chars Encoded>
-static std::expected<cbor::ref<T>, cbor::error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
+static cbor::result<cbor::ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                        T &&target);
 ```
 

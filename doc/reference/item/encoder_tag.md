@@ -1,7 +1,7 @@
 # cbor::encoder::tag
 
 ```cpp
-std::expected<void, error> tag(std::uint64_t const number);
+cbor::result<void> tag(std::uint64_t const number);
 ```
 
 Writes the head of a tag (major type 6) with the tag number `number`,

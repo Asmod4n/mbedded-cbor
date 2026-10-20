@@ -1,7 +1,7 @@
 # cbor::encode_iov
 
 ```cpp
-std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+cbor::result<ref<std::span<std::string_view const>>> encode_iov(item const &root);
 ```
 
 Writes the tree at `root` into a list of pieces, not into one buffer.

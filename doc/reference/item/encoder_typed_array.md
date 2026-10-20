@@ -1,7 +1,7 @@
 # cbor::encoder::typed_array
 
 ```cpp
-std::expected<void, error> typed_array(cbor::typed_array const value);
+cbor::result<void> typed_array(cbor::typed_array const value);
 ```
 
 Writes a typed array (RFC 8746): the tag `value.tag` and then

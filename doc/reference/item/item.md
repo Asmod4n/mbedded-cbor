@@ -6,7 +6,7 @@ struct item {
     std::uint8_t const additional_information;
 
     template <cbor::type K>
-    std::expected<item_alternative_t<K>, error> get() const;
+    cbor::result<item_alternative_t<K>> get() const;
 };
 
 template <cbor::type K>

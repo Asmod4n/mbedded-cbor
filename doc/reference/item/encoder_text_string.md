@@ -1,12 +1,12 @@
 # cbor::encoder::text_string
 
 ```cpp
-std::expected<void, error> text_string(std::string_view const text);
+cbor::result<void> text_string(std::string_view const text);
 template <class S>
     requires std::same_as<S, std::string>
-std::expected<void, error> text_string(S &&text);
-std::expected<void, error> text_string(std::shared_ptr<std::string const> const &text);
-std::expected<void, error> text_string(ref<std::string_view> const &text);
+cbor::result<void> text_string(S &&text);
+cbor::result<void> text_string(std::shared_ptr<std::string const> const &text);
+cbor::result<void> text_string(ref<std::string_view> const &text);
 ```
 
 Writes `text` as a text string, with the shortest head for the length.

@@ -11,7 +11,7 @@ public:
     sequence(std::shared_ptr<void const> o, Encoded const &e);
 
     struct iterator {
-        using value_type = std::expected<std::string_view, error>;
+        using value_type = cbor::result<std::string_view>;
         using difference_type = std::ptrdiff_t;
 
         value_type operator*() const;

@@ -19,7 +19,7 @@ of RFC 8949, which looks like JSON.
 
 ## 1. Errors
 
-A call that reads CBOR returns a `std::expected<T, cbor::error>`. It
+A call that reads CBOR returns a `cbor::result<T>`. It
 holds the value or the error. Bad input never throws.
 
 ```cpp

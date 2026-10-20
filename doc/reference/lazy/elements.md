@@ -1,11 +1,11 @@
 # cbor::lazy::elements
 
 ```cpp
-std::expected<lazy_elements, error> elements() const;
+cbor::result<lazy_elements> elements() const;
 ```
 
 Gives the elements of an array, or of a typed array, as a view. Each
-element of the view is a `std::expected<lazy, error>`. The call reads
+element of the view is a `cbor::result<lazy>`. The call reads
 only the head. The view reads one element at each step.
 
 ## Errors

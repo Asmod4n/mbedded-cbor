@@ -62,9 +62,9 @@ Only public members are written.
 
 | Call | Result |
 |---|---|
-| `schema<T>::encode(value)` | `std::expected<std::string, error>` |
-| `schema<T>::encode(value, target)` | `std::expected<std::size_t, error>`, the count of bytes appended |
-| `schema<T>::decode(owner)` | `std::expected<ref<T>, error>`, the whole struct |
+| `schema<T>::encode(value)` | `cbor::result<std::string>` |
+| `schema<T>::encode(value, target)` | `cbor::result<std::size_t>`, the count of bytes appended |
+| `schema<T>::decode(owner)` | `cbor::result<ref<T>>`, the whole struct |
 
 `decode` takes the same forms as `structs<T>::decode`: a moved
 `std::string`, a `std::shared_ptr<std::string const>`, a

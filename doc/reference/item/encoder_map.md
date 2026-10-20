@@ -1,7 +1,7 @@
 # cbor::encoder::map
 
 ```cpp
-std::expected<void, error> map(std::uint64_t const count);
+cbor::result<void> map(std::uint64_t const count);
 ```
 
 Writes the head of a map (major type 5) with `count` pairs, with the shortest head for `count`. The

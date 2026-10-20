@@ -2,9 +2,9 @@
 
 ```cpp
 template <borrowed_range_of_chars Encoded>
-static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
+static cbor::result<lazy> view(std::shared_ptr<void const> owner, Encoded const &encoded);
 template <owning_range_of_chars Encoded>
-static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
+static cbor::result<lazy> view(std::shared_ptr<Encoded const> owner);
 ```
 
 Makes the lazy of the top-level item in the bytes, in place. Nothing is

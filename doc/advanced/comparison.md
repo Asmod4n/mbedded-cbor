@@ -67,11 +67,11 @@ int const id = doc.at("user").at("id");
 
 ### mbedded-cbor
 
-at_path reads the heads on the way to the field and decodes nothing else. The result is a std::expected.
+at_path reads the heads on the way to the field and decodes nothing else. The result is a cbor::result.
 
 ```cpp
 // bytes: {"user": {"id": 42}}
-std::expected<std::int64_t, cbor::error> const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);
+cbor::result<std::int64_t> const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);
 ```
 
 ### nlohmann/json
@@ -214,7 +214,7 @@ for (int const x : v)
 
 ### mbedded-cbor
 
-elements() gives a forward range. Each element is a std::expected<cbor::lazy, cbor::error>.
+elements() gives a forward range. Each element is a cbor::result<cbor::lazy>.
 
 ```cpp
 auto const doc = cbor::lazy::take_ownership(std::move(bytes)); // [1, 2, 3]
@@ -396,7 +396,7 @@ The input stops before its end. Each snippet tells that the input is broken.
 
 ### C++ in memory
 
-Data in memory is not parsed. The snippet shows the standard form of an error: a std::expected.
+Data in memory is not parsed. The snippet shows the standard form of an error: a cbor::result.
 
 ```cpp
 auto const parse = [](std::string const &s) -> std::expected<int, std::errc> {
@@ -409,7 +409,7 @@ auto const r = parse("");
 
 ### mbedded-cbor
 
-Each read gives a std::expected<T, cbor::error>. A wrong use that the compiler cannot see throws std::logic_error ([basics.md](basics.md)).
+Each read gives a cbor::result<T>. A wrong use that the compiler cannot see throws std::logic_error ([basics.md](basics.md)).
 
 ```cpp
 // bytes: [1, 2] without its last byte

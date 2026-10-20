@@ -2,25 +2,25 @@
 
 ```cpp
 template <owning_range_of_chars Encoded>
-static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded);
+static cbor::result<accessor<T, false>> unverified_path(Encoded &&encoded);
 template <owning_range_of_chars Encoded>
-static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<Encoded const> encoded);
+static cbor::result<accessor<T, false>> unverified_path(std::shared_ptr<Encoded const> encoded);
 template <borrowed_range_of_chars Encoded>
-static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded);
+static cbor::result<accessor<T, false>> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
 template <fixed_string Path, std::convertible_to<std::size_t>... Index>
 static auto unverified_at_path(std::string_view const encoded, Index const... indexes);
 
 template <owning_range_of_chars Encoded>
-static std::expected<ref<T>, error> unverified_decode(Encoded &&encoded);
+static cbor::result<ref<T>> unverified_decode(Encoded &&encoded);
 template <owning_range_of_chars Encoded>
-static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded);
+static cbor::result<ref<T>> unverified_decode(std::shared_ptr<Encoded const> encoded);
 template <owning_range_of_chars Encoded>
-static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target);
+static cbor::result<ref<T>> unverified_decode(std::shared_ptr<Encoded const> encoded, T target);
 template <borrowed_range_of_chars Encoded>
-static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded);
+static cbor::result<ref<T>> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded);
 template <borrowed_range_of_chars Encoded>
-static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target);
+static cbor::result<ref<T>> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target);
 ```
 
 Each function takes the arguments of [path](path.md),

@@ -1,11 +1,11 @@
 # cbor::lazy::entries
 
 ```cpp
-std::expected<lazy_entries, error> entries() const;
+cbor::result<lazy_entries> entries() const;
 ```
 
 Gives the pairs of a map, in the order of the bytes, as a view. Each
-element of the view is a `std::expected<std::pair<lazy, lazy>, error>`:
+element of the view is a `cbor::result<std::pair<lazy, lazy>>`:
 the key in `first`, the value in `second`. A key that occurs twice
 occurs twice in the view.
 

@@ -1,7 +1,7 @@
 # cbor::item_size
 
 ```cpp
-std::expected<std::size_t, error> item_size(std::string_view encoded);
+cbor::result<std::size_t> item_size(std::string_view encoded);
 ```
 
 Reads the first item in `encoded` to its end and gives its size in bytes.

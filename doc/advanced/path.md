@@ -12,18 +12,18 @@ Every function is in the namespace `cbor`. A comment shows the CBOR in
 
 | Form | Path | Result |
 |---|---|---|
-| `at_path<Path, T>(encoded)` | compile time, singular | `std::expected<T, error>`, T a scalar |
-| `at_path<Path, T>(encoded)` | compile time, singular | `std::expected<T, error>`, T `std::string` or `std::vector<std::byte>`: a copy of the text or of the bytes of the value |
-| `at_path<Path, T>(owner)` | compile time, singular | `std::expected<ref<T>, error>`, T a view, `owner` a `std::shared_ptr<std::string const>`, read in place |
-| `at_path<Path, T>(owner, view)` | compile time, singular | `std::expected<ref<T>, error>`, T a view, `owner` a `std::shared_ptr<void const>`, `view` a `std::string_view` of bytes that `owner` keeps alive |
-| `at_path<Path, T>(std::move(encoded))` | compile time, singular | `std::expected<ref<T>, error>`, T a view; the rvalue `std::string` is moved into a new owner |
-| `lazy.at_path<Path, T>()` | compile time, singular | T a scalar: `std::expected<T, error>`. T a view: `std::expected<ref<T>, error>` |
-| `lazy.at_path<Path>()` | compile time, singular | `std::expected<lazy, error>`, the node |
-| `lazy.at_path<Path, nodelist>()` | compile time, any | `std::expected<nodelist, error>`, the nodelist |
-| `jsonpath::compile<T>(path)` | run time | `std::expected<jsonpath::query<T>, error>`, the parsed path |
+| `at_path<Path, T>(encoded)` | compile time, singular | `cbor::result<T>`, T a scalar |
+| `at_path<Path, T>(encoded)` | compile time, singular | `cbor::result<T>`, T `std::string` or `std::vector<std::byte>`: a copy of the text or of the bytes of the value |
+| `at_path<Path, T>(owner)` | compile time, singular | `cbor::result<ref<T>>`, T a view, `owner` a `std::shared_ptr<std::string const>`, read in place |
+| `at_path<Path, T>(owner, view)` | compile time, singular | `cbor::result<ref<T>>`, T a view, `owner` a `std::shared_ptr<void const>`, `view` a `std::string_view` of bytes that `owner` keeps alive |
+| `at_path<Path, T>(std::move(encoded))` | compile time, singular | `cbor::result<ref<T>>`, T a view; the rvalue `std::string` is moved into a new owner |
+| `lazy.at_path<Path, T>()` | compile time, singular | T a scalar: `cbor::result<T>`. T a view: `cbor::result<ref<T>>` |
+| `lazy.at_path<Path>()` | compile time, singular | `cbor::result<lazy>`, the node |
+| `lazy.at_path<Path, nodelist>()` | compile time, any | `cbor::result<nodelist>`, the nodelist |
+| `jsonpath::compile<T>(path)` | run time | `cbor::result<jsonpath::query<T>>`, the parsed path |
 | `lazy.at_path(e)` | run time, `e` a query | T `lazy`: the node. T `nodelist`: the nodelist. Else as `lazy.at_path<Path, T>()` |
 | `at_path(encoded, e)` | run time, `e` a query | T a scalar: as `at_path<Path, T>(encoded)` |
-| `at_path(owner, view, e)`, `at_path(owner, e)`, `at_path(std::move(encoded), e)` | run time, `e` a query | T a view: `std::expected<ref<T>, error>`. T `lazy`: the node. T `nodelist`: the nodelist |
+| `at_path(owner, view, e)`, `at_path(owner, e)`, `at_path(std::move(encoded), e)` | run time, `e` a query | T a view: `cbor::result<ref<T>>`. T `lazy`: the node. T `nodelist`: the nodelist |
 
 No free form takes a lazy. A lazy reads a path with its member
 `lazy.at_path`.

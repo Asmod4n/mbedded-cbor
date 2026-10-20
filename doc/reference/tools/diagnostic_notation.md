@@ -1,7 +1,7 @@
 # cbor::diagnostic_notation
 
 ```cpp
-std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
+cbor::result<std::string> diagnostic_notation(std::string_view encoded);
 ```
 
 Gives the text of the item in `encoded` in the diagnostic notation of

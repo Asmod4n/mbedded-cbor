@@ -22,7 +22,7 @@ auto const held = std::make_shared<std::string const>(message());
 auto const b = cbor::lazy::view(held);                          // read in place
 ```
 
-Each form gives `std::expected<lazy, error>`. A null pointer or an empty
+Each form gives `cbor::result<lazy>`. A null pointer or an empty
 owner throws `std::logic_error`. A `std::string` lvalue, a
 `std::string_view` alone and a literal do not compile.
 
@@ -36,15 +36,15 @@ them.
 
 | Call | Result |
 |---|---|
-| `at(std::string_view key)` | `std::expected<lazy, error>`, the value of the text key |
-| `at(cbor::key{n})` | `std::expected<lazy, error>`, the value of the integer key n |
-| `at(std::size_t index)` | `std::expected<lazy, error>`, the element of the array |
+| `at(std::string_view key)` | `cbor::result<lazy>`, the value of the text key |
+| `at(cbor::key{n})` | `cbor::result<lazy>`, the value of the integer key n |
+| `at(std::size_t index)` | `cbor::result<lazy>`, the element of the array |
 | `l[key]`, `l[cbor::key{n}]`, `l[index]` | the same as `at` |
-| `size()` | `std::expected<std::uint64_t, error>`, the elements of an array or the pairs of a map |
-| `empty()` | `std::expected<bool, error>` |
+| `size()` | `cbor::result<std::uint64_t>`, the elements of an array or the pairs of a map |
+| `empty()` | `cbor::result<bool>` |
 
-`operator[]` gives the same `std::expected` as `at` and does not throw.
-`l["a"]["b"]` does not compile, because the result is a `std::expected`.
+`operator[]` gives the same `cbor::result` as `at` and does not throw.
+`l["a"]["b"]` does not compile, because the result is a `cbor::result`.
 A path reads a chain: `l.at_path<"$.a.b">()` ([path.md](path.md)).
 
 ```cpp
@@ -76,8 +76,8 @@ range and a borrowed range. The standard algorithms and views take them.
 
 | Call | Element of the view |
 |---|---|
-| `elements()` | `std::expected<lazy, error>` |
-| `entries()` | `std::expected<std::pair<lazy, lazy>, error>` |
+| `elements()` | `cbor::result<lazy>` |
+| `entries()` | `cbor::result<std::pair<lazy, lazy>>` |
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
@@ -92,12 +92,12 @@ std::ranges::distance(*m.entries() | std::views::drop(1));  // 1
 ```
 
 An algorithm takes the view directly. Each element is a
-`std::expected<lazy, error>`, and `->` reaches the lazy:
+`cbor::result<lazy>`, and `->` reaches the lazy:
 
 ```cpp
 // [{"age": 31}, {"age": 20}, {"age": 40}]
 auto const people = *cbor::lazy::take_ownership(std::move(bytes));
-std::ranges::count_if(*people.elements(), [](std::expected<cbor::lazy, cbor::error> const &e) {
+std::ranges::count_if(*people.elements(), [](cbor::result<cbor::lazy> const &e) {
     auto const age = e->at("age");
     return age && age->get<std::int64_t>().value_or(0) > 30;
 });                                       // 2
@@ -149,7 +149,7 @@ view that gave it end. An iterator belongs to one thread
 
 ## 5. clone and decode
 
-`lazy::clone()` gives `std::expected<cbor::owning<cbor::item>, error>`.
+`lazy::clone()` gives `cbor::result<cbor::owning<cbor::item>>`.
 It reads the whole item at the lazy, checks every head and builds one
 `cbor::item` for each data item. `cbor::decode(encoded)` does the same
 for the one top-level item in a `std::string_view`. The tree copies each
@@ -158,7 +158,7 @@ input, and it stays valid after the input ends.
 
 An item has two data members: `type` (a `cbor::type`) and
 `additional_information` (RFC 8949 3). `get<K>()` gives the value as
-`std::expected<cbor::item_alternative_t<K>, error>`, where `K` is a
+`cbor::result<cbor::item_alternative_t<K>>`, where `K` is a
 `cbor::type`. A `K` that is not the `type` of the item gives
 `incorrect_type`.
 
@@ -185,14 +185,14 @@ cbor::lazy::view(owner)->clone().error();        // too_little_data
 A tag 28 stays a tag item over the value it marks. A tag 29 stays a tag
 item over its content. The decode resolves neither tag and checks no index.
 A tag 24 is a tag item over its byte string, and
-`cbor::encoded_cbor_data_item(tree, item)` gives a `std::expected` of the
+`cbor::encoded_cbor_data_item(tree, item)` gives a `cbor::result` of the
 root of the embedded item, decoded as a top-level item of its own. It throws
 `std::logic_error` for an item that is not a tag 24 of that tree. For a tag
 24 whose content is no byte string it gives `incorrect_type`. A count in a head reserves nothing: an array that claims more
 elements than bytes are left gives `too_little_data` before it reads an
 element.
 
-`type()` of a lazy gives `std::expected<cbor::type, error>`: the major
+`type()` of a lazy gives `cbor::result<cbor::type>`: the major
 type, or for a tag 2, 3 or a typed array of RFC 8746 the kind of that
 tag. The data member `type` of an item holds the same value. A lazy and
 an item keep tags 28 and 29 as tags.
@@ -223,7 +223,7 @@ An integer and a float take the width of their type; a count, a length and
 a tag number take the shortest head. The encoder counts nothing: the counts
 of `array` and `map` are yours.
 
-Each call gives `std::expected<void, error>`. After an error, and after
+Each call gives `cbor::result<void>`. After an error, and after
 `finish()`, every call throws `std::logic_error`. `finish()` gives the size
 in bytes, or the pieces for an `iov_writer`.
 
@@ -262,7 +262,7 @@ head. It gives the size in bytes.
 
 `cbor::sequence` reads a CBOR Sequence (RFC 8742): top-level items one
 after the other, with nothing between them. Its iterator gives
-`std::expected<std::string_view, error>`, the bytes of one item.
+`cbor::result<std::string_view>`, the bytes of one item.
 
 ```cpp
 // 1, "a", [1, 2]
@@ -297,7 +297,7 @@ carries its encoding indicator.
 ## 9. item_size
 
 `item_size(encoded)` gives the size in bytes of the first top-level item,
-as `std::expected<std::size_t, error>`. It checks that the item is
+as `cbor::result<std::size_t>`. It checks that the item is
 well-formed and allocates nothing. The nesting depth does not limit it.
 
 | bytes | Result |
@@ -352,7 +352,7 @@ cbor::lazy::view(owner)->clone();                      // an array that holds th
 
 `cbor::encode_iov(item)` writes a decoded item into a list of pieces, not
 into one buffer. It gives
-`std::expected<cbor::ref<std::span<std::string_view const>>, error>`:
+`cbor::result<cbor::ref<std::span<std::string_view const>>>`:
 the pieces in order, and their storage, which lives as long as the
 result. Use the pieces with `writev` or a socket, or join them.
 

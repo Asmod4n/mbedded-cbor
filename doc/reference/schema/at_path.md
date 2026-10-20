@@ -8,7 +8,7 @@ template <fixed_string Path, std::convertible_to<std::size_t>... Index>
 static auto at_path(std::string_view const encoded, Index const... indexes);
 ```
 
-Reads one value at `Path` and returns a `std::expected` of it. It makes
+Reads one value at `Path` and returns a `cbor::result` of it. It makes
 the checks of [path](path.md) and of an accessor in one call and keeps
 nothing. It exists only for a value that holds no view into the bytes:
 a number, a `bool`, an enum, or a `std::optional` of one.

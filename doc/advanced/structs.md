@@ -7,8 +7,8 @@ comment shows the CBOR as text.
 
 | Call | Result |
 |---|---|
-| `structs<T>::encode(value)` | `std::expected<std::string, error>`, the bytes |
-| `structs<T>::encode(value, target)` | `std::expected<std::size_t, error>`, the count of bytes appended to `target` |
+| `structs<T>::encode(value)` | `cbor::result<std::string>`, the bytes |
+| `structs<T>::encode(value, target)` | `cbor::result<std::size_t>`, the count of bytes appended to `target` |
 
 `encode` with a target appends. The target is a `std::string`, a
 container of `char`, a `std::span<char>` or a writer

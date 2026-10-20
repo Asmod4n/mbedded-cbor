@@ -32,7 +32,7 @@ enum class error {
 };
 ```
 
-The fault that a call returns in its `std::expected<T, cbor::error>`.
+The fault that a call returns in its `cbor::result<T>`.
 Bad input never throws. The first value is 1. So a `std::error_code`
 from a `cbor::error` is always true as a `bool`. A wrong use of the library is not an
 error value: it does not compile, or it throws `std::logic_error`.

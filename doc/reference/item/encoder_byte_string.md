@@ -1,12 +1,12 @@
 # cbor::encoder::byte_string
 
 ```cpp
-std::expected<void, error> byte_string(std::span<std::byte const> const bytes);
+cbor::result<void> byte_string(std::span<std::byte const> const bytes);
 template <class V>
     requires std::same_as<V, std::vector<std::byte>>
-std::expected<void, error> byte_string(V &&bytes);
-std::expected<void, error> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes);
-std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes);
+cbor::result<void> byte_string(V &&bytes);
+cbor::result<void> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes);
+cbor::result<void> byte_string(ref<std::span<std::byte const>> const &bytes);
 ```
 
 Writes `bytes` as a byte string, with the shortest head for the length.
