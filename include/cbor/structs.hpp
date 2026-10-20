@@ -972,7 +972,7 @@ class generic
             return std::array<map_key, count>{pfr::key_of<I, U>()...};
         }(std::make_index_sequence<count>());
         std::array<std::size_t, count> order;
-        std::ranges::iota(order, std::size_t{0});
+        std::iota(order.begin(), order.end(), std::size_t{0});
         std::ranges::sort(order, [&](std::size_t const a, std::size_t const b) {
             return reflection::key_encoding_less(keys[a], keys[b]);
         });
