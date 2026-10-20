@@ -141,11 +141,13 @@ TEST_CASE("doc basics: threads")
     {
         auto const use_first = [&first_read](std::expected<std::int64_t, error> const &v) { first_read = *v; };
         auto const use_second = [&second_read](std::expected<std::int64_t, error> const &v) { second_read = *v; };
-        std::jthread first([&owner, &use_first] { use_first(cbor::at_path<"$.id", std::int64_t>(*owner)); });
-        std::jthread second([&owner, &use_second] {
+        std::thread first([&owner, &use_first] { use_first(cbor::at_path<"$.id", std::int64_t>(*owner)); });
+        std::thread second([&owner, &use_second] {
             if (auto const doc = cbor::lazy::view(owner))
                 use_second(doc->at_path<"$.id", std::int64_t>());
         });
+        first.join();
+        second.join();
     }
     CHECK_EQ(first_read, 42);
     CHECK_EQ(second_read, 42);

@@ -332,11 +332,11 @@ TEST_CASE("doc advanced path: a lazy in another thread")
 {
     auto const l = *test::lazy_of_copy(preferred(A(1, 2)));
     std::int64_t read = 0;
-    std::jthread([&read, &l] { read = *l.at_path<"$[1]", std::int64_t>(); }).join();
+    std::thread([&read, &l] { read = *l.at_path<"$[1]", std::int64_t>(); }).join();
     CHECK_EQ(read, 2);
     auto const shared = *test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     std::int64_t content = -1;
-    std::jthread([&content, &shared] { content = *shared.at_path<"$[1]", std::int64_t>(); }).join();
+    std::thread([&content, &shared] { content = *shared.at_path<"$[1]", std::int64_t>(); }).join();
     CHECK_EQ(content, 0);
 }
 
