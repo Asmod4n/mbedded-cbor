@@ -1119,7 +1119,7 @@ TEST_CASE("lazy: two threads read one root lazy")
     cbor::lazy const l = *test::lazy_of_copy(s);
     std::array<std::array<bool, 6>, threads> right{};
     {
-        std::vector<std::jthread> workers;
+        std::vector<std::thread> workers;
         for (std::size_t t = 0; t < threads; ++t)
             workers.emplace_back([&l, &right, t] {
                 auto const text = l.at(std::size_t{0}).and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
@@ -1148,6 +1148,8 @@ TEST_CASE("lazy: two threads read one root lazy")
                 right[t] = {text.has_value() && **text == "hello", index == 0u, reference, count == 4, pairs == 1,
                             element == 2u};
             });
+        for (std::thread &w : workers)
+            w.join();
     }
     for (auto const &r : right)
         for (std::size_t i = 0; i < r.size(); ++i) {
@@ -1724,9 +1726,11 @@ TEST_CASE("lazy: threads apply one query at once")
     auto const e = *cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]");
     std::array<std::size_t, 4> found{};
     {
-        std::array<std::jthread, 4> threads;
+        std::array<std::thread, 4> threads;
         for (std::size_t i = 0; i < threads.size(); ++i)
-            threads[i] = std::jthread([&l, &e, &found, i] { found[i] = l.at_path(e)->size(); });
+            threads[i] = std::thread([&l, &e, &found, i] { found[i] = l.at_path(e)->size(); });
+        for (std::thread &t : threads)
+            t.join();
     }
     for (std::size_t const n : found)
         CHECK_EQ(n, 2u);
