@@ -377,7 +377,8 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         return value{negative{argument_of(it)}};
     case cbor::major_type::byte_string: {
         std::string b;
-        for (std::byte const x : it.get<cbor::type::byte_string>().value())
+        auto const content = it.get<cbor::type::byte_string>().value();
+        for (std::byte const x : content)
             b.push_back(static_cast<char>(x));
         return value{bytes{std::move(b)}};
     }

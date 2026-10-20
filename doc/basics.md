@@ -11,8 +11,9 @@ This page states them.
 | Write a struct and read it back | `cbor::structs` | [structs.md](structs.md) |
 | Read one field of a large message | `cbor::schema` | [schema.md](schema.md) |
 
-The library needs C++23. `structs` and `schema` need g++ 16 with
-`-std=c++26 -freflection`. Every example includes `<cbor/cbor.hpp>`.
+The library needs C++23 and g++ 15 or later. `schema` needs g++ 16 with
+`-std=c++26 -freflection`. `structs` reads the members by reflection
+there, and through Boost.PFR on every other compiler. Every example includes `<cbor/cbor.hpp>`.
 A comment shows the CBOR in `bytes` as text, in the diagnostic notation
 of RFC 8949, which looks like JSON.
 

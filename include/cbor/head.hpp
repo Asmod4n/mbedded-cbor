@@ -144,9 +144,6 @@ class heads
         head_append(out, major, preferred_argument_info(argument), argument);
     }
 
-#ifdef __cpp_impl_reflection
-    static constexpr int extended_precision_digits = std::numeric_limits<std::uint64_t>::digits;
-
 #ifdef __SIZEOF_INT128__
     static constexpr std::array<char, sizeof(uint128)> big_endian(uint128 const value)
     {
@@ -159,6 +156,9 @@ class heads
         return bytes;
     }
 #endif
+
+#ifdef __cpp_impl_reflection
+    static constexpr int extended_precision_digits = std::numeric_limits<std::uint64_t>::digits;
 
     CBOR_ALWAYS_INLINE static void u32_write(std::span<char> const out, std::size_t const at, std::size_t const value)
     {
