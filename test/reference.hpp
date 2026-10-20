@@ -522,7 +522,8 @@ inline std::expected<value, error> value_of(cbor::item const &it)
         return value{negative{it.get<cbor::type::negative_integer>().value()}};
     case cbor::type::array: {
         array a;
-        for (cbor::item const &child : it.get<cbor::type::array>().value()) {
+        auto const children = it.get<cbor::type::array>().value();
+        for (cbor::item const &child : children) {
             auto e = value_of(child);
             if (!e)
                 return std::unexpected(e.error());
