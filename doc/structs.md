@@ -3,8 +3,9 @@
 `cbor::structs<T>` writes a C++ value as CBOR and reads it back. An
 aggregate struct needs no code of its own: g++ 16 with
 `-std=c++26 -freflection` reads its members by reflection, and every
-other compiler reads them through Boost.PFR (C++23 and the Boost
-headers). A class with a constructor or a base class takes a description
+other compiler reads them through Boost.PFR 1.84 or later (C++23 and
+the Boost headers; the library ships a copy for a system that has none,
+see the README). A class with a constructor or a base class takes a description
 (section 3).
 [basics.md](basics.md) states how errors come back and how long a result
 stays valid.

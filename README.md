@@ -64,8 +64,23 @@ The code of every library, task by task:
 - g++ 15 or clang 23, C++23.
 - `cbor::schema` needs C++26 reflection: g++ 16 with `-std=c++26
   -freflection`.
-- `cbor::structs` uses the Boost.PFR headers where reflection is not
+- `cbor::structs` uses Boost.PFR 1.84 or later where reflection is not
   available. Nothing else is needed.
+
+### Boost.PFR
+
+CMake looks for Boost 1.84 or later on the system and uses it. If it
+finds none, the library uses its own copy of Boost.PFR 1.92.0 in
+`third_party/boost_pfr`, unchanged from boostorg/pfr, under the Boost
+Software License 1.0. An install then places this copy in
+`include/mbedded-cbor/boost_pfr`, and the CMake package and the
+pkg-config file add it to the include path. The configure output says
+which of the two the build takes.
+
+Every translation unit of a program must see the same Boost.PFR. A
+program that also uses another Boost.PFR of its own breaks the
+one-definition rule. An older Boost.PFR that comes first on the include
+path stops the build with an error that names version 1.84.
 
 ## Installation
 
