@@ -4,4 +4,4 @@ includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 Name: mbedded-cbor
 Description: A header-only C++ library for CBOR (RFC 8949)
 Version: @PROJECT_VERSION@
-Cflags: -I${includedir} @CBOR_PC_DEFINITIONS@
+Cflags: -I${includedir} @CBOR_PC_BOOST_PFR@ @CBOR_PC_DEFINITIONS@
