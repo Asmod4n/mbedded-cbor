@@ -2761,6 +2761,9 @@ public:
             if constexpr (requires { result->owner; })
                 if (result)
                     result->owner = self.owner;
+            if constexpr (requires { (*result)->owner; })
+                if (result && *result)
+                    (*result)->owner = self.owner;
             return result;
         }
 
@@ -2946,6 +2949,9 @@ public:
             if constexpr (requires { result->owner; })
                 if (result)
                     result->owner = self.owner;
+            if constexpr (requires { (*result)->owner; })
+                if (result && *result)
+                    (*result)->owner = self.owner;
             return result;
         }
     };
