@@ -147,6 +147,23 @@ TEST_CASE("doc reference schema: unverified")
     CHECK_EQ((*back)->make, "Volvo");
 }
 
+// description.md: the data form and the description together have the size of the message, the data form reads
+// with apart, and a read without apart refuses it.
+TEST_CASE("doc reference schema: description")
+{
+    constexpr auto apart = cbor::description_place::apart;
+    auto const data = cbor::schema<car>::encode<apart>(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
+    REQUIRE(data.has_value());
+    auto const description = cbor::schema<car>::description();
+    CHECK_EQ(data->size() + description.size(), sample_bytes().size());
+    CHECK_EQ((cbor::schema<car>::at_path<"$.seats", apart>(*data)), 5);
+    auto const refused = cbor::schema<car>::at_path<"$.seats">(*data).error();
+    CHECK((refused == error::incorrect_type || refused == error::too_little_data));
+    auto const root = cbor::schema<car>::path<apart>(std::string(*data));
+    REQUIRE(root.has_value());
+    CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18);
+}
+
 // fixed_size.md: the root of tire takes 3 bytes of class tag, 2 bytes of tag 128, 5 bytes of record head, 3 bytes
 // for the std::uint16_t and 5 for the float. A text is a reference 6(N) of 6 bytes. The root ends the message.
 TEST_CASE("doc reference schema: fixed_size")
