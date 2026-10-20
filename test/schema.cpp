@@ -2835,7 +2835,7 @@ std::string reencoded(auto const &decoded)
 }
 
 template <class T>
-using unverified_root = decltype(*cbor::schema<T>::unverified_path(std::string()));
+using unverified_root = std::remove_cvref_t<decltype(*cbor::schema<T>::unverified_path(std::string()))>;
 
 // Reads every kind of part through the unverified forms and returns nothing: the sweep below only needs each call
 // to return.
@@ -2902,7 +2902,7 @@ TEST_CASE("unverified: the same results as the verified forms on a message that 
     CHECK_EQ(cbor::schema<everything>::unverified_at_path<"$.engines[1].cc">(bytes), 1200u);
     CHECK_EQ(cbor::schema<everything>::unverified_at_path<"$.gauges[].at.x">(bytes, 1uz), -6);
     CHECK_EQ(cbor::schema<everything>::unverified_at_path<"$.tires[].airPressure">(bytes, 1uz), 3.0f);
-    CHECK_EQ(cbor::schema<everything>::unverified_at_path<"$.maybe">(bytes), std::optional<std::int32_t>{-9});
+    CHECK_EQ(cbor::schema<everything>::unverified_at_path<"$.maybe">(bytes).value(), std::optional<std::int32_t>{-9});
     auto const root = cbor::schema<everything>::unverified_path(std::string(bytes));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.text">(), "text"sv);
@@ -2953,6 +2953,19 @@ TEST_CASE("unverified: a forged type byte gives a value, not an error")
     CHECK_EQ(cbor::schema<everything>::unverified_at_path<"$.gauges[1].on">(vector_head), false);
 }
 
+// An accessor inside an optional shares the owner of the message like every other accessor, so a read through it
+// does not see a moved-from accessor.
+TEST_CASE("schema: an accessor inside an optional reads its fields")
+{
+    auto const root = cbor::schema<everything>::path(schema_bytes(sample_everything));
+    REQUIRE(root.has_value());
+    auto const inner = root->at_path<"$.inner">();
+    REQUIRE(inner.has_value());
+    REQUIRE(inner->has_value());
+    CHECK_EQ((*inner)->at_path<"@.x">(), 1);
+    CHECK_EQ((*inner)->at_path<"@.y">(), 2);
+}
+
 // The unverified forms keep every check of a bound: a cut message, an index past the end and a length past the
 // end give the same error in both forms.
 TEST_CASE("unverified: a bound is checked as in the verified forms")
@@ -2965,11 +2978,14 @@ TEST_CASE("unverified: a bound is checked as in the verified forms")
     CHECK_EQ(cbor::schema<everything>::unverified_at_path<"$.tires[].diameter">(bytes, 2uz).error(),
              error::index_out_of_bounds);
     std::string longer = bytes;
-    std::size_t const head = longer.find("\xd9\x80\x69"s);
-    REQUIRE_NE(head, std::string::npos);
-    std::size_t const length = longer.find('\x5a', head) + 1;
-    longer.replace(length, 4, "\xff\xff\xff\xff"s);
-    CHECK_FALSE(cbor::schema<everything>::unverified_at_path<"$.gauges[0].on">(longer).has_value());
+    std::size_t vectors = 0;
+    for (std::size_t head = longer.find("\xd9\x80\x69"s); head != std::string::npos;
+         head = longer.find("\xd9\x80\x69"s, head + 1), ++vectors)
+        longer.replace(longer.find('\x5a', head) + 1, 4, "\xff\xff\xff\xff"s);
+    CHECK_EQ(vectors, 2);
+    CHECK_EQ(cbor::schema<everything>::at_path<"$.gauges[0].on">(longer).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<everything>::unverified_at_path<"$.gauges[0].on">(longer).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<everything>::unverified_at_path<"$.tires[0].diameter">(longer).error(), error::too_little_data);
 }
 
 // Every accessor that an unverified accessor gives is unverified, and every accessor that a verified accessor
