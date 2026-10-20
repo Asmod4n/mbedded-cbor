@@ -193,22 +193,20 @@ public:
         requires(sizeof(T) >= sizeof(unsigned int))
     static constexpr std::expected<T, std::errc> checked_mul(T const a, std::type_identity_t<T> const b)
     {
-#ifdef __STDC_VERSION_STDCKDINT_H__
-        if !consteval {
-            T product;
-            if (ckd_mul(&product, a, b)) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-            return product;
-        }
-#elif defined(__has_builtin)
-#if __has_builtin(__builtin_mul_overflow)
+#if defined(__has_builtin) && __has_builtin(__builtin_mul_overflow)
         if !consteval {
             T product;
             if (__builtin_mul_overflow(a, b, &product)) [[unlikely]]
                 return std::unexpected(std::errc::value_too_large);
             return product;
         }
-#endif
+#elif defined(__STDC_VERSION_STDCKDINT_H__)
+        if !consteval {
+            T product;
+            if (ckd_mul(&product, a, b)) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+            return product;
+        }
 #endif
         if (a != 0 && b > std::numeric_limits<T>::max() / a) [[unlikely]]
             return std::unexpected(std::errc::value_too_large);
@@ -219,22 +217,20 @@ public:
         requires(sizeof(T) >= sizeof(unsigned int))
     static constexpr std::expected<T, std::errc> checked_add(T const a, std::type_identity_t<T> const b)
     {
-#ifdef __STDC_VERSION_STDCKDINT_H__
-        if !consteval {
-            T sum;
-            if (ckd_add(&sum, a, b)) [[unlikely]]
-                return std::unexpected(std::errc::value_too_large);
-            return sum;
-        }
-#elif defined(__has_builtin)
-#if __has_builtin(__builtin_add_overflow)
+#if defined(__has_builtin) && __has_builtin(__builtin_add_overflow)
         if !consteval {
             T sum;
             if (__builtin_add_overflow(a, b, &sum)) [[unlikely]]
                 return std::unexpected(std::errc::value_too_large);
             return sum;
         }
-#endif
+#elif defined(__STDC_VERSION_STDCKDINT_H__)
+        if !consteval {
+            T sum;
+            if (ckd_add(&sum, a, b)) [[unlikely]]
+                return std::unexpected(std::errc::value_too_large);
+            return sum;
+        }
 #endif
         if (b > std::numeric_limits<T>::max() - a) [[unlikely]]
             return std::unexpected(std::errc::value_too_large);
