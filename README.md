@@ -61,7 +61,7 @@ The code of every library, task by task:
 
 ## Requirements
 
-- g++ 16 or clang 23, C++23.
+- g++ 15 or clang 23, C++23.
 - `cbor::schema` needs C++26 reflection: g++ 16 with `-std=c++26
   -freflection`.
 - `cbor::structs` uses the Boost.PFR headers where reflection is not
@@ -101,10 +101,12 @@ through a `std::shared_ptr`. Neither form copies them.
 auto const doc = cbor::lazy::take_ownership(std::move(bytes)).value();
 
 int sum = 0;
-if (auto const samples = doc.at("samples"))
-    for (auto const &x : samples->elements().value())
+if (auto const samples = doc.at("samples")) {
+    auto const elements = samples->elements().value();
+    for (auto const &x : elements)
         if (x)
             sum += x->get<int>().value_or(0);   // 12
+}
 ```
 
 ### Read one value by its path

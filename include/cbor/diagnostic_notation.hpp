@@ -370,7 +370,7 @@ class extended_diagnostic_notation
         char const sign = text[at];
         if (sign == '+' || sign == '-')
             negative = text[at++] == '-';
-        auto const word = [&](std::string_view const w) { return std::ranges::starts_with(std::span(text).subspan(at), w); };
+        auto const word = [&](std::string_view const w) { return std::string_view{std::span(text).subspan(at)}.starts_with(w); };
         if (word("Infinity") || word("NaN")) {
             bool const nan = word("NaN");
             if (sign == '+' || (nan && sign == '-')) [[unlikely]]
@@ -621,7 +621,7 @@ class extended_diagnostic_notation
             std::string content;
             std::size_t next = blank_end(text, at + std::string_view("<<").size());
             bool separated = true;
-            while (!std::ranges::starts_with(std::span(text).subspan(next), std::string_view(">>"))) {
+            while (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view(">>"))) {
                 if (!separated || next >= text.size()) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 auto const item = literal_parse({text, next}, content, {n.depth + 1, n.depth_max});
