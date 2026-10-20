@@ -42,7 +42,7 @@ struct [[=cbor::allowlist{}]] t {
 #if CBOR_TEST_CASE == 1
 template <>
 struct cbor::describe_members<t> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(t, a),
     };
@@ -50,7 +50,7 @@ struct cbor::describe_members<t> {
 #else
 template <>
 struct cbor::describe_members<t> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(t, a),
         CBOR_MEMBER(t, b),

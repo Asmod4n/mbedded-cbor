@@ -154,7 +154,7 @@ public:
 
 template <>
 struct cbor::describe_members<describe_test::aggregate> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160010, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160010};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::aggregate, a),
     };
@@ -162,7 +162,7 @@ struct cbor::describe_members<describe_test::aggregate> {
 
 template <>
 struct cbor::describe_members<describe_test::aggregate_derived> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160011, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160011};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::aggregate_derived, id),
         CBOR_MEMBER(describe_test::aggregate_derived, a),
@@ -171,7 +171,7 @@ struct cbor::describe_members<describe_test::aggregate_derived> {
 
 template <>
 struct cbor::describe_members<describe_test::with_constructor> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160012, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160012};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::with_constructor, a),
     };
@@ -179,7 +179,7 @@ struct cbor::describe_members<describe_test::with_constructor> {
 
 template <>
 struct cbor::describe_members<describe_test::with_private> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160013, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160013};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::with_private, a),
     };
@@ -187,7 +187,7 @@ struct cbor::describe_members<describe_test::with_private> {
 
 template <>
 struct cbor::describe_members<describe_test::with_protected> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160014, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160014};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::with_protected, a),
     };
@@ -195,7 +195,7 @@ struct cbor::describe_members<describe_test::with_protected> {
 
 template <>
 struct cbor::describe_members<describe_test::with_base> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160015, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160015};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::with_base, id),
         CBOR_MEMBER(describe_test::with_base, a),
@@ -204,7 +204,7 @@ struct cbor::describe_members<describe_test::with_base> {
 
 template <>
 struct cbor::describe_members<describe_test::with_protected_base> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160016, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160016};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::with_protected_base, a),
     };
@@ -212,7 +212,7 @@ struct cbor::describe_members<describe_test::with_protected_base> {
 
 template <>
 struct cbor::describe_members<describe_test::with_private_base> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160017, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160017};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::with_private_base, a),
     };
@@ -220,7 +220,7 @@ struct cbor::describe_members<describe_test::with_private_base> {
 
 template <>
 struct cbor::describe_members<describe_test::with_empty_base> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160018, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160018};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::with_empty_base, a),
     };
@@ -228,7 +228,7 @@ struct cbor::describe_members<describe_test::with_empty_base> {
 
 template <>
 struct cbor::describe_members<describe_test::with_virtual_base> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160019, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160019};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::with_virtual_base, id),
         CBOR_MEMBER(describe_test::with_virtual_base, a),
@@ -237,7 +237,7 @@ struct cbor::describe_members<describe_test::with_virtual_base> {
 
 template <>
 struct cbor::describe_members<describe_test::no_default> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160020, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160020};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::no_default, a),
     };
@@ -245,7 +245,7 @@ struct cbor::describe_members<describe_test::no_default> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<0>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160030, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160030};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::key_form<0>, v),
     };
@@ -253,7 +253,7 @@ struct cbor::describe_members<describe_test::key_form<0>> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<1>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160031, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160031};
     static constexpr std::tuple members{
         cbor::member{"text", &describe_test::key_form<1>::v},
     };
@@ -261,7 +261,7 @@ struct cbor::describe_members<describe_test::key_form<1>> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<2>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160032, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160032};
     static constexpr std::tuple members{
         cbor::member{0, &describe_test::key_form<2>::v},
     };
@@ -269,7 +269,7 @@ struct cbor::describe_members<describe_test::key_form<2>> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<3>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160033, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160033};
     static constexpr std::tuple members{
         cbor::member{23, &describe_test::key_form<3>::v},
     };
@@ -277,7 +277,7 @@ struct cbor::describe_members<describe_test::key_form<3>> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<4>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160034, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160034};
     static constexpr std::tuple members{
         cbor::member{24, &describe_test::key_form<4>::v},
     };
@@ -285,7 +285,7 @@ struct cbor::describe_members<describe_test::key_form<4>> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<5>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160035, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160035};
     static constexpr std::tuple members{
         cbor::member{-1, &describe_test::key_form<5>::v},
     };
@@ -293,7 +293,7 @@ struct cbor::describe_members<describe_test::key_form<5>> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<6>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160036, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160036};
     static constexpr std::tuple members{
         cbor::member{-24, &describe_test::key_form<6>::v},
     };
@@ -301,7 +301,7 @@ struct cbor::describe_members<describe_test::key_form<6>> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<7>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160037, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160037};
     static constexpr std::tuple members{
         cbor::member{-25, &describe_test::key_form<7>::v},
     };
@@ -309,7 +309,7 @@ struct cbor::describe_members<describe_test::key_form<7>> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<8>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160038, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160038};
     static constexpr std::tuple members{
         cbor::member{std::numeric_limits<std::uint64_t>::max(), &describe_test::key_form<8>::v},
     };
@@ -317,7 +317,7 @@ struct cbor::describe_members<describe_test::key_form<8>> {
 
 template <>
 struct cbor::describe_members<describe_test::key_form<9>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160039, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160039};
     static constexpr std::tuple members{
         cbor::member{std::numeric_limits<std::int64_t>::min(), &describe_test::key_form<9>::v},
     };
@@ -325,7 +325,7 @@ struct cbor::describe_members<describe_test::key_form<9>> {
 
 template <>
 struct cbor::describe_members<describe_test::mixed> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160040, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160040};
     static constexpr std::tuple members{
         cbor::member{"a", &describe_test::mixed::text},
         cbor::member{10, &describe_test::mixed::positive},
@@ -335,7 +335,7 @@ struct cbor::describe_members<describe_test::mixed> {
 
 template <>
 struct cbor::describe_members<describe_test::doors> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::doors, count),
     };
@@ -343,7 +343,7 @@ struct cbor::describe_members<describe_test::doors> {
 
 template <>
 struct cbor::describe_members<describe_test::car> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160002, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160002};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::car, doors),
     };
@@ -351,13 +351,13 @@ struct cbor::describe_members<describe_test::car> {
 
 template <>
 struct cbor::describe_members<describe_test::nothing> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160041, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160041};
     static constexpr std::tuple members{};
 };
 
 template <>
 struct cbor::describe_members<describe_test::claims> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160043, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160043};
     static constexpr std::tuple members{
         cbor::member{1, &describe_test::claims::iss},
         cbor::member{4, &describe_test::claims::exp},
@@ -366,7 +366,7 @@ struct cbor::describe_members<describe_test::claims> {
 
 template <>
 struct cbor::describe_members<describe_test::pair_alias> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160042, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160042};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::pair_alias, first),
         cbor::member{"s", &describe_test::pair_alias::second},
@@ -392,7 +392,7 @@ struct cbor::describe_members<describe_test::tag_form<0>> {
 
 template <>
 struct cbor::describe_members<describe_test::tag_form<1>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{23, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{23};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::tag_form<1>, v),
     };
@@ -400,7 +400,7 @@ struct cbor::describe_members<describe_test::tag_form<1>> {
 
 template <>
 struct cbor::describe_members<describe_test::tag_form<2>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{25, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{25};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::tag_form<2>, v),
     };
@@ -408,7 +408,7 @@ struct cbor::describe_members<describe_test::tag_form<2>> {
 
 template <>
 struct cbor::describe_members<describe_test::tag_form<3>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{255, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{255};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::tag_form<3>, v),
     };
@@ -416,7 +416,7 @@ struct cbor::describe_members<describe_test::tag_form<3>> {
 
 template <>
 struct cbor::describe_members<describe_test::tag_form<4>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{256, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{256};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::tag_form<4>, v),
     };
@@ -424,7 +424,7 @@ struct cbor::describe_members<describe_test::tag_form<4>> {
 
 template <>
 struct cbor::describe_members<describe_test::tag_form<5>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{65534, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{65534};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::tag_form<5>, v),
     };
@@ -432,7 +432,7 @@ struct cbor::describe_members<describe_test::tag_form<5>> {
 
 template <>
 struct cbor::describe_members<describe_test::tag_form<6>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{65536, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{65536};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::tag_form<6>, v),
     };
@@ -440,7 +440,7 @@ struct cbor::describe_members<describe_test::tag_form<6>> {
 
 template <>
 struct cbor::describe_members<describe_test::tag_form<7>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{4294967294, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{4294967294};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::tag_form<7>, v),
     };
@@ -448,7 +448,7 @@ struct cbor::describe_members<describe_test::tag_form<7>> {
 
 template <>
 struct cbor::describe_members<describe_test::tag_form<8>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{4294967296, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{4294967296};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::tag_form<8>, v),
     };
@@ -456,7 +456,7 @@ struct cbor::describe_members<describe_test::tag_form<8>> {
 
 template <>
 struct cbor::describe_members<describe_test::tag_form<9>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{18446744073709551614u, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{18446744073709551614u};
     static constexpr std::tuple members{
         CBOR_MEMBER(describe_test::tag_form<9>, v),
     };
@@ -464,7 +464,7 @@ struct cbor::describe_members<describe_test::tag_form<9>> {
 
 template <>
 struct cbor::describe_members<std::pair<int, long>> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160044, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160044};
     static constexpr std::tuple members{
         cbor::member{"first", &std::pair<int, long>::first},
         cbor::member{"second", &std::pair<int, long>::second},

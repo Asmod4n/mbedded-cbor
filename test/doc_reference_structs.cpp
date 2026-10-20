@@ -70,7 +70,7 @@ struct [[=cbor::tag(1803)]] [[=cbor::allowlist{}]] login {
 
 template <>
 struct cbor::describe_members<reference_structs::header> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060};
     static constexpr std::tuple members{
         cbor::member{"content-type", &reference_structs::header::content_type},
     };

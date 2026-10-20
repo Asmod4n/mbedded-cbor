@@ -23,7 +23,7 @@ struct derived : base_id {
 #if CBOR_TEST_CASE == 1
 template <>
 struct cbor::describe_members<twice> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         cbor::member{"k", &twice::a},
         cbor::member{"k", &twice::b},
@@ -32,7 +32,7 @@ struct cbor::describe_members<twice> {
 #elif CBOR_TEST_CASE == 2
 template <>
 struct cbor::describe_members<twice> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         cbor::member{1, &twice::a},
         cbor::member{1, &twice::b},
@@ -41,7 +41,7 @@ struct cbor::describe_members<twice> {
 #elif CBOR_TEST_CASE == 3
 template <>
 struct cbor::describe_members<twice> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(twice, a),
         cbor::member{"x", &twice::a},
@@ -50,7 +50,7 @@ struct cbor::describe_members<twice> {
 #elif CBOR_TEST_CASE == 4
 template <>
 struct cbor::describe_members<derived> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(derived, id),
         cbor::member{"y", static_cast<int derived::*>(&derived::id)},

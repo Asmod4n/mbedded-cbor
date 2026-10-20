@@ -3,7 +3,6 @@
 ```cpp
 struct tag {
     std::uint64_t number;
-    std::uint16_t generation = 0;
 };
 ```
 

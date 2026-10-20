@@ -35,7 +35,7 @@ None at run time. The checks run where `encode` or `decode` compiles.
 ```cpp
 template <>
 struct cbor::describe_members<header> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060};
     static constexpr std::tuple members{
         cbor::member{"content-type", &header::content_type},
     };
