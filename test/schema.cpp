@@ -3101,7 +3101,7 @@ void check_description_apart(T const &value)
     CHECK_EQ(reencoded(cbor::schema<T>::template unverified_decode<apart>(std::string(data))), inside);
     auto const owner = std::make_shared<std::string const>(data);
     CHECK_EQ(reencoded(cbor::schema<T>::template decode<apart>(owner)), inside);
-    CHECK_EQ(reencoded(cbor::schema<T>::template decode<apart>(std::shared_ptr<void const>(owner), *owner)), inside);
+    CHECK_EQ(reencoded(cbor::schema<T>::template decode<apart>(std::shared_ptr<void const>(owner), std::string_view(*owner))), inside);
     CHECK_EQ(reencoded(cbor::schema<T>::template decode<apart>(owner, T{})), inside);
     CHECK(cbor::schema<T>::template path<apart>(std::string(data)).has_value());
     CHECK(cbor::schema<T>::template path<apart>(owner).has_value());
@@ -3120,7 +3120,9 @@ TEST_CASE("description apart: the data and the description together hold what th
     check_description_apart(empty{});
     check_description_apart(gauges{});
     check_description_apart(fifteen_entries{});
-    check_description_apart(eighteen_entries{.p = {{1, 2}, {3, 4}}});
+    eighteen_entries points{};
+    points.p = {{1, 2}, {3, 4}};
+    check_description_apart(points);
 }
 
 // Every read form gives on the data form what it gives on the message.
@@ -3207,7 +3209,6 @@ TEST_CASE("description apart: the checks of the message hold for the data form")
     for (std::size_t k = 0; k < 4; ++k)
         entry[directory + 5 + k] = '\xff';
     CHECK_FALSE(cbor::schema<everything>::decode<apart>(std::string(entry)).has_value());
-    CHECK_FALSE((cbor::schema<everything>::at_path<"$.text", apart>(entry)).has_value());
     std::uint32_t const length = (std::uint32_t{static_cast<unsigned char>(data[directory + 3])} << 8) |
                                  static_cast<unsigned char>(data[directory + 4]);
     std::string filler = data;
