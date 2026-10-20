@@ -208,9 +208,9 @@ and `std::move(*l)` moves the lazy out of it:
 ```cpp
 // [1, 2]
 auto l = cbor::lazy::take_ownership(std::move(bytes));
-std::jthread([](cbor::lazy const &v) {
+std::thread([](cbor::lazy const &v) {
     v.at(1)->get<std::int64_t>();   // 2
-}, std::move(*l));
+}, std::move(*l)).join();
 ```
 
 ## 8. Owners

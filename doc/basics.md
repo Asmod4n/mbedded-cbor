@@ -99,11 +99,13 @@ that made them, so each thread makes its own lazy.
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with {"id": 42}
-std::jthread first([&owner] { use(cbor::at_path<"$.id", std::int64_t>(*owner)); });
-std::jthread second([&owner] {
+std::thread first([&owner] { use(cbor::at_path<"$.id", std::int64_t>(*owner)); });
+std::thread second([&owner] {
     if (auto const doc = cbor::lazy::view(owner))   // the lazy of this thread
         use(doc->at_path<"$.id", std::int64_t>());
 });
+first.join();
+second.join();
 ```
 
 The library starts no thread and holds no lock.
