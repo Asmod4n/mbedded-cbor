@@ -6,6 +6,7 @@
 #ifdef __cpp_impl_reflection
 
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -126,6 +127,24 @@ TEST_CASE("doc reference schema: static at_path")
     CHECK_EQ(cbor::schema<car>::at_path<"$.track[2]">(bytes), 3.0);
     CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
     CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(bytes.substr(0, 3)).error(), error::too_little_data);
+}
+
+// unverified.md: the unverified forms give the values of the verified forms and still check an index against its
+// count; an unverified accessor gives an unverified accessor.
+TEST_CASE("doc reference schema: unverified")
+{
+    std::string const bytes = sample_bytes();
+    CHECK_EQ(cbor::schema<car>::unverified_at_path<"$.seats">(bytes), 5);
+    CHECK_EQ(cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
+
+    auto const lane = cbor::schema<car>::unverified_path(std::string(bytes));
+    REQUIRE(lane.has_value());
+    CHECK_EQ(lane->at_path<"$.tires[1].diameter">(), 18);
+    CHECK(std::same_as<std::remove_cvref_t<decltype(*lane)>, cbor::schema<car>::accessor<car, false>>);
+
+    auto const back = cbor::schema<car>::unverified_decode(std::make_shared<std::string const>(bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ((*back)->make, "Volvo");
 }
 
 // fixed_size.md: the root of tire takes 3 bytes of class tag, 2 bytes of tag 128, 5 bytes of record head, 3 bytes

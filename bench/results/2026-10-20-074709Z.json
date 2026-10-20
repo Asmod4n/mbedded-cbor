@@ -1,0 +1,290 @@
+{
+ "what": "bench/compare.cpp in two trees, each built from its own commit: base = f688794 (unverified-forms), head = afe6eca (unverified-speed: the owner test by control block, and path, unverified_path and path_with_owner inlined). Arms on carsales and records: base and head MB_FIELD, MB_FIELD_UNVERIFIED, MB_READ, MB_READ_UNVERIFIED; head MB_FIELD_AA (A/A); head FB_FIELD and FB_READ (FlatBuffers without its Verifier). One binary per arm and data set, 5 rounds, shuffled order, 1 s min_time.",
+ "context": {
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+  "resolved_march": "-march= sapphirerapids",
+  "compilers": {
+   "g++-16": "g++-16 (SUSE Linux) 16.2.1 20260929"
+  },
+  "cxx_library": "libstdc++.so.6 => /lib64/libstdc++.so.6 / libstdc++6-16.2.1+git9713-1.1.x86_64",
+  "libc": "glibc-2.44-3.1.x86_64 / libc.so.6 => /lib64/libc.so.6",
+  "kernel": "Linux 6.18.44-fc-v139 #1 SMP PREEMPT_DYNAMIC @0 x86_64",
+  "scheduler": "EEVDF (Linux >= 6.6)",
+  "virtualization": "hypervisor",
+  "container": "podman, image localhost/mbedded-cbor-tw-compare",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256": "cd57f3c12a72aed9439fc958e0460f5edfd05a9692f15e599584c01ff294ee3d",
+  "user": "uid=1000(ubuntu) gid=0(root) groups=0(root)",
+  "priority": "nice -10",
+  "threads": 1,
+  "pinned": false,
+  "start": "2026-10-20T07:47:09Z",
+  "end": "2026-10-20T07:50:23Z"
+ },
+ "results": {
+  "cars.base.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    33.66179288432503,
+    35.36000332588114,
+    37.76295327269333,
+    35.001465001631026,
+    34.15484282764808
+   ],
+   "median": 35.001465001631026,
+   "spread": 0.1218342826379295
+  },
+  "cars.base.MB_FIELD_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    24.179332240999894,
+    24.79326507711143,
+    27.34620983313134,
+    24.81087955327754,
+    24.817599879224346
+   ],
+   "median": 24.81087955327754,
+   "spread": 0.13097456788990658
+  },
+  "cars.base.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    76559.31184586053,
+    73114.74508841174,
+    67635.20775274547,
+    61696.64260792048,
+    72015.89302534453
+   ],
+   "median": 72015.89302534453,
+   "spread": 0.24089915771254633
+  },
+  "cars.base.MB_READ_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    53573.98048437091,
+    50800.48361586356,
+    53945.60410198338,
+    56799.11656675898,
+    52148.966446010585
+   ],
+   "median": 53573.98048437091,
+   "spread": 0.11808220166278538
+  },
+  "cars.head.FB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    2.9107231759421994,
+    2.662630381854011,
+    2.8921025404733554,
+    2.7882090766964795,
+    2.8183736780680593
+   ],
+   "median": 2.8183736780680593,
+   "spread": 0.0931758293524163
+  },
+  "cars.head.FB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    26565.353186915327,
+    30289.305341337295,
+    24325.986363700926,
+    24677.21160710399,
+    24977.474289624188
+   ],
+   "median": 24977.474289624188,
+   "spread": 0.2451419189535844
+  },
+  "cars.head.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    16.451969528859298,
+    14.002067916413672,
+    15.190439504243374,
+    15.696489349745933,
+    16.804986956384802
+   ],
+   "median": 15.696489349745933,
+   "spread": 0.2001789347618761
+  },
+  "cars.head.MB_FIELD_AA": {
+   "unit": "ns",
+   "repetitions": [
+    19.717030518783936,
+    19.85969040804486,
+    21.144085159070084,
+    15.69686169599575,
+    16.510533517220413
+   ],
+   "median": 19.717030518783936,
+   "spread": 0.3470262762437357
+  },
+  "cars.head.MB_FIELD_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    4.985122674621827,
+    7.173017384273831,
+    5.640923676560853,
+    5.49935793513769,
+    6.302348143244819
+   ],
+   "median": 5.640923676560853,
+   "spread": 0.4388848284095592
+  },
+  "cars.head.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    62289.11034511176,
+    53486.75819185736,
+    69376.83121025706,
+    64602.82685445179,
+    61567.959678945525
+   ],
+   "median": 62289.11034511176,
+   "spread": 0.29708424207355955
+  },
+  "cars.head.MB_READ_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    42497.52894297535,
+    37451.83331313643,
+    40964.013456975335,
+    34189.86594233324,
+    37191.813772884365
+   ],
+   "median": 37451.83331313643,
+   "spread": 0.24298612386062945
+  },
+  "records.base.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    21.726386258670775,
+    21.15428946345004,
+    22.067185924184454,
+    22.78028503054546,
+    21.12864441420488
+   ],
+   "median": 21.726386258670775,
+   "spread": 0.0781706854430364
+  },
+  "records.base.MB_FIELD_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    20.550184933042765,
+    16.66753715347846,
+    16.428750938441215,
+    16.71990715314833,
+    15.9270402908769
+   ],
+   "median": 16.66753715347846,
+   "spread": 0.29027016681900597
+  },
+  "records.base.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    183442.70544014085,
+    162758.3978377122,
+    167123.60612382347,
+    183920.39927565525,
+    176037.4398356537
+   ],
+   "median": 176037.4398356537,
+   "spread": 0.13002094957363663
+  },
+  "records.base.MB_READ_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    146799.44479952136,
+    146335.18524288142,
+    138050.4493779072,
+    147690.2971942649,
+    147789.8760888524
+   ],
+   "median": 146799.44479952136,
+   "spread": 0.07054976463194218
+  },
+  "records.head.FB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    11.800017692336448,
+    12.822284904575273,
+    12.544732444836637,
+    13.921429896872025,
+    11.817237378507244
+   ],
+   "median": 12.544732444836637,
+   "spread": 0.1797804257457456
+  },
+  "records.head.FB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    146951.52167320726,
+    124992.63606335878,
+    114971.09223709047,
+    120813.54195937882,
+    115558.20885782174
+   ],
+   "median": 120813.54195937882,
+   "spread": 0.278160612496988
+  },
+  "records.head.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    21.523539037691105,
+    20.701497470540296,
+    21.39722582384278,
+    21.738510447171542,
+    20.34619134550404
+   ],
+   "median": 21.39722582384278,
+   "spread": 0.06843143652903705
+  },
+  "records.head.MB_FIELD_AA": {
+   "unit": "ns",
+   "repetitions": [
+    21.00888172619324,
+    19.183763149244502,
+    20.767076246710836,
+    18.614532405549387,
+    22.07794436378875
+   ],
+   "median": 20.767076246710836,
+   "spread": 0.1860595733904573
+  },
+  "records.head.MB_FIELD_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    16.554628034446726,
+    14.00920351966913,
+    14.8943531689486,
+    13.331809660369263,
+    12.979975992446185
+   ],
+   "median": 14.00920351966913,
+   "spread": 0.2753974309413856
+  },
+  "records.head.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    154545.96075461849,
+    152300.3475755288,
+    166410.5493840821,
+    155840.55328041333,
+    164269.0875205525
+   ],
+   "median": 155840.55328041333,
+   "spread": 0.09264720687230033
+  },
+  "records.head.MB_READ_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    142734.71411756924,
+    163984.18284481665,
+    148798.49812561908,
+    130249.84226862671,
+    143097.6593585324
+   ],
+   "median": 143097.6593585324,
+   "spread": 0.2589971702738525
+  }
+ }
+}
