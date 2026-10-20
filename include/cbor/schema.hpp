@@ -53,7 +53,6 @@ struct allowlist {};
 
 struct tag {
     std::uint64_t number;
-    std::uint16_t generation = 0;
 };
 
 template <std::uint64_t Number, class T>
@@ -274,6 +273,24 @@ class reflection
 
 #ifdef __cpp_impl_reflection
     template <class Root>
+    static consteval bool integer_key_used()
+    {
+        if constexpr (std::is_class_v<Root> && std::is_aggregate_v<Root>)
+            return std::ranges::any_of(packing_table_of<Root>(), [](std::meta::info const type) {
+                return std::ranges::any_of(
+                    std::meta::nonstatic_data_members_of(type, std::meta::access_context::unprivileged()),
+                    [](std::meta::info const m) {
+                        return std::ranges::any_of(std::meta::annotations_of(m), [](std::meta::info const a) {
+                            return std::meta::remove_const(std::meta::type_of(a)) == (^^cbor::key) &&
+                                   std::meta::extract<cbor::key>(a).text == nullptr;
+                        });
+                    });
+            });
+        else
+            return false;
+    }
+
+    template <class Root>
     static consteval bool table_tag_taken_by_standard_type()
     {
         if constexpr (std::is_class_v<Root> && std::is_aggregate_v<Root>)
@@ -454,7 +471,7 @@ class reflection
     static consteval std::string_view key_of(std::meta::info const r)
     {
         for (std::meta::info const a : std::meta::annotations_of(r))
-            if (std::meta::remove_const(std::meta::type_of(a)) == ^^cbor::key)
+            if (std::meta::remove_const(std::meta::type_of(a)) == (^^cbor::key) && std::meta::extract<cbor::key>(a).text != nullptr)
                 return std::meta::extract<cbor::key>(a).text;
         auto const name = std::meta::u8identifier_of(r);
         return std::define_static_string(std::string(name.begin(), name.end()));
@@ -2570,6 +2587,7 @@ consteval std::size_t reflection::member_offset()
 template <class T>
 class schema
 {
+    static_assert(!reflection::integer_key_used<T>(), "cbor::schema takes a text in cbor::key; an integer key is for cbor::lazy and cbor::describe_members");
     static_assert(!reflection::table_tag_taken_by_standard_type<T>(),
                   "cbor::schema takes a tag that no standard type has.");
     static_assert(!reflection::table_tag_invalid<T>(), "cbor::schema takes a tag that the IANA registry calls always invalid.");

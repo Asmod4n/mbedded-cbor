@@ -13,7 +13,7 @@ struct low {
 
 template <>
 struct cbor::describe_members<low> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         cbor::member{-9223372036854775808, &low::a},
     };

@@ -93,7 +93,7 @@ concept decodes_beside = requires(std::shared_ptr<void const> const &o, Part p) 
 
 template <>
 struct cbor::describe_members<doc_advanced_structs::account> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160061, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160061};
     static constexpr std::tuple members{
         CBOR_MEMBER(doc_advanced_structs::account, user),
         cbor::member{1, &doc_advanced_structs::account::level},
@@ -102,7 +102,7 @@ struct cbor::describe_members<doc_advanced_structs::account> {
 
 template <>
 struct cbor::describe_members<doc_advanced_structs::tagged_person> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800};
     static constexpr std::tuple members{
         CBOR_MEMBER(doc_advanced_structs::tagged_person, name),
         CBOR_MEMBER(doc_advanced_structs::tagged_person, age),

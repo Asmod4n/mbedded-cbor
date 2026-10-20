@@ -341,7 +341,7 @@ struct renamed {
 
 template <>
 struct cbor::describe_members<renamed> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160050, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160050};
     static constexpr std::tuple members{
         cbor::member{"x-user-id", &renamed::m0},
         cbor::member{"EOF", &renamed::m1},
@@ -400,7 +400,7 @@ private:
 
 template <>
 struct cbor::describe_members<account> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160051, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160051};
     static constexpr std::tuple members{
         CBOR_MEMBER(account, name),
         CBOR_MEMBER(account, id),

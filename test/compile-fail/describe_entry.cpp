@@ -39,7 +39,7 @@ struct other {
 #if CBOR_TEST_CASE == 1
 template <>
 struct cbor::describe_members<kinds> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(kinds, own),
     };
@@ -47,7 +47,7 @@ struct cbor::describe_members<kinds> {
 #elif CBOR_TEST_CASE == 2
 template <>
 struct cbor::describe_members<kinds> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(kinds, inherited),
     };
@@ -55,7 +55,7 @@ struct cbor::describe_members<kinds> {
 #elif CBOR_TEST_CASE == 3
 template <>
 struct cbor::describe_members<kinds> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(kinds, function),
     };
@@ -63,7 +63,7 @@ struct cbor::describe_members<kinds> {
 #elif CBOR_TEST_CASE == 4
 template <>
 struct cbor::describe_members<kinds> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(kinds, shared),
     };
@@ -71,7 +71,7 @@ struct cbor::describe_members<kinds> {
 #elif CBOR_TEST_CASE == 5
 template <>
 struct cbor::describe_members<kinds> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(kinds, bits),
     };
@@ -79,7 +79,7 @@ struct cbor::describe_members<kinds> {
 #elif CBOR_TEST_CASE == 6
 template <>
 struct cbor::describe_members<kinds> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         CBOR_MEMBER(kinds, reference),
     };
@@ -87,7 +87,7 @@ struct cbor::describe_members<kinds> {
 #elif CBOR_TEST_CASE == 7
 template <>
 struct cbor::describe_members<plain> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160001};
     static constexpr std::tuple members{
         cbor::member{"x", &other::x},
     };

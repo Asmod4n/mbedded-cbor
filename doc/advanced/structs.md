@@ -166,7 +166,7 @@ private:
 };
 template <>
 struct cbor::describe_members<account> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160061, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160061};
     static constexpr std::tuple members{
         CBOR_MEMBER(account, user),
         cbor::member{1, &account::level},
@@ -210,7 +210,7 @@ A struct that carries `[[=cbor::tag(n)]]` does not compile in `structs`.
 struct person { std::string name; std::int64_t age; };
 template <>
 struct cbor::describe_members<person> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800};
     static constexpr std::tuple members{
         CBOR_MEMBER(person, name),
         CBOR_MEMBER(person, age),

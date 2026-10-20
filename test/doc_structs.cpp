@@ -77,7 +77,7 @@ struct kinds {
 
 template <>
 struct cbor::describe_members<doc_structs::header> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060, 0};
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060};
     static constexpr std::tuple members{
         cbor::member{"content-type", &doc_structs::header::content_type},
     };
