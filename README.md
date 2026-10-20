@@ -61,7 +61,7 @@ The code of every library, task by task:
 
 ## Requirements
 
-- g++ 15 or clang 23, C++23.
+- g++ 15 or clang 19, C++23.
 - `cbor::schema` needs C++26 reflection: g++ 16 with `-std=c++26
   -freflection`.
 - `cbor::structs` uses Boost.PFR 1.84 or later where reflection is not
@@ -170,9 +170,10 @@ for (auto const p : *points | std::views::drop(1) | std::views::take(1))
 
 The tests run the examples of RFC 8949 Appendix A, the test vectors of
 the IETF CBOR working group and the JSONPath Compliance Test Suite. They
-run with g++ 16 and clang 23, with AddressSanitizer and
-UndefinedBehaviorSanitizer. Fuzz targets cover decode, encode, the
-encoder, item_size, lazy, path and schema.
+run with g++ 16 and clang 23 under AddressSanitizer and
+UndefinedBehaviorSanitizer, with g++ 15, and with the clang 19 and Boost
+1.83 of Debian 13 under both sanitizers. Fuzz targets cover decode,
+encode, the encoder, item_size, lazy, path and schema.
 
 ## License
 

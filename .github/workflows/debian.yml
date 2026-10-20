@@ -1,0 +1,30 @@
+name: debian
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install the packages of Debian 13
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates clang libclang-rt-19-dev cmake ninja-build doctest-dev libboost-dev pkg-config
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++
+          "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+      - name: Build
+        run: cmake --build build -- -k 0
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel "$(nproc)"
