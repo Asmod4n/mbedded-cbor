@@ -44,7 +44,7 @@ template <bool>
 struct tree_decoder;
 
 
-std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
+result<std::string> diagnostic_notation(std::string_view encoded);
 
 class heads
 {
@@ -231,7 +231,7 @@ class heads
     struct decoder {
         std::string_view encoded;
 
-        CBOR_ALWAYS_INLINE std::expected<head, error> head_decode()
+        CBOR_ALWAYS_INLINE result<head> head_decode()
         {
             if (!validity::pending_items_fit(initial_byte_size, encoded.size())) [[unlikely]]
                 return std::unexpected(error::too_little_data);
@@ -315,7 +315,7 @@ class heads
             return std::nullopt;
         }
 
-        constexpr std::expected<std::string_view, error> byte_string_decode(std::uint64_t const length)
+        constexpr result<std::string_view> byte_string_decode(std::uint64_t const length)
         {
             if (!validity::pending_items_fit(length, encoded.size())) [[unlikely]]
                 return std::unexpected(error::too_little_data);
@@ -324,7 +324,7 @@ class heads
             return string;
         }
 
-        std::expected<std::optional<std::uint64_t>, error> bignum_decode(std::uint64_t const tag)
+        result<std::optional<std::uint64_t>> bignum_decode(std::uint64_t const tag)
         {
             auto const r = head_decode();
             if (!r) [[unlikely]]
@@ -656,7 +656,7 @@ class heads
                !validity::typed_array_check(tag, 0).has_value();
     }
 
-    static constexpr std::expected<head, error> typed_array_element_decode(std::uint64_t const tag,
+    static constexpr result<head> typed_array_element_decode(std::uint64_t const tag,
                                                                            std::string_view const elements,
                                                                            validity::index const position)
     {
@@ -695,7 +695,7 @@ class heads
     };
 
     template <bool Checked>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<raw_head, error>
+    CBOR_ALWAYS_INLINE static constexpr result<raw_head>
     raw_head_read(std::string_view const encoded, validity::offset const at)
     {
         std::string_view const rest = validity::subspan(encoded, at);
@@ -776,7 +776,7 @@ class heads
     template <bool>
     friend struct tree_decoder;
 
-    friend std::expected<owning<item>, error> decode(std::string_view encoded);
+    friend result<owning<item>> decode(std::string_view encoded);
 
     friend struct item;
 
@@ -784,9 +784,9 @@ class heads
 
     friend struct lazy_entries;
 
-    friend std::expected<std::size_t, error> item_size(std::string_view encoded);
+    friend result<std::size_t> item_size(std::string_view encoded);
 
-    friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
+    friend result<std::string> diagnostic_notation(std::string_view encoded);
 
     friend class reflection;
 

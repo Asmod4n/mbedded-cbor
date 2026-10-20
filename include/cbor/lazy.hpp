@@ -79,27 +79,27 @@ public:
     std::uint64_t typed_array_tag{};
 
     template <borrowed_range_of_chars Encoded>
-    static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
+    static result<lazy> view(std::shared_ptr<void const> owner, Encoded const &encoded);
     template <owning_range_of_chars Encoded>
-    static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
+    static result<lazy> view(std::shared_ptr<Encoded const> owner);
     template <owning_range_of_chars Encoded>
-    static std::expected<lazy, error> take_ownership(Encoded &&encoded);
+    static result<lazy> take_ownership(Encoded &&encoded);
 
-    std::expected<lazy, error> at(std::string_view key) const;
+    result<lazy> at(std::string_view key) const;
 
-    std::expected<lazy, error> at(key k) const;
+    result<lazy> at(key k) const;
 
-    std::expected<lazy, error> at(std::size_t index) const;
+    result<lazy> at(std::size_t index) const;
 
-    std::expected<lazy, error> operator[](std::string_view key) const;
+    result<lazy> operator[](std::string_view key) const;
 
-    std::expected<lazy, error> operator[](key k) const;
+    result<lazy> operator[](key k) const;
 
-    std::expected<lazy, error> operator[](std::size_t index) const;
+    result<lazy> operator[](std::size_t index) const;
 
     template <fixed_string Path>
         requires is_valid_path_v<Path>
-    std::expected<lazy, error> at_path() const;
+    result<lazy> at_path() const;
 
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> &&
@@ -109,27 +109,27 @@ public:
                   || std::is_same_v<T, std::float128_t>
 #endif
                   ))
-    std::expected<T, error> at_path() const;
+    result<T> at_path() const;
 
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, typed_array>))
-    std::expected<ref<T>, error> at_path() const;
+    result<ref<T>> at_path() const;
 
     template <fixed_string Path, std::same_as<nodelist> T>
         requires is_valid_path_v<Path>
-    std::expected<nodelist, error> at_path() const;
+    result<nodelist> at_path() const;
 
     template <class E>
         requires is_path_query_v<E>
-    std::expected<typename E::result_type, error> at_path(E const &e) const;
+    result<typename E::result_type> at_path(E const &e) const;
 
-    std::expected<std::uint64_t, error> size() const;
+    result<std::uint64_t> size() const;
 
-    std::expected<bool, error> empty() const;
+    result<bool> empty() const;
 
-    std::expected<cbor::type, error> type() const;
+    result<cbor::type> type() const;
 
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
@@ -139,24 +139,24 @@ public:
 #ifdef __STDCPP_FLOAT128_T__
                  || std::is_same_v<T, std::float128_t>
 #endif
-    std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+    result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                    std::is_same_v<T, typed_array>,
-                               ref<T>, T>, error> get() const;
+                               ref<T>, T>> get() const;
 
-    std::expected<lazy_elements, error> elements() const;
+    result<lazy_elements> elements() const;
 
-    std::expected<lazy_entries, error> entries() const;
+    result<lazy_entries> entries() const;
 
-    std::expected<owning<item>, error> clone() const;
+    result<owning<item>> clone() const;
 
 private:
-    static std::expected<lazy, error> from(std::shared_ptr<void const> owner, std::string_view encoded);
+    static result<lazy> from(std::shared_ptr<void const> owner, std::string_view encoded);
 
     template <class Entries = lazy_entries>
-    std::expected<typename Entries::iterator, error> find(std::string_view key) const;
+    result<typename Entries::iterator> find(std::string_view key) const;
 
     template <class Entries = lazy_entries>
-    std::expected<typename Entries::iterator, error> find(std::int64_t key) const;
+    result<typename Entries::iterator> find(std::int64_t key) const;
 
     void throw_logic_error_if_no_top_level() const;
 
@@ -164,11 +164,11 @@ private:
     struct resolved;
 
     template <bool Checked>
-    static std::expected<resolved<Checked>, error> container_resolve(top_level_item source,
+    static result<resolved<Checked>> container_resolve(top_level_item source,
                                                                      validity::offset offset);
 
     template <bool Checked>
-    static std::expected<resolved<Checked>, error> tag_content_resolve(top_level_item source,
+    static result<resolved<Checked>> tag_content_resolve(top_level_item source,
                                                                        validity::offset offset);
 
     struct tag_content {
@@ -177,26 +177,26 @@ private:
     };
 
     template <bool Checked>
-    static std::expected<tag_content, error> typed_array_bytes_read(resolved<Checked> const &found);
+    static result<tag_content> typed_array_bytes_read(resolved<Checked> const &found);
 
-    static std::expected<std::string_view, error> typed_array_element_read(lazy const &node);
+    static result<std::string_view> typed_array_element_read(lazy const &node);
 
     template <bool Checked>
-    static std::expected<resolved<Checked>, error> resolve(lazy const &node);
+    static result<resolved<Checked>> resolve(lazy const &node);
 
     template <bool Checked, std::integral Index>
-    static std::expected<lazy, error> index_select(resolved<Checked> const &found, Index i);
+    static result<lazy> index_select(resolved<Checked> const &found, Index i);
 
     template <class Key, class Entries = lazy_entries, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<typename Entries::iterator, error> key_find(resolved<Checked> found, Key key);
+    static result<typename Entries::iterator> key_find(resolved<Checked> found, Key key);
 
     template <class Iterator, class Last, class Key, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<std::pair<Iterator, bool>, error> key_find(Iterator first, Last last, Key key);
+    static result<std::pair<Iterator, bool>> key_find(Iterator first, Last last, Key key);
 
     template <class Iterator>
-    static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
+    static result<lazy> value_of(result<Iterator> found);
 
     friend struct lazy_elements;
 
@@ -209,7 +209,7 @@ private:
 struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
-        using value_type = std::expected<lazy, error>;
+        using value_type = result<lazy>;
         using difference_type = std::ptrdiff_t;
 
         iterator() = default;
@@ -283,7 +283,7 @@ private:
 struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
-        using value_type = std::expected<std::pair<lazy, lazy>, error>;
+        using value_type = result<std::pair<lazy, lazy>>;
         using difference_type = std::ptrdiff_t;
 
         iterator() = default;
@@ -368,7 +368,7 @@ namespace cbor
 {
 
 template <bool Checked, class First, class Second>
-std::expected<bool, error> validity::keys_equivalent(First &first, offset const first_at, Second &second,
+result<bool> validity::keys_equivalent(First &first, offset const first_at, Second &second,
                                                      offset const second_at, std::size_t const depth,
                                                      std::size_t const depth_max)
 {
@@ -405,7 +405,7 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
     if (h->major != k->major || heads::is_bignum(h->major, h->argument)) [[unlikely]] {
         auto const integer_of = [&]<class Message>(Message &message, std::string_view const encoded,
                                                    heads::raw_head const n)
-            -> std::expected<std::optional<std::pair<bool, std::uint64_t>>, error> {
+            -> result<std::optional<std::pair<bool, std::uint64_t>>> {
             if (n.major == major_type::unsigned_integer || n.major == major_type::negative_integer)
                 return std::pair{n.major == major_type::negative_integer, n.argument};
             if (!heads::is_bignum(n.major, n.argument))
@@ -469,7 +469,7 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
                                                              offset const value, In &in,
                                                              std::string_view const in_encoded,
                                                              offset const in_at)
-            -> std::expected<std::uint64_t, error> {
+            -> result<std::uint64_t> {
             std::uint64_t count = 0;
             heads::decoder<Checked> e{validity::subspan(in_encoded, in_at)};
             for (std::uint64_t j = 0; j < h->argument; ++j) {
@@ -546,7 +546,7 @@ struct lazy::resolved {
 };
 
 template <bool Checked>
-std::expected<lazy::resolved<Checked>, error> lazy::container_resolve(lazy::top_level_item source,
+result<lazy::resolved<Checked>> lazy::container_resolve(lazy::top_level_item source,
                                                                       validity::offset offset)
 {
     validity::throw_logic_error_if(source.encoded.data() == nullptr, "cbor::lazy: the lazy holds no top-level item");
@@ -574,7 +574,7 @@ std::expected<lazy::resolved<Checked>, error> lazy::container_resolve(lazy::top_
 }
 
 template <bool Checked>
-std::expected<lazy::resolved<Checked>, error> lazy::tag_content_resolve(lazy::top_level_item source,
+result<lazy::resolved<Checked>> lazy::tag_content_resolve(lazy::top_level_item source,
                                                                         validity::offset offset)
 {
     for (;;) {
@@ -594,7 +594,7 @@ std::expected<lazy::resolved<Checked>, error> lazy::tag_content_resolve(lazy::to
 }
 
 template <bool Checked>
-std::expected<lazy::tag_content, error> lazy::typed_array_bytes_read(resolved<Checked> const &found)
+result<lazy::tag_content> lazy::typed_array_bytes_read(resolved<Checked> const &found)
 {
     if (found.h.major != major_type::tag) [[unlikely]]
         return std::unexpected(error::incorrect_type);
@@ -702,7 +702,7 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
     return *this;
 }
 
-inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner,
+inline result<lazy> lazy::from(std::shared_ptr<void const> owner,
                                              std::string_view const encoded)
 {
     validity::throw_logic_error_if_empty(owner,
@@ -719,13 +719,13 @@ inline void lazy::throw_logic_error_if_no_top_level() const
 }
 
 template <borrowed_range_of_chars Encoded>
-std::expected<lazy, error> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
+result<lazy> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
     return from(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
 }
 
 template <owning_range_of_chars Encoded>
-std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
+result<lazy> lazy::view(std::shared_ptr<Encoded const> owner)
 {
     validity::throw_logic_error_if_null(owner, "cbor::lazy::view: the encoded data item is null");
     std::string_view const bytes(std::ranges::data(*owner), std::ranges::size(*owner));
@@ -733,14 +733,14 @@ std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
 }
 
 template <owning_range_of_chars Encoded>
-std::expected<lazy, error> lazy::take_ownership(Encoded &&encoded)
+result<lazy> lazy::take_ownership(Encoded &&encoded)
 {
     return view(std::make_shared<Encoded const>(std::move(encoded)));
 }
 
 template <class Key, class Entries, bool Checked>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-std::expected<typename Entries::iterator, error> lazy::key_find(resolved<Checked> found, Key const key)
+result<typename Entries::iterator> lazy::key_find(resolved<Checked> found, Key const key)
 {
     if (heads::is_typed_array(found.h)) [[unlikely]]
         if (auto const bytes = typed_array_bytes_read(found); !bytes) [[unlikely]]
@@ -763,7 +763,7 @@ std::expected<typename Entries::iterator, error> lazy::key_find(resolved<Checked
 
 template <class Iterator, class Last, class Key, bool Checked>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-std::expected<std::pair<Iterator, bool>, error> lazy::key_find(Iterator it, Last const last, Key const key)
+result<std::pair<Iterator, bool>> lazy::key_find(Iterator it, Last const last, Key const key)
 {
     for (; it != last; ++it) {
         if (it == std::default_sentinel) [[unlikely]] {
@@ -808,7 +808,7 @@ std::expected<std::pair<Iterator, bool>, error> lazy::key_find(Iterator it, Last
 }
 
 template <class Entries>
-std::expected<typename Entries::iterator, error> lazy::find(std::string_view const key) const
+result<typename Entries::iterator> lazy::find(std::string_view const key) const
 {
     throw_logic_error_if_no_top_level();
     auto found = resolve<true>(*this);
@@ -818,7 +818,7 @@ std::expected<typename Entries::iterator, error> lazy::find(std::string_view con
 }
 
 template <class Entries>
-std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const key) const
+result<typename Entries::iterator> lazy::find(std::int64_t const key) const
 {
     throw_logic_error_if_no_top_level();
     auto found = resolve<true>(*this);
@@ -827,7 +827,7 @@ std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const k
     return key_find(std::move(*found), key);
 }
 
-inline std::expected<std::string_view, error> lazy::typed_array_element_read(lazy const &node)
+inline result<std::string_view> lazy::typed_array_element_read(lazy const &node)
 {
     validity::throw_logic_error_if(node.top_level.encoded.data() == nullptr, "cbor::lazy: the lazy holds no top-level item");
     return validity::substr(node.top_level.encoded, node.offset,
@@ -835,7 +835,7 @@ inline std::expected<std::string_view, error> lazy::typed_array_element_read(laz
 }
 
 template <bool Checked>
-std::expected<lazy::resolved<Checked>, error> lazy::resolve(lazy const &node)
+result<lazy::resolved<Checked>> lazy::resolve(lazy const &node)
 {
     if (node.typed_array_tag == 0) [[likely]]
         return tag_content_resolve<Checked>(node.top_level, node.offset);
@@ -849,7 +849,7 @@ std::expected<lazy::resolved<Checked>, error> lazy::resolve(lazy const &node)
 }
 
 template <bool Checked, std::integral Index>
-std::expected<lazy, error> lazy::index_select(resolved<Checked> const &found, Index const i)
+result<lazy> lazy::index_select(resolved<Checked> const &found, Index const i)
 {
     if (heads::is_typed_array(found.h)) {
         auto const bytes = typed_array_bytes_read(found);
@@ -875,7 +875,7 @@ std::expected<lazy, error> lazy::index_select(resolved<Checked> const &found, In
     return lazy{found.source, element, {}};
 }
 
-inline std::expected<std::uint64_t, error> lazy::size() const
+inline result<std::uint64_t> lazy::size() const
 {
     throw_logic_error_if_no_top_level();
     auto const found = resolve<true>(*this);
@@ -897,12 +897,12 @@ inline std::expected<std::uint64_t, error> lazy::size() const
     return h.argument;
 }
 
-inline std::expected<bool, error> lazy::empty() const
+inline result<bool> lazy::empty() const
 {
     return size().transform([](std::uint64_t const n) { return n == 0; });
 }
 
-inline std::expected<cbor::type, error> lazy::type() const
+inline result<cbor::type> lazy::type() const
 {
     validity::throw_logic_error_if(top_level.encoded.data() == nullptr,
                                    "cbor::lazy::type: the lazy holds no top-level item");
@@ -937,7 +937,7 @@ inline std::expected<cbor::type, error> lazy::type() const
 }
 
 template <class Iterator>
-std::expected<lazy, error> lazy::value_of(std::expected<Iterator, error> found)
+result<lazy> lazy::value_of(result<Iterator> found)
 {
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -946,19 +946,19 @@ std::expected<lazy, error> lazy::value_of(std::expected<Iterator, error> found)
     return lazy{std::move(found->top_level), found->value, {}};
 }
 
-inline std::expected<lazy, error> lazy::at(std::string_view const key) const
+inline result<lazy> lazy::at(std::string_view const key) const
 {
     return value_of(find(key));
 }
 
-inline std::expected<lazy, error> lazy::at(key const k) const
+inline result<lazy> lazy::at(key const k) const
 {
     if (k.text != nullptr)
         return at(std::string_view(k.text));
     return value_of(find(k.number));
 }
 
-inline std::expected<lazy, error> lazy::at(std::size_t const index) const
+inline result<lazy> lazy::at(std::size_t const index) const
 {
     throw_logic_error_if_no_top_level();
     auto const found = resolve<true>(*this);
@@ -975,9 +975,9 @@ template <class T>
 #ifdef __STDCPP_FLOAT128_T__
              || std::is_same_v<T, std::float128_t>
 #endif
-std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+result<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                                std::is_same_v<T, typed_array>,
-                           ref<T>, T>, error> lazy::get() const
+                           ref<T>, T>> lazy::get() const
 {
     throw_logic_error_if_no_top_level();
     if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
@@ -1103,7 +1103,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
 #endif
 }
 
-inline std::expected<lazy_elements, error> lazy::elements() const
+inline result<lazy_elements> lazy::elements() const
 {
     throw_logic_error_if_no_top_level();
     auto const found = resolve<true>(*this);
@@ -1127,7 +1127,7 @@ inline std::expected<lazy_elements, error> lazy::elements() const
             return lazy_elements(source, validity::distance(source.encoded, d.encoded), h.argument, {});
 }
 
-inline std::expected<lazy_entries, error> lazy::entries() const
+inline result<lazy_entries> lazy::entries() const
 {
     throw_logic_error_if_no_top_level();
     auto const found = resolve<true>(*this);
@@ -1146,7 +1146,7 @@ inline std::expected<lazy_entries, error> lazy::entries() const
     return lazy_entries(source, validity::distance(source.encoded, d.encoded), h.argument);
 }
 
-inline std::expected<owning<item>, error> lazy::clone() const
+inline result<owning<item>> lazy::clone() const
 {
     validity::throw_logic_error_if(top_level.encoded.data() == nullptr, "cbor::lazy::clone: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {

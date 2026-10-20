@@ -36,9 +36,9 @@ class encoder;
 class iov_writer;
 
 template <class Target>
-std::expected<std::size_t, error> encode(item const &root, Target &&target);
+result<std::size_t> encode(item const &root, Target &&target);
 
-std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+result<ref<std::span<std::string_view const>>> encode_iov(item const &root);
 
 class encoding
 {
@@ -137,13 +137,13 @@ private:
     }
 
     template <class Writer>
-    static std::expected<void, error> item_encode(encoder<Writer> &out, item const &node, std::size_t depth,
+    static result<void> item_encode(encoder<Writer> &out, item const &node, std::size_t depth,
                                                   std::size_t depth_max);
 
     template <class Target>
-    friend std::expected<std::size_t, error> encode(item const &root, Target &&target);
+    friend result<std::size_t> encode(item const &root, Target &&target);
 
-    friend std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+    friend result<ref<std::span<std::string_view const>>> encode_iov(item const &root);
 
     template <class>
     friend class cbor::encoder;
@@ -605,7 +605,7 @@ class encoder
         validity::throw_logic_error_if(!usable, "cbor::encoder: a call after an error or after finish");
     }
 
-    std::expected<void, error> written(std::expected<void, std::errc> const r)
+    result<void> written(std::expected<void, std::errc> const r)
     {
         if (!r) [[unlikely]] {
             usable = false;
@@ -614,7 +614,7 @@ class encoder
         return {};
     }
 
-    std::expected<void, error> refused(error const e)
+    result<void> refused(error const e)
     {
         usable = false;
         return std::unexpected(e);
@@ -649,7 +649,7 @@ public:
 
     template <class T>
         requires integer_argument<T>
-    std::expected<void, error> unsigned_integer(T const value)
+    result<void> unsigned_integer(T const value)
     {
         throw_logic_error_if_unusable();
         return written(out.fixed_width_head_encode(major_type::unsigned_integer, value));
@@ -657,13 +657,13 @@ public:
 
     template <class T>
         requires integer_argument<T>
-    std::expected<void, error> negative_integer(T const argument)
+    result<void> negative_integer(T const argument)
     {
         throw_logic_error_if_unusable();
         return written(out.fixed_width_head_encode(major_type::negative_integer, argument));
     }
 
-    std::expected<void, error> byte_string(std::span<std::byte const> const bytes)
+    result<void> byte_string(std::span<std::byte const> const bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(encoding::encoder<std::remove_reference_t<message_type>>::chars_of(bytes)));
@@ -671,25 +671,25 @@ public:
 
     template <class V>
         requires std::same_as<V, std::vector<std::byte>>
-    std::expected<void, error> byte_string(V &&bytes)
+    result<void> byte_string(V &&bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(std::move(bytes)));
     }
 
-    std::expected<void, error> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes)
+    result<void> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(bytes));
     }
 
-    std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes)
+    result<void> byte_string(ref<std::span<std::byte const>> const &bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(bytes));
     }
 
-    std::expected<void, error> text_string(std::string_view const text)
+    result<void> text_string(std::string_view const text)
     {
         throw_logic_error_if_unusable();
         return written(out.text_string_encode(text));
@@ -697,50 +697,50 @@ public:
 
     template <class S>
         requires std::same_as<S, std::string>
-    std::expected<void, error> text_string(S &&text)
+    result<void> text_string(S &&text)
     {
         throw_logic_error_if_unusable();
         return written(out.text_string_encode(std::move(text)));
     }
 
-    std::expected<void, error> text_string(std::shared_ptr<std::string const> const &text)
+    result<void> text_string(std::shared_ptr<std::string const> const &text)
     {
         throw_logic_error_if_unusable();
         return written(out.text_string_encode(text));
     }
 
-    std::expected<void, error> text_string(ref<std::string_view> const &text)
+    result<void> text_string(ref<std::string_view> const &text)
     {
         throw_logic_error_if_unusable();
         return written(out.text_string_encode(text));
     }
 
-    std::expected<void, error> array(std::uint64_t const count)
+    result<void> array(std::uint64_t const count)
     {
         throw_logic_error_if_unusable();
         return written(out.head_encode(major_type::array, count));
     }
 
-    std::expected<void, error> map(std::uint64_t const count)
+    result<void> map(std::uint64_t const count)
     {
         throw_logic_error_if_unusable();
         return written(out.head_encode(major_type::map, count));
     }
 
-    std::expected<void, error> tag(std::uint64_t const number)
+    result<void> tag(std::uint64_t const number)
     {
         throw_logic_error_if_unusable();
         return written(out.head_encode(major_type::tag, number));
     }
 
 private:
-    std::expected<void, error> shareable()
+    result<void> shareable()
     {
         throw_logic_error_if_unusable();
         return written(out.head_encode(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable)));
     }
 
-    std::expected<void, error> sharedref(std::uint64_t const index)
+    result<void> sharedref(std::uint64_t const index)
     {
         throw_logic_error_if_unusable();
         if (auto const r = written(out.head_encode(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref)));
@@ -751,7 +751,7 @@ private:
 
 public:
 
-    std::expected<void, error> simple_value(cbor::simple_value const value)
+    result<void> simple_value(cbor::simple_value const value)
     {
         throw_logic_error_if_unusable();
         std::uint8_t const info = heads::preferred_argument_info(std::to_underlying(value));
@@ -765,7 +765,7 @@ public:
                  (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
                   (sizeof(T) == sizeof(std::uint16_t) &&
                    std::numeric_limits<T>::digits == heads::half_precision.significand_bits + 1)))
-    std::expected<void, error> floating_point(T const value)
+    result<void> floating_point(T const value)
     {
         throw_logic_error_if_unusable();
         if constexpr (sizeof(T) == sizeof(std::uint16_t))
@@ -774,7 +774,7 @@ public:
             return written(out.fixed_width_float_encode(value));
     }
 
-    std::expected<void, error> typed_array(cbor::typed_array const value)
+    result<void> typed_array(cbor::typed_array const value)
     {
         throw_logic_error_if_unusable();
         if (auto const r = validity::typed_array_check(value.tag, value.bytes.size()); !r) [[unlikely]]
@@ -785,7 +785,7 @@ public:
     }
 
     auto finish()
-        -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>
+        -> result<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>>
     {
         throw_logic_error_if_unusable();
         usable = false;
@@ -808,7 +808,7 @@ template <class Element>
 encoder(std::span<Element>) -> encoder<std::span<Element>>;
 
 template <class Writer>
-std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item const &node, std::size_t const depth,
+result<void> encoding::item_encode(encoder<Writer> &out, item const &node, std::size_t const depth,
                                                  std::size_t const depth_max)
 {
     if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
@@ -904,7 +904,7 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
 }
 
 template <class Target>
-std::expected<std::size_t, error> encode(item const &root, Target &&target)
+result<std::size_t> encode(item const &root, Target &&target)
 {
     decltype(auto) message = encoding::message_of(target, 0);
     encoding::encoder<std::remove_reference_t<decltype(message)>> out(message);
@@ -917,7 +917,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
     return out.written;
 }
 
-inline std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root)
+inline result<ref<std::span<std::string_view const>>> encode_iov(item const &root)
 {
     iov_writer writer;
     encoding::encoder<iov_writer> out(writer);

@@ -62,7 +62,7 @@ TEST_CASE("doc path: std::string as T copies the text")
     std::string const bytes = preferred(M("user"s, M("name"s, "ann"s)));
     auto const name = cbor::at_path<"$.user.name", std::string>(bytes);
     CHECK_EQ(name, "ann"s);
-    CHECK(std::is_same_v<decltype(name), std::expected<std::string, error> const>);
+    CHECK(std::is_same_v<decltype(name), cbor::result<std::string> const>);
 }
 
 // The section "Read a text" shows that a text needs an owner, and that the view points into the bytes of that

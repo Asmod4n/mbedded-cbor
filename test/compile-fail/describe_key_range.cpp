@@ -22,5 +22,5 @@ struct cbor::describe_members<low> {
 int main()
 {
     [[maybe_unused]] auto const encode =
-        static_cast<std::expected<std::string, cbor::error> (*)(low const &)>(&cbor::structs<low>::encode);
+        static_cast<cbor::result<std::string> (*)(low const &)>(&cbor::structs<low>::encode);
 }

@@ -1,5 +1,7 @@
 // The result is kept in a variable, so the ref lives as long as
-// the reference. tools/ref.query must find nothing here.
+// the reference. A reference bound to *r or r.value() of a temporary
+// cbor::result binds the value itself and extends its life.
+// tools/ref.query must find nothing here.
 #include <cbor/cbor.hpp>
 
 #include <cstddef>
@@ -31,4 +33,12 @@ std::size_t safe_expression(std::shared_ptr<std::string const> const &owner)
     auto const all = cbor::jsonpath::compile<cbor::nodelist>("$.*");
     auto const nodes = cbor::at_path(owner, *all);
     return (*name).size() + nodes->size() + (node ? 1u : 0u);
+}
+
+std::size_t safe_temporary(std::shared_ptr<std::string const> const &owner, cbor::lazy const &l)
+{
+    auto const &by_star = *cbor::at_path<"$.name", std::string_view>(owner);
+    auto const &by_value = cbor::at_path<"$.name", std::string_view>(owner).value();
+    auto const &member = *l.at_path<"$.name", std::string_view>();
+    return (*by_star).size() + (*by_value).size() + (*member).size();
 }

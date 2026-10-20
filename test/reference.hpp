@@ -426,7 +426,7 @@ inline std::string repeat(std::string_view part, std::size_t n)
 
 // The index selector of RFC 9535 through the public interface of lazy: an index counts from the end when it
 // is negative, and on a map it names the integer key, as at_path reads it.
-inline std::expected<cbor::lazy, cbor::error> index_select(cbor::lazy const &l, std::int64_t const index)
+inline cbor::result<cbor::lazy> index_select(cbor::lazy const &l, std::int64_t const index)
 {
     if (auto const e = l.elements(); !e && e.error() == cbor::error::not_indexable)
         return l.at(cbor::key{index});
@@ -461,10 +461,10 @@ inline std::string magnitude_plus_one(std::string_view const m)
     return sum;
 }
 
-inline std::expected<value, error> value_of(cbor::item const &it);
+inline cbor::result<value> value_of(cbor::item const &it);
 
 template <cbor::type K>
-std::expected<value, error> tag_value(cbor::item const &it)
+cbor::result<value> tag_value(cbor::item const &it)
 {
     std::pair<std::uint64_t, cbor::item const *> const tag = it.get<K>().value();
     std::uint64_t const number = tag.first;
@@ -491,7 +491,7 @@ std::expected<value, error> tag_value(cbor::item const &it)
 // The reference model of a decoded item tree. Tags 28 and 29 are plain tags over their content, as RFC 8949
 // 3.4 lets a reader that does not know a tag pass it on. A bignum that fits 64 bits is an integer. Tag 24 is a tag
 // over its byte string.
-inline std::expected<value, error> value_of(cbor::item const &it)
+inline cbor::result<value> value_of(cbor::item const &it)
 {
     switch (it.type) {
     case cbor::type::text_string:
@@ -557,7 +557,7 @@ inline std::expected<value, error> value_of(cbor::item const &it)
     std::unreachable();
 }
 
-inline std::expected<value, error> value_of(cbor::lazy const &l)
+inline cbor::result<value> value_of(cbor::lazy const &l)
 {
     auto const tree = l.clone();
     if (!tree)
@@ -566,14 +566,14 @@ inline std::expected<value, error> value_of(cbor::lazy const &l)
 }
 
 template <class E>
-inline std::expected<value, error> value_of(std::expected<cbor::lazy, E> const &l)
+inline cbor::result<value> value_of(std::expected<cbor::lazy, E> const &l)
 {
     if (!l)
         return std::unexpected(l.error());
     return value_of(*l);
 }
 
-inline std::expected<value, error> decoded(std::string_view const wire)
+inline cbor::result<value> decoded(std::string_view const wire)
 {
     auto const l = test::lazy_of_copy(wire);
     if (!l)
@@ -603,7 +603,7 @@ inline std::string magnitude_minus_one(std::string_view const m)
 // A bignum of the model is an integer where its value fits 64 bits, and a tag over its magnitude otherwise. A
 // negative bignum of absolute value zero is no value.
 template <class Target>
-std::expected<void, error> bignum_encode(cbor::encoder<Target> &e, bignum const &b)
+cbor::result<void> bignum_encode(cbor::encoder<Target> &e, bignum const &b)
 {
     std::string_view const m = magnitude_without_leading_zeros(b.magnitude);
     if (b.negative && m.empty())
@@ -623,10 +623,10 @@ std::expected<void, error> bignum_encode(cbor::encoder<Target> &e, bignum const 
 // The reference model written through the public encoder: an integer at its native width of 64 bits, a float as
 // a double, a bignum as tag 2 or 3 over its magnitude, every other head in its shortest form.
 template <class Target>
-std::expected<void, error> value_encode(cbor::encoder<Target> &e, value const &v)
+cbor::result<void> value_encode(cbor::encoder<Target> &e, value const &v)
 {
     return std::visit(
-        [&](auto const &k) -> std::expected<void, error> {
+        [&](auto const &k) -> cbor::result<void> {
             using K = std::remove_cvref_t<decltype(k)>;
             if constexpr (std::same_as<K, std::uint64_t>) {
                 return e.unsigned_integer(k);
@@ -680,7 +680,7 @@ auto encode(Target &&target, value const &v)
     return e.finish();
 }
 
-inline std::expected<cbor::ref<std::span<std::string_view const>>, error> encode_iov(value const &v)
+inline cbor::result<cbor::ref<std::span<std::string_view const>>> encode_iov(value const &v)
 {
     cbor::iov_writer w;
     return encode(w, v);
@@ -726,20 +726,20 @@ inline void check_both(std::string_view const wire, value const &expected)
 }
 
 // The value of the node that a singular query selects.
-inline std::expected<value, error> at_path(std::string_view const path, cbor::lazy const &l)
+inline cbor::result<value> at_path(std::string_view const path, cbor::lazy const &l)
 {
     return cbor::jsonpath::compile<cbor::lazy>(path).and_then(
         [&l](cbor::jsonpath::query<cbor::lazy> const &e) { return value_of(l.at_path(e)); });
 }
 
 template <cbor::fixed_string Path>
-std::expected<value, error> at_path(cbor::lazy const &l)
+cbor::result<value> at_path(cbor::lazy const &l)
 {
     return value_of(l.at_path<Path>());
 }
 
 // The nodelist of a query as an array of the values of its nodes.
-inline std::expected<value, error> values_of(std::expected<std::vector<cbor::lazy>, error> const &nodes)
+inline cbor::result<value> values_of(cbor::result<std::vector<cbor::lazy>> const &nodes)
 {
     if (!nodes)
         return std::unexpected(nodes.error());
@@ -753,14 +753,14 @@ inline std::expected<value, error> values_of(std::expected<std::vector<cbor::laz
     return value{std::move(a)};
 }
 
-inline std::expected<value, error> query(std::string_view const path, cbor::lazy const &l)
+inline cbor::result<value> query(std::string_view const path, cbor::lazy const &l)
 {
     return cbor::jsonpath::compile<cbor::nodelist>(path).and_then(
         [&l](cbor::jsonpath::query<cbor::nodelist> const &e) { return values_of(l.at_path(e)); });
 }
 
 template <cbor::fixed_string Path>
-std::expected<value, error> query(cbor::lazy const &l)
+cbor::result<value> query(cbor::lazy const &l)
 {
     return values_of(l.at_path<Path, cbor::nodelist>());
 }

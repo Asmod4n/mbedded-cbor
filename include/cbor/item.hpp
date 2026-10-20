@@ -75,7 +75,7 @@ struct item {
     std::uint8_t const additional_information;
 
     template <cbor::type K>
-    std::expected<item_alternative_t<K>, error> get() const
+    result<item_alternative_t<K>> get() const
     {
         if (type != K) [[unlikely]]
             return std::unexpected(error::incorrect_type);

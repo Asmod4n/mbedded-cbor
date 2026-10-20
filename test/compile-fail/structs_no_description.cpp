@@ -78,6 +78,6 @@ int main()
     return cbor::structs<t>::decode(bytes).has_value();
 #else
     [[maybe_unused]] auto const encode =
-        static_cast<std::expected<std::string, cbor::error> (*)(t const &)>(&cbor::structs<t>::encode);
+        static_cast<cbor::result<std::string> (*)(t const &)>(&cbor::structs<t>::encode);
 #endif
 }

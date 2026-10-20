@@ -900,7 +900,7 @@ TEST_CASE("view: the iterator and the view model the standard concepts")
     CHECK((std::same_as<decltype(std::declval<V const &>().rbegin()), std::reverse_iterator<I>>));
     CHECK((std::same_as<decltype(std::declval<V const &>().cbegin()), I>));
     CHECK((std::same_as<decltype(std::declval<V const &>()[0]), double>));
-    CHECK((std::same_as<decltype(std::declval<V const &>().at(0)), std::expected<double, cbor::error>>));
+    CHECK((std::same_as<decltype(std::declval<V const &>().at(0)), cbor::result<double>>));
     CHECK((std::same_as<decltype(std::declval<V const &>().front()), double>));
     CHECK((!std::ranges::borrowed_range<V>));
     CHECK((!std::ranges::contiguous_range<V>));
@@ -1257,10 +1257,10 @@ TEST_CASE("path: a path compiles where it names a part of the type")
     CHECK_FALSE(path_reads<garage, "tires">);
     CHECK(path_reads<garage, "@.tires">);
     using A = cbor::schema<garage>::accessor<>;
-    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.names[0]">()), std::expected<std::string_view, cbor::error>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), std::expected<cbor::schema<garage>::accessor<cbor::fixed_element<tire>>, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.names[0]">()), cbor::result<std::string_view>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), cbor::result<cbor::schema<garage>::accessor<cbor::fixed_element<tire>>>>);
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires">()),
-                       std::expected<cbor::schema<garage>::accessor<std::vector<tire>>, cbor::error>>);
+                       cbor::result<cbor::schema<garage>::accessor<std::vector<tire>>>>);
 }
 
 // An accessor of a list gives its size and its elements; an accessor of a struct gives its fields. A leaf through
@@ -2052,8 +2052,8 @@ TEST_CASE("attack: no text result outlives its bytes")
 {
     std::string const bytes = *cbor::schema<probe>::encode(sample_probe);
     using A = cbor::schema<probe>::accessor<>;
-    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.text">()), std::expected<std::string_view, cbor::error>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.code">()), std::expected<std::string_view, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.text">()), cbor::result<std::string_view>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.code">()), cbor::result<std::string_view>>);
     CHECK(path_reads<probe, "$.text">);
     CHECK_FALSE(temporary_reads<A, "$.text">);
     CHECK_FALSE(temporary_reads<cbor::schema<probe>::accessor<tire>, "@.diameter">);

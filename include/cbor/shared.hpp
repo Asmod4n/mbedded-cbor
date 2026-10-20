@@ -18,7 +18,7 @@ class value_sharing
 public:
     enum class index : std::size_t {};
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<index, error>
+    CBOR_ALWAYS_INLINE static constexpr result<index>
     check_sharedref_index(std::uint64_t const argument, std::size_t const marked)
     {
         if (!std::in_range<std::size_t>(argument)) [[unlikely]]

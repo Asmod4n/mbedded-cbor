@@ -43,11 +43,11 @@ public:
 
 
     struct iterator {
-        using value_type = std::expected<std::string_view, error>;
+        using value_type = result<std::string_view>;
         using difference_type = std::ptrdiff_t;
 
         std::string_view encoded;
-        std::expected<std::size_t, error> size;
+        result<std::size_t> size;
 
         value_type operator*() const
         {

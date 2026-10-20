@@ -81,7 +81,7 @@ struct zone_owner {
 
 };
 
-inline std::expected<std::reference_wrapper<item const>, error>
+inline result<std::reference_wrapper<item const>>
 encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
 {
     constexpr char const *what = "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree";
@@ -104,18 +104,18 @@ struct tree_decoder {
     std::size_t depth_max;
     std::size_t open = 0;
 
-    std::expected<item *, error> item_decode(item *storage, std::size_t depth);
+    result<item *> item_decode(item *storage, std::size_t depth);
 
-    std::expected<item *, error> content_decode(item *storage, heads::head h, std::size_t depth);
+    result<item *> content_decode(item *storage, heads::head h, std::size_t depth);
 
-    CBOR_ALWAYS_INLINE inline std::expected<void, error> scalar_decode(item &node, heads::head h);
+    CBOR_ALWAYS_INLINE inline result<void> scalar_decode(item &node, heads::head h);
 
-    CBOR_NEVER_INLINE std::expected<item *, error> bignum_decode(item &node, std::uint64_t tag, std::size_t depth);
+    CBOR_NEVER_INLINE result<item *> bignum_decode(item &node, std::uint64_t tag, std::size_t depth);
 };
 
 
 template <bool Checked>
-std::expected<void, error> tree_decoder<Checked>::scalar_decode(item &node, heads::head const h)
+result<void> tree_decoder<Checked>::scalar_decode(item &node, heads::head const h)
 {
     switch (h.major) {
     case major_type::byte_string:
@@ -151,7 +151,7 @@ std::expected<void, error> tree_decoder<Checked>::scalar_decode(item &node, head
 }
 
 template <bool Checked>
-std::expected<item *, error> tree_decoder<Checked>::bignum_decode(item &node, std::uint64_t const tag,
+result<item *> tree_decoder<Checked>::bignum_decode(item &node, std::uint64_t const tag,
                                                                                std::size_t const depth)
 {
     auto const next = heads::raw_head_read<Checked>(d.encoded, validity::offset{});
@@ -175,7 +175,7 @@ std::expected<item *, error> tree_decoder<Checked>::bignum_decode(item &node, st
 }
 
 template <bool Checked>
-std::expected<item *, error> tree_decoder<Checked>::item_decode(item *const storage,
+result<item *> tree_decoder<Checked>::item_decode(item *const storage,
                                                                                std::size_t const depth)
 {
     if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
@@ -187,7 +187,7 @@ std::expected<item *, error> tree_decoder<Checked>::item_decode(item *const stor
 }
 
 template <bool Checked>
-std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const storage,
+result<item *> tree_decoder<Checked>::content_decode(item *const storage,
                                                                                   heads::head const head,
                                                                                   std::size_t const depth)
 {
@@ -286,7 +286,7 @@ struct decoded_tree {
 };
 
 template <bool Checked>
-std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const encoded,
+result<decoded_tree<Checked>> decode_tree(std::string_view const encoded,
                                                         std::size_t const depth_max)
 {
     auto decoded = std::make_unique<zone>(
@@ -301,7 +301,7 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
     return decoded_tree<Checked>{zone_owner::tree_owned(*built, std::move(decoded)), tree.d.encoded};
 }
 
-inline std::expected<owning<item>, error> decode(std::string_view const encoded)
+inline result<owning<item>> decode(std::string_view const encoded)
 {
     auto const decoded = decode_tree<true>(encoded, limits::nesting_depth);
     if (!decoded) [[unlikely]]

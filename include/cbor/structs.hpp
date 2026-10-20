@@ -373,7 +373,7 @@ class generic
     };
 
     template <class U, class V, bool Checked>
-    static std::expected<void, error> integer_read(heads::decoder<Checked> &d, V &out)
+    static result<void> integer_read(heads::decoder<Checked> &d, V &out)
     {
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
@@ -441,7 +441,7 @@ class generic
 
 #ifdef __SIZEOF_INT128__
     template <class U, bool Checked>
-    static std::expected<void, error> wide_integer_read(heads::decoder<Checked> &d, U &out)
+    static result<void> wide_integer_read(heads::decoder<Checked> &d, U &out)
     {
         auto const h = d.head_decode();
         if (!h) [[unlikely]]
@@ -484,7 +484,7 @@ class generic
 #endif
 
     template <class U, std::size_t I = 0, bool Checked>
-    static std::expected<void, error> variant_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+    static result<void> variant_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                    heads::head const &h, std::size_t const depth,
                                                    std::size_t const depth_max)
     {
@@ -499,7 +499,7 @@ class generic
     }
 
     template <class U, bool Checked>
-    static std::expected<void, error> generic_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+    static result<void> generic_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                    std::size_t const depth, std::size_t const depth_max)
     {
         using marked_value = typename value_sharing::sharing_decoder<Checked>::marked_value;
@@ -539,7 +539,7 @@ class generic
     }
 
     template <class U, bool Checked>
-    static std::expected<void, error> generic_value_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+    static result<void> generic_value_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                          std::size_t const depth, std::size_t const depth_max)
     {
         if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
@@ -665,7 +665,7 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::array || h->argument != std::tuple_size_v<U>) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            std::expected<void, error> r;
+            result<void> r;
             [&]<std::size_t... I>(std::index_sequence<I...>) {
                 ((r = r.and_then([&] { return generic_read(d, std::get<I>(out), depth + 1, depth_max); })),
                  ...);
@@ -757,7 +757,7 @@ class generic
     }
 
     template <class U, bool Checked>
-    static std::expected<void, error> epoch_read(value_sharing::sharing_decoder<Checked> &d, U &out)
+    static result<void> epoch_read(value_sharing::sharing_decoder<Checked> &d, U &out)
     {
         using rep = std::chrono::seconds::rep;
         heads::decoder<Checked> look = d;
@@ -782,7 +782,7 @@ class generic
 
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
     template <class U, bool Checked, std::size_t N>
-    static std::expected<void, error> text_parse(value_sharing::sharing_decoder<Checked> &d, U &out,
+    static result<void> text_parse(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                  std::array<char const *, N> const &formats)
     {
         auto const h = d.head_decode();
@@ -807,7 +807,7 @@ class generic
 #endif
 
     template <class U, bool Checked>
-    static std::expected<void, error> tag_content_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+    static result<void> tag_content_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                        heads::head const &tag, std::size_t const depth,
                                                        std::size_t const depth_max)
     {
@@ -886,7 +886,7 @@ class generic
     }
 
     template <class U, bool Checked>
-    static std::expected<void, error> struct_read(value_sharing::sharing_decoder<Checked> &d, U &out,
+    static result<void> struct_read(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                   std::size_t const depth, std::size_t const depth_max)
     {
         static_assert(pfr::struct_readable<U>());
@@ -905,7 +905,7 @@ class generic
             return std::unexpected(error::incorrect_type);
         std::bitset<count> found;
         auto const member_read =
-            [&]<std::size_t I>(std::integral_constant<std::size_t, I>) -> std::expected<void, error> {
+            [&]<std::size_t I>(std::integral_constant<std::size_t, I>) -> result<void> {
             if (auto const unique = validity::check_key_unique(found.test(I)); !unique) [[unlikely]]
                 return unique;
             found.set(I);
@@ -943,7 +943,7 @@ class generic
                     return std::unexpected(c);
                 }
             }
-            std::expected<void, error> r;
+            result<void> r;
             bool const matched = [&]<std::size_t... I>(std::index_sequence<I...>) {
                 return (
                     false || ... ||
@@ -1350,7 +1350,7 @@ class structs
 {
 public:
     template <owning_range_of_chars Encoded>
-    static std::expected<ref<T>, error> decode(Encoded &&encoded)
+    static result<ref<T>> decode(Encoded &&encoded)
     {
 #if defined(__cpp_exceptions)
         try {
@@ -1364,14 +1364,14 @@ public:
     }
 
     template <owning_range_of_chars Encoded>
-    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
+    static result<ref<T>> decode(std::shared_ptr<Encoded const> encoded)
     {
         pfr::check_default_constructible<T>();
         return decode(std::move(encoded), T{});
     }
 
     template <owning_range_of_chars Encoded>
-    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
+    static result<ref<T>> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::structs::decode: the encoded data item is null");
         std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
@@ -1379,21 +1379,21 @@ public:
     }
 
     template <borrowed_range_of_chars Encoded>
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+    static result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         pfr::check_default_constructible<T>();
         return decode(std::move(owner), encoded, T{});
     }
 
     template <borrowed_range_of_chars Encoded>
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
+    static result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
     {
         return decode_with_owner(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
                             std::move(target));
     }
 
-    CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
+    CBOR_ALWAYS_INLINE static result<std::string> encode(T const &value)
     {
         auto const counted = generic::generic_size(value);
         if (!counted) [[unlikely]]
@@ -1410,7 +1410,7 @@ public:
     }
 
     template <class Target>
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
+    CBOR_ALWAYS_INLINE static result<std::size_t> encode(T const &value, Target &&target)
     {
         using U = std::remove_cvref_t<Target>;
         auto const counted = generic::generic_size(value);
@@ -1458,7 +1458,7 @@ public:
     }
 
 private:
-    static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<void const> owner,
+    static result<ref<T>> decode_with_owner(std::shared_ptr<void const> owner,
                                                      std::string_view const encoded, T &&target)
     {
         validity::throw_logic_error_if_empty(owner,
@@ -1478,7 +1478,7 @@ private:
     }
 
     template <bool Checked>
-    static std::expected<T, error> read(std::string_view const encoded, std::size_t const depth_max, T out)
+    static result<T> read(std::string_view const encoded, std::size_t const depth_max, T out)
     {
         value_sharing::sharing_decoder<Checked> d{{encoded}, {}};
         if (auto const r = generic::generic_read(d, out, 0, depth_max); !r) [[unlikely]]

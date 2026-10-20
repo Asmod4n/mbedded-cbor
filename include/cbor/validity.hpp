@@ -92,7 +92,7 @@ public:
     static constexpr std::size_t initial_size_limit = std::size_t{1} << 20;
     static constexpr std::size_t bump_chunk_size = std::size_t{1} << 13;
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_limit(std::uint64_t const value,
+    CBOR_ALWAYS_INLINE static constexpr result<void> check_limit(std::uint64_t const value,
                                                                                std::size_t const limit,
                                                                                error const exceeded)
     {
@@ -101,14 +101,14 @@ public:
         return {};
     }
 
-    static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth,
+    static constexpr result<void> check_nesting_depth(std::size_t const depth,
                                                                     std::size_t const depth_max)
     {
         return check_limit(depth, depth_max, error::nesting_depth_exceeded);
     }
 
     template <bool Checked>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_argument(major_type const major, std::uint64_t const argument)
     {
         if constexpr (Checked &&
@@ -133,7 +133,7 @@ public:
         return pending <= bytes_left;
     }
 
-    static constexpr std::expected<void, error> check_pending_items(std::uint64_t const pending,
+    static constexpr result<void> check_pending_items(std::uint64_t const pending,
                                                                     std::size_t const bytes_left)
     {
         if (!pending_items_fit(pending, bytes_left)) [[unlikely]]
@@ -141,7 +141,7 @@ public:
         return {};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_pending_items(major_type const major, std::uint8_t const info, std::uint64_t const argument,
                         std::size_t const bytes_left)
     {
@@ -243,7 +243,7 @@ public:
         return std::ranges::adjacent_find(sorted, {}, projection) == std::ranges::end(sorted);
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_key_unique(bool const equal_key_seen)
+    CBOR_ALWAYS_INLINE static constexpr result<void> check_key_unique(bool const equal_key_seen)
     {
         if (equal_key_seen) [[unlikely]]
             return std::unexpected(error::duplicate_key);
@@ -251,7 +251,7 @@ public:
     }
 
     template <bool Checked, class First, class Second>
-    static std::expected<bool, error> keys_equivalent(First &first, offset first_at, Second &second,
+    static result<bool> keys_equivalent(First &first, offset first_at, Second &second,
                                                       offset second_at, std::size_t depth,
                                                       std::size_t depth_max);
 
@@ -266,7 +266,7 @@ public:
         return error::io_error;
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_additional_information(major_type const major, std::uint8_t const info)
     {
         if (info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument)) [[likely]]
@@ -278,7 +278,7 @@ public:
         return std::unexpected(error::syntax_error);
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_definite_length(major_type const major, std::uint8_t const info)
     {
         if (info == std::to_underlying(rfc8949::additional_information::indefinite_length) &&
@@ -289,7 +289,7 @@ public:
         return {};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_chunk(major_type const string, major_type const major, std::uint8_t const info)
     {
         if (major != string || info == std::to_underlying(rfc8949::additional_information::indefinite_length))
@@ -298,7 +298,7 @@ public:
         return {};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_one_data_item(std::string_view const rest)
     {
         if (!rest.empty()) [[unlikely]]
@@ -306,7 +306,7 @@ public:
         return {};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_simple_value(std::uint8_t const info, std::uint64_t const argument)
     {
         if (info == std::to_underlying(rfc8949::simple_float_information::simple_value_follows) &&
@@ -315,7 +315,7 @@ public:
         return {};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_tag_content(std::uint64_t const tag, major_type const content)
     {
         major_type admitted;
@@ -348,7 +348,7 @@ public:
         return std::size_t{1} << (f + ll);
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_whole_elements(std::size_t const size,
+    CBOR_ALWAYS_INLINE static constexpr result<void> check_whole_elements(std::size_t const size,
                                                                                         std::size_t const element)
     {
         if (size % element != 0) [[unlikely]]
@@ -356,7 +356,7 @@ public:
         return {};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag,
+    CBOR_ALWAYS_INLINE static constexpr result<void> typed_array_check(std::uint64_t const tag,
                                                                                      std::size_t const size)
     {
         if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
@@ -366,7 +366,7 @@ public:
         return check_whole_elements(size, typed_array_element_size(tag));
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_typed_array_content(std::uint64_t const tag, major_type const content, std::size_t const size)
     {
         if (auto const r = check_tag_content(tag, content); !r) [[unlikely]]
@@ -374,7 +374,7 @@ public:
         return typed_array_check(tag, size);
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_entries_all_read(std::uint64_t const claimed, std::uint64_t const readable, error const failure)
     {
         if (failure != error{}) [[unlikely]]
@@ -418,7 +418,7 @@ public:
         return std::span(elements).subspan(static_cast<std::size_t>(std::to_underlying(i)) * size, size);
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<std::string_view, error>
+    CBOR_ALWAYS_INLINE static constexpr result<std::string_view>
     substr(std::string_view const encoded, offset const at, std::size_t const size)
     {
         if (std::to_underlying(at) > encoded.size() || encoded.size() - std::to_underlying(at) < size) [[unlikely]]
@@ -427,7 +427,7 @@ public:
     }
 
     template <std::integral I>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<index, error>
+    CBOR_ALWAYS_INLINE static constexpr result<index>
     check_index(I const i, std::uint64_t const length)
     {
         if constexpr (std::is_signed_v<I>) {
@@ -443,7 +443,7 @@ public:
         return index{static_cast<std::uint64_t>(i)};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_count(std::size_t const count,
+    CBOR_ALWAYS_INLINE static constexpr result<void> check_count(std::size_t const count,
                                                                                std::size_t const size)
     {
         if (count > size) [[unlikely]]
@@ -454,7 +454,7 @@ public:
     template <class T, class M>
         requires(std::numeric_limits<T>::is_integer && std::numeric_limits<M>::is_integer &&
                  !std::numeric_limits<M>::is_signed && sizeof(T) <= sizeof(M))
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_number_range(bool const negative,
+    CBOR_ALWAYS_INLINE static constexpr result<void> check_number_range(bool const negative,
                                                                                       M const magnitude)
     {
         if ((!std::numeric_limits<T>::is_signed && negative) ||
@@ -465,7 +465,7 @@ public:
 
     template <class T, class M>
         requires(std::is_same_v<T, double> && std::numeric_limits<M>::is_integer && !std::numeric_limits<M>::is_signed)
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_number_range(bool const negative,
+    CBOR_ALWAYS_INLINE static constexpr result<void> check_number_range(bool const negative,
                                                                                       M const magnitude)
     {
         constexpr std::uint64_t exact_max = std::uint64_t{1} << std::numeric_limits<double>::digits;
@@ -475,7 +475,7 @@ public:
     }
 
     template <std::signed_integral T>
-    static constexpr std::expected<T, error> check_whole_number(double const value)
+    static constexpr result<T> check_whole_number(double const value)
     {
         constexpr double low = static_cast<double>(std::numeric_limits<T>::min());
         if (!(value >= low && value < -low && value == std::trunc(value))) [[unlikely]]
@@ -483,7 +483,7 @@ public:
         return static_cast<T>(value);
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    CBOR_ALWAYS_INLINE static constexpr result<void>
     check_magnitude_size(std::size_t const size, std::size_t const width)
     {
         if (size > width) [[unlikely]]
@@ -498,7 +498,7 @@ public:
     template <bool>
     friend struct tree_decoder;
 
-    friend std::expected<owning<item>, error> decode(std::string_view encoded);
+    friend result<owning<item>> decode(std::string_view encoded);
 
     friend class well_formedness;
 

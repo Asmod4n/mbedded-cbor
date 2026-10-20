@@ -32,7 +32,7 @@ class well_formedness
     };
 
     template <bool Checked, class Marks>
-    static std::expected<void, error> item_skip(heads::decoder<Checked> &d, Marks &marks)
+    static result<void> item_skip(heads::decoder<Checked> &d, Marks &marks)
     {
         std::uint64_t pending = 1;
         while (pending != 0) {
@@ -92,7 +92,7 @@ class well_formedness
     }
 
     template <bool Checked>
-    CBOR_ALWAYS_INLINE static std::expected<void, error> items_skip(heads::decoder<Checked> &d,
+    CBOR_ALWAYS_INLINE static result<void> items_skip(heads::decoder<Checked> &d,
                                                                     std::uint64_t const count)
     {
         no_marks none;
@@ -114,7 +114,7 @@ class well_formedness
         requires requires(Marks &m, heads::decoder<Checked> const &at, std::size_t depth) {
             m.mark(at, depth);
         }
-    static std::expected<void, error> item_skip(heads::decoder<Checked> &d, Marks &marks,
+    static result<void> item_skip(heads::decoder<Checked> &d, Marks &marks,
                                                 std::size_t const depth, std::size_t const depth_max)
     {
         std::array<std::uint64_t, validity::nesting_depth_limit + 1> left;
@@ -183,7 +183,7 @@ class well_formedness
         }
     }
 
-    friend std::expected<std::size_t, error> item_size(std::string_view encoded);
+    friend result<std::size_t> item_size(std::string_view encoded);
 
     friend class validity;
 
@@ -199,7 +199,7 @@ class well_formedness
     friend class generic;
 };
 
-inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
+inline result<std::size_t> item_size(std::string_view const encoded)
 {
     heads::decoder<true> d{encoded};
     well_formedness::no_marks none;

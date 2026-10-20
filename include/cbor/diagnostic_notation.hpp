@@ -84,7 +84,7 @@ class extended_diagnostic_notation
         return -1;
     }
 
-    static constexpr std::expected<void, error> head_append(std::string &out, major_type const major,
+    static constexpr result<void> head_append(std::string &out, major_type const major,
                                                             std::uint64_t const argument, int const indicator)
     {
         int info;
@@ -120,7 +120,7 @@ class extended_diagnostic_notation
         int indicator;
     };
 
-    static constexpr std::expected<indicated, error> indicator_parse(std::string_view const text, std::size_t const at)
+    static constexpr result<indicated> indicator_parse(std::string_view const text, std::size_t const at)
     {
         if (at >= text.size() || text[at] != '_')
             return indicated{at, no_indicator};
@@ -158,7 +158,7 @@ class extended_diagnostic_notation
         std::uint32_t value;
     };
 
-    static constexpr std::expected<code_unit, error> hex4_parse(std::string_view const text, std::size_t const at)
+    static constexpr result<code_unit> hex4_parse(std::string_view const text, std::size_t const at)
     {
         if (at + 4 > text.size()) [[unlikely]]
             return std::unexpected(error::invalid_path);
@@ -172,7 +172,7 @@ class extended_diagnostic_notation
         return code_unit{at + 4, value};
     }
 
-    static constexpr std::expected<std::size_t, error> quoted_parse(std::string_view const text, std::size_t at,
+    static constexpr result<std::size_t> quoted_parse(std::string_view const text, std::size_t at,
                                                                     std::string &out)
     {
         char const quote = text[at++];
@@ -257,7 +257,7 @@ class extended_diagnostic_notation
         }
     }
 
-    static constexpr std::expected<std::size_t, error> hex_string_parse(std::string_view const text, std::size_t at,
+    static constexpr result<std::size_t> hex_string_parse(std::string_view const text, std::size_t at,
                                                                         std::string &out)
     {
         int high = -1;
@@ -284,7 +284,7 @@ class extended_diagnostic_notation
         return at + 1;
     }
 
-    static constexpr std::expected<std::size_t, error> base64_string_parse(std::string_view const text, std::size_t at,
+    static constexpr result<std::size_t> base64_string_parse(std::string_view const text, std::size_t at,
                                                                            std::string &out)
     {
         std::uint32_t bits = 0;
@@ -336,7 +336,7 @@ class extended_diagnostic_notation
         return at + 1;
     }
 
-    static constexpr std::expected<void, error> float_append(std::string &out, double const value, int const indicator)
+    static constexpr result<void> float_append(std::string &out, double const value, int const indicator)
     {
         bool const nan = value != value;
         bool const infinite = !nan && (value > std::numeric_limits<double>::max() || value < -std::numeric_limits<double>::max());
@@ -363,7 +363,7 @@ class extended_diagnostic_notation
         return head_append(out, major_type::simple_float, argument, info);
     }
 
-    static constexpr std::expected<std::size_t, error> number_parse(std::string_view const text, std::size_t at,
+    static constexpr result<std::size_t> number_parse(std::string_view const text, std::size_t at,
                                                                     std::string &out)
     {
         bool negative = false;
@@ -503,7 +503,7 @@ class extended_diagnostic_notation
         return next->at;
     }
 
-    static constexpr std::expected<parsed, error> separator_parse(std::string_view const text, std::size_t const at)
+    static constexpr result<parsed> separator_parse(std::string_view const text, std::size_t const at)
     {
         std::size_t next = blank_end(text, at);
         bool separated = next != at;
@@ -514,7 +514,7 @@ class extended_diagnostic_notation
         return parsed{next, separated};
     }
 
-    static constexpr std::expected<std::size_t, error> container_parse(literal_cursor const cursor, std::string &out,
+    static constexpr result<std::size_t> container_parse(literal_cursor const cursor, std::string &out,
                                                                        nesting const n)
     {
         std::string_view const text = cursor.text;
@@ -567,7 +567,7 @@ class extended_diagnostic_notation
         return at + 1;
     }
 
-    static constexpr std::expected<std::size_t, error> string_finish(std::string_view const text, std::size_t const at,
+    static constexpr result<std::size_t> string_finish(std::string_view const text, std::size_t const at,
                                                                      std::string &out, major_type const major,
                                                                      std::string_view const content)
     {
@@ -590,7 +590,7 @@ class extended_diagnostic_notation
         return next->at;
     }
 
-    static constexpr std::expected<std::size_t, error> literal_parse(literal_cursor const cursor, std::string &out, nesting const n)
+    static constexpr result<std::size_t> literal_parse(literal_cursor const cursor, std::string &out, nesting const n)
     {
         if (auto const r = validity::check_nesting_depth(n.depth, n.depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -693,7 +693,7 @@ class extended_diagnostic_notation
         return number_parse(text, at, out);
     }
 
-    static constexpr std::expected<validity::offset, error> canonical_append(std::string &out, std::string_view const encoded,
+    static constexpr result<validity::offset> canonical_append(std::string &out, std::string_view const encoded,
                                                                             validity::offset const at, nesting const n)
     {
         std::size_t depth = n.depth;
@@ -950,7 +950,7 @@ class extended_diagnostic_notation
     };
 
     template <bool Checked>
-    static std::expected<diagnostic_head, error> diagnostic_head_decode(heads::decoder<Checked> &d)
+    static result<diagnostic_head> diagnostic_head_decode(heads::decoder<Checked> &d)
     {
         if (auto const r = validity::check_pending_items(heads::initial_byte_size, d.encoded.size()); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -979,7 +979,7 @@ class extended_diagnostic_notation
     }
 
     template <bool Checked>
-    static std::expected<void, error>
+    static result<void>
     diagnostic_write(std::string &out, heads::decoder<Checked> &d, std::string_view const encoded,
                      std::size_t const depth, std::size_t const depth_max)
     {
@@ -1100,10 +1100,10 @@ class extended_diagnostic_notation
 
     friend class jsonpath;
 
-    friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
+    friend result<std::string> diagnostic_notation(std::string_view encoded);
 };
 
-inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
+inline result<std::string> diagnostic_notation(std::string_view const encoded)
 {
     heads::decoder<true> d{encoded};
     std::string out;

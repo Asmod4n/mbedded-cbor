@@ -61,5 +61,5 @@ struct cbor::describe_members<t> {
 int main()
 {
     [[maybe_unused]] auto const encode =
-        static_cast<std::expected<std::string, cbor::error> (*)(t const &)>(&cbor::structs<t>::encode);
+        static_cast<cbor::result<std::string> (*)(t const &)>(&cbor::structs<t>::encode);
 }

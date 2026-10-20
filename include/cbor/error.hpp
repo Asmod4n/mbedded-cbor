@@ -1,9 +1,12 @@
 #pragma once
 
+#include <concepts>
 #include <expected>
+#include <functional>
 #include <string>
 #include <system_error>
 #include <type_traits>
+#include <utility>
 
 namespace cbor
 {
@@ -134,6 +137,155 @@ inline std::error_code make_error_code(error const e) noexcept
 {
     return {static_cast<int>(e), category()};
 }
+
+template <class T>
+class result;
+
+template <class T>
+class result_base : public std::expected<T, error>
+{
+    using base = std::expected<T, error>;
+
+    template <class Self>
+    using base_like = std::conditional_t<std::is_const_v<std::remove_reference_t<Self>>,
+                                         std::conditional_t<std::is_lvalue_reference_v<Self>, base const &, base const &&>,
+                                         std::conditional_t<std::is_lvalue_reference_v<Self>, base &, base &&>>;
+
+    template <class R>
+    static constexpr std::expected<typename std::remove_cvref_t<R>::value_type, typename std::remove_cvref_t<R>::error_type>
+    plain(R &&r)
+    {
+        return std::forward<R>(r);
+    }
+
+    template <class R>
+    static constexpr auto wrapped(R &&r)
+    {
+        using X = std::remove_cvref_t<R>;
+        if constexpr (std::same_as<typename X::error_type, error>)
+            return result<typename X::value_type>(std::forward<R>(r));
+        else
+            return X(std::forward<R>(r));
+    }
+
+    template <class U>
+    static constexpr bool is_result_or_expected = false;
+    template <class U>
+    static constexpr bool is_result_or_expected<result<U>> = true;
+    template <class U, class G>
+    static constexpr bool is_result_or_expected<std::expected<U, G>> = true;
+    template <class G>
+    static constexpr bool is_result_or_expected<std::unexpected<G>> = true;
+
+    template <class>
+    friend class result;
+
+public:
+    using base::base;
+
+    constexpr result_base(base &&b) noexcept(std::is_nothrow_move_constructible_v<base>) : base(std::move(b))
+    {
+    }
+
+    constexpr result_base(base const &b) noexcept(std::is_nothrow_copy_constructible_v<base>) : base(b)
+    {
+    }
+
+    template <class Self, class F>
+    constexpr auto and_then(this Self &&self, F &&f)
+    {
+        return wrapped(static_cast<base_like<Self>>(self).and_then([&f](auto &&...v) {
+            return plain(std::invoke(std::forward<F>(f), std::forward<decltype(v)>(v)...));
+        }));
+    }
+
+    template <class Self, class F>
+    constexpr auto or_else(this Self &&self, F &&f)
+    {
+        return wrapped(static_cast<base_like<Self>>(self).or_else(
+            [&f](auto &&e) { return plain(std::invoke(std::forward<F>(f), std::forward<decltype(e)>(e))); }));
+    }
+
+    template <class Self, class F>
+    constexpr auto transform(this Self &&self, F &&f)
+    {
+        return wrapped(static_cast<base_like<Self>>(self).transform(std::forward<F>(f)));
+    }
+
+    template <class Self, class F>
+    constexpr auto transform_error(this Self &&self, F &&f)
+    {
+        return wrapped(static_cast<base_like<Self>>(self).transform_error(std::forward<F>(f)));
+    }
+
+    template <std::same_as<result<T>> R>
+    friend constexpr bool operator==(R const &x, R const &y)
+    {
+        return static_cast<base const &>(x) == static_cast<base const &>(y);
+    }
+
+    template <std::same_as<result<T>> R, class U, class G>
+    friend constexpr bool operator==(R const &x, std::expected<U, G> const &y)
+    {
+        return static_cast<base const &>(x) == y;
+    }
+
+    template <std::same_as<result<T>> R, class G>
+    friend constexpr bool operator==(R const &x, std::unexpected<G> const &e)
+    {
+        return static_cast<base const &>(x) == e;
+    }
+
+    template <class A, class B>
+    static constexpr bool value_comparable = requires(A const &a, B const &b) {
+        { a == b } -> std::convertible_to<bool>;
+    };
+
+    template <std::same_as<result<T>> R, class U>
+        requires(!std::is_void_v<T> && !is_result_or_expected<U> && value_comparable<T, U>)
+    friend constexpr bool operator==(R const &x, U const &v)
+    {
+        return static_cast<base const &>(x) == v;
+    }
+};
+
+template <class T>
+class result : public result_base<T>
+{
+    using base = std::expected<T, error>;
+
+public:
+    using result_base<T>::result_base;
+    using base::operator*;
+    using base::value;
+
+    constexpr T operator*() && noexcept(std::is_nothrow_move_constructible_v<T>)
+    {
+        return std::move(*static_cast<base &>(*this));
+    }
+
+    constexpr T operator*() const && noexcept(std::is_nothrow_copy_constructible_v<T>)
+    {
+        return *static_cast<base const &>(*this);
+    }
+
+    constexpr T value() &&
+    {
+        return std::move(static_cast<base &>(*this)).value();
+    }
+
+    constexpr T value() const &&
+    {
+        return static_cast<base const &>(*this).value();
+    }
+};
+
+template <>
+class result<void> : public result_base<void>
+{
+public:
+    using result_base<void>::result_base;
+};
 
 } // namespace cbor
 
