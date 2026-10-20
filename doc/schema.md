@@ -148,6 +148,21 @@ as `structs` does.
 Every read checks the bytes that it reads. A read never goes outside the
 message, and a field with a wrong head gives an error.
 
+## 7. Read from a peer that you trust
+
+`unverified_path`, `unverified_at_path` and `unverified_decode` take the
+same arguments as `path`, `at_path` and `decode`. They do not check the
+tags and the heads in the message. They check every bound, so a read
+never goes outside the message. A wrong byte gives a wrong value, not an
+error.
+
+```cpp
+auto const fast = cbor::schema<sensor>::unverified_path(owner);
+```
+
+[reference/schema/unverified.md](reference/schema/unverified.md) lists
+what each form checks.
+
 More: the bytes of a message, every check, the accessor in detail, the
 typed array view, a memory budget and the cost of each call are in
 [advanced/schema.md](advanced/schema.md).

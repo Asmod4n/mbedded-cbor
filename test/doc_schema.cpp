@@ -114,6 +114,16 @@ TEST_CASE("doc schema: read the whole struct")
     CHECK_EQ((*back)->name, "t1");
 }
 
+// The section "Read from a peer that you trust" opens a message with unverified_path, which reads as path does.
+TEST_CASE("doc schema: read from a peer that you trust")
+{
+    auto const owner = std::make_shared<std::string const>(*cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}}));
+    auto const fast = cbor::schema<sensor>::unverified_path(owner);
+    REQUIRE(fast.has_value());
+    CHECK_EQ(fast->at_path<"$.id">(), 7);
+    CHECK_EQ(fast->at_path<"$.readings[1]">(), 2.5);
+}
+
 struct [[=cbor::tag(1701)]] other {
     std::uint8_t a;
 };
