@@ -131,8 +131,10 @@ TEST_CASE("doc advanced basics: threads")
     std::int64_t first = 0;
     std::int64_t second = 0;
     {
-        std::jthread const a([&] { first = *l.at(1)->get<std::int64_t>(); });
-        std::jthread const b([&] { second = *l.at(1)->get<std::int64_t>(); });
+        std::thread a([&] { first = *l.at(1)->get<std::int64_t>(); });
+        std::thread b([&] { second = *l.at(1)->get<std::int64_t>(); });
+        a.join();
+        b.join();
     }
     CHECK_EQ(first, 2);
     CHECK_EQ(second, 2);
@@ -144,15 +146,15 @@ TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thre
     std::string bytes = preferred(A(1, 2));
     auto l = cbor::lazy::take_ownership(std::move(bytes));
     std::int64_t read = 0;
-    std::jthread([&read](cbor::lazy const &v) { read = *v.at(1)->get<std::int64_t>(); }, std::move(*l)).join();
+    std::thread([&read](cbor::lazy const &v) { read = *v.at(1)->get<std::int64_t>(); }, std::move(*l)).join();
     CHECK_EQ(read, 2);
     auto const plain = *test::lazy_of_copy(preferred(M("a"s, 1)));
     std::int64_t other = 0;
-    std::jthread([&] { other = *plain.at("a")->get<std::int64_t>(); }).join();
+    std::thread([&] { other = *plain.at("a")->get<std::int64_t>(); }).join();
     CHECK_EQ(other, 1);
     auto const tagged = *test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     std::int64_t content = -1;
-    std::jthread([&] { content = *tagged.at(1)->get<std::int64_t>(); }).join();
+    std::thread([&] { content = *tagged.at(1)->get<std::int64_t>(); }).join();
     CHECK_EQ(content, 0);
 }
 
