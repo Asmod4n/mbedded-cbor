@@ -4,7 +4,8 @@
 # usage: test/run.sh fast|full|<build>...
 #   fast: gcc-release clang-asan
 #   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx
-#   tsan, gcc-describe and wasm are run by name and not in fast or full.
+#   tsan, gcc-describe, gcc-describe-bundled and wasm are run by name and not in fast or full.
+#   gcc-describe-bundled is gcc-describe with CMake told not to find Boost, so the tests take the copy in third_party.
 #   gcc-describe builds with g++ and no reflection, so the tests take the path of the descriptions and Boost.PFR.
 #   wasm compiles test/describe.cpp for wasm32-wasip1 in the image mbedded-cbor-wasm and does not run it: the
 #   libc++ of Debian for wasm32 has no std::basic_fstream, which the runner of doctest needs.
@@ -37,6 +38,7 @@ one() {
 	gcc-asan) cxx=g++-16 type=Debug flags=$asan ;;
 	gcc-release) cxx=g++-16 type=Release flags= ;;
 	gcc-describe) cxx=g++-16 type=Release flags= options=-DCBOR_HAS_FREFLECTION=OFF ;;
+	gcc-describe-bundled) cxx=g++-16 type=Release flags= options="-DCBOR_HAS_FREFLECTION=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Boost=ON" ;;
 	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" ;;
 	clang-release) cxx=clang++-23 type=Release flags=$pch_clang ;;
 	clang-libcxx) cxx=clang++-23 type=Release flags="-stdlib=libc++ $pch_clang" ;;
