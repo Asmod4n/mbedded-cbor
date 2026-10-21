@@ -1,0 +1,73 @@
+{
+ "what": "bench/compare.cpp on carsales (DS_CARS), two trees each from its own commit: base = 55418aa (main), built twice (base, base2: A/A), head = d1bce71 (schema-table-apart, the inside form with the template parameter description_place). One binary per arm, run alternately in shuffled order, 1 s min_time, g++-16. Arm MB_FIELD only, 11 rounds, a second run because the first showed head above the A/A span.",
+ "context": {
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -std=c++26 -freflection",
+  "resolved_march": "-march=                     \t\tsapphirerapids",
+  "compiler": "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "cxx_library and libc": "libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f1fc8a20000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007f1fc86ba000)",
+  "packages": "libstdc++6-16.2.1+git9713-1.1.x86_64\nglibc-2.44-3.1.x86_64",
+  "kernel": "6.18.44-fc-v139",
+  "container": "podman, image mbedded-cbor-tw-compare, --network none",
+  "user": "uid=0(root) gid=0(root) groups=0(root)",
+  "priority": "nice -n -10 refused (Permission denied): the run had no raised priority",
+  "threads": "1 per binary, binaries run one after the other; builds 3 at a time",
+  "processors": "4",
+  "times": "2026-10-20T22:01:23Z 2026-10-20T22:02:18Z"
+ },
+ "results": {
+  "cars.base.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    17.391498064842633,
+    16.571114168662827,
+    15.775061731448305,
+    16.96342800185827,
+    16.938829909402344,
+    15.386268087949338,
+    16.888239147019778,
+    16.297209874739792,
+    17.8716645950453,
+    17.59765544098799,
+    17.78469977965302
+   ],
+   "median": 16.938829909402344,
+   "spread": 0.14672775630838447
+  },
+  "cars.base2.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    16.616614799090158,
+    17.589295802549433,
+    22.527009078435494,
+    16.320383422452846,
+    15.315725399694541,
+    16.61679525622639,
+    16.258144258842133,
+    15.770808971624835,
+    22.375100780033215,
+    16.163845864848273,
+    16.942888054550536
+   ],
+   "median": 16.616614799090158,
+   "spread": 0.4339803122315748
+  },
+  "cars.head.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    16.309150516389337,
+    16.297942127013172,
+    16.21449844914036,
+    16.07571354524016,
+    15.861805677330976,
+    17.19234044827867,
+    15.926112204870668,
+    15.144584938676264,
+    16.15008923119485,
+    16.990744675186313,
+    16.287419386087514
+   ],
+   "median": 16.21449844914036,
+   "spread": 0.1262916343681893
+  }
+ }
+}
