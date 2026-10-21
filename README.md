@@ -1,8 +1,8 @@
 # mbedded-cbor
 
-A header-only C++ library for CBOR. It reads a message in place, goes to
-one value without decoding the rest, and writes C++ structs as Packed
-CBOR with every field at an offset that the compiler knows.
+A header-only C++ library for CBOR. It reads a message in place, goes
+to one value and skips the rest by its length, and writes C++ structs
+as Packed CBOR with every field at an offset that the compiler knows.
 
 ```cpp
 struct [[=cbor::tag(1703)]] point {
@@ -16,7 +16,7 @@ struct [[=cbor::tag(1704)]] track {
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
 auto const lane = cbor::schema<track>::path(std::move(*message));
-lane->at_path<"$.points[2].x">();   // 5: one jump to the field, no walk
+lane->at_path<"$.points[2].x">();   // 5: one jump to the field
 ```
 
 It implements CBOR (RFC 8949), CBOR sequences (RFC 8742), typed arrays
@@ -26,7 +26,7 @@ and every other CBOR decoder can read it.
 
 ## Features
 
-- **Reads in place.** No tree, no copy. A text comes back as a view into
+- **Reads in place.** A text comes back as a view into
   the message.
 - **Reads only what you ask for.** A path reads the heads of the items on
   its way and skips the rest by their length.
@@ -36,25 +36,25 @@ and every other CBOR decoder can read it.
   all have a fixed width, is one block of little-endian bytes. The block
   is checked once.
 - **Errors as values.** Bad input gives a `std::expected` with a
-  `cbor::error`. A read never throws on input.
+  `cbor::error`. A read gives every fault of the input as a value.
 - **Trusted peers.** The `unverified_` forms of `cbor::schema` skip the
   checks of the data and keep every check of a bound.
 - **Description apart.** `cbor::schema` can store the description of a
-  struct once and the data of each message without it.
+  struct once and the data of each message apart from it.
 - **Limits.** Nesting depth, string length and element count are
-  constants of the build. A count in the input reserves no memory.
+  constants of the build. Memory grows with the items that were read.
 
 ## How a read works
 
 <img src="doc/img/path-read.svg" alt="lazy::at_path reads the heads on its way, skips a text by its length, and stops at the value" width="100%">
 
-A path compares the keys it meets. It skips a value that it does not
-need by the length in its head, and it touches no byte after the value.
+A path compares the keys it meets. It skips every other value by the
+length in its head, and it stops at the value.
 
 <img src="doc/img/walk-or-jump.svg" alt="a CBOR walk visits every item before the field; cbor::schema jumps to the field in one step" width="100%">
 
 With `cbor::schema`, the struct is the layout. The offset of a field
-comes from the compiler, so the read does not walk.
+comes from the compiler, so the read is one jump.
 
 <img src="doc/img/fixed-vector.svg" alt="a vector of fixed-size structs: the head is checked once, element i is at i times 8" width="100%">
 
@@ -82,18 +82,18 @@ The code of every library, task by task:
 
 | Compiler | System | What builds |
 |---|---|---|
-| g++ 16, `-std=c++26 -freflection` | Linux | everything |
-| g++ 15, clang 23, `-std=c++23` | Linux | everything but `cbor::schema` |
-| AppleClang of Xcode 16 and 26 | macOS 15 | everything but `cbor::schema` |
+| g++ 16, `-std=c++26 -freflection` | Linux | every part, `cbor::schema` too |
+| g++ 15, clang 23, `-std=c++23` | Linux | every part in C++23 |
+| AppleClang of Xcode 16 and 26 | macOS 15 | every part in C++23 |
 
-`cbor::structs` uses Boost.PFR 1.84 or later where reflection is not
-available. Nothing else is needed.
+On g++ 15, clang 23 and AppleClang, `cbor::structs` uses Boost.PFR
+1.84 or later. It is the only dependency.
 
 ### Boost.PFR
 
-CMake looks for Boost 1.84 or later on the system and uses it. If it
-finds none, the library uses its own copy of Boost.PFR 1.92.0 in
-`third_party/boost_pfr`, unchanged from boostorg/pfr, under the Boost
+CMake looks for Boost 1.84 or later on the system and uses it. Else
+the library uses its own copy of Boost.PFR 1.92.0 in
+`third_party/boost_pfr`, the files of boostorg/pfr, under the Boost
 Software License 1.0. An install then places this copy in
 `include/mbedded-cbor/boost_pfr`, and the CMake package and the
 pkg-config file add it to the include path. The configure output says
@@ -116,7 +116,7 @@ find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
 ```
 
-Or without an install:
+Or with FetchContent:
 
 ```cmake
 include(FetchContent)
@@ -131,7 +131,7 @@ FetchContent_MakeAvailable(mbedded-cbor)
 ### Read a message
 
 The bytes move into the library, or the library reads them in place
-through a `std::shared_ptr`. Neither form copies them.
+through a `std::shared_ptr`. Both forms read the bytes where they are.
 
 ```cpp
 // bytes: a std::string with {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
@@ -153,7 +153,7 @@ if (auto const samples = doc.at("samples")) {
 auto const doc = cbor::lazy::view(owner).value();
 
 auto const id = doc.at_path<"$.user.id", std::int64_t>();          // 42
-auto const name = doc.at_path<"$.user.name", std::string_view>();  // "ann", no copy
+auto const name = doc.at_path<"$.user.name", std::string_view>();  // "ann", a view into the message
 auto const age = doc.at_path<"$.user.age", int>();                 // cbor::error::key_not_found
 ```
 
@@ -199,7 +199,7 @@ schema.
 
 ## Status
 
-Not released. The API can still change. The fuzzing runs before the
+Version 0.9, before the first release. The API can still change. The fuzzing runs before the
 first release.
 
 ## License
