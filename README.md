@@ -4,6 +4,21 @@ A header-only C++ library for CBOR. It reads a message in place, goes to
 one value without decoding the rest, and writes C++ structs as Packed
 CBOR with every field at an offset that the compiler knows.
 
+```cpp
+struct [[=cbor::tag(1703)]] point {
+    float x;
+    float y;
+};
+
+struct [[=cbor::tag(1704)]] track {
+    std::vector<point> points;
+};
+
+auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
+auto const lane = cbor::schema<track>::path(std::move(*message));
+lane->at_path<"$.points[2].x">();   // 5: one jump to the field, no walk
+```
+
 It implements CBOR (RFC 8949), CBOR sequences (RFC 8742), typed arrays
 (RFC 8746), JSONPath (RFC 9535) and Packed CBOR
 (draft-ietf-cbor-packed-19). Every message it writes is standard CBOR,
@@ -22,6 +37,10 @@ and every other CBOR decoder can read it.
   is checked once.
 - **Errors as values.** Bad input gives a `std::expected` with a
   `cbor::error`. A read never throws on input.
+- **Trusted peers.** The `unverified_` forms of `cbor::schema` skip the
+  checks of the data and keep every check of a bound.
+- **Description apart.** `cbor::schema` can store the description of a
+  struct once and the data of each message without it.
 - **Limits.** Nesting depth, string length and element count are
   constants of the build. A count in the input reserves no memory.
 
@@ -61,11 +80,14 @@ The code of every library, task by task:
 
 ## Requirements
 
-- g++ 15 or clang 23, C++23.
-- `cbor::schema` needs C++26 reflection: g++ 16 with `-std=c++26
-  -freflection`.
-- `cbor::structs` uses Boost.PFR 1.84 or later where reflection is not
-  available. Nothing else is needed.
+| Compiler | System | What builds |
+|---|---|---|
+| g++ 16, `-std=c++26 -freflection` | Linux | everything |
+| g++ 15, clang 23, `-std=c++23` | Linux | everything but `cbor::schema` |
+| AppleClang of Xcode 16 and 26 | macOS 15 | everything but `cbor::schema` |
+
+`cbor::structs` uses Boost.PFR 1.84 or later where reflection is not
+available. Nothing else is needed.
 
 ### Boost.PFR
 
@@ -170,9 +192,15 @@ for (auto const p : *points | std::views::drop(1) | std::views::take(1))
 
 The tests run the examples of RFC 8949 Appendix A, the test vectors of
 the IETF CBOR working group and the JSONPath Compliance Test Suite. They
-run with g++ 15, g++ 16 and clang 23, with AddressSanitizer and
-UndefinedBehaviorSanitizer. Fuzz targets cover decode, encode, the
-encoder, item_size, lazy, path and schema.
+run with g++ 15, g++ 16 and clang 23 on Linux and with Xcode 16 and 26
+on macOS, with AddressSanitizer and UndefinedBehaviorSanitizer. Fuzz
+targets cover decode, encode, the encoder, item_size, lazy, path and
+schema.
+
+## Status
+
+Not released. The API can still change. The fuzzing runs before the
+first release.
 
 ## License
 
