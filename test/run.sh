@@ -90,7 +90,7 @@ done
 for n in "$@"; do
 	cat "$root/$branch/$n.result"
 	[ -s "$root/$branch/$n.result" ] && grep -q "rc=0" "$root/$branch/$n.result" ||
-		tail -30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log"
+		tail -n 30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log"
 done
 if [ $interop = 1 ]; then
 	"$src/test/interop/run.sh" | tail -40
