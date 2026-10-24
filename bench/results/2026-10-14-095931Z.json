@@ -1,0 +1,1855 @@
+{
+ "time": "2026-10-14-095931Z",
+ "commit_a": {
+  "given": "c1736a4",
+  "id": "c1736a4f7c238d3c9fca0bc124b3afaca5188eca"
+ },
+ "commit_b": {
+  "given": "858b86e30b18d1f3a49c91019b3999d54398044f",
+  "id": "858b86e30b18d1f3a49c91019b3999d54398044f"
+ },
+ "bench_sources_commit": "0b649dafe2da03629cdb3aed54d17ed7d15c6402",
+ "what": "literal against expression forms of at_path: AP_SA cbor::at_path<P,T>(bytes), AP_LM lazy::view then at_path<P,T>(), AP_XS cbor::at_path(bytes, e) with e made once, AP_XL lazy::view then at_path(e), AP_MK jsonpath::make_expression<T>(text) alone, AP_RL lazy::view then at_path(text) then get<T>, AP_NL nodelist by the literal form of the commit (query<P>() at a, at_path<P,nodelist>() at b) summed, AP_NX nodelist expression made once then applied and summed; path 4 $.statuses[0].user.id uint64, path 5 $.statuses[*].id, records path 1 $[0].id int64; gate steal limit 1%; a = commit a, aa = commit a built again, b = commit b",
+ "documents": "twitter records; MB_STRUCT on twitter only",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+ "pie": "-fPIE -pie",
+ "elf_type_count": {
+  "Type: DYN": 52
+ },
+ "rounds": 20,
+ "min_time": "0.2s",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.0",
+  "clang version 23.1.2"
+ ],
+ "gxx_binary": {
+  "binary": "a.gxx.records.AP_LM_1",
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (SUSE Linux) 16.2.0",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang.records.AP_LM_1",
+  "comment": "String dump of section '.comment':\n  [     0]  clang version 23.1.2",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "libc": "ldd (GNU libc) 2.44",
+ "kernel": "6.18.44-fc-v114",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "unknown",
+ "container": "yes",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 1000,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpus_in_machine": 4,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; builds used 3 of 4 cpus",
+ "gate": [
+  "gate: vmstat 1 5",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 10495388 57376 5524952  0    0   404   911  554    0 21  1 75  2  0  0",
+  " 0  0      0 10495192 57376 5525116  0    0     0     0  390  348  1  0 99  0  0  0",
+  " 0  0      0 10495192 57376 5525116  0    0     0     0  344  300  1  0 99  0  0  0",
+  " 0  0      0 10492420 57376 5525096  0    0     0    20  353  347  1  1 98  0  0  0",
+  " 0  0      0 10492420 57376 5525116  0    0     0     0  210  216  0  0 100 0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "    PID USER     %CPU  NI COMMAND",
+  "      1 ubuntu    0.9   0 bash",
+  "     14 ubuntu    0.0   0 bash",
+  "     15 ubuntu    0.0   0 ps",
+  "     16 ubuntu    0.0   0 head",
+  "gate: busy 1.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 8.80694174109047
+ },
+ "rounds_detail": [
+  {
+   "round": 1,
+   "wall_s": 37.887568950653076,
+   "steal_ticks": 83,
+   "steal_percent_of_cpu_time": 0.5467360516435017
+  },
+  {
+   "round": 2,
+   "wall_s": 36.81310272216797,
+   "steal_ticks": 56,
+   "steal_percent_of_cpu_time": 0.37968675842429994
+  },
+  {
+   "round": 3,
+   "wall_s": 36.56295919418335,
+   "steal_ticks": 70,
+   "steal_percent_of_cpu_time": 0.47778308647873863
+  },
+  {
+   "round": 4,
+   "wall_s": 37.36222243309021,
+   "steal_ticks": 64,
+   "steal_percent_of_cpu_time": 0.4272077965422869
+  },
+  {
+   "round": 5,
+   "wall_s": 36.01881527900696,
+   "steal_ticks": 67,
+   "steal_percent_of_cpu_time": 0.46408533628870263
+  },
+  {
+   "round": 6,
+   "wall_s": 36.4677734375,
+   "steal_ticks": 69,
+   "steal_percent_of_cpu_time": 0.4720207962785607
+  },
+  {
+   "round": 7,
+   "wall_s": 37.22257137298584,
+   "steal_ticks": 66,
+   "steal_percent_of_cpu_time": 0.4425668879501106
+  },
+  {
+   "round": 8,
+   "wall_s": 36.115514039993286,
+   "steal_ticks": 59,
+   "steal_percent_of_cpu_time": 0.40754299924017406
+  },
+  {
+   "round": 9,
+   "wall_s": 37.03896689414978,
+   "steal_ticks": 72,
+   "steal_percent_of_cpu_time": 0.4849137931034483
+  },
+  {
+   "round": 10,
+   "wall_s": 35.74278783798218,
+   "steal_ticks": 68,
+   "steal_percent_of_cpu_time": 0.4744296378985558
+  },
+  {
+   "round": 11,
+   "wall_s": 36.188409090042114,
+   "steal_ticks": 59,
+   "steal_percent_of_cpu_time": 0.40684043580195833
+  },
+  {
+   "round": 12,
+   "wall_s": 35.510627031326294,
+   "steal_ticks": 68,
+   "steal_percent_of_cpu_time": 0.4782669855113237
+  },
+  {
+   "round": 13,
+   "wall_s": 36.10096311569214,
+   "steal_ticks": 88,
+   "steal_percent_of_cpu_time": 0.6089965397923875
+  },
+  {
+   "round": 14,
+   "wall_s": 36.67091703414917,
+   "steal_ticks": 75,
+   "steal_percent_of_cpu_time": 0.5103776794828173
+  },
+  {
+   "round": 15,
+   "wall_s": 36.91145873069763,
+   "steal_ticks": 69,
+   "steal_percent_of_cpu_time": 0.46691027202598456
+  },
+  {
+   "round": 16,
+   "wall_s": 36.253499031066895,
+   "steal_ticks": 53,
+   "steal_percent_of_cpu_time": 0.36513951085084395
+  },
+  {
+   "round": 17,
+   "wall_s": 36.53159976005554,
+   "steal_ticks": 51,
+   "steal_percent_of_cpu_time": 0.3487179487179487
+  },
+  {
+   "round": 18,
+   "wall_s": 35.5495719909668,
+   "steal_ticks": 77,
+   "steal_percent_of_cpu_time": 0.54038879921398
+  },
+  {
+   "round": 19,
+   "wall_s": 37.26521348953247,
+   "steal_ticks": 150,
+   "steal_percent_of_cpu_time": 1.0050251256281406
+  },
+  {
+   "round": 20,
+   "wall_s": 36.159478425979614,
+   "steal_ticks": 64,
+   "steal_percent_of_cpu_time": 0.4419889502762431
+  }
+ ],
+ "steal_percent_of_cpu_time_max": 1.0050251256281406,
+ "failed": [],
+ "cells": {
+  "clang.records.AP_LM_1": {
+   "a": {
+    "repetitions_ns": [
+     104.57696655512379,
+     82.34331283308063,
+     90.44926869334651,
+     80.667300191164,
+     85.21506785724607,
+     83.3326616437784,
+     85.66791529635759,
+     80.3103617066406,
+     82.38406400394624,
+     84.19306311902527,
+     88.06931650208315,
+     80.41646008925142,
+     81.3001116210675,
+     90.14523581587386,
+     80.35606610213367,
+     83.25868615824783,
+     84.62565069308496,
+     97.00125507042216,
+     82.47820665127502,
+     106.21320809977139
+    ],
+    "median_ns": 83.76286238140183,
+    "spread": 0.32253430121195636,
+    "check": "0",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     96.3011221798859,
+     112.08790250977283,
+     78.96920445404727,
+     85.53771086750048,
+     80.21886169345716,
+     82.9619520356675,
+     88.45353989145096,
+     91.4695246157874,
+     91.38682051794063,
+     80.3482535838818,
+     83.08264474085952,
+     84.57832221249663,
+     84.04457586886039,
+     91.85632948519357,
+     92.33083624808432,
+     86.28806281903076,
+     81.76439827476241,
+     86.06462820188642,
+     83.3797814198051,
+     78.25943612048229
+    ],
+    "median_ns": 85.05801653999856,
+    "spread": 0.4322605434724931,
+    "check": "0",
+    "copies": "1656"
+   },
+   "b": {
+    "repetitions_ns": [
+     103.53573794019947,
+     111.64597463968134,
+     98.49774378857816,
+     90.75970492466462,
+     102.09394580463676,
+     100.03724680102448,
+     97.98271894074273,
+     89.08499798612505,
+     106.42048970137648,
+     91.15212351630095,
+     90.57022995118733,
+     106.63495911743684,
+     111.13180678400121,
+     93.21452685074237,
+     95.38020818223369,
+     89.43039067819964,
+     95.90684767402149,
+     110.12561612951698,
+     96.5018395747229,
+     92.67844385628308
+    ],
+    "median_ns": 97.2422792577328,
+    "spread": 0.25325225530195516,
+    "check": "0",
+    "copies": "1656"
+   },
+   "a_over_a_ratio": 1.0154621525790204,
+   "b_over_a_ratio": 1.1609235464632814,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "clang.records.AP_MK_1": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:689:16: error: variable has incomplete type 'const void'\n  689 |     auto const e = ap_make();\n      |                ^\n3 errors generated."
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:689:16: error: variable has incomplete type 'const void'\n  689 |     auto const e = ap_make();\n      |                ^\n3 errors generated."
+   },
+   "b": {
+    "repetitions_ns": [
+     203.54861600026197,
+     217.08003580651436,
+     206.62761031154355,
+     230.47633749721933,
+     207.25942416837032,
+     209.02797436160367,
+     219.74011201608212,
+     203.95778029759583,
+     208.01396218695285,
+     203.3857896130773,
+     218.6432007315951,
+     206.3579141975146,
+     208.09061700038,
+     203.91044229907988,
+     212.50507992267154,
+     229.81426271019734,
+     210.55389600041963,
+     202.22416549619385,
+     255.7849889007621,
+     261.8254099998012
+    ],
+    "median_ns": 208.55929568099185,
+    "spread": 0.2947285966410831,
+    "check": "1",
+    "copies": "1656"
+   }
+  },
+  "clang.records.AP_RL_1": {
+   "a": {
+    "repetitions_ns": [
+     407.83235793972807,
+     398.48256453106376,
+     593.8816529517507,
+     397.51525789251775,
+     392.920880434701,
+     418.7230760288658,
+     414.1912152679045,
+     387.33382438529975,
+     366.79498164703637,
+     372.52254768762276,
+     380.83255616114195,
+     381.7626708067987,
+     409.65282129745685,
+     405.02245662107816,
+     392.3721217245274,
+     523.3380939921415,
+     384.9055402645566,
+     397.3915628698685,
+     532.6230986845641,
+     396.4287240185503
+    ],
+    "median_ns": 397.4534103811931,
+    "spread": 0.6191106276454945,
+    "check": "0",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     391.21476394452054,
+     382.7878781577594,
+     434.16030169651606,
+     386.550998176004,
+     366.2381830734429,
+     362.17678770086656,
+     508.68066201041444,
+     408.2330448864985,
+     418.1829025435354,
+     364.6807920309697,
+     399.3102482432349,
+     487.0717935981474,
+     484.1613612362389,
+     448.6821853701787,
+     433.89332048336996,
+     370.6207451753147,
+     387.2644016365017,
+     412.38488499026806,
+     418.7839818825403,
+     376.2388508020166
+    ],
+    "median_ns": 403.7716465648667,
+    "spread": 0.4045092874106282,
+    "check": "0",
+    "copies": "1656"
+   },
+   "b": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:703:23: error: no matching member function for call to 'at_path'\n  703 |     auto const n = l->at_path(std::string_view(AP_TEXT));\n      |                    ~~~^~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1850:53: note: candidate template ignored: constraints not satisfied [with E = std::string_view]\n 1850 | std::expected<typename E::result_type, error> lazy::at_path(E const &e) const\n      |                                                     ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/lazy.hpp:119:18: note: because 'is_path_expression_v<std::basic_string_view<char>>' evaluated to false\n  119 |         requires is_path_expression_v<E>\n      |                  ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1804:34: note: candidate function template not viable: requires 0 arguments, but 1 was provided\n 1804 | std::expected<lazy, error> lazy::at_path() const\n      |                                  ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1834:31: note: candidate function template not viable: requires 0 arguments, but 1 was provided\n 1834 | std::expected<T, error> lazy::at_path() const\n      |                               ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1843:43: note: candidate function template not viable: requires 0 arguments, but 1 was provided\n 1843 | std::expected<owning_ref<T>, error> lazy::at_path() const\n      |                                           ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1817:38: note: candidate function template not viable: requires 0 arguments, but 1 was provided\n 1817 | std::expected<nodelist, error> lazy::at_path() const\n      |                                      ^\n1 error generated."
+   }
+  },
+  "clang.records.AP_SA_1": {
+   "a": {
+    "repetitions_ns": [
+     67.10916949008752,
+     63.62255074398705,
+     74.43744568738167,
+     65.78959471565456,
+     69.92873032722954,
+     67.05472825215223,
+     75.02620115961271,
+     82.02623153636696,
+     67.6055489330535,
+     67.87683710185026,
+     73.45787598686765,
+     67.83911695688045,
+     67.12104170518252,
+     72.12496166693025,
+     74.6443536164147,
+     64.44917125923791,
+     76.7962293585926,
+     84.0301657029974,
+     70.187876372528,
+     66.61582117991624
+    ],
+    "median_ns": 68.90278371453991,
+    "spread": 0.32076071644988335,
+    "check": "0",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     68.06073931149089,
+     65.65768549573275,
+     70.7543762212862,
+     70.46666204303683,
+     66.9223432201527,
+     84.18015978307308,
+     67.6095529988033,
+     74.12740151409132,
+     82.9459180300738,
+     82.84247340920737,
+     73.58755408885399,
+     71.38061217205613,
+     66.98449212021045,
+     69.91168160562778,
+     64.88311295270611,
+     84.5382540395478,
+     86.51202470457032,
+     67.47702941487462,
+     71.98601353827411,
+     71.4160963942074
+    ],
+    "median_ns": 71.06749419667116,
+    "spread": 0.3333519427101119,
+    "check": "0",
+    "copies": "1656"
+   },
+   "b": {
+    "repetitions_ns": [
+     66.54834340484284,
+     70.73351343017421,
+     69.4331491093047,
+     69.35322394968122,
+     69.29147986724573,
+     84.91581135383153,
+     80.50343137087033,
+     66.8253777489888,
+     73.31544888554228,
+     73.50828054073045,
+     64.13851403544804,
+     68.2048946217219,
+     78.19463126709495,
+     69.83979424110102,
+     72.81330454041196,
+     75.64979578214144,
+     65.78371701105624,
+     84.54892659830026,
+     72.81183937163182,
+     65.76113291598183
+    ],
+    "median_ns": 70.28665383563762,
+    "spread": 0.3239441641398224,
+    "check": "0",
+    "copies": "1656"
+   },
+   "a_over_a_ratio": 1.0314168799202588,
+   "b_over_a_ratio": 1.0200843862394733,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "clang.records.AP_XL_1": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "b": {
+    "repetitions_ns": [
+     90.80923895579893,
+     90.55859668356463,
+     104.22752925239851,
+     89.38145189199581,
+     87.73905824076508,
+     95.66137552585346,
+     90.18993418087845,
+     86.17816486073208,
+     92.7024072805112,
+     96.61456721486718,
+     88.29750445849267,
+     88.51391888319492,
+     86.91551482559801,
+     89.15905123664692,
+     92.19611571945087,
+     91.86306317915228,
+     102.95178347060524,
+     102.08835412218923,
+     100.61859538894299,
+     88.69654928312309
+    ],
+    "median_ns": 90.68391781968178,
+    "spread": 0.20944243151191544,
+    "check": "0",
+    "copies": "1656"
+   }
+  },
+  "clang.records.AP_XS_1": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "b": {
+    "repetitions_ns": [
+     75.42252681880694,
+     77.11704085140215,
+     75.60854342636284,
+     78.06561167937409,
+     85.23350340107196,
+     92.44469562607969,
+     96.31749787775567,
+     80.24130341247185,
+     74.51526055637684,
+     81.50991990042588,
+     78.67145855863923,
+     78.59691457172748,
+     75.06987199737586,
+     86.1512298966157,
+     79.44131027762,
+     81.21276825079791,
+     77.90502672691521,
+     73.93450316060414,
+     83.70889054763666,
+     73.93452984664741
+    ],
+    "median_ns": 78.63418656518336,
+    "spread": 0.302740855220601,
+    "check": "0",
+    "copies": "1656"
+   }
+  },
+  "clang.twitter.AP_LM_4": {
+   "a": {
+    "repetitions_ns": [
+     324.99939856100605,
+     333.91581293065855,
+     375.57551238516595,
+     447.6938437575641,
+     393.51754477608307,
+     411.84473910114673,
+     366.2424314184176,
+     435.4857666567112,
+     389.18141516722767,
+     342.1921385197382,
+     330.68595976518884,
+     361.3626319719163,
+     353.16784715557975,
+     425.3543907364676,
+     427.43971675241335,
+     385.51024990753035,
+     369.7926161428854,
+     434.21675447019294,
+     372.9615105561419,
+     556.2394949635807
+    ],
+    "median_ns": 380.5428811463481,
+    "spread": 0.711509305636971,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     346.6674760016485,
+     337.18599012772654,
+     400.2369005482074,
+     377.3290127464321,
+     312.0506704788273,
+     335.6452717432704,
+     324.75916138928403,
+     470.3061564609904,
+     315.9037888790577,
+     389.0826330381118,
+     346.8168733558671,
+     359.64954505451925,
+     395.19118214815006,
+     359.7159446158038,
+     466.04138761723516,
+     357.7106403170292,
+     431.3077922829535,
+     393.26425976264613,
+     330.9581236904036,
+     346.00167840386956
+    ],
+    "median_ns": 358.6800926857742,
+    "spread": 0.5071467583752578,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     407.04048292666073,
+     348.3970910781124,
+     575.3016357372436,
+     369.9493778560614,
+     458.24800016213396,
+     359.3785752135627,
+     404.0465676356216,
+     498.3070077203395,
+     333.9394028112844,
+     404.61556056743285,
+     334.17689854790024,
+     504.6708825458431,
+     371.2009723893499,
+     371.6296551611634,
+     499.5235350563944,
+     397.5149201998803,
+     486.10173091139546,
+     341.4211500641019,
+     450.7673480474894,
+     472.6182003161413
+    ],
+    "median_ns": 404.3310641015272,
+    "spread": 0.7227725476360081,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9425484234661954,
+   "b_over_a_ratio": 1.0625111758325883,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "clang.twitter.AP_MK_4": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:689:16: error: variable has incomplete type 'const void'\n  689 |     auto const e = ap_make();\n      |                ^\n3 errors generated."
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:689:16: error: variable has incomplete type 'const void'\n  689 |     auto const e = ap_make();\n      |                ^\n3 errors generated."
+   },
+   "b": {
+    "repetitions_ns": [
+     460.3850957929965,
+     352.7809576865897,
+     339.79713549691047,
+     346.6926317910187,
+     367.25058042967044,
+     321.48814688036646,
+     309.2113245899563,
+     330.3118473644616,
+     442.458115218037,
+     333.7774698088609,
+     483.3528726295598,
+     309.68092216264324,
+     361.6286439535747,
+     326.6436788286855,
+     381.1050900897738,
+     360.95414619597983,
+     310.82959585356195,
+     382.54499533357466,
+     309.226644081199,
+     336.7527493953157
+    ],
+    "median_ns": 343.2448836439646,
+    "spread": 0.5631797227043085,
+    "check": "1",
+    "copies": "1354"
+   }
+  },
+  "clang.twitter.AP_NL_5": {
+   "a": {
+    "repetitions_ns": [
+     185936.3232986662,
+     182197.33109750762,
+     175539.50309032135,
+     180324.66927234744,
+     174334.2446185357,
+     174821.5287813972,
+     170039.30722129392,
+     167071.72401438933,
+     173206.02033473886,
+     184406.82076003926,
+     168503.59645906393,
+     191169.93668550544,
+     172877.62004978524,
+     171118.75329341885,
+     169256.68674705678,
+     183877.00311335357,
+     176555.22930338696,
+     171747.98741001403,
+     171184.0457918436,
+     181395.35755584325
+    ],
+    "median_ns": 174577.88669996645,
+    "spread": 0.14423872629123413,
+    "check": "13693999927316377726",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     173193.84164019243,
+     170943.44328646036,
+     181616.08205119616,
+     176740.02682031228,
+     192915.4167262483,
+     195279.40345870913,
+     169362.0085836874,
+     175384.77289405648,
+     189844.07598045614,
+     171763.25633292997,
+     173996.08553834978,
+     174295.0385368608,
+     171617.1427704602,
+     176671.58969351312,
+     172303.86293485327,
+     170107.0487660114,
+     188247.98901091964,
+     174608.41375157758,
+     167691.079842961,
+     169195.85101145733
+    ],
+    "median_ns": 174145.5620376053,
+    "spread": 0.16451873076125456,
+    "check": "13693999927316377726",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     195935.66482806887,
+     185952.8339370104,
+     175916.91767543906,
+     185630.55210639143,
+     181568.34088120714,
+     181366.077586309,
+     173848.00752805444,
+     172225.4702704609,
+     169736.82834979286,
+     202044.6839997021,
+     179327.48979571072,
+     170457.22855279228,
+     196362.4529755019,
+     170283.80992772352,
+     178570.96336068134,
+     174738.61566690722,
+     183108.60024217007,
+     189385.36112970707,
+     184259.82356721596,
+     186380.79318885788
+    ],
+    "median_ns": 181467.20923375807,
+    "spread": 0.1903408704169336,
+    "check": "13693999927316377726",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9975236000931541,
+   "b_over_a_ratio": 1.0394627444748015,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "clang.twitter.AP_NX_5": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:670:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  670 |     return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:670:50: error: no member named 'nodelist' in namespace 'cbor'\n  670 |     return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));\n      |                                                  ^~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:670:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  670 |     return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:670:50: error: no member named 'nodelist' in namespace 'cbor'\n  670 |     return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));\n      |                                                  ^~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "b": {
+    "repetitions_ns": [
+     188378.62415315426,
+     171482.39999975212,
+     167776.10326401572,
+     192334.86770113243,
+     205549.64996858424,
+     169613.65373159669,
+     176218.03437139088,
+     174325.36612346247,
+     172606.74610756207,
+     173977.60422951318,
+     169324.11036947917,
+     181355.79642174885,
+     180138.57203892764,
+     176465.41279405085,
+     174790.97465270892,
+     187544.06030739818,
+     200118.86198738377,
+     174626.74275140435,
+     175663.7801329374,
+     178266.11562497873
+    ],
+    "median_ns": 175940.90725216415,
+    "spread": 0.2251425916426688,
+    "check": "13693999927316377726",
+    "copies": "1354"
+   }
+  },
+  "clang.twitter.AP_RL_4": {
+   "a": {
+    "repetitions_ns": [
+     1380.7577792345917,
+     992.0234781302929,
+     1063.9740815595617,
+     975.9174191935869,
+     1260.366764010106,
+     1212.839991496966,
+     985.2073278742472,
+     909.145754790777,
+     992.7427314869456,
+     962.2354500637936,
+     1046.2125652988914,
+     1051.1121223586292,
+     1076.0812514116494,
+     926.4695009318893,
+     959.506362133752,
+     1073.5314756045912,
+     1292.2802047476846,
+     1493.9713666266316,
+     1111.9016250336758,
+     1159.7867997808373
+    ],
+    "median_ns": 1057.5431019590956,
+    "spread": 0.6432693644050962,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     1193.0784464880508,
+     975.810782011187,
+     985.3763177718001,
+     999.2545862361566,
+     1068.749876564774,
+     1142.0401710950168,
+     1063.461198056757,
+     1037.5241177686241,
+     1276.685694215655,
+     984.9667603382147,
+     985.0914705516865,
+     1336.0844496788684,
+     1504.1233591306411,
+     1165.1917688763763,
+     1065.5588522891574,
+     1001.2173021904208,
+     1137.1187309323434,
+     1099.4023159518574,
+     978.9880211890961,
+     1096.820882629131
+    ],
+    "median_ns": 1067.1543644269657,
+    "spread": 0.541408833411924,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "b": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:703:23: error: no matching member function for call to 'at_path'\n  703 |     auto const n = l->at_path(std::string_view(AP_TEXT));\n      |                    ~~~^~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1850:53: note: candidate template ignored: constraints not satisfied [with E = std::string_view]\n 1850 | std::expected<typename E::result_type, error> lazy::at_path(E const &e) const\n      |                                                     ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/lazy.hpp:119:18: note: because 'is_path_expression_v<std::basic_string_view<char>>' evaluated to false\n  119 |         requires is_path_expression_v<E>\n      |                  ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1804:34: note: candidate function template not viable: requires 0 arguments, but 1 was provided\n 1804 | std::expected<lazy, error> lazy::at_path() const\n      |                                  ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1834:31: note: candidate function template not viable: requires 0 arguments, but 1 was provided\n 1834 | std::expected<T, error> lazy::at_path() const\n      |                               ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1843:43: note: candidate function template not viable: requires 0 arguments, but 1 was provided\n 1843 | std::expected<owning_ref<T>, error> lazy::at_path() const\n      |                                           ^\n/tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/query.hpp:1817:38: note: candidate function template not viable: requires 0 arguments, but 1 was provided\n 1817 | std::expected<nodelist, error> lazy::at_path() const\n      |                                      ^\n1 error generated."
+   }
+  },
+  "clang.twitter.AP_SA_4": {
+   "a": {
+    "repetitions_ns": [
+     375.97631043586875,
+     339.4627018039213,
+     369.9166039714751,
+     374.58593012844386,
+     333.65775990244055,
+     460.50162133066846,
+     368.3805333682088,
+     336.63538841729456,
+     417.17780101131734,
+     308.0635075936705,
+     323.78919882883184,
+     324.0984349636077,
+     306.3534172721627,
+     326.08863621641166,
+     320.79122713474976,
+     327.44948578073456,
+     367.07317033909317,
+     406.381203628085,
+     308.9080292659,
+     339.6622069095176
+    ],
+    "median_ns": 338.04904511060795,
+    "spread": 0.5031711590850685,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     348.3738058811154,
+     420.7607452922571,
+     326.95521500858734,
+     364.2781511504205,
+     359.6872295175762,
+     310.96649861204213,
+     411.833952484624,
+     385.0109231484046,
+     318.7994608953937,
+     333.26583473230926,
+     321.70793167226793,
+     335.51747768886906,
+     339.7023833706188,
+     324.0833356198973,
+     297.68429882876154,
+     345.1198100039475,
+     407.7570196965125,
+     320.0162415746992,
+     318.8553262764983,
+     316.388430784114
+    ],
+    "median_ns": 334.3916562105892,
+    "spread": 0.41344621448877117,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     441.6408104980353,
+     342.7544483545822,
+     311.13672118539796,
+     343.8106772519276,
+     345.48495929927765,
+     411.9276380248763,
+     373.77263020754566,
+     493.4449478491437,
+     428.279770092836,
+     304.5852409200072,
+     398.167418794145,
+     397.3081392959656,
+     339.7641506906221,
+     326.1929130994845,
+     308.7150394321553,
+     322.08381535199965,
+     381.7338361070102,
+     329.1622927372253,
+     320.25931402185347,
+     324.4583056979202
+    ],
+    "median_ns": 343.2825628032549,
+    "spread": 0.6200553459474305,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9891808926754339,
+   "b_over_a_ratio": 1.0154815337251866,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "clang.twitter.AP_XL_4": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "b": {
+    "repetitions_ns": [
+     399.2205422295446,
+     357.72681011996224,
+     343.55840796450644,
+     348.2535183171002,
+     349.85243239528427,
+     322.07297071327525,
+     368.3959183720588,
+     330.1695811418505,
+     341.93253461842573,
+     358.656593241231,
+     442.75353945733775,
+     376.7767839197445,
+     354.52196995447326,
+     361.342057847603,
+     351.90039712878297,
+     349.4970161367343,
+     508.4752821525746,
+     447.93515477930737,
+     407.52662353382334,
+     360.1120712436242
+    ],
+    "median_ns": 358.1917016805966,
+    "spread": 0.5787580094861284,
+    "check": "1186275104",
+    "copies": "1354"
+   }
+  },
+  "clang.twitter.AP_XS_4": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: no member named 'make_expression' in 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:44: error: unexpected type name 'ap_type': expected expression\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                            ^\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:675:10: error: variable has incomplete type 'void'\n  675 |     auto e = ap_make();\n      |          ^\n3 errors generated."
+   },
+   "b": {
+    "repetitions_ns": [
+     386.7599085173567,
+     316.660689795633,
+     321.21926874478385,
+     412.346323344157,
+     339.27829571553735,
+     320.01724671269426,
+     323.2414672440217,
+     395.75125041726983,
+     326.43271071922624,
+     330.4844299867819,
+     380.26876523060594,
+     397.98147562330905,
+     350.40811343101797,
+     361.3924464735972,
+     335.1465454438687,
+     356.81264830135854,
+     503.65529234634914,
+     407.5226796397273,
+     372.52261725006315,
+     365.84720126104355
+    ],
+    "median_ns": 359.1025473874779,
+    "spread": 0.59052041688976,
+    "check": "1186275104",
+    "copies": "1354"
+   }
+  },
+  "gxx.records.AP_LM_1": {
+   "a": {
+    "repetitions_ns": [
+     59.4456232911809,
+     60.62190008293791,
+     58.891038413835645,
+     64.51947499967169,
+     79.75309288270778,
+     76.91186575976386,
+     71.71243918991789,
+     69.14572943283784,
+     57.45104126885143,
+     59.00082528637993,
+     100.57426971914288,
+     57.00866223096504,
+     92.39690588845085,
+     67.69948054492309,
+     73.84126753339713,
+     58.42148184798386,
+     58.95822122189007,
+     56.35630385285645,
+     55.22487656613679,
+     62.288986026797765
+    ],
+    "median_ns": 61.45544305486784,
+    "spread": 0.8211769038305785,
+    "check": "0",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     101.5093654659489,
+     64.94002059773499,
+     58.11736779213606,
+     66.03321454431392,
+     59.72130274430303,
+     61.29726940798045,
+     96.77538662936257,
+     66.30592069582215,
+     104.03626861615074,
+     62.75966329137005,
+     92.61337756217016,
+     107.23517514319933,
+     67.42965554705599,
+     62.07585829771606,
+     63.26051670730904,
+     78.11462816697895,
+     100.96761072718382,
+     71.27041956019261,
+     63.59755522734304,
+     84.31808827815446
+    ],
+    "median_ns": 66.86778812143908,
+    "spread": 0.8451485195740311,
+    "check": "0",
+    "copies": "1656"
+   },
+   "b": {
+    "repetitions_ns": [
+     93.28108761417471,
+     62.37384693719174,
+     119.66754049791966,
+     60.00407358203212,
+     73.40586746783868,
+     64.87162346667657,
+     67.72367632642042,
+     60.0783554296112,
+     60.526265168774074,
+     64.90994525701059,
+     60.19063963665968,
+     60.34046318916809,
+     59.366165965157435,
+     58.58827543927924,
+     65.42773714966334,
+     66.4239431081006,
+     101.39256155880794,
+     57.96103143741499,
+     60.16604335076688,
+     63.24881829760657
+    ],
+    "median_ns": 62.81133261739916,
+    "spread": 1.0646206171664487,
+    "check": "0",
+    "copies": "1656"
+   },
+   "a_over_a_ratio": 1.0880694174109047,
+   "b_over_a_ratio": 1.022062969447975,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "gxx.records.AP_MK_1": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "b": {
+    "repetitions_ns": [
+     208.59763499993278,
+     227.90368500045588,
+     199.24327282213682,
+     217.03432042001427,
+     198.90463250289665,
+     210.23743600017042,
+     221.21671980877943,
+     241.2557050001851,
+     216.4910190003866,
+     214.7085192128407,
+     286.0908894200199,
+     293.3170772309601,
+     246.12065821574953,
+     303.92662748096546,
+     218.9433178637866,
+     218.68965100020432,
+     213.6350002146001,
+     217.8039583991695,
+     218.02993999972387,
+     242.09185220982505
+    ],
+    "median_ns": 218.3597954999641,
+    "spread": 0.5280017546928646,
+    "check": "1",
+    "copies": "1656"
+   }
+  },
+  "gxx.records.AP_RL_1": {
+   "a": {
+    "repetitions_ns": [
+     344.25915902125223,
+     303.9251294043979,
+     302.03873656077883,
+     315.856357667241,
+     426.1910991966367,
+     328.1716422630261,
+     370.3170816915222,
+     375.9801098401687,
+     411.31115746204597,
+     341.8161559765942,
+     315.4485253860971,
+     312.1915747787291,
+     381.3820715228167,
+     292.4112283541562,
+     313.85311295897884,
+     362.0349995884666,
+     404.88940070440214,
+     455.47879381262976,
+     316.798063580504,
+     495.0844565098208
+    ],
+    "median_ns": 343.0376574989232,
+    "spread": 0.6931102793022548,
+    "check": "0",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     335.93148103995435,
+     304.7781829649189,
+     294.2668282610121,
+     341.8885222522455,
+     377.5708366815741,
+     503.9556414499286,
+     296.6948874117757,
+     340.6704416407839,
+     301.1913826191465,
+     416.1592259020496,
+     346.6249363591991,
+     311.8542372961458,
+     428.29242653182854,
+     387.89912345594337,
+     312.84523417332906,
+     340.33712357918847,
+     469.9643305824161,
+     547.8178506090761,
+     309.10718267023725,
+     440.2000275191935
+    ],
+    "median_ns": 341.2794819465147,
+    "spread": 0.8616364401194636,
+    "check": "0",
+    "copies": "1656"
+   },
+   "b": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'uint64_t ap()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:703:30: error: no matching function for call to 'cbor::lazy::at_path(std::string_view) const'\n  703 |     auto const n = l->at_path(std::string_view(AP_TEXT));\n      |                    ~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~\n  \u2022 there are 5 candidates\nIn file included from /tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/cbor.hpp:15,\n                 from /w/bench/value.hpp:3,\n                 from /tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:18:\n    \u2022 candidate 1: 'template<fixed_string<...auto...> Path>  requires  is_valid_path_v<Path> std::expected<cbor::lazy, cbor::error> cbor::lazy::at_path() const'\n      /tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/lazy.hpp:96:32:\n         96 |     std::expected<lazy, error> at_path() const;\n            |                                ^~~~~~~\n      \u2022 candidate expects 0 arguments, 1 provided\n    \u2022 candidate 2: 'template<fixed_string<...auto...> Path, class T>  requires (is_singular_query_v<Path>) && ((integral<T>) && !(is_same_v<T, bool>) || (is_same_v<T, double>) || (is_same_v<T, bool>) || (is_same_v<T, std::nullptr_t>) || (is_same_v<T, cbor::simple_value>) || (is_same_v<T, _Float128>)) std::expected<_Vp, cbor::error> cbor::lazy::at_path() const'\n      /tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/lazy.hpp:106:29:\n        106 |     std::expected<T, error> at_path() const;\n            |                             ^~~~~~~\n      \u2022 candidate expects 0 arguments, 1 provided\n    \u2022 candidate 3: 'template<fixed_string<...auto...> Path, class T>  requires (is_singular_query_v<Path>) && ((is_same_v<T, std::basic_string_view<char, std::char_traits<char> > >) || (is_same_v<T, std::span<const std::byte, 18446744073709551615> >) || (is_same_v<T, cbor::typed_array>)) std::expected<cbor::owning_ref<T>, cbor::error> cbor::lazy::at_path() const'\n      /tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/lazy."
+   }
+  },
+  "gxx.records.AP_SA_1": {
+   "a": {
+    "repetitions_ns": [
+     46.687190717696396,
+     59.478189517839816,
+     41.53524934179674,
+     51.04448053983086,
+     40.95580482864058,
+     40.58211093500476,
+     67.61821975893803,
+     63.71616109062347,
+     41.75305076462076,
+     41.45602071988538,
+     43.27311699651613,
+     43.021530005927666,
+     49.73102623030532,
+     45.41361213431965,
+     56.57110557329687,
+     48.382523385957775,
+     43.933284800130984,
+     44.65007349051509,
+     53.51060907365303,
+     73.83216323586755
+    ],
+    "median_ns": 46.05040142600802,
+    "spread": 0.8193278155026287,
+    "check": "0",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     43.71802791191922,
+     40.68473623905085,
+     53.586714095052216,
+     45.02124188754198,
+     41.32320739741211,
+     47.290884980024735,
+     40.797528390625146,
+     50.027039079321405,
+     43.90603501635618,
+     39.63799898981472,
+     57.56757010828625,
+     44.401887406472056,
+     47.39065756502414,
+     63.22253556964371,
+     50.37055164226374,
+     50.8434752753545,
+     52.93399092465997,
+     49.09763876642048,
+     42.02067940895118,
+     69.5274624256723
+    ],
+    "median_ns": 47.340771272524435,
+    "spread": 0.7540608556839083,
+    "check": "0",
+    "copies": "1656"
+   },
+   "b": {
+    "repetitions_ns": [
+     45.968209589456116,
+     42.467566337899655,
+     42.1267812177316,
+     43.38144859016105,
+     67.29219454031315,
+     49.356202398022184,
+     48.77237839103191,
+     43.98632912647045,
+     40.862028796893064,
+     48.61476029125318,
+     45.05127895821503,
+     60.80284072947767,
+     48.06192804347861,
+     43.202882414635006,
+     44.433517664943395,
+     42.07048503991021,
+     41.834987923071616,
+     52.42692423597133,
+     47.893187715073545,
+     58.18875781260725
+    ],
+    "median_ns": 45.50974427383557,
+    "spread": 0.646814818588491,
+    "check": "0",
+    "copies": "1656"
+   },
+   "a_over_a_ratio": 1.0280208164654054,
+   "b_over_a_ratio": 0.9882594475741725,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "gxx.records.AP_XL_1": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "b": {
+    "repetitions_ns": [
+     63.85822099284769,
+     65.06007959049684,
+     65.24779227369812,
+     65.23001397380756,
+     79.57550298360451,
+     81.10960401740545,
+     75.208506055166,
+     59.348884442543785,
+     69.63904950435203,
+     79.91763404338514,
+     58.72643530350253,
+     79.7010633120729,
+     85.13081592836437,
+     60.278227017968895,
+     87.95805764931886,
+     60.22988121304796,
+     57.921712061271535,
+     60.31140955088437,
+     64.69920706396915,
+     63.950907028345505
+    ],
+    "median_ns": 65.1450467821522,
+    "spread": 0.5185679863239172,
+    "check": "0",
+    "copies": "1656"
+   }
+  },
+  "gxx.records.AP_XS_1": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "b": {
+    "repetitions_ns": [
+     52.21172450596947,
+     84.57798637872139,
+     56.32354562746355,
+     55.8940625844435,
+     50.40250516191104,
+     73.97430775959623,
+     65.63103432602497,
+     67.2471766823141,
+     49.442526727707744,
+     56.346094155944456,
+     50.08904231040485,
+     47.26707301121982,
+     48.80985131144596,
+     56.49433676836625,
+     46.75002552462777,
+     61.78794318435539,
+     46.39459186794813,
+     46.92667101443092,
+     52.89283441464992,
+     51.49998218269162
+    ],
+    "median_ns": 52.55227946030969,
+    "spread": 0.8230139111785655,
+    "check": "0",
+    "copies": "1656"
+   }
+  },
+  "gxx.twitter.AP_LM_4": {
+   "a": {
+    "repetitions_ns": [
+     322.8591666019747,
+     315.5287955987862,
+     351.9512563062699,
+     369.4573567837952,
+     414.5131990526831,
+     378.17866822153763,
+     331.7768767558667,
+     491.2817322679756,
+     343.5161438408045,
+     343.85459615565964,
+     399.8091234061493,
+     425.36336475663694,
+     312.74060272811755,
+     337.9396764983887,
+     431.51787653693333,
+     355.40179047191447,
+     338.36533064553095,
+     355.1932304983381,
+     394.3145031081254,
+     328.45050936716706
+    ],
+    "median_ns": 353.572243402304,
+    "spread": 0.5708920683224288,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     377.6965898695408,
+     317.7311248522717,
+     320.7978018997446,
+     321.94077499703076,
+     389.6694871951893,
+     342.881920811138,
+     305.8753675121755,
+     333.71717114677574,
+     562.6312186441005,
+     332.3529225215214,
+     446.21204683964606,
+     341.2632008423676,
+     392.8615248731984,
+     453.80098375001774,
+     411.6870637391499,
+     344.0137512935713,
+     341.8867700873049,
+     333.90415297222853,
+     335.78086695537826,
+     323.80823321473343
+    ],
+    "median_ns": 341.57498546483623,
+    "spread": 0.8394132983647489,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     297.6309709520106,
+     463.47000004090705,
+     373.16245273555876,
+     306.71966719716335,
+     532.1022426965491,
+     312.6005941144904,
+     305.3768500420038,
+     337.8000826154658,
+     323.6619854315023,
+     362.0344301363482,
+     328.10516518173023,
+     318.2899304393891,
+     339.14804072026857,
+     311.54146667660757,
+     296.7610533227358,
+     407.607284469287,
+     335.9304367148358,
+     309.4451552285907,
+     386.92461052136997,
+     338.1933062842395
+    ],
+    "median_ns": 332.017800948283,
+    "spread": 0.7930325989167901,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9660684395867098,
+   "b_over_a_ratio": 0.9390380810252241,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "gxx.twitter.AP_MK_4": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "b": {
+    "repetitions_ns": [
+     333.9044324537414,
+     342.0603762410111,
+     332.2860906135344,
+     319.1050889162133,
+     353.8718115311544,
+     339.87679726897153,
+     345.3029631888772,
+     338.01772991244536,
+     323.98636633746645,
+     387.0716215765808,
+     321.7515627604018,
+     362.1165753291124,
+     396.88738349834847,
+     328.3784896435249,
+     328.18428821307066,
+     326.8008584729508,
+     347.29437948785545,
+     333.6780079190459,
+     329.2871010930504,
+     357.35706322814525
+    ],
+    "median_ns": 335.96108118309337,
+    "spread": 0.24375134488236982,
+    "check": "1",
+    "copies": "1354"
+   }
+  },
+  "gxx.twitter.AP_NL_5": {
+   "a": {
+    "repetitions_ns": [
+     133755.58360646147,
+     143392.5933813463,
+     140540.4253086561,
+     125500.5831097198,
+     134351.12010141357,
+     136885.81412604413,
+     131006.68937338059,
+     136017.44469913378,
+     124470.10706332987,
+     166191.00143176783,
+     145861.5689562376,
+     154159.43269699125,
+     134937.9539104906,
+     126803.03025795471,
+     167931.87644057497,
+     127498.17090711913,
+     136427.77342650574,
+     127882.25771337718,
+     148611.23467843316,
+     139256.11439340748
+    ],
+    "median_ns": 136222.60906281974,
+    "spread": 0.3491743552139144,
+    "check": "13693999927316377726",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     147282.76387988814,
+     162685.95606730916,
+     136268.48603361324,
+     133972.9039604082,
+     172095.8022387868,
+     131646.06040578283,
+     146867.2483006552,
+     146374.46099641238,
+     126476.97574874912,
+     127701.32252169322,
+     161004.5768310425,
+     126094.00202207039,
+     129572.82091030476,
+     137236.84367703256,
+     142744.1711663054,
+     131681.22143218046,
+     129212.71871512698,
+     145522.93200689807,
+     137406.3296753298,
+     135849.66358177687
+    ],
+    "median_ns": 136752.66485532292,
+    "spread": 0.3648214782544903,
+    "check": "13693999927316377726",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     126827.95383255738,
+     134987.1895186322,
+     130105.15275134932,
+     142733.98528724624,
+     217173.11500015057,
+     165947.1840261561,
+     137201.95276632963,
+     126422.18127821335,
+     131527.85077525466,
+     131493.09299204207,
+     145489.81170109884,
+     137835.25049913584,
+     138834.45937325445,
+     135385.37932973725,
+     153635.14753067805,
+     136244.253460404,
+     164853.79343443256,
+     155894.3628961513,
+     135784.61702141716,
+     155501.82725445388
+    ],
+    "median_ns": 137518.60163273272,
+    "spread": 0.7178402777454416,
+    "check": "13693999927316377726",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 1.0038910999880992,
+   "b_over_a_ratio": 1.0095137846707614,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "gxx.twitter.AP_NX_5": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:670:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  670 |     return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:670:50: error: 'nodelist' is not a member of 'cbor'\n  670 |     return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));\n      |                                                  ^~~~~~~~"
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:670:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  670 |     return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:670:50: error: 'nodelist' is not a member of 'cbor'\n  670 |     return cbor::jsonpath::make_expression<cbor::nodelist>(std::string_view(AP_TEXT));\n      |                                                  ^~~~~~~~"
+   },
+   "b": {
+    "repetitions_ns": [
+     129119.51955312213,
+     151786.22095334445,
+     139414.31788085346,
+     127429.58204194794,
+     135261.49809708353,
+     130092.92719585552,
+     130500.23718812827,
+     129622.72972979533,
+     156873.3489113078,
+     123902.80514877691,
+     146630.9055003876,
+     138243.86455975805,
+     139921.96100715623,
+     135409.475311516,
+     150963.51634670098,
+     146754.60958238525,
+     155513.65657035934,
+     147812.96984693495,
+     131777.70969244812,
+     134470.2330003717
+    ],
+    "median_ns": 136826.66993563704,
+    "spread": 0.26610005901756106,
+    "check": "13693999927316377726",
+    "copies": "1354"
+   }
+  },
+  "gxx.twitter.AP_RL_4": {
+   "a": {
+    "repetitions_ns": [
+     966.6419047374358,
+     929.6325389955115,
+     1199.3953884452658,
+     847.3749833828875,
+     863.189291586027,
+     828.0361333922491,
+     809.1195964323365,
+     842.555742918049,
+     1506.8932186814816,
+     959.1555968043506,
+     908.1850226446812,
+     1425.076923464969,
+     953.1654392629886,
+     813.3618491750963,
+     803.8867248540171,
+     824.3289099858599,
+     1011.0526066217033,
+     1017.9216223218899,
+     811.1626966418756,
+     798.5429260588326
+    ],
+    "median_ns": 885.6871571153541,
+    "spread": 0.8870534939413657,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     949.938825089752,
+     826.5939709959796,
+     1203.7777735865368,
+     976.6790049163995,
+     935.9120587362105,
+     771.6947143502173,
+     770.8151064264603,
+     1034.1162986584711,
+     1244.0418652872988,
+     1157.8249411176007,
+     869.6491758611843,
+     876.1430187746806,
+     840.9071266947136,
+     1246.5052596069702,
+     1290.6336186516492,
+     1243.6434251184903,
+     853.9258577027318,
+     933.3323490691885,
+     869.1361094221991,
+     798.7168904844535
+    ],
+    "median_ns": 934.6222039026995,
+    "spread": 0.6743750970775535,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "b": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'uint64_t ap()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:703:30: error: no matching function for call to 'cbor::lazy::at_path(std::string_view) const'\n  703 |     auto const n = l->at_path(std::string_view(AP_TEXT));\n      |                    ~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~\n  \u2022 there are 5 candidates\nIn file included from /tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/cbor.hpp:15,\n                 from /w/bench/value.hpp:3,\n                 from /tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:18:\n    \u2022 candidate 1: 'template<fixed_string<...auto...> Path>  requires  is_valid_path_v<Path> std::expected<cbor::lazy, cbor::error> cbor::lazy::at_path() const'\n      /tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/lazy.hpp:96:32:\n         96 |     std::expected<lazy, error> at_path() const;\n            |                                ^~~~~~~\n      \u2022 candidate expects 0 arguments, 1 provided\n    \u2022 candidate 2: 'template<fixed_string<...auto...> Path, class T>  requires (is_singular_query_v<Path>) && ((integral<T>) && !(is_same_v<T, bool>) || (is_same_v<T, double>) || (is_same_v<T, bool>) || (is_same_v<T, std::nullptr_t>) || (is_same_v<T, cbor::simple_value>) || (is_same_v<T, _Float128>)) std::expected<_Vp, cbor::error> cbor::lazy::at_path() const'\n      /tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/lazy.hpp:106:29:\n        106 |     std::expected<T, error> at_path() const;\n            |                             ^~~~~~~\n      \u2022 candidate expects 0 arguments, 1 provided\n    \u2022 candidate 3: 'template<fixed_string<...auto...> Path, class T>  requires (is_singular_query_v<Path>) && ((is_same_v<T, std::basic_string_view<char, std::char_traits<char> > >) || (is_same_v<T, std::span<const std::byte, 18446744073709551615> >) || (is_same_v<T, cbor::typed_array>)) std::expected<cbor::owning_ref<T>, cbor::error> cbor::lazy::at_path() const'\n      /tmp/mbedded-cbor-desktop.JdqsX8/src/b/include/cbor/lazy."
+   }
+  },
+  "gxx.twitter.AP_SA_4": {
+   "a": {
+    "repetitions_ns": [
+     434.73916209703674,
+     380.4260693514308,
+     276.99091932680136,
+     357.6706845999919,
+     290.45099263937277,
+     333.29697619378226,
+     298.21570303097707,
+     356.0316009452393,
+     295.395567635931,
+     286.10694286912087,
+     320.51431448452234,
+     345.6875568395206,
+     357.27417916407154,
+     345.9301866683315,
+     378.39496866872463,
+     447.136970790364,
+     411.2981841186457,
+     506.6624658514115,
+     311.0476140330328,
+     342.4776478528783
+    ],
+    "median_ns": 345.80887175392604,
+    "spread": 0.8291663390366868,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     302.7914946075935,
+     370.1784266818465,
+     278.22533791460563,
+     308.00744769658303,
+     485.32786844727445,
+     455.26465854275966,
+     406.7093089387262,
+     317.18313169152253,
+     286.5494649569303,
+     302.3855042278832,
+     369.10276478957775,
+     367.2044390701186,
+     413.1578354647237,
+     390.27011847284837,
+     302.486974175629,
+     286.21129270533544,
+     306.4167110799764,
+     446.431184204348,
+     282.160020893009,
+     317.72460354235284
+    ],
+    "median_ns": 317.4538676169377,
+    "spread": 0.7443697690691053,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     341.00263873509243,
+     292.60813254481616,
+     295.01934592649656,
+     449.1257186888304,
+     427.1491029283349,
+     364.6770102164074,
+     344.41384314094773,
+     400.036803985968,
+     308.54798381286577,
+     421.5592411729435,
+     428.7760265918191,
+     300.08255371673806,
+     292.04449628898004,
+     379.72100826526673,
+     305.35194311951204,
+     297.82416471700566,
+     329.44039009998795,
+     413.99380897347015,
+     322.540703150589,
+     276.13928765679503
+    ],
+    "median_ns": 335.2215144175402,
+    "spread": 0.6264462854957271,
+    "check": "1186275104",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9180038268157404,
+   "b_over_a_ratio": 0.9693837891356365,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "gxx.twitter.AP_XL_4": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "b": {
+    "repetitions_ns": [
+     348.90839514622144,
+     318.60153458521376,
+     426.07596590451453,
+     304.31693076254584,
+     342.91518813827497,
+     352.49564822834645,
+     354.36297823951486,
+     340.3908109831055,
+     497.6985853248286,
+     305.2224158810664,
+     321.174347227001,
+     301.6881498532208,
+     403.3935106765839,
+     327.72984183824593,
+     367.3300729636848,
+     309.75845587465136,
+     297.69502090134176,
+     326.0865251595166,
+     301.2731853518907,
+     368.14018726062
+    ],
+    "median_ns": 334.0603264106757,
+    "spread": 0.6718404755911906,
+    "check": "1186275104",
+    "copies": "1354"
+   }
+  },
+  "gxx.twitter.AP_XS_4": {
+   "a": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "aa": {
+    "error": "/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp: In function 'auto ap_make()':\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:28: error: 'make_expression' is not a member of 'cbor::jsonpath'\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                            ^~~~~~~~~~~~~~~\n/tmp/mbedded-cbor-desktop.JdqsX8/runtime.cpp:664:51: error: expected primary-expression before '>' token\n  664 |     return cbor::jsonpath::make_expression<ap_type>(std::string_view(AP_TEXT));\n      |                                                   ^"
+   },
+   "b": {
+    "repetitions_ns": [
+     486.9941173559957,
+     311.7360266267566,
+     397.30141221882104,
+     318.1759706778558,
+     396.999069031506,
+     299.832839595359,
+     344.6512486751947,
+     313.22493860598894,
+     278.662037354946,
+     289.7210297069245,
+     306.7211222052612,
+     316.2608465308406,
+     299.7326845631355,
+     471.14805643291425,
+     286.5964607253287,
+     292.17922982079415,
+     286.9821108838559,
+     356.1918794516892,
+     345.89502398777574,
+     276.7550683698799
+    ],
+    "median_ns": 312.4804826163728,
+    "spread": 0.7596574480982361,
+    "check": "1186275104",
+    "copies": "1354"
+   }
+  }
+ }
+}
