@@ -84,7 +84,7 @@ static std::uint64_t op()
         std::abort();
     auto const &[protected_header, unprotected, payload, signature] = (*sign1)->content;
     auto const claims = cbor::structs<cwt_claims>::decode(
-        std::string_view(reinterpret_cast<char const *>(payload.data()), payload.size()));
+        doc, std::string_view(reinterpret_cast<char const *>(payload.data()), payload.size()));
     if (!claims) [[unlikely]]
         std::abort();
     return bytes_sum(protected_header) + bytes_sum(unprotected.kid.value_or(std::span<std::byte const>{})) +
