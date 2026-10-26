@@ -79,10 +79,9 @@ struct, outside every namespace. It gives the tag of the struct and one
 `cbor::member` for each member. The entry
 `cbor::member{key, &type::member}` gives the key. A key is a text or an
 integer. `CBOR_MEMBER(type, member)` takes the name as the key.
-`cbor::structs` takes no annotation: `[[=cbor::key("x")]]`,
-`[[=cbor::skip{}]]`, `[[=cbor::allow{}]]` and `[[=cbor::allowlist{}]]`
-on a type that it reads do not compile. They work with
-[cbor::schema](schema.md) only.
+[cbor::schema](schema.md) reads the same description. An annotation
+`[[=cbor::key("x")]]` or `[[=cbor::tag(n)]]` on a type that `structs`
+reads does not compile.
 
 ```cpp
 struct header {

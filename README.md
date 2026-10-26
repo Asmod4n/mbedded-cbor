@@ -5,13 +5,25 @@ to one value and skips the rest by its length, and writes C++ structs
 as Packed CBOR with every field at an offset that the compiler knows.
 
 ```cpp
-struct [[=cbor::tag(1703)]] point {
+struct point {
     float x;
     float y;
 };
 
-struct [[=cbor::tag(1704)]] track {
+struct track {
     std::vector<point> points;
+};
+
+template <>
+struct cbor::describe_members<point> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
+    static constexpr std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
+};
+
+template <>
+struct cbor::describe_members<track> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
+    static constexpr std::tuple members{CBOR_MEMBER(track, points)};
 };
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
@@ -30,7 +42,8 @@ and every other CBOR decoder can read it.
   the message.
 - **Reads only what you ask for.** A path reads the heads of the items on
   its way and skips the rest by their length.
-- **Fixed offsets.** `cbor::schema` lays out a struct at compile time. A
+- **Fixed offsets.** `cbor::schema` lays out a struct at compile time,
+  from the tag and the members that `cbor::describe_members` gives. A
   read of a field of fixed size is one jump.
 - **Raw arrays.** A list of numbers, and a list of structs whose fields
   all have a fixed width, is one block of little-endian bytes. The block
@@ -160,13 +173,25 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 ### Write structs, read one field
 
 ```cpp
-struct [[=cbor::tag(1703)]] point {
+struct point {
     float x;
     float y;
 };
 
-struct [[=cbor::tag(1704)]] track {
+struct track {
     std::vector<point> points;
+};
+
+template <>
+struct cbor::describe_members<point> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
+    static constexpr std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
+};
+
+template <>
+struct cbor::describe_members<track> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
+    static constexpr std::tuple members{CBOR_MEMBER(track, points)};
 };
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
