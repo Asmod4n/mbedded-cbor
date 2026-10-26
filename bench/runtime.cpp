@@ -414,6 +414,7 @@ static void fb_build(flexbuffers::Builder &f, bench::value const &x)
     default: std::abort();
     }
 }
+#if defined(ARM_FB_READ) || defined(ARM_FB_READ_V)
 static std::uint64_t fb_read(flexbuffers::Reference const r)
 {
     if (r.IsMap()) { auto const m = r.AsMap(); auto const k = m.Keys(); auto const v = m.Values(); std::uint64_t s = m.size(); for (std::size_t i = 0; i < m.size(); ++i) s += bytes_sum(k[i].AsKey()) + fb_read(v[i]); return s; }
@@ -426,6 +427,7 @@ static std::uint64_t fb_read(flexbuffers::Reference const r)
     if (r.IsBool()) return 20u + r.AsBool();
     return 22;
 }
+#endif
 #endif
 
 #if defined(ARM_TC_READ) || defined(ARM_TC_PATH)
