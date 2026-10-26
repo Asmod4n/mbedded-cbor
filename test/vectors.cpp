@@ -671,18 +671,22 @@ namespace
 {
 
 // A reader of a CBOR Sequence (RFC 8742) that gets the bytes one at a time gives the same items, and the same error,
-// as cbor::sequence over the whole buffer. Every cut of a well-formed item is a prefix that waits for more bytes, so
-// it gives too_little_data and no other error.
+// as cbor::sequence over the whole buffer, in each form of feed. Every cut of a well-formed item is a prefix that
+// waits for more bytes, so it gives too_little_data, or nesting_depth_exceeded where the item is nested deeper than
+// the limit and the prefix reaches that depth.
 void sequence_reader_check(std::string_view const wire)
 {
     test::sequence_outcome const whole = test::sequence_outcome_of(wire);
-    CHECK_EQ(test::reader_outcome_byte_by_byte(wire), whole);
-    if (whole.last != error::too_little_data)
+    for (test::feed_form const form : test::feed_forms) {
+        CAPTURE(static_cast<int>(form));
+        CHECK_EQ(test::reader_outcome_byte_by_byte(wire, form), whole);
+    }
+    if (whole.last != error::too_little_data && whole.last != error::nesting_depth_exceeded)
         return;
     for (std::size_t cut = 0; cut < wire.size(); ++cut) {
         test::sequence_outcome const prefix = test::reader_outcome_split_at(wire.substr(0, cut), 0);
         CHECK(prefix.items.empty());
-        CHECK_EQ(prefix.last, error::too_little_data);
+        CHECK((prefix.last == error::too_little_data || prefix.last == whole.last));
     }
 }
 
@@ -724,7 +728,7 @@ TEST_CASE("sequence_reader: cbor-wg vectors fed byte by byte")
 namespace
 {
 
-// A reader gives one outcome for an item at every split, and it is the outcome of cbor::sequence over the whole
+// A reader gives one outcome for an item at every split and in every form of feed, and it is the outcome of cbor::sequence over the whole
 // buffer. An array or a map that announces more items than bytes follow gives too_little_data before its elements in
 // both (owner, 2026-10-12).
 void sequence_reader_malformed_check(std::string_view const wire)
@@ -732,11 +736,14 @@ void sequence_reader_malformed_check(std::string_view const wire)
     test::sequence_outcome const whole = test::sequence_outcome_of(wire);
     test::sequence_outcome const read = test::reader_outcome_split_at(wire, 0);
     CHECK_EQ(read, whole);
-    for (std::size_t at = 1; at <= wire.size(); ++at) {
-        CAPTURE(at);
-        CHECK_EQ(test::reader_outcome_split_at(wire, at), read);
+    for (test::feed_form const form : test::feed_forms) {
+        CAPTURE(static_cast<int>(form));
+        for (std::size_t at = 1; at <= wire.size(); ++at) {
+            CAPTURE(at);
+            CHECK_EQ(test::reader_outcome_split_at(wire, at, form), read);
+        }
+        CHECK_EQ(test::reader_outcome_byte_by_byte(wire, form), read);
     }
-    CHECK_EQ(test::reader_outcome_byte_by_byte(wire), read);
 }
 
 } // namespace

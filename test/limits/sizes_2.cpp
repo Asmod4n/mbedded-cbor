@@ -1,5 +1,6 @@
 #include "../owned_copy.hpp"
 #include "../reference.hpp"
+#include "../sequence_reader.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -266,3 +267,24 @@ TEST_CASE("limits sizes 2: the string and container limits of packed")
 }
 
 #endif
+
+// Limits apply to the output only (owner, 2026-10-18): the reader skips over an item to find its end and gives
+// a string or a container above the limit as an item. A read of its value gives the error of the limit.
+TEST_CASE("limits sizes 2: sequence_reader gives an item above a size limit, and its read fails")
+{
+    for (test::feed_form const form : test::feed_forms) {
+        CAPTURE(static_cast<int>(form));
+        cbor::sequence_reader r;
+        test::piece_feed(r, "\x63"
+                            "ab"sv, form, 0);
+        test::piece_feed(r, "c\x83\x01\x02"sv, form, 1);
+        test::piece_feed(r, "\x03"sv, form, 2);
+        auto const text = r.next();
+        auto const array = r.next();
+        REQUIRE(text.has_value());
+        REQUIRE(array.has_value());
+        CHECK_EQ(text->get<std::string_view>().error(), error::string_length_exceeded);
+        CHECK_EQ(array->size().error(), error::container_elements_exceeded);
+        CHECK(r.empty());
+    }
+}

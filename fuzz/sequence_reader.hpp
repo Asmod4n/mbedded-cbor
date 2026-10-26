@@ -12,25 +12,29 @@
 namespace fuzz
 {
 
-// A sequence_reader gives one outcome for the same bytes, whatever the pieces they arrive in. The first byte
-// of the input seeds the lengths of the pieces; the rest is the CBOR Sequence. The outcome is compared with
-// cbor::sequence over the whole buffer, and it is the same, with one difference: the reader refuses an item
-// nested deeper than the limit, which cbor::sequence does not check. A decode of that item also fails, with
-// nesting_depth_exceeded or with an error that it finds first on its way down.
+// A sequence_reader gives one outcome for the same bytes, whatever the pieces they arrive in and whatever form of
+// feed brings them. The first byte of the input chooses the form and seeds the lengths of the pieces; the rest is
+// the CBOR Sequence. The outcome is compared with cbor::sequence over the whole buffer, and it is the same, with
+// one difference: the reader refuses an item as soon as it is nested deeper than the limit, so it can give
+// nesting_depth_exceeded where the rest of the item is cut or not well-formed. The reference never gives such an
+// item.
 inline void sequence_reader_target(std::string_view const input)
 {
     if (input.empty())
         return;
-    std::minstd_rand pieces(static_cast<std::uint8_t>(input.front()) + 1u);
+    auto const first = static_cast<std::uint8_t>(input.front());
+    test::feed_form const form = test::feed_forms[first % test::feed_forms.size()];
+    std::minstd_rand pieces(static_cast<std::uint_fast32_t>(first / test::feed_forms.size() + 1u));
     std::string_view const bytes = input.substr(1);
+    constexpr std::size_t piece_size_max = 16;
     std::vector<std::size_t> cuts;
     for (std::size_t at = 0;;) {
-        at += 1 + pieces() % 16;
+        at += 1 + pieces() % piece_size_max;
         if (at >= bytes.size())
             break;
         cuts.push_back(at);
     }
-    test::sequence_outcome const read = test::reader_outcome_of(bytes, cuts);
+    test::sequence_outcome const read = test::reader_outcome_of(bytes, cuts, form);
     require(read == test::reader_outcome_split_at(bytes, 0));
 
     test::sequence_outcome const whole = test::sequence_outcome_of(bytes);
@@ -39,10 +43,7 @@ inline void sequence_reader_target(std::string_view const input)
     for (std::size_t i = 0; i < n; ++i)
         require(read.items[i] == whole.items[i]);
     if (read.last == cbor::error::nesting_depth_exceeded) {
-        if (whole.items.size() > n) {
-            auto const deep = test::decoded(whole.items[n]);
-            require(!deep.has_value());
-        }
+        require(whole.items.size() == n);
         return;
     }
     require(whole == read);

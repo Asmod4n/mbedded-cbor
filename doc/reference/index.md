@@ -12,5 +12,5 @@ the call does, its errors, its cost, one example and links. The guides in
 | [structs](structs/index.md) | `cbor::structs<T>`: any CBOR into a C++ struct and back |
 | [schema](schema/index.md) | `cbor::schema<T>`: structs as Packed CBOR, fields at fixed offsets |
 | [ref](ref/index.md) | `cbor::ref<T>`, `cbor::owning<T>`: results that hold the bytes |
-| [tools](tools/index.md) | `item_size`, `sequence`, `diagnostic_notation` |
+| [tools](tools/index.md) | `item_size`, `sequence`, `sequence_reader`, `diagnostic_notation` |
 | [errors](errors/index.md) | `cbor::error`, `std::error_code`, the limits of a build |

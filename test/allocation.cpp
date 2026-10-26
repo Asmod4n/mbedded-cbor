@@ -293,3 +293,109 @@ TEST_CASE("decode: the block for the strings of a small message stays in proport
     REQUIRE(tree.has_value());
     CHECK_LT(after - before, cbor::validity::bump_chunk_size);
 }
+
+// A sequence_reader reads a stream without end, so a feed and a next() on the path that succeeds allocate
+// nothing once the buffer of the reader and its list of pieces have grown to the size that the stream needs.
+// Each piece ends inside an item, so every item is cut and goes through the copy of its tail.
+TEST_CASE("sequence_reader: feed and next() allocate nothing on the path that succeeds")
+{
+    constexpr std::size_t warm_up = 16;
+    constexpr std::size_t rounds = 200;
+    SUBCASE("copied pieces")
+    {
+        cbor::sequence_reader r;
+        std::size_t counted = 0;
+        for (std::size_t i = 0; i < warm_up + rounds; ++i) {
+            std::size_t const before = allocations;
+            r.feed("\x63"
+                   "a"sv);
+            r.feed("bc\x01"sv);
+            auto const string = r.next();
+            auto const one = r.next();
+            std::size_t const after = allocations;
+            REQUIRE(string.has_value());
+            REQUIRE(one.has_value());
+            if (i >= warm_up)
+                counted += after - before;
+        }
+        CHECK_EQ(counted, 0u);
+    }
+    SUBCASE("held pieces")
+    {
+        auto const head = std::make_shared<std::string const>("\x01\x63"
+                                                              "a"s);
+        auto const tail = std::make_shared<std::string const>("bc"s);
+        cbor::sequence_reader r;
+        std::size_t counted = 0;
+        for (std::size_t i = 0; i < warm_up + rounds; ++i) {
+            std::size_t const before = allocations;
+            r.feed(head);
+            r.feed(tail);
+            auto const one = r.next();
+            auto const string = r.next();
+            std::size_t const after = allocations;
+            REQUIRE(one.has_value());
+            REQUIRE(string.has_value());
+            if (i >= warm_up)
+                counted += after - before;
+        }
+        CHECK_EQ(counted, 0u);
+    }
+}
+
+// The rvalue form takes the std::string without a copy of its bytes: the reader allocates only the block that
+// holds the moved std::string and its count of owners.
+TEST_CASE("sequence_reader: an rvalue std::string is taken without a copy")
+{
+    constexpr std::size_t size = 1 << 16;
+    constexpr std::size_t share_of_size = 64;
+    std::string bytes(size, '\x01');
+    cbor::sequence_reader r;
+    std::size_t const before = allocated_bytes;
+    r.feed(std::move(bytes));
+    std::size_t const after = allocated_bytes;
+    CHECK_LT(after - before, size / share_of_size);
+    CHECK_EQ(r.next()->get<std::uint64_t>().value(), 1u);
+}
+
+// A count in the input reserves nothing (rule): the memory that the reader holds for an array that claims
+// 2^64 - 1 elements grows with the bytes that arrived, not with the count. A std::string that grows by
+// doubling takes less than twice its size over all its blocks, so eight times the bytes leaves room.
+TEST_CASE("sequence_reader: a claimed count of 2^64 - 1 reserves nothing")
+{
+    constexpr std::size_t pieces = 64;
+    constexpr std::size_t piece_size = 16;
+    constexpr std::size_t bytes_per_byte_read = 8;
+    std::string const zeros(piece_size, '\x00');
+    cbor::sequence_reader r;
+    std::size_t const before = allocated_bytes;
+    r.feed("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+    bool waited = r.next().error() == error::too_little_data;
+    for (std::size_t i = 0; i < pieces; ++i) {
+        r.feed(std::string_view(zeros));
+        waited = waited && r.next().error() == error::too_little_data;
+    }
+    std::size_t const after = allocated_bytes;
+    CHECK(waited);
+    CHECK_LT(after - before, bytes_per_byte_read * pieces * piece_size + piece_size);
+}
+
+// After an error the reader keeps no byte that a later feed gives, so a peer that sends after a malformed item
+// does not make the reader hold memory.
+TEST_CASE("sequence_reader: after an error feed keeps nothing")
+{
+    cbor::sequence_reader r;
+    r.feed("\x1c"sv);
+    REQUIRE_EQ(r.next().error(), error::syntax_error);
+    constexpr std::size_t size = 1 << 16;
+    std::string const big(size, '\x01');
+    auto const shared = std::make_shared<std::string const>(big);
+    std::size_t const before = allocations;
+    r.feed(std::string_view(big));
+    r.feed(big);
+    r.feed(shared);
+    std::size_t const after = allocations;
+    CHECK_EQ(after, before);
+    CHECK_EQ(shared.use_count(), 1);
+    CHECK(r.empty());
+}
