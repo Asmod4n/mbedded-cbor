@@ -3245,3 +3245,187 @@ TEST_CASE("description apart: the unverified forms stay inside the input")
 }
 
 #endif
+
+#ifdef __cpp_impl_reflection
+
+namespace
+{
+
+struct described_wheel {
+    std::uint16_t diameter;
+    float airPressure;
+    bool snowTires;
+};
+
+struct described_engine {
+    std::uint16_t horsepower;
+    std::uint32_t cc;
+};
+
+struct described_car {
+    std::uint8_t seats;
+    described_engine motor;
+    bool hasNavSystem;
+};
+
+struct described_renamed {
+    std::int8_t last;
+    std::int8_t first;
+};
+
+struct described_größe {
+    std::uint8_t höhe;
+    std::uint8_t b;
+};
+
+template <int K>
+struct described_filler {
+    std::int8_t v;
+};
+
+struct described_point {
+    float x;
+    float y;
+};
+
+struct described_fifteen_entries {
+    described_filler<0> d0;
+    described_filler<1> d1;
+    described_filler<2> d2;
+    described_filler<3> d3;
+    described_filler<4> d4;
+    described_filler<5> d5;
+    described_filler<6> d6;
+    described_filler<7> d7;
+    described_filler<8> d8;
+    described_filler<9> d9;
+    described_filler<10> e0;
+    described_filler<11> e1;
+    std::vector<described_point> p;
+};
+
+constexpr int chain_last = 19;
+
+template <int K>
+struct described_chain {
+    std::uint8_t v;
+    described_chain<K + 1> next;
+};
+
+template <>
+struct described_chain<chain_last> {
+    std::uint8_t v;
+    std::string text;
+    std::vector<std::string> words;
+};
+
+template <int K>
+described_chain<K> described_chain_of(std::uint8_t const v)
+{
+    if constexpr (K == chain_last)
+        return {v, "ab", {"x", "yz"}};
+    else
+        return {v, described_chain_of<K + 1>(static_cast<std::uint8_t>(v + 1))};
+}
+
+} // namespace
+
+template <>
+struct cbor::describe_members<described_wheel> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1500};
+    static constexpr std::tuple members{CBOR_MEMBER(described_wheel, diameter), CBOR_MEMBER(described_wheel, airPressure),
+                                        CBOR_MEMBER(described_wheel, snowTires)};
+};
+
+template <>
+struct cbor::describe_members<described_engine> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1501};
+    static constexpr std::tuple members{CBOR_MEMBER(described_engine, horsepower), CBOR_MEMBER(described_engine, cc)};
+};
+
+template <>
+struct cbor::describe_members<described_car> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1502};
+    static constexpr std::tuple members{CBOR_MEMBER(described_car, hasNavSystem), CBOR_MEMBER(described_car, motor),
+                                        CBOR_MEMBER(described_car, seats)};
+};
+
+template <>
+struct cbor::describe_members<described_renamed> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1621};
+    static constexpr std::tuple members{cbor::member{cbor::map_key("a"), &described_renamed::last},
+                                        CBOR_MEMBER(described_renamed, first)};
+};
+
+template <>
+struct cbor::describe_members<described_größe> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1506};
+    static constexpr std::tuple members{CBOR_MEMBER(described_größe, höhe), CBOR_MEMBER(described_größe, b)};
+};
+
+template <int K>
+struct cbor::describe_members<described_filler<K>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700 + K};
+    static constexpr std::tuple members{CBOR_MEMBER(described_filler<K>, v)};
+};
+
+template <>
+struct cbor::describe_members<described_point> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1630};
+    static constexpr std::tuple members{CBOR_MEMBER(described_point, x), CBOR_MEMBER(described_point, y)};
+};
+
+template <>
+struct cbor::describe_members<described_fifteen_entries> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1690};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(described_fifteen_entries, d0), CBOR_MEMBER(described_fifteen_entries, d1),
+        CBOR_MEMBER(described_fifteen_entries, d2), CBOR_MEMBER(described_fifteen_entries, d3),
+        CBOR_MEMBER(described_fifteen_entries, d4), CBOR_MEMBER(described_fifteen_entries, d5),
+        CBOR_MEMBER(described_fifteen_entries, d6), CBOR_MEMBER(described_fifteen_entries, d7),
+        CBOR_MEMBER(described_fifteen_entries, d8), CBOR_MEMBER(described_fifteen_entries, d9),
+        CBOR_MEMBER(described_fifteen_entries, e0), CBOR_MEMBER(described_fifteen_entries, e1),
+        CBOR_MEMBER(described_fifteen_entries, p)};
+};
+
+template <int K>
+struct cbor::describe_members<described_chain<K>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{static_cast<std::uint64_t>(1600 + K)};
+    static constexpr std::tuple members{CBOR_MEMBER(described_chain<K>, v), CBOR_MEMBER(described_chain<K>, next)};
+};
+
+template <>
+struct cbor::describe_members<described_chain<chain_last>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1600 + chain_last};
+    static constexpr std::tuple members{CBOR_MEMBER(described_chain<chain_last>, v),
+                                        CBOR_MEMBER(described_chain<chain_last>, text),
+                                        CBOR_MEMBER(described_chain<chain_last>, words)};
+};
+
+// The description replaces the annotations. Each pair of types has the same members, tags and keys, one pair
+// with annotations and one with cbor::describe_members, so the two must give the same bytes, sizes and offsets.
+TEST_CASE("schema: a described type gives the bytes of the annotated type")
+{
+    CHECK_EQ(schema_bytes(described_wheel{24, 2.5f, true}), schema_bytes(wheel{24, 2.5f, true}));
+    CHECK_EQ(cbor::schema<described_wheel>::fixed_size(), cbor::schema<wheel>::fixed_size());
+    CHECK_EQ(cbor::schema<described_wheel>::member_offset<^^described_wheel::snowTires>(),
+             cbor::schema<wheel>::member_offset<^^wheel::snowTires>());
+    std::string const car_bytes = schema_bytes(described_car{4, {120, 1600}, true});
+    CHECK_EQ(car_bytes, schema_bytes(car{4, {120, 1600}, true}));
+    CHECK(std::ranges::equal(cbor::schema<described_car>::description(), cbor::schema<car>::description()));
+    auto const car_back = cbor::schema<described_car>::decode(std::string(car_bytes));
+    REQUIRE(car_back.has_value());
+    CHECK_EQ((*car_back)->motor.cc, 1600u);
+    std::string const renamed_bytes = schema_bytes(described_renamed{7, 9});
+    CHECK_EQ(renamed_bytes, schema_bytes(renamed{7, 9}));
+    CHECK_EQ(at_path<described_renamed, "$.a">(renamed_bytes), 7);
+    CHECK_EQ(schema_bytes(described_größe{1, 2}), schema_bytes(größe{1, 2}));
+    described_fifteen_entries described_filled{};
+    described_filled.p = {{1.0f, 2.0f}};
+    fifteen_entries filled{};
+    filled.p = {{1.0f, 2.0f}};
+    CHECK_EQ(schema_bytes(described_filled), schema_bytes(filled));
+    CHECK_EQ(schema_bytes(described_chain_of<0>(1)), schema_bytes(chain_of<chain0>(1)));
+}
+
+#endif

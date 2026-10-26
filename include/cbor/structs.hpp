@@ -61,28 +61,7 @@ class pfr
     static consteval bool struct_readable()
     {
         if constexpr (has_describe_members<U>) {
-            static_assert(reflection::tag_declared<U>(),
-                          "cbor::describe_members<T>::tag is a std::optional<cbor::tag>.");
-            if constexpr (reflection::tag_declared<U>()) {
-                static_assert(!describe_members<U>::tag.has_value() ||
-                                  !reflection::tag_taken_by_standard_type(describe_members<U>::tag->number),
-                              "cbor::describe_members takes a tag that no standard type has.");
-                static_assert(!describe_members<U>::tag.has_value() ||
-                                  !reflection::tag_invalid(describe_members<U>::tag->number),
-                              "cbor::describe_members takes a tag that the IANA registry calls always invalid.");
-            }
-            static_assert(reflection::members_of_class<U>(),
-                          "cbor::describe_members lists a member of another class.");
-            if constexpr (reflection::members_of_class<U>()) {
-                static_assert(reflection::pointers_unique<U>(), "cbor::describe_members lists a member twice.");
-                static_assert(reflection::reflected_members_listed<U>(),
-                              "cbor::describe_members lists other members than reflection reads with unprivileged().");
-            }
-            static_assert(reflection::keys_unique(describe_members<U>::members),
-                          "cbor::describe_members gives two members the same key.");
-            static_assert(reflection::annotations_absent<U>(),
-                          "a type with cbor::describe_members takes its members, keys and tag from the description only.");
-            return true;
+            return reflection::description_valid<U>();
 #ifdef __cpp_impl_reflection
         } else if constexpr (std::is_aggregate_v<U>) {
             static_assert(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty(),
@@ -146,20 +125,11 @@ class pfr
             return std::get<I>(describe_members<U>::members).key;
 #ifdef __cpp_impl_reflection
         else
-            return map_key(reflection::key_of(reflection::members_of<U>()[I]));
+            return map_key(reflection::key_of<U>(reflection::members_of<U>()[I]));
 #elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
         else
             return map_key(boost::pfr::get_name<I, U>());
 #endif
-    }
-
-    template <class U>
-    static consteval std::optional<std::uint64_t> tag_of()
-    {
-        if constexpr (has_describe_members<U> && reflection::tag_declared<U>())
-            if (describe_members<U>::tag.has_value())
-                return describe_members<U>::tag->number;
-        return std::nullopt;
     }
 
     template <class E, class Alloc>
@@ -433,8 +403,8 @@ class generic
             return h.major == major_type::map;
         else if constexpr (requires(U const &c) { typename U::value_type; c.size(); })
             return h.major == major_type::array;
-        else if constexpr (pfr::tag_of<U>().has_value())
-            return h.major == major_type::tag && h.argument == *pfr::tag_of<U>();
+        else if constexpr (reflection::tag_number_of<U>().has_value())
+            return h.major == major_type::tag && h.argument == *reflection::tag_number_of<U>();
         else
             return h.major == major_type::map;
     }
@@ -891,7 +861,7 @@ class generic
     {
         static_assert(pfr::struct_readable<U>());
         constexpr std::size_t count = pfr::tuple_size_v<U>;
-        if constexpr (constexpr std::optional<std::uint64_t> tag = pfr::tag_of<U>(); tag.has_value()) {
+        if constexpr (constexpr std::optional<std::uint64_t> tag = reflection::tag_number_of<U>(); tag.has_value()) {
             auto const t = d.head_decode();
             if (!t) [[unlikely]]
                 return std::unexpected(t.error());
@@ -1140,7 +1110,7 @@ class generic
             if (!size) [[unlikely]]
                 return size;
             std::size_t head = heads::head_size(present);
-            if constexpr (constexpr std::optional<std::uint64_t> tag = pfr::tag_of<U>(); tag.has_value())
+            if constexpr (constexpr std::optional<std::uint64_t> tag = reflection::tag_number_of<U>(); tag.has_value())
                 head += heads::head_size(*tag);
             return validity::checked_add(*size, head);
         }
@@ -1285,7 +1255,7 @@ class generic
             return elements_write(out, at, value);
         } else {
             static_assert(pfr::struct_readable<U>());
-            if constexpr (constexpr std::optional<std::uint64_t> tag = pfr::tag_of<U>(); tag.has_value())
+            if constexpr (constexpr std::optional<std::uint64_t> tag = reflection::tag_number_of<U>(); tag.has_value())
                 at += heads::head_write(out, at, major_type::tag, *tag);
             std::size_t const present = [&]<std::size_t... I>(std::index_sequence<I...>) {
                 return (std::size_t{0} + ... +
