@@ -30,18 +30,18 @@ struct sequence_outcome {
 // The nesting depth of a well-formed item, counted as RFC 8949 nests it: an array or a map with an element
 // and a tag each add one level. The reader refuses an item deeper than cbor::limits::nesting_depth, and
 // cbor::sequence does not, so the reference computes the depth on its own.
-inline std::size_t nesting_depth_of(std::string_view &bytes)
+inline std::size_t nesting_depth_read(std::string_view &bytes)
 {
     constexpr unsigned additional_information_bits = 5;
     constexpr unsigned additional_information_mask = (1u << additional_information_bits) - 1;
     constexpr unsigned one_byte_argument = 24;
     constexpr unsigned eight_byte_argument = 27;
     constexpr unsigned bits_per_byte = 8;
-    constexpr unsigned byte_string = 2;
-    constexpr unsigned text_string = 3;
-    constexpr unsigned array = 4;
-    constexpr unsigned map = 5;
-    constexpr unsigned tag = 6;
+    constexpr unsigned major_byte_string = 2;
+    constexpr unsigned major_text_string = 3;
+    constexpr unsigned major_array = 4;
+    constexpr unsigned major_map = 5;
+    constexpr unsigned major_tag = 6;
     constexpr std::uint64_t data_items_per_pair = 2;
     auto const initial = static_cast<std::uint8_t>(bytes.front());
     unsigned const major = initial >> additional_information_bits;
@@ -55,24 +55,24 @@ inline std::size_t nesting_depth_of(std::string_view &bytes)
             argument = argument << bits_per_byte | static_cast<std::uint8_t>(bytes[i]);
         bytes.remove_prefix(width);
     }
-    if (major == byte_string || major == text_string) {
+    if (major == major_byte_string || major == major_text_string) {
         bytes.remove_prefix(static_cast<std::size_t>(argument));
         return 0;
     }
-    std::uint64_t const children = major == array ? argument
-                                   : major == map ? data_items_per_pair * argument
-                                   : major == tag ? 1
+    std::uint64_t const children = major == major_array ? argument
+                                   : major == major_map ? data_items_per_pair * argument
+                                   : major == major_tag ? 1
                                                   : 0;
     std::size_t deepest = 0;
     for (std::uint64_t i = 0; i < children; ++i)
-        deepest = std::max(deepest, nesting_depth_of(bytes));
+        deepest = std::max(deepest, nesting_depth_read(bytes));
     return children == 0 ? 0 : deepest + 1;
 }
 
 inline std::size_t nesting_depth_of(std::string_view const item)
 {
     std::string_view rest = item;
-    return nesting_depth_of(rest);
+    return nesting_depth_read(rest);
 }
 
 // The same items from cbor::sequence over the whole buffer. An item goes through lazy::view, as the items of
