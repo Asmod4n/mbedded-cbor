@@ -53,6 +53,10 @@ struct cbor::describe_members<cwt_claims> {
     };
 };
 
+static std::shared_ptr<std::string const> doc;
+static std::string msg;
+
+#if defined(OP_READ)
 static std::uint64_t bytes_sum(std::span<std::byte const> const s)
 {
     return std::transform_reduce(s.begin(), s.end(), std::uint64_t{0}, std::plus<>{},
@@ -64,15 +68,13 @@ static std::uint64_t bytes_sum(std::string_view const s)
     return bytes_sum(std::as_bytes(std::span(s)));
 }
 
-static std::shared_ptr<std::string const> doc;
-static std::string msg;
-
 static std::uint64_t claims_read(cwt_claims const &c)
 {
     return bytes_sum(c.iss.value_or("")) + bytes_sum(c.sub.value_or("")) + bytes_sum(c.aud.value_or("")) +
            c.exp.value_or(0) + c.nbf.value_or(0) + c.iat.value_or(0) +
            bytes_sum(c.cti.value_or(std::span<std::byte const>{}));
 }
+#endif
 
 static std::uint64_t op()
 {
@@ -82,7 +84,7 @@ static std::uint64_t op()
         std::abort();
     auto const &[protected_header, unprotected, payload, signature] = (*sign1)->content;
     auto const claims = cbor::structs<cwt_claims>::decode(
-        std::string_view(reinterpret_cast<char const *>(payload.data()), payload.size()));
+        doc, std::string_view(reinterpret_cast<char const *>(payload.data()), payload.size()));
     if (!claims) [[unlikely]]
         std::abort();
     return bytes_sum(protected_header) + bytes_sum(unprotected.kid.value_or(std::span<std::byte const>{})) +
