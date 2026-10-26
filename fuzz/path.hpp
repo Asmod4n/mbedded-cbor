@@ -1,8 +1,11 @@
 #pragma once
 
 #include "common.hpp"
+#include "../test/owned_copy.hpp"
 
 #include <bit>
+#include <cmath>
+#include <limits>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -59,6 +62,25 @@ struct segment {
 };
 
 // A name selector in single quotes, with the escapes of RFC 9535 2.3.1.1 where a character needs one.
+inline double binary16_decode(std::uint16_t const half)
+{
+    constexpr unsigned exponent_bits = 0x1f;
+    constexpr unsigned mantissa_bits = 0x3ff;
+    constexpr unsigned sign_bit = 0x8000;
+    constexpr int subnormal_scale = -24;
+    constexpr int normal_bias = 25;
+    constexpr unsigned implicit_one = 1024;
+    constexpr unsigned exponent_shift = 10;
+    unsigned const exponent = (half >> exponent_shift) & exponent_bits;
+    unsigned const mantissa = half & mantissa_bits;
+    double const magnitude = exponent == 0 ? std::ldexp(mantissa, subnormal_scale)
+                             : exponent != exponent_bits
+                                 ? std::ldexp(mantissa + implicit_one, static_cast<int>(exponent) - normal_bias)
+                             : mantissa == 0 ? std::numeric_limits<double>::infinity()
+                                             : std::numeric_limits<double>::quiet_NaN();
+    return half & sign_bit ? -magnitude : magnitude;
+}
+
 inline std::string quoted(std::string_view const key)
 {
     std::string text = "'";
@@ -94,7 +116,7 @@ inline query query_from(source &in, std::vector<std::string> const &keys)
         case 0:
         case 1: {
             std::string key = keys.empty() || in.byte() % 4 == 0 ? in.text() : keys.at(in.byte() % keys.size());
-            q.text += identifier_p(key) && in.byte() & 1 ? "." + key : "[" + quoted(key) + "]";
+            q.text += identifier_p(key) && in.byte() & 1 ? "." + key : "[" + fuzz::quoted(key) + "]";
             q.segments.push_back({segment::kind::key, key, 0});
             break;
         }
@@ -135,11 +157,50 @@ inline query query_from(source &in, std::vector<std::string> const &keys)
 // whole embedded data item does not decode, the reference cannot say what lazy finds.
 struct undecided {};
 
+// The numbers of an RFC 8746 typed array (2.1) as values of the model: the tag names the class, the length and the byte
+// order of each element. A byte string whose length is no multiple of the element length has no elements. The model
+// holds no binary128, so a query that reaches one is undecided.
+inline std::optional<std::vector<test::value>> typed_array_elements(std::uint64_t const tag, std::string_view const bytes)
+{
+    constexpr std::uint64_t f = 0x10;
+    constexpr std::uint64_t s = 0x08;
+    constexpr std::uint64_t e = 0x04;
+    constexpr std::uint64_t ll = 0x03;
+    constexpr std::size_t bits_per_byte = 8;
+    bool const floating = (tag & f) != 0;
+    bool const signed_integer = (tag & s) != 0;
+    bool const little_endian = (tag & e) != 0;
+    std::size_t const length = std::size_t{1} << ((tag & ll) + (floating ? 1 : 0));
+    if (bytes.size() % length != 0)
+        return std::nullopt;
+    if (length > sizeof(std::uint64_t))
+        throw undecided{};
+    std::vector<test::value> elements;
+    for (std::size_t at = 0; at < bytes.size(); at += length) {
+        std::uint64_t bits = 0;
+        for (std::size_t i = 0; i < length; ++i)
+            bits = bits << bits_per_byte | static_cast<unsigned char>(bytes[at + (little_endian ? length - 1 - i : i)]);
+        if (floating && length == 2)
+            elements.push_back(test::value{binary16_decode(static_cast<std::uint16_t>(bits))});
+        else if (floating && length == 4)
+            elements.push_back(test::value{static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(bits)))});
+        else if (floating)
+            elements.push_back(test::value{std::bit_cast<double>(bits)});
+        else if (signed_integer && bits >> (length * bits_per_byte - 1) != 0)
+            elements.push_back(test::value{test::negative{(~bits) & (~std::uint64_t{0} >> (sizeof(std::uint64_t) * bits_per_byte - length * bits_per_byte))}});
+        else
+            elements.push_back(test::value{bits});
+    }
+    return elements;
+}
+
 // The reference: RFC 9535 2.1.2 over the eager value. Each segment maps the nodelist to the children it selects.
 // A name selects a value under an equal text key; an index counts from the end when negative and selects a
 // value under an equal integer key of a map; a wildcard selects every element or every value. Without a
-// wildcard a missing child is an error; with one it adds no node. Tag 24 is a top-level item of its own when a
-// segment goes into it. A nodelist longer than the message is an error.
+// wildcard a missing child is an error; with one it adds no node. A segment passes every tag that the path does
+// not interpret, tags 28 and 29 included (RFC 8949 6.1). Tag 24 is a top-level item of its own when a
+// segment goes into it. A typed array of RFC 8746 is the array of its numbers when a segment goes into it, and its
+// content must be a byte string (RFC 8746 2, RFC 8949 5.3.2). A nodelist longer than the message is an error.
 inline std::optional<test::value> walked(test::value const &start, std::vector<segment> const &segments,
                                          std::size_t const limit)
 {
@@ -150,6 +211,12 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
     for (auto const &s : segments) {
         std::vector<test::value> next;
         for (test::value v : nodes) {
+            while (auto const *t = test::get_if<test::tagged>(v)) {
+                if (t->tag == 2 || t->tag == 3 || t->tag == 24 || (t->tag >= 64 && t->tag <= 87))
+                    break;
+                test::value const content = t->content;
+                v = content;
+            }
             if (auto const *t = test::get_if<test::tagged>(v); t && t->tag == 24) {
                 auto const *b = test::get_if<test::bytes>(t->content);
                 if (!b)
@@ -158,6 +225,15 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
                 if (!inner)
                     throw undecided{};
                 v = *inner;
+            }
+            if (auto const *t = test::get_if<test::tagged>(v); t && t->tag >= 64 && t->tag <= 87 && t->tag != 76) {
+                auto const *b = test::get_if<test::bytes>(t->content);
+                if (!b)
+                    return std::nullopt;
+                auto const elements = typed_array_elements(t->tag, b->b);
+                if (!elements)
+                    return std::nullopt;
+                v = test::value{test::array(elements->begin(), elements->end())};
             }
             std::size_t const before = next.size();
             if (s.kind == segment::kind::wildcard) {
@@ -174,6 +250,12 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
             }
             if (auto const *m = test::get_if<test::map>(v)) {
                 for (auto const &[k, x] : *m) {
+                    // An eager tree keeps a tag 2 or 3 over content that is not a byte string as a tag; a lookup by
+                    // number reads such a key as a bignum and gives inadmissible_type_for_tag_content.
+                    if (auto const *g = std::get_if<test::tagged *>(&k.kind);
+                        g && s.kind == segment::kind::index && ((*g)->tag == 2 || (*g)->tag == 3) &&
+                        !test::get_if<test::bytes>((*g)->content))
+                        return std::nullopt;
                     bool const t = (std::holds_alternative<test::short_text>(k.kind) || std::holds_alternative<std::string *>(k.kind));
                     auto const *u = std::get_if<std::uint64_t>(&k.kind);
                     auto const *n = std::get_if<test::negative>(&k.kind);
@@ -233,11 +315,11 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     auto const typed = [&owner] {
         if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                       std::is_same_v<T, cbor::typed_array>)
-            return cbor::at_path<Path, T>(owner, *owner);
+            return cbor::at_path<Path, T>(owner);
         else
             return cbor::at_path<Path, T>(std::string_view(*owner));
     }();
-    auto const root = cbor::lazy::from(std::string(document));
+    auto const root = test::lazy_of_copy(std::string(document));
     require(root.has_value());
     std::expected<cbor::lazy, cbor::error> node = *root;
     for (step const &s : steps)
@@ -286,7 +368,7 @@ inline void path_target(std::string_view const input)
     typed_reads_check<"$[1][0]">(whole, {std::int64_t{1}, std::int64_t{0}});
     typed_reads_check<"$['a'][-1]['b']">(whole, {"a", std::int64_t{-1}, "b"});
 
-    if (auto const any = cbor::lazy::from(std::string(1, '\0'))) {
+    if (auto const any = test::lazy_of_copy(std::string(1, '\0'))) {
         (void)test::at_path(input, *any);
         (void)test::query(input, *any);
     }
@@ -303,10 +385,10 @@ inline void path_target(std::string_view const input)
     text_keys(*eager, keys, 0);
     source pin{path_bytes};
     query const q = query_from(pin, keys);
-    auto const root = cbor::lazy::from(std::string{document});
+    auto const root = test::lazy_of_copy(std::string{document});
     require(root.has_value());
     auto found = test::at_path(q.text, *root);
-    if (!found && found.error() == cbor::error::invalid_path)
+    if (!found && found.error() == cbor::error::not_singular_query)
         found = test::query(q.text, *root);
     if (!q.valid)
         return;

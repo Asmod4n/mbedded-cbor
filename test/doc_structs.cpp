@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 using namespace std::string_literals;
@@ -39,15 +40,15 @@ struct person {
 };
 
 // The section "Write a struct and read it back" shows this round trip whole, with the check of each result, because
-// a new user meets two std::expected values and an owning_ref in it.
+// a new user meets two std::expected values and a ref in it.
 std::expected<std::string, cbor::error> round_trip()
 {
-    auto const bytes = cbor::structs<person>::encode(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});
+    auto bytes = cbor::structs<person>::encode(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});
     if (!bytes)
         return std::unexpected(bytes.error());
     auto const text = cbor::diagnostic_notation(*bytes);
 
-    auto const back = cbor::structs<person>::decode(*bytes);
+    auto const back = cbor::structs<person>::decode(std::move(*bytes));
     if (!back)
         return std::unexpected(back.error());
     person const &p = **back;
@@ -57,8 +58,7 @@ std::expected<std::string, cbor::error> round_trip()
 enum class color : std::uint8_t { red, green };
 
 struct header {
-    [[=cbor::key("content-type")]] std::string content_type;
-    [[=cbor::skip{}]] std::string cache;
+    std::string content_type;
 };
 
 struct kinds {
@@ -72,6 +72,19 @@ struct kinds {
     std::unordered_map<std::string, int> m;
     color c;
 };
+
+} // namespace doc_structs
+
+template <>
+struct cbor::describe_members<doc_structs::header> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060};
+    static constexpr std::tuple members{
+        cbor::member{"content-type", &doc_structs::header::content_type},
+    };
+};
+
+namespace doc_structs
+{
 
 // The section "Write a struct and read it back" gives the text of the bytes and a member of the struct that decode
 // gives back.
@@ -88,24 +101,27 @@ TEST_CASE("doc structs: types")
     auto const bytes = cbor::structs<kinds>::encode(k);
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes),
-             R"({"b": true, "c": 1, "d": 2.5, "f": 1.5, "l": [1, 2], "m": {"a": 1}, "s": [3], "u": 7, "raw": h'01'})");
-    auto const back = cbor::structs<kinds>::decode(*bytes);
+             R"({"b": true, "c": 1, "d": 2.5, "f": 1.5, "l": [1, 2], "m": {"a": 1}, "s": 258([3]), "u": 7, "raw": 64(h'01')})");
+    auto const back = cbor::structs<kinds>::decode(std::string(*bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->c, color::green);
     CHECK_EQ((*back)->m.at("a"), 1);
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::optional<int>>::encode(std::nullopt)), "null");
 }
 
-// The section "Keys" shows the two annotations, and that an empty optional member has no key.
+// The section "Keys" shows a key that a description gives, the tag that the description writes, and that an
+// empty optional member has no key.
 TEST_CASE("doc structs: keys")
 {
-    auto const bytes = cbor::structs<header>::encode(header{"text/plain", "x"});
+    auto const bytes = cbor::structs<header>::encode(header{"text/plain"});
     REQUIRE(bytes.has_value());
-    CHECK_EQ(cbor::diagnostic_notation(*bytes), R"({"content-type": "text/plain"})");
+    CHECK_EQ(cbor::diagnostic_notation(*bytes), R"(160060({"content-type": "text/plain"}))");
+    CHECK_EQ(cbor::structs<header>::decode(preferred(M("content-type"s, "text/plain"s))).error(),
+             error::incorrect_type);
     auto const none = cbor::structs<person>::encode(person{"bob", 40, {}, std::nullopt});
     REQUIRE(none.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*none), R"({"age": 40, "name": "bob", "tags": []})");
-    auto const back = cbor::structs<person>::decode(*none);
+    auto const back = cbor::structs<person>::decode(std::string(*none));
     REQUIRE(back.has_value());
     CHECK_FALSE((*back)->home.has_value());
 }
@@ -123,9 +139,19 @@ TEST_CASE("doc structs: input from other programs")
     CHECK_EQ(cbor::structs<int>::decode(preferred(V("a"s))).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::uint8_t>::decode(preferred(V(256))).error(), error::number_out_of_range);
     CHECK_EQ((cbor::structs<std::array<int, 2>>::decode(preferred(A(1))).error()), error::incorrect_type);
-    CHECK_EQ(cbor::structs<int>::decode(preferred(V(1)) + preferred(V(2))).error(), error::syntax_error);
+    auto const first = cbor::structs<int>::decode(preferred(V(1)) + preferred(V(2)));
+    REQUIRE(first.has_value());
+    CHECK_EQ(**first, 1);
     std::string const cut = preferred(V("abc"s));
     CHECK_EQ(cbor::structs<std::string>::decode(cut.substr(0, cut.size() - 1)).error(), error::too_little_data);
+}
+
+// A user expected that a std::vector of a number type reads a plain array. The section "Types" and the table of the
+// section "Input from other programs" state that it reads only its typed array.
+TEST_CASE("doc structs: a vector of numbers reads only a typed array")
+{
+    CHECK_EQ(cbor::structs<std::vector<int>>::decode(preferred(A(1, 2))).error(), error::incorrect_type);
+    CHECK_EQ((cbor::structs<std::array<std::uint16_t, 2>>::decode(preferred(A(1, 2))).error()), error::incorrect_type);
 }
 
 } // namespace doc_structs

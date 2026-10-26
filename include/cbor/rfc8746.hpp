@@ -18,6 +18,7 @@ class rfc8746
         typed_array_first = 64,
         typed_array_reserved = 76,
         float128_big_endian = 83,
+        float128_little_endian = 87,
         typed_array_last = 87
     };
 
@@ -27,9 +28,9 @@ class rfc8746
 
     friend class heads;
 
-#ifdef __cpp_impl_reflection
     friend class reflection;
-#endif
+
+    friend struct lazy;
 };
 
 }

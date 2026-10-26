@@ -1,0 +1,386 @@
+{
+ "what": "bench/compare.cpp of f688794 with probe arms, built outside the tree against a copy of include/ of f688794. A suffix is a macro of the copy: +NOOWNER removes the moved-from check and the owner copy from accessor::at_path; +OWNEREQ makes validity::throw_logic_error_if_empty test owner.owner_equal(std::shared_ptr<void const>()) in place of use_count() == 0; +OWNERBEFORE makes it test !owner.owner_before(e) && !e.owner_before(owner) with e an empty std::shared_ptr<void const>. Arms on carsales and records: MB_FIELD, MB_FIELD_UNVERIFIED (+_AA, A/A), MB_READ, MB_READ_UNVERIFIED, each with the suffixes, FB_FIELD and FB_READ (FlatBuffers without its Verifier). One binary per arm and data set, 5 rounds, shuffled order, 1 s min_time.",
+ "context": {
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+  "resolved_march": "-march= sapphirerapids",
+  "compilers": {
+   "g++-16": "g++-16 (SUSE Linux) 16.2.1 20260929"
+  },
+  "cxx_library": "libstdc++.so.6 => /lib64/libstdc++.so.6 / libstdc++6-16.2.1+git9713-1.1.x86_64",
+  "libc": "glibc-2.44-3.1.x86_64 / libc.so.6 => /lib64/libc.so.6",
+  "kernel": "Linux 6.18.44-fc-v139 #1 SMP PREEMPT_DYNAMIC @0 x86_64",
+  "scheduler": "EEVDF (Linux >= 6.6)",
+  "virtualization": "hypervisor",
+  "container": "podman, image localhost/mbedded-cbor-tw-compare",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256": "cd57f3c12a72aed9439fc958e0460f5edfd05a9692f15e599584c01ff294ee3d",
+  "user": "uid=1000(ubuntu) gid=0(root) groups=0(root)",
+  "priority": "nice -10",
+  "threads": 1,
+  "pinned": false,
+  "start": "2026-10-20T06:33:25Z",
+  "end": "2026-10-20T06:37:52Z"
+ },
+ "results": {
+  "cars.FB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    2.664037414255633,
+    2.7471212148317132,
+    2.656949187798464,
+    2.8656159183684933,
+    2.6261191932259873
+   ],
+   "median": 2.664037414255633,
+   "spread": 0.0911979645707941
+  },
+  "cars.FB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    25480.43667246695,
+    24178.02221401796,
+    24417.930676402586,
+    26548.24585479892,
+    24843.537823219624
+   ],
+   "median": 24843.537823219624,
+   "spread": 0.09803215580663771
+  },
+  "cars.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    34.97449720778773,
+    34.018453144705546,
+    31.866382749512656,
+    30.653352732573737,
+    32.97607712404168
+   ],
+   "median": 32.97607712404168,
+   "spread": 0.14096808635951041
+  },
+  "cars.MB_FIELD+OWNERBEFORE": {
+   "unit": "ns",
+   "repetitions": [
+    31.5148460925522,
+    32.8953429687283,
+    33.11008195438283,
+    32.61264476760939,
+    30.800310845261325
+   ],
+   "median": 32.61264476760939,
+   "spread": 0.0749918116322148
+  },
+  "cars.MB_FIELD+OWNEREQ": {
+   "unit": "ns",
+   "repetitions": [
+    35.75952226717242,
+    31.87638582930306,
+    31.776306637483803,
+    35.57655311397116,
+    34.62481850013414
+   ],
+   "median": 34.62481850013414,
+   "spread": 0.12535174950099326
+  },
+  "cars.MB_FIELD_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    24.5253793540077,
+    24.221354997018437,
+    25.66927669604657,
+    24.405002879708807,
+    26.330778087332586
+   ],
+   "median": 24.5253793540077,
+   "spread": 0.08708939242143199
+  },
+  "cars.MB_FIELD_UNVERIFIED+NOOWNER": {
+   "unit": "ns",
+   "repetitions": [
+    6.7559223510371815,
+    6.348329210904156,
+    6.613497834933586,
+    6.172484788949319,
+    6.34660964576144
+   ],
+   "median": 6.348329210904156,
+   "spread": 0.09452231670662004
+  },
+  "cars.MB_FIELD_UNVERIFIED+OWNERBEFORE": {
+   "unit": "ns",
+   "repetitions": [
+    6.653738474136589,
+    7.380902245172241,
+    6.6224263894167095,
+    7.750338024786489,
+    6.80358814123881
+   ],
+   "median": 6.80358814123881,
+   "spread": 0.17031697584019856
+  },
+  "cars.MB_FIELD_UNVERIFIED+OWNEREQ": {
+   "unit": "ns",
+   "repetitions": [
+    6.336900577789617,
+    6.60646962113614,
+    7.190632804814607,
+    7.089901859440954,
+    6.92243314903799
+   ],
+   "median": 6.92243314903799,
+   "spread": 0.13472394217723105
+  },
+  "cars.MB_FIELD_UNVERIFIED_AA": {
+   "unit": "ns",
+   "repetitions": [
+    25.0169974509481,
+    24.54363815840753,
+    25.020794603533012,
+    24.161330842612774,
+    25.227769225647265
+   ],
+   "median": 25.0169974509481,
+   "spread": 0.0441382302151021
+  },
+  "cars.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    64507.473271757684,
+    59579.34880673693,
+    62157.2497856886,
+    75355.3320526028,
+    61883.110000002416
+   ],
+   "median": 62157.2497856886,
+   "spread": 0.26478945409490606
+  },
+  "cars.MB_READ+OWNERBEFORE": {
+   "unit": "ns",
+   "repetitions": [
+    57758.371757265595,
+    54316.186887806136,
+    63434.991877146866,
+    56931.794650850126,
+    60748.3913502876
+   ],
+   "median": 57758.371757265595,
+   "spread": 0.1678837472184167
+  },
+  "cars.MB_READ_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    52691.40136304262,
+    51979.44561564352,
+    50846.36678721423,
+    47599.107358338784,
+    60422.01791466731
+   ],
+   "median": 51979.44561564352,
+   "spread": 0.26939392917170135
+  },
+  "cars.MB_READ_UNVERIFIED+NOOWNER": {
+   "unit": "ns",
+   "repetitions": [
+    31994.186881581547,
+    28383.211602562587,
+    27074.5020798467,
+    28931.06259083131,
+    29338.251036296864
+   ],
+   "median": 28931.06259083131,
+   "spread": 0.18170915155617529
+  },
+  "cars.MB_READ_UNVERIFIED+OWNERBEFORE": {
+   "unit": "ns",
+   "repetitions": [
+    40843.88475526819,
+    43116.52738959242,
+    42637.091423451566,
+    44017.25943960539,
+    46555.39901392888
+   ],
+   "median": 43116.52738959242,
+   "spread": 0.13983768421841902
+  },
+  "records.FB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    11.268546771054812,
+    10.608802005928991,
+    11.986567161336357,
+    11.80622970855666,
+    11.654960203577096
+   ],
+   "median": 11.654960203577096,
+   "spread": 0.12987000366651835
+  },
+  "records.FB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    110965.90046492651,
+    110722.87579430004,
+    117386.38888468227,
+    112825.54887824785,
+    115708.699449985
+   ],
+   "median": 112825.54887824785,
+   "spread": 0.0601819004661841
+  },
+  "records.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    22.10621089186507,
+    23.4465044232107,
+    21.840652084490383,
+    21.029934507159368,
+    22.42271323215397
+   ],
+   "median": 22.10621089186507,
+   "spread": 0.1149109577696803
+  },
+  "records.MB_FIELD+OWNERBEFORE": {
+   "unit": "ns",
+   "repetitions": [
+    22.242304347660326,
+    22.389645499332453,
+    22.15443000387395,
+    20.790048098688175,
+    22.22498997690893
+   ],
+   "median": 22.22498997690893,
+   "spread": 0.07694053390598987
+  },
+  "records.MB_FIELD+OWNEREQ": {
+   "unit": "ns",
+   "repetitions": [
+    22.802305884218153,
+    23.405088784732637,
+    20.71088457385844,
+    21.97697438603128,
+    21.541125850500446
+   ],
+   "median": 21.97697438603128,
+   "spread": 0.130086390142643
+  },
+  "records.MB_FIELD_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    16.610847546816082,
+    14.520931548459217,
+    16.51685776220636,
+    15.536893298709778,
+    15.99321390086554
+   ],
+   "median": 15.99321390086554,
+   "spread": 0.14392437505695854
+  },
+  "records.MB_FIELD_UNVERIFIED+NOOWNER": {
+   "unit": "ns",
+   "repetitions": [
+    17.429910354012634,
+    15.834732794798839,
+    16.899564784652316,
+    16.85059281204932,
+    17.480641698148027
+   ],
+   "median": 16.899564784652316,
+   "spread": 0.10394295405412923
+  },
+  "records.MB_FIELD_UNVERIFIED+OWNERBEFORE": {
+   "unit": "ns",
+   "repetitions": [
+    15.621095595011768,
+    16.631850649244004,
+    16.412356083139226,
+    15.884147902139478,
+    17.18659352364011
+   ],
+   "median": 16.412356083139226,
+   "spread": 0.10021690982598219
+  },
+  "records.MB_FIELD_UNVERIFIED+OWNEREQ": {
+   "unit": "ns",
+   "repetitions": [
+    15.91661847828809,
+    14.509134453549759,
+    16.331948686984283,
+    15.363966443884078,
+    15.76790752723585
+   ],
+   "median": 15.76790752723585,
+   "spread": 0.12563218290313394
+  },
+  "records.MB_FIELD_UNVERIFIED_AA": {
+   "unit": "ns",
+   "repetitions": [
+    15.315020139272502,
+    14.872280022247049,
+    15.538270537431208,
+    15.619060997334472,
+    16.207962327176443
+   ],
+   "median": 15.538270537431208,
+   "spread": 0.0898101906991653
+  },
+  "records.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    171257.44491909718,
+    171127.70551216035,
+    171933.06717288826,
+    162050.76380563865,
+    171571.62110961968
+   ],
+   "median": 171257.44491909718,
+   "spread": 0.060982763272268814
+  },
+  "records.MB_READ+OWNERBEFORE": {
+   "unit": "ns",
+   "repetitions": [
+    180014.45817879678,
+    150356.34929569223,
+    179955.10016349083,
+    160433.60118041094,
+    172675.59840216447
+   ],
+   "median": 172675.59840216447,
+   "spread": 0.19725212152350569
+  },
+  "records.MB_READ_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    151378.46904112288,
+    169916.43125202155,
+    163911.62332904196,
+    139086.2499766386,
+    141284.84022089312
+   ],
+   "median": 151378.46904112288,
+   "spread": 0.2216623230589745
+  },
+  "records.MB_READ_UNVERIFIED+NOOWNER": {
+   "unit": "ns",
+   "repetitions": [
+    135210.41220205353,
+    121594.24680408782,
+    120395.24747137449,
+    133789.22786890005,
+    147226.2011333964
+   ],
+   "median": 133789.22786890005,
+   "spread": 0.22285724914848748
+  },
+  "records.MB_READ_UNVERIFIED+OWNERBEFORE": {
+   "unit": "ns",
+   "repetitions": [
+    126593.02565032944,
+    135092.58064222004,
+    144394.3199533756,
+    153172.46427743294,
+    134254.64609835742
+   ],
+   "median": 135092.58064222004,
+   "spread": 0.20995973901848464
+  }
+ }
+}

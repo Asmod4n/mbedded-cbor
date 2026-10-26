@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.hpp"
+#include "../test/owned_copy.hpp"
 
 namespace fuzz
 {
@@ -26,21 +27,35 @@ inline void decode_encode_decode(std::string_view const input)
     require(end.has_value() && *end <= input.size());
 }
 
-// encode of the decoded tree gives the bytes of the input back, tag 28 and tag 29 included, and the iov target
-// gives the same bytes.
+// encode of the decoded tree writes the library's own form (RFC 8949 2: the same value, not the same bytes). The
+// written bytes decode to the same value, or the reference model refuses both alike (a cycle through tag 29).
+// The own form is a fixed point of decode and encode, and the iov target gives the same bytes.
 inline void tree_encode(std::string_view const input)
 {
-    auto const top_level = cbor::lazy::from(input);
+    auto const top_level = test::lazy_of_copy(input);
     if (!top_level)
         return;
-    auto const tree = top_level->decode();
+    auto const tree = top_level->clone();
     if (!tree)
         return;
     auto const end = cbor::item_size(input);
     require(end.has_value());
     std::string out;
     auto const written = cbor::encode(**tree, out);
-    require(written.has_value() && *written == out.size() && out == input.substr(0, *end));
+    require(written.has_value() && *written == out.size());
+    auto const value = test::decoded(input.substr(0, *end));
+    auto const again = test::decoded(out);
+    require(value.has_value() == again.has_value());
+    if (value)
+        require(same(*value, *again));
+    else
+        require(value.error() == again.error());
+    auto const top_again = test::lazy_of_copy(out);
+    require(top_again.has_value());
+    auto const tree_again = top_again->clone();
+    require(tree_again.has_value());
+    std::string twice;
+    require(cbor::encode(**tree_again, twice).has_value() && twice == out);
     auto const pieces = cbor::encode_iov(**tree);
     require(pieces.has_value());
     std::string joined;

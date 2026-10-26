@@ -9,10 +9,11 @@ This page states them.
 | Read one value | `cbor::at_path` | [path.md](path.md) |
 | Walk through arrays and maps | `cbor::lazy` | [runtime.md](runtime.md) |
 | Write a struct and read it back | `cbor::structs` | [structs.md](structs.md) |
-| Read one field of a large message | `cbor::packed` | [packed.md](packed.md) |
+| Read one field of a large message | `cbor::schema` | [schema.md](schema.md) |
 
-The library needs C++23. `structs` and `packed` need g++ 16 with
-`-std=c++26 -freflection`. Every example includes `<cbor/cbor.hpp>`.
+The library needs C++23 and g++ 15 or later. `schema` needs g++ 16 with
+`-std=c++26 -freflection`. `structs` reads the members by reflection
+there, and through Boost.PFR on every other compiler. Every example includes `<cbor/cbor.hpp>`.
 A comment shows the CBOR in `bytes` as text, in the diagnostic notation
 of RFC 8949, which looks like JSON.
 
@@ -56,13 +57,28 @@ program, not of the input.
 ## 2. Results that point into the bytes
 
 A text or a byte string comes back as a view into the bytes, with no
-copy. The view sits in a `cbor::owning_ref`. The `owning_ref` holds the
-bytes, so the view stays valid while the `owning_ref` lives.
+copy. The view sits in a `cbor::ref`. The `ref` holds the bytes, so the
+view stays valid while the `ref` lives.
+
+Bytes go into the library in three forms, and no form copies them:
+
+- An rvalue `std::string` is moved into storage that the library owns.
+- A `std::shared_ptr<std::string const>` is read in place, and every
+  result keeps it alive.
+- A `std::shared_ptr<void const>` and a `std::string_view` beside it are
+  read in place. The owner keeps the bytes of the view alive. The
+  library does not check that it holds them. A `std::string` lvalue
+  beside an owner does not compile.
+
+A read that gives a number also takes a `std::string_view`, because its
+result points into nothing. A read with `std::string` or
+`std::vector<std::byte>` as the type also takes a `std::string_view`. It
+copies the text or the bytes of the value into the result.
 
 ```cpp
 // bytes: {"name": "ann"}
 auto const owner = std::make_shared<std::string const>(std::move(bytes));
-auto const name = cbor::at_path<"$.name", std::string_view>(owner, *owner);
+auto const name = cbor::at_path<"$.name", std::string_view>(owner);
 if (name) {
     std::string_view const text = **name;   // "ann"
     std::string const copy{text};           // a copy of your own
@@ -70,11 +86,11 @@ if (name) {
 }
 ```
 
-`*name` is the `owning_ref`, and `**name` is the `std::string_view`.
+`*name` is the `ref`, and `**name` is the `std::string_view`.
 `text` stays valid after `owner` ends, because `name` holds the bytes.
-Keep a result in a variable: `*` on a temporary `owning_ref` does not
+Keep a result in a variable: `*` and `->` on a temporary `ref` do not
 compile. A `cbor::lazy`, a result of `structs` and an accessor of
-`packed` hold the bytes in the same way.
+`schema` hold the bytes in the same way.
 
 ## 3. Threads
 
@@ -83,36 +99,38 @@ writes them. A `cbor::lazy` and every result from it belong to the thread
 that made them, so each thread makes its own lazy.
 
 ```cpp
-// bytes: {"id": 42}
-std::jthread first([&bytes] { use(cbor::at_path<"$.id", std::int64_t>(bytes)); });
-std::jthread second([&bytes] {
-    if (auto const doc = cbor::lazy::from(bytes))   // the lazy of this thread
-        use(cbor::at_path<"$.id", std::int64_t>(*doc));
+// owner: a std::shared_ptr<std::string const> with {"id": 42}
+std::thread first([&owner] { use(cbor::at_path<"$.id", std::int64_t>(*owner)); });
+std::thread second([&owner] {
+    if (auto const doc = cbor::lazy::view(owner))   // the lazy of this thread
+        use(doc->at_path<"$.id", std::int64_t>());
 });
+first.join();
+second.join();
 ```
 
 The library starts no thread and holds no lock.
 
 ## 4. Limits
 
-A limit stops input that is too large or too deep. `cbor::limits` is one
-object for the whole process and for every thread.
+A limit stops input that is too deep or that holds a string or a
+container that is too large. A limit is a constant of the build: a macro
+sets it, and `cbor::limits` gives its value.
 
-| Field | Counts | Default | Error |
-|---|---|---|---|
-| `nesting_depth` | the arrays, maps and tags around a value | 128, at most 512 | `nesting_depth_exceeded` |
-| `string_length` | the bytes of one text or byte string | no limit | `string_length_exceeded` |
-| `container_elements` | the elements of one array, or the pairs of one map | no limit | `container_elements_exceeded` |
-| `input_bytes` | the size of the input of one call | no limit | `input_bytes_exceeded` |
+| Macro | Constant | Counts | Default | Error |
+|---|---|---|---|---|
+| `CBOR_NESTING_DEPTH_DEFAULT` | `cbor::limits::nesting_depth` | the arrays, maps and tags around a value | 128, at most 512 | `nesting_depth_exceeded` |
+| `CBOR_STRING_LENGTH_DEFAULT` | `cbor::limits::string_length` | the bytes of one text or byte string | no limit | `string_length_exceeded` |
+| `CBOR_CONTAINER_ELEMENTS_DEFAULT` | `cbor::limits::container_elements` | the elements of one array, or the pairs of one map | no limit | `container_elements_exceeded` |
 
-```cpp
-cbor::limits.string_length = 1024;                     // one field
-cbor::limits = {.nesting_depth = 16, .input_bytes = 65536};
-// string_length and container_elements are now back at their defaults
+```sh
+g++ -DCBOR_NESTING_DEPTH_DEFAULT=16 -DCBOR_STRING_LENGTH_DEFAULT=1024 ...
 ```
 
-An assignment of `{...}` sets every field. A field that it does not name
-gets its default, not its old value.
+Every translation unit of one program uses the same values. A limit that
+the build does not set gets its default. A check whose limit is not set
+is not in the program. The library does not bound the size of the input:
+the program bounds it before it calls the library.
 
 The error comes at the read that meets the value. A count in the input
 reserves no memory: memory grows only with the values that a call reads.

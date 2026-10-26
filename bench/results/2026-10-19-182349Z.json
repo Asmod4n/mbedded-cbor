@@ -1,0 +1,150 @@
+{
+ "what": "compare.cpp on carsales (1000 cars), one tree 5f7e6b9: OP_MB_FIELD (twice, A/A: MB_FIELD2), FB_FIELD_V and FB_READ_V (FlatBuffers with Verifier), CP_FIELD, MB_READ, CP_READ, MB_ENCODE, FB_ENCODE, CP_ENCODE; 5 rounds, 1 s min_time, uid 1000, nice -10, one binary at a time, shuffled order",
+ "context": {
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+  "resolved_march": "-march= \t\tsapphirerapids",
+  "compilers": {
+   "g++-16": "g++-16 (SUSE Linux) 16.2.1 20260929",
+   "clang++-23": "clang version 23.1.3"
+  },
+  "cxx_library": {
+   "cmp.g++-16.head.carsales.CP_ENCODE": "libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007febc67cd000)",
+   "rpm": "libstdc++6-16.2.1+git9713-1.1.x86_64\nlibc++1-23.1.3-1.1.x86_64"
+  },
+  "libc": "glibc-2.44-3.1.x86_64 / libc.so.6 => /lib64/libc.so.6 (0x00007f0af6c3d000)",
+  "kernel": "Linux 0be7db46021e 6.18.44-fc-v139 #1 SMP PREEMPT_DYNAMIC @0 x86_64 x86_64 x86_64 GNU/Linux",
+  "scheduler": "EEVDF (Linux >= 6.6); sched_autogroup_enabled=1",
+  "virtualization": "hypervisor ",
+  "container": "podman, image localhost/mbedded-cbor-tw-compare, uid 0",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "user": "uid=1000(ubuntu) gid=0(root) groups=0(root)",
+  "priority": "nice -10",
+  "threads": 1,
+  "pinned": false,
+  "start": "2026-10-19T18:20:22Z",
+  "end": "2026-10-19T18:21:55Z"
+ },
+ "results": {
+  "CP_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    88760.24120304346,
+    96667.71290711654,
+    96391.97540877013,
+    117197.22064791019,
+    107839.96050000725
+   ],
+   "median": 96667.71290711654,
+   "spread": 0.2941724655489727
+  },
+  "CP_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    249.04131527930113,
+    264.622519678633,
+    255.8590235864755,
+    243.132465175802,
+    236.21670843714534
+   ],
+   "median": 249.04131527930113,
+   "spread": 0.1140606377284444
+  },
+  "CP_READ": {
+   "unit": "ns",
+   "repetitions": [
+    164612.5563846387,
+    201392.55344111865,
+    196699.76067205946,
+    186962.44280944305,
+    180416.42831495553
+   ],
+   "median": 186962.44280944305,
+   "spread": 0.19672398639959507
+  },
+  "FB_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    285699.17430488515,
+    268184.7140111584,
+    276643.0654424741,
+    278291.77813854296,
+    278593.71091760637
+   ],
+   "median": 278291.77813854296,
+   "spread": 0.06293560093969962
+  },
+  "FB_FIELD_V": {
+   "unit": "ns",
+   "repetitions": [
+    66152.69333607354,
+    72559.01060404192,
+    77544.43629970055,
+    75279.4978955751,
+    76040.64059196932
+   ],
+   "median": 75279.4978955751,
+   "spread": 0.1513259689833374
+  },
+  "FB_READ_V": {
+   "unit": "ns",
+   "repetitions": [
+    98141.23449879447,
+    112095.50090992011,
+    107839.92541377271,
+    105507.80552151526,
+    114248.86313591071
+   ],
+   "median": 107839.92541377271,
+   "spread": 0.14936609586210883
+  },
+  "MB_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    27190.332314317566,
+    26885.833016526296,
+    29313.73457829467,
+    27732.30374102286,
+    28722.249773106472
+   ],
+   "median": 27732.30374102286,
+   "spread": 0.08754777765458094
+  },
+  "MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    15.444172756355556,
+    19.33297097236765,
+    18.203480849883515,
+    18.34136119921292,
+    17.91166976488245
+   ],
+   "median": 18.203480849883515,
+   "spread": 0.2136293738588452
+  },
+  "MB_FIELD2": {
+   "unit": "ns",
+   "repetitions": [
+    23.316785197364307,
+    17.064358681454873,
+    17.36414694298551,
+    16.406906283797234,
+    25.939956031173775
+   ],
+   "median": 17.36414694298551,
+   "spread": 0.5490076638188984
+  },
+  "MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    81447.39927713483,
+    71263.58020227452,
+    74953.2827986766,
+    71757.3293061965,
+    80904.90520242482
+   ],
+   "median": 74953.2827986766,
+   "spread": 0.13586888651980586
+  }
+ }
+}

@@ -4,14 +4,17 @@
 #include <cstddef>
 #include <expected>
 #include <iterator>
+#include <memory>
 #include <span>
 #include <string>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 #include "error.hpp"
 #include "item_size.hpp"
+#include "ref.hpp"
 #include "validity.hpp"
 
 namespace cbor
@@ -19,16 +22,25 @@ namespace cbor
 
 class sequence
 {
+    std::shared_ptr<void const> owner;
     std::string_view encoded;
 
 public:
-    explicit sequence(std::string_view const e) : encoded(e)
+    template <owning_range_of_chars Encoded>
+    explicit sequence(std::shared_ptr<Encoded const> e)
     {
+        validity::throw_logic_error_if_null(e, "cbor::sequence: the encoded data items are null");
+        encoded = std::string_view(std::ranges::data(*e), std::ranges::size(*e));
+        owner = std::move(e);
     }
 
-    template <class Encoded>
-        requires(!std::is_lvalue_reference_v<Encoded> && !std::ranges::borrowed_range<Encoded>)
-    explicit sequence(Encoded &&) = delete;
+    template <borrowed_range_of_chars Encoded>
+    sequence(std::shared_ptr<void const> o, Encoded const &e)
+        : owner(std::move(o)), encoded(std::ranges::data(e), std::ranges::size(e))
+    {
+        validity::throw_logic_error_if_empty(owner, "cbor::sequence: the owner of the encoded data items is empty");
+    }
+
 
     struct iterator {
         using value_type = std::expected<std::string_view, error>;

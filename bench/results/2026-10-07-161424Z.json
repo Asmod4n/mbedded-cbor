@@ -11,8 +11,8 @@
  },
  "ops": {
   "READ": "lazy_decode with a summing binding",
-  "DEC": "lazy::decode() of the root",
-  "DECALL": "lazy::decode() of every node through lazy elements/entries, strings summed",
+  "DEC": "lazy::clone() of the root",
+  "DECALL": "lazy::clone() of every node through lazy elements/entries, strings summed",
   "PATH1": "at_path one node (twitter $.statuses[50].id, floats $[1000], records $[1000].id; cwt not measured: the path does not enter tag 18)",
   "PATHALL": "at_path $..*",
   "LAZY": "lazy elements/entries over every node, no decode"

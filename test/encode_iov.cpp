@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstddef>
 #include <memory>
@@ -16,7 +17,7 @@ namespace
 {
 
 using iov_encoder = cbor::encoding::encoder<cbor::iov_writer>;
-using pieces = cbor::owning_ref<std::span<std::string_view const>>;
+using pieces = cbor::ref<std::span<std::string_view const>>;
 
 std::string joined(pieces const &p)
 {
@@ -100,7 +101,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             CHECK_EQ(points_into(p, owner->data()), size >= iov_encoder::ref_size && size > 0);
         }
         {
-            auto const read = cbor::lazy::from(expected)->get<std::string_view>();
+            auto const read = test::lazy_of_copy(expected)->get<std::string_view>();
             REQUIRE(read.has_value());
             cbor::iov_writer w;
             iov_encoder e{w};
@@ -141,7 +142,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
                      size >= iov_encoder::ref_size && size > 0);
         }
         {
-            auto const read = cbor::lazy::from(expected)->get<std::span<std::byte const>>();
+            auto const read = test::lazy_of_copy(expected)->get<std::span<std::byte const>>();
             REQUIRE(read.has_value());
             cbor::iov_writer w;
             iov_encoder e{w};
@@ -328,17 +329,6 @@ TEST_CASE("encode_iov: the encoder over views gives the bytes of encode")
     auto const p = test::encode_iov(long_text);
     REQUIRE(p.has_value());
     CHECK_EQ(joined(*p), encoded(long_text));
-}
-
-// An error of encode_iov of a tree must come back as the error value, and the writer must free what it holds.
-TEST_CASE("encode_iov: an error of the tree comes back as the error value")
-{
-    auto const tree = cbor::lazy::from(std::string(100, '\x81') + '\x80')->decode();
-    REQUIRE(tree.has_value());
-    test::limits_guard const depth{{.nesting_depth = 16}};
-    auto const p = cbor::encode_iov(**tree);
-    REQUIRE_FALSE(p.has_value());
-    CHECK_EQ(p.error(), error::nesting_depth_exceeded);
 }
 
 // Without preferred serialization the encoder writes every float as a double, the width that needs no

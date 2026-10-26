@@ -1,0 +1,218 @@
+{
+ "what": "bench/compare.cpp of 2c4da6e, built outside the tree against a copy of include/ of that commit with probe macros: +INLINE marks the public path and unverified_path overloads and the private path_with_owner with CBOR_ALWAYS_INLINE; +NOPREFIX skips the compare of the packing prefix (313 bytes on carsales) in directory_read. Arms on carsales and records: MB_FIELD (+_AA, A/A), MB_FIELD+INLINE, MB_FIELD+NOPREFIX, MB_FIELD+INLINE+NOPREFIX, MB_FIELD_UNVERIFIED, MB_READ, MB_READ+INLINE. One binary per arm and data set, 5 rounds, shuffled order, 1 s min_time. A profile with perf (cpu-clock, no hardware counters in the virtual machine) of MB_FIELD before the run showed memcmp and the entry of the out-of-line path() as the hot spots.",
+ "context": {
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+  "resolved_march": "-march= sapphirerapids",
+  "compilers": {
+   "g++-16": "g++-16 (SUSE Linux) 16.2.1 20260929"
+  },
+  "cxx_library": "libstdc++.so.6 => /lib64/libstdc++.so.6 / libstdc++6-16.2.1+git9713-1.1.x86_64",
+  "libc": "glibc-2.44-3.1.x86_64 / libc.so.6 => /lib64/libc.so.6",
+  "kernel": "Linux 6.18.44-fc-v139 #1 SMP PREEMPT_DYNAMIC @0 x86_64",
+  "scheduler": "EEVDF (Linux >= 6.6)",
+  "virtualization": "hypervisor",
+  "container": "podman, image localhost/mbedded-cbor-tw-compare",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz, 4 cpus",
+  "cpu_flags_sha256": "cd57f3c12a72aed9439fc958e0460f5edfd05a9692f15e599584c01ff294ee3d",
+  "user": "uid=1000(ubuntu) gid=0(root) groups=0(root)",
+  "priority": "nice -10",
+  "threads": 1,
+  "pinned": false,
+  "start": "2026-10-20T07:18:10Z",
+  "end": "2026-10-20T07:20:32Z"
+ },
+ "results": {
+  "cars.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    32.375801029606,
+    36.413946641628335,
+    33.9191085845677,
+    34.17748158552087,
+    32.427564827938106
+   ],
+   "median": 33.9191085845677,
+   "spread": 0.12472728036380198
+  },
+  "cars.MB_FIELD+INLINE": {
+   "unit": "ns",
+   "repetitions": [
+    15.970706659666881,
+    17.21743699617851,
+    16.76107859021103,
+    15.760081730944846,
+    15.703993539168229
+   ],
+   "median": 15.970706659666881,
+   "spread": 0.09637315840938898
+  },
+  "cars.MB_FIELD+INLINE+NOPREFIX": {
+   "unit": "ns",
+   "repetitions": [
+    9.645756241262466,
+    8.692902998585728,
+    9.500375421007037,
+    8.791243771837035,
+    9.438953458116375
+   ],
+   "median": 9.438953458116375,
+   "spread": 0.10961277755333976
+  },
+  "cars.MB_FIELD+NOPREFIX": {
+   "unit": "ns",
+   "repetitions": [
+    32.56342735017799,
+    27.279059652846186,
+    30.90074963014524,
+    30.17615767813632,
+    27.982892426848597
+   ],
+   "median": 30.17615767813632,
+   "spread": 0.19371517070532351
+  },
+  "cars.MB_FIELD_AA": {
+   "unit": "ns",
+   "repetitions": [
+    35.72316308261324,
+    35.10814801483562,
+    35.68149085206416,
+    36.55029942077666,
+    34.865700305531895
+   ],
+   "median": 35.68149085206416,
+   "spread": 0.04831680134006899
+  },
+  "cars.MB_FIELD_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    6.593937295384736,
+    6.843806876577496,
+    11.053192250854476,
+    6.875549469942288,
+    7.115322659140691
+   ],
+   "median": 6.875549469942288,
+   "spread": 0.6762659024056668
+  },
+  "cars.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    62736.448321221316,
+    62126.16417579667,
+    65824.541769643,
+    63466.43251219043,
+    61947.150247940415
+   ],
+   "median": 62736.448321221316,
+   "spread": 0.06259192725062435
+  },
+  "cars.MB_READ+INLINE": {
+   "unit": "ns",
+   "repetitions": [
+    59559.1411449574,
+    63940.354484473864,
+    67189.56806517212,
+    62470.909823154456,
+    63937.65708428218
+   ],
+   "median": 63937.65708428218,
+   "spread": 0.12811512680553072
+  },
+  "records.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    22.735426386449113,
+    25.022571557715203,
+    24.945098624018613,
+    22.492867394231304,
+    24.78052766651101
+   ],
+   "median": 24.78052766651101,
+   "spread": 0.11246694870626794
+  },
+  "records.MB_FIELD+INLINE": {
+   "unit": "ns",
+   "repetitions": [
+    21.550432819486748,
+    21.503980914296076,
+    19.843145556085307,
+    20.619682552192216,
+    20.477209993447204
+   ],
+   "median": 20.619682552192216,
+   "spread": 0.08603914427659198
+  },
+  "records.MB_FIELD+INLINE+NOPREFIX": {
+   "unit": "ns",
+   "repetitions": [
+    20.40416558423539,
+    19.551527419557953,
+    17.066741955568155,
+    18.941053285755146,
+    18.276573722306317
+   ],
+   "median": 18.941053285755146,
+   "spread": 0.19555130307565083
+  },
+  "records.MB_FIELD+NOPREFIX": {
+   "unit": "ns",
+   "repetitions": [
+    25.206100792625527,
+    23.04701747098369,
+    23.614843751424715,
+    25.38060902144726,
+    26.859794964062555
+   ],
+   "median": 25.206100792625527,
+   "spread": 0.16543474650805345
+  },
+  "records.MB_FIELD_AA": {
+   "unit": "ns",
+   "repetitions": [
+    26.335156243839894,
+    23.42797180265336,
+    21.66978815624342,
+    27.84072766256936,
+    27.2605918071055
+   ],
+   "median": 26.335156243839894,
+   "spread": 0.2847715659162082
+  },
+  "records.MB_FIELD_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    17.19991114495729,
+    17.614683384481232,
+    15.850672687463106,
+    17.586929722597734,
+    15.27555864607362
+   ],
+   "median": 17.19991114495729,
+   "spread": 0.15312858878708524
+  },
+  "records.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    178638.29467912484,
+    174010.6503974199,
+    218753.88789756934,
+    162882.5454668199,
+    166461.44465923225
+   ],
+   "median": 174010.6503974199,
+   "spread": 0.34301614252541723
+  },
+  "records.MB_READ+INLINE": {
+   "unit": "ns",
+   "repetitions": [
+    170312.75148455534,
+    170377.24834801684,
+    168426.13662219516,
+    180014.53278278504,
+    171598.8012055996
+   ],
+   "median": 170377.24834801684,
+   "spread": 0.06880402527182805
+  }
+ }
+}

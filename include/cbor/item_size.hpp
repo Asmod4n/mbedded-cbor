@@ -102,7 +102,7 @@ class well_formedness
                     return r;
             return {};
         }
-        heads::decoder<false> unlimited{d.encoded, validity::limit_checks<false>{}};
+        heads::decoder<false> unlimited{d.encoded};
         for (std::uint64_t i = 0; i < count; ++i)
             if (auto const r = item_skip(unlimited, none); !r) [[unlikely]]
                 return r;
@@ -175,6 +175,8 @@ class well_formedness
             }
             if (children == 0)
                 continue;
+            if (auto const r = validity::check_pending_items(children, d.encoded.size()); !r) [[unlikely]]
+                return r;
             if (auto const r = validity::check_nesting_depth(depth + level + 1, depth_max); !r) [[unlikely]]
                 return r;
             left[++level] = children;
@@ -194,27 +196,16 @@ class well_formedness
 
     friend class jsonpath;
 
-    friend class value_sharing;
-
-#ifdef __cpp_impl_reflection
     friend class generic;
-#endif
 };
 
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
 {
-    return validity::limits_apply(
-        limits.load(),
-        [encoded]<bool Checked>(
-            std::size_t, validity::limit_checks<Checked> const checks) -> std::expected<std::size_t, error> {
-            if (auto const r = validity::check_input_bytes(encoded.size(), checks); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            heads::decoder<Checked> d{encoded, checks};
-            well_formedness::no_marks none;
-            if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            return encoded.size() - d.encoded.size();
-        });
+    heads::decoder<true> d{encoded};
+    well_formedness::no_marks none;
+    if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return encoded.size() - d.encoded.size();
 }
 
 } // namespace cbor

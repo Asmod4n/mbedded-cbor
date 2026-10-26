@@ -2,14 +2,16 @@
 #include <doctest/doctest.h>
 
 #include "reference.hpp"
-#include "limits_guard.hpp"
 
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 using namespace std::string_literals;
@@ -17,78 +19,36 @@ using namespace std::string_literals;
 // Each test in this file is one example of README.md. The tests exist so that every example in the README
 // compiles and gives the result that the README states.
 
-// Step 2 reads a message in place: contains, size, and a loop over the elements of an array.
+// "Read a message" moves the bytes into the lazy and loops over the elements of an array.
 TEST_CASE("doc readme: read a message")
 {
-    std::string const bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
-    auto const doc = cbor::lazy::from(bytes).value();
-
-    bool const has_samples = doc.contains("samples").value();
-    std::uint64_t const pairs = doc.size().value();
-    CHECK(has_samples);
-    CHECK_EQ(pairs, 3u);
+    std::string bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
+    auto const doc = cbor::lazy::take_ownership(std::move(bytes)).value();
 
     int sum = 0;
-    if (auto const samples = doc.at("samples"))
-        for (auto const &x : samples->elements().value())
+    if (auto const samples = doc.at("samples")) {
+        auto const elements = samples->elements().value();
+        for (auto const &x : elements)
             if (x)
                 sum += x->get<int>().value_or(0);
+    }
     CHECK_EQ(sum, 12);
 }
 
-// Step 3 reads one value by its path; a missing member gives key_not_found.
+// "Read one value by its path" reads the bytes in place through the shared_ptr; a missing member gives
+// key_not_found.
 TEST_CASE("doc readme: read one value by its path")
 {
-    std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
-    auto const doc = cbor::lazy::from(bytes).value();
+    auto const owner =
+        std::make_shared<std::string const>(test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s))));
+    auto const doc = cbor::lazy::view(owner).value();
 
-    auto const id = cbor::at_path<"$.user.id", std::int64_t>(doc);
-    auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
-    auto const age = cbor::at_path<"$.user.age", int>(doc);
+    auto const id = doc.at_path<"$.user.id", std::int64_t>();
+    auto const name = doc.at_path<"$.user.name", std::string_view>();
+    auto const age = doc.at_path<"$.user.age", int>();
     CHECK_EQ(*id, 42);
     CHECK_EQ(**name, "ann");
     CHECK_EQ(age.error(), cbor::error::key_not_found);
-}
-
-// Step 4 cuts the last byte: a read of the cut value gives too_little_data, which converts to
-// std::error_code; a read of a value before the cut still succeeds, because a read stops at its item.
-TEST_CASE("doc readme: handle bad input")
-{
-    std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
-    std::string const cut = bytes.substr(0, bytes.size() - 1);
-
-    auto const doc = cbor::lazy::from(cut).value();
-    auto const name = cbor::at_path<"$.user.name", std::string_view>(doc);
-    REQUIRE_FALSE(name.has_value());
-    CHECK_EQ(name.error(), cbor::error::too_little_data);
-    std::string const why = std::error_code(name.error()).message();
-    CHECK_EQ(why, "too little data");
-    CHECK_EQ(cbor::at_path<"$.user.id", std::int64_t>(cut), 42);
-}
-
-// Step 5 sets limits; an array of 101 elements is over a limit of 100.
-TEST_CASE("doc readme: set limits")
-{
-    test::limits_guard const guard{{.nesting_depth = 16, .string_length = 4096, .container_elements = 100}};
-
-    test::array a;
-    for (int i = 0; i < 101; ++i)
-        a.push_back(test::V(i));
-    std::string const bytes = test::preferred(test::value{std::move(a)});
-    auto const n = cbor::lazy::from(bytes).value().size();
-    CHECK_EQ(n.error(), cbor::error::container_elements_exceeded);
-}
-
-// Step 6 reads a CBOR sequence item by item and prints each item in diagnostic notation.
-TEST_CASE("doc readme: read a stream of items")
-{
-    std::string const log = test::preferred(test::V(1)) + test::preferred(test::value{"a"s}) +
-                            test::preferred(test::A(1, 2));
-    std::vector<std::string> printed;
-    for (auto const &item : cbor::sequence{log})
-        if (item)
-            printed.push_back(cbor::diagnostic_notation(*item).value());
-    CHECK_EQ(printed, std::vector<std::string>{"1", "\"a\"", "[1, 2]"});
 }
 
 #ifdef __cpp_impl_reflection
@@ -96,38 +56,31 @@ TEST_CASE("doc readme: read a stream of items")
 namespace
 {
 
-struct [[=cbor::tag(1900)]] series {
-    std::string unit;
-    std::vector<double> values;
+struct [[=cbor::tag(1703)]] point {
+    float x;
+    float y;
 };
 
-struct reading {
-    std::string sensor;
-    double value;
-    std::vector<std::uint16_t> samples;
+struct [[=cbor::tag(1704)]] track {
+    std::vector<point> points;
 };
 
 } // namespace
 
-// Step 7 writes a struct as Packed CBOR, reads one element at its offset and sums a view of an array.
-TEST_CASE("doc readme: packed")
+// "Write structs, read one field" reads one leaf at its offset and a page of the fixed-size vector.
+TEST_CASE("doc readme: write structs, read one field")
 {
-    std::string const bytes = cbor::packed<series>::encode({"m", {1.5, 2.5, 3.5}}).value();
-    auto const second = cbor::packed<series>::at_path<"$.values[1]">(bytes);
-    CHECK_EQ(*second, 2.5);
-    auto const root = cbor::packed<series>::path(bytes).value();
-    auto const values = root.view<"$.values">();
-    double const sum = std::ranges::fold_left(*values, 0.0, std::plus{});
-    CHECK_EQ(sum, 7.5);
-}
-
-// Step 8 writes a struct as deterministic CBOR: the keys in RFC 8949 4.2.1 order, every number shortest.
-TEST_CASE("doc readme: structs")
-{
-    std::string const bytes = cbor::structs<reading>::encode({"t1", 21.5, {3, 4, 5}}).value();
-    std::string const text = cbor::diagnostic_notation(bytes).value();
-    CHECK_EQ(text, R"({"value": 21.5, "sensor": "t1", "samples": [3, 4, 5]})");
-    CHECK_EQ(bytes.size(), 32u);
+    auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
+    REQUIRE(message.has_value());
+    auto const lane = cbor::schema<track>::path(std::move(*message));
+    REQUIRE(lane.has_value());
+    CHECK_EQ(lane->at_path<"$.points[2].x">(), 5.0f);
+    auto const points = lane->at_path<"$.points">();
+    REQUIRE(points.has_value());
+    std::vector<float> seen;
+    for (auto const p : *points | std::views::drop(1) | std::views::take(1))
+        seen.push_back(*p.at_path<"@.y">());
+    CHECK_EQ(seen, (std::vector<float>{4}));
 }
 
 #endif

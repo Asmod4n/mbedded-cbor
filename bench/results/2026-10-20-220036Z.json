@@ -1,0 +1,127 @@
+{
+ "what": "bench/compare.cpp on carsales (DS_CARS), two trees each from its own commit: base = 55418aa (main), built twice (base, base2: A/A), head = d1bce71 (schema-table-apart, the inside form with the template parameter description_place). One binary per arm, run alternately in shuffled order, 1 s min_time, g++-16. Arms MB_ENCODE, MB_FIELD, MB_READ; MB_DECODE did not compile on either tree (compare.cpp:781 OP_FIRST). 5 rounds.",
+ "context": {
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -std=c++26 -freflection",
+  "resolved_march": "-march=                     \t\tsapphirerapids",
+  "compiler": "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "cxx_library and libc": "libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f053fa8e000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007f053f728000)",
+  "packages": "libstdc++6-16.2.1+git9713-1.1.x86_64\nglibc-2.44-3.1.x86_64",
+  "kernel": "6.18.44-fc-v139",
+  "container": "podman, image mbedded-cbor-tw-compare, --network none",
+  "user": "uid=0(root) gid=0(root) groups=0(root)",
+  "priority": "nice -n -10 refused (Permission denied): the run had no raised priority",
+  "threads": "1 per binary, binaries run one after the other; builds 3 at a time",
+  "processors": "4",
+  "times": "2026-10-20T21:59:12Z 2026-10-20T22:00:36Z"
+ },
+ "results": {
+  "cars.base.MB_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    27387.27968078162,
+    28458.89352578268,
+    26877.1228218207,
+    27466.761301915216,
+    27823.697831806767
+   ],
+   "median": 27466.761301915216,
+   "spread": 0.05758854080301369
+  },
+  "cars.base.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    15.649313099003258,
+    16.61077336439294,
+    23.3989372649367,
+    15.573972405480466,
+    16.492911452614894
+   ],
+   "median": 16.492911452614894,
+   "spread": 0.4744441199443662
+  },
+  "cars.base.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    67465.5277086482,
+    62610.07171382442,
+    70184.89760060332,
+    63781.08996677023,
+    67533.46202565287
+   ],
+   "median": 67465.5277086482,
+   "spread": 0.11227698269093808
+  },
+  "cars.base2.MB_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    28013.649761914578,
+    27019.11221541237,
+    31307.701925212587,
+    27007.488263003022,
+    28604.793310909907
+   ],
+   "median": 28013.649761914578,
+   "spread": 0.153504227359044
+  },
+  "cars.base2.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    16.189849013740744,
+    15.498257483017259,
+    15.615853117957034,
+    17.702557622116682,
+    15.636376574736222
+   ],
+   "median": 15.636376574736222,
+   "spread": 0.14097256666617528
+  },
+  "cars.base2.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    62276.695100433026,
+    65320.076992443144,
+    63312.417695770026,
+    60983.71764536556,
+    68330.12462169415
+   ],
+   "median": 63312.417695770026,
+   "spread": 0.11603421956857936
+  },
+  "cars.head.MB_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    26882.074348223112,
+    29155.843810742947,
+    28431.450794620385,
+    28074.51285032603,
+    26712.30458495166
+   ],
+   "median": 28074.51285032603,
+   "spread": 0.08703763583783465
+  },
+  "cars.head.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    17.843291428303562,
+    17.634521274977104,
+    18.041177922841534,
+    15.544182191633356,
+    15.663803262118222
+   ],
+   "median": 17.634521274977104,
+   "spread": 0.14159702394367496
+  },
+  "cars.head.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    59947.21037910457,
+    68424.11976157465,
+    62608.25233515926,
+    61590.513213436614,
+    66605.9714013327
+   ],
+   "median": 62608.25233515926,
+   "spread": 0.1353960391210227
+  }
+ }
+}

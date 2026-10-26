@@ -45,6 +45,18 @@ struct fixed_string {
     }
 };
 
+template <fixed_string Path>
+class is_valid_path;
+
+template <fixed_string Path>
+inline constexpr bool is_valid_path_v = is_valid_path<Path>::value;
+
+template <fixed_string Path>
+class is_singular_query;
+
+template <fixed_string Path>
+inline constexpr bool is_singular_query_v = is_singular_query<Path>::value;
+
 class rfc9535
 {
     static constexpr std::int64_t exact_integer_max =

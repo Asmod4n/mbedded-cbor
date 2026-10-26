@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -85,7 +86,7 @@ TEST_CASE("major 7: a NaN keeps its sign and payload when it is decoded")
     for (auto const &c : cases) {
         CAPTURE(c.bits);
         CHECK_EQ(bits_of(float_of(c.wire)), c.bits);
-        auto const top = cbor::lazy::from(c.wire);
+        auto const top = test::lazy_of_copy(c.wire);
         REQUIRE(top.has_value());
         auto const d = top->get<double>();
         REQUIRE(d.has_value());

@@ -6,6 +6,10 @@
 namespace cbor
 {
 
+template <bool>
+struct tree_decoder;
+
+
 template <std::size_t N>
 struct fixed_string;
 
@@ -89,8 +93,6 @@ class rfc8949
 
     friend class well_formedness;
 
-    friend class value_sharing;
-
     friend class extended_diagnostic_notation;
 
     friend class jsonpath;
@@ -99,14 +101,18 @@ class rfc8949
 
     friend struct lazy;
 
+    template <bool>
+    friend struct tree_decoder;
+
+    template <class Target>
+    friend class encoder;
+
     template <fixed_string Path>
     friend class is_singular_query;
 
-#ifdef __cpp_impl_reflection
     friend class reflection;
 
     friend class generic;
-#endif
 };
 
 }

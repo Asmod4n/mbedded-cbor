@@ -10,7 +10,7 @@ FlatBuffers and Cap'n Proto. Each code example was compiled and run.
 | Read one field | a path; the rest is not decoded | decodes the whole input first | decodes the whole input; no lookup of a key | direct | direct |
 | Write a struct | no extra code (C++26 reflection) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
 | Shared values, tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
-| A list of numbers with no copy | `cbor::packed` | copies | reads each number | direct | direct |
+| A list of numbers with no copy | `cbor::schema` | copies | reads each number | direct | direct |
 | Broken input | a `std::expected` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
 
 ## Read one field
@@ -35,8 +35,8 @@ struct person {
     int age;
 };
 
-auto const bytes = cbor::structs<person>::encode(person{"ann", 30});
-auto const back = cbor::structs<person>::decode(*bytes);
+auto bytes = cbor::structs<person>::encode(person{"ann", 30});
+auto const back = cbor::structs<person>::decode(std::move(*bytes));
 // (*back)->name is "ann", (*back)->age is 30
 ```
 

@@ -19,13 +19,20 @@ cbor::at_path<"$.user.age", std::int64_t>(bytes).error();    // key_not_found
 The path is a string literal, and the compiler checks it: a path that is
 not valid does not compile. `bytes` is a `std::string_view`, so a
 `std::string` goes in directly. The call reads the bytes in place. It
-copies nothing and keeps nothing.
+does not copy the bytes and keeps nothing.
 
 For a number or a truth value, `T` is an integer type, `double` or
 `bool`. A `double` also reads an integer that it holds exactly. No other
 value converts: a text read as a number gives `incorrect_type`, and `256`
-read as `std::uint8_t` gives `number_out_of_range`. `float` and
-`std::string` do not compile as `T`.
+read as `std::uint8_t` gives `number_out_of_range`. `float` does not
+compile as `T`.
+
+With `std::string` as `T`, the call copies the text of the value into
+the result. That result needs no owner.
+
+```cpp
+cbor::at_path<"$.user.name", std::string>(bytes);   // "ann", a copy
+```
 
 ## 2. Read a text
 
@@ -34,8 +41,8 @@ the bytes, a `std::shared_ptr`, and the result holds it
 ([basics.md](basics.md), section 2).
 
 ```cpp
-auto const owner = std::make_shared<std::string const>(bytes);
-auto const name = cbor::at_path<"$.user.name", std::string_view>(owner, *owner);
+auto const owner = std::make_shared<std::string const>(std::move(bytes));
+auto const name = cbor::at_path<"$.user.name", std::string_view>(owner);
 if (name)
     use(**name);   // "ann"
 ```
@@ -50,10 +57,10 @@ the lazy holds the bytes.
 
 ```cpp
 // bytes: {"cars": [{"hp": 5}, {"hp": 7, "make": "kia"}]}
-auto const cars = cbor::lazy::from(bytes).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
+auto const cars = cbor::lazy::take_ownership(std::move(bytes)).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
 if (cars) {
-    cbor::at_path<"$[1].hp", std::int64_t>(*cars);          // 7
-    cbor::at_path<"$[1].make", std::string_view>(*cars);    // "kia"
+    cars->at_path<"$[1].hp", std::int64_t>();          // 7
+    cars->at_path<"$[1].make", std::string_view>();    // "kia"
 }
 ```
 
@@ -80,9 +87,11 @@ The examples select from this value:
 | `$.store.book[?@.price < 10].title` | "A", "C": a filter |
 
 `at_path` reads a path that selects one value: names and indexes only.
-`[*]`, `..`, a filter and a slice such as `[0:2]` select many values, and
-only `cbor::query` reads them. `query` gives every match as a
-`cbor::lazy`, in a `std::vector`, and an empty vector when nothing matches.
+`[*]`, `..`, a filter and a slice such as `[0:2]` select many values.
+Only a read with `cbor::nodelist` as the result reads them, for example
+`lazy.at_path<Path, cbor::nodelist>()`. It gives every match as a
+`cbor::lazy`, in a `cbor::nodelist`, and an empty vector when nothing
+matches.
 
 In a filter, `@` is the current value. A filter compares with `==`,
 `!=`, `<`, `<=`, `>` and `>=`, and joins tests with `&&`, `||` and `!`.
@@ -111,15 +120,17 @@ if (!id) {
 ```
 
 A path reads the bytes up to its value and no further, so it does not
-find a fault after the value. `cbor::item_size(bytes)` checks the whole
+find a fault after the value. A list or a map that claims more items than
+the bytes left gives `too_little_data` before the path reads an element.
+`cbor::item_size(bytes)` checks the whole
 value and gives its size in bytes.
 
 ## 6. What is not supported
 
 - `match()` and `search()`: the library has no regular expressions.
 - Function extensions beyond those of RFC 9535.
-- Normalized paths: `query` gives values, not their places.
+- Normalized paths: a `nodelist` gives values, not their places.
 
-More: every form of `at_path` and `query`, the full syntax, keys that are
+More: every form of `at_path`, a path at run time, the full syntax, keys that are
 not text, tags, typed arrays, limits and cost are in
 [advanced/path.md](advanced/path.md).

@@ -1,66 +1,126 @@
-#include "shared.hpp"
-
 #ifndef CBOR_ITEM_HPP
 #define CBOR_ITEM_HPP
 
 #include <cstddef>
+#include <concepts>
 #include <cstdint>
 #include <expected>
 #include <span>
 #include <string_view>
-#include <variant>
-#include <vector>
-#if defined(__STDCPP_FLOAT16_T__)
-#include <stdfloat>
-#endif
+#include <utility>
 
 #include "error.hpp"
-#include "head.hpp"
+#include "rfc8949.hpp"
 
 namespace cbor
 {
 
+template <bool>
+struct tree_decoder;
+
+class encoding;
+
 struct item;
 
-struct record {
-    std::uint64_t tag;
-    std::span<std::string_view const> names;
-    std::span<std::byte const> fields;
+template <cbor::type K>
+struct item_alternative;
+
+template <cbor::type K>
+    requires(K == cbor::type::unsigned_integer || K == cbor::type::negative_integer)
+struct item_alternative<K> {
+    using type = std::uint64_t;
 };
 
-struct data_items {
-    std::vector<item const *> const *decoded;
-    std::size_t first;
-    std::size_t count;
-
-    std::span<item const *const> span() const
-    {
-        return std::span(*decoded).subspan(first, count);
-    }
+template <cbor::type K>
+    requires(K == cbor::type::half_float || K == cbor::type::single_float || K == cbor::type::double_float)
+struct item_alternative<K> {
+    using type = double;
 };
 
-struct sharedref {
-    item const *shareable;
-    std::uint8_t additional_information;
-    std::uint64_t argument;
+template <>
+struct item_alternative<cbor::type::text_string> {
+    using type = std::string_view;
 };
+
+template <>
+struct item_alternative<cbor::type::byte_string> {
+    using type = std::span<std::byte const>;
+};
+
+template <cbor::type K>
+    requires(K == cbor::type::array || K == cbor::type::map)
+struct item_alternative<K> {
+    using type = std::span<item const>;
+};
+
+template <cbor::type K>
+    requires(K == cbor::type::tag || K == cbor::type::unsigned_bignum || K == cbor::type::negative_bignum ||
+             K == cbor::type::typed_array)
+struct item_alternative<K> {
+    using type = std::pair<std::uint64_t, item const *>;
+};
+
+template <cbor::type K>
+    requires(K == cbor::type::false_value || K == cbor::type::true_value || K == cbor::type::null ||
+             K == cbor::type::undefined || K == cbor::type::simple_value)
+struct item_alternative<K> {
+    using type = cbor::simple_value;
+};
+
+template <cbor::type K>
+using item_alternative_t = typename item_alternative<K>::type;
 
 struct item {
-    cbor::major_type major_type;
-    std::uint8_t additional_information;
-    std::uint64_t argument;
-    std::variant<std::monostate, std::span<std::byte const>, std::string_view, item const *, data_items, sharedref,
-                 record, simple_value,
-#if defined(__STDCPP_FLOAT16_T__)
-                 std::float16_t,
-#endif
-                 float, double>
-        content;
+    cbor::type const type;
+    std::uint8_t const additional_information;
 
-    std::expected<cbor::type, error> type() const
+    template <cbor::type K>
+    std::expected<item_alternative_t<K>, error> get() const
     {
-        return heads::type_of(major_type, additional_information, argument);
+        if (type != K) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        if constexpr (std::same_as<item_alternative_t<K>, std::uint64_t>)
+            return via.u64;
+        else if constexpr (std::same_as<item_alternative_t<K>, double>)
+            return via.f64;
+        else if constexpr (K == cbor::type::text_string)
+            return via.str;
+        else if constexpr (K == cbor::type::byte_string)
+            return via.bin;
+        else if constexpr (K == cbor::type::array)
+            return via.array;
+        else if constexpr (K == cbor::type::map)
+            return via.map;
+        else if constexpr (std::same_as<item_alternative_t<K>, std::pair<std::uint64_t, item const *>>)
+            return std::pair<std::uint64_t, item const *>(via.tag.number, via.tag.content);
+        else
+            return via.simple_value;
     }
+
+private:
+    union content {
+        std::uint64_t u64;
+        double f64;
+        std::string_view str;
+        std::span<std::byte const> bin;
+        std::span<item const> array;
+        std::span<item const> map;
+        struct {
+            std::uint64_t number;
+            item const *content;
+        } tag;
+        cbor::simple_value simple_value;
+    } via;
+
+    constexpr item(cbor::type const t, std::uint8_t const info, content const v)
+        : type(t), additional_information(info), via(v)
+    {
+    }
+
+    template <bool>
+    friend struct tree_decoder;
+
+    friend class encoding;
 };
 
 }

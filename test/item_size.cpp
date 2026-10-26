@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <cstddef>
 #include <string>
@@ -57,4 +58,28 @@ TEST_CASE("item_size: the nesting depth is not bounded, and the count of items i
     CHECK_EQ(cbor::item_size("\xbb\x7f\xff\xff\xff\xff\xff\xff\xff\x00"sv).error(), error::too_little_data);
     CHECK_EQ(cbor::item_size("\x82\x00\x00"sv).value(), 3u);
     CHECK_EQ(cbor::item_size("\xa1\x00\x00"sv).value(), 3u);
+}
+
+// RFC 8949 3: each data item has at least its initial byte. item_size refuses a count larger than the bytes left with
+// too_little_data before it skips an element, by owner decision.
+TEST_CASE("item_size: a count larger than the bytes left is too_little_data before the elements")
+{
+    for (std::string_view const wire : {"\x8c\xff"sv, "\x95\xf8\x04"sv, "\x95\xbf"sv, "\x88\x00\x7f"sv,
+                                        "\x87\xd8\x1c\x1f"sv, "\x85\xd8\x1c\xd8\x1c"sv, "\xa2\xff\x00\x00"sv}) {
+        CAPTURE(wire);
+        CHECK_EQ(cbor::item_size(wire).error(), error::too_little_data);
+    }
+}
+
+// Found by the fuzzer: 28(24(h'83')) holds an embedded array that claims three items and has none. RFC 8949 3.4.5.1 and
+// 5.3.2: the outer item is well-formed, and the embedded data item is a top-level item of its own, by owner decision.
+// item_size frames the outer item; decode reads the embedded item and gives too_little_data for it.
+TEST_CASE("item_size: a cut item inside tag 24 is framed, and decode refuses it")
+{
+    std::string_view const wire = "\xd8\x1c\xd8\x18\x41\x83"sv;
+    CHECK_EQ(cbor::item_size(wire).value(), wire.size());
+    auto const top_level = test::lazy_of_copy(wire);
+    REQUIRE(top_level.has_value());
+    CHECK_EQ(top_level->clone().error(), error::too_little_data);
+    CHECK_EQ(cbor::item_size("\xd8\x1c\xd8\x18\x41"sv).error(), error::too_little_data);
 }
