@@ -27,12 +27,12 @@ using cbor::error;
 namespace doc_advanced_packed
 {
 
-struct [[=cbor::tag(1700)]] tire {
+struct tire {
     std::uint16_t diameter;
     float pressure;
 };
 
-struct [[=cbor::tag(1701)]] car {
+struct car {
     std::string make;
     std::uint8_t seats;
     std::vector<tire> tires;
@@ -44,11 +44,11 @@ struct untagged {
     std::uint8_t a;
 };
 
-struct [[=cbor::tag(1700)]] twin {
+struct twin {
     std::uint8_t a;
 };
 
-struct [[=cbor::tag(1702)]] pair_of_tags {
+struct pair_of_tags {
     tire t;
     twin w;
 };
@@ -63,6 +63,49 @@ struct [[=cbor::tag(1711)]] skipped {
     std::uint8_t kept;
     [[=cbor::skip{}]] std::uint8_t secret;
 };
+
+} // namespace doc_advanced_packed
+
+template <>
+struct cbor::describe_members<doc_advanced_packed::tire> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_advanced_packed::tire, diameter),
+        CBOR_MEMBER(doc_advanced_packed::tire, pressure),
+    };
+};
+
+template <>
+struct cbor::describe_members<doc_advanced_packed::car> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1701};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_advanced_packed::car, make),
+        CBOR_MEMBER(doc_advanced_packed::car, seats),
+        CBOR_MEMBER(doc_advanced_packed::car, tires),
+        CBOR_MEMBER(doc_advanced_packed::car, track),
+        CBOR_MEMBER(doc_advanced_packed::car, note),
+    };
+};
+
+template <>
+struct cbor::describe_members<doc_advanced_packed::twin> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_advanced_packed::twin, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<doc_advanced_packed::pair_of_tags> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1702};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_advanced_packed::pair_of_tags, t),
+        CBOR_MEMBER(doc_advanced_packed::pair_of_tags, w),
+    };
+};
+
+namespace doc_advanced_packed
+{
 
 template <class A>
 concept reads_seats = requires(A &&a) { std::forward<A>(a).template at_path<"$.seats">(); };

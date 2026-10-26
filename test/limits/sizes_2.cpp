@@ -240,16 +240,33 @@ TEST_CASE("doc advanced path: the size limits")
 namespace
 {
 
-struct[[= cbor::tag(1590)]] note {
+struct note {
     std::string text;
     std::vector<std::int32_t> numbers;
 };
 
-struct[[= cbor::tag(1591)]] names {
+struct names {
     std::vector<std::string> list;
 };
 
 } // namespace
+
+template <>
+struct cbor::describe_members<note> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1590};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(note, text),
+        CBOR_MEMBER(note, numbers),
+    };
+};
+
+template <>
+struct cbor::describe_members<names> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1591};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(names, list),
+    };
+};
 
 // packed checks the string and container limits on each head it reads. The list of std::int32_t is a typed
 // array (RFC 8746), a tag over a byte string of 4 bytes for each element.

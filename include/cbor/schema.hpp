@@ -584,8 +584,10 @@ class reflection
     {
         if constexpr (has_describe_members<U>) {
             constexpr auto members = own_members<U>();
+            constexpr auto texts = listed_key_texts<U>();
+            constexpr auto sizes = listed_key_sizes<U>();
             auto const i = static_cast<std::size_t>(std::ranges::find(members, r) - members.begin());
-            return std::string_view(listed_key_texts<U>()[i], listed_key_sizes<U>()[i]);
+            return std::string_view(texts[i], sizes[i]);
         } else {
             for (std::meta::info const a : std::meta::annotations_of(r))
                 if (std::meta::remove_const(std::meta::type_of(a)) == (^^cbor::key) &&
