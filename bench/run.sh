@@ -20,6 +20,7 @@ stamp=$(date -u +%Y%m%dT%H%M%SZ)
 build=$(mktemp -d "${TMPDIR:-/tmp}/mbedded-cbor-bench.XXXXXX")
 trap 'rm -rf "$build"' EXIT
 flags="-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG"
+warnings="-Wall -Wextra -Werror"
 export GLIBC_TUNABLES=glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456
 
 docs=${DOCS:-"cwt senml floats ints strings records twitter"}
@@ -60,14 +61,14 @@ for cc in "$GXX" "$CLANGXX"; do
 	tag=$(basename "$cc")
 	for a in $arms; do
 		for d in $docs; do
-			spawn "$cc" -std=c++23 $flags -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" \
+			spawn "$cc" -std=c++23 $flags $warnings -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" \
 				-DDOC_PATH="\"$here/docs/$d.cbor\"" -I"$root/include" $extra \
 				"$here/runtime.cpp" $(arm_libraries "$a") -lbenchmark -lpthread -o "$build/rt.$tag.$a.$d"
 		done
 	done
 done
 for op in ${CWT_OPS-READ ENC}; do
-	spawn "$GXX" -std=c++26 -freflection $flags -DOP_$op -DDOC_PATH="\"$here/docs/cwt.cbor\"" \
+	spawn "$GXX" -std=c++26 -freflection $flags $warnings -DOP_$op -DDOC_PATH="\"$here/docs/cwt.cbor\"" \
 		-I"$root/include" "$here/cwt.cpp" -lbenchmark -lpthread -o "$build/cw.$op"
 done
 finish
