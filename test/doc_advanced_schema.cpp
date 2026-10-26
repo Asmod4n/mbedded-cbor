@@ -53,15 +53,9 @@ struct pair_of_tags {
     twin w;
 };
 
-struct [[=cbor::tag(1710)]] [[=cbor::allowlist{}]] chosen {
-    [[=cbor::key("id")]] [[=cbor::allow{}]] std::uint8_t number;
-    [[=cbor::allow{}]] std::uint8_t kept;
-    std::uint8_t secret;
-};
-
-struct [[=cbor::tag(1711)]] skipped {
+struct chosen {
+    std::uint8_t number;
     std::uint8_t kept;
-    [[=cbor::skip{}]] std::uint8_t secret;
 };
 
 } // namespace doc_advanced_packed
@@ -92,6 +86,15 @@ struct cbor::describe_members<doc_advanced_packed::twin> {
     static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
     static constexpr std::tuple members{
         CBOR_MEMBER(doc_advanced_packed::twin, a),
+    };
+};
+
+template <>
+struct cbor::describe_members<doc_advanced_packed::chosen> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1710};
+    static constexpr std::tuple members{
+        cbor::member{"id", &doc_advanced_packed::chosen::number},
+        CBOR_MEMBER(doc_advanced_packed::chosen, kept),
     };
 };
 
@@ -135,24 +138,19 @@ TEST_CASE("doc advanced schema: a struct needs a tag of its own")
     CHECK_FALSE(cbor::tags_registered<pair_of_tags>());
 }
 
-// The section "Structs and tags" lists the annotations that choose the keys and the members.
-TEST_CASE("doc advanced schema: annotations choose the keys and the members")
+// The section "Structs and tags" shows that the description gives the key of each member.
+TEST_CASE("doc advanced schema: the description gives the keys")
 {
-    auto const a = cbor::schema<chosen>::encode(chosen{7, 8, 9});
+    auto const a = cbor::schema<chosen>::encode(chosen{7, 8});
     REQUIRE(a.has_value());
     CHECK_NE(a->find("\x62" "id"sv), std::string::npos);
     CHECK_NE(a->find("\x64" "kept"sv), std::string::npos);
     CHECK_EQ(a->find("number"sv), std::string::npos);
-    CHECK_EQ(a->find("secret"sv), std::string::npos);
     auto const back = cbor::schema<chosen>::decode(std::string(*a));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->number, 7u);
     CHECK_EQ((*back)->kept, 8u);
-    CHECK_EQ((*back)->secret, 0u);
-    auto const b = cbor::schema<skipped>::encode(skipped{1, 2});
-    REQUIRE(b.has_value());
-    CHECK_EQ(b->find("secret"sv), std::string::npos);
-    CHECK_EQ(cbor::schema<skipped>::at_path<"$.kept">(*b), 1u);
+    CHECK_EQ(cbor::schema<chosen>::at_path<"$.id">(*a), 7u);
 }
 
 // The section "Encode and decode" shows the round trip of a struct and the encode that appends to a target.
