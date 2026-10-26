@@ -1,7 +1,7 @@
 {
  "time": "2026-10-07-120930Z",
  "commit": "455b525944bfb381cfa66374b71944cdf3cbfc89",
- "how": "Google Benchmark, one binary per arm and document, -O2 -march=native -falign-functions=64 -falign-loops=64, 7 processes per binary, all binaries alternate in each round, --benchmark_min_time=0.03s, GLIBC_TUNABLES trim_threshold, mmap_threshold and top_pad high, uid 1000, not pinned, 15.1 s. READ: lazy_decode through a binding that sums every item (455b525). A and A2: lazy::decode at b748684, the same source built twice (A/A). N: lazy::decode at 455b525. A decode arm builds the items, walks the tree, sums like READ, and frees the top-level item.",
+ "how": "Google Benchmark, one binary per arm and document, -O2 -march=native -falign-functions=64 -falign-loops=64, 7 processes per binary, all binaries alternate in each round, --benchmark_min_time=0.03s, GLIBC_TUNABLES trim_threshold, mmap_threshold and top_pad high, uid 1000, not pinned, 15.1 s. READ: lazy_decode through a binding that sums every item (455b525). A and A2: lazy::clone at b748684, the same source built twice (A/A). N: lazy::clone at 455b525. A decode arm builds the items, walks the tree, sums like READ, and frees the top-level item.",
  "finding": "N is 11 to 31 percent faster than A on twitter, floats and records, cwt unchanged. A/A spread up to 14.5 percent. decode stays 3.7 to 7.7 times slower than READ.",
  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -DNDEBUG",
  "processes": 7,

@@ -25,7 +25,7 @@
 #include "validity.hpp"
 #include "head.hpp"
 #include "item.hpp"
-#include "owning_ref.hpp"
+#include "ref.hpp"
 
 namespace cbor
 {
@@ -38,7 +38,7 @@ class iov_writer;
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
-std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
 
 class encoding
 {
@@ -143,17 +143,17 @@ private:
     template <class Target>
     friend std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
-    friend std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+    friend std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
 
     template <class>
     friend class cbor::encoder;
 
-#ifdef __cpp_impl_reflection
-    template <class>
-    friend class packed;
-
     template <class>
     friend class structs;
+
+#ifdef __cpp_impl_reflection
+    template <class>
+    friend class schema;
 #endif
 };
 
@@ -410,7 +410,7 @@ struct encoding::encoder {
         return text_string_encode(std::string_view(*text));
     }
 
-    std::expected<void, std::errc> text_string_encode(owning_ref<std::string_view> const text)
+    std::expected<void, std::errc> text_string_encode(ref<std::string_view> const text)
     {
         if constexpr (blocks)
             if ((*text).size() >= ref_size)
@@ -439,7 +439,7 @@ struct encoding::encoder {
         return byte_string_encode(chars_of(*bytes));
     }
 
-    std::expected<void, std::errc> byte_string_encode(owning_ref<std::span<std::byte const>> const bytes)
+    std::expected<void, std::errc> byte_string_encode(ref<std::span<std::byte const>> const bytes)
     {
         if constexpr (blocks)
             if ((*bytes).size() >= ref_size)
@@ -465,7 +465,7 @@ struct encoding::encoder {
         return {};
     }
 
-    owning_ref<std::span<std::string_view const>> release()
+    ref<std::span<std::string_view const>> release()
         requires blocks
     {
         std::ignore = flush();
@@ -577,7 +577,7 @@ class iov_writer
         piece_open = false;
     }
 
-    owning_ref<std::span<std::string_view const>> release()
+    ref<std::span<std::string_view const>> release()
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a second release");
         released = true;
@@ -683,7 +683,7 @@ public:
         return written(out.byte_string_encode(bytes));
     }
 
-    std::expected<void, error> byte_string(owning_ref<std::span<std::byte const>> const &bytes)
+    std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(bytes));
@@ -709,7 +709,7 @@ public:
         return written(out.text_string_encode(text));
     }
 
-    std::expected<void, error> text_string(owning_ref<std::string_view> const &text)
+    std::expected<void, error> text_string(ref<std::string_view> const &text)
     {
         throw_logic_error_if_unusable();
         return written(out.text_string_encode(text));
@@ -732,6 +732,24 @@ public:
         throw_logic_error_if_unusable();
         return written(out.head_encode(major_type::tag, number));
     }
+
+private:
+    std::expected<void, error> shareable()
+    {
+        throw_logic_error_if_unusable();
+        return written(out.head_encode(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable)));
+    }
+
+    std::expected<void, error> sharedref(std::uint64_t const index)
+    {
+        throw_logic_error_if_unusable();
+        if (auto const r = written(out.head_encode(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref)));
+            !r) [[unlikely]]
+            return r;
+        return written(out.head_encode(major_type::unsigned_integer, index));
+    }
+
+public:
 
     std::expected<void, error> simple_value(cbor::simple_value const value)
     {
@@ -767,7 +785,7 @@ public:
     }
 
     auto finish()
-        -> std::expected<std::conditional_t<pieces, owning_ref<std::span<std::string_view const>>, std::size_t>, error>
+        -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>
     {
         throw_logic_error_if_unusable();
         usable = false;
@@ -795,20 +813,90 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
 {
     if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
         return r;
-    std::expected<void, std::errc> written = out.head_encode(node.major_type, node.additional_information, node.argument);
-    if (auto const *const text = std::get_if<std::string_view>(&node.content); written && text != nullptr) {
-        written = out.payload_encode(*text);
-    } else if (auto const *const bytes = std::get_if<std::span<std::byte const>>(&node.content);
-               written && bytes != nullptr) {
-        written = out.payload_encode(encoder<Writer>::chars_of(*bytes));
-    } else if (auto const *const children = std::get_if<data_items>(&node.content); written && children != nullptr) {
-        for (item const *const child : children->span())
-            if (auto const r = item_encode(out, *child, depth + 1, depth_max); !r) [[unlikely]]
+    major_type const major = heads::major_type_of(node.type);
+    std::uint64_t argument = node.via.u64;
+    std::uint8_t info = node.additional_information;
+    switch (node.type) {
+    case cbor::type::byte_string:
+        argument = node.via.bin.size();
+        break;
+    case cbor::type::text_string:
+        argument = node.via.str.size();
+        break;
+    case cbor::type::array:
+        argument = node.via.array.size();
+        break;
+    case cbor::type::map:
+        validity::throw_logic_error_if(node.via.map.size() % rfc8949::data_items_per_pair != 0,
+                                       "cbor::encode: a map holds a key and a value for each entry");
+        argument = node.via.map.size() / rfc8949::data_items_per_pair;
+        break;
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum:
+        if (node.via.tag.content->type == cbor::type::byte_string) {
+            std::string_view const magnitude =
+                heads::magnitude_without_leading_zeros(encoder<Writer>::chars_of(node.via.tag.content->via.bin));
+            if (validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
+                std::expected<void, std::errc> const fits =
+                    out.head_encode(node.type == cbor::type::negative_bignum ? major_type::negative_integer
+                                                                            : major_type::unsigned_integer,
+                                    heads::magnitude_value(magnitude));
+                if (!fits) [[unlikely]]
+                    return std::unexpected(validity::writer_error(fits.error()));
+                return {};
+            }
+        }
+        argument = node.via.tag.number;
+        break;
+    case cbor::type::tag:
+    case cbor::type::typed_array:
+        argument = node.via.tag.number;
+        break;
+    case cbor::type::false_value:
+    case cbor::type::true_value:
+    case cbor::type::null:
+    case cbor::type::undefined:
+    case cbor::type::simple_value:
+        argument = std::to_underlying(node.via.simple_value);
+        break;
+    case cbor::type::half_float:
+        info = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+        argument = heads::float_encode(rfc8949::simple_float_information::half_precision_float, node.via.f64);
+        break;
+    case cbor::type::single_float:
+        info = std::to_underlying(rfc8949::simple_float_information::single_precision_float);
+        argument = heads::float_encode(rfc8949::simple_float_information::single_precision_float, node.via.f64);
+        break;
+    case cbor::type::double_float:
+        info = std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+        argument = heads::float_encode(rfc8949::simple_float_information::double_precision_float, node.via.f64);
+        break;
+    case cbor::type::unsigned_integer:
+    case cbor::type::negative_integer:
+        break;
+    }
+    std::expected<void, std::errc> written = out.head_encode(major, info, argument);
+    if (!written) [[unlikely]]
+        return std::unexpected(validity::writer_error(written.error()));
+    switch (major) {
+    case major_type::byte_string:
+        written = out.payload_encode(encoder<Writer>::chars_of(node.via.bin));
+        break;
+    case major_type::text_string:
+        written = out.payload_encode(node.via.str);
+        break;
+    case major_type::array:
+    case major_type::map:
+        for (item const &child : major == major_type::array ? node.via.array : node.via.map)
+            if (auto const r = item_encode(out, child, depth + 1, depth_max); !r) [[unlikely]]
                 return r;
-    } else if (auto const *const content = std::get_if<item const *>(&node.content); written && content != nullptr) {
-        return item_encode(out, **content, depth + 1, depth_max);
-    } else if (auto const *const reference = std::get_if<sharedref>(&node.content); written && reference != nullptr) {
-        written = out.head_encode(major_type::unsigned_integer, reference->additional_information, reference->argument);
+        break;
+    case major_type::tag:
+        return item_encode(out, *node.via.tag.content, depth + 1, depth_max);
+    case major_type::unsigned_integer:
+    case major_type::negative_integer:
+    case major_type::simple_float:
+        break;
     }
     if (!written) [[unlikely]]
         return std::unexpected(validity::writer_error(written.error()));
@@ -818,10 +906,9 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target)
 {
-    std::size_t const depth_max = limits.load().nesting_depth;
     decltype(auto) message = encoding::message_of(target, 0);
     encoding::encoder<std::remove_reference_t<decltype(message)>> out(message);
-    if (auto const r = encoding::item_encode(out, root, 0, depth_max); !r) [[unlikely]]
+    if (auto const r = encoding::item_encode(out, root, 0, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const r = out.flush(); !r) [[unlikely]]
         return std::unexpected(validity::writer_error(r.error()));
@@ -830,14 +917,12 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
     return out.written;
 }
 
-inline std::expected<owning_ref<std::span<std::string_view const>>, error> encode_iov(item const &root)
+inline std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root)
 {
-    std::size_t const depth_max = limits.load().nesting_depth;
     iov_writer writer;
     encoding::encoder<iov_writer> out(writer);
-    if (auto const r = encoding::item_encode(out, root, 0, depth_max); !r) [[unlikely]]
+    if (auto const r = encoding::item_encode(out, root, 0, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     return out.release();
 }
-
 }

@@ -1,0 +1,251 @@
+{
+ "time": "20261005T172525Z",
+ "commit": "8d137be55af206bfde214c4a256cdb885dbcb0f9-dirty",
+ "flags": "-O2 -march=native -DNDEBUG",
+ "processes": 1,
+ "min_time": "0.2s",
+ "compilers": {
+  "gxx": "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "clangxx": "clang version 23.1.2"
+ },
+ "resolved_march": "znver3",
+ "libraries": "linux-vdso.so.1 (0x00007fd96ded3000)\n\tlibbenchmark.so.1 => /lib64/libbenchmark.so.1 (0x00007fd96de43000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fd96da00000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007fd96dd1f000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007fd96dcef000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007fd96d600000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fd96ded5000)",
+ "libc": "ldd (GNU libc) 2.44",
+ "kernel": "7.2.8-1-default",
+ "virtualization": "none",
+ "cpu": {
+  "model": "AMD Ryzen 9 5950X 16-Core Processor",
+  "flags_sha256": "fd0a5283bf1913dcdc5eb5482b57605bc0d12818aca07df050165d6b67fc75c8",
+  "cpus": 32
+ },
+ "user": 1000,
+ "nice": 0,
+ "threads": 1,
+ "arms": {
+  "rt.clang++.MP_READ.cwt": {
+   "repetitions_ns": [
+    81.66638779544917
+   ],
+   "median_ns": 81.66638779544917,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_READ.floats": {
+   "repetitions_ns": [
+    177566.89242529558
+   ],
+   "median_ns": 177566.89242529558,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_READ.ints": {
+   "repetitions_ns": [
+    396042.9095964926
+   ],
+   "median_ns": 396042.9095964926,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_READ.records": {
+   "repetitions_ns": [
+    197663.62332415517
+   ],
+   "median_ns": 197663.62332415517,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_READ.senml": {
+   "repetitions_ns": [
+    173.211125753183
+   ],
+   "median_ns": 173.211125753183,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_READ.strings": {
+   "repetitions_ns": [
+    417848.39938102587
+   ],
+   "median_ns": 417848.39938102587,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_READ.twitter": {
+   "repetitions_ns": [
+    168073.00178348608
+   ],
+   "median_ns": 168073.00178348608,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_REUSE.cwt": {
+   "repetitions_ns": [
+    9.637287327593445
+   ],
+   "median_ns": 9.637287327593445,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_REUSE.floats": {
+   "repetitions_ns": [
+    209332.1965133424
+   ],
+   "median_ns": 209332.1965133424,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_REUSE.ints": {
+   "repetitions_ns": [
+    528986.589454119
+   ],
+   "median_ns": 528986.589454119,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_REUSE.records": {
+   "repetitions_ns": [
+    291126.9908349684
+   ],
+   "median_ns": 291126.9908349684,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_REUSE.senml": {
+   "repetitions_ns": [
+    321.00180973548447
+   ],
+   "median_ns": 321.00180973548447,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_REUSE.strings": {
+   "repetitions_ns": [
+    250256.60777064366
+   ],
+   "median_ns": 250256.60777064366,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.clang++.MP_REUSE.twitter": {
+   "repetitions_ns": [
+    201205.40684126993
+   ],
+   "median_ns": 201205.40684126993,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_READ.cwt": {
+   "repetitions_ns": [
+    77.32945946472991
+   ],
+   "median_ns": 77.32945946472991,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_READ.floats": {
+   "repetitions_ns": [
+    242073.96331863038
+   ],
+   "median_ns": 242073.96331863038,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_READ.ints": {
+   "repetitions_ns": [
+    411877.09800897003
+   ],
+   "median_ns": 411877.09800897003,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_READ.records": {
+   "repetitions_ns": [
+    231505.43040133556
+   ],
+   "median_ns": 231505.43040133556,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_READ.senml": {
+   "repetitions_ns": [
+    155.18159740419992
+   ],
+   "median_ns": 155.18159740419992,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_READ.strings": {
+   "repetitions_ns": [
+    504002.1066668573
+   ],
+   "median_ns": 504002.1066668573,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_READ.twitter": {
+   "repetitions_ns": [
+    165289.8189857035
+   ],
+   "median_ns": 165289.8189857035,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_REUSE.cwt": {
+   "repetitions_ns": [
+    7.471939038486303
+   ],
+   "median_ns": 7.471939038486303,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_REUSE.floats": {
+   "repetitions_ns": [
+    169042.61993958522
+   ],
+   "median_ns": 169042.61993958522,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_REUSE.ints": {
+   "repetitions_ns": [
+    314437.9921435018
+   ],
+   "median_ns": 314437.9921435018,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_REUSE.records": {
+   "repetitions_ns": [
+    227664.13442613918
+   ],
+   "median_ns": 227664.13442613918,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_REUSE.senml": {
+   "repetitions_ns": [
+    217.89408015154723
+   ],
+   "median_ns": 217.89408015154723,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_REUSE.strings": {
+   "repetitions_ns": [
+    182135.024804288
+   ],
+   "median_ns": 182135.024804288,
+   "spread": 0.0,
+   "same": null
+  },
+  "rt.g++-16.MP_REUSE.twitter": {
+   "repetitions_ns": [
+    149909.90220310783
+   ],
+   "median_ns": 149909.90220310783,
+   "spread": 0.0,
+   "same": null
+  }
+ },
+ "failed": []
+}

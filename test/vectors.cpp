@@ -1,4 +1,6 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
+#include "item_head.hpp"
 #include "sequence_reader.hpp"
 
 #include <algorithm>
@@ -23,6 +25,7 @@
 #include <stdfloat>
 #endif
 
+using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
@@ -116,7 +119,8 @@ TEST_CASE("test vectors: not well-formed items fail")
 // in the low 5 bits and the argument after it. The item of each example keeps these fields from the wire, and its
 // content follows section 3.1: a string is the bytes after the head, an array and a map hold as many members as the
 // argument says, a tag points to its content, a float holds the bits of the argument in the width of the additional
-// information. Indefinite lengths are refused, as cbor::decode refuses them.
+// information. Indefinite lengths are refused, as cbor::decode refuses them. Every example is in preferred form,
+// which is the own form of encode(item), so encode gives the bytes of the example.
 TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fields of the wire")
 {
     auto const cases = cases_of(TEST_VECTORS "/appendix_a.json");
@@ -124,9 +128,9 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
         std::string const wire = bytes_of_hex(c.hex);
-        auto const top_level = cbor::lazy::from(wire);
+        auto const top_level = test::lazy_of_copy(wire);
         REQUIRE(top_level.has_value());
-        auto const decoded_item = top_level->decode();
+        auto const decoded_item = top_level->clone();
         auto const initial = static_cast<std::uint8_t>(wire.front());
         if ((initial & 0x1f) == 31) {
             CHECK_EQ(decoded_item.error(), error::indefinite_length);
@@ -145,52 +149,49 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
         std::uint64_t argument = info < 24 ? info : 0;
         for (std::size_t i = 1; i <= argument_bytes; ++i)
             argument = argument << 8 | static_cast<std::uint8_t>(wire[i]);
-        CHECK_EQ(std::to_underlying(it.major_type), initial >> 5);
+        cbor::major_type const major = static_cast<cbor::major_type>(initial >> 5);
         CHECK_EQ(it.additional_information, info);
-        CHECK_EQ(it.argument, argument);
+        CHECK_EQ(argument_of(it), argument);
         std::string_view const after_head = std::string_view(wire).substr(1 + argument_bytes);
-        switch (it.major_type) {
+        switch (major) {
         case cbor::major_type::unsigned_integer:
+            CHECK_EQ(it.type, cbor::type::unsigned_integer);
+            break;
         case cbor::major_type::negative_integer:
-            CHECK(std::holds_alternative<std::monostate>(it.content));
+            CHECK_EQ(it.type, cbor::type::negative_integer);
             break;
-        case cbor::major_type::byte_string:
-            REQUIRE(std::holds_alternative<std::span<std::byte const>>(it.content));
-            CHECK(std::ranges::equal(std::get<std::span<std::byte const>>(it.content), std::as_bytes(std::span(after_head))));
+        case cbor::major_type::byte_string: {
+            auto const b = it.get<cbor::type::byte_string>();
+            REQUIRE(b.has_value());
+            CHECK(std::ranges::equal(*b, std::as_bytes(std::span(after_head))));
             break;
-        case cbor::major_type::text_string:
-            REQUIRE(std::holds_alternative<std::string_view>(it.content));
-            CHECK_EQ(std::get<std::string_view>(it.content), after_head);
+        }
+        case cbor::major_type::text_string: {
+            auto const t = it.get<cbor::type::text_string>();
+            REQUIRE(t.has_value());
+            CHECK_EQ(*t, after_head);
             break;
+        }
         case cbor::major_type::array:
         case cbor::major_type::map:
-            REQUIRE(std::holds_alternative<cbor::data_items>(it.content));
-            CHECK_EQ(std::get<cbor::data_items>(it.content).span().size(),
-                     it.major_type == cbor::major_type::map ? 2 * argument : argument);
+            REQUIRE((it.type == cbor::type::array || it.type == cbor::type::map));
+            CHECK_EQ(children_of(it).size(), it.type == cbor::type::map ? 2 * argument : argument);
             break;
-        case cbor::major_type::tag:
-            REQUIRE(std::holds_alternative<cbor::item const *>(it.content));
-            CHECK_EQ(std::to_underlying(std::get<cbor::item const *>(it.content)->major_type),
-                     static_cast<std::uint8_t>(after_head.front()) >> 5);
+        case cbor::major_type::tag: {
+            std::string content;
+            REQUIRE(cbor::encode(*tag_content_of(it), content).has_value());
+            CHECK_EQ(static_cast<std::uint8_t>(content.front()) >> 5, static_cast<std::uint8_t>(after_head.front()) >> 5);
             break;
+        }
         case cbor::major_type::simple_float:
-            if (info == 25) {
-#if defined(__STDCPP_FLOAT16_T__)
-                REQUIRE(std::holds_alternative<std::float16_t>(it.content));
-                CHECK_EQ(std::bit_cast<std::uint16_t>(std::get<std::float16_t>(it.content)), argument);
-#else
-                REQUIRE(std::holds_alternative<float>(it.content));
-#endif
-            } else if (info == 26) {
-                REQUIRE(std::holds_alternative<float>(it.content));
-                CHECK_EQ(std::bit_cast<std::uint32_t>(std::get<float>(it.content)), argument);
-            } else if (info == 27) {
-                REQUIRE(std::holds_alternative<double>(it.content));
-                CHECK_EQ(std::bit_cast<std::uint64_t>(std::get<double>(it.content)), argument);
-            } else {
-                REQUIRE(std::holds_alternative<cbor::simple_value>(it.content));
-                CHECK_EQ(std::to_underlying(std::get<cbor::simple_value>(it.content)), argument);
-            }
+            if (info == 25)
+                CHECK_EQ(it.type, cbor::type::half_float);
+            else if (info == 26)
+                CHECK_EQ(it.type, cbor::type::single_float);
+            else if (info == 27)
+                CHECK_EQ(it.type, cbor::type::double_float);
+            else
+                CHECK_EQ(argument_of(it), argument);
             break;
         }
     }
@@ -198,8 +199,6 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
 
 namespace
 {
-
-constexpr std::size_t depth_limit = cbor::validity::nesting_depth_limit;
 
 // One test of a file of the CBOR WG test vectors. decoded holds the bytes of the "decoded" item, empty when
 // the test has none.
@@ -249,7 +248,7 @@ std::string member_bytes(cbor::lazy const &object, std::string_view const key)
 std::vector<wg_vector> wg_vectors_of(std::string const &path)
 {
     std::string const file = file_read(path);
-    auto const top = cbor::lazy::from(std::string_view(file));
+    auto const top = test::lazy_of_copy(std::string_view(file));
     REQUIRE(top.has_value());
     bool const file_fail = member_bool(*top, "fail", false);
     auto const tests = top->at("tests");
@@ -270,7 +269,7 @@ std::vector<wg_vector> wg_vectors_of(std::string const &path)
                     member_bool(*t, "roundtrip", true),
                     member_bool(*t, "fail", file_fail)};
         if (auto const decoded = t->at("decoded")) {
-            std::string_view const rest = std::string_view(file).substr(decoded->offset);
+            std::string_view const rest = cbor::validity::subspan(std::string_view(file), decoded->offset);
             auto const end = cbor::item_size(rest);
             REQUIRE(end.has_value());
             v.decoded = std::string(rest.substr(0, *end));
@@ -364,27 +363,28 @@ bool equivalent(value const &a, value const &b)
     return a == b;
 }
 
-// The walk of lazy: lazy::decode gives the item of each node, elements and entries give the members,
+// The walk of lazy: lazy::clone gives the item of each node, elements and entries give the members,
 // get<double> gives a float. A tag stays a tag, so a bignum compares through integer_of.
 std::expected<value, error> lazy_value(cbor::lazy const &l)
 {
-    auto const decoded_item = l.decode();
+    auto const decoded_item = l.clone();
     if (!decoded_item)
         return std::unexpected(decoded_item.error());
     cbor::item const &it = **decoded_item;
-    switch (it.major_type) {
+    switch (major_of(it.type)) {
     case cbor::major_type::unsigned_integer:
-        return value{it.argument};
+        return value{argument_of(it)};
     case cbor::major_type::negative_integer:
-        return value{negative{it.argument}};
+        return value{negative{argument_of(it)}};
     case cbor::major_type::byte_string: {
         std::string b;
-        for (std::byte const x : std::get<std::span<std::byte const>>(it.content))
+        auto const content = it.get<cbor::type::byte_string>().value();
+        for (std::byte const x : content)
             b.push_back(static_cast<char>(x));
         return value{bytes{std::move(b)}};
     }
     case cbor::major_type::text_string:
-        return value{std::string(std::get<std::string_view>(it.content))};
+        return value{std::string(it.get<cbor::type::text_string>().value())};
     case cbor::major_type::array: {
         auto const elements = l.elements();
         if (!elements)
@@ -422,10 +422,10 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         // RFC 8949 3: the content follows the head, whose argument takes 1 << (ai - 24) bytes from ai 24 on.
         std::size_t const argument_bytes =
             it.additional_information < 24 ? 0 : std::size_t{1} << (it.additional_information - 24);
-        auto content = lazy_value(cbor::lazy{l.top_level, l.offset + 1 + argument_bytes});
+        auto content = lazy_value(cbor::lazy{l.top_level, cbor::validity::next(l.offset, 1 + argument_bytes)});
         if (!content)
             return content;
-        return value{tagged{it.argument, std::move(*content)}};
+        return value{tagged{argument_of(it), std::move(*content)}};
     }
     case cbor::major_type::simple_float:
         if (it.additional_information >= 25 && it.additional_information <= 27) {
@@ -434,14 +434,14 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
                 return std::unexpected(d.error());
             return value{*d};
         }
-        return value{simple{static_cast<std::uint8_t>(it.argument)}};
+        return value{simple{static_cast<std::uint8_t>(argument_of(it))}};
     }
     return std::unexpected(error::syntax_error);
 }
 
 std::expected<value, error> lazy_value_of(std::string_view const wire)
 {
-    auto const top = cbor::lazy::from(wire);
+    auto const top = test::lazy_of_copy(wire);
     REQUIRE(top.has_value());
     return lazy_value(*top);
 }
@@ -497,6 +497,15 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     CAPTURE(v.description);
     CAPTURE(v.encoded);
     REQUIRE_FALSE(v.decoded.empty());
+    // The nesting depth defaults to 128 (owner, 2026-10-06). A vector nested deeper gives
+    // nesting_depth_exceeded in a build with the default and is read in full in the build with the nesting
+    // depth at its bound.
+    if (auto const shallow = decoded(v.encoded);
+        !shallow && shallow.error() == error::nesting_depth_exceeded) {
+        ++count.nesting_depth_exceeded;
+        ++count.vectors;
+        return;
+    }
     auto const expected = decoded(v.decoded);
     REQUIRE(expected.has_value());
 
@@ -515,15 +524,21 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     REQUIRE(l.has_value());
     CHECK(equivalent(*l, *expected));
 
-    // encode of the decoded tree writes each head with the additional information of the wire, so every vector,
-    // also one that is not in preferred form, comes back byte for byte.
-    auto const top_level = cbor::lazy::from(std::string(v.encoded));
+    // encode of the decoded tree writes the library's own form: the same value (RFC 8949 2), and the own form is a
+    // fixed point, so a second decode and encode gives the same bytes. The bytes of the vector itself are checked
+    // only where it is in the own form, which the test of RFC 8949 Appendix A does.
+    auto const top_level = test::lazy_of_copy(std::string(v.encoded));
     REQUIRE(top_level.has_value());
-    auto const tree = top_level->decode();
+    auto const tree = top_level->clone();
     REQUIRE(tree.has_value());
     std::string again;
     REQUIRE(cbor::encode(**tree, again).has_value());
-    CHECK_EQ(again, v.encoded);
+    CHECK(same_value(again, v.encoded));
+    std::string twice;
+    auto const again_lazy = test::lazy_of_copy(again);
+    auto const again_tree = again_lazy->clone();
+    REQUIRE(cbor::encode(**again_tree, twice).has_value());
+    CHECK_EQ(twice, again);
 
     auto const text = cbor::diagnostic_notation(v.encoded);
     REQUIRE(text.has_value());
@@ -535,14 +550,6 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     bool const bignum_tag = text->starts_with("2(") || text->starts_with("3(");
     if (!bignum_tag && !text->starts_with("float'"))
         CHECK_EQ(without_encoding_indicators(*text), without_encoding_indicators(*expected_text));
-
-    // The nesting depth defaults to 128 (owner, 2026-10-06). A vector nested deeper is read with the depth set to
-    // the limit and gives nesting_depth_exceeded at the default.
-    test::limits_guard const shallow_depth{{.nesting_depth = cbor::validity::nesting_depth_default}};
-    if (auto const shallow = decoded(v.encoded); !shallow) {
-        CHECK_EQ(shallow.error(), error::nesting_depth_exceeded);
-        ++count.nesting_depth_exceeded;
-    }
     ++count.vectors;
 }
 
@@ -553,7 +560,6 @@ void wg_good_check(wg_vector const &v, wg_count &count)
 // item in the extended generic data model.
 TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
 {
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     wg_count count{};
     for (char const *const file :
          {"/rfc8949/good.cbor", "/rfc8949-appendixA/mt0.cbor", "/rfc8949-appendixA/mt1.cbor",
@@ -567,14 +573,15 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
         }
     }
     CHECK_EQ(count.vectors, 88u + 11u + 5u + 2u + 7u + 4u + 5u + 8u + 22u + 6u + 1165u);
-    CHECK_EQ(count.nesting_depth_exceeded, 3u);
+    // Three vectors nest deeper than 128 and no vector deeper than the bound.
+    CHECK_EQ(count.nesting_depth_exceeded,
+             cbor::limits::nesting_depth == cbor::validity::nesting_depth_limit ? 0u : 3u);
 }
 
 // bad.cbor holds items that are not well-formed or not valid. Each one fails in decode, lazy and diagnostic_notation,
 // except where a decision of this library differs from the vector.
 TEST_CASE("cbor-wg test vectors: every bad vector fails")
 {
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     std::size_t checked = 0;
     for (wg_vector const &v : wg_vectors_of(CBOR_TEST_VECTORS "/tests/rfc8949/bad.cbor")) {
         CAPTURE(v.description);
@@ -590,11 +597,11 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
             CHECK(l.has_value());
             CHECK(text.has_value());
         } else if (v.encoded == "\xc1\xa1\x61\x61\x00"sv || v.encoded == "\xc0\xa1\x61\x61\x00"sv) {
-            // RFC 8949 3.4.1 and 3.4.2 make a map invalid as the content of tag 0 or 1, and RFC 8949 5.3.2
-            // names the error.
-            CHECK_EQ(d.error(), error::inadmissible_type_for_tag_content);
-            CHECK_EQ(l.error(), error::inadmissible_type_for_tag_content);
-            CHECK_EQ(text.error(), error::inadmissible_type_for_tag_content);
+            // RFC 8949 3.4.1 and 3.4.2 make a map invalid as the content of tag 0 or 1. The library interprets
+            // no tag 0 or 1 (owner, 2026-10-13), so the tag passes as a plain tag over the map.
+            CHECK(d.has_value());
+            CHECK(l.has_value());
+            CHECK(text.has_value());
         } else {
             CHECK_FALSE(d.has_value());
             CHECK_FALSE(l.has_value());
@@ -610,9 +617,8 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
 // streaming.edn. decode and lazy give indefinite_length; diagnostic_notation writes the item.
 TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
-    auto const top = cbor::lazy::from(std::string_view(file));
+    auto const top = test::lazy_of_copy(std::string_view(file));
     REQUIRE(top.has_value());
     auto const tests = top->at("tests");
     REQUIRE(tests.has_value());
@@ -637,91 +643,28 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
     CHECK_EQ(checked, 11u);
 }
 
-// RFC 8949 3.4.1: the content of tag 0 is a text string. RFC 8949 3.4.2: the content of tag 1 is an unsigned or
-// negative integer (major types 0 and 1) or a float (major type 7 with additional information 25, 26 or 27).
-// Every other content is invalid. One item of each major type, each float width and two simple values goes
-// into each tag, and decode, lazy and diagnostic_notation give the same answer.
-TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation refuse every content that RFC 8949 3.4.1 and 3.4.2 forbid")
+// RFC 8949 3.4.1 and 3.4.2 name the content of tags 0 and 1, but the library interprets neither tag (owner,
+// 2026-10-13). So every content passes as a plain tag in decode, lazy and diagnostic_notation: one item of each
+// major type, each float width and two simple values, alone and behind a tag 28 or a tag 29.
+TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation pass every content")
 {
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    struct content {
-        std::string_view encoded;
-        bool date_time_string;
-        bool epoch_based_date_time;
+    std::array<std::string_view, 12> const contents{
+        "\x00"sv, "\x20"sv, "\x40"sv, "\x60"sv, "\x80"sv, "\xa0"sv, "\xc2\x40"sv, "\xf4"sv, "\xf8\x20"sv,
+        "\xf9\x3c\x00"sv, "\xfa\x3f\x80\x00\x00"sv, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv,
     };
-    std::array<content, 12> const contents{{
-        {"\x00"sv, false, true},
-        {"\x20"sv, false, true},
-        {"\x40"sv, false, false},
-        {"\x60"sv, true, false},
-        {"\x80"sv, false, false},
-        {"\xa0"sv, false, false},
-        {"\xc2\x40"sv, false, false},
-        {"\xf4"sv, false, false},
-        {"\xf8\x20"sv, false, false},
-        {"\xf9\x3c\x00"sv, false, true},
-        {"\xfa\x3f\x80\x00\x00"sv, false, true},
-        {"\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv, false, true},
-    }};
-    for (content const &c : contents)
+    for (std::string_view const c : contents)
         for (char const tag : {'\xc0', '\xc1'}) {
-            std::string const wire = std::string(1, tag) + std::string(c.encoded);
-            CAPTURE(wire);
-            bool const admitted = tag == '\xc0' ? c.date_time_string : c.epoch_based_date_time;
-            auto const d = decoded(wire);
-            auto const l = lazy_value_of(wire);
-            auto const text = cbor::diagnostic_notation(wire);
-            if (admitted) {
-                CHECK(d.has_value());
-                CHECK(l.has_value());
-                CHECK(text.has_value());
-            } else {
-                CHECK_EQ(d.error(), error::inadmissible_type_for_tag_content);
-                CHECK_EQ(l.error(), error::inadmissible_type_for_tag_content);
-                CHECK_EQ(text.error(), error::inadmissible_type_for_tag_content);
+            std::string const plain = std::string(1, tag) + std::string(c);
+            std::string const marked = "\x82\xd8\x1c"s + std::string(c) + tag + "\xd8\x1d\x00"s;
+            std::string const inside = std::string(1, tag) + "\xd8\x1c"s + std::string(c);
+            std::string const forward = std::string(1, tag) + "\xd8\x1d\x00"s;
+            for (std::string const &wire : {plain, marked, inside, forward}) {
+                CAPTURE(wire);
+                CHECK(decoded(wire).has_value());
+                CHECK(lazy_value_of(wire).has_value());
+                CHECK(cbor::diagnostic_notation(wire).has_value());
             }
         }
-}
-
-// A content of tag 0 or 1 may be a tag 28 or a tag 29 (RFC 8949 3.4.1, 3.4.2; value-sharing). The check of the
-// content type must read the value that a tag 29 names. A fuzzer found [28(0), 0(29(0))] accepted by decode,
-// and the encoder wrote 0(0), which no reader accepts. decode, lazy and diagnostic_notation give the same answer for each.
-TEST_CASE("tags 0 and 1: a content behind tag 28 or tag 29 is checked as the value it names")
-{
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
-    struct shared_content {
-        std::string_view encoded;
-        error refused;
-    };
-    std::array<shared_content, 12> const contents{{
-        {"\x82\xd8\x1c\x00\xc0\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\x82\xd8\x1c\x60\xc0\xd8\x1d\x00"sv, error{}},
-        {"\x82\xd8\x1c\x00\xc1\xd8\x1d\x00"sv, error{}},
-        {"\x82\xd8\x1c\x60\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\xc1\xd8\x1c\x00"sv, error{}},
-        {"\xc0\xd8\x1c\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\xc1\xd8\x1d\x00"sv, error::sharedref_index_not_marked},
-        {"\xd8\x1c\x81\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\xd8\x1c\xd8\x1c\xc1\xd8\x1d\x01"sv, error::inadmissible_type_for_tag_content},
-        {"\x83\xd8\x1c\x00\xd8\x1c\xd8\x1d\x00\xc1\xd8\x1d\x01"sv, error{}},
-        {"\xd8\x1c\x82\x00\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-        {"\xd8\x1c\xc1\xd8\x1d\x00"sv, error::inadmissible_type_for_tag_content},
-    }};
-    for (shared_content const &c : contents) {
-        CAPTURE(c.encoded);
-        auto const d = decoded(c.encoded);
-        auto const l = lazy_value_of(c.encoded);
-        auto const text = cbor::diagnostic_notation(c.encoded);
-        if (c.refused == error{}) {
-            CHECK(d.has_value());
-            CHECK(l.has_value());
-            CHECK(text.has_value());
-        } else {
-            CHECK_EQ(d.error(), c.refused);
-            CHECK_EQ(l.error(), c.refused);
-            CHECK_EQ(text.error(), c.refused);
-        }
-    }
 }
 
 namespace
@@ -762,7 +705,6 @@ TEST_CASE("sequence_reader: RFC 8949 Appendix A fed byte by byte")
 // The good vectors of the CBOR working group, each on its own and each file as one sequence.
 TEST_CASE("sequence_reader: cbor-wg vectors fed byte by byte")
 {
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     for (char const *const file :
          {"/rfc8949/good.cbor", "/rfc8949-appendixA/mt0.cbor", "/rfc8949-appendixA/mt1.cbor",
           "/rfc8949-appendixA/mt2.cbor", "/rfc8949-appendixA/mt3.cbor", "/rfc8949-appendixA/mt4.cbor",
@@ -806,7 +748,6 @@ TEST_CASE("sequence_reader: not well-formed items give one error at every split"
         CAPTURE(c.hex);
         sequence_reader_malformed_check(bytes_of_hex(c.hex));
     }
-    test::limits_guard const depth{{.nesting_depth = depth_limit}};
     for (wg_vector const &v : wg_vectors_of(CBOR_TEST_VECTORS "/tests/rfc8949/bad.cbor")) {
         CAPTURE(v.encoded);
         sequence_reader_malformed_check(v.encoded);

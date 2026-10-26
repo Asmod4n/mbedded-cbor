@@ -1,0 +1,297 @@
+{
+ "time": "2026-10-17-155720Z",
+ "commit_a": {
+  "given": "c69e9c9",
+  "id": "c69e9c9355d1709965e8efa2774b77b519909509"
+ },
+ "commit_b": {
+  "given": "c69e9c9",
+  "id": "c69e9c9355d1709965e8efa2774b77b519909509"
+ },
+ "bench_sources_commit": "unknown",
+ "what": "READ, lazy path (MB_PATH), at_path (MB_AT_PATH) and struct decode (MB_STRUCT); a = commit a, aa = commit a built again, b = commit b",
+ "documents": "twitter records; MB_STRUCT on twitter only",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+ "pie": "-fPIE -pie",
+ "elf_type_count": {
+  "Type: DYN": 12
+ },
+ "rounds": 5,
+ "min_time": "0.05s",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "clang version 23.1.3"
+ ],
+ "gxx_binary": {
+  "binary": "a.gxx.records.READ",
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (SUSE Linux) 16.2.1 20260929",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang.records.READ",
+  "comment": "String dump of section '.comment':\n  [     0]  clang version 23.1.3",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "libc": "ldd (GNU libc) 2.44",
+ "kernel": "6.18.44-fc-v139",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "unknown",
+ "container": "yes",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 1000,
+ "priority": "nice 0 (nice -10 refused)",
+ "threads": 1,
+ "pinned": false,
+ "cpus_in_machine": 4,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; builds used 3 of 4 cpus",
+ "gate": [
+  "gate: vmstat 1 5",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 1  0      0 12062812 42932 3972016  0    0   151  1301  914    0 56  3 39  0  1  0",
+  " 0  0      0 12079264 42932 3972020  0    0     0     0  386  434  3  0 96  0  0  0",
+  " 0  0      0 12080600 42932 3972020  0    0     0     0  580  585  2  0 98  0  0  0",
+  " 0  0      0 12082812 42932 3972020  0    0     0     0  270  309  0  0 100 0  0  0",
+  " 0  0      0 12084888 42932 3972020  0    0     0     0  239  298  0  0 100 0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "    PID USER     %CPU  NI COMMAND",
+  "      1 ubuntu    0.8   0 bash",
+  "     13 ubuntu    0.0   0 bash",
+  "     14 ubuntu    0.0   0 ps",
+  "     15 ubuntu    0.0   0 head",
+  "gate: busy 1.5% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 9.949499309775245
+ },
+ "rounds_detail": [
+  {
+   "round": 1,
+   "wall_s": 5.376922845840454,
+   "steal_ticks": 6,
+   "steal_percent_of_cpu_time": 0.27803521779425394
+  },
+  {
+   "round": 2,
+   "wall_s": 5.306157350540161,
+   "steal_ticks": 7,
+   "steal_percent_of_cpu_time": 0.32941176470588235
+  },
+  {
+   "round": 3,
+   "wall_s": 5.252732753753662,
+   "steal_ticks": 8,
+   "steal_percent_of_cpu_time": 0.3789673140691615
+  },
+  {
+   "round": 4,
+   "wall_s": 5.482784032821655,
+   "steal_ticks": 10,
+   "steal_percent_of_cpu_time": 0.45392646391284613
+  },
+  {
+   "round": 5,
+   "wall_s": 5.476263046264648,
+   "steal_ticks": 11,
+   "steal_percent_of_cpu_time": 0.4988662131519274
+  }
+ ],
+ "steal_percent_of_cpu_time_max": 0.4988662131519274,
+ "failed": [],
+ "cells": {
+  "clang.records.READ": {
+   "a": {
+    "repetitions_ns": [
+     492455.8435378043,
+     517426.6797338431,
+     523779.06474425114,
+     601932.2999964061,
+     503739.69536289317
+    ],
+    "median_ns": 517426.6797338431,
+    "spread": 0.22230715280404145,
+    "check": "9492683289386398827",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     561903.6666684399,
+     538198.280009965,
+     701711.73949745,
+     496243.33793150884,
+     531214.0800015186
+    ],
+    "median_ns": 538198.280009965,
+    "spread": 0.4140476775414157,
+    "check": "9492683289386398827",
+    "copies": "1656"
+   },
+   "b": {
+    "repetitions_ns": [
+     542935.5066735297,
+     469028.68243213976,
+     505481.50000395253,
+     517437.0575554898,
+     574767.6261698786
+    ],
+    "median_ns": 517437.0575554898,
+    "spread": 0.225442382733251,
+    "check": "9492683289386398827",
+    "copies": "1656"
+   },
+   "a_over_a_ratio": 1.0401440456970763,
+   "b_over_a_ratio": 1.0000200566032893,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "clang.twitter.READ": {
+   "a": {
+    "repetitions_ns": [
+     337427.3644886186,
+     349204.9832430645,
+     339077.22380328254,
+     371714.3152184492,
+     362407.1111213804
+    ],
+    "median_ns": 349204.9832430645,
+    "spread": 0.10161283386661157,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     354670.009947039,
+     317932.07762510143,
+     435887.1690168547,
+     379321.694583331,
+     368201.75141733437
+    ],
+    "median_ns": 368201.75141733437,
+    "spread": 0.3710072046610011,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     341534.6556618526,
+     325143.0240337728,
+     382006.4347815207,
+     357448.8358982564,
+     381199.06060852704
+    ],
+    "median_ns": 357448.8358982564,
+    "spread": 0.1748873773833186,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 1.0544000489278447,
+   "b_over_a_ratio": 1.0236074885834425,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "gxx.records.READ": {
+   "a": {
+    "repetitions_ns": [
+     546423.4899955045,
+     478078.8476757562,
+     527462.1699936688,
+     488646.8881001359,
+     470561.6308804156
+    ],
+    "median_ns": 488646.8881001359,
+    "spread": 0.16121556484142618,
+    "check": "9492683289386398827",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     484603.8896583446,
+     713686.2095129411,
+     474050.00681415526,
+     748639.5168577954,
+     497735.006855729
+    ],
+    "median_ns": 497735.006855729,
+    "spread": 0.5792416540377547,
+    "check": "9492683289386398827",
+    "copies": "1656"
+   },
+   "b": {
+    "repetitions_ns": [
+     470967.6148662323,
+     464904.2384096672,
+     487525.0431579595,
+     498188.1544047022,
+     610661.2777633321
+    ],
+    "median_ns": 487525.0431579595,
+    "spread": 0.3135205646914878,
+    "check": "9492683289386398827",
+    "copies": "1656"
+   },
+   "a_over_a_ratio": 1.0185985401256268,
+   "b_over_a_ratio": 0.9977041807294872,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "gxx.twitter.READ": {
+   "a": {
+    "repetitions_ns": [
+     361868.4574401878,
+     363409.5000014289,
+     370330.8930441726,
+     369847.65425741184,
+     471995.0381673309
+    ],
+    "median_ns": 369847.65425741184,
+    "spread": 0.3043276595759816,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     371931.2947444115,
+     572471.5440010186,
+     557951.0629978022,
+     406645.644064973,
+     376293.3421105691
+    ],
+    "median_ns": 406645.644064973,
+    "spread": 0.5391862746973657,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     365862.0329648269,
+     363576.1774202492,
+     445813.6956521269,
+     374459.895832994,
+     439554.74497210124
+    ],
+    "median_ns": 374459.895832994,
+    "spread": 0.22619061241963956,
+    "check": "11743431291459881107",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 1.0994949930977524,
+   "b_over_a_ratio": 1.0124706525037797,
+   "same_check": true,
+   "difference_over_noise": false
+  }
+ }
+}

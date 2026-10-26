@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "owned_copy.hpp"
 
 #include <initializer_list>
 #include <limits>
@@ -45,20 +46,20 @@ TEST_CASE("major 5: empty, string, integer, nested keys")
 }
 
 // Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError'.
-// The limit is 16 here; the limit itself must pass and one level more must fail.
+// The limit is the nesting depth of the build; the limit itself must pass and one level more must fail.
 TEST_CASE("depth: nested arrays and maps past the limit")
 {
-    test::limits_guard const depth{{.nesting_depth = 16}};
-    CHECK(decoded(std::string(16, '\x81') + '\x00').has_value());
-    CHECK_EQ(decode_error(std::string(17, '\x81') + '\x00'), error::nesting_depth_exceeded);
+    constexpr std::size_t depth = cbor::limits::nesting_depth;
+    CHECK(decoded(std::string(depth, '\x81') + '\x00').has_value());
+    CHECK_EQ(decode_error(std::string(depth + 1, '\x81') + '\x00'), error::nesting_depth_exceeded);
     CHECK(decoded(repeat("\xa1\x61"
                          "a"sv,
-                         16) +
+                         depth) +
                   '\x00')
               .has_value());
     CHECK_EQ(decode_error(repeat("\xa1\x61"
                                  "a"sv,
-                                 17) +
+                                 depth + 1) +
                           '\x00'),
              error::nesting_depth_exceeded);
 }
@@ -99,23 +100,18 @@ TEST_CASE("major 6: a tag keeps its number and its content")
 }
 
 // Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError',
-// the encode part. encode of a tree counts the depth as decode does.
-TEST_CASE("depth: encode past the limit")
+// the encode part. encode of a tree counts the depth as decode does, so the deepest tree that decode gives
+// encodes.
+TEST_CASE("depth: encode at the limit")
 {
     value deep = V(0);
-    for (int i = 0; i < 16; ++i)
+    for (std::size_t i = 0; i < cbor::limits::nesting_depth; ++i)
         deep = A(deep);
-    auto const fits = cbor::lazy::from(preferred(deep))->decode();
-    auto const past = cbor::lazy::from(preferred(A(deep)))->decode();
+    auto const fits = test::lazy_of_copy(preferred(deep))->clone();
     REQUIRE(fits.has_value());
-    REQUIRE(past.has_value());
-    test::limits_guard const depth{{.nesting_depth = 16}};
     std::string w;
     CHECK(cbor::encode(**fits, w).has_value());
-    std::string w2;
-    auto const r = cbor::encode(**past, w2);
-    REQUIRE_FALSE(r.has_value());
-    CHECK_EQ(r.error(), error::nesting_depth_exceeded);
+    CHECK_EQ(w, preferred(deep));
 }
 
 // RFC 8949 Table 4: the simple values 24 to 31 are reserved; Appendix F: f8 with a value below 32 is

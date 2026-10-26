@@ -10,6 +10,7 @@
 #endif
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -329,66 +330,91 @@ inline value text_value(std::string_view const t)
     return {s};
 }
 
-// The value of a decoded item tree. Tag 28 is the value it marks and tag 29 the value it points to; a bignum of at
-// most 8 bytes is an integer, as a dynamic language reads it. A float is a double.
+inline value value_of(cbor::item const &it);
+
+template <cbor::type K>
+value tag_value(cbor::item const &it)
+{
+    std::pair<std::uint64_t, cbor::item const *> const tag = it.get<K>().value();
+    std::uint64_t const number = tag.first;
+    cbor::item const *const content = tag.second;
+    auto const magnitude = content->get<cbor::type::byte_string>();
+    if ((number == 2 || number == 3) && magnitude) {
+        std::string m(reinterpret_cast<char const *>(magnitude->data()), magnitude->size());
+        m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
+        if (m.size() <= sizeof(std::uint64_t)) {
+            std::uint64_t n = 0;
+            for (char const ch : m)
+                n = n << 8 | static_cast<unsigned char>(ch);
+            return number == 3 ? value{negative{n}} : value{n};
+        }
+        return {bignum{number == 3, std::move(m)}};
+    }
+    return {tagged{number, value_of(*content)}};
+}
+
+// The value of a decoded item tree. A bignum of at most 8 bytes is an integer, as a dynamic language reads it. A
+// float is a double. Tags 28 and 29 are plain tags.
 inline value value_of(cbor::item const &it)
 {
-    if (auto const *t = std::get_if<std::string_view>(&it.content))
-        return text_value(*t);
-    if (auto const *b = std::get_if<std::span<std::byte const>>(&it.content))
-        return {bytes{std::string(reinterpret_cast<char const *>(b->data()), b->size())}};
-    if (auto const *d = std::get_if<double>(&it.content))
-        return {*d};
-    if (auto const *f = std::get_if<float>(&it.content))
-        return {static_cast<double>(*f)};
-#if defined(__STDCPP_FLOAT16_T__)
-    if (auto const *h = std::get_if<std::float16_t>(&it.content))
-        return {static_cast<double>(*h)};
-#endif
-    if (auto const *v = std::get_if<cbor::simple_value>(&it.content))
-        return {simple{std::to_underlying(*v)}};
-    if (auto const *r = std::get_if<cbor::sharedref>(&it.content))
-        return value_of(*r->shareable);
-    if (auto const *c = std::get_if<cbor::data_items>(&it.content)) {
-        auto const children = c->span();
-        if (it.major_type == cbor::major_type::array) {
-            array a;
-            a.reserve(children.size());
-            for (cbor::item const *const child : children)
-                a.push_back(value_of(*child));
-            return {std::move(a)};
-        }
+    switch (it.type) {
+    case cbor::type::text_string:
+        return text_value(it.get<cbor::type::text_string>().value());
+    case cbor::type::byte_string: {
+        std::span<std::byte const> const b = it.get<cbor::type::byte_string>().value();
+        return {bytes{std::string(reinterpret_cast<char const *>(b.data()), b.size())}};
+    }
+    case cbor::type::half_float:
+        return {it.get<cbor::type::half_float>().value()};
+    case cbor::type::single_float:
+        return {it.get<cbor::type::single_float>().value()};
+    case cbor::type::double_float:
+        return {it.get<cbor::type::double_float>().value()};
+    case cbor::type::false_value:
+        return {simple{std::to_underlying(it.get<cbor::type::false_value>().value())}};
+    case cbor::type::true_value:
+        return {simple{std::to_underlying(it.get<cbor::type::true_value>().value())}};
+    case cbor::type::null:
+        return {simple{std::to_underlying(it.get<cbor::type::null>().value())}};
+    case cbor::type::undefined:
+        return {simple{std::to_underlying(it.get<cbor::type::undefined>().value())}};
+    case cbor::type::simple_value:
+        return {simple{std::to_underlying(it.get<cbor::type::simple_value>().value())}};
+    case cbor::type::unsigned_integer:
+        return {it.get<cbor::type::unsigned_integer>().value()};
+    case cbor::type::negative_integer:
+        return {negative{it.get<cbor::type::negative_integer>().value()}};
+    case cbor::type::array: {
+        std::span<cbor::item const> const children = it.get<cbor::type::array>().value();
+        array a;
+        a.reserve(children.size());
+        for (cbor::item const &child : children)
+            a.push_back(value_of(child));
+        return {std::move(a)};
+    }
+    case cbor::type::map: {
+        std::span<cbor::item const> const children = it.get<cbor::type::map>().value();
         map m;
         m.reserve(children.size() / 2);
         for (std::size_t i = 0; i + 1 < children.size(); i += 2)
-            m.push_back(entry{value_of(*children[i]), value_of(*children[i + 1])});
+            m.push_back(entry{value_of(children[i]), value_of(children[i + 1])});
         return {std::move(m)};
     }
-    if (auto const *inner = std::get_if<cbor::item const *>(&it.content)) {
-        if (it.argument == 28)
-            return value_of(**inner);
-        auto const *magnitude = std::get_if<std::span<std::byte const>>(&(*inner)->content);
-        if ((it.argument == 2 || it.argument == 3) && magnitude != nullptr) {
-            std::string m(reinterpret_cast<char const *>(magnitude->data()), magnitude->size());
-            m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
-            if (m.size() <= sizeof(std::uint64_t)) {
-                std::uint64_t n = 0;
-                for (char const ch : m)
-                    n = n << 8 | static_cast<unsigned char>(ch);
-                return it.argument == 3 ? value{negative{n}} : value{n};
-            }
-            return {bignum{it.argument == 3, std::move(m)}};
-        }
-        return {tagged{it.argument, value_of(**inner)}};
+    case cbor::type::tag:
+        return tag_value<cbor::type::tag>(it);
+    case cbor::type::unsigned_bignum:
+        return tag_value<cbor::type::unsigned_bignum>(it);
+    case cbor::type::negative_bignum:
+        return tag_value<cbor::type::negative_bignum>(it);
+    case cbor::type::typed_array:
+        return tag_value<cbor::type::typed_array>(it);
     }
-    if (it.major_type == cbor::major_type::unsigned_integer)
-        return {it.argument};
-    return {negative{it.argument}};
+    std::unreachable();
 }
 
 inline std::expected<value, error> value_of(cbor::lazy const &l)
 {
-    auto const tree = l.decode();
+    auto const tree = l.clone();
     if (!tree)
         return std::unexpected(tree.error());
     return value_of(**tree);

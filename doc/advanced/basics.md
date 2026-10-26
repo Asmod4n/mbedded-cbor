@@ -40,23 +40,20 @@ the compiler cannot see a wrong use, the library throws
 `std::logic_error`:
 
 - an empty owner, or a null `std::shared_ptr<std::string const>`;
-- a `cbor::lazy{}` that holds no item;
-- a limit above its bound (section 4);
-- `cbor::transfer` of a lazy that something else shares (section 7);
-- in a debug build, a lazy in a thread that does not own it (section 7).
+- a `cbor::lazy{}` that holds no item.
 
 ## 3. Every error value
 
 | Error | When |
 |---|---|
 | `too_little_data` | The bytes end before the item ends. |
-| `syntax_error` | A head is not well-formed, or a simple value is reserved in the two-byte form. `structs` also gives it for bytes after the item. |
+| `syntax_error` | A head is not well-formed, or a simple value is reserved in the two-byte form. No decode reads the bytes after its item. |
 | `indefinite_length` | A head uses indefinite length. The library does not read indefinite length. `diagnostic_notation` prints it. |
 | `nesting_depth_exceeded` | The item is deeper than the nesting depth (section 5). |
 | `inadmissible_type_for_tag_content` | A tag has content that its definition does not allow. |
-| `sharedref_index_not_marked` | A tag 29 names no tag 28 before it. |
-| `sharedref_index_out_of_range` | The index of a tag 29 does not fit `std::size_t`. |
-| `sharedref_not_complete` | A step or a path meets a tag 29 inside the tag 28 that it names, or a chain of marks that refers to its own start. |
+| `sharedref_index_not_marked` | `structs` decode meets a tag 29 that names no tag 28 before it. |
+| `sharedref_index_out_of_range` | `structs` decode meets a tag 29 whose index does not fit `std::size_t`. |
+| `sharedref_not_complete` | `structs` decode meets a tag 29 that names a tag 28 in a skipped member. |
 | `reserved_simple_value` | An encode meets a simple value from 24 to 31. |
 | `unsupported_value` | The encoder meets a typed array with a reserved tag or a tag outside RFC 8746. `structs` gives it for a map key that is an array, a map or a tag. |
 | `not_indexable` | A key or an index meets an item that is not a map or an array. |
@@ -65,86 +62,73 @@ the compiler cannot see a wrong use, the library throws
 | `invalid_path` | The path text is not valid ([path.md](path.md)). |
 | `incorrect_type` | A typed read finds another kind of item than T takes. |
 | `number_out_of_range` | The number does not fit T. |
-| `cyclic_data_structure` | An encode without sharing meets a cycle. |
-| `unpopulated_table_index` | A reference in a `packed<T>` message names an entry that its table does not have. |
+| `cyclic_data_structure` | No call of the library gives it. A writer of the program can give it. |
+| `unpopulated_table_index` | A reference in a `schema<T>` message names an entry that its table does not have. |
 | `nodelist_too_long` | One step of a query selects more nodes than the item has bytes. |
 | `duplicate_key` | A deterministic check finds a key twice in one map. |
-| `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `packed` decode. |
-| `string_length_exceeded`, `container_elements_exceeded`, `input_bytes_exceeded` | A limit is in force and the input goes past it (section 4). |
+| `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `schema` decode. |
+| `string_length_exceeded`, `container_elements_exceeded` | A limit is set and the input goes past it (section 4). |
+| `not_singular_query` | `jsonpath::compile<T>` gets a path that is not singular, and `T` is not `nodelist` ([path.md](path.md), section 10). |
 
 ```cpp
+// owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
 // [1, 2] without its last byte
-cbor::lazy::from(bytes)->at(1).error();                  // too_little_data
+cbor::lazy::view(owner)->at(1).error();                  // too_little_data
 // [_ 1]
-cbor::lazy::from(bytes)->at(0).error();                  // indefinite_length
+cbor::lazy::view(owner)->at(0).error();                  // indefinite_length
 // {"a": 1}
-cbor::lazy::from(bytes)->at("b").error();                // key_not_found
+cbor::lazy::view(owner)->at("b").error();                // key_not_found
 // 1
-cbor::lazy::from(bytes)->at(0).error();                  // not_indexable
+cbor::lazy::view(owner)->at(0).error();                  // not_indexable
 // "a"
-cbor::lazy::from(bytes)->get<std::int64_t>().error();    // incorrect_type
+cbor::lazy::view(owner)->get<std::int64_t>().error();    // incorrect_type
 // 256
-cbor::lazy::from(bytes)->get<std::uint8_t>().error();    // number_out_of_range
+cbor::lazy::view(owner)->get<std::uint8_t>().error();    // number_out_of_range
 ```
 
 ## 4. Limits
 
-`cbor::limits` holds the limits that are in force. Each call reads it once
-at its start. An assignment changes the limits for every later call in
-every thread. A call that runs keeps the limits that it read.
+The limits are constants of the build. A macro sets each limit, and the
+library sets each macro that the build does not set. `cbor::limits` gives
+the values. No call reads a limit at run time, and a check whose limit is
+not set is not in the program.
 
-| Field | Default | Bound | Error |
-|---|---|---|---|
-| `nesting_depth` | 128 | 512 | `nesting_depth_exceeded` |
-| `string_length` | `SIZE_MAX` | `SIZE_MAX` | `string_length_exceeded` |
-| `container_elements` | `SIZE_MAX` | `SIZE_MAX` | `container_elements_exceeded` |
-| `input_bytes` | `SIZE_MAX` | `SIZE_MAX` | `input_bytes_exceeded` |
-
-A limit is checked by the step that reads the item. `lazy::from` checks
-only `input_bytes`. So a string that is too long gives
-`string_length_exceeded` at `get`, not at `lazy::from`.
-`input_bytes` is the size of the bytes that a call over bytes gets.
-
-A field reads as a `std::size_t`. An assignment to a field above its bound
-throws `std::logic_error` and does not change the field. An assignment of
-`cbor::limit_values` sets all four fields. A field that the designated
-initializers do not name gets its default, not its old value.
-
-```cpp
-std::size_t const depth = cbor::limits.nesting_depth;   // 128
-cbor::limits.string_length = 64;
-cbor::limits = {.string_length = 2, .container_elements = 8};  // nesting_depth is 128 again
-cbor::limits.nesting_depth = 513;                       // throws std::logic_error
-```
-
-Each default is a macro. A program defines the macro before it includes
-the library, or with `-D` on the command line:
-
-| Macro | Field |
-|---|---|
-| `CBOR_NESTING_DEPTH_DEFAULT` | `nesting_depth` |
-| `CBOR_STRING_LENGTH_DEFAULT` | `string_length` |
-| `CBOR_CONTAINER_ELEMENTS_DEFAULT` | `container_elements` |
-| `CBOR_INPUT_BYTES_DEFAULT` | `input_bytes` |
+| Macro | Constant | Default | Bound | Error |
+|---|---|---|---|---|
+| `CBOR_NESTING_DEPTH_DEFAULT` | `cbor::limits::nesting_depth` | 128 | 512 | `nesting_depth_exceeded` |
+| `CBOR_STRING_LENGTH_DEFAULT` | `cbor::limits::string_length` | `SIZE_MAX` | `SIZE_MAX` | `string_length_exceeded` |
+| `CBOR_CONTAINER_ELEMENTS_DEFAULT` | `cbor::limits::container_elements` | `SIZE_MAX` | `SIZE_MAX` | `container_elements_exceeded` |
 
 ```sh
-g++ -DCBOR_NESTING_DEPTH_DEFAULT=32 ...
+g++ -DCBOR_NESTING_DEPTH_DEFAULT=32 -DCBOR_STRING_LENGTH_DEFAULT=4096 ...
 ```
 
-A default above the bound does not compile. All translation units of one
+```cpp
+std::size_t const depth = cbor::limits::nesting_depth;   // 32
+```
+
+A value above the bound does not compile. All translation units of one
 program use the same values: a different value is a violation of the one
 definition rule.
+
+The library does not bound the size of the input. The program bounds it
+before it calls the library.
+
+A limit is checked by the step that reads the item. `lazy::take_ownership`
+and `lazy::view` check no limit. So a string that is too long gives
+`string_length_exceeded` at `get`, not when the lazy is made.
 
 The limits count what a call reads or decodes. An item that a path or a
 lazy only skips does not count. `item_size`, `decode` and
 `diagnostic_notation` read every item, so every item counts there.
 
 ```cpp
-cbor::limits = {.string_length = 2};
+// owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
+// built with -DCBOR_STRING_LENGTH_DEFAULT=2
 // {"a": "xyz", "n": 1}
-cbor::lazy::from(bytes)->at("n")->get<std::int64_t>();        // 1: "xyz" is only skipped
-cbor::lazy::from(bytes)->at("a")->get<std::string_view>();    // string_length_exceeded
-cbor::item_size(bytes);                                       // string_length_exceeded
+cbor::lazy::view(owner)->at("n")->get<std::int64_t>();        // 1: "xyz" is only skipped
+cbor::lazy::view(owner)->at("a")->get<std::string_view>();    // string_length_exceeded
+cbor::item_size(*owner);                                       // string_length_exceeded
 ```
 
 ## 5. Nesting depth
@@ -158,7 +142,7 @@ An item that a call only skips can be deeper than the limit, and so can
 the item of `item_size`: neither keeps a stack.
 
 ```cpp
-cbor::limits = {.nesting_depth = 2};
+// built with -DCBOR_NESTING_DEPTH_DEFAULT=2
 // [[1]]
 cbor::diagnostic_notation(bytes);   // "[[1]]"
 // [[[1]]]
@@ -169,12 +153,12 @@ cbor::item_size(bytes);             // 4
 ## 6. Memory
 
 The caller sets the bound of the memory of a decode. `structs<T>::decode`
-and `packed<T>::decode` take a target as their third argument. The target
+and `schema<T>::decode` take a target as their third argument. The target
 holds `std::pmr` containers with a `std::pmr::memory_resource`. The decode
 reads into the target and makes each element with the allocator of its
 container. When the resource refuses, the decode returns
 `error::not_enough_memory`. A `std::bad_alloc` does not leave
-`structs<T>::decode` or `packed<T>::decode`.
+`structs<T>::decode` or `schema<T>::decode`.
 
 ```cpp
 using texts = std::pmr::vector<std::pmr::string>;
@@ -182,7 +166,7 @@ auto const owner = std::make_shared<std::string const>(
     *cbor::structs<std::vector<std::string>>::encode({std::string(40, 'a'), std::string(40, 'b')}));
 std::array<std::byte, 64> buffer{};
 std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
-cbor::structs<texts>::decode(owner, *owner, texts(&budget));   // not_enough_memory
+cbor::structs<texts>::decode(owner, texts(&budget));   // not_enough_memory
 ```
 
 The library takes no allocator in other places. These places allocate
@@ -195,10 +179,10 @@ members use the default resource.
 |---|---|
 | `at_path<Path, T>(encoded)` for a scalar T | nothing |
 | `item_size`, the iterator of `cbor::sequence` | nothing |
-| a step of a lazy (`at`, `find`, `get`) that meets no tag 29 | nothing |
-| `lazy::from` | the shared state of the top-level item, once; the forms with `std::string_view` and `std::string` also the `std::shared_ptr<std::string const>` that holds the bytes |
-| the first tag 29 of a top-level item | the marks of the tags 28 before it |
-| `lazy::decode` | its items |
+| a step of a lazy (`at`, `get`) | nothing |
+| `lazy::view` | nothing |
+| `lazy::take_ownership` | one allocation: the `std::shared_ptr<std::string const>` that holds the bytes |
+| `lazy::clone` | its items |
 | `diagnostic_notation`, the encoder into a `std::string` | the string |
 | the encoder into a span | nothing |
 
@@ -207,106 +191,95 @@ The target of the encoder chooses the memory of the bytes
 
 ## 7. Threads
 
-The library starts no thread and holds no lock. The only global is
-`cbor::limits`, and each field is atomic.
+The library starts no thread and holds no lock. It has no global that
+changes: the limits are constants.
 
 A call over bytes, for example `at_path<Path, T>(encoded)` and
 `item_size`, has no shared state. Two lazy values from two calls of
-`lazy::from` share nothing, also over the same bytes.
+`lazy::take_ownership` or `lazy::view` share nothing, also over the same
+bytes.
 
-The lazy values of one top-level item share their marks of tag 28, and a
-read of a tag 29 adds marks with no lock. So a `cbor::lazy` belongs to one
-thread. `cbor::is_thread_bound_v<T>` is true for `lazy`, `lazy_elements`,
-`lazy_entries`, their iterators and every `owning_ref`.
-`cbor::is_sendable_v<T>` is its opposite, and true for `cbor::sendable<T>`.
-An application queue can check `is_sendable_v` at compile time.
-
-```cpp
-static_assert(cbor::is_thread_bound_v<cbor::lazy>);
-static_assert(cbor::is_sendable_v<std::string>);
-static_assert(cbor::is_sendable_v<cbor::sendable<cbor::lazy>>);
-```
-
-`cbor::transfer(std::move(l))` gives a `cbor::sendable<cbor::lazy>`. It
-throws `std::logic_error` when another lazy, iterator or view shares the
-top-level item of `l`. The thread that receives it reads `.value`.
-`lazy::from` gives a `std::expected`, and `std::move(*l)` moves the lazy
-out of it:
+A lazy holds only its owner, its bytes and its offset, and a read changes
+nothing in it. So several threads read one lazy, and the lazy values of
+one top-level item, at the same time. `lazy::take_ownership` gives a
+`std::expected`,
+and `std::move(*l)` moves the lazy out of it:
 
 ```cpp
 // [1, 2]
-auto l = cbor::lazy::from(bytes);
-std::jthread([](cbor::sendable<cbor::lazy> const &v) {
-    v.value.at(1)->get<std::int64_t>();   // 2
-}, cbor::transfer(std::move(*l)));
+auto l = cbor::lazy::take_ownership(std::move(bytes));
+std::thread([](cbor::lazy const &v) {
+    v.at(1)->get<std::int64_t>();   // 2
+}, std::move(*l)).join();
 ```
-
-A debug build is a build without the macro `NDEBUG`. A debug build records
-the thread that reads the marks first. A read of the marks in another
-thread then throws `std::logic_error`. A build with `NDEBUG` does not
-check. Only an item with a tag 28 or a tag 29 has marks. A read that does
-not touch the marks is not checked. So a lazy over `{"a": 1}` does not
-throw in another thread, but it is still a wrong use.
 
 ## 8. Owners
 
 A `cbor::lazy` holds the owner of the bytes. So does every lazy that a
 step gives, and every iterator. A lazy from `at` stays valid after the
 lazy that gave it and after the `std::string` that went into
-`lazy::from` end.
+`lazy::take_ownership` end.
 
 ```cpp
 std::optional<cbor::lazy> keep;
 {
     std::string bytes = message();   // {"tags": ["a", "b"]}
-    keep = *cbor::lazy::from(std::move(bytes))->at("tags");
+    keep = *cbor::lazy::take_ownership(std::move(bytes))->at("tags");
 }
 keep->at(1)->get<std::string_view>();   // "b"
 ```
 
-- `*r` gives the `T const &`, and `r->` reaches its members.
-- `*` and `->` do not compile on a temporary `owning_ref`.
-- `==` compares the value with a `T` or with another `owning_ref`, as
+A text or a byte string comes back in a `cbor::ref<T>`. The `ref` holds
+the owner of the bytes.
+
+- `*r` gives the value. A view comes back by value, any other `T` as
+  `T const &`. `r->` reaches the members of the value.
+- `*` and `->` do not compile on a temporary `ref`.
+- `==` compares the value with a `T` or with another `ref`, as
   `std::optional` does. `==` takes a temporary, because it gives a `bool`.
-- A copy of an `owning_ref` shares the owner. It does not copy the bytes.
+- A copy of a `ref` shares the owner. It does not copy the bytes.
+- `r.clone()` copies the value out: a `std::string` for a
+  `std::string_view`, a `std::vector<std::byte>` for a
+  `std::span<std::byte const>`, and a `cbor::owning<T>` for any other `T`.
 
 The owner of the bytes comes from one of these:
 
 | Call | Owner |
 |---|---|
-| `lazy::from(std::string)` with an lvalue | the library copies the string into a new `std::shared_ptr<std::string const>` |
-| `lazy::from(std::string)` with an rvalue | the library moves the string into a new `std::shared_ptr<std::string const>` |
-| `lazy::from(std::string_view)` | the library copies the bytes into a new `std::shared_ptr<std::string const>` |
-| `lazy::from(std::shared_ptr<std::string const>)` | the caller |
-| `lazy::from(owner, encoded)` | the caller: `owner` holds the bytes of `encoded` |
+| `lazy::take_ownership(std::string&&)` | the library moves the string into a new `std::shared_ptr<std::string const>` |
+| `lazy::view(std::shared_ptr<std::string const>)` | the caller |
+| `lazy::view(owner, view)` | the caller: `owner` keeps the bytes of `view` alive |
 
-An rvalue or a `std::shared_ptr` avoids the copy:
+A `std::string` lvalue and a `std::string_view` alone do not compile,
+because no form copies the bytes:
 
 ```cpp
 auto const shared = std::make_shared<std::string const>(message());
-auto const a = cbor::lazy::from(shared).value();   // shares the bytes, no copy
-auto const b = cbor::lazy::from(std::move(bytes)).value();   // moves the string, no copy
+auto const a = cbor::lazy::view(shared).value();   // shares the bytes, no copy
+auto const b = cbor::lazy::take_ownership(std::move(bytes)).value();   // moves the string, no copy
 ```
 
-`structs<T>::decode`, `packed<T>::decode` and `packed<T>::path` take the
-same forms. `at_path` takes an owner for a view result
-([path.md](path.md)).
+`structs<T>::decode`, `schema<T>::decode`, `schema<T>::path` and
+`at_path` for a view result ([path.md](path.md)) take the same forms.
+`cbor::sequence` takes the two forms with a `std::shared_ptr`, and no
+rvalue `std::string`. The library takes no other pointer to bytes.
 
-The form with an owner reads bytes that something else holds, for example
-a page of a read transaction of a database. The owner can be any
-`std::shared_ptr`, and the aliasing constructor of `std::shared_ptr` makes
-one from an object that holds the bytes.
+A larger object can hold the bytes. Two forms read them in place. The
+aliasing constructor of `std::shared_ptr` makes an owner of the string
+from the object. Or the object is the owner, and a view of its bytes
+goes beside it.
 
 ```cpp
 struct page {
     std::string bytes;   // "xyz"
 };
 auto const p = std::make_shared<page const>(message());
-std::shared_ptr<void const> const owner(p, p->bytes.data());   // shares the count of p
-cbor::lazy::from(owner, p->bytes)->get<std::string_view>();    // "xyz", a view into p->bytes
+std::shared_ptr<std::string const> const owner(p, &p->bytes);   // shares the count of p
+cbor::lazy::view(owner)->get<std::string_view>();               // "xyz", a view into p->bytes
+cbor::lazy::view(p, std::string_view(p->bytes))->get<std::string_view>();   // the same view
 ```
 
-An empty owner throws `std::logic_error`. A temporary `std::string` or a
-moved `std::string` beside an owner does not compile, because the owner
-does not hold it. The library does not check that the owner holds the
-bytes of `encoded`.
+An empty owner throws `std::logic_error`. A `std::string_view` beside an
+owner compiles, and the library does not check that the owner holds its
+bytes. A `std::string` beside an owner does not compile, because it is
+not a borrowed range: its bytes can end before the owner ends.

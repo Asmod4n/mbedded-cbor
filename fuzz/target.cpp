@@ -1,4 +1,5 @@
 #include "decode.hpp"
+#include "diagnostic.hpp"
 #include "item_size.hpp"
 #include "encode.hpp"
 #include "encoder.hpp"
