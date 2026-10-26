@@ -45,10 +45,24 @@ TEST_CASE("limits: with no size limit a head of 2^64 - 1 finds too little data")
 namespace
 {
 
-struct[[= cbor::tag(1592)]] pmr_names {
+struct pmr_names {
     std::pmr::string text;
     std::pmr::vector<std::pmr::string> list;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<pmr_names> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1592};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(pmr_names, text),
+        CBOR_MEMBER(pmr_names, list),
+    };
+};
+
+namespace
+{
 
 // Each string is longer than any short string buffer, so each one allocates from the resource.
 std::string const long_text(40, 'x');

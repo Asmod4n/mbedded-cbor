@@ -56,16 +56,33 @@ TEST_CASE("doc readme: read one value by its path")
 namespace
 {
 
-struct [[=cbor::tag(1703)]] point {
+struct point {
     float x;
     float y;
 };
 
-struct [[=cbor::tag(1704)]] track {
+struct track {
     std::vector<point> points;
 };
 
 } // namespace
+
+template <>
+struct cbor::describe_members<point> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(point, x),
+        CBOR_MEMBER(point, y),
+    };
+};
+
+template <>
+struct cbor::describe_members<track> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(track, points),
+    };
+};
 
 // "Write structs, read one field" reads one leaf at its offset and a page of the fixed-size vector.
 TEST_CASE("doc readme: write structs, read one field")

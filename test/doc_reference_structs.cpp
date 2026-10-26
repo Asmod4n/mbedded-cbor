@@ -52,8 +52,8 @@ struct reading {
     std::optional<std::uint8_t> unit;
 };
 
-struct [[=cbor::tag(1801)]] renamed {
-    [[=cbor::key("id")]] std::uint8_t number;
+struct renamed {
+    std::uint8_t number;
 };
 
 struct [[=cbor::tag(1802)]] guarded {
@@ -67,6 +67,14 @@ struct [[=cbor::tag(1803)]] [[=cbor::allowlist{}]] login {
 };
 
 } // namespace reference_structs
+
+template <>
+struct cbor::describe_members<reference_structs::renamed> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1801};
+    static constexpr std::tuple members{
+        cbor::member{"id", &reference_structs::renamed::number},
+    };
+};
 
 template <>
 struct cbor::describe_members<reference_structs::header> {

@@ -17,9 +17,22 @@ using cbor::error;
 namespace
 {
 
-struct[[= cbor::tag(1515)]] node {
+struct node {
     std::vector<node> children;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<node> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1515};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(node, children),
+    };
+};
+
+namespace
+{
 
 void u32_append(std::string &out, std::uint32_t const value)
 {

@@ -24,19 +24,19 @@ namespace fuzz::schema
 
 enum class shade : std::uint8_t { dark, light };
 
-struct [[=cbor::tag(1500)]] tire {
+struct tire {
     std::uint16_t diameter;
     float airPressure;
     bool snowTires;
 };
 
-struct [[=cbor::tag(1501)]] engine {
+struct engine {
     std::uint16_t horsepower;
     std::int32_t torque;
     bool usesGas;
 };
 
-struct [[=cbor::tag(1502)]] vehicle {
+struct vehicle {
     std::string make;
     std::int32_t balance;
     std::array<tire, 2> spare;
@@ -52,7 +52,7 @@ struct [[=cbor::tag(1502)]] vehicle {
     bool flag;
 };
 
-struct [[=cbor::tag(1503)]] numbers {
+struct numbers {
     std::int8_t i8;
     std::uint8_t u8;
     std::int16_t i16;
@@ -72,13 +72,94 @@ struct [[=cbor::tag(1503)]] numbers {
     std::optional<std::int64_t> maybe;
 };
 
-struct [[=cbor::tag(1504)]] garage {
+struct garage {
     std::vector<vehicle> cars;
     std::map<std::uint16_t, std::string> owners;
     std::map<std::int32_t, tire> stock;
     std::vector<std::uint8_t> blob;
     std::string note;
 };
+
+} // namespace fuzz::schema
+
+template <>
+struct cbor::describe_members<fuzz::schema::tire> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1500};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(fuzz::schema::tire, diameter),
+        CBOR_MEMBER(fuzz::schema::tire, airPressure),
+        CBOR_MEMBER(fuzz::schema::tire, snowTires),
+    };
+};
+
+template <>
+struct cbor::describe_members<fuzz::schema::engine> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1501};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(fuzz::schema::engine, horsepower),
+        CBOR_MEMBER(fuzz::schema::engine, torque),
+        CBOR_MEMBER(fuzz::schema::engine, usesGas),
+    };
+};
+
+template <>
+struct cbor::describe_members<fuzz::schema::vehicle> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1502};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(fuzz::schema::vehicle, make),
+        CBOR_MEMBER(fuzz::schema::vehicle, balance),
+        CBOR_MEMBER(fuzz::schema::vehicle, spare),
+        CBOR_MEMBER(fuzz::schema::vehicle, wheels),
+        CBOR_MEMBER(fuzz::schema::vehicle, motor),
+        CBOR_MEMBER(fuzz::schema::vehicle, code),
+        CBOR_MEMBER(fuzz::schema::vehicle, mac),
+        CBOR_MEMBER(fuzz::schema::vehicle, tone),
+        CBOR_MEMBER(fuzz::schema::vehicle, owner),
+        CBOR_MEMBER(fuzz::schema::vehicle, names),
+        CBOR_MEMBER(fuzz::schema::vehicle, big),
+        CBOR_MEMBER(fuzz::schema::vehicle, d),
+        CBOR_MEMBER(fuzz::schema::vehicle, flag),
+    };
+};
+
+template <>
+struct cbor::describe_members<fuzz::schema::numbers> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1503};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(fuzz::schema::numbers, i8),
+        CBOR_MEMBER(fuzz::schema::numbers, u8),
+        CBOR_MEMBER(fuzz::schema::numbers, i16),
+        CBOR_MEMBER(fuzz::schema::numbers, u16),
+        CBOR_MEMBER(fuzz::schema::numbers, i32),
+        CBOR_MEMBER(fuzz::schema::numbers, u32),
+        CBOR_MEMBER(fuzz::schema::numbers, i64),
+        CBOR_MEMBER(fuzz::schema::numbers, u64),
+        CBOR_MEMBER(fuzz::schema::numbers, i128),
+        CBOR_MEMBER(fuzz::schema::numbers, u128),
+        CBOR_MEMBER(fuzz::schema::numbers, f16),
+        CBOR_MEMBER(fuzz::schema::numbers, f32),
+        CBOR_MEMBER(fuzz::schema::numbers, f64),
+        CBOR_MEMBER(fuzz::schema::numbers, fixed),
+        CBOR_MEMBER(fuzz::schema::numbers, list),
+        CBOR_MEMBER(fuzz::schema::numbers, nested),
+        CBOR_MEMBER(fuzz::schema::numbers, maybe),
+    };
+};
+
+template <>
+struct cbor::describe_members<fuzz::schema::garage> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1504};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(fuzz::schema::garage, cars),
+        CBOR_MEMBER(fuzz::schema::garage, owners),
+        CBOR_MEMBER(fuzz::schema::garage, stock),
+        CBOR_MEMBER(fuzz::schema::garage, blob),
+        CBOR_MEMBER(fuzz::schema::garage, note),
+    };
+};
+
+namespace fuzz::schema
+{
 
 consteval bool character_p(std::meta::info const type)
 {

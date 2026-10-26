@@ -38,13 +38,23 @@ namespace
 
 enum class color : std::uint16_t { black, white };
 
-struct [[=cbor::tag(1500)]] wheel {
+struct wheel {
     std::uint16_t diameter;
     float airPressure;
     bool snowTires;
 };
 
 } // namespace
+
+template <>
+struct cbor::describe_members<wheel> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1500};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(wheel, diameter),
+        CBOR_MEMBER(wheel, airPressure),
+        CBOR_MEMBER(wheel, snowTires),
+    };
+};
 
 // Each kind of field has the size that RFC 8949 3 gives its head plus its argument, so a reader finds every
 // field at an offset the compiler knows. The expectations are counted from the specification by hand.
@@ -125,36 +135,116 @@ TEST_CASE("fixed_size: a part of variable size takes 6 bytes")
 namespace
 {
 
-struct [[=cbor::tag(1501)]] engine {
+struct engine {
     std::uint16_t horsepower;
     std::uint32_t cc;
 };
 
-struct [[=cbor::tag(1502)]] car {
+struct car {
     std::uint8_t seats;
     engine motor;
     bool hasNavSystem;
 };
 
-struct [[=cbor::tag(1503)]] empty {
+struct empty {
 };
 
-struct [[=cbor::tag(1504)]] thirty {
+struct thirty {
     std::uint8_t m00, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11, m12, m13, m14;
     std::uint8_t m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28, m29;
 };
 
-struct [[=cbor::tag(1505)]] long_name {
+struct long_name {
     std::uint8_t a_member_name_of_twenty_nine_b;
     std::uint8_t b;
 };
 
-struct [[=cbor::tag(1506)]] größe {
+struct größe {
     std::uint8_t höhe;
     std::uint8_t b;
 };
 
 } // namespace
+
+template <>
+struct cbor::describe_members<engine> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1501};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(engine, horsepower),
+        CBOR_MEMBER(engine, cc),
+    };
+};
+
+template <>
+struct cbor::describe_members<car> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1502};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(car, seats),
+        CBOR_MEMBER(car, motor),
+        CBOR_MEMBER(car, hasNavSystem),
+    };
+};
+
+template <>
+struct cbor::describe_members<empty> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1503};
+    static constexpr std::tuple<> members{};
+};
+
+template <>
+struct cbor::describe_members<thirty> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1504};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(thirty, m00),
+        CBOR_MEMBER(thirty, m01),
+        CBOR_MEMBER(thirty, m02),
+        CBOR_MEMBER(thirty, m03),
+        CBOR_MEMBER(thirty, m04),
+        CBOR_MEMBER(thirty, m05),
+        CBOR_MEMBER(thirty, m06),
+        CBOR_MEMBER(thirty, m07),
+        CBOR_MEMBER(thirty, m08),
+        CBOR_MEMBER(thirty, m09),
+        CBOR_MEMBER(thirty, m10),
+        CBOR_MEMBER(thirty, m11),
+        CBOR_MEMBER(thirty, m12),
+        CBOR_MEMBER(thirty, m13),
+        CBOR_MEMBER(thirty, m14),
+        CBOR_MEMBER(thirty, m15),
+        CBOR_MEMBER(thirty, m16),
+        CBOR_MEMBER(thirty, m17),
+        CBOR_MEMBER(thirty, m18),
+        CBOR_MEMBER(thirty, m19),
+        CBOR_MEMBER(thirty, m20),
+        CBOR_MEMBER(thirty, m21),
+        CBOR_MEMBER(thirty, m22),
+        CBOR_MEMBER(thirty, m23),
+        CBOR_MEMBER(thirty, m24),
+        CBOR_MEMBER(thirty, m25),
+        CBOR_MEMBER(thirty, m26),
+        CBOR_MEMBER(thirty, m27),
+        CBOR_MEMBER(thirty, m28),
+        CBOR_MEMBER(thirty, m29),
+    };
+};
+
+template <>
+struct cbor::describe_members<long_name> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1505};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(long_name, a_member_name_of_twenty_nine_b),
+        CBOR_MEMBER(long_name, b),
+    };
+};
+
+template <>
+struct cbor::describe_members<größe> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1506};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(größe, höhe),
+        CBOR_MEMBER(größe, b),
+    };
+};
 
 // The offset points at the head of a value. The keys are in the table, so the 3 bytes of the class tag and the 7
 // bytes of the record head come first. The values follow the key order of RFC 8949 4.2.1, a shorter key first:
@@ -200,34 +290,92 @@ TEST_CASE("member_offset: the record head has one width for any count and any na
 namespace
 {
 
-struct [[=cbor::tag(1507)]] login {
+struct login {
     std::uint16_t id;
     bool ok;
     std::string name;
 };
 
-struct [[=cbor::tag(1508)]] measures {
+struct measures {
     std::int16_t t;
     float f;
     std::vector<std::uint16_t> v;
     std::optional<std::uint8_t> o;
 };
 
-struct [[=cbor::tag(1509)]] named {
+struct named {
     std::string n;
 };
 
-struct [[=cbor::tag(1510)]] people {
+struct people {
     std::vector<named> people;
 };
 
-struct [[=cbor::tag(1533)]] pmr_named {
+struct pmr_named {
     std::pmr::string n;
 };
 
-struct [[=cbor::tag(1534)]] pmr_people {
+struct pmr_people {
     std::pmr::vector<pmr_named> people;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<login> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1507};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(login, id),
+        CBOR_MEMBER(login, ok),
+        CBOR_MEMBER(login, name),
+    };
+};
+
+template <>
+struct cbor::describe_members<measures> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1508};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(measures, t),
+        CBOR_MEMBER(measures, f),
+        CBOR_MEMBER(measures, v),
+        CBOR_MEMBER(measures, o),
+    };
+};
+
+template <>
+struct cbor::describe_members<named> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1509};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(named, n),
+    };
+};
+
+template <>
+struct cbor::describe_members<people> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1510};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(people, people),
+    };
+};
+
+template <>
+struct cbor::describe_members<pmr_named> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1533};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(pmr_named, n),
+    };
+};
+
+template <>
+struct cbor::describe_members<pmr_people> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1534};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(pmr_people, people),
+    };
+};
+
+namespace
+{
 
 class counting_resource : public std::pmr::memory_resource
 {
@@ -319,22 +467,54 @@ TEST_CASE("encode: a struct with a number, a bool and a string")
     check_one_item(bytes);
 }
 
-struct [[=cbor::tag(1620)]] unsorted {
+struct unsorted {
     std::int8_t zz;
     std::int8_t b;
     std::int8_t aa;
 };
 
-struct [[=cbor::tag(1620)]] unsorted_other_order {
+template <>
+struct cbor::describe_members<unsorted> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1620};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(unsorted, zz),
+        CBOR_MEMBER(unsorted, b),
+        CBOR_MEMBER(unsorted, aa),
+    };
+};
+
+
+struct unsorted_other_order {
     std::int8_t aa;
     std::int8_t zz;
     std::int8_t b;
 };
 
-struct [[=cbor::tag(1621)]] renamed {
-    [[=cbor::key("a")]] std::int8_t last;
+template <>
+struct cbor::describe_members<unsorted_other_order> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1620};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(unsorted_other_order, aa),
+        CBOR_MEMBER(unsorted_other_order, zz),
+        CBOR_MEMBER(unsorted_other_order, b),
+    };
+};
+
+
+struct renamed {
+    std::int8_t last;
     std::int8_t first;
 };
+
+template <>
+struct cbor::describe_members<renamed> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1621};
+    static constexpr std::tuple members{
+        cbor::member{"a", &renamed::last},
+        CBOR_MEMBER(renamed, first),
+    };
+};
+
 
 // packed is deterministic: RFC 8949 4.2.1 sorts the keys of a map "in the bytewise lexicographic order of their
 // deterministic encodings", so a shorter key comes first. The encodings are 61 62 ("b"), 62 61 61 ("aa") and
@@ -356,8 +536,8 @@ TEST_CASE("encode: the order of declaration does not change the bytes")
     CHECK_EQ(schema_bytes(unsorted{3, 1, 2}), schema_bytes(unsorted_other_order{2, 3, 1}));
 }
 
-// A key given by cbor::key takes part in the order: "a" (61 61) comes before "first" (65 ...).
-TEST_CASE("encode: a key given by cbor::key is sorted by that key")
+// A key that the description gives takes part in the order: "a" (61 61) comes before "first" (65 ...).
+TEST_CASE("encode: a key given in cbor::describe_members is sorted by that key")
 {
     std::string const bytes = schema_bytes(renamed{7, 9});
     CHECK_NE(bytes.find("\xd8\x72\x82\x61" "a\x65" "first"s), std::string::npos);
@@ -369,16 +549,37 @@ TEST_CASE("encode: a key given by cbor::key is sorted by that key")
     CHECK_EQ((*back)->first, 9);
 }
 
-struct [[=cbor::tag(1622)]] sorted_inner {
+struct sorted_inner {
     std::int8_t y;
     std::int8_t x;
 };
 
-struct [[=cbor::tag(1623)]] sorted_outer {
+template <>
+struct cbor::describe_members<sorted_inner> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1622};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(sorted_inner, y),
+        CBOR_MEMBER(sorted_inner, x),
+    };
+};
+
+
+struct sorted_outer {
     std::int8_t z;
     sorted_inner a;
     std::int8_t B;
 };
+
+template <>
+struct cbor::describe_members<sorted_outer> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1623};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(sorted_outer, z),
+        CBOR_MEMBER(sorted_outer, a),
+        CBOR_MEMBER(sorted_outer, B),
+    };
+};
+
 
 // The order holds at every depth: the outer keys are "B" (61 42), "a" (61 61) and "z"
 // (61 7a), keys of one length ordered by their bytes; the inner record holds x before y. A decode gives every value
@@ -466,12 +667,12 @@ TEST_CASE("path: a message shorter than the least size is too_little_data, a for
 namespace
 {
 
-struct [[=cbor::tag(1511)]] tire {
+struct tire {
     std::uint16_t diameter;
     float airPressure;
 };
 
-struct [[=cbor::tag(1512)]] vehicle {
+struct vehicle {
     std::string make;
     std::int32_t balance;
     std::array<tire, 2> spare;
@@ -481,6 +682,35 @@ struct [[=cbor::tag(1512)]] vehicle {
     std::optional<std::uint8_t> owner;
     std::optional<std::uint8_t> none;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<tire> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1511};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(tire, diameter),
+        CBOR_MEMBER(tire, airPressure),
+    };
+};
+
+template <>
+struct cbor::describe_members<vehicle> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1512};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(vehicle, make),
+        CBOR_MEMBER(vehicle, balance),
+        CBOR_MEMBER(vehicle, spare),
+        CBOR_MEMBER(vehicle, wheels),
+        CBOR_MEMBER(vehicle, motor),
+        CBOR_MEMBER(vehicle, code),
+        CBOR_MEMBER(vehicle, owner),
+        CBOR_MEMBER(vehicle, none),
+    };
+};
+
+namespace
+{
 
 vehicle const sample_vehicle{"Tesla", -7, {{{15, 2.5f}, {16, 2.0f}}}, {{17, 1.5f}, {18, 3.0f}, {19, 0.5f}},
                              {300, 1800}, {'A', 'B', 'C', 'D'}, std::uint8_t{9}, std::nullopt};
@@ -541,13 +771,23 @@ namespace
 
 enum class shade : std::uint8_t { dark, light };
 
-struct [[=cbor::tag(1513)]] badge {
+struct badge {
     std::array<std::byte, 4> mac;
     shade tone;
     std::string label;
 };
 
 } // namespace
+
+template <>
+struct cbor::describe_members<badge> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1513};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(badge, mac),
+        CBOR_MEMBER(badge, tone),
+        CBOR_MEMBER(badge, label),
+    };
+};
 
 // A fixed-length array of bytes is a byte string laid out inline (RFC 8949 3.1), the same as a fixed text.
 // The reader gives the bytes themselves, not an offset and a length read out of them.
@@ -570,7 +810,7 @@ TEST_CASE("at_path: a fixed byte array is read inline")
 namespace
 {
 
-struct [[=cbor::tag(1530)]] numbers {
+struct numbers {
     std::vector<std::uint16_t> u16;
     std::vector<std::uint32_t> u32;
     std::vector<std::uint64_t> u64;
@@ -585,6 +825,28 @@ struct [[=cbor::tag(1530)]] numbers {
     std::vector<double> f64;
 };
 
+} // namespace
+
+template <>
+struct cbor::describe_members<numbers> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1530};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(numbers, u16),
+        CBOR_MEMBER(numbers, u32),
+        CBOR_MEMBER(numbers, u64),
+        CBOR_MEMBER(numbers, s8),
+        CBOR_MEMBER(numbers, s16),
+        CBOR_MEMBER(numbers, s32),
+        CBOR_MEMBER(numbers, s64),
+        CBOR_MEMBER(numbers, f16),
+        CBOR_MEMBER(numbers, f32),
+        CBOR_MEMBER(numbers, f64),
+    };
+};
+
+namespace
+{
+
 numbers const sample_numbers{{0x0102},
                              {0x01020304},
                              {0x0102030405060708},
@@ -598,11 +860,19 @@ numbers const sample_numbers{{0x0102},
                              {1.0f},
                              {1.0}};
 
-struct [[=cbor::tag(1531)]] doubles {
+struct doubles {
     std::vector<double> v;
 };
 
 } // namespace
+
+template <>
+struct cbor::describe_members<doubles> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1531};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doubles, v),
+    };
+};
 
 // The schema writes a list of a fixed-width number as a typed array of RFC 8746 in little endian. The tag numbers
 // come from RFC 8746 figure 6: uint16le 69, uint32le 70, uint64le 71, sint8 72, sint16le 77, sint32le 78,
@@ -1167,12 +1437,28 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
 namespace
 {
 
-struct [[=cbor::tag(1514)]] garage {
+struct garage {
     std::vector<tire> tires;
     std::vector<std::string> names;
     std::vector<std::vector<std::uint16_t>> rows;
     std::map<std::uint16_t, std::string> owners;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<garage> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1514};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(garage, tires),
+        CBOR_MEMBER(garage, names),
+        CBOR_MEMBER(garage, rows),
+        CBOR_MEMBER(garage, owners),
+    };
+};
+
+namespace
+{
 
 garage const sample_garage{{{17, 1.5f}, {18, 3.0f}, {19, 0.5f}},
                            {"a", "bc"},
@@ -1361,9 +1647,9 @@ TEST_CASE("decode: an error is read as a value")
 namespace
 {
 
-struct [[=cbor::tag(65536)]] keyed {
-    [[=cbor::key("x-user-id")]] std::uint8_t m0;
-    [[=cbor::key("EOF")]] bool m1;
+struct keyed {
+    std::uint8_t m0;
+    bool m1;
 };
 
 struct [[=cbor::tag(1518)]] guarded {
@@ -1372,6 +1658,15 @@ struct [[=cbor::tag(1518)]] guarded {
 };
 
 } // namespace
+
+template <>
+struct cbor::describe_members<keyed> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{65536};
+    static constexpr std::tuple members{
+        cbor::member{"x-user-id", &keyed::m0},
+        cbor::member{"EOF", &keyed::m1},
+    };
+};
 
 // cbor::skip holds in the schema form too: the member has no key in the table and takes no place in the record.
 // The record is the class tag 1518 = d9 05 ee, 7 bytes of record head and the integer.
@@ -1388,12 +1683,13 @@ TEST_CASE("schema: cbor::skip leaves a public member out")
     CHECK_EQ(back.secret, 0u);
 }
 
-// The key of an annotation takes the place of the member name in the table. The expectation is counted from the
-// draft and RFC 8949 3 by hand: the keys with the text heads 69 and 63, an empty directory, f7 up to index 15,
-// then the class tag 65536, which needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and 4.1), the record head of
-// 7 bytes, the integer with its fixed width of 18 and 1 byte, and the simple value. The test exists because a tag
-// number above 65535 makes the head of the class tag 5 bytes long, and every offset behind it moves by that.
-TEST_CASE("schema: an annotation gives the key of a member")
+// The key that the description gives takes the place of the member name in the table. The expectation is
+// counted from the draft and RFC 8949 3 by hand: the keys with the text heads 69 and 63, an empty directory,
+// f7 up to index 15, then the class tag 65536, which needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and
+// 4.1), the record head of 7 bytes, the integer with its fixed width of 18 and 1 byte, and the simple value.
+// The test exists because a tag number above 65535 makes the head of the class tag 5 bytes long, and every
+// offset behind it moves by that.
+TEST_CASE("schema: the description gives the key of a member")
 {
     CHECK_EQ(cbor::schema<keyed>::fixed_size(), 15u);
     CHECK_EQ(cbor::schema<keyed>::member_offset<^^keyed::m1>(), 12u);
@@ -1476,18 +1772,37 @@ TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
 namespace
 {
 
-struct [[=cbor::tag(1516)]] passkey_user {
+struct passkey_user {
     std::vector<std::byte> id;
     std::string name;
 };
 
-struct [[=cbor::tag(1517)]] passkey_login {
+struct passkey_login {
     std::vector<std::byte> signature;
     std::optional<passkey_user> user;
     std::optional<std::string> note;
 };
 
 } // namespace
+
+template <>
+struct cbor::describe_members<passkey_user> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1516};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(passkey_user, id),
+        CBOR_MEMBER(passkey_user, name),
+    };
+};
+
+template <>
+struct cbor::describe_members<passkey_login> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1517};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(passkey_login, signature),
+        CBOR_MEMBER(passkey_login, user),
+        CBOR_MEMBER(passkey_login, note),
+    };
+};
 
 // A store such as LMDB hands out exactly the bytes it was asked for, and the next record may sit right
 // behind them. A writer whose allocate returns a span gets the message written straight into it, and no
@@ -1573,106 +1888,292 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
 namespace
 {
 
-struct [[=cbor::tag(1619)]] chain19 {
+struct chain19 {
     std::uint8_t v;
     std::string text;
     std::vector<std::string> words;
 };
 
-struct [[=cbor::tag(1618)]] chain18 {
+struct chain18 {
     std::uint8_t v;
     chain19 next;
 };
 
-struct [[=cbor::tag(1617)]] chain17 {
+struct chain17 {
     std::uint8_t v;
     chain18 next;
 };
 
-struct [[=cbor::tag(1616)]] chain16 {
+struct chain16 {
     std::uint8_t v;
     chain17 next;
 };
 
-struct [[=cbor::tag(1615)]] chain15 {
+struct chain15 {
     std::uint8_t v;
     chain16 next;
 };
 
-struct [[=cbor::tag(1614)]] chain14 {
+struct chain14 {
     std::uint8_t v;
     chain15 next;
 };
 
-struct [[=cbor::tag(1613)]] chain13 {
+struct chain13 {
     std::uint8_t v;
     chain14 next;
 };
 
-struct [[=cbor::tag(1612)]] chain12 {
+struct chain12 {
     std::uint8_t v;
     chain13 next;
 };
 
-struct [[=cbor::tag(1611)]] chain11 {
+struct chain11 {
     std::uint8_t v;
     chain12 next;
 };
 
-struct [[=cbor::tag(1610)]] chain10 {
+struct chain10 {
     std::uint8_t v;
     chain11 next;
 };
 
-struct [[=cbor::tag(1609)]] chain9 {
+struct chain9 {
     std::uint8_t v;
     chain10 next;
 };
 
-struct [[=cbor::tag(1608)]] chain8 {
+struct chain8 {
     std::uint8_t v;
     chain9 next;
 };
 
-struct [[=cbor::tag(1607)]] chain7 {
+struct chain7 {
     std::uint8_t v;
     chain8 next;
 };
 
-struct [[=cbor::tag(1606)]] chain6 {
+struct chain6 {
     std::uint8_t v;
     chain7 next;
 };
 
-struct [[=cbor::tag(1605)]] chain5 {
+struct chain5 {
     std::uint8_t v;
     chain6 next;
 };
 
-struct [[=cbor::tag(1604)]] chain4 {
+struct chain4 {
     std::uint8_t v;
     chain5 next;
 };
 
-struct [[=cbor::tag(1603)]] chain3 {
+struct chain3 {
     std::uint8_t v;
     chain4 next;
 };
 
-struct [[=cbor::tag(1602)]] chain2 {
+struct chain2 {
     std::uint8_t v;
     chain3 next;
 };
 
-struct [[=cbor::tag(1601)]] chain1 {
+struct chain1 {
     std::uint8_t v;
     chain2 next;
 };
 
-struct [[=cbor::tag(1600)]] chain0 {
+struct chain0 {
     std::uint8_t v;
     chain1 next;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<chain19> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1619};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain19, v),
+        CBOR_MEMBER(chain19, text),
+        CBOR_MEMBER(chain19, words),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain18> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1618};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain18, v),
+        CBOR_MEMBER(chain18, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain17> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1617};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain17, v),
+        CBOR_MEMBER(chain17, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain16> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1616};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain16, v),
+        CBOR_MEMBER(chain16, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain15> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1615};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain15, v),
+        CBOR_MEMBER(chain15, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain14> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1614};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain14, v),
+        CBOR_MEMBER(chain14, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain13> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1613};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain13, v),
+        CBOR_MEMBER(chain13, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain12> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1612};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain12, v),
+        CBOR_MEMBER(chain12, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain11> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1611};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain11, v),
+        CBOR_MEMBER(chain11, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain10> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1610};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain10, v),
+        CBOR_MEMBER(chain10, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain9> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1609};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain9, v),
+        CBOR_MEMBER(chain9, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain8> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1608};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain8, v),
+        CBOR_MEMBER(chain8, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain7> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1607};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain7, v),
+        CBOR_MEMBER(chain7, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain6> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1606};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain6, v),
+        CBOR_MEMBER(chain6, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain5> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1605};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain5, v),
+        CBOR_MEMBER(chain5, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain4> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1604};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain4, v),
+        CBOR_MEMBER(chain4, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain3> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1603};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain3, v),
+        CBOR_MEMBER(chain3, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain2> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1602};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain2, v),
+        CBOR_MEMBER(chain2, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain1> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1601};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain1, v),
+        CBOR_MEMBER(chain1, next),
+    };
+};
+
+template <>
+struct cbor::describe_members<chain0> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1600};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(chain0, v),
+        CBOR_MEMBER(chain0, next),
+    };
+};
+
+namespace
+{
 
 template <class C>
 C chain_of(std::uint8_t const v)
@@ -1755,15 +2256,31 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
 namespace
 {
 
-struct [[=cbor::tag(1520)]] point_a {
+struct point_a {
     std::uint8_t x;
 };
 
-struct [[=cbor::tag(1521)]] point_b {
+struct point_b {
     std::uint8_t x;
 };
 
 } // namespace
+
+template <>
+struct cbor::describe_members<point_a> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1520};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(point_a, x),
+    };
+};
+
+template <>
+struct cbor::describe_members<point_b> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1521};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(point_b, x),
+    };
+};
 
 // The tag of the class names the class on the wire. point_a and point_b have the same keys and the same layout,
 // so only the class tag tells them apart: 1520 = d9 05 f0 against 1521 = d9 05 f1 (RFC 8949 3.4). The test exists
@@ -1798,11 +2315,26 @@ TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 namespace
 {
 
-struct [[=cbor::tag(1522)]] ticket {
+struct ticket {
     std::string_view holder;
     std::vector<std::string_view> seats;
     std::uint16_t row;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<ticket> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1522};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(ticket, holder),
+        CBOR_MEMBER(ticket, seats),
+        CBOR_MEMBER(ticket, row),
+    };
+};
+
+namespace
+{
 
 ticket const sample_ticket{"a holder name longer than the small string buffer", {"seat one of the long list", "seat two"}, 12};
 
@@ -1880,7 +2412,7 @@ TEST_CASE("path: the root keeps the owner after the caller releases it")
 namespace
 {
 
-struct [[=cbor::tag(1523)]] probe {
+struct probe {
     bool flag;
     std::int16_t i16;
     std::uint64_t u64;
@@ -1894,6 +2426,30 @@ struct [[=cbor::tag(1523)]] probe {
     engine motor;
     std::array<std::uint16_t, 2> pair;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<probe> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1523};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(probe, flag),
+        CBOR_MEMBER(probe, i16),
+        CBOR_MEMBER(probe, u64),
+        CBOR_MEMBER(probe, f64),
+        CBOR_MEMBER(probe, f32),
+        CBOR_MEMBER(probe, i128),
+        CBOR_MEMBER(probe, code),
+        CBOR_MEMBER(probe, text),
+        CBOR_MEMBER(probe, tires),
+        CBOR_MEMBER(probe, maybe),
+        CBOR_MEMBER(probe, motor),
+        CBOR_MEMBER(probe, pair),
+    };
+};
+
+namespace
+{
 
 probe const sample_probe{true, -300, 1ull << 40, 2.5, -1.5f, cbor::int128{-5}, {'x', 'y', 'z'}, "probe text",
                          {{17, 1.5f}, {18, 2.0f}}, -9, {300, 1800}, {{7, 8}}};
@@ -2283,18 +2839,18 @@ TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
 namespace
 {
 
-struct [[=cbor::tag(1524)]] lot_wheel {
+struct lot_wheel {
     std::uint16_t diameter;
     float airPressure;
     bool snowTires;
 };
 
-struct [[=cbor::tag(1525)]] lot_engine {
+struct lot_engine {
     std::uint16_t horsepower;
     std::uint32_t cc;
 };
 
-struct [[=cbor::tag(1526)]] lot_car {
+struct lot_car {
     std::string make;
     std::string model;
     std::uint8_t seats;
@@ -2304,11 +2860,59 @@ struct [[=cbor::tag(1526)]] lot_car {
     char code[2];
 };
 
-struct [[=cbor::tag(1527)]] parking_lot {
+struct parking_lot {
     std::vector<lot_car> cars;
     std::vector<std::string> notes;
     std::vector<std::vector<std::uint16_t>> rows;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<lot_wheel> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1524};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(lot_wheel, diameter),
+        CBOR_MEMBER(lot_wheel, airPressure),
+        CBOR_MEMBER(lot_wheel, snowTires),
+    };
+};
+
+template <>
+struct cbor::describe_members<lot_engine> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1525};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(lot_engine, horsepower),
+        CBOR_MEMBER(lot_engine, cc),
+    };
+};
+
+template <>
+struct cbor::describe_members<lot_car> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1526};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(lot_car, make),
+        CBOR_MEMBER(lot_car, model),
+        CBOR_MEMBER(lot_car, seats),
+        CBOR_MEMBER(lot_car, wheels),
+        CBOR_MEMBER(lot_car, engine),
+        CBOR_MEMBER(lot_car, note),
+        CBOR_MEMBER(lot_car, code),
+    };
+};
+
+template <>
+struct cbor::describe_members<parking_lot> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1527};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(parking_lot, cars),
+        CBOR_MEMBER(parking_lot, notes),
+        CBOR_MEMBER(parking_lot, rows),
+    };
+};
+
+namespace
+{
 
 parking_lot sample_lot()
 {
@@ -2534,32 +3138,32 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
 namespace
 {
 
-struct [[=cbor::tag(1630)]] point {
+struct point {
     float x;
     float y;
 };
 
-struct [[=cbor::tag(1631)]] cloud {
+struct cloud {
     std::vector<point> points;
 };
 
-struct [[=cbor::tag(1638)]] gauge {
+struct gauge {
     bool on;
     color shade;
     sorted_inner at;
     std::array<std::uint16_t, 2> range;
 };
 
-struct [[=cbor::tag(1639)]] gauges {
+struct gauges {
     std::vector<gauge> g;
 };
 
 template <int K>
-struct [[=cbor::tag(1700 + K)]] filler_type {
+struct filler_type {
     std::int8_t v;
 };
 
-struct [[=cbor::tag(1690)]] fifteen_entries {
+struct fifteen_entries {
     filler_type<0> d0;
     filler_type<1> d1;
     filler_type<2> d2;
@@ -2575,7 +3179,7 @@ struct [[=cbor::tag(1690)]] fifteen_entries {
     std::vector<point> p;
 };
 
-struct [[=cbor::tag(1691)]] eighteen_entries {
+struct eighteen_entries {
     filler_type<0> d0;
     filler_type<1> d1;
     filler_type<2> d2;
@@ -2593,6 +3197,98 @@ struct [[=cbor::tag(1691)]] eighteen_entries {
     filler_type<14> e4;
     std::vector<point> p;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<point> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1630};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(point, x),
+        CBOR_MEMBER(point, y),
+    };
+};
+
+template <>
+struct cbor::describe_members<cloud> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1631};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(cloud, points),
+    };
+};
+
+template <>
+struct cbor::describe_members<gauge> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1638};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(gauge, on),
+        CBOR_MEMBER(gauge, shade),
+        CBOR_MEMBER(gauge, at),
+        CBOR_MEMBER(gauge, range),
+    };
+};
+
+template <>
+struct cbor::describe_members<gauges> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1639};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(gauges, g),
+    };
+};
+
+template <int K>
+struct cbor::describe_members<filler_type<K>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700 + K};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(filler_type<K>, v),
+    };
+};
+
+template <>
+struct cbor::describe_members<fifteen_entries> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1690};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(fifteen_entries, d0),
+        CBOR_MEMBER(fifteen_entries, d1),
+        CBOR_MEMBER(fifteen_entries, d2),
+        CBOR_MEMBER(fifteen_entries, d3),
+        CBOR_MEMBER(fifteen_entries, d4),
+        CBOR_MEMBER(fifteen_entries, d5),
+        CBOR_MEMBER(fifteen_entries, d6),
+        CBOR_MEMBER(fifteen_entries, d7),
+        CBOR_MEMBER(fifteen_entries, d8),
+        CBOR_MEMBER(fifteen_entries, d9),
+        CBOR_MEMBER(fifteen_entries, e0),
+        CBOR_MEMBER(fifteen_entries, e1),
+        CBOR_MEMBER(fifteen_entries, p),
+    };
+};
+
+template <>
+struct cbor::describe_members<eighteen_entries> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1691};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(eighteen_entries, d0),
+        CBOR_MEMBER(eighteen_entries, d1),
+        CBOR_MEMBER(eighteen_entries, d2),
+        CBOR_MEMBER(eighteen_entries, d3),
+        CBOR_MEMBER(eighteen_entries, d4),
+        CBOR_MEMBER(eighteen_entries, d5),
+        CBOR_MEMBER(eighteen_entries, d6),
+        CBOR_MEMBER(eighteen_entries, d7),
+        CBOR_MEMBER(eighteen_entries, d8),
+        CBOR_MEMBER(eighteen_entries, d9),
+        CBOR_MEMBER(eighteen_entries, e0),
+        CBOR_MEMBER(eighteen_entries, e1),
+        CBOR_MEMBER(eighteen_entries, e2),
+        CBOR_MEMBER(eighteen_entries, e3),
+        CBOR_MEMBER(eighteen_entries, e4),
+        CBOR_MEMBER(eighteen_entries, p),
+    };
+};
+
+namespace
+{
 
 bool same(gauge const &a, gauge const &b)
 {
@@ -2801,7 +3497,7 @@ TEST_CASE("at_path: a fixed-size vector is a range of its elements")
 namespace
 {
 
-struct [[=cbor::tag(1660)]] everything {
+struct everything {
     bool flag;
     cbor::int128 big;
     char code[3];
@@ -2815,6 +3511,30 @@ struct [[=cbor::tag(1660)]] everything {
     std::vector<gauge> gauges;
     std::vector<tire> tires;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<everything> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1660};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(everything, flag),
+        CBOR_MEMBER(everything, big),
+        CBOR_MEMBER(everything, code),
+        CBOR_MEMBER(everything, engines),
+        CBOR_MEMBER(everything, inner),
+        CBOR_MEMBER(everything, maybe),
+        CBOR_MEMBER(everything, text),
+        CBOR_MEMBER(everything, track),
+        CBOR_MEMBER(everything, names),
+        CBOR_MEMBER(everything, owners),
+        CBOR_MEMBER(everything, gauges),
+        CBOR_MEMBER(everything, tires),
+    };
+};
+
+namespace
+{
 
 everything const sample_everything{true,
                                    cbor::int128{-5},
@@ -3353,7 +4073,7 @@ struct cbor::describe_members<described_car> {
 template <>
 struct cbor::describe_members<described_renamed> {
     static constexpr std::optional<cbor::tag> tag = cbor::tag{1621};
-    static constexpr std::tuple members{cbor::member{cbor::map_key("a"), &described_renamed::last},
+    static constexpr std::tuple members{cbor::member{"a", &described_renamed::last},
                                         CBOR_MEMBER(described_renamed, first)};
 };
 
