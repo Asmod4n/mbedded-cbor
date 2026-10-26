@@ -92,7 +92,7 @@ class pfr
             return std::tuple_size_v<std::remove_const_t<decltype(describe_members<U>::members)>>;
 #ifdef __cpp_impl_reflection
         else
-            return reflection::members_of<U>().size();
+            return reflection::data_members<U>().size();
 #elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
         else
             return boost::pfr::tuple_size_v<U>;
@@ -110,7 +110,7 @@ class pfr
             return value.*std::get<I>(describe_members<V>::members).pointer;
         } else {
 #ifdef __cpp_impl_reflection
-            static constexpr auto members = reflection::members_of<V>();
+            static constexpr auto members = reflection::data_members<V>();
             return value.[:members[I]:];
 #elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
             return boost::pfr::get<I>(value);
@@ -125,7 +125,7 @@ class pfr
             return std::get<I>(describe_members<U>::members).key;
 #ifdef __cpp_impl_reflection
         else
-            return map_key(reflection::key_of<U>(reflection::members_of<U>()[I]));
+            return map_key(reflection::key_of<U>(reflection::data_members<U>()[I]));
 #elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
         else
             return map_key(boost::pfr::get_name<I, U>());

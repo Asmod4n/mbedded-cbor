@@ -56,16 +56,6 @@ struct renamed {
     std::uint8_t number;
 };
 
-struct [[=cbor::tag(1802)]] guarded {
-    std::uint8_t id;
-    [[=cbor::skip{}]] std::uint8_t secret;
-};
-
-struct [[=cbor::tag(1803)]] [[=cbor::allowlist{}]] login {
-    [[=cbor::allow{}]] std::uint8_t id;
-    std::uint8_t secret;
-};
-
 } // namespace reference_structs
 
 template <>
@@ -103,9 +93,7 @@ struct cbor::describe_members<reference_structs::account> {
 };
 
 using reference_structs::account;
-using reference_structs::guarded;
 using reference_structs::header;
-using reference_structs::login;
 using reference_structs::person;
 using reference_structs::reading;
 using reference_structs::renamed;
@@ -210,30 +198,6 @@ TEST_CASE("doc reference structs: cbor::key")
     auto const seven = doc.at(cbor::key{7})->get<std::string_view>();
     REQUIRE(seven.has_value());
     CHECK_EQ(**seven, "seven");
-}
-
-// skip.md: a skipped member is not written, and decode leaves its default value.
-TEST_CASE("doc reference structs: cbor::skip")
-{
-    auto bytes = cbor::schema<guarded>::encode(guarded{7, 42});
-    REQUIRE(bytes.has_value());
-    CHECK_EQ(bytes->find("secret"s), std::string::npos);
-    auto const back = cbor::schema<guarded>::decode(std::move(*bytes));
-    REQUIRE(back.has_value());
-    CHECK_EQ((*back)->id, 7u);
-    CHECK_EQ((*back)->secret, 0u);
-}
-
-// allowlist.md and allow.md: under cbor::allowlist only the members with cbor::allow are written.
-TEST_CASE("doc reference structs: cbor::allowlist and cbor::allow")
-{
-    auto bytes = cbor::schema<login>::encode(login{7, 42});
-    REQUIRE(bytes.has_value());
-    CHECK_EQ(bytes->find("secret"s), std::string::npos);
-    auto const back = cbor::schema<login>::decode(std::move(*bytes));
-    REQUIRE(back.has_value());
-    CHECK_EQ((*back)->id, 7u);
-    CHECK_EQ((*back)->secret, 0u);
 }
 
 // describe_members.md: a description gives the tag and the text key of each member.

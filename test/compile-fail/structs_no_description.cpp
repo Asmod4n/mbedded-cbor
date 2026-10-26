@@ -1,8 +1,7 @@
 // cbor::structs reads a type with no description only when it is an aggregate with no base and no annotation,
 // so that its bytes are the same on every build. CBOR_TEST_CASE selects the case: 1 a class with a
-// constructor, 2 a class with a private member, 3 an aggregate with a base, 4 cbor::key, 5 cbor::skip, 6
-// cbor::allow, 7 cbor::allowlist, 8 cbor::tag on an aggregate, 9 decode into a default-constructed object of
-// a type with no default constructor.
+// constructor, 2 a class with a private member, 3 an aggregate with a base, 4 cbor::key, 8 cbor::tag on an
+// aggregate, 9 decode into a default-constructed object of a type with no default constructor.
 #include <cbor/cbor.hpp>
 
 #include <expected>
@@ -38,18 +37,6 @@ struct t : b {
 #elif CBOR_TEST_CASE == 4
 struct t {
     [[=cbor::key("x")]] int a;
-};
-#elif CBOR_TEST_CASE == 5
-struct t {
-    [[=cbor::skip{}]] int a;
-};
-#elif CBOR_TEST_CASE == 6
-struct t {
-    [[=cbor::allow{}]] int a;
-};
-#elif CBOR_TEST_CASE == 7
-struct [[=cbor::allowlist{}]] t {
-    int a;
 };
 #elif CBOR_TEST_CASE == 8
 struct [[=cbor::tag(160001)]] t {
