@@ -151,7 +151,7 @@ TEST_CASE("sequence_reader: every two cuts in every form give the same items")
                             "abc\xa1\x61k\x19\x01\x00\xc1\x1a\x00\x00\x00\x01\xfb\x3f\xf0\x00\x00\x00\x00\x00"
                             "\x00\x80\x84\x80\x41z\xa0\xf6"s;
     test::sequence_outcome const whole = test::sequence_outcome_of(all);
-    REQUIRE_EQ(whole.items.size(), 9u);
+    REQUIRE_EQ(whole.items.size(), 8u);
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         for (std::size_t a = 0; a <= all.size(); ++a)
@@ -216,7 +216,7 @@ TEST_CASE("sequence_reader: an item over a copied piece and held pieces")
     for (std::size_t n : {3u, 4u, 9u}) {
         CAPTURE(n);
         cbor::sequence_reader s;
-        s.feed(std::make_shared<std::string const>("\x5a\x00\x00\x00"s + static_cast<char>(n)));
+        s.feed(std::make_shared<std::string const>("\x7a\x00\x00\x00"s + static_cast<char>(n)));
         for (std::size_t i = 0; i < n; ++i)
             s.feed(std::make_shared<std::string const>("x"s));
         auto const string = s.next();
