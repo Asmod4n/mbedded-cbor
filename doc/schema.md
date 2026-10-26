@@ -22,10 +22,20 @@ clang has no reflection yet, so a clang build has no `cbor::schema`.
 ## 1. Write a message and read one field
 
 ```cpp
-struct [[=cbor::tag(1700)]] sensor {
+struct sensor {
     std::string name;
     std::uint16_t id;
     std::vector<double> readings;
+};
+
+template <>
+struct cbor::describe_members<sensor> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(sensor, name),
+        CBOR_MEMBER(sensor, id),
+        CBOR_MEMBER(sensor, readings),
+    };
 };
 
 auto bytes = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
@@ -38,16 +48,21 @@ auto const second = cbor::schema<sensor>::at_path<"$.readings[1]">(*bytes);   //
 `encode` returns a `std::expected<std::string, cbor::error>`, and
 `at_path` returns a `std::expected` of the value of the member.
 
-## 2. Tags
+## 2. Tags and keys
 
-Every struct in a message carries `[[=cbor::tag(n)]]`, and each struct
-has its own number. A struct with no tag, or two structs with one
-number, do not compile.
+`schema` reads each struct from its description, the specialization of
+`cbor::describe_members` that `cbor::structs` reads too
+([structs.md](structs.md), section 3). The description gives the tag of
+the struct and lists every public member with its key. Each struct in a
+message has its own tag number.
 
-The key of a member is its name. `[[=cbor::key("x")]]` changes it.
-`cbor::structs` refuses this annotation; it takes its keys from
-`cbor::describe_members` ([structs.md](structs.md), section 3). Only
-public members are written.
+`CBOR_MEMBER(type, member)` takes the name of the member as the key.
+`cbor::member{"x", &type::member}` takes the text `x`. A key in `schema`
+is a text.
+
+A struct with no description, with `cbor::untagged` or with a base
+class, a member that the description leaves out, and two structs with
+one number do not compile.
 
 ## 3. Read one value
 
@@ -101,13 +116,25 @@ such a list is a range of element accessors, so a page is
 `std::views::drop` and `std::views::take`:
 
 ```cpp
-struct [[=cbor::tag(1703)]] point {
+struct point {
     float x;
     float y;
 };
 
-struct [[=cbor::tag(1704)]] track {
+struct track {
     std::vector<point> points;
+};
+
+template <>
+struct cbor::describe_members<point> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
+    static constexpr std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
+};
+
+template <>
+struct cbor::describe_members<track> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
+    static constexpr std::tuple members{CBOR_MEMBER(track, points)};
 };
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});

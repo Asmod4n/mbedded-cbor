@@ -52,19 +52,7 @@ struct reading {
     std::optional<std::uint8_t> unit;
 };
 
-struct renamed {
-    std::uint8_t number;
-};
-
 } // namespace reference_structs
-
-template <>
-struct cbor::describe_members<reference_structs::renamed> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1801};
-    static constexpr std::tuple members{
-        cbor::member{"id", &reference_structs::renamed::number},
-    };
-};
 
 template <>
 struct cbor::describe_members<reference_structs::header> {
@@ -96,7 +84,6 @@ using reference_structs::account;
 using reference_structs::header;
 using reference_structs::person;
 using reference_structs::reading;
-using reference_structs::renamed;
 using reference_structs::senml;
 
 // encode.md: encode(value) gives the bytes of a map with the member names as keys, sorted by RFC 8949 4.2.1.
@@ -181,23 +168,6 @@ TEST_CASE("doc reference structs: decode with an empty owner throws")
     CHECK_THROWS_AS(std::ignore = cbor::structs<int>::decode(std::shared_ptr<std::string const>()), std::logic_error);
     CHECK_THROWS_AS(std::ignore = cbor::structs<int>::decode(std::shared_ptr<void const>(), std::string_view("\x01")),
                     std::logic_error);
-}
-
-// key.md: cbor::key gives a member of a schema struct another key; the lazy form takes an integer key.
-TEST_CASE("doc reference structs: cbor::key")
-{
-    auto bytes = cbor::schema<renamed>::encode(renamed{7});
-    REQUIRE(bytes.has_value());
-    CHECK_NE(bytes->find("\x62id"s), std::string::npos);
-    CHECK_EQ(bytes->find("number"s), std::string::npos);
-    auto const back = cbor::schema<renamed>::decode(std::move(*bytes));
-    REQUIRE(back.has_value());
-    CHECK_EQ((*back)->number, 7u);
-
-    auto const doc = cbor::lazy::take_ownership(test::preferred(test::M(7, "seven"s))).value();
-    auto const seven = doc.at(cbor::key{7})->get<std::string_view>();
-    REQUIRE(seven.has_value());
-    CHECK_EQ(**seven, "seven");
 }
 
 // describe_members.md: a description gives the tag and the text key of each member.

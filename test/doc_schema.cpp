@@ -72,8 +72,8 @@ TEST_CASE("doc schema: write a message and read one field")
     CHECK(first_message() == std::pair<std::uint16_t, double>{7, 2.5});
 }
 
-// The section "Tags" states that a struct with no tag leaves no schema to call.
-TEST_CASE("doc schema: tags")
+// The section "Tags and keys" states that a struct with no description does not compile in schema.
+TEST_CASE("doc schema: tags and keys")
 {
     CHECK(cbor::tags_registered<sensor>());
     CHECK_FALSE(cbor::tags_registered<untagged>());

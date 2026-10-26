@@ -344,8 +344,14 @@ double const sum = std::accumulate(values.begin(), values.end(), 0.0);
 cbor::schema writes a std::vector<double> as an RFC 8746 typed array. view gives a typed_array_view, a random access range over the bytes of the input, with no copy.
 
 ```cpp
-struct [[=cbor::tag(1900)]] series {
+struct series {
     std::vector<double> values;
+};
+
+template <>
+struct cbor::describe_members<series> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1900};
+    static constexpr std::tuple members{CBOR_MEMBER(series, values)};
 };
 
 auto const root = cbor::schema<series>::path(std::move(bytes));
