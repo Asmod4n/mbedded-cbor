@@ -51,7 +51,6 @@ TEST_CASE("doc readme: read one value by its path")
     CHECK_EQ(age.error(), cbor::error::key_not_found);
 }
 
-#ifdef __cpp_impl_reflection
 
 namespace
 {
@@ -87,9 +86,9 @@ struct cbor::describe_members<track> {
 // "Write structs, read one field" reads one leaf at its offset and a page of the fixed-size vector.
 TEST_CASE("doc readme: write structs, read one field")
 {
-    auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
+    auto message = cbor::packed<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
     REQUIRE(message.has_value());
-    auto const lane = cbor::schema<track>::path(std::move(*message));
+    auto const lane = cbor::packed<track>::path(std::move(*message));
     REQUIRE(lane.has_value());
     CHECK_EQ(lane->at_path<"$.points[2].x">(), 5.0f);
     auto const points = lane->at_path<"$.points">();
@@ -100,4 +99,3 @@ TEST_CASE("doc readme: write structs, read one field")
     CHECK_EQ(seen, (std::vector<float>{4}));
 }
 
-#endif

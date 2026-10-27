@@ -5,7 +5,7 @@ template <class S>
 struct fixed_element {};
 
 template <class S>
-    requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 class accessor<fixed_element<S>> {
 public:
     template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
@@ -40,7 +40,7 @@ O(p), p the count of steps. No allocation.
 
 ```cpp
 // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})
-auto const root = cbor::schema<car>::path(std::move(bytes));
+auto const root = cbor::packed<car>::path(std::move(bytes));
 auto const second = root->at_path<"$.tires[]">(1uz);
 second->at_path<"@.diameter">();   // 18
 second->at_path<"@.pressure">();   // 2.25f

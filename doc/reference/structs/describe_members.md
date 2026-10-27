@@ -8,8 +8,8 @@ template <class T>
 concept has_describe_members = requires { describe_members<T>::members; };
 ```
 
-A specialization describes how `cbor::structs` and `cbor::schema`
-write and read `T`. It
+A specialization describes how `cbor::structs`, `cbor::packed` and
+`cbor::schema` write and read `T`. It
 holds `tag`, a `std::optional<cbor::tag>`, and `members`, a `std::tuple`
 of [member](member.md) entries. `cbor::untagged` gives a map with no
 tag. The specialization stands outside every namespace, after `T`.
@@ -43,6 +43,16 @@ struct cbor::describe_members<header> {
 };
 cbor::structs<header>::encode(header{"text/plain"});   // 160060({"content-type": "text/plain"})
 ```
+
+`CBOR_DEFINE_TYPE(T, TAG, members...)` writes this specialization:
+
+```cpp
+CBOR_DEFINE_TYPE(trailer, cbor::tag{160061}, cbor::member{"checksum", &trailer::checksum});
+cbor::structs<trailer>::encode(trailer{7});   // 160061({"checksum": 7})
+```
+
+The macro stands at global scope. A type whose name holds a comma goes
+through an alias.
 
 ## See also
 

@@ -2,7 +2,7 @@
 
 ```cpp
 template <fixed_string Path, std::convertible_to<std::size_t>... Index>
-    requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && Path.view().starts_with('$') &&
+    requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
              reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
              value_holds_no_view<typename decltype(reflection::path_result<T, T, Path, 1>())::type>)
 static auto at_path(std::string_view const encoded, Index const... indexes);
@@ -34,9 +34,9 @@ path. No allocation.
 
 ```cpp
 // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})
-cbor::schema<car>::at_path<"$.seats">(bytes);                    // 5
-cbor::schema<car>::at_path<"$.tires[1].diameter">(bytes);        // 18
-cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz);    // error::index_out_of_bounds
+cbor::packed<car>::at_path<"$.seats">(bytes);                    // 5
+cbor::packed<car>::at_path<"$.tires[1].diameter">(bytes);        // 18
+cbor::packed<car>::at_path<"$.tires[].diameter">(bytes, 5uz);    // error::index_out_of_bounds
 ```
 
 ## See also

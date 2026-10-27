@@ -2,10 +2,10 @@
 
 ```cpp
 static std::expected<std::string, cbor::error> encode(T const &value)
-    requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>());
+    requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
 
 template <class Target>
-    requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 static std::expected<std::size_t, cbor::error> encode(T const &value, Target &&target);
 ```
 
@@ -35,9 +35,9 @@ allocates nothing.
 ## Example
 
 ```cpp
-auto const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
+auto const bytes = cbor::packed<tire>::encode(tire{17, 2.5f});
 std::string out = "x";
-auto const n = cbor::schema<tire>::encode(tire{17, 2.5f}, out);
+auto const n = cbor::packed<tire>::encode(tire{17, 2.5f}, out);
 use(out.size() == 1 + *n);   // true
 ```
 

@@ -212,3 +212,26 @@ TEST_CASE("doc reference structs: member types")
 }
 
 #endif
+
+namespace reference_structs
+{
+
+struct trailer {
+    std::uint8_t checksum;
+};
+
+} // namespace reference_structs
+
+CBOR_DEFINE_TYPE(reference_structs::trailer, cbor::tag{160061},
+                 cbor::member{"checksum", &reference_structs::trailer::checksum});
+
+// describe_members.md: CBOR_DEFINE_TYPE writes the description; 160061 = 0x0002713d, "checksum" is 68 + 8 bytes.
+TEST_CASE("doc reference structs: CBOR_DEFINE_TYPE")
+{
+    auto const bytes = cbor::structs<reference_structs::trailer>::encode(reference_structs::trailer{7});
+    REQUIRE(bytes.has_value());
+    using namespace std::string_literals;
+    CHECK_EQ(*bytes, "\xda\x00\x02\x71\x3d\xa1\x68"
+                     "checksum\x07"s);
+}
+

@@ -108,6 +108,18 @@ struct Car {
     std::vector<Wheel> wheels; std::uint16_t length; std::uint16_t width; std::uint16_t height; std::uint32_t weight;
     Engine engine; float fuelCapacity; float fuelLevel; bool hasPowerWindows; bool hasPowerSteering;
     bool hasCruiseControl; std::uint8_t cupHolders; bool hasNavSystem;
+#if defined(MB_CAR_CONSTRUCTOR)
+    Car(std::string_view make_, std::string_view model_, std::uint8_t color_, std::uint8_t seats_, std::uint8_t doors_,
+        std::vector<Wheel> wheels_, std::uint16_t length_, std::uint16_t width_, std::uint16_t height_, std::uint32_t weight_,
+        Engine engine_, float fuelCapacity_, float fuelLevel_, bool hasPowerWindows_, bool hasPowerSteering_,
+        bool hasCruiseControl_, std::uint8_t cupHolders_, bool hasNavSystem_)
+        : make(make_), model(model_), color(color_), seats(seats_), doors(doors_), wheels(std::move(wheels_)), length(length_),
+          width(width_), height(height_), weight(weight_), engine(engine_), fuelCapacity(fuelCapacity_), fuelLevel(fuelLevel_),
+          hasPowerWindows(hasPowerWindows_), hasPowerSteering(hasPowerSteering_), hasCruiseControl(hasCruiseControl_),
+          cupHolders(cupHolders_), hasNavSystem(hasNavSystem_)
+    {
+    }
+#endif
 };
 
 template <>
@@ -146,7 +158,11 @@ struct cbor::describe_members<ParkingLot> {
 };
 
 using T = ParkingLot;
+#if defined(MB_FORM_PACKED)
+using S = cbor::packed<T>;
+#else
 using S = cbor::schema<T>;
+#endif
 static std::string json_text;
 static nlohmann::json json;
 
@@ -389,7 +405,11 @@ struct cbor::describe_members<Floats> {
 };
 
 using T = Floats;
+#if defined(MB_FORM_PACKED)
+using S = cbor::packed<T>;
+#else
 using S = cbor::schema<T>;
+#endif
 
 static double scalar(cbor::lazy const &e)
 {
@@ -654,7 +674,11 @@ struct cbor::describe_members<Records> {
 };
 
 using T = Records;
+#if defined(MB_FORM_PACKED)
+using S = cbor::packed<T>;
+#else
 using S = cbor::schema<T>;
+#endif
 
 template <class V> static V must(std::expected<V, cbor::error> const &r)
 {
