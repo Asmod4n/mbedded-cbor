@@ -2,7 +2,7 @@
 
 ```cpp
 template <class U = T>
-    requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 class accessor {
 public:
     template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
@@ -52,7 +52,7 @@ O(1). No allocation.
 
 ```cpp
 // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})
-auto const root = cbor::schema<car>::path(std::move(bytes));
+auto const root = cbor::packed<car>::path(std::move(bytes));
 auto const tires = root->at_path<"$.tires">();
 tires->size();                       // 2
 tires->at_path<"@[1].diameter">();   // 18

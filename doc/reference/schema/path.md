@@ -2,16 +2,16 @@
 
 ```cpp
 template <owning_range_of_chars Encoded>
-    requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 static std::expected<accessor<>, cbor::error> path(Encoded &&encoded);
 
 template <owning_range_of_chars Encoded>
 static std::expected<accessor<>, cbor::error> path(std::shared_ptr<Encoded const> encoded)
-    requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>());
+    requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
 
 template <borrowed_range_of_chars Encoded>
 static std::expected<accessor<>, cbor::error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
-    requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>());
+    requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
 ```
 
 Opens a message and gives the root [accessor](accessor.md). An rvalue
@@ -37,7 +37,7 @@ O(1) in the size of the message. The rvalue form makes one
 
 ```cpp
 // bytes: a std::string from schema<car>::encode(car{"Volvo", 5, ...})
-auto const root = cbor::schema<car>::path(std::move(bytes));
+auto const root = cbor::packed<car>::path(std::move(bytes));
 if (root)
     use(root->at_path<"$.make">());   // "Volvo"
 ```

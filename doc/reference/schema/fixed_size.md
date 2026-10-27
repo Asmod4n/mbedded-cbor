@@ -2,7 +2,7 @@
 
 ```cpp
 template <class U = T>
-    requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 static consteval std::size_t fixed_size();
 ```
 
@@ -27,9 +27,9 @@ Compile time. No cost at run time.
 ## Example
 
 ```cpp
-cbor::schema<tire>::fixed_size();                  // 18
-cbor::schema<tire>::fixed_size<std::uint16_t>();   // 3
-cbor::schema<car>::fixed_size<std::string>();      // 6
+cbor::packed<tire>::fixed_size();                  // 18
+cbor::packed<tire>::fixed_size<std::uint16_t>();   // 3
+cbor::packed<car>::fixed_size<std::string>();      // 6
 ```
 
 ## See also

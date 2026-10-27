@@ -52,12 +52,12 @@ As [encode](encode.md), [path](path.md), [at_path](at_path.md) and
 
 ```cpp
 constexpr auto apart = cbor::description_place::apart;
-auto const data = cbor::schema<car>::encode<apart>(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
-auto const description = cbor::schema<car>::description();
+auto const data = cbor::packed<car>::encode<apart>(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
+auto const description = cbor::packed<car>::description();
 data->size() + description.size();                          // the size of the message
-cbor::schema<car>::at_path<"$.seats", apart>(*data);        // 5
-cbor::schema<car>::at_path<"$.seats">(*data);               // error::incorrect_type or error::too_little_data
-cbor::schema<car>::path<apart>(std::string(*data))->at_path<"$.tires[1].diameter">();   // 18
+cbor::packed<car>::at_path<"$.seats", apart>(*data);        // 5
+cbor::packed<car>::at_path<"$.seats">(*data);               // error::incorrect_type or error::too_little_data
+cbor::packed<car>::path<apart>(std::string(*data))->at_path<"$.tires[1].diameter">();   // 18
 ```
 
 ## See also
