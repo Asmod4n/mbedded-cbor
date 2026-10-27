@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <new>
+#include <numeric>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -148,7 +149,7 @@ class reflection
 
     template <class U>
     static constexpr bool is_inline_optional = is_optional<U> && requires {
-        requires std::is_class_v<typename U::value_type> && std::is_aggregate_v<typename U::value_type>;
+        requires has_describe_members<typename U::value_type>;
         requires !requires { fixed_length<typename U::value_type>::value; };
     };
 
@@ -205,6 +206,29 @@ class reflection
 #else
     static constexpr bool is_wide_integer = false;
 #endif
+
+    template <class U>
+    static constexpr bool is_struct = has_describe_members<U> || (std::is_class_v<U> && std::is_aggregate_v<U>);
+
+    template <class U, class... A>
+    static consteval bool contains(std::tuple<std::type_identity<A>...>)
+    {
+        return (std::is_same_v<U, A> || ...);
+    }
+
+    template <class U, class... A>
+    static consteval std::size_t index_in(std::tuple<std::type_identity<A>...>)
+    {
+        std::array<bool, sizeof...(A) + 1> const hits{std::is_same_v<U, A>..., true};
+        return static_cast<std::size_t>(std::ranges::find(hits, true) - hits.begin());
+    }
+
+    template <auto Build>
+    static constexpr auto static_bytes = [] {
+        std::array<char, Build().size()> bytes{};
+        std::ranges::copy(Build(), bytes.begin());
+        return bytes;
+    }();
 
     static consteval std::vector<unsigned char> key_encoded(major_type const major, std::uint64_t const argument,
                                                             std::string_view const text)
@@ -265,23 +289,29 @@ class reflection
     template <class Root>
     static consteval bool descriptions_valid()
     {
-        if constexpr (std::is_class_v<Root> && std::is_aggregate_v<Root>)
-            template for (constexpr std::meta::info type : packing_table_of<Root>()) {
-                using U = typename[:type:];
-                static_assert(has_describe_members<U>, "cbor::schema takes each struct through cbor::describe_members<T>.");
-                if constexpr (has_describe_members<U>) {
-                    static_assert(description_valid<U>());
-                    static_assert(std::meta::bases_of(type, std::meta::access_context::unprivileged()).empty(),
-                                  "cbor::schema takes a class with no base class.");
-                    if constexpr (tag_declared<U>())
-                        static_assert(describe_members<U>::tag.has_value(),
-                                      "cbor::schema takes a struct with a tag; cbor::untagged is for cbor::structs.");
-                    static_assert(std::apply([](auto const &...m) { return ((m.key.major == major_type::text_string) && ...); },
-                                             describe_members<U>::members),
-                                  "cbor::schema takes a text key in cbor::describe_members; an integer key is for "
-                                  "cbor::structs.");
-                }
-            }
+        if constexpr (is_struct<std::remove_cv_t<Root>>)
+            std::apply(
+                []<class... U>(std::type_identity<U>...) {
+                    (
+                        [] {
+                            static_assert(has_describe_members<U>,
+                                          "cbor::schema takes each struct through cbor::describe_members<T>.");
+                            if constexpr (has_describe_members<U>) {
+                                static_assert(description_valid<U>());
+                                static_assert(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty(),
+                                              "cbor::schema takes a class with no base class.");
+                                if constexpr (tag_declared<U>())
+                                    static_assert(describe_members<U>::tag.has_value(),
+                                                  "cbor::schema takes a struct with a tag; cbor::untagged is for cbor::structs.");
+                                static_assert(std::apply([](auto const &...m) { return ((m.key.major == major_type::text_string) && ...); },
+                                                         describe_members<U>::members),
+                                              "cbor::schema takes a text key in cbor::describe_members; an integer key is for "
+                                              "cbor::structs.");
+                            }
+                        }(),
+                        ...);
+                },
+                packing_table_of<Root>{});
         static_assert(tags_registered<Root>(), "cbor::schema takes one tag for one struct only.");
         return true;
     }
@@ -383,6 +413,42 @@ class reflection
         return validity::keys_unique(keys, key_encoding_of);
     }
 
+    template <std::size_t N>
+    static consteval std::array<std::size_t, N> keys_sorted(std::array<map_key, N> const &keys)
+    {
+        std::array<std::size_t, N> order;
+        std::iota(order.begin(), order.end(), std::size_t{0});
+        std::ranges::sort(order, [&](std::size_t const a, std::size_t const b) { return key_encoding_less(keys[a], keys[b]); });
+        return order;
+    }
+
+    template <class U>
+    static constexpr std::array<std::size_t, describe::members_count<U>> key_order =
+        keys_sorted([]<std::size_t... I>(std::index_sequence<I...>) {
+            return std::array<map_key, sizeof...(I)>{describe::key_of<U, I>...};
+        }(std::make_index_sequence<describe::members_count<U>>{}));
+
+    template <class U, class F>
+    CBOR_ALWAYS_INLINE static constexpr void for_each_field(F &&f)
+    {
+        [&]<std::size_t... K>(std::index_sequence<K...>) {
+            (f(std::integral_constant<std::size_t, key_order<U>[K]>{}), ...);
+        }(std::make_index_sequence<describe::members_count<U>>{});
+    }
+
+    template <class U, class P>
+    static consteval std::size_t member_index_of(P const pointer)
+    {
+        std::size_t found = describe::members_count<U>;
+        for_each_field<U>([&](auto i) {
+            constexpr auto listed = std::get<decltype(i)::value>(describe_members<U>::members).pointer;
+            if constexpr (std::is_same_v<std::remove_cv_t<decltype(listed)>, P>)
+                if (listed == pointer)
+                    found = decltype(i)::value;
+        });
+        return found;
+    }
+
     template <class T>
     static consteval bool annotations_absent()
     {
@@ -474,61 +540,10 @@ class reflection
     }
 
 #ifdef __cpp_impl_reflection
-    template <class U>
-    static consteval std::span<std::meta::info const> own_members()
-    {
-        return std::define_static_array(
-            std::meta::nonstatic_data_members_of(std::meta::dealias(^^U), std::meta::access_context::unprivileged()));
-    }
-
-    template <class U, std::meta::info R>
-    static consteval std::string_view listed_key()
-    {
-        return std::apply(
-            [](auto const &...m) {
-                std::string_view key;
-                auto const take = [&key](auto const &e) {
-                    if constexpr (std::is_same_v<decltype(e.pointer), decltype(&[:R:])>)
-                        if (e.pointer == &[:R:])
-                            key = e.key.text;
-                };
-                (take(m), ...);
-                return key;
-            },
-            describe_members<U>::members);
-    }
-
-    template <class U>
-    static consteval std::span<char const *const> listed_key_texts()
-    {
-        std::vector<char const *> texts;
-        template for (constexpr std::meta::info m : own_members<U>())
-            texts.push_back(std::define_static_string(listed_key<U, m>()));
-        return std::define_static_array(texts);
-    }
-
-    template <class U>
-    static consteval std::span<std::size_t const> listed_key_sizes()
-    {
-        std::vector<std::size_t> sizes;
-        template for (constexpr std::meta::info m : own_members<U>())
-            sizes.push_back(listed_key<U, m>().size());
-        return std::define_static_array(sizes);
-    }
-
-    template <class U>
     static consteval std::string_view key_of(std::meta::info const r)
     {
-        if constexpr (has_describe_members<U>) {
-            constexpr auto members = own_members<U>();
-            constexpr auto texts = listed_key_texts<U>();
-            constexpr auto sizes = listed_key_sizes<U>();
-            auto const i = static_cast<std::size_t>(std::ranges::find(members, r) - members.begin());
-            return std::string_view(texts[i], sizes[i]);
-        } else {
-            auto const name = std::meta::u8identifier_of(r);
-            return std::define_static_string(std::string(name.begin(), name.end()));
-        }
+        auto const name = std::meta::u8identifier_of(r);
+        return std::define_static_string(std::string(name.begin(), name.end()));
     }
 
     static consteval bool annotated(std::meta::info const entity, std::meta::info const type)
@@ -589,12 +604,19 @@ class reflection
     template <class U>
     static consteval std::span<std::meta::info const> data_members()
     {
-        std::vector<std::meta::info> members(std::from_range, own_members<U>());
+        std::vector<std::meta::info> members(std::from_range, std::meta::nonstatic_data_members_of(
+                                                                  std::meta::dealias(^^U), std::meta::access_context::unprivileged()));
         std::ranges::sort(members, {}, [](std::meta::info const m) {
-            std::string_view const key = key_of<U>(m);
+            std::string_view const key = key_of(m);
             return key_encoded(major_type::text_string, key.size(), key);
         });
         return std::define_static_array(members);
+    }
+
+    template <class U, std::meta::info M>
+    static consteval std::size_t member_index_of()
+    {
+        return member_index_of<U>(&[:M:]);
     }
 
     template <class M>
@@ -632,13 +654,11 @@ class reflection
     template <class S>
     static consteval bool fixed_struct_valid()
     {
-        if constexpr (!std::is_class_v<S> || !std::is_aggregate_v<S> || requires { fixed_length<S>::value; }) {
+        if constexpr (!has_describe_members<S> || !std::is_default_constructible_v<S> || requires { fixed_length<S>::value; }) {
             return false;
         } else {
-            bool valid = !data_members<S>().empty();
-            template for (constexpr auto m : data_members<S>())
-                valid = valid && !std::meta::is_bit_field(m) &&
-                        fixed_member_valid<std::remove_cv_t<typename[:std::meta::type_of(m):]>>();
+            bool valid = describe::members_count<S> > 0;
+            for_each_field<S>([&](auto i) { valid = valid && fixed_member_valid<describe::member_t<S, decltype(i)::value>>(); });
             return valid;
         }
     }
@@ -658,22 +678,21 @@ class reflection
             return fixed_length<M>::value * sizeof(fixed_leaf_t<std::remove_cv_t<typename fixed_length<M>::element>>);
         } else {
             std::size_t width = 0;
-            template for (constexpr auto m : data_members<M>())
-                width += fixed_width<std::remove_cv_t<typename[:std::meta::type_of(m):]>>();
+            for_each_field<M>([&](auto i) { width += fixed_width<describe::member_t<M, decltype(i)::value>>(); });
             return width;
         }
     }
 
-    template <class S, std::meta::info Member>
+    template <class S, std::size_t Member>
     static consteval std::size_t fixed_offset()
     {
         std::size_t at = 0;
         bool before = true;
-        template for (constexpr auto m : data_members<S>()) {
-            before = before && m != Member;
+        for_each_field<S>([&](auto i) {
+            before = before && decltype(i)::value != Member;
             if (before)
-                at += fixed_width<std::remove_cv_t<typename[:std::meta::type_of(m):]>>();
-        }
+                at += fixed_width<describe::member_t<S, decltype(i)::value>>();
+        });
         return at;
     }
 
@@ -685,9 +704,10 @@ class reflection
             return false;
         } else {
             bool same = true;
-            template for (constexpr auto m : data_members<S>()) {
+            template for (constexpr std::meta::info m :
+                          std::define_static_array(std::meta::nonstatic_data_members_of(^^S, std::meta::access_context::unprivileged()))) {
                 using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
-                same = same && std::meta::offset_of(m).bytes == static_cast<std::ptrdiff_t>(fixed_offset<S, m>());
+                same = same && std::meta::offset_of(m).bytes == static_cast<std::ptrdiff_t>(fixed_offset<S, member_index_of<S, m>()>());
                 if constexpr (fixed_struct_valid<M>())
                     same = same && fixed_layout_native<M>();
             }
@@ -700,10 +720,10 @@ class reflection
     {
         heads::head_append(encoded, major_type::array, 2);
         heads::head_append(encoded, major_type::unsigned_integer, *tag_number_of<S>());
-        heads::head_append(encoded, major_type::array, data_members<S>().size());
-        template for (constexpr auto m : data_members<S>()) {
-            using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
-            constexpr std::string_view key = key_of<S>(m);
+        heads::head_append(encoded, major_type::array, describe::members_count<S>);
+        for_each_field<S>([&](auto i) {
+            using M = describe::member_t<S, decltype(i)::value>;
+            constexpr std::string_view key = describe::key_of<S, decltype(i)::value>.text;
             constexpr bool counted = !is_fixed_leaf<M> && requires { fixed_length<M>::value; };
             heads::head_append(encoded, major_type::array, counted ? 3 : 2);
             heads::head_append(encoded, major_type::text_string, key.size());
@@ -717,43 +737,50 @@ class reflection
             } else {
                 description_encode<M>(encoded);
             }
-        }
+        });
     }
 
-    template <class T>
-    static consteval void description_types_collect(std::vector<std::meta::info> &visited, std::vector<std::meta::info> &types)
+    template <class U, std::size_t K, class Lists>
+    static consteval auto description_members_collect(Lists const lists)
+    {
+        if constexpr (K == describe::members_count<U>)
+            return lists;
+        else
+            return description_members_collect<U, K + 1>(
+                description_types_collect<describe::member_t<U, key_order<U>[K]>>(lists));
+    }
+
+    template <class T, class Visited, class Types>
+    static consteval auto description_types_collect(std::pair<Visited, Types> const lists)
     {
         using U = std::remove_cv_t<T>;
         if constexpr (requires { fixed_length<U>::value; }) {
-            description_types_collect<typename fixed_length<U>::element>(visited, types);
-        } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-            if (std::ranges::contains(visited, std::meta::dealias(^^U)))
-                return;
-            visited.push_back(std::meta::dealias(^^U));
-            template for (constexpr auto m : data_members<U>())
-                description_types_collect<typename[:std::meta::type_of(m):]>(visited, types);
+            return description_types_collect<typename fixed_length<U>::element>(lists);
+        } else if constexpr (has_describe_members<U>) {
+            if constexpr (contains<U>(Visited{}))
+                return lists;
+            else
+                return description_members_collect<U, 0>(
+                    std::pair(std::tuple_cat(lists.first, std::tuple<std::type_identity<U>>{}), lists.second));
         } else if constexpr (is_inline_optional<U> || is_optional<U>) {
-            description_types_collect<typename U::value_type>(visited, types);
+            return description_types_collect<typename U::value_type>(lists);
         } else if constexpr (is_map<U>) {
-            description_types_collect<typename U::key_type>(visited, types);
-            description_types_collect<typename U::mapped_type>(visited, types);
+            return description_types_collect<typename U::mapped_type>(description_types_collect<typename U::key_type>(lists));
         } else if constexpr (is_fixed_vector<U>) {
-            constexpr std::meta::info e = std::meta::dealias(^^std::remove_cv_t<std::ranges::range_value_t<U>>);
-            if (!std::ranges::contains(types, e))
-                types.push_back(e);
+            using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+            if constexpr (contains<E>(Types{}))
+                return lists;
+            else
+                return std::pair(lists.first, std::tuple_cat(lists.second, std::tuple<std::type_identity<E>>{}));
         } else if constexpr (std::ranges::sized_range<U>) {
-            description_types_collect<std::ranges::range_value_t<U>>(visited, types);
+            return description_types_collect<std::ranges::range_value_t<U>>(lists);
+        } else {
+            return lists;
         }
     }
 
     template <class Root>
-    static consteval std::span<std::meta::info const> description_types_of()
-    {
-        std::vector<std::meta::info> visited;
-        std::vector<std::meta::info> types;
-        description_types_collect<Root>(visited, types);
-        return std::define_static_array(types);
-    }
+    using description_types_of = decltype(description_types_collect<Root>(std::pair<std::tuple<>, std::tuple<>>{}).second);
 
     template <class Root>
     friend consteval bool cbor::tags_registered();
@@ -761,7 +788,7 @@ class reflection
     template <class T, class Root>
     static consteval std::size_t fixed_size();
 
-    template <class T, std::meta::info Member, class Root>
+    template <class T, std::size_t Member, class Root>
     static consteval std::size_t member_offset();
 
     static constexpr std::size_t inline_optional_head = 2;
@@ -830,14 +857,13 @@ class reflection
                 for (std::size_t i = 0; i < n; ++i)
                     zero_initialized_encode<Root, E>(encoded);
             }
-        } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
+        } else if constexpr (has_describe_members<U>) {
             heads::head_append(encoded, major_type::tag, *tag_number_of<U>());
             straight_reference_encode<Root, U>(encoded);
             fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
-            auto const count = heads::big_endian(static_cast<std::uint32_t>(data_members<U>().size()));
+            auto const count = heads::big_endian(static_cast<std::uint32_t>(describe::members_count<U>));
             std::ranges::copy(count, encoded.end() - sizeof(std::uint32_t));
-            template for (constexpr auto m : data_members<U>())
-                zero_initialized_encode<Root, typename[:std::meta::type_of(m):]>(encoded);
+            for_each_field<U>([&](auto i) { zero_initialized_encode<Root, describe::member_t<U, decltype(i)::value>>(encoded); });
         } else if constexpr (is_inline_optional<U>) {
             heads::head_append(encoded, major_type::array, 2);
             heads::head_append(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
@@ -851,88 +877,96 @@ class reflection
     template <class Root, class T>
     static consteval std::span<char const> zero_initialized()
     {
-        std::vector<char> encoded;
-        zero_initialized_encode<Root, T>(encoded);
-        return std::define_static_array(encoded);
+        return static_bytes<[]() consteval {
+            std::vector<char> encoded;
+            zero_initialized_encode<Root, T>(encoded);
+            return encoded;
+        }>;
     }
 
     template <class U>
     static consteval std::span<char const> record_keys()
     {
-        std::vector<char> encoded;
-        heads::head_append(encoded, major_type::tag,
-                           std::to_underlying(validity::tag_number::record_function));
-        static constexpr auto members = data_members<U>();
-        heads::head_append(encoded, major_type::array, members.size());
-        template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, members.size()))) {
-            constexpr std::string_view key = key_of<U>(members[i]);
-            heads::head_append(encoded, major_type::text_string, key.size());
-            encoded.insert(encoded.end(), key.begin(), key.end());
-        }
-        return std::define_static_array(encoded);
+        return static_bytes<[]() consteval {
+            std::vector<char> encoded;
+            heads::head_append(encoded, major_type::tag, std::to_underlying(validity::tag_number::record_function));
+            heads::head_append(encoded, major_type::array, describe::members_count<U>);
+            for_each_field<U>([&](auto i) {
+                constexpr std::string_view key = describe::key_of<U, decltype(i)::value>.text;
+                heads::head_append(encoded, major_type::text_string, key.size());
+                encoded.insert(encoded.end(), key.begin(), key.end());
+            });
+            return encoded;
+        }>;
     }
 
-    template <class T>
-    static consteval void record_types_collect(std::vector<std::meta::info> &types)
+    template <class U, std::size_t K, class Types>
+    static consteval auto record_members_collect(Types const types)
+    {
+        if constexpr (K == describe::members_count<U>)
+            return types;
+        else
+            return record_members_collect<U, K + 1>(record_types_collect<describe::member_t<U, key_order<U>[K]>>(types));
+    }
+
+    template <class T, class Types>
+    static consteval auto record_types_collect(Types const types)
     {
         using U = std::remove_cv_t<T>;
         if constexpr (requires { fixed_length<U>::value; }) {
-            record_types_collect<typename fixed_length<U>::element>(types);
-        } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-            if (std::ranges::contains(types, std::meta::dealias(^^U)))
-                return;
-            types.push_back(std::meta::dealias(^^U));
-            template for (constexpr auto m : data_members<U>())
-                record_types_collect<typename[:std::meta::type_of(m):]>(types);
+            return record_types_collect<typename fixed_length<U>::element>(types);
+        } else if constexpr (is_struct<U>) {
+            if constexpr (contains<U>(Types{}))
+                return types;
+            else if constexpr (has_describe_members<U>)
+                return record_members_collect<U, 0>(std::tuple_cat(types, std::tuple<std::type_identity<U>>{}));
+            else
+                return std::tuple_cat(types, std::tuple<std::type_identity<U>>{});
         } else if constexpr (is_inline_optional<U> || is_optional<U>) {
-            record_types_collect<typename U::value_type>(types);
+            return record_types_collect<typename U::value_type>(types);
         } else if constexpr (is_map<U>) {
-            record_types_collect<typename U::key_type>(types);
-            record_types_collect<typename U::mapped_type>(types);
+            return record_types_collect<typename U::mapped_type>(record_types_collect<typename U::key_type>(types));
         } else if constexpr (std::ranges::sized_range<U>) {
-            record_types_collect<std::ranges::range_value_t<U>>(types);
+            return record_types_collect<std::ranges::range_value_t<U>>(types);
+        } else {
+            return types;
         }
     }
 
     template <class Root>
-    static consteval std::span<std::meta::info const> packing_table_of()
-    {
-        std::vector<std::meta::info> types;
-        record_types_collect<Root>(types);
-        return std::define_static_array(types);
-    }
+    using packing_table_of = decltype(record_types_collect<Root>(std::tuple<>{}));
 
     template <class Root>
     static consteval std::size_t shared_first_of()
     {
-        return std::max(shared_first, packing_table_of<Root>().size() + description_types_of<Root>().size() + 1);
+        return std::max(shared_first, std::tuple_size_v<packing_table_of<Root>> + std::tuple_size_v<description_types_of<Root>> + 1);
     }
 
     template <class Root>
     static consteval std::size_t fillers_of()
     {
-        return shared_first_of<Root>() - 1 - packing_table_of<Root>().size() - description_types_of<Root>().size();
+        return shared_first_of<Root>() - 1 - std::tuple_size_v<packing_table_of<Root>> - std::tuple_size_v<description_types_of<Root>>;
     }
 
     template <class Root, class S>
     static consteval std::span<char const> fixed_array_head()
     {
-        std::vector<char> encoded;
-        heads::head_append(encoded, major_type::tag, std::to_underlying(validity::tag_number::fixed_array));
-        heads::head_append(encoded, major_type::array, 2);
-        constexpr auto types = description_types_of<Root>();
-        std::size_t const j = packing_table_of<Root>().size() +
-                              static_cast<std::size_t>(std::ranges::find(types, std::meta::dealias(^^S)) - types.begin());
-        if (j < shared_first) {
-            heads::head_append(encoded, major_type::simple_float, j);
-        } else {
-            std::size_t const m = j - shared_first;
-            heads::head_append(encoded, major_type::tag, std::to_underlying(validity::tag_number::reference));
-            heads::head_append(encoded, static_cast<major_type>(m & 1), m >> 1);
-        }
-        encoded.push_back(heads::initial_byte(major_type::byte_string,
-                                              std::to_underlying(rfc8949::additional_information::four_byte_argument)));
-        return std::define_static_array(encoded);
+        return static_bytes<[]() consteval {
+            std::vector<char> encoded;
+            heads::head_append(encoded, major_type::tag, std::to_underlying(validity::tag_number::fixed_array));
+            heads::head_append(encoded, major_type::array, 2);
+            std::size_t const j = std::tuple_size_v<packing_table_of<Root>> + index_in<S>(description_types_of<Root>{});
+            if (j < shared_first) {
+                heads::head_append(encoded, major_type::simple_float, j);
+            } else {
+                std::size_t const m = j - shared_first;
+                heads::head_append(encoded, major_type::tag, std::to_underlying(validity::tag_number::reference));
+                heads::head_append(encoded, static_cast<major_type>(m & 1), m >> 1);
+            }
+            encoded.push_back(heads::initial_byte(major_type::byte_string,
+                                                  std::to_underlying(rfc8949::additional_information::four_byte_argument)));
+            return encoded;
+        }>;
     }
 
     static constexpr std::uint64_t straight_argument_count =
@@ -942,8 +976,7 @@ class reflection
     template <class Root, class U>
     static consteval std::uint64_t argument_index_of()
     {
-        constexpr auto types = packing_table_of<Root>();
-        return static_cast<std::uint64_t>(std::ranges::find(types, std::meta::dealias(^^std::remove_cv_t<U>)) - types.begin());
+        return index_in<std::remove_cv_t<U>>(packing_table_of<Root>{});
     }
 
     template <class Root, class U>
@@ -971,29 +1004,33 @@ class reflection
     template <class Root>
     static consteval std::span<char const> description_of()
     {
-        std::vector<char> encoded;
-        template for (constexpr std::meta::info type : packing_table_of<Root>()) {
-            constexpr auto keys = record_keys<typename[:type:]>();
-            encoded.insert(encoded.end(), keys.begin(), keys.end());
-        }
-        template for (constexpr std::meta::info type : description_types_of<Root>())
-            description_encode<typename[:type:]>(encoded);
-        return std::define_static_array(encoded);
+        return static_bytes<[]() consteval {
+            std::vector<char> encoded;
+            std::apply(
+                [&]<class... U>(std::type_identity<U>...) {
+                    (encoded.insert(encoded.end(), record_keys<U>().begin(), record_keys<U>().end()), ...);
+                },
+                packing_table_of<Root>{});
+            std::apply([&]<class... U>(std::type_identity<U>...) { (description_encode<U>(encoded), ...); },
+                       description_types_of<Root>{});
+            return encoded;
+        }>;
     }
 
     template <class Root, description_place D>
     static consteval std::span<char const> packing_prefix_of()
     {
-        std::vector<char> encoded;
-        heads::head_append(encoded, major_type::tag,
-                           std::to_underlying(validity::tag_number::basic_packed_cbor));
-        heads::head_append(encoded, major_type::array, 2);
-        fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
-        if constexpr (D == description_place::inside) {
-            constexpr auto description = description_of<Root>();
-            encoded.insert(encoded.end(), description.begin(), description.end());
-        }
-        return std::define_static_array(encoded);
+        return static_bytes<[]() consteval {
+            std::vector<char> encoded;
+            heads::head_append(encoded, major_type::tag, std::to_underlying(validity::tag_number::basic_packed_cbor));
+            heads::head_append(encoded, major_type::array, 2);
+            fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
+            if constexpr (D == description_place::inside) {
+                constexpr auto description = description_of<Root>();
+                encoded.insert(encoded.end(), description.begin(), description.end());
+            }
+            return encoded;
+        }>;
     }
 
     template <class Root, description_place D>
@@ -1002,7 +1039,7 @@ class reflection
         if constexpr (D == description_place::inside)
             return shared_first_of<Root>();
         else
-            return shared_first_of<Root>() - packing_table_of<Root>().size() - description_types_of<Root>().size();
+            return shared_first_of<Root>() - std::tuple_size_v<packing_table_of<Root>> - std::tuple_size_v<description_types_of<Root>>;
     }
 
     template <class U>
@@ -1081,9 +1118,10 @@ class reflection
                 if constexpr (!std::is_arithmetic_v<E> && !std::same_as<E, std::byte>)
                     for (auto const &e : value)
                         add<E>(e);
-            } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-                template for (constexpr auto m : data_members<U>())
-                    add<typename[:std::meta::type_of(m):]>(value.[:m:]);
+            } else if constexpr (has_describe_members<U>) {
+                for_each_field<U>([&] CBOR_ALWAYS_INLINE(auto i) {
+                    add<describe::member_t<U, decltype(i)::value>>(describe::get<decltype(i)::value>(value));
+                });
             } else if constexpr (is_inline_optional<U>) {
                 if (value.has_value())
                     add<typename U::value_type>(*value);
@@ -1246,21 +1284,22 @@ class reflection
     template <class S>
     CBOR_ALWAYS_INLINE static void fixed_struct_write(std::span<char, fixed_width<S>()> const out, S const &value)
     {
-        template for (constexpr auto m : data_members<S>()) {
-            using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
-            constexpr std::size_t at = fixed_offset<S, m>();
+        for_each_field<S>([&] CBOR_ALWAYS_INLINE(auto i) {
+            constexpr std::size_t I = decltype(i)::value;
+            using M = describe::member_t<S, I>;
+            constexpr std::size_t at = fixed_offset<S, I>();
             if constexpr (is_fixed_leaf<M>) {
                 using L = fixed_leaf_t<M>;
-                typed_array_element_write<L>(out.template subspan<at, sizeof(L)>(), static_cast<L>(value.[:m:]));
+                typed_array_element_write<L>(out.template subspan<at, sizeof(L)>(), static_cast<L>(describe::get<I>(value)));
             } else if constexpr (requires { fixed_length<M>::value; }) {
                 using L = fixed_leaf_t<std::remove_cv_t<typename fixed_length<M>::element>>;
                 for (std::size_t k = 0; k < fixed_length<M>::value; ++k)
                     typed_array_element_write<L>(out.subspan(at + k * sizeof(L)).template first<sizeof(L)>(),
-                                                 static_cast<L>(value.[:m:][k]));
+                                                 static_cast<L>(describe::get<I>(value)[k]));
             } else {
-                fixed_struct_write<M>(out.template subspan<at, fixed_width<M>()>(), value.[:m:]);
+                fixed_struct_write<M>(out.template subspan<at, fixed_width<M>()>(), describe::get<I>(value));
             }
-        }
+        });
     }
 
     template <class Root, class T, bool Exact, description_place D>
@@ -1322,12 +1361,13 @@ class reflection
                     at += fixed_size<E, Root>();
                 }
             }
-        } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-            template for (constexpr auto m : data_members<U>()) {
-                using M = typename[:std::meta::type_of(m):];
-                position = value_encode<Root, M, Exact, D>(out, field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(),
-                                           value.[:m:], position);
-            }
+        } else if constexpr (has_describe_members<U>) {
+            for_each_field<U>([&] CBOR_ALWAYS_INLINE(auto i) {
+                constexpr std::size_t I = decltype(i)::value;
+                using M = describe::member_t<U, I>;
+                position = value_encode<Root, M, Exact, D>(
+                    out, field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(), describe::get<I>(value), position);
+            });
         } else if constexpr (is_inline_optional<U>) {
             if (value.has_value()) {
                 using E = typename U::value_type;
@@ -1343,13 +1383,14 @@ class reflection
     }
 
     template <class U>
-    static consteval std::meta::info member_named(std::string_view const name)
+    static consteval std::size_t member_named(std::string_view const name)
     {
-        constexpr auto members = data_members<U>();
-        auto const m = std::ranges::find_if(members, [name](std::meta::info const r) {
-            return key_of<U>(r) == name;
+        std::size_t found = describe::members_count<U>;
+        for_each_field<U>([&](auto i) {
+            if (describe::key_of<U, decltype(i)::value>.text == name)
+                found = decltype(i)::value;
         });
-        return m == members.end() ? std::meta::info{} : *m;
+        return found;
     }
 
     static consteval std::size_t step_end(std::string_view const path, std::size_t const at)
@@ -1698,15 +1739,15 @@ class reflection
             else
                 return true;
         } else if constexpr (path[At] == '.') {
-            if constexpr (!(std::is_class_v<U> && std::is_aggregate_v<U>) || requires { fixed_length<U>::value; } || is_optional<U>) {
+            if constexpr (!has_describe_members<U> || requires { fixed_length<U>::value; } || is_optional<U>) {
                 return false;
             } else {
                 constexpr std::size_t end = step_end(path, At);
-                constexpr std::meta::info m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
-                if constexpr (m == std::meta::info{})
+                constexpr std::size_t m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
+                if constexpr (m == describe::members_count<U>)
                     return false;
                 else
-                    return path_valid<typename[:std::meta::type_of(m):], Path, end>();
+                    return path_valid<describe::member_t<U, m>, Path, end>();
             }
         } else if constexpr (path[At] == '[' && index_end(path, At) < path.size()) {
             constexpr std::size_t close = index_end(path, At);
@@ -1744,8 +1785,8 @@ class reflection
                 return std::type_identity<U>{};
         } else if constexpr (path[At] == '.') {
             constexpr std::size_t end = step_end(path, At);
-            constexpr std::meta::info m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
-            return path_result<Root, typename[:std::meta::type_of(m):], Path, end, Verified>();
+            constexpr std::size_t m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
+            return path_result<Root, describe::member_t<U, m>, Path, end, Verified>();
         } else {
             constexpr std::size_t close = index_end(path, At);
             if constexpr (requires { fixed_length<U>::value; })
@@ -1765,8 +1806,8 @@ class reflection
             return std::type_identity<typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified>>{};
         } else {
             constexpr std::size_t end = step_end(path, At);
-            constexpr std::meta::info m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
-            using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
+            constexpr std::size_t m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
+            using M = describe::member_t<S, m>;
             if constexpr (fixed_struct_valid<M>()) {
                 return fixed_path_result<Root, M, Path, end, Verified>();
             } else if constexpr (is_fixed_leaf<M>) {
@@ -1788,8 +1829,8 @@ class reflection
             return typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified>(encoded, at, floor);
         } else {
             constexpr std::size_t end = step_end(path, At);
-            constexpr std::meta::info m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
-            using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
+            constexpr std::size_t m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
+            using M = describe::member_t<S, m>;
             std::size_t const place = at + fixed_offset<S, m>();
             if constexpr (fixed_struct_valid<M>()) {
                 return fixed_walk<Root, M, Path, end, Verified>(encoded, place, floor, indexes);
@@ -1899,8 +1940,8 @@ class reflection
             }
         } else if constexpr (path[At] == '.') {
             constexpr std::size_t end = step_end(path, At);
-            constexpr std::meta::info m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
-            using M = typename[:std::meta::type_of(m):];
+            constexpr std::size_t m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
+            using M = describe::member_t<U, m>;
             if constexpr (Verified)
                 if (!class_tag_valid<Root, U>(field)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
@@ -2020,18 +2061,19 @@ class reflection
                                               std::size_t const depth_max)
         {
             using U = std::remove_cv_t<T>;
-            if constexpr (std::is_class_v<U> && std::is_aggregate_v<U> && !requires { fixed_length<U>::value; }) {
+            if constexpr (has_describe_members<U>) {
                 if constexpr (Verified)
                     if (!class_tag_valid<Root, U>(field)) [[unlikely]]
                         return std::unexpected(error::incorrect_type);
                 std::expected<void, error> done;
-                template for (constexpr std::meta::info m : data_members<U>()) {
-                    using M = typename[:std::meta::type_of(m):];
+                for_each_field<U>([&] CBOR_ALWAYS_INLINE(auto i) {
+                    constexpr std::size_t I = decltype(i)::value;
+                    using M = describe::member_t<U, I>;
                     if (done)
-                        done = value_read<Root>(out.[:m:],
-                                                    field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(),
-                                                    depth, depth_max);
-                }
+                        done = value_read<Root>(describe::get<I>(out),
+                                                field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(), depth,
+                                                depth_max);
+                });
                 return done;
             } else if constexpr (is_fixed_string<U>) {
                 if constexpr (Verified)
@@ -2049,12 +2091,14 @@ class reflection
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
                         return std::unexpected(error::incorrect_type);
                 std::expected<void, error> done;
-                template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, n))) {
-                    if (done)
-                        done = value_read<Root>(
-                            std::span(out).template subspan<i, 1>().front(),
-                            field.template subspan<heads::head_size(n) + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(), depth, depth_max);
-                }
+                [&]<std::size_t... I>(std::index_sequence<I...>) {
+                    ((done = done ? value_read<Root>(std::span(out).template subspan<I, 1>().front(),
+                                                     field.template subspan<heads::head_size(n) + I * fixed_size<E, Root>(),
+                                                                            fixed_size<E, Root>()>(),
+                                                     depth, depth_max)
+                                  : done),
+                     ...);
+                }(std::make_index_sequence<n>{});
                 return done;
             } else if constexpr (is_inline_optional<U>) {
                 if (field.template subspan<1, 1>().front() !=
@@ -2195,14 +2239,15 @@ class reflection
         static std::expected<void, error> fixed_struct_read(S &out, std::span<char const, fixed_width<S>()> const in)
         {
             std::expected<void, error> done;
-            template for (constexpr auto m : data_members<S>()) {
-                using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
-                constexpr std::size_t at = fixed_offset<S, m>();
+            for_each_field<S>([&] CBOR_ALWAYS_INLINE(auto i) {
+                constexpr std::size_t I = decltype(i)::value;
+                using M = describe::member_t<S, I>;
+                constexpr std::size_t at = fixed_offset<S, I>();
                 if (done) {
                     if constexpr (is_fixed_leaf<M>) {
                         auto const v = fixed_leaf_read<M, Verified>(in.template subspan<at, sizeof(fixed_leaf_t<M>)>());
                         if (v)
-                            out.[:m:] = *v;
+                            describe::get<I>(out) = *v;
                         else [[unlikely]]
                             done = std::unexpected(v.error());
                     } else if constexpr (requires { fixed_length<M>::value; }) {
@@ -2210,15 +2255,15 @@ class reflection
                         for (std::size_t k = 0; k < fixed_length<M>::value && done; ++k) {
                             auto const v = fixed_leaf_read<L, Verified>(in.subspan(at + k * sizeof(fixed_leaf_t<L>)).template first<sizeof(fixed_leaf_t<L>)>());
                             if (v)
-                                out.[:m:][k] = *v;
+                                describe::get<I>(out)[k] = *v;
                             else [[unlikely]]
                                 done = std::unexpected(v.error());
                         }
                     } else {
-                        done = fixed_struct_read<M>(out.[:m:], in.template subspan<at, fixed_width<M>()>());
+                        done = fixed_struct_read<M>(describe::get<I>(out), in.template subspan<at, fixed_width<M>()>());
                     }
                 }
-            }
+            });
             return done;
         }
     };
@@ -2548,12 +2593,18 @@ consteval bool tags_registered()
 {
     std::vector<std::uint64_t> numbers;
     bool tagged = true;
-    template for (constexpr std::meta::info type : reflection::packing_table_of<Root>()) {
-        constexpr auto number = reflection::tag_number_of<typename[:type:]>();
-        tagged = tagged && number.has_value();
-        if constexpr (number.has_value())
-            numbers.push_back(*number);
-    }
+    std::apply(
+        [&]<class... U>(std::type_identity<U>...) {
+            (
+                [&] {
+                    constexpr auto number = reflection::tag_number_of<U>();
+                    tagged = tagged && number.has_value();
+                    if constexpr (number.has_value())
+                        numbers.push_back(*number);
+                }(),
+                ...);
+        },
+        reflection::packing_table_of<Root>{});
     if (!tagged)
         return false;
     std::ranges::sort(numbers);
@@ -2613,23 +2664,17 @@ consteval std::size_t reflection::fixed_size()
             static_assert(size.has_value(), "The fixed size must fit in std::size_t.");
             return *size;
         }
-    } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-        if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty()) {
-            return no_fixed_size<U>();
-        } else {
-            std::size_t size = heads::head_size(*reflection::tag_number_of<U>()) +
-                               reflection::straight_reference_size<Root, U>() + reflection::item_head;
-            template for (constexpr auto m : reflection::data_members<U>()) {
-                if constexpr (!std::meta::has_identifier(m) || std::meta::is_bit_field(m) || !std::meta::is_public(m))
-                    return no_fixed_size<U>();
-                constexpr std::size_t member = fixed_size<typename[:std::meta::type_of(m):], Root>();
-                auto const sum = validity::checked_add(size, member);
-                if (!sum)
-                    return no_fixed_size<U>();
-                size = *sum;
-            }
-            return size;
-        }
+    } else if constexpr (has_describe_members<U>) {
+        std::size_t size = heads::head_size(*reflection::tag_number_of<U>()) + reflection::straight_reference_size<Root, U>() +
+                           reflection::item_head;
+        bool fits = true;
+        reflection::for_each_field<U>([&](auto i) {
+            constexpr std::size_t member = fixed_size<describe::member_t<U, decltype(i)::value>, Root>();
+            auto const sum = validity::checked_add(size, member);
+            fits = fits && sum.has_value();
+            size = sum.value_or(size);
+        });
+        return fits ? size : no_fixed_size<U>();
     } else if constexpr (reflection::is_inline_optional<U>) {
         constexpr std::size_t value = fixed_size<typename U::value_type, Root>();
         constexpr auto size = validity::checked_add(reflection::inline_optional_head, value);
@@ -2648,22 +2693,19 @@ consteval std::size_t reflection::fixed_size()
         return no_fixed_size<T>();
 }
 
-template <class T, std::meta::info Member, class Root>
+template <class T, std::size_t Member, class Root>
 consteval std::size_t reflection::member_offset()
 {
     using U = std::remove_cv_t<T>;
-    if constexpr (std::meta::parent_of(Member) != std::meta::dealias(^^U)) {
-        return no_fixed_size<T>();
-    } else {
-        std::size_t offset = heads::head_size(*reflection::tag_number_of<U>()) +
-                             reflection::straight_reference_size<Root, U>() + reflection::item_head;
-        template for (constexpr auto m : reflection::data_members<U>()) {
-            if constexpr (m == Member)
-                return offset;
-            offset += fixed_size<typename[:std::meta::type_of(m):], Root>();
-        }
-        return no_fixed_size<T>();
-    }
+    std::size_t offset = heads::head_size(*reflection::tag_number_of<U>()) + reflection::straight_reference_size<Root, U>() +
+                         reflection::item_head;
+    bool before = true;
+    reflection::for_each_field<U>([&](auto i) {
+        before = before && decltype(i)::value != Member;
+        if (before)
+            offset += fixed_size<describe::member_t<U, decltype(i)::value>, Root>();
+    });
+    return Member < describe::members_count<U> ? offset : no_fixed_size<T>();
 }
 
 template <class T>
@@ -2677,28 +2719,31 @@ class schema
 
 public:
     template <class U = T>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static consteval std::size_t fixed_size()
     {
         return reflection::fixed_size<U, T>();
     }
 
     template <class U = T>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static constexpr std::span<char const> description()
     {
         return reflection::description_of<U>();
     }
 
-    template <std::meta::info Member, class U = T>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+    template <auto Member, class U = T>
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static consteval std::size_t member_offset()
     {
-        return reflection::member_offset<U, Member, T>();
+        if constexpr (std::is_same_v<decltype(Member), std::meta::info>)
+            return reflection::member_offset<U, reflection::member_index_of<std::remove_cv_t<U>, Member>(), T>();
+        else
+            return reflection::member_offset<U, reflection::member_index_of<std::remove_cv_t<U>>(Member), T>();
     }
 
     template <class U = T, bool Verified = true>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     class accessor
     {
         static constexpr bool listed = reflection::is_list<U> || reflection::is_map<U>;
@@ -2956,7 +3001,7 @@ public:
     };
 
     template <class S, bool Verified>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     class accessor<fixed_element<S>, Verified>
     {
         std::shared_ptr<void const> owner;
@@ -3005,28 +3050,28 @@ public:
     };
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
     {
         return path_with_owner<true, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
     {
         return path_with_owner<true, D>(std::move(encoded));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         return path_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
 
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && Path.view().starts_with('$') &&
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
                  value_holds_no_view<typename decltype(reflection::path_result<T, T, Path, 1>())::type>)
     static auto at_path(std::string_view const encoded, Index const... indexes)
@@ -3035,35 +3080,35 @@ public:
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
         return decode_with_owner<true, D>(std::move(encoded));
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
         return decode_with_owner<true, D>(std::move(encoded), T{});
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
     {
         return decode_with_owner<true, D>(std::move(encoded), std::move(target));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)), T{});
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
     {
         return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
@@ -3071,28 +3116,28 @@ public:
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
     {
         return path_with_owner<false, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<Encoded const> encoded)
     {
         return path_with_owner<false, D>(std::move(encoded));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         return path_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
 
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>() && Path.view().starts_with('$') &&
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
                  value_holds_no_view<typename decltype(reflection::path_result<T, T, Path, 1>())::type>)
     static auto unverified_at_path(std::string_view const encoded, Index const... indexes)
@@ -3101,35 +3146,35 @@ public:
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(Encoded &&encoded)
     {
         return decode_with_owner<false, D>(std::move(encoded));
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded)
     {
         return decode_with_owner<false, D>(std::move(encoded), T{});
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target)
     {
         return decode_with_owner<false, D>(std::move(encoded), std::move(target));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)), T{});
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
     {
         return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
@@ -3138,7 +3183,7 @@ public:
 
     template <description_place D = description_place::inside>
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     {
         reflection::second_item<T> second;
         second.add(value);
@@ -3157,7 +3202,7 @@ public:
     }
 
     template <description_place D = description_place::inside, class Target>
-        requires(std::is_class_v<T> && std::is_aggregate_v<T> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
         using U = std::remove_cvref_t<Target>;
