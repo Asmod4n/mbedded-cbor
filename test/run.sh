@@ -1,8 +1,9 @@
 #!/bin/bash
 # Builds and runs the tests in the image mbedded-cbor-tw, then the tests of
 # test/cmake, which install the library and build programs that use it.
-# usage: test/run.sh check|fast|full|<build>...
+# usage: test/run.sh check|one <pattern>|fast|full|<build>...
 #   check: g++ 16 with reflection at -O0 and every test, the run after each change. It is the default.
+#   one <pattern>: the build check, and only the test cases and ctest tests whose names contain <pattern>.
 #   fast: gcc-release clang-asan
 #   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release
 #   gcc15-release builds with g++ 15, the floor of the library, in the image of containers/tumbleweed-gcc15.Containerfile.
@@ -26,8 +27,10 @@ parallel_level=$(nproc)
 
 interop=0
 [ "${1:-check}" = full ] && interop=1
+pattern=
 case ${1:-check} in
 check) set -- check ;;
+one) pattern=${2:?one takes a pattern}; set -- check ;;
 fast) set -- gcc-release clang-asan ;;
 full) set -- gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release ;;
 esac
@@ -69,7 +72,7 @@ one() {
 	fi
 	podman run --rm --network none \
 		-v "$src":/src:ro -v "$root/$branch/$n":/b -v "$cache":/ccache \
-		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=2G -e CMAKE_BUILD_PARALLEL_LEVEL="$parallel_level" \
+		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=2G -e CMAKE_BUILD_PARALLEL_LEVEL="$parallel_level" -e CBOR_TEST_PATTERN="$pattern" \
 		-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 		"$img" bash -c '
 		s=${EPOCHREALTIME/./}
@@ -78,8 +81,8 @@ one() {
 			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" -DCBOR_COMPILE_FAIL='"$compile_fail"' '"$options"' >/b/configure.log 2>&1 &&
 		cmake --build /b >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
-		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test >/b/test.log 2>&1; r=$?; }
-		[ $r = 0 ] && { ctest --test-dir /b -j"$CMAKE_BUILD_PARALLEL_LEVEL" -R "^(cmake|clang_query|compile_fail|limits)_" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
+		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test ${CBOR_TEST_PATTERN:+"-tc=*$CBOR_TEST_PATTERN*"} >/b/test.log 2>&1; r=$?; }
+		[ $r = 0 ] && { ctest --test-dir /b -j"$CMAKE_BUILD_PARALLEL_LEVEL" -R "^(cmake|clang_query|compile_fail|limits)_.*$CBOR_TEST_PATTERN" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
 			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log | head -1)"
