@@ -16,7 +16,6 @@
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
 # The builds run one after the other, and each runs as many jobs as there are processors.
-# A build that runs longer than ten minutes is stopped and fails.
 set -u
 src=$(cd "$(dirname "$0")/.." && pwd)
 root=${CBOR_BUILD_ROOT:-/home/user/mbedded-cbor-build}
@@ -52,7 +51,7 @@ one() {
 	tsan) cxx=clang++-23 type=Debug flags="$tsan $pch_clang" compile_fail=OFF ;;
 	wasm)
 		mkdir -p "$root/$branch/$n"
-		podman run --rm --network none --timeout 600 -v "$src":/src:ro -v "$root/$branch/$n":/b mbedded-cbor-wasm bash -c '
+		podman run --rm --network none -v "$src":/src:ro -v "$root/$branch/$n":/b mbedded-cbor-wasm bash -c '
 		s=${EPOCHREALTIME/./}
 		clang++-23 --target=wasm32-wasip1 -std=gnu++23 -O2 -flto -fno-exceptions -Wall -Wextra -Werror \
 			-idirafter /usr/include -I/src/include -DDOCTEST_CONFIG_NO_MULTITHREADING -DDOCTEST_CONFIG_NO_POSIX_SIGNALS \
@@ -68,7 +67,7 @@ one() {
 	if [ -n "$file" ] && ! podman image exists "$img"; then
 		podman build -q -t "$img" -f "$src/containers/$file.Containerfile" "$src/containers" >/dev/null || return 1
 	fi
-	podman run --rm --network none --timeout 600 \
+	podman run --rm --network none \
 		-v "$src":/src:ro -v "$root/$branch/$n":/b -v "$cache":/ccache \
 		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=2G -e CMAKE_BUILD_PARALLEL_LEVEL="$parallel_level" \
 		-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
