@@ -1329,7 +1329,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: crend meets the requirements of a reversibl
     CHECK(v->crend() == std::reverse_iterator<V::iterator>(v->begin()));
     CHECK(v->crend().base() == v->begin());
     CHECK_EQ(std::distance(v->crbegin(), v->crend()), 3);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*std::prev(v->crend())), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*std::ranges::prev(v->crend())), 0x3ff0000000000000u);
     std::vector<std::uint64_t> forwards;
     for (auto i = v->crend(); i != v->crbegin();)
         forwards.push_back(std::bit_cast<std::uint64_t>(*--i));
