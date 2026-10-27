@@ -125,7 +125,7 @@ class pfr
             return describe::key_of<U, I>;
 #ifdef __cpp_impl_reflection
         else
-            return map_key(reflection::key_of<U>(reflection::data_members<U>()[I]));
+            return map_key(reflection::key_of(reflection::data_members<U>()[I]));
 #elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
         else
             return map_key(boost::pfr::get_name<I, U>());
@@ -944,11 +944,7 @@ class generic
         std::array<map_key, count> const keys = [&]<std::size_t... I>(std::index_sequence<I...>) {
             return std::array<map_key, count>{pfr::key_of<I, U>()...};
         }(std::make_index_sequence<count>());
-        std::array<std::size_t, count> order;
-        std::iota(order.begin(), order.end(), std::size_t{0});
-        std::ranges::sort(order, [&](std::size_t const a, std::size_t const b) {
-            return reflection::key_encoding_less(keys[a], keys[b]);
-        });
+        std::array<std::size_t, count> const order = reflection::keys_sorted(keys);
         if (!validity::keys_unique(order,
                                    [&](std::size_t const i) { return reflection::key_encoding_of(keys[i]); }))
             std::unreachable();
