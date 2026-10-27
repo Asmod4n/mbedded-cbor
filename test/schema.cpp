@@ -3973,6 +3973,156 @@ TEST_CASE("description apart: the unverified forms stay inside the input")
 namespace
 {
 
+class reading
+{
+public:
+    reading(std::uint16_t const v, std::string u) : value(v), unit(std::move(u))
+    {
+    }
+
+    std::uint16_t value;
+    std::string unit;
+};
+
+struct reading_plain {
+    std::uint16_t value;
+    std::string unit;
+};
+
+struct station {
+    std::vector<reading> readings;
+    std::optional<reading> first;
+    std::map<std::uint16_t, reading> by_hour;
+};
+
+class pmr_reading
+{
+public:
+    explicit pmr_reading(std::pmr::string u) : unit(std::move(u))
+    {
+    }
+
+    std::pmr::string unit;
+};
+
+struct pmr_station {
+    std::pmr::vector<pmr_reading> readings;
+};
+
+} // namespace
+
+template <>
+struct cbor::describe_members<reading> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1670};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(reading, value),
+        CBOR_MEMBER(reading, unit),
+    };
+};
+
+template <>
+struct cbor::describe_members<reading_plain> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1670};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(reading_plain, value),
+        CBOR_MEMBER(reading_plain, unit),
+    };
+};
+
+template <>
+struct cbor::describe_members<station> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1671};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(station, readings),
+        CBOR_MEMBER(station, first),
+        CBOR_MEMBER(station, by_hour),
+    };
+};
+
+template <>
+struct cbor::describe_members<pmr_reading> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1672};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(pmr_reading, unit),
+    };
+};
+
+template <>
+struct cbor::describe_members<pmr_station> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1673};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(pmr_station, readings),
+    };
+};
+
+// A class with no default constructor is built by its constructor, which takes the described members in the order
+// of the description, as mrb_cpp_new of mruby-c-ext-helpers forwards its arguments to new T(...). The wire does not
+// show how a class is built, so the same description gives the bytes of an aggregate. The key order (unit before
+// value) differs from the order of the description, so a mix-up of the two orders shows here.
+TEST_CASE("decode: a class with a constructor takes its described members in the order of the description")
+{
+    std::string const bytes = schema_bytes(reading{7, "kg"});
+    CHECK_EQ(bytes, schema_bytes(reading_plain{7, "kg"}));
+    auto const back = cbor::schema<reading>::decode(std::string(bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ((**back).value, 7u);
+    CHECK_EQ((**back).unit, "kg");
+    auto const unverified = cbor::schema<reading>::unverified_decode(std::make_shared<std::string const>(bytes));
+    REQUIRE(unverified.has_value());
+    CHECK_EQ((**unverified).unit, "kg");
+    CHECK_EQ(at_path<reading, "$.unit">(bytes), "kg");
+}
+
+// Each place that makes an element builds a class with a constructor the same way: an element of a vector, the
+// value of an optional and the value of a map.
+TEST_CASE("decode: a class with a constructor in a vector, an optional and a map")
+{
+    station const full{{reading{1, "a"}, reading{2, "bb"}}, reading{3, "ccc"}, {{9, reading{4, "dddd"}}}};
+    std::string const bytes = schema_bytes(full);
+    auto const back = cbor::schema<station>::decode(std::string(bytes));
+    REQUIRE(back.has_value());
+    REQUIRE_EQ((**back).readings.size(), 2u);
+    CHECK_EQ((**back).readings[1].value, 2u);
+    CHECK_EQ((**back).readings[1].unit, "bb");
+    REQUIRE((**back).first.has_value());
+    CHECK_EQ((**back).first->unit, "ccc");
+    REQUIRE_EQ((**back).by_hour.size(), 1u);
+    CHECK_EQ((**back).by_hour.at(9).unit, "dddd");
+    CHECK_EQ(at_path<station, "$.readings[1].unit">(bytes), "bb");
+    CHECK_EQ(reencoded(cbor::schema<station>::decode(std::string(bytes))), bytes);
+    auto const empty = cbor::schema<station>::decode(schema_bytes(station{{}, std::nullopt, {}}));
+    REQUIRE(empty.has_value());
+    CHECK((**empty).readings.empty());
+    CHECK_FALSE((**empty).first.has_value());
+}
+
+// The arguments of the constructor are made with the allocator of the vector (std::tuple with std::allocator_arg,
+// [tuple.cnstr]), so a std::pmr member keeps the resource of the vector through the move into the class.
+TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the resource of the vector")
+{
+    std::string const long_unit(40, 'u');
+    pmr_station value;
+    value.readings.emplace_back(std::pmr::string(long_unit));
+    value.readings.emplace_back(std::pmr::string(long_unit));
+    std::string const bytes = schema_bytes(value);
+    counting_resource fallback;
+    counting_resource target;
+    auto const owner = std::make_shared<std::string const>(bytes);
+    std::pmr::memory_resource *const was = std::pmr::set_default_resource(&fallback);
+    auto const decoded = cbor::schema<pmr_station>::decode(owner, pmr_station{std::pmr::vector<pmr_reading>(&target)});
+    std::pmr::set_default_resource(was);
+    REQUIRE(decoded.has_value());
+    REQUIRE_EQ((**decoded).readings.size(), 2u);
+    for (pmr_reading const &r : (**decoded).readings) {
+        CHECK_EQ(r.unit, long_unit);
+        CHECK_EQ(r.unit.get_allocator().resource(), &target);
+    }
+    CHECK_EQ(fallback.allocations, 0u);
+}
+
+namespace
+{
+
 template <class T>
 void golden_fill(T &value, unsigned &seed)
 {

@@ -289,29 +289,35 @@ class reflection
     template <class Root>
     static consteval bool descriptions_valid()
     {
+        constexpr auto check = []<class U>(std::type_identity<U>) {
+            static_assert(has_describe_members<U>,
+                          "cbor::schema takes each struct through cbor::describe_members<T>.");
+            if constexpr (has_describe_members<U>) {
+                static_assert(description_valid<U>());
+                static_assert(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty(),
+                              "cbor::schema takes a class with no base class.");
+                if constexpr (tag_declared<U>())
+                    static_assert(describe_members<U>::tag.has_value(),
+                                  "cbor::schema takes a struct with a tag; cbor::untagged is for cbor::structs.");
+                static_assert(std::apply([](auto const &...m) { return ((m.key.major == major_type::text_string) && ...); },
+                                         describe_members<U>::members),
+                              "cbor::schema takes a text key in cbor::describe_members; an integer key is for "
+                              "cbor::structs.");
+                static_assert(
+                    std::apply(
+                        [](auto const &...m) {
+                            return (std::is_same_v<typename decltype(class_of(m.pointer))::type, U> && ...);
+                        },
+                        describe_members<U>::members),
+                    "cbor::schema takes the members of the class itself; a member of a base class is not taken.");
+                static_assert(decode_form_valid<U>(),
+                              "cbor::schema decodes a class through its default constructor, or through a "
+                              "constructor that takes the described members in the order of the description, each "
+                              "of a type with a default constructor.");
+            }
+        };
         if constexpr (is_struct<std::remove_cv_t<Root>>)
-            std::apply(
-                []<class... U>(std::type_identity<U>...) {
-                    (
-                        [] {
-                            static_assert(has_describe_members<U>,
-                                          "cbor::schema takes each struct through cbor::describe_members<T>.");
-                            if constexpr (has_describe_members<U>) {
-                                static_assert(description_valid<U>());
-                                static_assert(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty(),
-                                              "cbor::schema takes a class with no base class.");
-                                if constexpr (tag_declared<U>())
-                                    static_assert(describe_members<U>::tag.has_value(),
-                                                  "cbor::schema takes a struct with a tag; cbor::untagged is for cbor::structs.");
-                                static_assert(std::apply([](auto const &...m) { return ((m.key.major == major_type::text_string) && ...); },
-                                                         describe_members<U>::members),
-                                              "cbor::schema takes a text key in cbor::describe_members; an integer key is for "
-                                              "cbor::structs.");
-                            }
-                        }(),
-                        ...);
-                },
-                packing_table_of<Root>{});
+            std::apply([&](auto... type) { (check(type), ...); }, packing_table_of<Root>{});
         static_assert(tags_registered<Root>(), "cbor::schema takes one tag for one struct only.");
         return true;
     }
@@ -351,6 +357,41 @@ class reflection
     {
         return std::apply([](auto const &...m) { return (member_of<U, decltype(m.pointer)>() && ...); },
                           describe_members<U>::members);
+    }
+
+    template <class U>
+    static consteval bool decode_form_valid()
+    {
+        if constexpr (std::is_default_constructible_v<U>)
+            return true;
+        else if constexpr (std::is_aggregate_v<U>)
+            return false;
+        else
+            return []<std::size_t... I>(std::index_sequence<I...>) {
+                return (std::is_default_constructible_v<describe::member_t<U, I>> && ...) &&
+                       std::is_constructible_v<U, describe::member_t<U, I>...>;
+            }(std::make_index_sequence<describe::members_count<U>>{});
+    }
+
+    template <class U, std::size_t... I>
+    static std::type_identity<std::tuple<describe::member_t<U, I>...>> arguments_type(std::index_sequence<I...>);
+
+    template <class U>
+    using arguments_of = typename decltype(arguments_type<U>(std::make_index_sequence<describe::members_count<U>>{}))::type;
+
+    template <class U>
+    static constexpr arguments_of<U> arguments_make()
+    {
+        return arguments_of<U>{};
+    }
+
+    template <class U, class Container>
+    static constexpr arguments_of<U> arguments_make(Container const &container)
+    {
+        if constexpr (requires { container.get_allocator(); })
+            return arguments_of<U>(std::allocator_arg, container.get_allocator());
+        else
+            return arguments_of<U>{};
     }
 
     template <class U, class P>
@@ -2101,14 +2142,22 @@ class reflection
                 }(std::make_index_sequence<n>{});
                 return done;
             } else if constexpr (is_inline_optional<U>) {
+                using E = typename U::value_type;
                 if (field.template subspan<1, 1>().front() !=
                     heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::true_value))) {
                     out.reset();
                     return {};
                 }
-                return value_read<Root>(
-                    out.emplace(),
-                    field.template subspan<inline_optional_head, fixed_size<typename U::value_type, Root>()>(), depth, depth_max);
+                auto const inner = field.template subspan<inline_optional_head, fixed_size<E, Root>()>();
+                if constexpr (std::is_default_constructible_v<E>) {
+                    return value_read<Root>(out.emplace(), inner, depth, depth_max);
+                } else {
+                    auto made = constructed_read<Root, E>(arguments_make<E>(), inner, depth, depth_max);
+                    if (!made) [[unlikely]]
+                        return std::unexpected(made.error());
+                    out.emplace(std::move(*made));
+                    return {};
+                }
             } else if constexpr (is_optional<U>) {
                 using E = typename U::value_type;
                 auto const r = reference_take<Root, major_type::array>(field, fixed_size<E, Root>());
@@ -2123,13 +2172,18 @@ class reflection
                 }
                 if (auto const nesting = validity::check_nesting_depth(depth + 1, depth_max); !nesting) [[unlikely]]
                     return std::unexpected(nesting.error());
-                E element{};
-                if (auto const e = value_read<Root>(
-                        element, std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>(),
-                        depth + 1, depth_max);
-                    !e) [[unlikely]]
-                    return e;
-                out = std::move(element);
+                auto const inner = std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>();
+                if constexpr (std::is_default_constructible_v<E>) {
+                    E element{};
+                    if (auto const e = value_read<Root>(element, inner, depth + 1, depth_max); !e) [[unlikely]]
+                        return e;
+                    out = std::move(element);
+                } else {
+                    auto made = constructed_read<Root, E>(arguments_make<E>(), inner, depth + 1, depth_max);
+                    if (!made) [[unlikely]]
+                        return std::unexpected(made.error());
+                    out.emplace(std::move(*made));
+                }
                 return {};
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
                 auto const r = reference_take<Root, is_text_range<U> ? major_type::text_string : major_type::byte_string>(field, 1);
@@ -2160,15 +2214,25 @@ class reflection
                 out.clear();
                 for (std::size_t i = 0; i < r->length; ++i) {
                     auto const entry = std::span<char const>(encoded).subspan(r->data + i * pair).template first<pair>();
-                    K key = element_make<K>(out);
-                    V value = element_make<V>(out);
-                    if (auto const e = value_read<Root>(key, entry.template first<fixed_size<K, Root>()>(), depth + 1, depth_max);
-                        !e) [[unlikely]]
-                        return e;
-                    if (auto const e = value_read<Root>(value, entry.template last<fixed_size<V, Root>()>(), depth + 1, depth_max);
-                        !e) [[unlikely]]
-                        return e;
-                    out.try_emplace(std::move(key), std::move(value));
+                    if constexpr (std::is_default_constructible_v<K> && std::is_default_constructible_v<V>) {
+                        K key = element_make<K>(out);
+                        V value = element_make<V>(out);
+                        if (auto const e = value_read<Root>(key, entry.template first<fixed_size<K, Root>()>(), depth + 1, depth_max);
+                            !e) [[unlikely]]
+                            return e;
+                        if (auto const e = value_read<Root>(value, entry.template last<fixed_size<V, Root>()>(), depth + 1, depth_max);
+                            !e) [[unlikely]]
+                            return e;
+                        out.try_emplace(std::move(key), std::move(value));
+                    } else {
+                        auto key = element_read<Root, K>(out, entry.template first<fixed_size<K, Root>()>(), depth + 1, depth_max);
+                        if (!key) [[unlikely]]
+                            return std::unexpected(key.error());
+                        auto value = element_read<Root, V>(out, entry.template last<fixed_size<V, Root>()>(), depth + 1, depth_max);
+                        if (!value) [[unlikely]]
+                            return std::unexpected(value.error());
+                        out.try_emplace(std::move(*key), std::move(*value));
+                    }
                 }
                 return {};
             } else if constexpr (is_typed_array<U>) {
@@ -2218,12 +2282,19 @@ class reflection
                 out.clear();
                 out.reserve(r->length);
                 for (std::size_t i = 0; i < r->length; ++i) {
-                    E element = element_make<E>(out);
                     auto const entry =
                         std::span<char const>(encoded).subspan(r->data + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>();
-                    if (auto const e = value_read<Root>(element, entry, depth + 1, depth_max); !e) [[unlikely]]
-                        return e;
-                    out.push_back(std::move(element));
+                    if constexpr (std::is_default_constructible_v<E>) {
+                        E element = element_make<E>(out);
+                        if (auto const e = value_read<Root>(element, entry, depth + 1, depth_max); !e) [[unlikely]]
+                            return e;
+                        out.push_back(std::move(element));
+                    } else {
+                        auto element = constructed_read<Root, E>(arguments_make<E>(out), entry, depth + 1, depth_max);
+                        if (!element) [[unlikely]]
+                            return std::unexpected(element.error());
+                        out.push_back(std::move(*element));
+                    }
                 }
                 return {};
             } else {
@@ -2232,6 +2303,41 @@ class reflection
                         return std::unexpected(error::incorrect_type);
                 out = fixed_value_read<U>(field);
                 return {};
+            }
+        }
+
+        template <class Root, class U, class Arguments>
+        std::expected<U, error> constructed_read(Arguments arguments, std::span<char const, fixed_size<U, Root>()> const field,
+                                                 std::size_t const depth, std::size_t const depth_max)
+        {
+            if constexpr (Verified)
+                if (!class_tag_valid<Root, U>(field)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+            std::expected<void, error> done;
+            for_each_field<U>([&](auto i) {
+                constexpr std::size_t I = decltype(i)::value;
+                using M = describe::member_t<U, I>;
+                if (done)
+                    done = value_read<Root>(std::get<I>(arguments),
+                                            field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(), depth,
+                                            depth_max);
+            });
+            if (!done) [[unlikely]]
+                return std::unexpected(done.error());
+            return std::make_from_tuple<U>(std::move(arguments));
+        }
+
+        template <class Root, class E, class Container>
+        std::expected<E, error> element_read(Container const &container, std::span<char const, fixed_size<E, Root>()> const field,
+                                             std::size_t const depth, std::size_t const depth_max)
+        {
+            if constexpr (std::is_default_constructible_v<E>) {
+                E element = element_make<E>(container);
+                if (auto const e = value_read<Root>(element, field, depth, depth_max); !e) [[unlikely]]
+                    return std::unexpected(e.error());
+                return element;
+            } else {
+                return constructed_read<Root, E>(arguments_make<E>(container), field, depth, depth_max);
             }
         }
 
@@ -2268,9 +2374,8 @@ class reflection
         }
     };
 
-    template <class T, bool Verified, description_place D>
-    static std::expected<void, error> root_read(T &out, std::string_view const encoded,
-                                                std::size_t const depth_max)
+    template <class T, bool Verified, description_place D, class Target>
+    static std::expected<void, error> root_read(Target &out, std::string_view const encoded, std::size_t const depth_max)
     {
         auto const dir = directory_read<T, Verified, D>(encoded);
         if (!dir) [[unlikely]]
@@ -2282,8 +2387,15 @@ class reflection
                 return std::unexpected(error::incorrect_type);
         constexpr std::size_t fillers = fillers_of<T>();
         decode_cursor<Verified> c{encoded, *dir, 0, dir->at + sizeof(std::uint32_t) * dir->count + fillers, root};
-        if (auto const r = c.template value_read<T>(out, field, 0, depth_max); !r) [[unlikely]]
-            return std::unexpected(r.error());
+        if constexpr (std::is_same_v<Target, T>) {
+            if (auto const r = c.template value_read<T>(out, field, 0, depth_max); !r) [[unlikely]]
+                return std::unexpected(r.error());
+        } else {
+            auto made = c.template constructed_read<T, T>(arguments_make<T>(), field, 0, depth_max);
+            if (!made) [[unlikely]]
+                return std::unexpected(made.error());
+            out.emplace(std::move(*made));
+        }
         if (c.at != root) [[unlikely]]
             return std::unexpected(error::syntax_error);
         if constexpr (Verified)
@@ -3090,11 +3202,11 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
-        return decode_with_owner<true, D>(std::move(encoded), T{});
+        return decode_with_owner<true, D>(std::move(encoded));
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
     {
         return decode_with_owner<true, D>(std::move(encoded), std::move(target));
@@ -3104,11 +3216,11 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)), T{});
+        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
-        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
     {
         return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
@@ -3156,11 +3268,11 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded)
     {
-        return decode_with_owner<false, D>(std::move(encoded), T{});
+        return decode_with_owner<false, D>(std::move(encoded));
     }
 
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
-        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target)
     {
         return decode_with_owner<false, D>(std::move(encoded), std::move(target));
@@ -3170,11 +3282,11 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)), T{});
+        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
-        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
     {
         return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
@@ -3308,12 +3420,42 @@ private:
 #if defined(__cpp_exceptions)
         try {
 #endif
-            return decode_with_owner<Verified, D>(std::make_shared<Encoded const>(std::move(encoded)), T{});
+            return decode_with_owner<Verified, D>(std::make_shared<Encoded const>(std::move(encoded)));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
             return std::unexpected(error::not_enough_memory);
         }
 #endif
+    }
+
+    template <bool Verified, description_place D, owning_range_of_chars Encoded>
+    static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<Encoded const> encoded)
+    {
+        validity::throw_logic_error_if_null(encoded, "cbor::schema::decode: the encoded data item is null");
+        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
+        return decode_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes);
+    }
+
+    template <bool Verified, description_place D>
+    static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<void const> owner, std::string_view const encoded)
+    {
+        if constexpr (std::is_default_constructible_v<T>) {
+            return decode_with_owner<Verified, D>(std::move(owner), encoded, T{});
+        } else {
+            validity::throw_logic_error_if_empty(owner, "cbor::schema::decode: the owner of the encoded data item is empty");
+#if defined(__cpp_exceptions)
+            try {
+#endif
+                std::optional<T> made;
+                if (auto const r = reflection::root_read<T, Verified, D>(made, encoded, limits::nesting_depth); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return ref<T>(std::move(owner), std::move(*made));
+#if defined(__cpp_exceptions)
+            } catch (std::bad_alloc const &) {
+                return std::unexpected(error::not_enough_memory);
+            }
+#endif
+        }
     }
 
     template <bool Verified, description_place D, owning_range_of_chars Encoded>
