@@ -68,9 +68,22 @@ namespace doc_advanced_comparison
 {
 
 // begin numbers-decl
-struct [[=cbor::tag(1900)]] series {
+struct series {
     std::vector<double> values;
 };
+} // namespace doc_advanced_comparison
+
+template <>
+struct cbor::describe_members<doc_advanced_comparison::series> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1900};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_advanced_comparison::series, values),
+    };
+};
+
+namespace doc_advanced_comparison
+{
+
 // end numbers-decl
 
 // The section "A number array" reads a std::vector<double> member as an RFC 8746 typed array with no copy.

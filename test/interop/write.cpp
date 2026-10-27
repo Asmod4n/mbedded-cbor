@@ -545,12 +545,12 @@ void structs_cases()
     result_print("structs/senml", "RFC 8428 6", cbor::structs<senml>::encode(senml{"t", 1.5}), "a200617402f93e00");
 }
 
-struct [[= cbor::tag(1700)]] tire {
+struct tire {
     std::uint16_t diameter;
     float pressure;
 };
 
-struct [[= cbor::tag(1701)]] car {
+struct car {
     std::string make;
     std::uint8_t seats;
     std::vector<tire> tires;
@@ -558,13 +558,51 @@ struct [[= cbor::tag(1701)]] car {
     std::optional<std::string> note;
 };
 
-struct [[= cbor::tag(1702)]] sensor {
+struct sensor {
     std::string name;
     std::uint16_t id;
     std::vector<double> readings;
     std::vector<std::byte> raw;
     std::int64_t offset;
 };
+
+} // namespace
+
+template <>
+struct cbor::describe_members<tire> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(tire, diameter),
+        CBOR_MEMBER(tire, pressure),
+    };
+};
+
+template <>
+struct cbor::describe_members<car> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1701};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(car, make),
+        CBOR_MEMBER(car, seats),
+        CBOR_MEMBER(car, tires),
+        CBOR_MEMBER(car, track),
+        CBOR_MEMBER(car, note),
+    };
+};
+
+template <>
+struct cbor::describe_members<sensor> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1702};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(sensor, name),
+        CBOR_MEMBER(sensor, id),
+        CBOR_MEMBER(sensor, readings),
+        CBOR_MEMBER(sensor, raw),
+        CBOR_MEMBER(sensor, offset),
+    };
+};
+
+namespace
+{
 
 // schema<T>::encode. A generic decoder does not know Packed CBOR, so it gives the tags 113 and 114 with their
 // content (RFC 8949 3.4); the written bytes have no expectation and must only be accepted.

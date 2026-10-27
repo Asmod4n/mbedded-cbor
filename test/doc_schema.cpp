@@ -22,7 +22,7 @@ using cbor::error;
 namespace doc_packed
 {
 
-struct [[=cbor::tag(1700)]] sensor {
+struct sensor {
     std::string name;
     std::uint16_t id;
     std::vector<double> readings;
@@ -31,6 +31,21 @@ struct [[=cbor::tag(1700)]] sensor {
 struct untagged {
     std::uint8_t a;
 };
+
+} // namespace doc_packed
+
+template <>
+struct cbor::describe_members<doc_packed::sensor> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_packed::sensor, name),
+        CBOR_MEMBER(doc_packed::sensor, id),
+        CBOR_MEMBER(doc_packed::sensor, readings),
+    };
+};
+
+namespace doc_packed
+{
 
 template <cbor::fixed_string Path, class... Index>
 concept reads = requires(std::string_view const s, Index const... i) {
@@ -57,8 +72,8 @@ TEST_CASE("doc schema: write a message and read one field")
     CHECK(first_message() == std::pair<std::uint16_t, double>{7, 2.5});
 }
 
-// The section "Tags" states that a struct with no tag leaves no schema to call.
-TEST_CASE("doc schema: tags")
+// The section "Tags and keys" states that a struct with no description does not compile in schema.
+TEST_CASE("doc schema: tags and keys")
 {
     CHECK(cbor::tags_registered<sensor>());
     CHECK_FALSE(cbor::tags_registered<untagged>());
@@ -124,9 +139,22 @@ TEST_CASE("doc schema: read from a peer that you trust")
     CHECK_EQ(fast->at_path<"$.readings[1]">(), 2.5);
 }
 
-struct [[=cbor::tag(1701)]] other {
+struct other {
     std::uint8_t a;
 };
+
+} // namespace doc_packed
+
+template <>
+struct cbor::describe_members<doc_packed::other> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1701};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_packed::other, a),
+    };
+};
+
+namespace doc_packed
+{
 
 // The section "Errors" gives one input for each row, and states that a field with a wrong head gives an error.
 TEST_CASE("doc schema: errors")
@@ -148,16 +176,33 @@ TEST_CASE("doc schema: errors")
 namespace doc_packed
 {
 
-struct [[=cbor::tag(1703)]] point {
+struct point {
     float x;
     float y;
 };
 
-struct [[=cbor::tag(1704)]] track {
+struct track {
     std::vector<point> points;
 };
 
 } // namespace doc_packed
+
+template <>
+struct cbor::describe_members<doc_packed::point> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_packed::point, x),
+        CBOR_MEMBER(doc_packed::point, y),
+    };
+};
+
+template <>
+struct cbor::describe_members<doc_packed::track> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(doc_packed::track, points),
+    };
+};
 
 TEST_CASE("doc schema: a list of fixed-size structs is a range of elements")
 {

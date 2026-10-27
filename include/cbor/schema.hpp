@@ -45,12 +45,6 @@
 namespace cbor
 {
 
-struct skip {};
-
-struct allow {};
-
-struct allowlist {};
-
 struct tag {
     std::uint64_t number;
 };
@@ -225,12 +219,6 @@ class reflection
         return out;
     }
 
-    static consteval bool keys_unique(std::vector<std::vector<unsigned char>> encoded)
-    {
-        std::ranges::sort(encoded);
-        return validity::keys_unique(encoded);
-    }
-
     template <class E>
     CBOR_ALWAYS_INLINE static E typed_array_element_read(std::span<char const, sizeof(E)> const in)
     {
@@ -274,51 +262,28 @@ class reflection
     }
 
 #ifdef __cpp_impl_reflection
-    static consteval bool has_text(cbor::key const k)
-    {
-        return std::meta::reflect_constant(k.text) != std::meta::reflect_constant(static_cast<char const *>(nullptr));
-    }
-
     template <class Root>
-    static consteval bool integer_key_used()
+    static consteval bool descriptions_valid()
     {
         if constexpr (std::is_class_v<Root> && std::is_aggregate_v<Root>)
-            return std::ranges::any_of(packing_table_of<Root>(), [](std::meta::info const type) {
-                return std::ranges::any_of(
-                    std::meta::nonstatic_data_members_of(type, std::meta::access_context::unprivileged()),
-                    [](std::meta::info const m) {
-                        return std::ranges::any_of(std::meta::annotations_of(m), [](std::meta::info const a) {
-                            return std::meta::remove_const(std::meta::type_of(a)) == (^^cbor::key) &&
-                                   !has_text(std::meta::extract<cbor::key>(a));
-                        });
-                    });
-            });
-        else
-            return false;
-    }
-
-    template <class Root>
-    static consteval bool table_tag_taken_by_standard_type()
-    {
-        if constexpr (std::is_class_v<Root> && std::is_aggregate_v<Root>)
-            return std::ranges::any_of(packing_table_of<Root>(), [](std::meta::info const type) {
-                auto const number = tag_number_of(type);
-                return number && tag_taken_by_standard_type(*number);
-            });
-        else
-            return false;
-    }
-
-    template <class Root>
-    static consteval bool table_tag_invalid()
-    {
-        if constexpr (std::is_class_v<Root> && std::is_aggregate_v<Root>)
-            return std::ranges::any_of(packing_table_of<Root>(), [](std::meta::info const type) {
-                auto const number = tag_number_of(type);
-                return number && tag_invalid(*number);
-            });
-        else
-            return false;
+            template for (constexpr std::meta::info type : packing_table_of<Root>()) {
+                using U = typename[:type:];
+                static_assert(has_describe_members<U>, "cbor::schema takes each struct through cbor::describe_members<T>.");
+                if constexpr (has_describe_members<U>) {
+                    static_assert(description_valid<U>());
+                    static_assert(std::meta::bases_of(type, std::meta::access_context::unprivileged()).empty(),
+                                  "cbor::schema takes a class with no base class.");
+                    if constexpr (tag_declared<U>())
+                        static_assert(describe_members<U>::tag.has_value(),
+                                      "cbor::schema takes a struct with a tag; cbor::untagged is for cbor::structs.");
+                    static_assert(std::apply([](auto const &...m) { return ((m.key.major == major_type::text_string) && ...); },
+                                             describe_members<U>::members),
+                                  "cbor::schema takes a text key in cbor::describe_members; an integer key is for "
+                                  "cbor::structs.");
+                }
+            }
+        static_assert(tags_registered<Root>(), "cbor::schema takes one tag for one struct only.");
+        return true;
     }
 #endif
 
@@ -328,6 +293,17 @@ class reflection
         return requires {
             { describe_members<U>::tag } -> std::same_as<std::optional<cbor::tag> const &>;
         };
+    }
+
+    template <class U>
+    static consteval std::optional<std::uint64_t> tag_number_of()
+    {
+        if constexpr (has_describe_members<U>) {
+            if constexpr (tag_declared<U>())
+                if (describe_members<U>::tag.has_value())
+                    return describe_members<U>::tag->number;
+        }
+        return std::nullopt;
     }
 
     template <class M, class B>
@@ -412,13 +388,36 @@ class reflection
     {
 #ifdef __cpp_impl_reflection
         std::meta::info const type = std::meta::dealias(^^T);
-        if (annotated(type, ^^cbor::tag) || annotated(type, ^^cbor::allowlist))
+        if (annotated(type, ^^cbor::tag))
             return false;
         for (std::meta::info const m :
              std::meta::nonstatic_data_members_of(type, std::meta::access_context::unprivileged()))
-            if (annotated(m, ^^cbor::key) || annotated(m, ^^cbor::skip) || annotated(m, ^^cbor::allow))
+            if (annotated(m, ^^cbor::key))
                 return false;
 #endif
+        return true;
+    }
+
+    template <class U>
+    static consteval bool description_valid()
+    {
+        static_assert(tag_declared<U>(), "cbor::describe_members<T>::tag is a std::optional<cbor::tag>.");
+        if constexpr (tag_declared<U>()) {
+            static_assert(!describe_members<U>::tag.has_value() ||
+                              !tag_taken_by_standard_type(describe_members<U>::tag->number),
+                          "cbor::describe_members takes a tag that no standard type has.");
+            static_assert(!describe_members<U>::tag.has_value() || !tag_invalid(describe_members<U>::tag->number),
+                          "cbor::describe_members takes a tag that the IANA registry calls always invalid.");
+        }
+        static_assert(members_of_class<U>(), "cbor::describe_members lists a member of another class.");
+        if constexpr (members_of_class<U>()) {
+            static_assert(pointers_unique<U>(), "cbor::describe_members lists a member twice.");
+            static_assert(reflected_members_listed<U>(),
+                          "cbor::describe_members lists other members than reflection reads with unprivileged().");
+        }
+        static_assert(keys_unique(describe_members<U>::members), "cbor::describe_members gives two members the same key.");
+        static_assert(annotations_absent<U>(),
+                      "a type with cbor::describe_members takes its members, keys and tag from the description only.");
         return true;
     }
 
@@ -475,31 +474,61 @@ class reflection
     }
 
 #ifdef __cpp_impl_reflection
+    template <class U>
+    static consteval std::span<std::meta::info const> own_members()
+    {
+        return std::define_static_array(
+            std::meta::nonstatic_data_members_of(std::meta::dealias(^^U), std::meta::access_context::unprivileged()));
+    }
+
+    template <class U, std::meta::info R>
+    static consteval std::string_view listed_key()
+    {
+        return std::apply(
+            [](auto const &...m) {
+                std::string_view key;
+                auto const take = [&key](auto const &e) {
+                    if constexpr (std::is_same_v<decltype(e.pointer), decltype(&[:R:])>)
+                        if (e.pointer == &[:R:])
+                            key = e.key.text;
+                };
+                (take(m), ...);
+                return key;
+            },
+            describe_members<U>::members);
+    }
+
+    template <class U>
+    static consteval std::span<char const *const> listed_key_texts()
+    {
+        std::vector<char const *> texts;
+        template for (constexpr std::meta::info m : own_members<U>())
+            texts.push_back(std::define_static_string(listed_key<U, m>()));
+        return std::define_static_array(texts);
+    }
+
+    template <class U>
+    static consteval std::span<std::size_t const> listed_key_sizes()
+    {
+        std::vector<std::size_t> sizes;
+        template for (constexpr std::meta::info m : own_members<U>())
+            sizes.push_back(listed_key<U, m>().size());
+        return std::define_static_array(sizes);
+    }
+
+    template <class U>
     static consteval std::string_view key_of(std::meta::info const r)
     {
-        for (std::meta::info const a : std::meta::annotations_of(r))
-            if (std::meta::remove_const(std::meta::type_of(a)) == (^^cbor::key) && has_text(std::meta::extract<cbor::key>(a)))
-                return std::meta::extract<cbor::key>(a).text;
-        auto const name = std::meta::u8identifier_of(r);
-        return std::define_static_string(std::string(name.begin(), name.end()));
-    }
-
-    static consteval std::optional<std::uint64_t> tag_number_of(std::meta::info const type)
-    {
-        for (std::meta::info const a : std::meta::annotations_of(std::meta::dealias(type)))
-            if (std::meta::remove_const(std::meta::type_of(a)) == ^^cbor::tag)
-                return std::meta::extract<cbor::tag>(a).number;
-        return std::nullopt;
-    }
-
-    static consteval bool keys_unique(std::span<std::meta::info const> const members)
-    {
-        std::vector<std::vector<unsigned char>> encoded;
-        for (std::meta::info const m : members) {
-            std::string_view const key = key_of(m);
-            encoded.push_back(key_encoded(major_type::text_string, key.size(), key));
+        if constexpr (has_describe_members<U>) {
+            constexpr auto members = own_members<U>();
+            constexpr auto texts = listed_key_texts<U>();
+            constexpr auto sizes = listed_key_sizes<U>();
+            auto const i = static_cast<std::size_t>(std::ranges::find(members, r) - members.begin());
+            return std::string_view(texts[i], sizes[i]);
+        } else {
+            auto const name = std::meta::u8identifier_of(r);
+            return std::define_static_string(std::string(name.begin(), name.end()));
         }
-        return keys_unique(std::move(encoded));
     }
 
     static consteval bool annotated(std::meta::info const entity, std::meta::info const type)
@@ -560,14 +589,9 @@ class reflection
     template <class U>
     static consteval std::span<std::meta::info const> data_members()
     {
-        bool const only_allowed = annotated(^^U, ^^cbor::allowlist);
-        std::vector<std::meta::info> members;
-        for (std::meta::info const m :
-             std::meta::nonstatic_data_members_of(^^U, std::meta::access_context::unprivileged()))
-            if (!annotated(m, ^^cbor::skip) && (!only_allowed || annotated(m, ^^cbor::allow)))
-                members.push_back(m);
+        std::vector<std::meta::info> members(std::from_range, own_members<U>());
         std::ranges::sort(members, {}, [](std::meta::info const m) {
-            std::string_view const key = key_of(m);
+            std::string_view const key = key_of<U>(m);
             return key_encoded(major_type::text_string, key.size(), key);
         });
         return std::define_static_array(members);
@@ -675,11 +699,11 @@ class reflection
     static consteval void description_encode(std::vector<char> &encoded)
     {
         heads::head_append(encoded, major_type::array, 2);
-        heads::head_append(encoded, major_type::unsigned_integer, *tag_number_of(^^S));
+        heads::head_append(encoded, major_type::unsigned_integer, *tag_number_of<S>());
         heads::head_append(encoded, major_type::array, data_members<S>().size());
         template for (constexpr auto m : data_members<S>()) {
             using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
-            constexpr std::string_view key = key_of(m);
+            constexpr std::string_view key = key_of<S>(m);
             constexpr bool counted = !is_fixed_leaf<M> && requires { fixed_length<M>::value; };
             heads::head_append(encoded, major_type::array, counted ? 3 : 2);
             heads::head_append(encoded, major_type::text_string, key.size());
@@ -807,7 +831,7 @@ class reflection
                     zero_initialized_encode<Root, E>(encoded);
             }
         } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-            heads::head_append(encoded, major_type::tag, *tag_number_of(^^U));
+            heads::head_append(encoded, major_type::tag, *tag_number_of<U>());
             straight_reference_encode<Root, U>(encoded);
             fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
             auto const count = heads::big_endian(static_cast<std::uint32_t>(data_members<U>().size()));
@@ -838,10 +862,10 @@ class reflection
         std::vector<char> encoded;
         heads::head_append(encoded, major_type::tag,
                            std::to_underlying(validity::tag_number::record_function));
-        static constexpr auto members = members_of<U>();
+        static constexpr auto members = data_members<U>();
         heads::head_append(encoded, major_type::array, members.size());
         template for (constexpr std::size_t i : std::define_static_array(std::views::iota(0uz, members.size()))) {
-            constexpr std::string_view key = key_of(members[i]);
+            constexpr std::string_view key = key_of<U>(members[i]);
             heads::head_append(encoded, major_type::text_string, key.size());
             encoded.insert(encoded.end(), key.begin(), key.end());
         }
@@ -1323,7 +1347,7 @@ class reflection
     {
         constexpr auto members = data_members<U>();
         auto const m = std::ranges::find_if(members, [name](std::meta::info const r) {
-            return key_of(r) == name;
+            return key_of<U>(r) == name;
         });
         return m == members.end() ? std::meta::info{} : *m;
     }
@@ -1431,7 +1455,7 @@ class reflection
     template <class Root, class U>
     CBOR_ALWAYS_INLINE static bool class_tag_valid(std::span<char const, fixed_size<U, Root>()> const field)
     {
-        constexpr std::size_t n = heads::head_size(*tag_number_of(^^U));
+        constexpr std::size_t n = heads::head_size(*tag_number_of<U>());
         static_assert(zero_initialized<Root, U>().size() >= n, "The zero-initialized encoding must hold the whole tag head.");
         std::span<char const, n> const expected{zero_initialized<Root, U>().data(), n};
         return std::ranges::equal(field.template first<n>(), expected);
@@ -2266,15 +2290,6 @@ class reflection
         return size;
     }
 
-    template <class U>
-    static consteval auto members_of()
-    {
-        auto const members = data_members<U>();
-        if (!keys_unique(members))
-            std::unreachable();
-        return members;
-    }
-
     template <class>
     friend class cbor::typed_array_view;
 #endif
@@ -2532,12 +2547,15 @@ template <class Root>
 consteval bool tags_registered()
 {
     std::vector<std::uint64_t> numbers;
-    for (std::meta::info const type : reflection::packing_table_of<Root>()) {
-        auto const number = reflection::tag_number_of(type);
-        if (!number)
-            return false;
-        numbers.push_back(*number);
+    bool tagged = true;
+    template for (constexpr std::meta::info type : reflection::packing_table_of<Root>()) {
+        constexpr auto number = reflection::tag_number_of<typename[:type:]>();
+        tagged = tagged && number.has_value();
+        if constexpr (number.has_value())
+            numbers.push_back(*number);
     }
+    if (!tagged)
+        return false;
     std::ranges::sort(numbers);
     return validity::keys_unique(numbers);
 }
@@ -2596,11 +2614,10 @@ consteval std::size_t reflection::fixed_size()
             return *size;
         }
     } else if constexpr (std::is_class_v<U> && std::is_aggregate_v<U>) {
-        if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty() ||
-                      !reflection::keys_unique(reflection::data_members<U>())) {
+        if constexpr (!std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty()) {
             return no_fixed_size<U>();
         } else {
-            std::size_t size = heads::head_size(*reflection::tag_number_of(^^U)) +
+            std::size_t size = heads::head_size(*reflection::tag_number_of<U>()) +
                                reflection::straight_reference_size<Root, U>() + reflection::item_head;
             template for (constexpr auto m : reflection::data_members<U>()) {
                 if constexpr (!std::meta::has_identifier(m) || std::meta::is_bit_field(m) || !std::meta::is_public(m))
@@ -2638,7 +2655,7 @@ consteval std::size_t reflection::member_offset()
     if constexpr (std::meta::parent_of(Member) != std::meta::dealias(^^U)) {
         return no_fixed_size<T>();
     } else {
-        std::size_t offset = heads::head_size(*reflection::tag_number_of(^^U)) +
+        std::size_t offset = heads::head_size(*reflection::tag_number_of<U>()) +
                              reflection::straight_reference_size<Root, U>() + reflection::item_head;
         template for (constexpr auto m : reflection::data_members<U>()) {
             if constexpr (m == Member)
@@ -2652,10 +2669,7 @@ consteval std::size_t reflection::member_offset()
 template <class T>
 class schema
 {
-    static_assert(!reflection::integer_key_used<T>(), "cbor::schema takes a text in cbor::key; an integer key is for cbor::lazy and cbor::describe_members");
-    static_assert(!reflection::table_tag_taken_by_standard_type<T>(),
-                  "cbor::schema takes a tag that no standard type has.");
-    static_assert(!reflection::table_tag_invalid<T>(), "cbor::schema takes a tag that the IANA registry calls always invalid.");
+    static_assert(reflection::descriptions_valid<T>());
 
     template <class X>
     static constexpr bool value_holds_no_view = std::is_trivially_copyable_v<X> && !std::same_as<X, std::string_view> &&

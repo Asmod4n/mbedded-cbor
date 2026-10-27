@@ -16,5 +16,5 @@ fixed size at an offset that the compiler computes.
 | [accessor](accessor.md) | reads a part of a message by a path |
 | [fixed_element](fixed_element.md) | reads one element of a vector of fixed-size structs |
 | [typed_array_view](typed_array_view.md) | a range over a list of numbers in the message |
-| [tag](tag.md) | gives a struct its tag number |
+| [tag](tag.md) | the tag number of a struct in its description |
 | [wire](wire.md) | the bytes that `encode` writes |
