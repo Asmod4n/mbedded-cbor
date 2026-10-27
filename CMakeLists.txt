@@ -134,7 +134,8 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
 	endif()
 	function(cbor_compile_fail_count name file pattern count)
 		set(arguments ${CBOR_COMPILE_FAIL_FLAGS} ${CBOR_COMPILE_FAIL_ALL_ERRORS} ${ARGN})
-		add_test(NAME compile_fail_${name} COMMAND ${CMAKE_COMMAND} -DCOMPILER=${CMAKE_CXX_COMPILER} "-DARGUMENTS=$<JOIN:${arguments},@@>"
+		list(JOIN arguments "@@" joined)
+		add_test(NAME compile_fail_${name} COMMAND ${CMAKE_COMMAND} -DCOMPILER=${CMAKE_CXX_COMPILER} "-DARGUMENTS=${joined}"
 			-DSOURCE=${PROJECT_SOURCE_DIR}/test/compile-fail/${file} "-DPATTERN=${pattern}" -DCOUNT=${count} -P ${PROJECT_SOURCE_DIR}/cmake/compile_fail.cmake)
 	endfunction()
 	set(CBOR_STANDARD_TAGS 0,1,2,3,24,100,258,1004,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87)
