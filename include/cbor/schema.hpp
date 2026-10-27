@@ -1818,21 +1818,24 @@ class reflection
         return cbor::directory{directory_at<T, D>(), count};
     }
 
+    static consteval std::size_t count_index_arguments(std::string_view const path)
+    {
+        constexpr std::string_view index_argument_mark = "[]";
+        if (path.empty())
+            return 0;
+        return static_cast<std::size_t>(std::ranges::distance(path | std::views::split(index_argument_mark))) - 1;
+    }
+
     template <fixed_string Path>
     static consteval std::size_t index_arguments()
     {
-        return static_cast<std::size_t>(std::ranges::count_if(Path.view() | std::views::pairwise, [](auto const pair) {
-            return std::get<0>(pair) == '[' && std::get<1>(pair) == ']';
-        }));
+        return count_index_arguments(Path.view());
     }
 
     template <fixed_string Path, std::size_t At>
     static consteval std::size_t index_argument()
     {
-        return index_arguments<Path>() - static_cast<std::size_t>(std::ranges::count_if(
-                                          Path.view() | std::views::drop(At) | std::views::pairwise, [](auto const pair) {
-                                              return std::get<0>(pair) == '[' && std::get<1>(pair) == ']';
-                                          }));
+        return index_arguments<Path>() - count_index_arguments(Path.view().substr(At));
     }
 
     template <class T, fixed_string Path, std::size_t At>
