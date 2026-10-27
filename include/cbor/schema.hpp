@@ -26,6 +26,8 @@
 #include <vector>
 #ifdef __cpp_impl_reflection
 #include <meta>
+#elif __has_include(<boost/pfr.hpp>)
+#include <boost/pfr.hpp>
 #endif
 #if __has_include(<stdfloat>)
 #include <stdfloat>
@@ -58,7 +60,6 @@ struct tagged_item {
     T content;
 };
 
-#ifdef __cpp_impl_reflection
 template <class T>
 consteval std::size_t no_fixed_size()
 {
@@ -68,8 +69,10 @@ consteval std::size_t no_fixed_size()
 template <class Root>
 consteval bool tags_registered();
 
-template <class T>
-class schema;
+enum class member_source { reflection, description };
+
+template <class T, member_source Source>
+class basic_schema;
 
 template <class E>
 class typed_array_view;
@@ -83,8 +86,6 @@ struct directory {
 };
 
 enum class description_place { inside, apart };
-
-#endif
 
 class reflection
 {
@@ -285,7 +286,6 @@ class reflection
                tag == std::to_underlying(notable_tags::tag_number::programming_aid_for_simple_values);
     }
 
-#ifdef __cpp_impl_reflection
     template <class Root>
     static consteval bool descriptions_valid()
     {
@@ -294,8 +294,15 @@ class reflection
                           "cbor::schema takes each struct through cbor::describe_members<T>.");
             if constexpr (has_describe_members<U>) {
                 static_assert(description_valid<U>());
+#ifdef __cpp_impl_reflection
                 static_assert(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty(),
                               "cbor::schema takes a class with no base class.");
+#elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
+                if constexpr (std::is_aggregate_v<U> && !describes_array<U>())
+                    static_assert(boost::pfr::tuple_size_v<U> == describe::members_count<U>,
+                                  "cbor::schema lists each member of an aggregate; Boost.PFR counts another "
+                                  "number of members.");
+#endif
                 if constexpr (tag_declared<U>())
                     static_assert(describe_members<U>::tag.has_value(),
                                   "cbor::schema takes a struct with a tag; cbor::untagged is for cbor::structs.");
@@ -321,7 +328,6 @@ class reflection
         static_assert(tags_registered<Root>(), "cbor::schema takes one tag for one struct only.");
         return true;
     }
-#endif
 
     template <class U>
     static consteval bool tag_declared()
@@ -357,6 +363,17 @@ class reflection
     {
         return std::apply([](auto const &...m) { return (member_of<U, decltype(m.pointer)>() && ...); },
                           describe_members<U>::members);
+    }
+
+    template <class U>
+    static consteval bool describes_array()
+    {
+        if constexpr (has_describe_members<U>)
+            return []<std::size_t... I>(std::index_sequence<I...>) {
+                return (std::is_array_v<describe::member_t<U, I>> || ...);
+            }(std::make_index_sequence<describe::members_count<U>>{});
+        else
+            return false;
     }
 
     template <class U>
@@ -629,19 +646,6 @@ class reflection
         }
     }
 
-    template <class E, class Container>
-    static constexpr E element_make(Container const &container)
-    {
-        if constexpr (requires { container.get_allocator(); }) {
-            if constexpr (uses_allocator_aggregate<E, decltype(container.get_allocator())>())
-                return element_make<E>(container.get_allocator(), E{});
-            else
-                return std::make_obj_using_allocator<E>(container.get_allocator());
-        } else {
-            return E{};
-        }
-    }
-
     template <class U>
     static consteval std::span<std::meta::info const> data_members()
     {
@@ -658,6 +662,64 @@ class reflection
     static consteval std::size_t member_index_of()
     {
         return member_index_of<U>(&[:M:]);
+    }
+#elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
+    template <class E, class Alloc>
+    static consteval bool uses_allocator_aggregate()
+    {
+        if constexpr (std::uses_allocator_v<E, Alloc> || !std::is_class_v<E> || !std::is_aggregate_v<E> ||
+                      std::ranges::range<E>) {
+            return false;
+        } else if constexpr (describes_array<E>()) {
+            return false;
+        } else {
+            return []<std::size_t... I>(std::index_sequence<I...>) {
+                return ((!std::is_array_v<boost::pfr::tuple_element_t<I, E>> &&
+                         !std::is_reference_v<boost::pfr::tuple_element_t<I, E>>) &&
+                        ...) &&
+                       (false || ... ||
+                        (std::uses_allocator_v<boost::pfr::tuple_element_t<I, E>, Alloc> ||
+                         uses_allocator_aggregate<boost::pfr::tuple_element_t<I, E>, Alloc>()));
+            }(std::make_index_sequence<boost::pfr::tuple_size_v<E>>());
+        }
+    }
+
+    template <class E, class Alloc>
+    static constexpr E element_make(Alloc const &alloc, E &&from)
+    {
+        if constexpr (uses_allocator_aggregate<E, Alloc>()) {
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return E{element_make<boost::pfr::tuple_element_t<I, E>>(alloc, std::move(boost::pfr::get<I>(from)))...};
+            }(std::make_index_sequence<boost::pfr::tuple_size_v<E>>());
+        } else {
+            return std::make_obj_using_allocator<E>(alloc, std::move(from));
+        }
+    }
+#else
+    template <class E, class Alloc>
+    static consteval bool uses_allocator_aggregate()
+    {
+        return false;
+    }
+
+    template <class E, class Alloc>
+    static constexpr E element_make(Alloc const &alloc, E &&from)
+    {
+        return std::make_obj_using_allocator<E>(alloc, std::move(from));
+    }
+#endif
+
+    template <class E, class Container>
+    static constexpr E element_make(Container const &container)
+    {
+        if constexpr (requires { container.get_allocator(); }) {
+            if constexpr (uses_allocator_aggregate<E, decltype(container.get_allocator())>())
+                return element_make<E>(container.get_allocator(), E{});
+            else
+                return std::make_obj_using_allocator<E>(container.get_allocator());
+        } else {
+            return E{};
+        }
     }
 
     template <class M>
@@ -744,6 +806,7 @@ class reflection
                       sizeof(S) != fixed_width<S>()) {
             return false;
         } else {
+#ifdef __cpp_impl_reflection
             bool same = true;
             template for (constexpr std::meta::info m :
                           std::define_static_array(std::meta::nonstatic_data_members_of(^^S, std::meta::access_context::unprivileged()))) {
@@ -753,6 +816,9 @@ class reflection
                     same = same && fixed_layout_native<M>();
             }
             return same;
+#else
+            return false;
+#endif
         }
     }
 
@@ -874,15 +940,15 @@ class reflection
 #if defined(__STDCPP_BFLOAT16_T__)
                 digits == std::numeric_limits<std::bfloat16_t>::digits ||
 #endif
-                digits == std::numeric_limits<std::float32_t>::digits)
-                fixed_width_head_encode(encoded, major_type::simple_float, sizeof(std::float32_t));
-            else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
-                fixed_width_head_encode(encoded, major_type::simple_float, sizeof(std::float64_t));
+                digits == std::numeric_limits<float>::digits)
+                fixed_width_head_encode(encoded, major_type::simple_float, sizeof(float));
+            else if constexpr (digits == std::numeric_limits<double>::digits)
+                fixed_width_head_encode(encoded, major_type::simple_float, sizeof(double));
             else {
                 heads::head_append(encoded, major_type::tag,
                                    std::to_underlying(rfc8746::tag_number::float128_big_endian));
-                heads::head_append(encoded, major_type::byte_string, sizeof(std::float128_t));
-                encoded.resize(encoded.size() + sizeof(std::float128_t));
+                heads::head_append(encoded, major_type::byte_string, sizeof(uint128));
+                encoded.resize(encoded.size() + sizeof(uint128));
             }
         } else if constexpr (requires { fixed_length<U>::value; }) {
             using E = typename fixed_length<U>::element;
@@ -1094,14 +1160,14 @@ class reflection
 #endif
 #if defined(__STDCPP_BFLOAT16_T__)
         if constexpr (digits == std::numeric_limits<std::bfloat16_t>::digits)
-            return std::bit_cast<std::uint32_t>(static_cast<std::float32_t>(value));
+            return std::bit_cast<std::uint32_t>(static_cast<float>(value));
         else
 #endif
-        if constexpr (digits == std::numeric_limits<std::float32_t>::digits)
+        if constexpr (digits == std::numeric_limits<float>::digits)
             return std::bit_cast<std::uint32_t>(value);
-        else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
+        else if constexpr (digits == std::numeric_limits<double>::digits)
             return std::bit_cast<std::uint64_t>(value);
-#ifdef __SIZEOF_INT128__
+#if defined(__SIZEOF_INT128__) && defined(__STDCPP_FLOAT128_T__)
         else
             return std::bit_cast<uint128>(static_cast<std::float128_t>(value));
 #endif
@@ -1211,7 +1277,7 @@ class reflection
         return packing_prefix_of<Root, D>().size() + item_head;
     }
 
-    template <class Root, class E, bool Exact, description_place D, class R>
+    template <class Root, member_source Source, class E, bool Exact, description_place D, class R>
     CBOR_ALWAYS_INLINE static encode_cursor elements_encode(std::span<char> const out, std::size_t const data, R const &range,
                                        encode_cursor position)
     {
@@ -1220,13 +1286,13 @@ class reflection
         for (auto const &e : range) {
             auto const field = out.subspan(at).template first<size>();
             zero_initialized_copy<Root, E>(field);
-            position = value_encode<Root, E, Exact, D>(out, field, e, position);
+            position = value_encode<Root, Source, E, Exact, D>(out, field, e, position);
             at += size;
         }
         return position;
     }
 
-    template <class Root, bool Exact, description_place D, class V>
+    template <class Root, member_source Source, bool Exact, description_place D, class V>
     CBOR_ALWAYS_INLINE static encode_cursor reference_encode(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
                                         V const &value, encode_cursor c)
     {
@@ -1249,7 +1315,7 @@ class reflection
                 c.position += fixed_size<E, Root>();
                 auto const element = out.subspan(data).template first<fixed_size<E, Root>()>();
                 zero_initialized_copy<Root, E>(element);
-                c = value_encode<Root, E, Exact, D>(out, element, *value, c);
+                c = value_encode<Root, Source, E, Exact, D>(out, element, *value, c);
             }
         } else if constexpr (is_text_range<U> || is_byte_range<U>) {
             std::size_t const length = std::ranges::size(value);
@@ -1267,11 +1333,11 @@ class reflection
             for (auto const &[k, v] : value) {
                 auto const key = out.subspan(at).template first<fixed_size<K, Root>()>();
                 zero_initialized_copy<Root, K>(key);
-                c = value_encode<Root, K, Exact, D>(out, key, k, c);
+                c = value_encode<Root, Source, K, Exact, D>(out, key, k, c);
                 at += fixed_size<K, Root>();
                 auto const mapped = out.subspan(at).template first<fixed_size<M, Root>()>();
                 zero_initialized_copy<Root, M>(mapped);
-                c = value_encode<Root, M, Exact, D>(out, mapped, v, c);
+                c = value_encode<Root, Source, M, Exact, D>(out, mapped, v, c);
                 at += fixed_size<M, Root>();
             }
         } else if constexpr (is_typed_array<U>) {
@@ -1303,7 +1369,7 @@ class reflection
             heads::u32_write(out, item + head.size(), length * width);
             std::size_t at = item + head.size() + sizeof(std::uint32_t);
             c.position = at + length * width;
-            if constexpr (fixed_layout_native<E>() && std::ranges::contiguous_range<U>) {
+            if constexpr (Source == member_source::reflection && fixed_layout_native<E>() && std::ranges::contiguous_range<U>) {
                 auto const from = std::as_bytes(std::span(value));
                 std::ranges::copy(from, std::as_writable_bytes(out.subspan(at, from.size())).begin());
             } else {
@@ -1317,7 +1383,7 @@ class reflection
             std::size_t const length = std::ranges::size(value);
             heads::item_head_write(out, item, major_type::array, length);
             c.position = data + length * fixed_size<E, Root>();
-            c = elements_encode<Root, E, Exact, D>(out, data, value, c);
+            c = elements_encode<Root, Source, E, Exact, D>(out, data, value, c);
         }
         return c;
     }
@@ -1343,7 +1409,7 @@ class reflection
         });
     }
 
-    template <class Root, class T, bool Exact, description_place D>
+    template <class Root, member_source Source, class T, bool Exact, description_place D>
     CBOR_ALWAYS_INLINE static encode_cursor value_encode(std::span<char> const out, std::span<char, fixed_size<T, Root>()> const field,
                                     T const &value, encode_cursor position)
     {
@@ -1351,7 +1417,7 @@ class reflection
         if constexpr (std::same_as<U, bool>) {
             field.front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + value);
         } else if constexpr (std::is_enum_v<U>) {
-            position = value_encode<Root, std::underlying_type_t<U>, Exact, D>(out, field, std::to_underlying(value), position);
+            position = value_encode<Root, Source, std::underlying_type_t<U>, Exact, D>(out, field, std::to_underlying(value), position);
 #ifdef __SIZEOF_INT128__
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             uint128 magnitude = static_cast<uint128>(value);
@@ -1398,7 +1464,7 @@ class reflection
                               "The elements must lie inside the field.");
                 std::size_t at = head;
                 for (auto const &e : value) {
-                    position = value_encode<Root, E, Exact, D>(out, field.subspan(at).template first<fixed_size<E, Root>()>(), e, position);
+                    position = value_encode<Root, Source, E, Exact, D>(out, field.subspan(at).template first<fixed_size<E, Root>()>(), e, position);
                     at += fixed_size<E, Root>();
                 }
             }
@@ -1406,7 +1472,7 @@ class reflection
             for_each_field<U>([&] CBOR_ALWAYS_INLINE(auto i) {
                 constexpr std::size_t I = decltype(i)::value;
                 using M = describe::member_t<U, I>;
-                position = value_encode<Root, M, Exact, D>(
+                position = value_encode<Root, Source, M, Exact, D>(
                     out, field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(), describe::get<I>(value), position);
             });
         } else if constexpr (is_inline_optional<U>) {
@@ -1414,11 +1480,11 @@ class reflection
                 using E = typename U::value_type;
                 field.template subspan<1, 1>().front() =
                     heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::true_value));
-                position = value_encode<Root, E, Exact, D>(out, field.template subspan<inline_optional_head, fixed_size<E, Root>()>(), *value,
+                position = value_encode<Root, Source, E, Exact, D>(out, field.template subspan<inline_optional_head, fixed_size<E, Root>()>(), *value,
                                            position);
             }
         } else {
-            position = reference_encode<Root, Exact, D>(out, field, value, position);
+            position = reference_encode<Root, Source, Exact, D>(out, field, value, position);
         }
         return position;
     }
@@ -1482,7 +1548,7 @@ class reflection
             return static_cast<U>(heads::unsigned_read<M>(field.template last<sizeof(M)>()) ^ sign);
         } else {
             using B = decltype(float_bits(U{}));
-#ifdef __SIZEOF_INT128__
+#if defined(__SIZEOF_INT128__) && defined(__STDCPP_FLOAT128_T__)
             if constexpr (std::same_as<B, uint128>) {
                 auto const bits = heads::unsigned128_read(field.template last<sizeof(B)>());
                 return static_cast<U>(std::bit_cast<std::float128_t>(bits));
@@ -1492,16 +1558,16 @@ class reflection
                 auto const bits = heads::unsigned_read<B>(field.template last<sizeof(B)>());
 #if defined(__STDCPP_FLOAT16_T__)
                 using F = std::conditional_t<sizeof(B) == sizeof(std::uint16_t), std::float16_t,
-                                             std::conditional_t<sizeof(B) == sizeof(std::uint32_t), std::float32_t,
-                                                                std::float64_t>>;
+                                             std::conditional_t<sizeof(B) == sizeof(std::uint32_t), float,
+                                                                double>>;
                 return static_cast<U>(std::bit_cast<F>(bits));
 #else
                 if constexpr (sizeof(B) == sizeof(std::uint16_t))
                     return static_cast<U>(heads::float_decode_binary16(bits));
                 else
                     return static_cast<U>(
-                        std::bit_cast<std::conditional_t<sizeof(B) == sizeof(std::uint32_t), std::float32_t,
-                                                         std::float64_t>>(bits));
+                        std::bit_cast<std::conditional_t<sizeof(B) == sizeof(std::uint32_t), float,
+                                                         double>>(bits));
 #endif
             }
         }
@@ -1809,7 +1875,7 @@ class reflection
         }
     }
 
-    template <class Root, class T, fixed_string Path, std::size_t At, bool Verified = true>
+    template <class Root, member_source Source, class T, fixed_string Path, std::size_t At, bool Verified = true>
     static consteval auto path_result()
     {
         using U = std::remove_cv_t<T>;
@@ -1817,40 +1883,40 @@ class reflection
         if constexpr (At == path.size()) {
             if constexpr (is_optional<U>)
                 return std::type_identity<
-                    std::optional<typename decltype(path_result<Root, typename U::value_type, Path, At, Verified>())::type>>{};
+                    std::optional<typename decltype(path_result<Root, Source, typename U::value_type, Path, At, Verified>())::type>>{};
             else if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U>)
                 return std::type_identity<std::string_view>{};
             else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> && !std::same_as<U, uint128>)
-                return std::type_identity<typename cbor::schema<Root>::template accessor<U, Verified>>{};
+                return std::type_identity<typename cbor::basic_schema<Root, Source>::template accessor<U, Verified>>{};
             else
                 return std::type_identity<U>{};
         } else if constexpr (path[At] == '.') {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::size_t m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
-            return path_result<Root, describe::member_t<U, m>, Path, end, Verified>();
+            return path_result<Root, Source, describe::member_t<U, m>, Path, end, Verified>();
         } else {
             constexpr std::size_t close = index_end(path, At);
             if constexpr (requires { fixed_length<U>::value; })
-                return path_result<Root, typename fixed_length<U>::element, Path, close + 1, Verified>();
+                return path_result<Root, Source, typename fixed_length<U>::element, Path, close + 1, Verified>();
             else if constexpr (is_fixed_vector<U>)
-                return fixed_path_result<Root, std::remove_cv_t<std::ranges::range_value_t<U>>, Path, close + 1, Verified>();
+                return fixed_path_result<Root, Source, std::remove_cv_t<std::ranges::range_value_t<U>>, Path, close + 1, Verified>();
             else
-                return path_result<Root, std::ranges::range_value_t<U>, Path, close + 1, Verified>();
+                return path_result<Root, Source, std::ranges::range_value_t<U>, Path, close + 1, Verified>();
         }
     }
 
-    template <class Root, class S, fixed_string Path, std::size_t At, bool Verified = true>
+    template <class Root, member_source Source, class S, fixed_string Path, std::size_t At, bool Verified = true>
     static consteval auto fixed_path_result()
     {
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
-            return std::type_identity<typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified>>{};
+            return std::type_identity<typename cbor::basic_schema<Root, Source>::template accessor<fixed_element<S>, Verified>>{};
         } else {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::size_t m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
             using M = describe::member_t<S, m>;
             if constexpr (fixed_struct_valid<M>()) {
-                return fixed_path_result<Root, M, Path, end, Verified>();
+                return fixed_path_result<Root, Source, M, Path, end, Verified>();
             } else if constexpr (is_fixed_leaf<M>) {
                 return std::type_identity<M>{};
             } else {
@@ -1860,21 +1926,21 @@ class reflection
         }
     }
 
-    template <class Root, class S, fixed_string Path, std::size_t At, bool Verified = true>
+    template <class Root, member_source Source, class S, fixed_string Path, std::size_t At, bool Verified = true>
     CBOR_ALWAYS_INLINE static auto fixed_walk(std::string_view const encoded, std::size_t const at, cbor::directory const floor,
                                               std::array<std::size_t, index_arguments<Path>()> const &indexes)
-        -> std::expected<typename decltype(fixed_path_result<Root, S, Path, At, Verified>())::type, error>
+        -> std::expected<typename decltype(fixed_path_result<Root, Source, S, Path, At, Verified>())::type, error>
     {
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
-            return typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified>(encoded, at, floor);
+            return typename cbor::basic_schema<Root, Source>::template accessor<fixed_element<S>, Verified>(encoded, at, floor);
         } else {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::size_t m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
             using M = describe::member_t<S, m>;
             std::size_t const place = at + fixed_offset<S, m>();
             if constexpr (fixed_struct_valid<M>()) {
-                return fixed_walk<Root, M, Path, end, Verified>(encoded, place, floor, indexes);
+                return fixed_walk<Root, Source, M, Path, end, Verified>(encoded, place, floor, indexes);
             } else if constexpr (is_fixed_leaf<M>) {
                 return fixed_leaf_read<M, Verified>(std::span<char const>(encoded).subspan(place).template first<sizeof(fixed_leaf_t<M>)>());
             } else {
@@ -1894,11 +1960,11 @@ class reflection
         }
     }
 
-    template <class Root, class T, fixed_string Path, std::size_t At, bool Verified = true>
+    template <class Root, member_source Source, class T, fixed_string Path, std::size_t At, bool Verified = true>
     CBOR_ALWAYS_INLINE static auto
     path_walk(std::string_view const encoded, std::span<char const, fixed_size<T, Root>()> const field,
               cbor::directory const floor, std::array<std::size_t, index_arguments<Path>()> const &indexes)
-        -> std::expected<typename decltype(path_result<Root, T, Path, At, Verified>())::type, error>
+        -> std::expected<typename decltype(path_result<Root, Source, T, Path, At, Verified>())::type, error>
     {
         using U = std::remove_cv_t<T>;
         constexpr std::string_view path = Path.view();
@@ -1911,11 +1977,11 @@ class reflection
                 return std::string_view(field.template last<n>());
             } else if constexpr (is_inline_optional<U>) {
                 using E = typename U::value_type;
-                using X = typename decltype(path_result<Root, E, Path, At, Verified>())::type;
+                using X = typename decltype(path_result<Root, Source, E, Path, At, Verified>())::type;
                 if (field.template subspan<1, 1>().front() !=
                     heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::true_value)))
                     return std::optional<X>{};
-                auto const x = path_walk<Root, E, Path, At, Verified>(
+                auto const x = path_walk<Root, Source, E, Path, At, Verified>(
                     encoded, field.template subspan<inline_optional_head, fixed_size<E, Root>()>(), floor,
                     indexes);
                 if (!x) [[unlikely]]
@@ -1930,10 +1996,10 @@ class reflection
                 if constexpr (Verified)
                     if (r->length > 1) [[unlikely]]
                         return std::unexpected(error::syntax_error);
-                using X = typename decltype(path_result<Root, E, Path, At, Verified>())::type;
+                using X = typename decltype(path_result<Root, Source, E, Path, At, Verified>())::type;
                 if (r->length == 0)
                     return std::optional<X>{};
-                auto const x = path_walk<Root, E, Path, At, Verified>(
+                auto const x = path_walk<Root, Source, E, Path, At, Verified>(
                     encoded,
                     std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>(),
                     floor, indexes);
@@ -1952,27 +2018,27 @@ class reflection
                     fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, field, floor, *r);
+                return typename cbor::basic_schema<Root, Source>::template accessor<U, Verified>(encoded, field, floor, *r);
             } else if constexpr (is_typed_array<U>) {
                 using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
                 auto const r = reference_read<Root, major_type::array, E, Verified>(encoded, field, floor, sizeof(E));
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, field, floor, *r);
+                return typename cbor::basic_schema<Root, Source>::template accessor<U, Verified>(encoded, field, floor, *r);
             } else if constexpr (is_fixed_vector<U>) {
                 using S = std::remove_cv_t<std::ranges::range_value_t<U>>;
                 auto const r = reference_read<Root, major_type::array, S, Verified>(encoded, field, floor, fixed_width<S>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, field, floor, *r);
+                return typename cbor::basic_schema<Root, Source>::template accessor<U, Verified>(encoded, field, floor, *r);
             } else if constexpr (is_list<U>) {
                 auto const r = reference_read<Root, major_type::array, void, Verified>(
                     encoded, field, floor, fixed_size<std::ranges::range_value_t<U>, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, field, floor, *r);
+                return typename cbor::basic_schema<Root, Source>::template accessor<U, Verified>(encoded, field, floor, *r);
             } else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> && !std::same_as<U, uint128>) {
-                return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, field, floor);
+                return typename cbor::basic_schema<Root, Source>::template accessor<U, Verified>(encoded, field, floor);
             } else {
                 if constexpr (Verified)
                     if (!fixed_head_valid<U>(field)) [[unlikely]]
@@ -1986,7 +2052,7 @@ class reflection
             if constexpr (Verified)
                 if (!class_tag_valid<Root, U>(field)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
-            return path_walk<Root, M, Path, end, Verified>(
+            return path_walk<Root, Source, M, Path, end, Verified>(
                 encoded, field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(), floor,
                 indexes);
         } else {
@@ -2011,13 +2077,13 @@ class reflection
                     if (error const c = validity::check_index(i, n).error_or(error{}); c != error{})
                         [[unlikely]]
                         return std::unexpected(c);
-                    return path_walk<Root, E, Path, close + 1, Verified>(encoded,
+                    return path_walk<Root, Source, E, Path, close + 1, Verified>(encoded,
                                                                field.subspan(head + i * fixed_size<E, Root>())
                                                                    .template first<fixed_size<E, Root>()>(),
                                                                floor, indexes);
                 } else {
                     constexpr std::size_t i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
-                    return path_walk<Root, E, Path, close + 1, Verified>(
+                    return path_walk<Root, Source, E, Path, close + 1, Verified>(
                         encoded,
                         field.template subspan<head + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(),
                         floor, indexes);
@@ -2047,7 +2113,7 @@ class reflection
                     if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
                         [[unlikely]]
                         return std::unexpected(c);
-                    return fixed_walk<Root, S, Path, close + 1, Verified>(encoded, r->data + i * fixed_width<S>(), floor, indexes);
+                    return fixed_walk<Root, Source, S, Path, close + 1, Verified>(encoded, r->data + i * fixed_width<S>(), floor, indexes);
                 } else {
                     auto const r =
                         reference_read<Root, major_type::array, void, Verified>(encoded, field, floor, fixed_size<E, Root>());
@@ -2056,7 +2122,7 @@ class reflection
                     if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
                         [[unlikely]]
                         return std::unexpected(c);
-                    return path_walk<Root, E, Path, close + 1, Verified>(encoded,
+                    return path_walk<Root, Source, E, Path, close + 1, Verified>(encoded,
                                                                std::span<char const>(encoded)
                                                                    .subspan(r->data + i * fixed_size<E, Root>())
                                                                    .template first<fixed_size<E, Root>()>(),
@@ -2404,8 +2470,8 @@ class reflection
         return {};
     }
 
-    template <class>
-    friend class cbor::schema;
+    template <class, member_source>
+    friend class cbor::basic_schema;
 
     template <class T, description_place D>
     static std::expected<std::size_t, std::errc> encoded_size(second_item<T> const &second)
@@ -2429,7 +2495,7 @@ class reflection
         return size;
     }
 
-    template <bool Exact, description_place D, class T>
+    template <bool Exact, description_place D, member_source Source, class T>
     CBOR_ALWAYS_INLINE static std::size_t encoded_write(std::span<char> const encoded, T const &value, second_item<T> const &second)
     {
         static constexpr auto prefix = packing_prefix_of<T, D>();
@@ -2443,20 +2509,17 @@ class reflection
                           heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
         auto const root = encoded.subspan(size - fixed_size<T, T>()).template first<fixed_size<T, T>()>();
         zero_initialized_copy<T, T>(root);
-        value_encode<T, T, Exact, D>(encoded, root, value, encode_cursor{data + fillers, 0});
+        value_encode<T, Source, T, Exact, D>(encoded, root, value, encode_cursor{data + fillers, 0});
         return size;
     }
 
     template <class>
     friend class cbor::typed_array_view;
-#endif
 
     friend class generic;
 
     friend class pfr;
 };
-
-#ifdef __cpp_impl_reflection
 
 template <class E>
 class typed_array_view
@@ -2470,8 +2533,8 @@ class typed_array_view
     {
     }
 
-    template <class>
-    friend class schema;
+    template <class, member_source>
+    friend class basic_schema;
 
 public:
     typed_array_view(typed_array_view const &) = default;
@@ -2750,14 +2813,16 @@ consteval std::size_t reflection::fixed_size()
 #if defined(__STDCPP_BFLOAT16_T__)
             digits == std::numeric_limits<std::bfloat16_t>::digits ||
 #endif
-            digits == std::numeric_limits<std::float32_t>::digits)
-            return initial_byte_size + sizeof(std::float32_t);
-        else if constexpr (digits == std::numeric_limits<std::float64_t>::digits)
-            return initial_byte_size + sizeof(std::float64_t);
+            digits == std::numeric_limits<float>::digits)
+            return initial_byte_size + sizeof(float);
+        else if constexpr (digits == std::numeric_limits<double>::digits)
+            return initial_byte_size + sizeof(double);
+#if defined(__SIZEOF_INT128__) && defined(__STDCPP_FLOAT128_T__)
         else if constexpr (digits == heads::extended_precision_digits ||
                            digits == std::numeric_limits<std::float128_t>::digits)
             return heads::head_size(std::to_underlying(rfc8746::tag_number::float128_big_endian)) +
                    heads::head_size(sizeof(std::float128_t)) + sizeof(std::float128_t);
+#endif
         else
             return no_fixed_size<T>();
     } else if constexpr (requires { reflection::fixed_length<U>::value; }) {
@@ -2820,8 +2885,8 @@ consteval std::size_t reflection::member_offset()
     return Member < describe::members_count<U> ? offset : no_fixed_size<T>();
 }
 
-template <class T>
-class schema
+template <class T, member_source Source>
+class basic_schema
 {
     static_assert(reflection::descriptions_valid<T>());
 
@@ -2848,14 +2913,15 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static consteval std::size_t member_offset()
     {
+#ifdef __cpp_impl_reflection
         if constexpr (std::is_same_v<decltype(Member), std::meta::info>)
             return reflection::member_offset<U, reflection::member_index_of<std::remove_cv_t<U>, Member>(), T>();
         else
+#endif
             return reflection::member_offset<U, reflection::member_index_of<std::remove_cv_t<U>>(Member), T>();
     }
 
     template <class U = T, bool Verified = true>
-        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     class accessor
     {
         static constexpr bool listed = reflection::is_list<U> || reflection::is_map<U>;
@@ -2886,7 +2952,7 @@ public:
         {
         }
 
-        friend class schema;
+        friend class basic_schema;
 
         friend class reflection;
 
@@ -2905,10 +2971,10 @@ public:
                 std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
                 constexpr std::string_view path = Path.view();
                 if constexpr (path.starts_with('$') && std::same_as<U, T>) {
-                    return reflection::path_walk<T, T, Path, 1, Verified>(self.encoded, self.field, self.dir, i);
+                    return reflection::path_walk<T, Source, T, Path, 1, Verified>(self.encoded, self.field, self.dir, i);
                 } else if constexpr (path.starts_with('$')) {
                     constexpr std::size_t root = reflection::fixed_size<T, T>();
-                    return reflection::path_walk<T, T, Path, 1, Verified>(self.encoded,
+                    return reflection::path_walk<T, Source, T, Path, 1, Verified>(self.encoded,
                                                                 std::span<char const>(self.encoded)
                                                                     .subspan(self.encoded.size() - root)
                                                                     .template first<root>(),
@@ -2929,7 +2995,7 @@ public:
                 } else if constexpr (reflection::is_fixed_vector<U> && path.size() > 1) {
                     using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
                     constexpr std::size_t close = reflection::index_end(path, 1);
-                    using X = typename decltype(reflection::fixed_path_result<T, E, Path, close + 1, Verified>())::type;
+                    using X = typename decltype(reflection::fixed_path_result<T, Source, E, Path, close + 1, Verified>())::type;
                     std::size_t at;
                     if constexpr (close == 2)
                         at = std::get<0>(i);
@@ -2938,12 +3004,12 @@ public:
                     if (error const c = validity::check_index(at, self.items.length).error_or(error{});
                         c != error{}) [[unlikely]]
                         return std::expected<X, error>(std::unexpect, c);
-                    return reflection::fixed_walk<T, E, Path, close + 1, Verified>(
+                    return reflection::fixed_walk<T, Source, E, Path, close + 1, Verified>(
                         self.encoded, self.items.data + at * reflection::fixed_width<E>(), self.dir, i);
                 } else if constexpr (reflection::is_list<U> && path.size() > 1) {
                     using E = std::ranges::range_value_t<U>;
                     constexpr std::size_t close = reflection::index_end(path, 1);
-                    using X = typename decltype(reflection::path_result<T, E, Path, close + 1, Verified>())::type;
+                    using X = typename decltype(reflection::path_result<T, Source, E, Path, close + 1, Verified>())::type;
                     std::size_t at;
                     if constexpr (close == 2)
                         at = std::get<0>(i);
@@ -2952,14 +3018,14 @@ public:
                     if (error const c = validity::check_index(at, self.items.length).error_or(error{});
                         c != error{}) [[unlikely]]
                         return std::expected<X, error>(std::unexpect, c);
-                    return reflection::path_walk<T, E, Path, close + 1, Verified>(
+                    return reflection::path_walk<T, Source, E, Path, close + 1, Verified>(
                         self.encoded,
                         std::span<char const>(self.encoded)
                             .subspan(self.items.data + at * reflection::fixed_size<E, T>())
                             .template first<reflection::fixed_size<E, T>()>(),
                         self.dir, i);
                 } else {
-                    return reflection::path_walk<T, U, Path, 1, Verified>(self.encoded, self.field, self.dir, i);
+                    return reflection::path_walk<T, Source, U, Path, 1, Verified>(self.encoded, self.field, self.dir, i);
                 }
             
             }();
@@ -2977,7 +3043,7 @@ public:
                      sizeof...(Index) == reflection::index_arguments<Path>())
         auto view(this Self &&self, Index const... indexes)
         {
-            using X = typename decltype(reflection::path_result<T, T, Path, 1, Verified>())::type;
+            using X = typename decltype(reflection::path_result<T, Source, T, Path, 1, Verified>())::type;
             using E = typename decltype([]<class V>(std::type_identity<accessor<V, Verified>>) {
                 static_assert(reflection::is_typed_array<V>, "cbor::schema::accessor::view: the path does not end at a typed array");
                 return std::type_identity<std::remove_cv_t<std::ranges::range_value_t<V>>>{};
@@ -3113,7 +3179,6 @@ public:
     };
 
     template <class S, bool Verified>
-        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     class accessor<fixed_element<S>, Verified>
     {
         std::shared_ptr<void const> owner;
@@ -3125,7 +3190,7 @@ public:
         {
         }
 
-        friend class schema;
+        friend class basic_schema;
 
         friend class reflection;
 
@@ -3144,11 +3209,11 @@ public:
                 std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
                 if constexpr (Path.view().starts_with('$')) {
                     constexpr std::size_t root = reflection::fixed_size<T, T>();
-                    return reflection::path_walk<T, T, Path, 1, Verified>(
+                    return reflection::path_walk<T, Source, T, Path, 1, Verified>(
                         self.encoded, std::span<char const>(self.encoded).subspan(self.encoded.size() - root).template first<root>(),
                         self.dir, i);
                 } else {
-                    return reflection::fixed_walk<T, S, Path, 1, Verified>(self.encoded, self.at, self.dir, i);
+                    return reflection::fixed_walk<T, Source, S, Path, 1, Verified>(self.encoded, self.at, self.dir, i);
                 }
             }();
             if constexpr (requires { result->owner; })
@@ -3185,7 +3250,7 @@ public:
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
-                 value_holds_no_view<typename decltype(reflection::path_result<T, T, Path, 1>())::type>)
+                 value_holds_no_view<typename decltype(reflection::path_result<T, Source, T, Path, 1>())::type>)
     static auto at_path(std::string_view const encoded, Index const... indexes)
     {
         return at_path_with_directory<Path, true, D>(encoded, indexes...);
@@ -3251,7 +3316,7 @@ public:
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
-                 value_holds_no_view<typename decltype(reflection::path_result<T, T, Path, 1>())::type>)
+                 value_holds_no_view<typename decltype(reflection::path_result<T, Source, T, Path, 1>())::type>)
     static auto unverified_at_path(std::string_view const encoded, Index const... indexes)
     {
         return at_path_with_directory<Path, false, D>(encoded, indexes...);
@@ -3308,7 +3373,7 @@ public:
         std::size_t const padded = *sum;
         std::string out;
         out.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
-            return reflection::encoded_write<false, D>(std::span<char>(p, n), value, second);
+            return reflection::encoded_write<false, D, Source>(std::span<char>(p, n), value, second);
         });
         return out;
     }
@@ -3327,14 +3392,15 @@ public:
         if (!sum) [[unlikely]]
             return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
-        CBOR_ASSUME(padded >= fixed_size());
+        constexpr std::size_t least = fixed_size();
+        CBOR_ASSUME(padded >= least);
         if constexpr (std::same_as<U, std::string>) {
             std::size_t const at = target.size();
             auto const total = validity::checked_add(at, padded);
             if (!total) [[unlikely]]
                 return std::unexpected(validity::writer_error(total.error()));
             target.resize_and_overwrite(*total, [&](char *const p, std::size_t const n) {
-                return at + reflection::encoded_write<false, D>(std::span<char>(p, n).subspan(at), value, second);
+                return at + reflection::encoded_write<false, D, Source>(std::span<char>(p, n).subspan(at), value, second);
             });
             return *size;
         } else if constexpr (encoding::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
@@ -3344,13 +3410,13 @@ public:
                 return std::unexpected(validity::writer_error(total.error()));
             target.reserve(*total);
             target.insert(target.end(), padded, char{});
-            reflection::encoded_write<false, D>(std::span<char>(target).subspan(at), value, second);
+            reflection::encoded_write<false, D, Source>(std::span<char>(target).subspan(at), value, second);
             target.resize(at + *size);
             return *size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
             if (out.size() >= padded) {
-                reflection::encoded_write<false, D>(out.first(padded), value, second);
+                reflection::encoded_write<false, D, Source>(out.first(padded), value, second);
                 return *size;
             }
         }
@@ -3359,13 +3425,13 @@ public:
             std::span<char> const out(message);
             if (out.size() < *size) [[unlikely]]
                 return std::unexpected(error::no_buffer_space);
-            reflection::encoded_write<true, D>(out.first(*size), value, second);
+            reflection::encoded_write<true, D, Source>(out.first(*size), value, second);
             if (auto const r = message.done(*size); !r) [[unlikely]]
                 return std::unexpected(validity::writer_error(r.error()));
             return *size;
         } else {
             std::string encoded(padded, '\0');
-            encoded.resize(reflection::encoded_write<false, D>(std::span<char>(encoded), value, second));
+            encoded.resize(reflection::encoded_write<false, D, Source>(std::span<char>(encoded), value, second));
             if (auto const r = message.append(encoded); !r) [[unlikely]]
                 return std::unexpected(validity::writer_error(r.error()));
             if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
@@ -3378,13 +3444,13 @@ private:
     template <fixed_string Path, bool Verified, description_place D, std::convertible_to<std::size_t>... Index>
     static auto at_path_with_directory(std::string_view const encoded, Index const... indexes)
     {
-        using X = typename decltype(reflection::path_result<T, T, Path, 1, Verified>())::type;
+        using X = typename decltype(reflection::path_result<T, Source, T, Path, 1, Verified>())::type;
         auto const dir = reflection::directory_read<T, Verified, D>(encoded);
         if (!dir) [[unlikely]]
             return std::expected<X, error>(std::unexpect, dir.error());
         std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
         return std::expected<X, error>(
-            reflection::path_walk<T, T, Path, 1, Verified>(encoded,
+            reflection::path_walk<T, Source, T, Path, 1, Verified>(encoded,
                                                            std::span<char const>(encoded)
                                                                .subspan(encoded.size() - fixed_size())
                                                                .template first<fixed_size()>(),
@@ -3486,6 +3552,13 @@ private:
 #endif
     }
 };
+
+#ifdef __cpp_impl_reflection
+template <class T>
+using schema = basic_schema<T, member_source::reflection>;
 #endif
+
+template <class T>
+using packed = basic_schema<T, member_source::description>;
 
 }

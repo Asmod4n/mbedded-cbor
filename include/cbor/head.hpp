@@ -29,6 +29,11 @@
 namespace cbor
 {
 
+enum class member_source;
+
+template <class T, member_source Source>
+class basic_schema;
+
 #ifdef __SIZEOF_INT128__
 __extension__ typedef __int128 int128;
 __extension__ typedef unsigned __int128 uint128;
@@ -157,7 +162,6 @@ class heads
     }
 #endif
 
-#ifdef __cpp_impl_reflection
     static constexpr int extended_precision_digits = std::numeric_limits<std::uint64_t>::digits;
 
     CBOR_ALWAYS_INLINE static void u32_write(std::span<char> const out, std::size_t const at, std::size_t const value)
@@ -181,7 +185,6 @@ class heads
         auto const low = static_cast<uint128>(unsigned_read<std::uint64_t>(field.last<sizeof(std::uint64_t)>()));
         return high << std::numeric_limits<std::uint64_t>::digits | low;
     }
-#endif
 #endif
 
     static std::string_view magnitude_without_leading_zeros(std::string_view const magnitude)
@@ -797,10 +800,8 @@ class heads
     template <class>
     friend class structs;
 
-#ifdef __cpp_impl_reflection
-    template <class>
-    friend class schema;
-#endif
+    template <class, member_source>
+    friend class basic_schema;
 };
 
 }

@@ -30,6 +30,11 @@
 namespace cbor
 {
 
+enum class member_source;
+
+template <class T, member_source Source>
+class basic_schema;
+
 template <class Target>
 class encoder;
 
@@ -151,10 +156,8 @@ private:
     template <class>
     friend class structs;
 
-#ifdef __cpp_impl_reflection
-    template <class>
-    friend class schema;
-#endif
+    template <class, member_source>
+    friend class basic_schema;
 };
 
 template <class Writer>
