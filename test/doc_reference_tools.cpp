@@ -54,6 +54,37 @@ TEST_CASE("doc reference tools: sequence with a broken item")
     CHECK_THROWS_AS(cbor::sequence(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
+// sequence_reader.md: [1, 2] arrives in two pieces, and the second piece also holds 3. The item waits for its
+// last byte, and each piece is a std::string that the reader takes without a copy.
+TEST_CASE("doc reference tools: sequence_reader")
+{
+    std::string first = "\x82\x01"s;
+    std::string second = "\x02\x03"s;
+    cbor::sequence_reader r;
+    r.feed(std::move(first));
+    CHECK_EQ(r.next().error(), cbor::error::too_little_data);
+    r.feed(std::move(second));
+    CHECK_EQ(r.next()->size(), 2u);
+    CHECK_EQ(r.next()->get<std::int64_t>(), 3);
+    CHECK(r.empty());
+}
+
+// sequence_reader.md, section Errors: after bytes that are not well-formed every next() gives the error, and a
+// null piece throws.
+TEST_CASE("doc reference tools: sequence_reader errors")
+{
+    cbor::sequence_reader r;
+    r.feed("\x1c"s);
+    CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+    r.feed("\x01"s);
+    CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+    CHECK(r.empty());
+    CHECK_THROWS_AS(r.feed(std::shared_ptr<std::string const>{}), std::logic_error);
+    cbor::sequence_reader deep;
+    deep.feed(std::string(cbor::limits::nesting_depth + 1, '\x81') + "\x00"s);
+    CHECK_EQ(deep.next().error(), cbor::error::nesting_depth_exceeded);
+}
+
 // diagnostic_notation.md: the text of RFC 8949 section 8 for an item; a byte after the item is syntax_error.
 TEST_CASE("doc reference tools: diagnostic_notation")
 {

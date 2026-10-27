@@ -155,3 +155,35 @@ TEST_CASE("doc runtime: write CBOR")
     REQUIRE(e.finish().has_value());
     CHECK_EQ(cbor::diagnostic_notation(out), "{\"a\": 5_0}");
 }
+
+// The section "Read items from a socket": the bytes of [1, 2] and of "abc" arrive in three pieces, and each piece
+// ends in the middle of an item. Each piece is a std::string that the reader takes without a copy.
+TEST_CASE("doc runtime: read items from a socket")
+{
+    std::vector<std::string> handled;
+    auto const handle = [&handled](cbor::lazy const &item) {
+        handled.push_back(cbor::diagnostic_notation(item.top_level.encoded).value());
+    };
+    cbor::sequence_reader r;
+    for (std::string chunk : {"\x82\x01"s, "\x02\x63"
+                                           "a"s,
+                              "bc"s}) {
+        r.feed(std::move(chunk));
+        while (auto item = r.next())
+            handle(*item);
+        CHECK_EQ(r.next().error(), cbor::error::too_little_data);
+    }
+    CHECK_EQ(handled, std::vector<std::string>{"[1, 2]", "\"abc\""});
+    CHECK(r.empty());
+}
+
+// The section "Read items from a socket": after bytes that are not CBOR every call gives the same error.
+TEST_CASE("doc runtime: a reader after bytes that are not CBOR")
+{
+    cbor::sequence_reader r;
+    r.feed("\x01\x1c"s);
+    CHECK(r.next().has_value());
+    CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+    r.feed("\x02"s);
+    CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+}

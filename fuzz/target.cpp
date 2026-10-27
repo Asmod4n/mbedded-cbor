@@ -5,6 +5,7 @@
 #include "encoder.hpp"
 #include "lazy.hpp"
 #include "path.hpp"
+#include "sequence_reader.hpp"
 #include "schema.hpp"
 
 #include <cstddef>

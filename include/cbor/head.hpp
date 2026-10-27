@@ -758,6 +758,8 @@ class heads
 
     friend class validity;
 
+    friend class sequence_reader;
+
     friend class encoding;
 
     friend class well_formedness;

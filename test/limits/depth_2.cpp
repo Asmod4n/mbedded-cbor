@@ -1,5 +1,6 @@
 #include "../owned_copy.hpp"
 #include "../reference.hpp"
+#include "../sequence_reader.hpp"
 
 #include <cstddef>
 #include <string>
@@ -61,4 +62,22 @@ TEST_CASE("limits depth 2: a tag counts one level")
              error::nesting_depth_exceeded);
     CHECK_EQ(cbor::diagnostic_notation("\xd8\x64\xd8\x64\xd8\x64\x00"sv).error(),
              error::nesting_depth_exceeded);
+}
+
+// The reader keeps a stack of open containers bounded by the nesting depth of the build, so with the depth at 2
+// it reads [[1]] and refuses [[[1]]], at every split and in every form.
+TEST_CASE("limits depth 2: sequence_reader refuses an item one level deeper than the build allows")
+{
+    std::string const two = preferred(A(A(1)));
+    std::string const three = preferred(A(A(A(1))));
+    for (test::feed_form const form : test::feed_forms) {
+        CAPTURE(static_cast<int>(form));
+        CHECK_EQ(test::reader_outcome_byte_by_byte(two, form), test::sequence_outcome{{two}, error::too_little_data});
+        for (std::size_t at = 0; at <= three.size(); ++at) {
+            CAPTURE(at);
+            test::sequence_outcome const read = test::reader_outcome_split_at(three, at, form);
+            CHECK(read.items.empty());
+            CHECK_EQ(read.last, error::nesting_depth_exceeded);
+        }
+    }
 }
