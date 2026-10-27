@@ -10,6 +10,7 @@
 #   gcc-describe builds with g++ and no reflection, so the tests take the path of the descriptions and Boost.PFR.
 #   wasm compiles test/describe.cpp for wasm32-wasip1 in the image mbedded-cbor-wasm and does not run it: the
 #   libc++ of Debian for wasm32 has no std::basic_fstream, which the runner of doctest needs.
+#   The compile_fail tests run in gcc-release, clang-release, gcc15-release and gcc-describe only.
 #   full also runs test/interop/run.sh, which decodes the output of the library with other decoders.
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
@@ -36,15 +37,15 @@ pch_clang="-Xclang -fno-pch-timestamp -Wlifetime-safety -Wno-lifetime-safety-inv
 one() {
 	local n=$1 cxx type flags options= img=$image file=
 	case $n in
-	gcc-asan) cxx=g++-16 type=Debug flags=$asan ;;
+	gcc-asan) cxx=g++-16 type=Debug flags=$asan options=-DCBOR_COMPILE_FAIL=OFF ;;
 	gcc-release) cxx=g++-16 type=Release flags= ;;
 	gcc-describe) cxx=g++-16 type=Release flags= options=-DCBOR_HAS_FREFLECTION=OFF ;;
 	gcc15-release) cxx=g++-15 type=Release flags= img=mbedded-cbor-gcc15 file=tumbleweed-gcc15 ;;
-	gcc-describe-bundled) cxx=g++-16 type=Release flags= options="-DCBOR_HAS_FREFLECTION=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Boost=ON" ;;
-	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" ;;
+	gcc-describe-bundled) cxx=g++-16 type=Release flags= options="-DCBOR_HAS_FREFLECTION=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Boost=ON -DCBOR_COMPILE_FAIL=OFF" ;;
+	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" options=-DCBOR_COMPILE_FAIL=OFF ;;
 	clang-release) cxx=clang++-23 type=Release flags=$pch_clang ;;
-	clang-libcxx) cxx=clang++-23 type=Release flags="-stdlib=libc++ $pch_clang" ;;
-	tsan) cxx=clang++-23 type=Debug flags="$tsan $pch_clang" ;;
+	clang-libcxx) cxx=clang++-23 type=Release flags="-stdlib=libc++ $pch_clang" options=-DCBOR_COMPILE_FAIL=OFF ;;
+	tsan) cxx=clang++-23 type=Debug flags="$tsan $pch_clang" options=-DCBOR_COMPILE_FAIL=OFF ;;
 	wasm)
 		mkdir -p "$root/$branch/$n"
 		podman run --rm --network none -v "$src":/src:ro -v "$root/$branch/$n":/b mbedded-cbor-wasm bash -c '
