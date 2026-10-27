@@ -1,5 +1,6 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
+#include "sequence_reader.hpp"
 
 #include <cstddef>
 #include <string>
@@ -175,3 +176,17 @@ TEST_CASE("nesting depth depth_limit: structs")
 }
 
 #endif
+
+// The stack of the reader has one count per level up to the hard bound of the nesting depth, so an item at the
+// bound is read and one level more is refused, without a write past the end of the stack.
+TEST_CASE("nesting depth limit: sequence_reader reads an item at the bound and refuses one level more")
+{
+    std::string const at_bound = std::string(depth_limit, '\x81') + "\x00"s;
+    std::string const deeper = std::string(depth_limit + 1, '\x81') + "\x00"s;
+    for (test::feed_form const form : test::feed_forms) {
+        CAPTURE(static_cast<int>(form));
+        CHECK_EQ(test::reader_outcome_split_at(at_bound, depth_limit / 2, form).items.size(), 1u);
+        CHECK_EQ(test::reader_outcome_split_at(deeper, depth_limit / 2, form).last,
+                 error::nesting_depth_exceeded);
+    }
+}

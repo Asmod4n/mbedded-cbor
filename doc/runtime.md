@@ -158,6 +158,43 @@ e.unsigned_integer(std::uint8_t{5});
 e.finish();   // out holds {"a": 5}
 ```
 
+## 7. Read items from a socket
+
+A socket or a pipe gives bytes in pieces. A piece can end in the
+middle of an item. `cbor::sequence_reader` reads a CBOR sequence
+(RFC 8742): items one after the other, with nothing between them.
+
+```cpp
+cbor::sequence_reader r;
+r.feed(std::move(chunk));         // a std::string that arrived
+while (auto item = r.next())      // each item that is complete
+    handle(*item);                // a cbor::lazy
+// r.next().error() == cbor::error::too_little_data: wait for more bytes
+```
+
+`feed` takes a `std::string` that you move in without a copy, and a
+`std::shared_ptr<std::string const>` without a copy. It copies a
+`std::string_view` and a `std::string` that you do not move. `next`
+gives one item when all of its bytes are there. It gives
+`too_little_data` while it waits. The reader continues where it
+stopped.
+
+Each item is a `cbor::lazy` that keeps its bytes alive. You can keep
+it after later calls of `feed` and after the reader is gone. The
+reader copies only an item that a piece cuts.
+
+Bytes that are not CBOR give their error, for example
+`syntax_error`. After such an error every call gives the same error,
+and `feed` keeps no byte, because RFC 8742 gives no way to find the
+start of the next item.
+
+At the end of the stream, `r.empty()` tells you whether the reader
+still holds bytes of an item that is not complete.
+
+The reader refuses an item nested deeper than `cbor::limits` allows.
+The other limits apply when you read the item. Bound the bytes that
+you give to the reader.
+
 More: `operator[]`, a map with a key twice, `clone` and `decode`, the encoder, CBOR sequences,
 `item_size`, shared values and tag 55799 are in
 [advanced/runtime.md](advanced/runtime.md).
