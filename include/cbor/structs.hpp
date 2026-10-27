@@ -137,42 +137,21 @@ class pfr
     {
 #ifdef __cpp_impl_reflection
         return reflection::uses_allocator_aggregate<E, Alloc>();
-#elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
-        if constexpr (std::uses_allocator_v<E, Alloc> || !std::is_class_v<E> || !std::is_aggregate_v<E> ||
-                      has_describe_members<E> || std::ranges::range<E>) {
-            return false;
-        } else {
-            return []<std::size_t... I>(std::index_sequence<I...>) {
-                return ((!std::is_array_v<boost::pfr::tuple_element_t<I, E>> &&
-                         !std::is_reference_v<boost::pfr::tuple_element_t<I, E>>) &&
-                        ...) &&
-                       (false || ... ||
-                        (std::uses_allocator_v<boost::pfr::tuple_element_t<I, E>, Alloc> ||
-                         uses_allocator_aggregate<boost::pfr::tuple_element_t<I, E>, Alloc>()));
-            }(std::make_index_sequence<boost::pfr::tuple_size_v<E>>());
-        }
 #else
-        return false;
+        if constexpr (has_describe_members<E>)
+            return false;
+        else
+            return reflection::uses_allocator_aggregate<E, Alloc>();
 #endif
     }
 
     template <class E, class Alloc>
     static constexpr E element_make(Alloc const &alloc, E &&from)
     {
-#ifdef __cpp_impl_reflection
-        return reflection::element_make<E>(alloc, std::move(from));
-#else
-        if constexpr (uses_allocator_aggregate<E, Alloc>()) {
-#if defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
-            return [&]<std::size_t... I>(std::index_sequence<I...>) {
-                return E{element_make<boost::pfr::tuple_element_t<I, E>>(
-                    alloc, std::move(boost::pfr::get<I>(from)))...};
-            }(std::make_index_sequence<boost::pfr::tuple_size_v<E>>());
-#endif
-        } else {
+        if constexpr (uses_allocator_aggregate<E, Alloc>())
+            return reflection::element_make<E>(alloc, std::move(from));
+        else
             return std::make_obj_using_allocator<E>(alloc, std::move(from));
-        }
-#endif
     }
 
     template <class E>

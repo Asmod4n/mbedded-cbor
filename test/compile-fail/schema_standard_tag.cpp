@@ -5,6 +5,10 @@
 // inner struct. CBOR_TEST_TAG is one tag of a set, or a neighbour of it, which compiles.
 #include <cbor/cbor.hpp>
 
+#ifndef CBOR_TEST_FORM
+#define CBOR_TEST_FORM schema
+#endif
+
 #include <cstdint>
 
 #if CBOR_TEST_CASE == 1
@@ -48,5 +52,5 @@ struct cbor::describe_members<root> {
 int main()
 {
     root const value{};
-    return cbor::schema<root>::encode(value).has_value() ? 0 : 1;
+    return cbor::CBOR_TEST_FORM<root>::encode(value).has_value() ? 0 : 1;
 }

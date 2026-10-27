@@ -6,6 +6,10 @@
 // cbor::key on a member of a described class, 10 a right description, which compiles.
 #include <cbor/cbor.hpp>
 
+#ifndef CBOR_TEST_FORM
+#define CBOR_TEST_FORM schema
+#endif
+
 #include <cstdint>
 
 struct inner {
@@ -107,5 +111,5 @@ struct cbor::describe_members<root> {
 int main()
 {
     root const value{};
-    return cbor::schema<root>::encode(value).has_value() ? 0 : 1;
+    return cbor::CBOR_TEST_FORM<root>::encode(value).has_value() ? 0 : 1;
 }
