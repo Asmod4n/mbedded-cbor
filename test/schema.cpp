@@ -3010,7 +3010,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "path: an accessor gives the values of decode in e
     parking_lot const &back = *decoded;
     auto lot = *form<parking_lot>::path(std::string(bytes));
     std::vector<std::size_t> order(back.cars.size());
-    std::ranges::iota(order, 0uz);
+    std::iota(order.begin(), order.end(), 0uz);
     for (std::size_t const i : order)
         lot_car_matches(lot, back, i);
     for (std::size_t const i : order | std::views::reverse)
