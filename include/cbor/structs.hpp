@@ -89,7 +89,7 @@ class pfr
     static consteval std::size_t members_count()
     {
         if constexpr (has_describe_members<U>)
-            return std::tuple_size_v<std::remove_const_t<decltype(describe_members<U>::members)>>;
+            return describe::members_count<U>;
 #ifdef __cpp_impl_reflection
         else
             return reflection::data_members<U>().size();
@@ -107,7 +107,7 @@ class pfr
     {
         using V = std::remove_const_t<U>;
         if constexpr (has_describe_members<V>) {
-            return value.*std::get<I>(describe_members<V>::members).pointer;
+            return describe::get<I>(value);
         } else {
 #ifdef __cpp_impl_reflection
             static constexpr auto members = reflection::data_members<V>();
@@ -122,7 +122,7 @@ class pfr
     static consteval map_key key_of()
     {
         if constexpr (has_describe_members<U>)
-            return std::get<I>(describe_members<U>::members).key;
+            return describe::key_of<U, I>;
 #ifdef __cpp_impl_reflection
         else
             return map_key(reflection::key_of<U>(reflection::data_members<U>()[I]));

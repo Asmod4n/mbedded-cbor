@@ -56,6 +56,29 @@ struct describe_members;
 template <class T>
 concept has_describe_members = requires { describe_members<T>::members; };
 
+class describe
+{
+    template <class U>
+    static constexpr std::size_t members_count =
+        std::tuple_size_v<std::remove_cvref_t<decltype(describe_members<U>::members)>>;
+
+    template <std::size_t I, class U>
+    static constexpr auto &get(U &value)
+    {
+        return value.*std::get<I>(describe_members<std::remove_const_t<U>>::members).pointer;
+    }
+
+    template <class U, std::size_t I>
+    using member_t = std::remove_cvref_t<decltype(get<I>(std::declval<U &>()))>;
+
+    template <class U, std::size_t I>
+    static constexpr map_key key_of = std::get<I>(describe_members<U>::members).key;
+
+    friend class pfr;
+
+    friend class reflection;
+};
+
 }
 
 #define CBOR_MEMBER(T, m) cbor::member{cbor::map_key(std::string_view{#m}), &T::m}
