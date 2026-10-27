@@ -14,14 +14,14 @@
 #   full also runs test/interop/run.sh, which decodes the output of the library with other decoders.
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
-# The builds run one after the other, and each runs at most CMAKE_BUILD_PARALLEL_LEVEL jobs: one processor of four stays free.
+# The builds run one after the other, and each runs as many jobs as there are processors.
 set -u
 src=$(cd "$(dirname "$0")/.." && pwd)
 root=${CBOR_BUILD_ROOT:-/home/user/mbedded-cbor-build}
 cache=${CCACHE_HOST_DIR:-/home/user/.ccache}
 image=${CBOR_IMAGE:-mbedded-cbor-tw}
 branch=$(git -C "$src" rev-parse --abbrev-ref HEAD | tr / -)
-parallel_level=3
+parallel_level=$(nproc)
 
 interop=0
 [ "${1:-fast}" = full ] && interop=1
