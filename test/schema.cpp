@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "schema_golden.hpp"
 
 #ifdef __cpp_impl_reflection
 
@@ -3966,6 +3967,141 @@ TEST_CASE("description apart: the unverified forms stay inside the input")
     for (std::size_t n = 0; n < data.size(); ++n)
         reads(data.substr(0, n));
     reads(schema_bytes(sample_everything));
+}
+
+
+namespace
+{
+
+template <class T>
+void golden_fill(T &value, unsigned &seed)
+{
+    seed += 1;
+    if constexpr (cbor::has_describe_members<T>) {
+        std::apply([&](auto const &...m) { (golden_fill(value.*m.pointer, seed), ...); }, cbor::describe_members<T>::members);
+    } else if constexpr (std::same_as<T, bool>) {
+        value = seed % 2 == 1;
+    } else if constexpr (std::is_enum_v<T>) {
+        value = static_cast<T>(seed % 2);
+    } else if constexpr (std::same_as<T, cbor::int128>) {
+        value = -static_cast<cbor::int128>(seed) * 1000003;
+    } else if constexpr (std::is_arithmetic_v<T>) {
+        value = static_cast<T>(seed * 37u);
+    } else if constexpr (std::same_as<T, std::float16_t>) {
+        value = static_cast<std::float16_t>(seed) + std::float16_t{0.5f};
+    } else if constexpr (std::same_as<T, std::byte>) {
+        value = static_cast<std::byte>(seed);
+    } else if constexpr (std::same_as<T, std::string_view>) {
+        value = std::string_view("golden text").substr(seed % 7);
+    } else if constexpr (std::same_as<T, std::string> || std::same_as<T, std::pmr::string>) {
+        value.assign(seed % 5 + 1, static_cast<char>('a' + seed % 26));
+    } else if constexpr (std::is_array_v<T> || requires { std::tuple_size<T>::value; }) {
+        for (auto &e : value)
+            golden_fill(e, seed);
+    } else if constexpr (requires { value.has_value(); }) {
+        golden_fill(value.emplace(), seed);
+    } else if constexpr (requires { typename T::mapped_type; }) {
+        for (unsigned i = 0; i < 2; ++i) {
+            typename T::key_type k{};
+            typename T::mapped_type v{};
+            golden_fill(k, seed);
+            golden_fill(v, seed);
+            value.try_emplace(std::move(k), std::move(v));
+        }
+    } else {
+        for (unsigned i = 0; i < 2; ++i)
+            golden_fill(value.emplace_back(), seed);
+    }
+}
+
+std::string golden_hex(std::string_view const bytes)
+{
+    std::string out;
+    for (char const c : bytes) {
+        constexpr std::string_view digits = "0123456789abcdef";
+        auto const byte = static_cast<std::size_t>(static_cast<unsigned char>(c));
+        out += digits[byte >> 4];
+        out += digits[byte & 0xf];
+    }
+    return out;
+}
+
+template <class T>
+std::string golden_line(std::string_view const name)
+{
+    T value{};
+    unsigned seed = 0;
+    golden_fill(value, seed);
+    auto const inside = cbor::schema<T>::encode(value);
+    auto const data = cbor::schema<T>::template encode<cbor::description_place::apart>(value);
+    if (!inside || !data)
+        return std::string(name) + " no encoding\n";
+    auto const description = cbor::schema<T>::description();
+    return std::string(name) + " " + golden_hex(*inside) + " " + golden_hex(*data) + " " +
+           golden_hex(std::string_view(description.data(), description.size())) + "\n";
+}
+
+std::string golden_report()
+{
+    std::string report;
+    report += golden_line<wheel>("wheel");
+    report += golden_line<engine>("engine");
+    report += golden_line<car>("car");
+    report += golden_line<empty>("empty");
+    report += golden_line<thirty>("thirty");
+    report += golden_line<long_name>("long_name");
+    report += golden_line<größe>("größe");
+    report += golden_line<login>("login");
+    report += golden_line<measures>("measures");
+    report += golden_line<named>("named");
+    report += golden_line<people>("people");
+    report += golden_line<pmr_named>("pmr_named");
+    report += golden_line<pmr_people>("pmr_people");
+    report += golden_line<unsorted>("unsorted");
+    report += golden_line<unsorted_other_order>("unsorted_other_order");
+    report += golden_line<renamed>("renamed");
+    report += golden_line<listed_other_order>("listed_other_order");
+    report += golden_line<sorted_inner>("sorted_inner");
+    report += golden_line<sorted_outer>("sorted_outer");
+    report += golden_line<tire>("tire");
+    report += golden_line<vehicle>("vehicle");
+    report += golden_line<badge>("badge");
+    report += golden_line<numbers>("numbers");
+    report += golden_line<doubles>("doubles");
+    report += golden_line<garage>("garage");
+    report += golden_line<keyed>("keyed");
+    report += golden_line<passkey_user>("passkey_user");
+    report += golden_line<passkey_login>("passkey_login");
+    report += golden_line<chain19>("chain19");
+    report += golden_line<chain10>("chain10");
+    report += golden_line<chain0>("chain0");
+    report += golden_line<point_a>("point_a");
+    report += golden_line<point_b>("point_b");
+    report += golden_line<ticket>("ticket");
+    report += golden_line<probe>("probe");
+    report += golden_line<lot_wheel>("lot_wheel");
+    report += golden_line<lot_engine>("lot_engine");
+    report += golden_line<lot_car>("lot_car");
+    report += golden_line<parking_lot>("parking_lot");
+    report += golden_line<point>("point");
+    report += golden_line<cloud>("cloud");
+    report += golden_line<gauge>("gauge");
+    report += golden_line<gauges>("gauges");
+    report += golden_line<filler_type<3>>("filler_type<3>");
+    report += golden_line<fifteen_entries>("fifteen_entries");
+    report += golden_line<eighteen_entries>("eighteen_entries");
+    report += golden_line<everything>("everything");
+    return report;
+}
+
+} // namespace
+
+// The bytes of every described type of this file, with values that differ in each leaf, as the commit before
+// cbor::packed wrote them (dc787da): the message with the description inside, the data form apart, and the
+// description. A change of the walk that changes one byte fails here.
+TEST_CASE("golden bytes: every type of this file encodes as before")
+{
+    CHECK_EQ(golden_report(), golden_expected);
 }
 
 #endif
