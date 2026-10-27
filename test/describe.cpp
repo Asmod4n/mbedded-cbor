@@ -720,3 +720,96 @@ TEST_CASE("describe: cbor::untagged writes and reads a map with no tag")
                  .error(),
              cbor::error::incorrect_type);
 }
+
+namespace define_type_test
+{
+
+struct point {
+    std::uint8_t x;
+    std::uint8_t y;
+};
+
+template <class A, class B>
+struct two {
+    A a;
+    B b;
+};
+
+using two_ints = two<int, int>;
+
+class sample
+{
+public:
+    sample(std::uint8_t const v, std::string n) : value(v), name(std::move(n))
+    {
+    }
+
+    std::uint8_t value;
+    std::string name;
+};
+
+struct renamed {
+    std::uint8_t user_id;
+};
+
+} // namespace define_type_test
+
+namespace
+{
+
+struct hidden {
+    std::uint8_t h;
+};
+
+} // namespace
+
+CBOR_DEFINE_TYPE(define_type_test::point, cbor::tag{160100}, CBOR_MEMBER(define_type_test::point, x),
+                 CBOR_MEMBER(define_type_test::point, y));
+CBOR_DEFINE_TYPE(define_type_test::two_ints, cbor::tag{160101}, CBOR_MEMBER(define_type_test::two_ints, a),
+                 CBOR_MEMBER(define_type_test::two_ints, b));
+CBOR_DEFINE_TYPE(define_type_test::sample, cbor::tag{160102}, CBOR_MEMBER(define_type_test::sample, value),
+                 CBOR_MEMBER(define_type_test::sample, name));
+CBOR_DEFINE_TYPE(define_type_test::renamed, cbor::untagged,
+                 cbor::member{cbor::map_key("user-id"), &define_type_test::renamed::user_id});
+CBOR_DEFINE_TYPE(hidden, cbor::tag{160103}, CBOR_MEMBER(hidden, h));
+
+// CBOR_DEFINE_TYPE writes the specialization of cbor::describe_members that a user writes by hand: the tag and a
+// std::tuple of the members, so cbor::structs and cbor::packed read it alike. The tag 160100 is 0x00027164 (RFC
+// 8949 3.4); "x" (61 78) comes before "y" (61 79) by RFC 8949 4.2.1.
+TEST_CASE("CBOR_DEFINE_TYPE: the macro writes the description that structs and packed read")
+{
+    CHECK(std::is_same_v<std::remove_cvref_t<decltype(cbor::describe_members<define_type_test::point>::tag)>,
+                         std::optional<cbor::tag>>);
+    CHECK_EQ(cbor::describe_members<define_type_test::point>::tag->number, 160100u);
+    describe_test::round_trip("\xda\x00\x02\x71\x64\xa2\x61x\x01\x61y\x02"s, define_type_test::point{1, 2});
+    auto const bytes = cbor::packed<define_type_test::point>::encode(define_type_test::point{1, 2});
+    REQUIRE(bytes.has_value());
+    auto const back = cbor::packed<define_type_test::point>::decode(std::string(*bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ((**back).y, 2u);
+}
+
+// A type whose name holds a comma passes through an alias, because the preprocessor splits macro arguments at
+// each comma outside parentheses. The explicit specialization needs no alias.
+TEST_CASE("CBOR_DEFINE_TYPE: a template instance through an alias")
+{
+    describe_test::round_trip("\xda\x00\x02\x71\x65\xa2\x61"
+                              "a\x01\x61"
+                              "b\x02"s,
+                              define_type_test::two_ints{1, 2});
+}
+
+// A rename is an explicit cbor::member, a class with a constructor takes the described members in their order, a
+// type in an anonymous namespace is described at global scope as any other.
+TEST_CASE("CBOR_DEFINE_TYPE: a rename, a class with a constructor and a type in an anonymous namespace")
+{
+    describe_test::round_trip("\xa1\x67user-id\x05"s, define_type_test::renamed{5});
+    auto const bytes = cbor::packed<define_type_test::sample>::encode(define_type_test::sample{3, "abc"});
+    REQUIRE(bytes.has_value());
+    auto const back = cbor::packed<define_type_test::sample>::decode(std::string(*bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ((**back).value, 3u);
+    CHECK_EQ((**back).name, "abc");
+    describe_test::round_trip("\xda\x00\x02\x71\x67\xa1\x61h\x07"s, hidden{7});
+}
+

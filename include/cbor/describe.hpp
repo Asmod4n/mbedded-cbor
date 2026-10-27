@@ -82,3 +82,10 @@ class describe
 }
 
 #define CBOR_MEMBER(T, m) cbor::member{cbor::map_key(std::string_view{#m}), &T::m}
+
+#define CBOR_DEFINE_TYPE(T, TAG, ...)                                                                                  \
+    template <>                                                                                                        \
+    struct cbor::describe_members<T> {                                                                                 \
+        static constexpr std::optional<cbor::tag> tag = TAG;                                                           \
+        static constexpr std::tuple members{__VA_ARGS__};                                                              \
+    }
