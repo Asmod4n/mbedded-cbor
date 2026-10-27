@@ -4,17 +4,35 @@ This page adds the details to [../schema.md](../schema.md). The examples
 use these structs:
 
 ```cpp
-struct [[=cbor::tag(1700)]] tire {
+struct tire {
     std::uint16_t diameter;
     float pressure;
 };
 
-struct [[=cbor::tag(1701)]] car {
+struct car {
     std::string make;
     std::uint8_t seats;
     std::vector<tire> tires;
     std::vector<double> track;
     std::optional<std::string> note;
+};
+
+template <>
+struct cbor::describe_members<tire> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
+    static constexpr std::tuple members{CBOR_MEMBER(tire, diameter), CBOR_MEMBER(tire, pressure)};
+};
+
+template <>
+struct cbor::describe_members<car> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1701};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(car, make),
+        CBOR_MEMBER(car, seats),
+        CBOR_MEMBER(car, tires),
+        CBOR_MEMBER(car, track),
+        CBOR_MEMBER(car, note),
+    };
 };
 
 car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nullopt};
@@ -42,21 +60,38 @@ message.
 
 ## 2. Structs and tags
 
-The tag numbers of the root and of every struct inside it differ.
+The root and every struct inside it have a description,
+`cbor::describe_members<T>`, with a tag. The tag numbers differ.
 `cbor::tags_registered<T>()` is true when this holds. A struct with no
-tag, or two structs with one tag, leave no `schema<T>` to call: the
-program does not compile.
+description, or two structs with one tag, do not compile in
+`schema<T>`.
 
-Annotations choose the keys and the members. They work with
-`cbor::schema` only; `cbor::structs` refuses them.
+The description gives the key of each member:
 
-| Annotation | On | Effect |
-|---|---|---|
-| `[[=cbor::key("x")]]` | a member | `x` is the key in place of the name |
-| `[[=cbor::skip{}]]` | a member | the member is not written |
-| `[[=cbor::allowlist{}]]` | a struct | only the members with `[[=cbor::allow{}]]` are written |
+| Entry | Key |
+|---|---|
+| `CBOR_MEMBER(T, m)` | the name `m` |
+| `cbor::member{"x", &T::m}` | the text `x` |
 
-Only public members are written.
+```cpp
+struct chosen {
+    std::uint8_t number;
+    std::uint8_t kept;
+};
+
+template <>
+struct cbor::describe_members<chosen> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1710};
+    static constexpr std::tuple members{cbor::member{"id", &chosen::number}, CBOR_MEMBER(chosen, kept)};
+};
+
+auto const message = cbor::schema<chosen>::encode(chosen{7, 8});
+cbor::schema<chosen>::at_path<"$.id">(*message);   // 7
+```
+
+The description lists every public member. A member that it leaves
+out, a key that is not a text, two members with one key, a base class
+and `cbor::untagged` do not compile.
 
 ## 3. Encode and decode
 

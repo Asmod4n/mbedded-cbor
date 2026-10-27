@@ -119,10 +119,9 @@ come in the order of RFC 8949 4.2.1: sorted by their encoded bytes.
 An aggregate with no description is read by the names of its members:
 through reflection on a build with `-freflection`, through Boost.PFR on
 other builds. It takes no annotation, so it gives the same bytes on
-every build: `[[=cbor::key("x")]]`, `[[=cbor::skip{}]]`,
-`[[=cbor::allow{}]]`, `[[=cbor::allowlist{}]]` and `[[=cbor::tag(n)]]`
-on a type that `structs` reads do not compile. They work with
-[cbor::schema](schema.md) only. An aggregate with a base class needs a
+every build: `[[=cbor::key("x")]]` and `[[=cbor::tag(n)]]` on a type
+that `structs` reads do not compile. An aggregate with a base class
+needs a description. [cbor::schema](schema.md) reads the same
 description.
 
 A specialization of `cbor::describe_members<T>` describes a struct or a
@@ -204,7 +203,8 @@ A described struct carries the tag of its description (section 4).
 `cbor::tagged_item<N, E>` (RFC 8949 3.4, "tagged data item") writes tag
 N on the item of E, for content that is not a struct, for example the
 array of COSE_Sign1 (RFC 9052 4.2). Over a struct it does not compile.
-A struct that carries `[[=cbor::tag(n)]]` does not compile in `structs`.
+A struct that carries the annotation `[[=cbor::tag(n)]]` does not
+compile in `structs`.
 
 ```cpp
 struct person { std::string name; std::int64_t age; };

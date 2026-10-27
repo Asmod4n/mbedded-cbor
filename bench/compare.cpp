@@ -77,15 +77,74 @@ static std::uint8_t const *fb_bytes()
 #include <nlohmann/json.hpp>
 #include "carsales_generated.h"
 #include "carsales.capnp.h"
-struct [[=cbor::tag(1501)]] Wheel { std::uint16_t diameter; float airPressure; bool snowTires; };
-struct [[=cbor::tag(1502)]] Engine { std::uint16_t horsepower; std::uint8_t cylinders; std::uint32_t cc; bool usesGas; bool usesElectric; };
-struct [[=cbor::tag(1500)]] Car {
+struct Wheel { std::uint16_t diameter; float airPressure; bool snowTires; };
+
+template <>
+struct cbor::describe_members<Wheel> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1501};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(Wheel, diameter),
+        CBOR_MEMBER(Wheel, airPressure),
+        CBOR_MEMBER(Wheel, snowTires),
+    };
+};
+
+struct Engine { std::uint16_t horsepower; std::uint8_t cylinders; std::uint32_t cc; bool usesGas; bool usesElectric; };
+
+template <>
+struct cbor::describe_members<Engine> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1502};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(Engine, horsepower),
+        CBOR_MEMBER(Engine, cylinders),
+        CBOR_MEMBER(Engine, cc),
+        CBOR_MEMBER(Engine, usesGas),
+        CBOR_MEMBER(Engine, usesElectric),
+    };
+};
+
+struct Car {
     std::string_view make; std::string_view model; std::uint8_t color; std::uint8_t seats; std::uint8_t doors;
     std::vector<Wheel> wheels; std::uint16_t length; std::uint16_t width; std::uint16_t height; std::uint32_t weight;
     Engine engine; float fuelCapacity; float fuelLevel; bool hasPowerWindows; bool hasPowerSteering;
     bool hasCruiseControl; std::uint8_t cupHolders; bool hasNavSystem;
 };
-struct [[=cbor::tag(1503)]] ParkingLot { std::vector<Car> cars; };
+
+template <>
+struct cbor::describe_members<Car> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1500};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(Car, make),
+        CBOR_MEMBER(Car, model),
+        CBOR_MEMBER(Car, color),
+        CBOR_MEMBER(Car, seats),
+        CBOR_MEMBER(Car, doors),
+        CBOR_MEMBER(Car, wheels),
+        CBOR_MEMBER(Car, length),
+        CBOR_MEMBER(Car, width),
+        CBOR_MEMBER(Car, height),
+        CBOR_MEMBER(Car, weight),
+        CBOR_MEMBER(Car, engine),
+        CBOR_MEMBER(Car, fuelCapacity),
+        CBOR_MEMBER(Car, fuelLevel),
+        CBOR_MEMBER(Car, hasPowerWindows),
+        CBOR_MEMBER(Car, hasPowerSteering),
+        CBOR_MEMBER(Car, hasCruiseControl),
+        CBOR_MEMBER(Car, cupHolders),
+        CBOR_MEMBER(Car, hasNavSystem),
+    };
+};
+
+struct ParkingLot { std::vector<Car> cars; };
+
+template <>
+struct cbor::describe_members<ParkingLot> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1503};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(ParkingLot, cars),
+    };
+};
+
 using T = ParkingLot;
 using S = cbor::schema<T>;
 static std::string json_text;
@@ -319,7 +378,16 @@ static double cp_field()
 #if defined(DS_FLOATS)
 #include "floats_generated.h"
 #include "floats.capnp.h"
-struct [[=cbor::tag(1510)]] Floats { std::vector<double> values; };
+struct Floats { std::vector<double> values; };
+
+template <>
+struct cbor::describe_members<Floats> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1510};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(Floats, values),
+    };
+};
+
 using T = Floats;
 using S = cbor::schema<T>;
 
@@ -549,9 +617,42 @@ static double cp_field()
 #if defined(DS_RECORDS)
 #include "records_generated.h"
 #include "records.capnp.h"
-struct [[=cbor::tag(1521)]] User { std::string_view name; std::uint64_t followers; };
-struct [[=cbor::tag(1520)]] Record { std::int64_t id; std::string_view text; User user; double ratio; std::vector<std::string_view> tags; std::int64_t neg; };
-struct [[=cbor::tag(1522)]] Records { std::vector<Record> records; };
+struct User { std::string_view name; std::uint64_t followers; };
+
+template <>
+struct cbor::describe_members<User> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1521};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(User, name),
+        CBOR_MEMBER(User, followers),
+    };
+};
+
+struct Record { std::int64_t id; std::string_view text; User user; double ratio; std::vector<std::string_view> tags; std::int64_t neg; };
+
+template <>
+struct cbor::describe_members<Record> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1520};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(Record, id),
+        CBOR_MEMBER(Record, text),
+        CBOR_MEMBER(Record, user),
+        CBOR_MEMBER(Record, ratio),
+        CBOR_MEMBER(Record, tags),
+        CBOR_MEMBER(Record, neg),
+    };
+};
+
+struct Records { std::vector<Record> records; };
+
+template <>
+struct cbor::describe_members<Records> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1522};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(Records, records),
+    };
+};
+
 using T = Records;
 using S = cbor::schema<T>;
 
