@@ -407,7 +407,7 @@ template <class T>
 void read_target(std::string_view const message)
 {
     read_all<T>(message);
-    auto const value = cbor::schema<T>::decode(message);
+    auto const value = cbor::schema<T>::decode(std::string(message));
     if (value) {
         auto const again = cbor::schema<T>::encode(**value);
         require(again.has_value());
@@ -451,7 +451,7 @@ void fill(T &v, source &in, int const depth)
         for (auto &e : v)
             fill(e, in, depth + 1);
     } else if constexpr (requires { typename T::key_type; typename T::mapped_type; }) {
-        for (std::size_t n = depth > 3 ? 0 : in.byte() % 4; n > 0; --n) {
+        for (std::size_t n = depth > 3 ? 0uz : in.byte() % 4uz; n > 0; --n) {
             typename T::key_type k{};
             fill(k, in, depth + 1);
             fill(v.try_emplace(k).first->second, in, depth + 1);
@@ -463,7 +463,7 @@ void fill(T &v, source &in, int const depth)
             v = e;
         }
     } else if constexpr (requires { v.push_back(typename T::value_type{}); }) {
-        for (std::size_t n = depth > 3 ? 0 : in.byte() % 5; n > 0; --n) {
+        for (std::size_t n = depth > 3 ? 0uz : in.byte() % 5uz; n > 0; --n) {
             typename T::value_type e{};
             fill(e, in, depth + 1);
             v.push_back(std::move(e));
@@ -480,7 +480,7 @@ template <class T>
 void compare_all(T const &native, std::string_view const message)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
-    auto lot = cbor::schema<T>::path(message);
+    auto lot = cbor::schema<T>::path(std::string(message));
     require(lot.has_value());
     template for (constexpr std::meta::info text : texts)
         compare(native_at<T, text, 1>(native), lot->template at_path<path_text<text>>());
@@ -512,7 +512,7 @@ void round_trip(source &in)
         require(std::string_view(room.data(), *placed) == w.encoded);
     else
         require(placed.error() == cbor::error::no_buffer_space);
-    auto const back = cbor::schema<T>::decode(w.encoded);
+    auto const back = cbor::schema<T>::decode(std::string(w.encoded));
     require(back.has_value());
     auto const again = cbor::schema<T>::encode(**back);
     require(again.has_value() && *again == w.encoded);
