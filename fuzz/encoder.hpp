@@ -45,7 +45,7 @@ inline void encoder_target(std::string_view const input)
             case 2: {
                 std::string b = in.string();
                 if (in.byte() % 8 == 0)
-                    b.append(16384 + in.byte() * 64, 'x');
+                    b.append(16384uz + in.byte() * 64uz, 'x');
                 require(out.byte_string_encode(b).has_value());
                 items.push_back({{test::bytes{b}}, std::nullopt});
                 break;
@@ -53,7 +53,7 @@ inline void encoder_target(std::string_view const input)
             case 3: {
                 std::string t = in.text();
                 if (in.byte() % 8 == 0)
-                    t.append(16384 + in.byte() * 64, 'y');
+                    t.append(16384uz + in.byte() * 64uz, 'y');
                 require(out.text_string_encode(t).has_value());
                 items.push_back({{t}, std::nullopt});
                 break;
