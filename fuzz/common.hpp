@@ -183,7 +183,7 @@ inline bool tag_has_meaning(std::uint64_t const tag)
 // because the model promises the encoder valid UTF-8.
 inline test::value value_from(source &in, refusal &r, int const depth)
 {
-    std::uint8_t const k = in.byte() % (depth > 6 ? 7 : 10);
+    auto const k = static_cast<std::uint8_t>(in.byte() % (depth > 6 ? 7 : 10));
     switch (k) {
     case 0:
         return {in.number()};
