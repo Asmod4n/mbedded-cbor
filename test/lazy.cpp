@@ -1766,3 +1766,28 @@ TEST_CASE("lazy: a typed array tag with content that is no byte string is refuse
     CHECK(refused(l->size()));
     CHECK(refused(l->clone()));
 }
+
+// The fault: a read through operator-> of a temporary expected<lazy> gave a reference into bytes that the temporary
+// freed. Each read here starts at a temporary and is used after the statement ends, so the address sanitizer sees a
+// read of freed bytes.
+TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
+{
+    auto const message = [] { return "\x82\x63" "abc\x81\x63" "xyz"s; };
+    auto const first = cbor::lazy::take_ownership(message())->at(0)->get<std::string_view>();
+    REQUIRE(first.has_value());
+    CHECK_EQ(**first, "abc"sv);
+    auto const inner = cbor::lazy::take_ownership(message())->at(1);
+    REQUIRE(inner.has_value());
+    auto const second = inner->at(0)->get<std::string_view>();
+    REQUIRE(second.has_value());
+    CHECK_EQ(**second, "xyz"sv);
+    auto const elements = cbor::lazy::take_ownership(message())->elements();
+    REQUIRE(elements.has_value());
+    std::vector<cbor::type> types;
+    for (auto const &e : *elements)
+        types.push_back(*e->type());
+    CHECK_EQ(types, std::vector{cbor::type::text_string, cbor::type::array});
+    auto const copy = cbor::lazy::take_ownership(message())->clone();
+    REQUIRE(copy.has_value());
+    CHECK_EQ((*copy)->get<cbor::type::array>()->size(), 2u);
+}
