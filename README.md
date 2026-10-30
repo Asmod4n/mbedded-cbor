@@ -14,17 +14,8 @@ struct track {
     std::vector<point> points;
 };
 
-template <>
-struct cbor::describe_members<point> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
-    static constexpr std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
-};
-
-template <>
-struct cbor::describe_members<track> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
-    static constexpr std::tuple members{CBOR_MEMBER(track, points)};
-};
+CBOR_DEFINE_TYPE(point, cbor::tag{1703}, CBOR_MEMBER(point, x), CBOR_MEMBER(point, y));
+CBOR_DEFINE_TYPE(track, cbor::tag{1704}, CBOR_MEMBER(track, points));
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
 auto const lane = cbor::schema<track>::path(std::move(*message));
@@ -186,17 +177,8 @@ struct track {
     std::vector<point> points;
 };
 
-template <>
-struct cbor::describe_members<point> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
-    static constexpr std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
-};
-
-template <>
-struct cbor::describe_members<track> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
-    static constexpr std::tuple members{CBOR_MEMBER(track, points)};
-};
+CBOR_DEFINE_TYPE(point, cbor::tag{1703}, CBOR_MEMBER(point, x), CBOR_MEMBER(point, y));
+CBOR_DEFINE_TYPE(track, cbor::tag{1704}, CBOR_MEMBER(track, points));
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
 auto const lane = cbor::schema<track>::path(std::move(*message));
