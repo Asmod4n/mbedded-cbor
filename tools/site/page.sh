@@ -26,6 +26,9 @@ podman run --rm --network none -e SOURCE_URL="https://github.com/Asmod4n/mbedded
   page() { pandoc -s -f gfm -t html5 --template /src/tools/site/template.html "$@"; }
   page -V root=../../ -M pagetitle="cbor::lazy::at_path" /tmp/at_path.md -o /out/reference/lazy/at_path.html
   page -V root= -M pagetitle=mbedded-cbor /src/tools/site/index.md -o /out/index.html
+  cp /src/tools/site/lazy.html /out/lazy.html
+  clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -fno-exceptions -Wall -Wextra -Werror \
+    -I/src/include -I/src/third_party/boost_pfr/include -Wl,--strip-all,--gc-sections -o /out/examples.wasm /src/tools/site/examples.cpp
   lynx -dump -nolist /out/reference/lazy/at_path.html > /tmp/at_path.txt
   for heading in Parameters "Return value" Errors Cost Examples Implementation "See also"; do
     grep -q "^$heading\$\|^   $heading\$" /tmp/at_path.txt || { echo "page: no section $heading in lynx"; exit 1; }
