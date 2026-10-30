@@ -23,7 +23,6 @@ using namespace std::string_literals;
 // example compiles and gives the result that the page states. The input of each example is built with
 // preferred() from the text in the comment of the page.
 
-#ifdef __cpp_impl_reflection
 
 namespace reference_structs
 {
@@ -211,7 +210,6 @@ TEST_CASE("doc reference structs: member types")
     CHECK_FALSE((*back)->unit.has_value());
 }
 
-#endif
 
 namespace reference_structs
 {

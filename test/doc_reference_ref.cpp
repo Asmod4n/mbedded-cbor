@@ -15,7 +15,6 @@ using namespace std::string_literals;
 // Each test in this file is one example of a page in doc/reference/ref/. The tests exist so that every example
 // compiles and gives the result that the page states.
 
-#ifdef __cpp_impl_reflection
 
 namespace reference_ref
 {
@@ -102,4 +101,3 @@ TEST_CASE("doc reference ref: clone")
     CHECK_EQ(second->name.data(), seen.data());
 }
 
-#endif

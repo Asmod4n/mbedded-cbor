@@ -802,7 +802,6 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
     CHECK_EQ(cbor::diagnostic_notation("\x83\xd8\x1c\x05\xd8\x1d\x00\xd8\x1d\x07"sv), "[28(5), 29(0), 29(7)]");
 }
 
-#ifdef __cpp_impl_reflection
 // The eager table of one struct decode, for each form of the head of tag 29 and of its index: a forward index
 // is sharedref_index_not_marked, and a tag 29 into a plain member is incorrect_type. A vector of
 // std::optional is a plain array; a vector of numbers is a typed array, which holds no tag.
@@ -822,4 +821,3 @@ TEST_CASE("value sharing: an eager decode reads every form of a tag 29")
         CHECK((**marked == marked_numbers{5}));
     }
 }
-#endif

@@ -147,7 +147,6 @@ TEST_CASE("decode: the hard bound of the nesting depth fits the stack")
     CHECK(second->clone().has_value());
 }
 
-#ifdef __cpp_impl_reflection
 
 namespace
 {
@@ -175,7 +174,6 @@ TEST_CASE("nesting depth depth_limit: structs")
     CHECK_EQ(cbor::structs<nest>::decode(nests_around(depth_limit / 2)).error(), error::nesting_depth_exceeded);
 }
 
-#endif
 
 // The stack of the reader has one count per level up to the hard bound of the nesting depth, so an item at the
 // bound is read and one level more is refused, without a write past the end of the stack.
