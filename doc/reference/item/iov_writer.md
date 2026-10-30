@@ -4,6 +4,26 @@
 class iov_writer;
 ```
 
+```call-seq
+cbor::iov_writer w; → iov_writer
+```
+
+```example
+bytes: 78 28 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78
+call: auto const text = std::make_shared<std::string const>("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+result: shared_ptr to "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+call: cbor::iov_writer w;
+result: iov_writer
+call: cbor::encoder e(w);
+result: encoder over a cbor::iov_writer
+call: e.text_string(text)
+result: void
+call: auto const pieces = e.finish()
+result: ref to span of 2 pieces: 78 28, 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78 78
+call: (*pieces)->size()
+result: 2
+```
+
 A target of [encoder](encoder.md) that collects pieces, not one buffer.
 The encoder writes heads and short strings into blocks of 16 KiB. A text
 or a byte string of 32 bytes or more that the program hands over with

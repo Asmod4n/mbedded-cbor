@@ -5,6 +5,28 @@ template <cbor::type K>
 std::expected<item_alternative_t<K>, error> get() const;
 ```
 
+```call-seq
+node.get<cbor::type::unsigned_integer>() → std::expected<std::uint64_t, error>
+node.get<cbor::type::text_string>()      → std::expected<std::string_view, error>
+node.get<cbor::type::map>()              → std::expected<std::span<item const>, error>
+node.get<cbor::type::tag>()              → std::expected<std::pair<std::uint64_t, item const *>, error>
+node.get<cbor::type::null>()             → std::expected<simple_value, error>
+```
+
+```example
+message: {"a": -3}
+call: auto const tree = cbor::decode(bytes)
+result: owning item of {"a": -3}
+call: auto const map = *(*tree)->get<cbor::type::map>()
+result: span of 2 items: "a", -3
+call: map[0].get<cbor::type::text_string>()
+result: "a"
+call: map[1].get<cbor::type::negative_integer>()
+result: 2
+call: map[1].get<cbor::type::unsigned_integer>().error()
+result: cbor::error::incorrect_type
+```
+
 Gives the value of the node when `type` is `K`.
 
 | K | Result |

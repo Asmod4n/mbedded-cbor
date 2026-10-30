@@ -13,6 +13,24 @@ template <cbor::type K>
 using item_alternative_t = typename item_alternative<K>::type;
 ```
 
+```call-seq
+(*tree)->type                     → cbor::type const
+(*tree)->additional_information   → std::uint8_t const
+(*tree)->get<cbor::type::array>() → std::expected<std::span<item const>, error>
+```
+
+```example
+message: [1, {"a": 2}]
+call: auto const tree = cbor::decode(bytes)
+result: owning item of [1, {"a": 2}]
+call: (*tree)->type
+result: cbor::type::array
+call: (*tree)->additional_information
+result: 2
+call: (*tree)->get<cbor::type::array>()->size()
+result: 2
+```
+
 One node of a tree from [decode](decode.md) or
 [lazy::clone](../lazy/clone.md). `type` gives the kind of the node.
 `additional_information` gives the low 5 bits of the initial byte
