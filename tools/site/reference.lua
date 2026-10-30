@@ -118,6 +118,26 @@ local function implementation_html(file)
     .. "</details>"
 end
 
+local function types_html(path, namespace)
+  local text = read_file(tree .. "/" .. path)
+  if text == nil then error("reference.lua: cannot read " .. path) end
+  local open = "namespace " .. namespace .. "\n{\n"
+  local close = "} // namespace " .. namespace .. "\n"
+  local first = text:find(open, 1, true)
+  local _, last = text:find(close, first or 1, true)
+  if first == nil or last == nil then error("reference.lua: " .. path .. " has no namespace " .. namespace) end
+  local parts = { text:sub(first, last) }
+  for chunk in (text:sub(last + 1) .. "\n\n"):gmatch("(.-)\n\n+") do
+    if chunk:find(namespace .. "::", 1, true) and not chunk:find("^namespace ") then
+      parts[#parts + 1] = chunk:gsub("^\n+", "") .. "\n"
+    end
+  end
+  return '<section class="method" id="types"><h2>Types of the examples</h2>\n'
+    .. '<p>The WebAssembly module of this page holds these types, from <a href="https://github.com/Asmod4n/mbedded-cbor/blob/'
+    .. commit .. "/" .. path .. '">' .. path .. "</a>.</p>\n"
+    .. '<pre class="types"><code>' .. html_escaped(table.concat(parts, "\n")) .. "</code></pre>\n</section>"
+end
+
 local examples = {}
 
 local function page_blocks(file, title, does)
@@ -208,6 +228,16 @@ function Pandoc(doc)
   for _, b in ipairs(doc.blocks) do
     if b.t == "Header" and b.level == 1 then
       doc.meta.pagetitle = pandoc.utils.stringify(b)
+    elseif b.t == "Para" and #b.content >= 1 and pandoc.utils.stringify(b):match("^The examples use the types in") then
+      local link, namespace
+      for _, i in ipairs(b.content) do
+        if i.t == "Link" then link = i.target end
+        if i.t == "Code" then namespace = i.text end
+      end
+      local path = link:gsub("^[./]*", "")
+      table.insert(blocks, 1, pandoc.RawBlock("html", types_html(path, namespace)))
+      table.insert(methods, 1, pandoc.MetaMap({ name = pandoc.MetaString("types"),
+        id = pandoc.MetaString("types"), does = pandoc.MetaString("the types of the examples") }))
     elseif b.t == "Para" and doc.meta.lead == nil then
       doc.meta.lead = pandoc.MetaInlines(b:walk(links).content)
     elseif b.t == "Table" then
