@@ -41,7 +41,7 @@ struct cbor::describe_members<point> {
     static constexpr std::optional<cbor::tag> tag = cbor::tag{1802};
     static constexpr std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
 };
-auto const bytes = cbor::packed<point>::encode(point{1, 2});
+auto const bytes = cbor::schema<point>::encode(point{1, 2});
 // the root record starts with d9 07 0a, the head of tag 1802
 ```
 

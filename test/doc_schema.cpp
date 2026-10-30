@@ -48,7 +48,7 @@ namespace doc_packed
 
 template <cbor::fixed_string Path, class... Index>
 concept reads = requires(std::string_view const s, Index const... i) {
-    cbor::packed<sensor>::template at_path<Path>(s, i...);
+    cbor::schema<sensor>::template at_path<Path>(s, i...);
 };
 
 template <class A>
@@ -58,11 +58,11 @@ concept reads_name = requires(A &&a) { std::forward<A>(a).template at_path<"$.na
 // because a new user meets the std::expected of encode first.
 std::expected<std::pair<std::uint16_t, double>, cbor::error> first_message()
 {
-    auto const bytes = cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
+    auto const bytes = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     if (!bytes)
         return std::unexpected(bytes.error());
-    auto const id = cbor::packed<sensor>::at_path<"$.id">(*bytes);
-    auto const second = cbor::packed<sensor>::at_path<"$.readings[1]">(*bytes);
+    auto const id = cbor::schema<sensor>::at_path<"$.id">(*bytes);
+    auto const second = cbor::schema<sensor>::at_path<"$.readings[1]">(*bytes);
     return std::pair{*id, *second};
 }
 
@@ -81,10 +81,10 @@ TEST_CASE("doc schema: tags and keys")
 // The section "Read one value" shows an index from an argument, and the paths that do not compile.
 TEST_CASE("doc schema: read one value")
 {
-    std::string const bytes = *cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
+    std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::size_t const i = 1;
-    CHECK_EQ(cbor::packed<sensor>::at_path<"$.readings[]">(bytes, i), 2.5);
-    CHECK_EQ(cbor::packed<sensor>::at_path<"$.readings[]">(bytes, 2uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::schema<sensor>::at_path<"$.readings[]">(bytes, i), 2.5);
+    CHECK_EQ(cbor::schema<sensor>::at_path<"$.readings[]">(bytes, 2uz).error(), error::index_out_of_bounds);
     CHECK(reads<"$.id">);
     CHECK_FALSE(reads<"$.place">);
     CHECK_FALSE(reads<"$.name">);
@@ -94,11 +94,11 @@ TEST_CASE("doc schema: read one value")
 // The section "Read a text, a list or a struct" opens the message with path and reads a text and a list of numbers.
 TEST_CASE("doc schema: read a text, a list or a struct")
 {
-    std::string const bytes = *cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
+    std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::vector<double> used;
     auto const use = [&used](double const r) { used.push_back(r); };
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const root = cbor::packed<sensor>::path(owner);
+    auto const root = cbor::schema<sensor>::path(owner);
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.name">(), "t1"sv);
     auto const readings = root->view<"$.readings">();
@@ -109,7 +109,7 @@ TEST_CASE("doc schema: read a text, a list or a struct")
     CHECK_EQ(readings->size(), 2u);
     CHECK_EQ(readings->at(1), 2.5);
     CHECK_EQ(readings->at(2).error(), error::index_out_of_bounds);
-    using accessor = cbor::packed<sensor>::accessor<>;
+    using accessor = cbor::schema<sensor>::accessor<>;
     CHECK(reads_name<accessor const &>);
     CHECK_FALSE(reads_name<accessor>);
 }
@@ -117,11 +117,11 @@ TEST_CASE("doc schema: read a text, a list or a struct")
 // The section "Read the whole struct" decodes the message into a sensor.
 TEST_CASE("doc schema: read the whole struct")
 {
-    std::string const bytes = *cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
+    std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::size_t used = 0;
     auto const use = [&used](std::size_t const n) { used = n; };
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const back = cbor::packed<sensor>::decode(owner);
+    auto const back = cbor::schema<sensor>::decode(owner);
     if (back)
         use((*back)->readings.size());
     CHECK_EQ(used, 2u);
@@ -131,8 +131,8 @@ TEST_CASE("doc schema: read the whole struct")
 // The section "Read from a peer that you trust" opens a message with unverified_path, which reads as path does.
 TEST_CASE("doc schema: read from a peer that you trust")
 {
-    auto const owner = std::make_shared<std::string const>(*cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}}));
-    auto const fast = cbor::packed<sensor>::unverified_path(owner);
+    auto const owner = std::make_shared<std::string const>(*cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}}));
+    auto const fast = cbor::schema<sensor>::unverified_path(owner);
     REQUIRE(fast.has_value());
     CHECK_EQ(fast->at_path<"$.id">(), 7);
     CHECK_EQ(fast->at_path<"$.readings[1]">(), 2.5);
@@ -158,16 +158,16 @@ namespace doc_packed
 // The section "Errors" gives one input for each row, and states that a field with a wrong head gives an error.
 TEST_CASE("doc schema: errors")
 {
-    std::string const bytes = *cbor::packed<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
-    CHECK_EQ(cbor::packed<sensor>::decode(bytes.substr(0, 3)).error(), error::too_little_data);
-    CHECK_EQ(cbor::packed<other>::decode(std::string(bytes)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::packed<sensor>::at_path<"$.readings[]">(bytes, 9uz).error(), error::index_out_of_bounds);
+    std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
+    CHECK_EQ(cbor::schema<sensor>::decode(bytes.substr(0, 3)).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<other>::decode(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<sensor>::at_path<"$.readings[]">(bytes, 9uz).error(), error::index_out_of_bounds);
     std::size_t const head = bytes.find("\x19\x00\x07"sv);
     REQUIRE_NE(head, std::string::npos);
     std::string forged = bytes;
     forged[head] = '\x59';
-    CHECK_FALSE(cbor::packed<sensor>::at_path<"$.id">(forged).has_value());
-    CHECK_FALSE(cbor::packed<sensor>::decode(std::string(forged)).has_value());
+    CHECK_FALSE(cbor::schema<sensor>::at_path<"$.id">(forged).has_value());
+    CHECK_FALSE(cbor::schema<sensor>::decode(std::string(forged)).has_value());
 }
 
 } // namespace doc_packed
@@ -206,9 +206,9 @@ struct cbor::describe_members<doc_packed::track> {
 TEST_CASE("doc schema: a list of fixed-size structs is a range of elements")
 {
     using namespace doc_packed;
-    auto message = cbor::packed<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
+    auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
     REQUIRE(message.has_value());
-    auto const lane = cbor::packed<track>::path(std::move(*message));
+    auto const lane = cbor::schema<track>::path(std::move(*message));
     REQUIRE(lane.has_value());
     auto const points = lane->at_path<"$.points">();
     REQUIRE(points.has_value());
@@ -235,7 +235,7 @@ CBOR_DEFINE_TYPE(doc_packed::gauge, cbor::tag{1710}, CBOR_MEMBER(doc_packed::gau
 // The section "Tags and keys" writes a description with CBOR_DEFINE_TYPE, which packed reads as the explicit form.
 TEST_CASE("doc packed: a description through CBOR_DEFINE_TYPE")
 {
-    auto const bytes = cbor::packed<doc_packed::gauge>::encode(doc_packed::gauge{3});
+    auto const bytes = cbor::schema<doc_packed::gauge>::encode(doc_packed::gauge{3});
     REQUIRE(bytes.has_value());
-    CHECK_EQ(cbor::packed<doc_packed::gauge>::at_path<"$.level">(*bytes), 3);
+    CHECK_EQ(cbor::schema<doc_packed::gauge>::at_path<"$.level">(*bytes), 3);
 }

@@ -52,10 +52,8 @@
 namespace cbor
 {
 
-enum class member_source;
-
-template <class T, member_source Source>
-class basic_schema;
+template <class T>
+class schema;
 
 struct lazy;
 struct item;
@@ -522,8 +520,8 @@ public:
     template <class>
     friend class structs;
 
-    template <class, member_source>
-    friend class basic_schema;
+    template <class>
+    friend class schema;
 };
 
 static_assert(validity::check_nesting_depth(limits::nesting_depth, validity::nesting_depth_limit).has_value(),

@@ -28,8 +28,8 @@ Compile time. No cost at run time.
 
 ```cpp
 // tire: std::uint16_t diameter; float pressure;
-cbor::packed<tire>::member_offset<&tire::diameter>();   // 10
-cbor::packed<tire>::member_offset<&tire::pressure>();   // 13
+cbor::schema<tire>::member_offset<&tire::diameter>();   // 10
+cbor::schema<tire>::member_offset<&tire::pressure>();   // 13
 // bytes[bytes.size() - fixed_size() + 13] is 0xfa, the head of a float
 ```
 

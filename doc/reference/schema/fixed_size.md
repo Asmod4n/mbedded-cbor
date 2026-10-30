@@ -27,9 +27,9 @@ Compile time. No cost at run time.
 ## Example
 
 ```cpp
-cbor::packed<tire>::fixed_size();                  // 18
-cbor::packed<tire>::fixed_size<std::uint16_t>();   // 3
-cbor::packed<car>::fixed_size<std::string>();      // 6
+cbor::schema<tire>::fixed_size();                  // 18
+cbor::schema<tire>::fixed_size<std::uint16_t>();   // 3
+cbor::schema<car>::fixed_size<std::string>();      // 6
 ```
 
 ## See also

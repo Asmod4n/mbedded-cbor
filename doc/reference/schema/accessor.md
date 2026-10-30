@@ -52,7 +52,7 @@ O(1). No allocation.
 
 ```cpp
 // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})
-auto const root = cbor::packed<car>::path(std::move(bytes));
+auto const root = cbor::schema<car>::path(std::move(bytes));
 auto const tires = root->at_path<"$.tires">();
 tires->size();                       // 2
 tires->at_path<"@[1].diameter">();   // 18

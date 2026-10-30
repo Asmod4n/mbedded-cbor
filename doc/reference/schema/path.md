@@ -38,7 +38,7 @@ O(1) in the size of the message. The rvalue form makes one
 
 ```cpp
 // bytes: a std::string from schema<car>::encode(car{"Volvo", 5, ...})
-auto const root = cbor::packed<car>::path(std::move(bytes));
+auto const root = cbor::schema<car>::path(std::move(bytes));
 if (root)
     use(root->at_path<"$.make">());   // "Volvo"
 ```
