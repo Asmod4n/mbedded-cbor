@@ -71,13 +71,21 @@ struct kind<std::span<std::byte const>> {
     }
 };
 
-template <class T>
-struct kind<cbor::ref<T>> {
-    static constexpr std::string_view name = kind<T>::name == "std::string_view" ? "cbor::ref<std::string_view>"
-                                                                                : "cbor::ref<std::span<std::byte const>>";
-    static std::string text(cbor::ref<T> const &v)
+template <>
+struct kind<cbor::ref<std::string_view>> {
+    static constexpr std::string_view name = "cbor::ref<std::string_view>";
+    static std::string text(cbor::ref<std::string_view> const &v)
     {
-        return "ref to " + kind<T>::text(*v);
+        return "ref to " + kind<std::string_view>::text(*v);
+    }
+};
+
+template <>
+struct kind<cbor::ref<std::span<std::byte const>>> {
+    static constexpr std::string_view name = "cbor::ref<std::span<std::byte const>>";
+    static std::string text(cbor::ref<std::span<std::byte const>> const &v)
+    {
+        return "ref to " + kind<std::span<std::byte const>>::text(*v);
     }
 };
 
