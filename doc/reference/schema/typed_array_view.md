@@ -47,14 +47,14 @@ call: std::accumulate(track->begin(), track->end(), 0.0)
 result: 6
 call: (*track)[1]
 result: 2
-call: track->at(3)
-result: unexpected cbor::error::index_out_of_bounds
+call: track->at(2)
+result: 3
 call: track->last(2)->front()
 result: 2
-call: track->first(4).error()
-result: cbor::error::index_out_of_bounds
-call: (*track)[3]
-result: fault: the index is outside the view; in C++ operator[] throws std::logic_error
+call: track->first(2)->size()
+result: 2
+call: (*track)[2]
+result: 3
 ```
 
 A random access, sized range over an RFC 8746 typed array in the
