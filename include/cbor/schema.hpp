@@ -1785,7 +1785,7 @@ class reflection
     }
 
     template <class T, description_place D>
-    static error error_of_cut_message_corrected(std::string_view const encoded, error const e)
+    static error too_little_data_if_truncated(std::string_view const encoded, error const e)
     {
         if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded) || encoded.size() < fixed_size<T, T>())
             return e;
@@ -3514,7 +3514,7 @@ private:
                                                            *dir, i);
         if constexpr (Verified)
             if (!read) [[unlikely]]
-                return std::expected<X, error>(std::unexpect, reflection::error_of_cut_message_corrected<T, D>(encoded, read.error()));
+                return std::expected<X, error>(std::unexpect, reflection::too_little_data_if_truncated<T, D>(encoded, read.error()));
         return read;
     }
 
@@ -3537,7 +3537,7 @@ private:
         auto const root = std::span<char const>(encoded).subspan(encoded.size() - fixed_size()).template first<fixed_size()>();
         if constexpr (Verified)
             if (!reflection::class_tag_valid<T, T>(root)) [[unlikely]]
-                return std::unexpected(reflection::error_of_cut_message_corrected<T, D>(encoded, error::incorrect_type));
+                return std::unexpected(reflection::too_little_data_if_truncated<T, D>(encoded, error::incorrect_type));
         return accessor<T, Verified>(std::move(owner), encoded, root, *dir);
     }
 
@@ -3575,7 +3575,7 @@ private:
 #endif
                 std::optional<T> made;
                 if (auto const r = reflection::root_read<T, Verified, D>(made, encoded, limits::nesting_depth); !r) [[unlikely]]
-                    return std::unexpected(Verified ? reflection::error_of_cut_message_corrected<T, D>(encoded, r.error()) : r.error());
+                    return std::unexpected(Verified ? reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
                 return ref<T>(std::move(owner), std::move(*made));
 #if defined(__cpp_exceptions)
             } catch (std::bad_alloc const &) {
@@ -3604,7 +3604,7 @@ private:
 #endif
             if (auto const r = reflection::root_read<T, Verified, D>(target, encoded, limits::nesting_depth); !r)
                 [[unlikely]]
-                return std::unexpected(Verified ? reflection::error_of_cut_message_corrected<T, D>(encoded, r.error()) : r.error());
+                return std::unexpected(Verified ? reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
             return ref<T>(std::move(owner), std::move(target));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
