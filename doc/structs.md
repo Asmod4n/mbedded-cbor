@@ -8,7 +8,8 @@ the Boost headers; the library ships a copy for a system that has none,
 see the README). A class with a constructor or a base class takes a description
 (section 3).
 [basics.md](basics.md) states how errors come back and how long a result
-stays valid.
+stays valid. The reference with examples that run in the browser:
+<https://asmod4n.github.io/mbedded-cbor/structs.html>.
 
 ## 1. Write a struct and read it back
 
@@ -73,13 +74,15 @@ does not compile.
 
 ## 3. Keys
 
-The key of a member is its name. A description changes it. A
-description is a specialization of `cbor::describe_members` after the
-struct, outside every namespace. It gives the tag of the struct and one
-`cbor::member` for each member. The entry
-`cbor::member{key, &type::member}` gives the key. A key is a text or an
-integer. `CBOR_MEMBER(type, member)` takes the name as the key.
-[cbor::schema](schema.md) reads the same description. An annotation
+The key of a member is its name. A description changes it.
+`CBOR_DEFINE_TYPE(type, tag, members...)` writes the description at
+global scope, after the struct: the tag of the struct and one entry for
+each public member. The tag is a `cbor::tag{n}`, or `cbor::untagged`
+for a map with no tag. The entry `cbor::member{key, &type::member}`
+gives the key. A key is a text or an integer.
+`CBOR_MEMBER(type, member)` takes the name as the key. The macro writes
+a specialization of `cbor::describe_members`, which
+[cbor::schema](schema.md) reads too. An annotation
 `[[=cbor::key("x")]]` or `[[=cbor::tag(n)]]` on a type that `structs`
 reads does not compile.
 
@@ -87,18 +90,14 @@ reads does not compile.
 struct header {
     std::string content_type;
 };
-template <>
-struct cbor::describe_members<header> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060};
-    static constexpr std::tuple members{
-        cbor::member{"content-type", &header::content_type},
-    };
-};
+
+CBOR_DEFINE_TYPE(header, cbor::tag{160060}, cbor::member{"content-type", &header::content_type});
+
 // header{"text/plain"} is 160060({"content-type": "text/plain"})
 ```
 
-A described struct carries its tag. `decode` gives `incorrect_type`
-when the tag is missing or is another tag.
+A struct whose description has a tag carries that tag. `decode` gives
+`incorrect_type` when the tag is missing or is another tag.
 
 `encode` leaves out a `std::optional` member that is empty. `decode`
 gives an empty `std::optional` when its key is not in the map.
@@ -121,6 +120,7 @@ older program.
 | an array of another count for a `std::array` or a `std::tuple` | `incorrect_type` |
 | a plain array for a `std::vector` of a number type | `incorrect_type` |
 | the input ends inside the value | `too_little_data` |
+| bytes after the value | not read: `decode` gives the first value |
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
