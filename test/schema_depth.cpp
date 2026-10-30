@@ -96,18 +96,18 @@ std::size_t depth_of(node const &root)
 // level, as each nested item counts one in the other decoders.
 TEST_CASE("decode: a struct that holds itself stops at the nesting depth of the build")
 {
-    REQUIRE_EQ(cbor::packed<node>::fixed_size(), 16u);
+    REQUIRE_EQ(cbor::schema<node>::fixed_size(), 16u);
 
     constexpr std::size_t depth = cbor::limits::nesting_depth;
-    auto const at_limit = cbor::packed<node>::decode(node_chain(depth));
+    auto const at_limit = cbor::schema<node>::decode(node_chain(depth));
     REQUIRE(at_limit.has_value());
     CHECK_EQ(depth_of(**at_limit), depth);
 
-    auto const over = cbor::packed<node>::decode(node_chain(depth + 1));
+    auto const over = cbor::schema<node>::decode(node_chain(depth + 1));
     REQUIRE_FALSE(over.has_value());
     CHECK_EQ(over.error(), error::nesting_depth_exceeded);
 
-    auto const deep = cbor::packed<node>::decode(node_chain(100000));
+    auto const deep = cbor::schema<node>::decode(node_chain(100000));
     REQUIRE_FALSE(deep.has_value());
     CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
 }

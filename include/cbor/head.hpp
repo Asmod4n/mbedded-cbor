@@ -29,10 +29,8 @@
 namespace cbor
 {
 
-enum class member_source;
-
-template <class T, member_source Source>
-class basic_schema;
+template <class T>
+class schema;
 
 #ifdef __SIZEOF_INT128__
 __extension__ typedef __int128 int128;
@@ -800,8 +798,8 @@ class heads
     template <class>
     friend class structs;
 
-    template <class, member_source>
-    friend class basic_schema;
+    template <class>
+    friend class schema;
 };
 
 }

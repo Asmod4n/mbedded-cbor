@@ -36,7 +36,7 @@ struct cbor::describe_members<car> {
 };
 
 car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nullopt};
-auto const owner = std::make_shared<std::string const>(*cbor::packed<car>::encode(sample));
+auto const owner = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));
 std::string_view const bytes = *owner;                    // the message, read in place
 ```
 
@@ -85,8 +85,8 @@ struct cbor::describe_members<chosen> {
     static constexpr std::tuple members{cbor::member{"id", &chosen::number}, CBOR_MEMBER(chosen, kept)};
 };
 
-auto const message = cbor::packed<chosen>::encode(chosen{7, 8});
-cbor::packed<chosen>::at_path<"$.id">(*message);   // 7
+auto const message = cbor::schema<chosen>::encode(chosen{7, 8});
+cbor::schema<chosen>::at_path<"$.id">(*message);   // 7
 ```
 
 The description lists every public member. A member that it leaves
@@ -116,11 +116,11 @@ value holds no view into the message: a number, a `bool`, an enum, or an
 optional of one.
 
 ```cpp
-cbor::packed<car>::at_path<"$.seats">(bytes);                      // 5
-cbor::packed<car>::at_path<"$.tires[1].diameter">(bytes);          // 18
-cbor::packed<car>::at_path<"$.tires[].pressure">(bytes, 0uz);      // 2.5f
-cbor::packed<car>::at_path<"$.track[2]">(bytes);                   // 3.0
-cbor::packed<car>::at_path<"$.tires[].diameter">(bytes, 5uz);      // error::index_out_of_bounds
+cbor::schema<car>::at_path<"$.seats">(bytes);                      // 5
+cbor::schema<car>::at_path<"$.tires[1].diameter">(bytes);          // 18
+cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0uz);      // 2.5f
+cbor::schema<car>::at_path<"$.track[2]">(bytes);                   // 3.0
+cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz);      // error::index_out_of_bounds
 ```
 
 A path is a string literal. It names members with `.name` and elements
@@ -148,7 +148,7 @@ holds the same owner, so an accessor of a list outlives the temporary
 root that gave it.
 
 ```cpp
-auto const root = cbor::packed<car>::path(owner);
+auto const root = cbor::schema<car>::path(owner);
 root->at_path<"$.make">();                  // "Volvo", a std::string_view
 auto const tires = root->at_path<"$.tires">();
 tires->size();                              // 2
@@ -241,9 +241,9 @@ the full list.
 | a refused allocation in `decode` | `not_enough_memory` |
 
 ```cpp
-cbor::packed<car>::decode(std::string(owner->substr(0, 3)));         // too_little_data
-cbor::packed<car>::decode(*cbor::packed<tire>::encode(tire{1, 1}));  // too_little_data
-cbor::packed<tire>::decode(owner);                                   // incorrect_type
+cbor::schema<car>::decode(std::string(owner->substr(0, 3)));         // too_little_data
+cbor::schema<car>::decode(*cbor::schema<tire>::encode(tire{1, 1}));  // too_little_data
+cbor::schema<tire>::decode(owner);                                   // incorrect_type
 ```
 
 ## 9. Cost

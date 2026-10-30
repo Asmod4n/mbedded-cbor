@@ -1,10 +1,9 @@
 # schema
 
-`cbor::packed<T>` writes a struct as Packed CBOR and reads each field of
+`cbor::schema<T>` writes a struct as Packed CBOR and reads each field of
 fixed size at an offset that the compiler computes. It reads only the
-description of each struct and builds on every compiler.
-`cbor::schema<T>` has the same functions and writes the same bytes; it
-exists only with reflection and checks each description against it.
+description of each struct and builds on every compiler. With
+reflection it also checks each description against the members.
 
 | Function | Does |
 |---|---|

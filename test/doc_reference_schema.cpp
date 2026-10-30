@@ -87,7 +87,7 @@ car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}};
 
 std::string sample_bytes()
 {
-    auto bytes = cbor::packed<car>::encode(sample);
+    auto bytes = cbor::schema<car>::encode(sample);
     REQUIRE(bytes.has_value());
     return std::move(*bytes);
 }
@@ -105,61 +105,61 @@ using namespace doc_reference_schema;
 // appended, and a span that is too small gives no_buffer_space.
 TEST_CASE("doc reference schema: encode")
 {
-    auto const bytes = cbor::packed<tire>::encode(tire{17, 2.5f});
+    auto const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
     REQUIRE(bytes.has_value());
-    CHECK_EQ(cbor::packed<tire>::at_path<"$.diameter">(*bytes), 17);
+    CHECK_EQ(cbor::schema<tire>::at_path<"$.diameter">(*bytes), 17);
 
     std::string out = "x";
-    auto const n = cbor::packed<tire>::encode(tire{17, 2.5f}, out);
+    auto const n = cbor::schema<tire>::encode(tire{17, 2.5f}, out);
     REQUIRE(n.has_value());
     CHECK_EQ(out.size(), 1 + *n);
     CHECK_EQ(out.substr(1), *bytes);
 
     std::array<char, 4> small{};
-    CHECK_EQ(cbor::packed<tire>::encode(tire{17, 2.5f}, std::span<char>(small)).error(), error::no_buffer_space);
+    CHECK_EQ(cbor::schema<tire>::encode(tire{17, 2.5f}, std::span<char>(small)).error(), error::no_buffer_space);
 }
 
 // decode.md: a moved string gives the whole struct; a message of another struct gives incorrect_type, a message
 // that is too short gives too_little_data, and an empty owner throws std::logic_error.
 TEST_CASE("doc reference schema: decode")
 {
-    auto const back = cbor::packed<car>::decode(sample_bytes());
+    auto const back = cbor::schema<car>::decode(sample_bytes());
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->make, "Volvo");
     CHECK_EQ((*back)->tires.size(), 2u);
     CHECK_EQ((*back)->track[2], 3.0);
 
-    CHECK_EQ(cbor::packed<tire>::decode(sample_bytes()).error(), error::incorrect_type);
-    CHECK_EQ(cbor::packed<car>::decode(sample_bytes().substr(0, 3)).error(), error::too_little_data);
-    CHECK_THROWS_AS(std::ignore = cbor::packed<car>::decode(std::shared_ptr<std::string const>()), std::logic_error);
+    CHECK_EQ(cbor::schema<tire>::decode(sample_bytes()).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<car>::decode(sample_bytes().substr(0, 3)).error(), error::too_little_data);
+    CHECK_THROWS_AS(std::ignore = cbor::schema<car>::decode(std::shared_ptr<std::string const>()), std::logic_error);
 }
 
 // path.md: path takes a moved string or an owner and gives the root accessor; a null owner throws.
 TEST_CASE("doc reference schema: path")
 {
-    auto const root = cbor::packed<car>::path(sample_bytes());
+    auto const root = cbor::schema<car>::path(sample_bytes());
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
 
     auto const owner = std::make_shared<std::string const>(sample_bytes());
-    auto const shared = cbor::packed<car>::path(owner);
+    auto const shared = cbor::schema<car>::path(owner);
     REQUIRE(shared.has_value());
     CHECK_EQ(shared->at_path<"$.seats">(), 5);
 
-    CHECK_EQ(cbor::packed<tire>::path(sample_bytes()).error(), error::incorrect_type);
-    CHECK_THROWS_AS(std::ignore = cbor::packed<car>::path(std::shared_ptr<std::string const>()), std::logic_error);
+    CHECK_EQ(cbor::schema<tire>::path(sample_bytes()).error(), error::incorrect_type);
+    CHECK_THROWS_AS(std::ignore = cbor::schema<car>::path(std::shared_ptr<std::string const>()), std::logic_error);
 }
 
 // at_path.md: the static at_path reads one number with no accessor; [] takes the index from the next argument.
 TEST_CASE("doc reference schema: static at_path")
 {
     std::string const bytes = sample_bytes();
-    CHECK_EQ(cbor::packed<car>::at_path<"$.seats">(bytes), 5);
-    CHECK_EQ(cbor::packed<car>::at_path<"$.tires[1].diameter">(bytes), 18);
-    CHECK_EQ(cbor::packed<car>::at_path<"$.tires[].pressure">(bytes, 0uz), 2.5f);
-    CHECK_EQ(cbor::packed<car>::at_path<"$.track[2]">(bytes), 3.0);
-    CHECK_EQ(cbor::packed<car>::at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::packed<car>::at_path<"$.seats">(bytes.substr(0, 3)).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(bytes), 5);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[1].diameter">(bytes), 18);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0uz), 2.5f);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.track[2]">(bytes), 3.0);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(bytes.substr(0, 3)).error(), error::too_little_data);
 }
 
 // unverified.md: the unverified forms give the values of the verified forms and still check an index against its
@@ -167,15 +167,15 @@ TEST_CASE("doc reference schema: static at_path")
 TEST_CASE("doc reference schema: unverified")
 {
     std::string const bytes = sample_bytes();
-    CHECK_EQ(cbor::packed<car>::unverified_at_path<"$.seats">(bytes), 5);
-    CHECK_EQ(cbor::packed<car>::unverified_at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::schema<car>::unverified_at_path<"$.seats">(bytes), 5);
+    CHECK_EQ(cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
 
-    auto const lane = cbor::packed<car>::unverified_path(std::string(bytes));
+    auto const lane = cbor::schema<car>::unverified_path(std::string(bytes));
     REQUIRE(lane.has_value());
     CHECK_EQ(lane->at_path<"$.tires[1].diameter">(), 18);
-    CHECK(std::same_as<std::remove_cvref_t<decltype(*lane)>, cbor::packed<car>::accessor<car, false>>);
+    CHECK(std::same_as<std::remove_cvref_t<decltype(*lane)>, cbor::schema<car>::accessor<car, false>>);
 
-    auto const back = cbor::packed<car>::unverified_decode(std::make_shared<std::string const>(bytes));
+    auto const back = cbor::schema<car>::unverified_decode(std::make_shared<std::string const>(bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->make, "Volvo");
 }
@@ -185,14 +185,14 @@ TEST_CASE("doc reference schema: unverified")
 TEST_CASE("doc reference schema: description")
 {
     constexpr auto apart = cbor::description_place::apart;
-    auto const data = cbor::packed<car>::encode<apart>(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
+    auto const data = cbor::schema<car>::encode<apart>(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
     REQUIRE(data.has_value());
-    auto const description = cbor::packed<car>::description();
+    auto const description = cbor::schema<car>::description();
     CHECK_EQ(data->size() + description.size(), sample_bytes().size());
-    CHECK_EQ((cbor::packed<car>::at_path<"$.seats", apart>(*data)), 5);
-    auto const refused = cbor::packed<car>::at_path<"$.seats">(*data).error();
+    CHECK_EQ((cbor::schema<car>::at_path<"$.seats", apart>(*data)), 5);
+    auto const refused = cbor::schema<car>::at_path<"$.seats">(*data).error();
     CHECK((refused == error::incorrect_type || refused == error::too_little_data));
-    auto const root = cbor::packed<car>::path<apart>(std::string(*data));
+    auto const root = cbor::schema<car>::path<apart>(std::string(*data));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18);
 }
@@ -201,14 +201,14 @@ TEST_CASE("doc reference schema: description")
 // for the std::uint16_t and 5 for the float. A text is a reference 6(N) of 6 bytes. The root ends the message.
 TEST_CASE("doc reference schema: fixed_size")
 {
-    static_assert(cbor::packed<tire>::fixed_size() == 18);
-    CHECK_EQ(cbor::packed<tire>::fixed_size(), 18u);
-    CHECK_EQ(cbor::packed<tire>::fixed_size<std::uint16_t>(), 3u);
-    CHECK_EQ(cbor::packed<tire>::fixed_size<double>(), 9u);
-    CHECK_EQ(cbor::packed<car>::fixed_size<std::string>(), 6u);
-    auto const bytes = cbor::packed<tire>::encode(tire{17, 2.5f});
+    static_assert(cbor::schema<tire>::fixed_size() == 18);
+    CHECK_EQ(cbor::schema<tire>::fixed_size(), 18u);
+    CHECK_EQ(cbor::schema<tire>::fixed_size<std::uint16_t>(), 3u);
+    CHECK_EQ(cbor::schema<tire>::fixed_size<double>(), 9u);
+    CHECK_EQ(cbor::schema<car>::fixed_size<std::string>(), 6u);
+    auto const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
     REQUIRE(bytes.has_value());
-    std::size_t const root = bytes->size() - cbor::packed<tire>::fixed_size();
+    std::size_t const root = bytes->size() - cbor::schema<tire>::fixed_size();
     CHECK_EQ(byte_at(*bytes, root), 0xd9);
 }
 
@@ -217,19 +217,19 @@ TEST_CASE("doc reference schema: fixed_size")
 // binary32.
 TEST_CASE("doc reference schema: member_offset")
 {
-    CHECK_EQ(cbor::packed<tire>::member_offset<&tire::diameter>(), 10u);
-    CHECK_EQ(cbor::packed<tire>::member_offset<&tire::pressure>(), 13u);
-    auto const bytes = cbor::packed<tire>::encode(tire{17, 2.5f});
+    CHECK_EQ(cbor::schema<tire>::member_offset<&tire::diameter>(), 10u);
+    CHECK_EQ(cbor::schema<tire>::member_offset<&tire::pressure>(), 13u);
+    auto const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
     REQUIRE(bytes.has_value());
-    std::size_t const root = bytes->size() - cbor::packed<tire>::fixed_size();
-    CHECK_EQ(byte_at(*bytes, root + cbor::packed<tire>::member_offset<&tire::pressure>()), 0xfa);
+    std::size_t const root = bytes->size() - cbor::schema<tire>::fixed_size();
+    CHECK_EQ(byte_at(*bytes, root + cbor::schema<tire>::member_offset<&tire::pressure>()), 0xfa);
 }
 
 // accessor.md: @ starts at the part that the accessor names and $ at the root; size() counts a list; a vector of
 // fixed-size structs is a range of element accessors; view gives a list of numbers.
 TEST_CASE("doc reference schema: accessor")
 {
-    auto const root = cbor::packed<car>::path(sample_bytes());
+    auto const root = cbor::schema<car>::path(sample_bytes());
     REQUIRE(root.has_value());
     auto const tires = root->at_path<"$.tires">();
     REQUIRE(tires.has_value());
@@ -240,7 +240,7 @@ TEST_CASE("doc reference schema: accessor")
     for (auto const t : *tires)
         seen.push_back(*t.at_path<"@.diameter">());
     CHECK_EQ(seen, std::vector<std::uint16_t>{17, 18});
-    CHECK(std::ranges::random_access_range<cbor::packed<car>::accessor<std::vector<tire>> const &>);
+    CHECK(std::ranges::random_access_range<cbor::schema<car>::accessor<std::vector<tire>> const &>);
     auto const track = root->view<"$.track">();
     REQUIRE(track.has_value());
     CHECK_EQ(track->size(), 3u);
@@ -250,11 +250,11 @@ TEST_CASE("doc reference schema: accessor")
 // fixed_element.md: an element of a vector of fixed-size structs reads its members with @ and the root with $.
 TEST_CASE("doc reference schema: fixed_element")
 {
-    auto const root = cbor::packed<car>::path(sample_bytes());
+    auto const root = cbor::schema<car>::path(sample_bytes());
     REQUIRE(root.has_value());
     auto const second = root->at_path<"$.tires[]">(1uz);
     REQUIRE(second.has_value());
-    CHECK(std::same_as<std::remove_cvref_t<decltype(*second)>, cbor::packed<car>::accessor<cbor::fixed_element<tire>>>);
+    CHECK(std::same_as<std::remove_cvref_t<decltype(*second)>, cbor::schema<car>::accessor<cbor::fixed_element<tire>>>);
     CHECK_EQ(second->at_path<"@.diameter">(), 18);
     CHECK_EQ(second->at_path<"@.pressure">(), 2.25f);
     CHECK_EQ(second->at_path<"$.seats">(), 5);
@@ -264,7 +264,7 @@ TEST_CASE("doc reference schema: fixed_element")
 // operator[] outside the view throws.
 TEST_CASE("doc reference schema: typed_array_view")
 {
-    auto const root = cbor::packed<car>::path(sample_bytes());
+    auto const root = cbor::schema<car>::path(sample_bytes());
     REQUIRE(root.has_value());
     auto const track = root->view<"$.track">();
     REQUIRE(track.has_value());
@@ -286,9 +286,9 @@ TEST_CASE("doc reference schema: typed_array_view")
 // tag.md: the class tag is the first item of the root; 1802 is 0x070a and takes the two-byte argument d9 07 0a.
 TEST_CASE("doc reference schema: tag")
 {
-    auto const bytes = cbor::packed<point>::encode(point{1, 2});
+    auto const bytes = cbor::schema<point>::encode(point{1, 2});
     REQUIRE(bytes.has_value());
-    std::size_t const root = bytes->size() - cbor::packed<point>::fixed_size();
+    std::size_t const root = bytes->size() - cbor::schema<point>::fixed_size();
     CHECK_EQ(byte_at(*bytes, root), 0xd9);
     CHECK_EQ(byte_at(*bytes, root + 1), 0x07);
     CHECK_EQ(byte_at(*bytes, root + 2), 0x0a);
@@ -308,7 +308,7 @@ TEST_CASE("doc reference schema: wire")
     CHECK_EQ(byte_at(bytes, 9), 0x72);
     CHECK_NE(bytes.find("\xd9\x80\x69"sv), std::string::npos);
     CHECK_NE(bytes.find("\xd8\x56"sv), std::string::npos);
-    std::size_t const make = bytes.size() - cbor::packed<car>::fixed_size() + cbor::packed<car>::member_offset<&car::make>();
+    std::size_t const make = bytes.size() - cbor::schema<car>::fixed_size() + cbor::schema<car>::member_offset<&car::make>();
     CHECK_EQ(byte_at(bytes, make), 0xc6);
     CHECK_EQ(byte_at(bytes, make + 1), 0x1a);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());

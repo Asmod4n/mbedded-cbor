@@ -158,11 +158,7 @@ struct cbor::describe_members<ParkingLot> {
 };
 
 using T = ParkingLot;
-#if defined(MB_FORM_PACKED)
-using S = cbor::packed<T>;
-#else
 using S = cbor::schema<T>;
-#endif
 static std::string json_text;
 static nlohmann::json json;
 
@@ -405,11 +401,7 @@ struct cbor::describe_members<Floats> {
 };
 
 using T = Floats;
-#if defined(MB_FORM_PACKED)
-using S = cbor::packed<T>;
-#else
 using S = cbor::schema<T>;
-#endif
 
 static double scalar(cbor::lazy const &e)
 {
@@ -674,11 +666,7 @@ struct cbor::describe_members<Records> {
 };
 
 using T = Records;
-#if defined(MB_FORM_PACKED)
-using S = cbor::packed<T>;
-#else
 using S = cbor::schema<T>;
-#endif
 
 template <class V> static V must(std::expected<V, cbor::error> const &r)
 {

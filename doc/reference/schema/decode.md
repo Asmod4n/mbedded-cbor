@@ -56,7 +56,7 @@ allocation for each text, list and node of the result.
 
 ```cpp
 // bytes: a std::string from schema<car>::encode(car{"Volvo", 5, ...})
-auto const back = cbor::packed<car>::decode(std::move(bytes));
+auto const back = cbor::schema<car>::decode(std::move(bytes));
 if (back)
     use((*back)->make);   // "Volvo"
 ```

@@ -40,7 +40,7 @@ O(p), p the count of steps. No allocation.
 
 ```cpp
 // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})
-auto const root = cbor::packed<car>::path(std::move(bytes));
+auto const root = cbor::schema<car>::path(std::move(bytes));
 auto const second = root->at_path<"$.tires[]">(1uz);
 second->at_path<"@.diameter">();   // 18
 second->at_path<"@.pressure">();   // 2.25f

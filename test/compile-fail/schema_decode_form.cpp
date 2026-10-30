@@ -2,15 +2,11 @@
 // members in the order of the description. It takes the members of the class itself. A wrong use does not compile,
 // with a message that names the cause. CBOR_TEST_CASE selects the case: 1 a class whose constructor takes other
 // arguments, 2 a description that lists a member of a base class, 3 an aggregate whose member has no default
-// constructor, 4 a right class with a constructor, which compiles. CBOR_TEST_FORM names the form, schema or packed.
+// constructor, 4 a right class with a constructor, which compiles.
 #include <cbor/cbor.hpp>
 
 #include <cstdint>
 #include <string>
-
-#ifndef CBOR_TEST_FORM
-#define CBOR_TEST_FORM schema
-#endif
 
 class reading
 {
@@ -76,5 +72,5 @@ struct cbor::describe_members<root> {
 
 int main()
 {
-    return cbor::CBOR_TEST_FORM<root>::fixed_size() > 0 ? 0 : 1;
+    return cbor::schema<root>::fixed_size() > 0 ? 0 : 1;
 }
