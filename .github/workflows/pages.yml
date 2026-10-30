@@ -21,8 +21,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Build the image
-        run: podman build -q -t mbedded-cbor-site -f containers/site.Containerfile containers
+      - id: snapshot
+        name: Read the date of Debian sid
+        run: |
+          echo "snapshot=$(curl -sSf https://deb.debian.org/debian/dists/sid/InRelease | sed -n 's/^Date: //p' | head -1 | date -u -f - +%Y%m%dT%H%M%S)" >> "$GITHUB_OUTPUT"
+      - id: image
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/../image-site
+          key: image-site-${{ steps.snapshot.outputs.snapshot }}-${{ hashFiles('containers/site.Containerfile') }}
+      - if: steps.image.outputs.cache-hit != 'true'
+        name: Build the image
+        run: |
+          mkdir -p ../image-site
+          podman build -q -t mbedded-cbor-site -f containers/site.Containerfile containers
+          podman save -o ../image-site/image.tar mbedded-cbor-site
+      - if: steps.image.outputs.cache-hit == 'true'
+        name: Load the image
+        run: podman load -q -i ../image-site/image.tar
       - name: Build the site
         run: sh tools/site/page.sh "$RUNNER_TEMP/site"
       - uses: actions/upload-pages-artifact@v3
