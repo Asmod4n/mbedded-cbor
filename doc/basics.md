@@ -2,7 +2,7 @@
 
 Every part of the library follows four rules: how an error comes back,
 how long a result stays valid, how threads read, and how a limit is set.
-This page states them.
+This page states them, and where Boost.PFR comes from.
 
 | Task | Call | Document |
 |---|---|---|
@@ -11,9 +11,12 @@ This page states them.
 | Write a struct and read it back | `cbor::structs` | [structs.md](structs.md) |
 | Read one field of a large message | `cbor::schema` | [schema.md](schema.md) |
 
-The library needs C++23 and g++ 15 or later. `schema` needs g++ 16 with
-`-std=c++26 -freflection`. `structs` reads the members by reflection
-there, and through Boost.PFR on every other compiler. Every example includes `<cbor/cbor.hpp>`.
+The library needs C++23: g++ 15 or later, clang 23, or the AppleClang
+of Xcode 16. Every part builds on each of them. With g++ 16 and
+`-std=c++26 -freflection`, `structs` reads the members by reflection and
+`schema` checks each description against the members. On every other
+compiler, `structs` reads the members through Boost.PFR (section 5).
+Every example includes `<cbor/cbor.hpp>`.
 A comment shows the CBOR in `bytes` as text, in the diagnostic notation
 of RFC 8949, which looks like JSON.
 
@@ -134,6 +137,21 @@ the program bounds it before it calls the library.
 
 The error comes at the read that meets the value. A count in the input
 reserves no memory: memory grows only with the values that a call reads.
+
+## 5. Boost.PFR
+
+CMake looks for Boost 1.84 or later on the system and uses it. Else
+the library uses its own copy of Boost.PFR 1.92.0 in
+`third_party/boost_pfr`, the files of boostorg/pfr, under the Boost
+Software License 1.0. An install then places this copy in
+`include/mbedded-cbor/boost_pfr`, and the CMake package and the
+pkg-config file add it to the include path. The configure output says
+which of the two the build takes.
+
+Every translation unit of a program must see the same Boost.PFR. A
+program that also uses another Boost.PFR of its own breaks the
+one-definition rule. An older Boost.PFR that comes first on the include
+path stops the build with an error that names version 1.84.
 
 More: every error value, the limits in detail, memory, and a lazy that
 moves to another thread are in [advanced/basics.md](advanced/basics.md).
