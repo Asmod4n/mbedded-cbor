@@ -9,7 +9,52 @@ permissions:
   contents: read
 
 jobs:
+  image:
+    runs-on: ubuntu-24.04
+    outputs:
+      snapshot: ${{ steps.snapshot.outputs.snapshot }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: snapshot
+        name: Read the snapshot of Tumbleweed
+        run: echo "snapshot=$(curl -sSf https://download.opensuse.org/tumbleweed/repo/oss/media.1/products | awk '{print $3}')" >> "$GITHUB_OUTPUT"
+      - id: tw
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/../image
+          key: image-tw-${{ steps.snapshot.outputs.snapshot }}-${{ hashFiles('containers/tumbleweed.Containerfile') }}
+          lookup-only: true
+      - if: steps.tw.outputs.cache-hit != 'true'
+        name: Build the image
+        run: |
+          mkdir -p ../image
+          podman build -q -t mbedded-cbor-tw -f containers/tumbleweed.Containerfile containers
+          podman save -o ../image/image.tar mbedded-cbor-tw
+      - if: steps.tw.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/../image
+          key: image-tw-${{ steps.snapshot.outputs.snapshot }}-${{ hashFiles('containers/tumbleweed.Containerfile') }}
+      - id: gcc15
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/../image-gcc15
+          key: image-gcc15-${{ steps.snapshot.outputs.snapshot }}-${{ hashFiles('containers/tumbleweed-gcc15.Containerfile') }}
+          lookup-only: true
+      - if: steps.gcc15.outputs.cache-hit != 'true'
+        name: Build the image of g++ 15
+        run: |
+          mkdir -p ../image-gcc15
+          podman build -q -t mbedded-cbor-gcc15 -f containers/tumbleweed-gcc15.Containerfile containers
+          podman save -o ../image-gcc15/image.tar mbedded-cbor-gcc15
+      - if: steps.gcc15.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/../image-gcc15
+          key: image-gcc15-${{ steps.snapshot.outputs.snapshot }}-${{ hashFiles('containers/tumbleweed-gcc15.Containerfile') }}
+
   test:
+    needs: image
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -27,8 +72,13 @@ jobs:
           path: ${{ github.workspace }}/../ccache
           key: ccache-${{ matrix.build }}-${{ github.sha }}
           restore-keys: ccache-${{ matrix.build }}-
-      - name: Build the image
-        run: podman build -q -t mbedded-cbor-tw -f containers/tumbleweed.Containerfile containers
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/../image${{ matrix.build == 'gcc15-release' && '-gcc15' || '' }}
+          key: image-${{ matrix.build == 'gcc15-release' && 'gcc15' || 'tw' }}-${{ needs.image.outputs.snapshot }}-${{ hashFiles(matrix.build == 'gcc15-release' && 'containers/tumbleweed-gcc15.Containerfile' || 'containers/tumbleweed.Containerfile') }}
+          fail-on-cache-miss: true
+      - name: Load the image
+        run: podman load -q -i ../image${{ matrix.build == 'gcc15-release' && '-gcc15' || '' }}/image.tar
       - name: Build and test
         run: test/run.sh ${{ matrix.build }}
 
