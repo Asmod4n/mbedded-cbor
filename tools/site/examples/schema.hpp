@@ -11,14 +11,6 @@
 namespace site
 {
 
-template <class X>
-value expected_view_of(value const &owner, std::expected<X, cbor::error> v)
-{
-    value out = v ? view_of(owner, std::move(*v)) : value_of(v.error());
-    out.expected = true;
-    return out;
-}
-
 inline std::expected<std::vector<std::size_t>, fault> indexes_read(call const &c, std::size_t const first)
 {
     std::vector<std::size_t> out;

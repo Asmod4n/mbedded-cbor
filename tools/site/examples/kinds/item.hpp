@@ -175,15 +175,6 @@ struct kind<std::span<char>> {
 };
 
 template <>
-struct kind<std::span<char const>> {
-    static constexpr std::string_view name = "std::span<char const>";
-    static std::string text(std::span<char const> const v)
-    {
-        return bytes_text(std::as_bytes(v));
-    }
-};
-
-template <>
 struct kind<std::span<std::uint8_t, 2>> {
     static constexpr std::string_view name = "std::span<std::uint8_t, 2>";
     static std::string text(std::span<std::uint8_t, 2> const v)

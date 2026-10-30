@@ -10,7 +10,7 @@ for (const file of readdirSync(work).filter(f => /^examples-.*\.json$/.test(f)))
   const dump = group === "index" ? "" : flat(readFileSync(`${work}/${group}.txt`, "utf8"));
   for (const e of JSON.parse(readFileSync(`${work}/${file}`, "utf8"))) {
     const bytes = e.message !== undefined ? Uint8Array.from(encoded(JSON.parse(e.message))) : bytesOf(e.bytes);
-    const out = await run(bytes, e.calls.map(c => c.call).join("\n"));
+    const out = await run(bytes, e.calls.map(c => c.call).join("\n"), group);
     e.calls.forEach((c, i) => {
       count++;
       if (out[i] !== c.result) {
@@ -26,7 +26,7 @@ for (const file of readdirSync(work).filter(f => /^examples-.*\.json$/.test(f)))
   }
 }
 const names = [...readFileSync(header, "utf8").matchAll(/^    ([a-z_]+)(?: = 1)?,?$/gm)].map(m => m[1]);
-const back = await run(new Uint8Array([0]), names.map(n => `cbor::error::${n}`).join("\n"));
+const back = await run(new Uint8Array([0]), names.map(n => `cbor::error::${n}`).join("\n"), "errors");
 names.forEach((n, i) => {
   count++;
   if (back[i] !== `cbor::error::${n}`) {

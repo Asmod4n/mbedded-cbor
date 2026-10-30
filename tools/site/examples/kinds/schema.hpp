@@ -119,15 +119,6 @@ struct kind<char> {
 };
 
 template <>
-struct kind<std::span<char const>> {
-    static constexpr std::string_view name = "std::span<char const>";
-    static std::string text(std::span<char const> const v)
-    {
-        return number_text(v.size()) + " bytes: " + hex_text({v.data(), v.size()});
-    }
-};
-
-template <>
 struct kind<cbor::schema<car>::accessor<car>> {
     static constexpr std::string_view name = "cbor::schema<car>::accessor<car>";
     static std::string text(cbor::schema<car>::accessor<car> const &)

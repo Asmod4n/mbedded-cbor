@@ -19,21 +19,35 @@ constexpr std::span<site::entry const> tables[] = {site::lazy_functions,   site:
                                                    site::schema_functions, site::structs_functions, site::ref_functions,
                                                    site::tools_functions,  site::errors_functions};
 
+constexpr std::string_view groups[] = {"lazy", "path", "item", "schema", "structs", "ref", "tools", "errors"};
+
+static_assert(std::size(groups) == std::size(tables));
+
 consteval bool names_unique()
 {
-    std::vector<std::string_view> names;
-    for (std::span<site::entry const> const table : tables)
+    for (std::span<site::entry const> const table : tables) {
+        std::vector<std::string_view> names;
         for (site::entry const &e : table)
             names.push_back(e.name);
-    std::ranges::sort(names);
-    return std::ranges::adjacent_find(names) == names.end();
+        std::ranges::sort(names);
+        if (std::ranges::adjacent_find(names) != names.end())
+            return false;
+    }
+    return true;
 }
 
-static_assert(names_unique(), "two tables hold an entry of the same name");
+static_assert(names_unique(), "a table holds two entries of the same name");
 
-std::string lines_run(std::string_view const encoded, std::string_view const lines)
+std::string lines_run(std::string_view const encoded, std::string_view const lines, std::string_view const group)
 {
-    site::session s{tables, {}};
+    std::vector<std::span<site::entry const>> order;
+    for (std::size_t i = 0; i < std::size(tables); ++i)
+        if (groups[i] == group)
+            order.push_back(tables[i]);
+    for (std::size_t i = 0; i < std::size(tables); ++i)
+        if (groups[i] != group)
+            order.push_back(tables[i]);
+    site::session s{order, {}};
     s.variables.push_back({"bytes", site::value_of(std::string(encoded)), false});
     s.variables.push_back({"doc", site::value_of(cbor::lazy::take_ownership(std::string(encoded))), true});
     std::string out;
@@ -62,9 +76,10 @@ __attribute__((export_name("release"))) void release(char *const p)
 }
 
 __attribute__((export_name("run"))) char *run(char const *const bytes, std::size_t const bytes_size,
-                                              char const *const lines, std::size_t const lines_size)
+                                              char const *const lines, std::size_t const lines_size,
+                                              char const *const group, std::size_t const group_size)
 {
-    std::string const text = lines_run({bytes, bytes_size}, {lines, lines_size});
+    std::string const text = lines_run({bytes, bytes_size}, {lines, lines_size}, {group, group_size});
     auto const size = static_cast<std::uint32_t>(text.size());
     auto *const out = static_cast<char *>(std::malloc(sizeof size + text.size()));
     if (out == nullptr) [[unlikely]]
