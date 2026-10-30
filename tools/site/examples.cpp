@@ -8,6 +8,7 @@
 #include "examples/structs.hpp"
 #include "examples/tools.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
@@ -17,6 +18,18 @@ namespace
 constexpr std::span<site::entry const> tables[] = {site::lazy_functions,   site::path_functions,  site::item_functions,
                                                    site::schema_functions, site::structs_functions, site::ref_functions,
                                                    site::tools_functions,  site::errors_functions};
+
+consteval bool names_unique()
+{
+    std::vector<std::string_view> names;
+    for (std::span<site::entry const> const table : tables)
+        for (site::entry const &e : table)
+            names.push_back(e.name);
+    std::ranges::sort(names);
+    return std::ranges::adjacent_find(names) == names.end();
+}
+
+static_assert(names_unique(), "two tables hold an entry of the same name");
 
 std::string lines_run(std::string_view const encoded, std::string_view const lines)
 {

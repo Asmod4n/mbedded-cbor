@@ -67,20 +67,33 @@ export const instantiated = async source => {
     new Uint8Array(memory.buffer, p, data.length).set(data);
     return p;
   };
-  return async (bytes, lines) => {
+  const once = (bytes, lines) => {
     const text = textEncoder.encode(lines);
+    const b = put(bytes), l = put(text);
+    const p = x.run(b, bytes.length, l, text.length);
+    x.release(b);
+    x.release(l);
+    const n = new DataView(memory.buffer).getUint32(p, true);
+    const out = textDecoder.decode(new Uint8Array(memory.buffer, p + 4, n));
+    x.release(p);
+    return out.split("\n").slice(0, -1);
+  };
+  return async (bytes, lines) => {
     try {
-      const b = put(bytes), l = put(text);
-      const p = x.run(b, bytes.length, l, text.length);
-      x.release(b);
-      x.release(l);
-      const n = new DataView(memory.buffer).getUint32(p, true);
-      const out = textDecoder.decode(new Uint8Array(memory.buffer, p + 4, n));
-      x.release(p);
-      return out.split("\n").slice(0, -1);
-    } catch (e) {
+      return once(bytes, lines);
+    } catch {
       x = await made();
-      return ["fault: the call ended the module: " + e.message];
     }
+    const kept = [], results = [];
+    for (const line of lines.split("\n").filter(l => l.trim())) {
+      try {
+        results.push(once(bytes, [...kept, line].join("\n")).at(-1));
+        kept.push(line);
+      } catch {
+        x = await made();
+        results.push("fault: the call ended the program (a wrong use; exceptions are off in this build)");
+      }
+    }
+    return results;
   };
 };
