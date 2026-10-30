@@ -2,7 +2,10 @@
 
 A path reads one value from CBOR bytes, with no decode of the rest. The
 syntax is JSONPath (RFC 9535). [basics.md](basics.md) states how errors
-come back and how long a result stays valid.
+come back and how long a result stays valid. A message of
+`cbor::schema<T>` has an `at_path` of its own ([schema.md](schema.md)).
+The reference with examples that run in the browser:
+<https://asmod4n.github.io/mbedded-cbor/path.html>.
 
 ## 1. Read one value
 
