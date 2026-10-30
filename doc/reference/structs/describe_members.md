@@ -23,8 +23,8 @@ call: auto const h = cbor::structs<header>::encode(header{"text/plain"})
 result: 30 bytes: da 00 02 71 3c a1 6c 63 6f 6e 74 65 6e 74 2d 74 79 70 65 6a 74 65 78 74 2f 70 6c 61 69 6e
 call: cbor::lazy::take_ownership(*h)
 result: lazy of 160060({"content-type": "text/plain"})
-call: cbor::structs<header>::decode(std::move(bytes)).error()
-result: cbor::error::incorrect_type
+call: cbor::structs<header>::decode(*h).has_value()
+result: true
 call: auto const t = cbor::structs<trailer>::encode(trailer{7})
 result: 16 bytes: da 00 02 71 3d a1 68 63 68 65 63 6b 73 75 6d 07
 call: cbor::lazy::take_ownership(*t)

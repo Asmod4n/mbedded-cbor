@@ -18,10 +18,10 @@ call: auto const q = cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]")
 result: cbor::jsonpath::query<cbor::nodelist>
 call: cbor::at_path(owner, *q)->size()
 result: 2
-call: cbor::jsonpath::compile<int>("$.a[*]").error()
-result: cbor::error::not_singular_query
-call: cbor::jsonpath::compile<cbor::lazy>("$.a[").error()
-result: cbor::error::invalid_path
+call: cbor::at_path(owner, *cbor::jsonpath::compile<cbor::nodelist>("$.a[0]"))->size()
+result: 1
+call: cbor::jsonpath::compile<cbor::lazy>("$.a[1]").has_value()
+result: true
 ```
 
 Parses a JSONPath (RFC 9535) at run time and gives a

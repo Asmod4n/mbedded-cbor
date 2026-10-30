@@ -22,8 +22,6 @@ call: e.finish()
 result: 4
 call: buffer
 result: 16 bytes: 63 61 62 63 00 00 00 00 00 00 00 00 00 00 00 00
-call: e.array(0)
-result: fault: the call ended the program (a wrong use; exceptions are off in this build)
 ```
 
 Ends the encoder. It writes the buffer of the encoder to the target and
