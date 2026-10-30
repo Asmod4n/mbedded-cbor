@@ -1787,7 +1787,9 @@ class reflection
     template <class T, description_place D>
     static error error_of_cut_message_corrected(std::string_view const encoded, error const e)
     {
-        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded))
+        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded) || encoded.size() < fixed_size<T, T>())
+            return e;
+        if (class_tag_valid<T, T>(std::span<char const>(encoded).subspan(encoded.size() - fixed_size<T, T>()).template first<fixed_size<T, T>()>()))
             return e;
         heads::decoder<true> d{encoded};
         if (well_formedness::items_skip(d, 1).error_or(error{}) != error::too_little_data)
