@@ -46,7 +46,9 @@ None. `type` and `additional_information` are data members.
 
 ## Cost
 
-O(1). No allocation.
+A read of `type`, `additional_information` or [get](get.md) is O(1) and
+allocates nothing. The tree comes from [decode](decode.md): it copies
+every string of the item and allocates the nodes, O(bytes of the item).
 
 ## Example
 
