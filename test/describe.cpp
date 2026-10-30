@@ -774,17 +774,17 @@ CBOR_DEFINE_TYPE(define_type_test::renamed, cbor::untagged,
 CBOR_DEFINE_TYPE(hidden, cbor::tag{160103}, CBOR_MEMBER(hidden, h));
 
 // CBOR_DEFINE_TYPE writes the specialization of cbor::describe_members that a user writes by hand: the tag and a
-// std::tuple of the members, so cbor::structs and cbor::packed read it alike. The tag 160100 is 0x00027164 (RFC
+// std::tuple of the members, so cbor::structs and cbor::schema read it alike. The tag 160100 is 0x00027164 (RFC
 // 8949 3.4); "x" (61 78) comes before "y" (61 79) by RFC 8949 4.2.1.
-TEST_CASE("CBOR_DEFINE_TYPE: the macro writes the description that structs and packed read")
+TEST_CASE("CBOR_DEFINE_TYPE: the macro writes the description that structs and schema read")
 {
     CHECK(std::is_same_v<std::remove_cvref_t<decltype(cbor::describe_members<define_type_test::point>::tag)>,
                          std::optional<cbor::tag>>);
     CHECK_EQ(cbor::describe_members<define_type_test::point>::tag->number, 160100u);
     describe_test::round_trip("\xda\x00\x02\x71\x64\xa2\x61x\x01\x61y\x02"s, define_type_test::point{1, 2});
-    auto const bytes = cbor::packed<define_type_test::point>::encode(define_type_test::point{1, 2});
+    auto const bytes = cbor::schema<define_type_test::point>::encode(define_type_test::point{1, 2});
     REQUIRE(bytes.has_value());
-    auto const back = cbor::packed<define_type_test::point>::decode(std::string(*bytes));
+    auto const back = cbor::schema<define_type_test::point>::decode(std::string(*bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((**back).y, 2u);
 }
@@ -804,9 +804,9 @@ TEST_CASE("CBOR_DEFINE_TYPE: a template instance through an alias")
 TEST_CASE("CBOR_DEFINE_TYPE: a rename, a class with a constructor and a type in an anonymous namespace")
 {
     describe_test::round_trip("\xa1\x67user-id\x05"s, define_type_test::renamed{5});
-    auto const bytes = cbor::packed<define_type_test::sample>::encode(define_type_test::sample{3, "abc"});
+    auto const bytes = cbor::schema<define_type_test::sample>::encode(define_type_test::sample{3, "abc"});
     REQUIRE(bytes.has_value());
-    auto const back = cbor::packed<define_type_test::sample>::decode(std::string(*bytes));
+    auto const back = cbor::schema<define_type_test::sample>::decode(std::string(*bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((**back).value, 3u);
     CHECK_EQ((**back).name, "abc");

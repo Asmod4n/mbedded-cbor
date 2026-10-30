@@ -25,10 +25,8 @@
 namespace cbor
 {
 
-enum class member_source;
-
-template <class T, member_source Source>
-class basic_schema;
+template <class T>
+class schema;
 
 template <class T>
 class structs;
@@ -74,8 +72,8 @@ class CBOR_OWNER ref
     {
     }
 
-    template <class, member_source>
-    friend class basic_schema;
+    template <class>
+    friend class schema;
 
     template <class>
     friend class structs;

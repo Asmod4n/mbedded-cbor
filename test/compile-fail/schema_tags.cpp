@@ -6,10 +6,6 @@
 // error. A set of neighbours compiles.
 #include <cbor/cbor.hpp>
 
-#ifndef CBOR_TEST_FORM
-#define CBOR_TEST_FORM schema
-#endif
-
 #include <cstdint>
 
 #if CBOR_TEST_CASE == 1
@@ -56,7 +52,7 @@ struct cbor::describe_members<root<N>> {
 template <std::uint64_t... N>
 int encode_all()
 {
-    return (0 + ... + (cbor::CBOR_TEST_FORM<root<N>>::encode(root<N>{}).has_value() ? 0 : 1));
+    return (0 + ... + (cbor::schema<root<N>>::encode(root<N>{}).has_value() ? 0 : 1));
 }
 
 int main()
