@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -243,6 +244,27 @@ TEST_CASE("doc advanced runtime: encode")
     CHECK_EQ(cbor::encode(**tree, again), own.size());
     CHECK_EQ(again, own);
     CHECK(same_value(again, wire));
+}
+
+// The section "encode" states that a NaN keeps its bits in the encoder and in encode of an item. A NaN with a
+// payload shows it, because a writer that makes every NaN the quiet NaN loses the payload.
+TEST_CASE("doc advanced runtime: a NaN keeps its bits")
+{
+    std::string out;
+    {
+        cbor::encoder e(out);
+        REQUIRE(e.floating_point(std::bit_cast<float>(std::uint32_t{0x7fc00001})).has_value());
+        REQUIRE(e.finish().has_value());
+    }
+    CHECK_EQ(out, "\xfa\x7f\xc0\x00\x01"s);
+    for (std::string_view const wire :
+         {"\xf9\x7e\x01"sv, "\xfa\x7f\xc0\x00\x01"sv, "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"sv}) {
+        auto const tree = cbor::decode(wire);
+        REQUIRE(tree.has_value());
+        std::string again;
+        REQUIRE(cbor::encode(**tree, again).has_value());
+        CHECK_EQ(again, wire);
+    }
 }
 
 // The section "cbor::sequence" shows the items of a sequence, the error at a cut item, and the owner of the

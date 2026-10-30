@@ -1,6 +1,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -32,6 +33,28 @@ template <cbor::fixed_string Path>
 concept advanced_lazy_query_compiles = requires(cbor::lazy const &l) { l.at_path<Path, cbor::nodelist>(); };
 
 } // namespace
+
+namespace doc_advanced_path
+{
+
+struct frame {
+    std::array<std::uint8_t, 2> mac;
+};
+
+} // namespace doc_advanced_path
+
+CBOR_DEFINE_TYPE(doc_advanced_path::frame, cbor::tag{1760}, CBOR_MEMBER(doc_advanced_path::frame, mac));
+
+// The section "The forms" states that [n] of schema reads one byte of a byte string, and that a path of this page
+// gives not_indexable there. A user who knows one of the two forms tries the other.
+TEST_CASE("doc advanced path: an index on a byte string")
+{
+    using doc_advanced_path::frame;
+    std::string const message = *cbor::schema<frame>::encode(frame{{7, 9}});
+    CHECK_EQ(cbor::schema<frame>::at_path<"$.mac[1]">(message), std::uint8_t{9});
+    CHECK_EQ(cbor::at_path<"$.mac[1]", int>(preferred(M("mac"s, test::bytes{"\x07\x09"}))).error(),
+             error::not_indexable);
+}
 
 // The section "The forms" shows the form that reads one number from bytes the caller holds.
 TEST_CASE("doc advanced path: a scalar from bytes")

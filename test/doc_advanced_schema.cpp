@@ -2,6 +2,8 @@
 
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -23,7 +25,7 @@ using cbor::error;
 // Each test in this file is one example of doc/advanced/schema.md. The tests exist so that every example in the
 // document compiles and gives the result that the document states.
 
-namespace doc_advanced_packed
+namespace doc_advanced_schema
 {
 
 struct tire {
@@ -57,56 +59,27 @@ struct chosen {
     std::uint8_t kept;
 };
 
-} // namespace doc_advanced_packed
-
-template <>
-struct cbor::describe_members<doc_advanced_packed::tire> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_advanced_packed::tire, diameter),
-        CBOR_MEMBER(doc_advanced_packed::tire, pressure),
-    };
+struct frame {
+    std::array<std::uint8_t, 4> code;
+    std::vector<std::byte> payload;
 };
 
-template <>
-struct cbor::describe_members<doc_advanced_packed::car> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1701};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_advanced_packed::car, make),
-        CBOR_MEMBER(doc_advanced_packed::car, seats),
-        CBOR_MEMBER(doc_advanced_packed::car, tires),
-        CBOR_MEMBER(doc_advanced_packed::car, track),
-        CBOR_MEMBER(doc_advanced_packed::car, note),
-    };
-};
+} // namespace doc_advanced_schema
 
-template <>
-struct cbor::describe_members<doc_advanced_packed::twin> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_advanced_packed::twin, a),
-    };
-};
+CBOR_DEFINE_TYPE(doc_advanced_schema::tire, cbor::tag{1700}, CBOR_MEMBER(doc_advanced_schema::tire, diameter),
+                 CBOR_MEMBER(doc_advanced_schema::tire, pressure));
+CBOR_DEFINE_TYPE(doc_advanced_schema::car, cbor::tag{1701}, CBOR_MEMBER(doc_advanced_schema::car, make),
+                 CBOR_MEMBER(doc_advanced_schema::car, seats), CBOR_MEMBER(doc_advanced_schema::car, tires),
+                 CBOR_MEMBER(doc_advanced_schema::car, track), CBOR_MEMBER(doc_advanced_schema::car, note));
+CBOR_DEFINE_TYPE(doc_advanced_schema::twin, cbor::tag{1700}, CBOR_MEMBER(doc_advanced_schema::twin, a));
+CBOR_DEFINE_TYPE(doc_advanced_schema::chosen, cbor::tag{1710}, cbor::member{"id", &doc_advanced_schema::chosen::number},
+                 CBOR_MEMBER(doc_advanced_schema::chosen, kept));
+CBOR_DEFINE_TYPE(doc_advanced_schema::pair_of_tags, cbor::tag{1702}, CBOR_MEMBER(doc_advanced_schema::pair_of_tags, t),
+                 CBOR_MEMBER(doc_advanced_schema::pair_of_tags, w));
+CBOR_DEFINE_TYPE(doc_advanced_schema::frame, cbor::tag{1711}, CBOR_MEMBER(doc_advanced_schema::frame, code),
+                 CBOR_MEMBER(doc_advanced_schema::frame, payload));
 
-template <>
-struct cbor::describe_members<doc_advanced_packed::chosen> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1710};
-    static constexpr std::tuple members{
-        cbor::member{"id", &doc_advanced_packed::chosen::number},
-        CBOR_MEMBER(doc_advanced_packed::chosen, kept),
-    };
-};
-
-template <>
-struct cbor::describe_members<doc_advanced_packed::pair_of_tags> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1702};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_advanced_packed::pair_of_tags, t),
-        CBOR_MEMBER(doc_advanced_packed::pair_of_tags, w),
-    };
-};
-
-namespace doc_advanced_packed
+namespace doc_advanced_schema
 {
 
 template <class A>
@@ -119,20 +92,36 @@ concept schema_path_compiles = requires(std::string_view const s, Index const...
     cbor::schema<T>::template at_path<Path>(s, i...);
 };
 
-// The section "The message" states that a message is one tag 113 of Packed CBOR, and that item_size of a message is
-// its size.
+// The section "The message" states that a message is one tag 113 of Packed CBOR, that a list of fixed-size structs is
+// one byte string under tag 32873, that the message holds the description, and that item_size of a message is its
+// size.
 TEST_CASE("doc advanced schema: the message")
 {
     auto const bytes = cbor::schema<car>::encode(sample);
     REQUIRE(bytes.has_value());
     CHECK_EQ(bytes->substr(0, 2), "\xd8\x71"s);
+    CHECK_NE(bytes->find("\xd9\x80\x69"sv), std::string::npos);
+    auto const description = cbor::schema<car>::description();
+    CHECK_NE(bytes->find(std::string_view(description.data(), description.size())), std::string::npos);
     CHECK_EQ(cbor::item_size(*bytes), bytes->size());
+}
+
+// The section "The message" states that a float field holds the bits of the value, so a NaN keeps its bits.
+TEST_CASE("doc advanced schema: a NaN keeps its bits")
+{
+    float const nan = std::bit_cast<float>(std::uint32_t{0x7fc00123});
+    auto const bytes = cbor::schema<car>::encode(car{"", 0, {{1, nan}}, {}, std::nullopt});
+    REQUIRE(bytes.has_value());
+    auto const read = cbor::schema<car>::at_path<"$.tires[0].pressure">(*bytes);
+    REQUIRE(read.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>(*read), 0x7fc00123u);
 }
 
 // The section "Structs and tags" says that every struct needs its own tag.
 TEST_CASE("doc advanced schema: a struct needs a tag of its own")
 {
     CHECK(cbor::tags_registered<car>());
+    CHECK_EQ(cbor::describe_members<tire>::tag->number, 1700u);
     CHECK_FALSE(cbor::tags_registered<untagged>());
     CHECK_FALSE(cbor::tags_registered<pair_of_tags>());
 }
@@ -183,6 +172,21 @@ TEST_CASE("doc advanced schema: encode and decode")
     CHECK_EQ((*shared)->track.size(), 3u);
 }
 
+// The section "Encode and decode" says that tire has padding, and shows the message without the description.
+TEST_CASE("doc advanced schema: the description apart")
+{
+    CHECK_GT(sizeof(tire), sizeof(std::uint16_t) + sizeof(float));
+    std::string const bytes = *cbor::schema<car>::encode(sample);
+    constexpr auto apart = cbor::description_place::apart;
+    auto const data = cbor::schema<car>::encode<apart>(sample);
+    REQUIRE(data.has_value());
+    auto const back = cbor::schema<car>::decode<apart>(std::string(*data));
+    REQUIRE(back.has_value());
+    CHECK_EQ((*back)->make, "Volvo");
+    CHECK_EQ((*back)->tires[1].pressure, 2.25f);
+    CHECK_EQ(data->size() + cbor::schema<car>::description().size(), bytes.size());
+}
+
 // The section "One value with no accessor" shows schema<T>::at_path for a value that holds no view.
 TEST_CASE("doc advanced schema: one value with no accessor")
 {
@@ -192,6 +196,16 @@ TEST_CASE("doc advanced schema: one value with no accessor")
     CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0uz), 2.5f);
     CHECK_EQ(cbor::schema<car>::at_path<"$.track[2]">(bytes), 3.0);
     CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
+}
+
+// The section "One value with no accessor" says that [n] on a byte string reads one byte.
+TEST_CASE("doc advanced schema: one byte of a byte string")
+{
+    auto const packet = cbor::schema<frame>::encode(frame{{1, 2, 3, 4}, {std::byte{9}, std::byte{8}}});
+    REQUIRE(packet.has_value());
+    CHECK_EQ(cbor::schema<frame>::at_path<"$.code[2]">(*packet), std::uint8_t{3});
+    CHECK_EQ(cbor::schema<frame>::at_path<"$.payload[1]">(*packet), std::byte{8});
+    CHECK_EQ(cbor::schema<frame>::at_path<"$.payload[]">(*packet, 2uz).error(), error::index_out_of_bounds);
 }
 
 // The section "One value with no accessor" says that a path to a view, to a member that is not trivially copyable,
@@ -204,6 +218,8 @@ TEST_CASE("doc advanced schema: a wrong path does not compile")
     CHECK_FALSE(schema_path_compiles<car, "$.wheels">);
     CHECK_FALSE(schema_path_compiles<car, "$.tires[].diameter">);
     CHECK(schema_path_compiles<car, "$.tires[].diameter", std::size_t>);
+    CHECK(schema_path_compiles<frame, "$.code[3]">);
+    CHECK_FALSE(schema_path_compiles<frame, "$.code[4]">);
 }
 
 // The section "The accessor" shows path, the root accessor, and relative paths that start with @.
@@ -223,6 +239,11 @@ TEST_CASE("doc advanced schema: the accessor")
     auto const note = root->at_path<"$.note">();
     REQUIRE(note.has_value());
     CHECK_FALSE(note->has_value());
+    CHECK((std::ranges::random_access_range<decltype(*tires)>));
+    std::vector<float> seen;
+    for (auto const t : *tires | std::views::drop(1))
+        seen.push_back(*t.at_path<"@.pressure">());
+    CHECK_EQ(seen, std::vector<float>{2.25f});
 }
 
 // The section "The accessor" says that the accessor holds the owner, so it stays valid after the caller releases the
@@ -245,6 +266,11 @@ TEST_CASE("doc advanced schema: the accessor holds the owner")
     auto const beside = cbor::schema<car>::path(held, std::string_view(*held));
     REQUIRE(beside.has_value());
     CHECK_EQ(beside->at_path<"$.seats">(), 5u);
+    auto moved = cbor::schema<car>::path(std::string(*held));
+    REQUIRE(moved.has_value());
+    auto const kept = std::move(*moved);
+    CHECK_EQ(kept.at_path<"$.seats">(), 5u);
+    CHECK_THROWS_AS((void)moved->at_path<"$.seats">(), std::logic_error);
     using A = cbor::schema<car>::accessor<>;
     CHECK(reads_seats<A const &>);
     CHECK_FALSE(reads_seats<A>);
@@ -287,6 +313,9 @@ TEST_CASE("doc advanced schema: errors")
 {
     std::string const bytes = *cbor::schema<car>::encode(sample);
     CHECK_EQ(cbor::schema<car>::decode(bytes.substr(0, 3)).error(), error::too_little_data);
+    std::string_view const view = bytes;
+    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(view.substr(0, view.size() - 1)).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<car>::path(bytes.substr(0, bytes.size() / 2)).error(), error::too_little_data);
     std::string const small = *cbor::schema<tire>::encode(tire{1, 1.0f});
     CHECK_EQ(cbor::schema<car>::decode(std::string(small)).error(), error::too_little_data);
     CHECK_EQ(cbor::schema<tire>::decode(std::string(bytes)).error(), error::incorrect_type);
@@ -298,5 +327,5 @@ TEST_CASE("doc advanced schema: errors")
     CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(forged).error(), error::incorrect_type);
 }
 
-} // namespace doc_advanced_packed
+} // namespace doc_advanced_schema
 

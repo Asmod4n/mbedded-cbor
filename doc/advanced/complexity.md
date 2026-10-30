@@ -5,8 +5,9 @@ change to a function must keep the O form that this document gives for
 it. A row names a function by its name, not by a line number.
 
 A row marked "not checked" was not compared with the code. The rows of
-the sections ref.hpp, lazy.hpp, decode.hpp and the rows of `at_path` and
-`item` were compared with the headers of this version. The other rows
+the sections describe.hpp, schema.hpp, ref.hpp, lazy.hpp, decode.hpp,
+the float rows of head.hpp and the rows of `at_path` and `item` were
+compared with the headers of this version. The other rows
 were compared with an earlier version of the headers and were not
 compared again.
 
@@ -52,9 +53,9 @@ compared again.
 | `heads::head_write<Exact>(span<char>, size_t, major_type, uint64_t)` | O(1) | O(1) | |
 | `heads::head_append<Container>(Container&, major_type, uint8_t, uint64_t)` | O(1) amortized; O(size of out) on growth | O(1) amortized | The container allocates when it grows. |
 | `heads::head_append<Container>(Container&, major_type, uint64_t)` | O(1) amortized | O(1) amortized | As above. |
-| `heads::big_endian(uint128)` | O(1) | O(1) | Reflection and int128 only. |
-| `heads::u32_write(span<char>, size_t, size_t)` | O(1) | O(1) | Copies 4 bytes. Reflection only. |
-| `heads::item_head_write(span<char>, size_t, major_type, size_t)` | O(1) | O(1) | Writes 5 bytes. Reflection only. |
+| `heads::big_endian(uint128)` | O(1) | O(1) | int128 only. |
+| `heads::u32_write(span<char>, size_t, size_t)` | O(1) | O(1) | Copies 4 bytes. |
+| `heads::item_head_write(span<char>, size_t, major_type, size_t)` | O(1) | O(1) | Writes 5 bytes. |
 | `heads::unsigned128_read(span<char const, 16>)` | O(1) | O(1) | Confirmed. |
 | `heads::magnitude_without_leading_zeros(string_view)` | O(L) worst; O(1) common | O(1), a view | find_first_not_of. Confirmed. |
 | `heads::magnitude_value(string_view)` | O(L) | O(1) | The caller bounds L with check_magnitude_size. |
@@ -64,8 +65,10 @@ compared again.
 | `heads::decoder::byte_string_decode(uint64_t)` | O(1) | O(1), a view | Checks bytes left. Copies nothing. |
 | `heads::float_decode_binary16(uint16_t)` | O(1) | O(1) | |
 | `heads::float_encode_binary16(float)` | O(1) | O(1) | |
-| `heads::preferred_float_info(double)` | O(1) | O(1) | |
-| `heads::float_encode(simple_float_information, double)` | O(1) | O(1) | |
+| `heads::preferred_float_info(double)`, `preferred_float_info(float)` | O(1) | O(1) | A NaN goes to preferred_nan_info. |
+| `heads::preferred_nan_info(uint64_t)` | O(1) | O(1) | The shortest width that keeps the bits. |
+| `heads::nan_encode(simple_float_information, uint64_t)` | O(1) | O(1) | |
+| `heads::float_encode(simple_float_information, double)`, `float_encode(simple_float_information, float)` | O(1) | O(1) | |
 | `heads::is_nan(precision, uint64_t)` | O(1) | O(1) | |
 | `heads::significand_zero_pad(precision, uint64_t)` | O(1) | O(1) | |
 | `heads::nan_decode(precision, uint64_t)` | O(1) | O(1) | |
@@ -220,7 +223,6 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | `jsonpath::name_first(char)` | O(1) | O(1) | |
 | `jsonpath::function_name_char(char)` | O(1) | O(1) | |
 | `jsonpath::int_read(string_view, size_t)` | O(t), t = digits | O(1) | The digit scan has no bound; the 16-digit check comes after it. |
-| `jsonpath::number_end(string_view, size_t)` | O(t) | O(1) | |
 | `query::string_parse` | O(t) | O(t) | Allocates. |
 | `query::literal_parse` | O(t) expected | O(t) | Inner cost not checked. |
 | `query::selector_parse` | O(t) | O(t) through callees | Filter depth bounded by depth_max. |
@@ -324,58 +326,84 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | `diagnostic_write` | O(n) common; worst depends on check_tag_content | O(n) output; O(d) frames | |
 | `diagnostic_notation` | O(n) common | O(n) string; O(s); O(d) | |
 
+## describe.hpp
+
+All rows are compile time and have no run-time cost.
+
+| Function | Time | Memory | Notes |
+|---|---|---|---|
+| `map_key` constructors | O(1); O(len) for a text | O(1), a view | consteval. |
+| `CBOR_MEMBER(T, m)`, `CBOR_DEFINE_TYPE(T, tag, members...)` | O(c) | O(c) static | Macros. CBOR_DEFINE_TYPE writes the specialization of describe_members. |
+| `describe::get<I>` | O(1) | O(1) | |
+
 ## schema.hpp
 
-All rows marked "compile time" have no run-time cost.
+All rows marked "compile time" have no run-time cost. t is the count of
+the struct types in a message.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `no_fixed_size<T>()` | O(1) compile time | O(1) | |
-| `key::key(char const*)` | O(len) compile time | O(len) static | |
-| `reflection::key_of` | O(a + len) compile time | O(len) static | |
-| `reflection::tag_number_of` | O(a) compile time | O(1) | Not confirmed. |
-| `reflection::keys_unique` | O(c log c·len) compile time | O(c) | |
-| `reflection::annotated` | O(a) compile time | O(1) | |
-| `reflection::data_members<U>()` | O(c·a) compile time | O(c) static | |
+| `reflection::descriptions_valid<Root>()` | O(t·c²) compile time | O(c) | pointers_unique compares each pair. |
+| `reflection::description_valid<U>()`, `tag_declared`, `tag_number_of`, `members_of_class`, `decode_form_valid` | O(c²) compile time | O(c) | |
+| `reflection::tag_taken_by_standard_type`, `tag_invalid` | O(1) compile time | O(1) | |
+| `reflection::pointers_differ`, `pointer_differs_from_all`, `pointers_unique` | O(1), O(c), O(c²) compile time | O(1) | |
+| `reflection::keys_unique`, `keys_sorted`, `key_order` | O(c log c·len) compile time | O(c) | |
+| `reflection::key_encoded`, `key_encoding_of`, `key_encoding_less` | O(len) compile time | O(len) | |
+| `reflection::reflected_members_listed`, `public_members`, `listed_once` | O(c²) compile time | O(c) static | Reflection only. True without reflection. |
+| `reflection::annotations_absent`, `annotated` | O(c·a) compile time | O(1) | Reflection only. True without reflection. |
+| `reflection::key_of(info)`, `data_members<U>()` | O(len), O(c log c·len) compile time | O(len), O(c) static | Reflection only. |
+| `reflection::member_index_of` | O(c) compile time | O(1) | |
+| `reflection::uses_allocator_aggregate`, `element_make` | O(c) compile time; element_make O(c) | O(1) | With reflection or Boost.PFR; else make_obj_using_allocator. |
+| `reflection::arguments_make` | O(c) | O(c) stack | A class with no default constructor. |
+| `reflection::for_each_field<U>` | O(c) | O(1) | In key order. |
 | `reflection::typed_array_tag<E>()` | O(1) compile time | O(1) | |
-| `reflection::typed_array_element_read<E>` | O(1) | O(1) stack | |
-| `reflection::typed_array_element_write<E>` | O(1) | O(1) | |
+| `reflection::typed_array_element_read<E>`, `typed_array_element_write<E>` | O(1) | O(1) stack | |
+| `reflection::fixed_member_valid`, `fixed_struct_valid`, `fixed_width`, `fixed_offset` | O(c) compile time per struct | O(1) | |
+| `reflection::fixed_layout_native<S>()` | O(c·sizeof(S)) compile time | O(sizeof(S)) | One std::bit_cast probe per member. |
+| `reflection::description_encode`, `description_types_collect`, `description_members_collect` | O(t + Σc) compile time | O(t) | |
+| `reflection::description_of<Root>()` | O(t·c·len) compile time | O(t·c·len) static | |
 | `reflection::fixed_width_head_encode` | O(1) amortized | O(1) | Compile time only. |
 | `reflection::zero_initialized_encode<Root, T>` | O(fixed_size) compile time | O(fixed_size) | |
 | `reflection::zero_initialized<Root, T>()` | O(fixed_size) compile time; O(1) at run time | O(fixed_size) static | |
 | `reflection::record_keys<U>()` | O(c·len) compile time | O(c·len) static | |
-| `reflection::record_types_collect<T>` | O(t² + Σc) compile time | O(t) | |
-| `reflection::packing_table_of<Root>()` | O(t² + Σc) compile time | O(t) static | |
-| `reflection::shared_first_of`, `argument_index_of` | O(1), O(t) compile time | O(1) | |
-| `reflection::straight_reference_encode`, `_size` | O(t) compile time | O(1) | |
-| `reflection::packing_prefix_of<Root>()` | O(q) compile time | O(q) static | |
-| `reflection::float_bits<U>(U)` | O(1) | O(1) | |
+| `reflection::record_types_collect<T>`, `record_members_collect` | O(t² + Σc) compile time | O(t) | |
+| `reflection::packing_table_of<Root>` | O(t² + Σc) compile time | O(t) static | |
+| `reflection::shared_first_of`, `fillers_of`, `argument_index_of`, `table_first_of` | O(1), O(1), O(t), O(1) compile time | O(1) | |
+| `reflection::fixed_array_head<Root, S>()` | O(t) compile time | O(1) static | |
+| `reflection::straight_reference_encode`, `straight_reference_size` | O(t) compile time | O(1) | |
+| `reflection::packing_prefix_of<Root, D>()` | O(q) compile time | O(q) static | With apart, no description. |
+| `reflection::float_bits<U>(U)` | O(1) | O(1) | Copies the bits. |
 | `second_item::bytes_add`, `block_add` | O(1) | O(1) | checked_add, checked_mul. |
-| `second_item::elements_add<E, R>` | O(1) or O(m) | O(1) heap; O(d) stack | |
+| `second_item::elements_add<E, R>` | O(1) for numbers, enums and fixed-size structs; else O(m) | O(1) heap; O(d) stack | |
 | `second_item::add<T>` | O(v); common O(i) | O(1) heap; O(d) stack | Depth follows the value. |
 | `reflection::zero_initialized_copy<Root, E>` | O(fixed_size<E>) | O(1) | |
-| `reflection::directory_at<Root>()` | O(1) | O(1) | |
+| `reflection::directory_at<Root, D>()` | O(1) | O(1) | |
 | `reflection::elements_encode` | O(m·fixed_size + dynamic) | O(1) heap | |
-| `reflection::reference_encode` | O(len), O(m) or O(k) plus content | O(1) heap | No allocation. |
+| `reflection::reference_encode` | O(len), O(m) or O(k) plus content | O(1) heap | No allocation. A list of fixed-size structs is one copy of O(m·b) where fixed_layout_native holds. |
+| `reflection::fixed_struct_write<S>` | O(fixed_width<S>) | O(1) | |
 | `reflection::value_encode` | whole value O(n) | O(1) heap | |
-| `reflection::member_named`, `step_end`, `index_end`, `index_of` | O(c·len), O(L), O(L), O(digits) compile time | O(1) | |
-| `reflection::fixed_value_read<T>` | O(1) | O(1) | |
-| `reflection::fixed_head_valid<T>` | O(1) | O(1) | |
-| `reflection::class_tag_valid` | O(1) | O(1) | |
-| `reflection::shared_index_read` | O(1) | O(1) | Not opened. |
+| `reflection::member_named`, `step_end`, `index_end`, `index_of`, `count_index_arguments` | O(c·len), O(L), O(L), O(digits), O(L) compile time | O(1) | |
+| `reflection::fixed_value_read<T>`, `fixed_head_valid<T>`, `class_tag_valid`, `fixed_length_head_valid` | O(1) | O(1) | |
+| `reflection::fixed_leaf_read<M>` | O(1) | O(1) | |
+| `reflection::shared_index_read` | O(1) | O(1) | |
+| `reflection::fixed_array_read<Root, S>` | O(1) | O(1) | check_whole_elements. |
 | `reflection::item_reference_read` | O(1) | O(1) | checked_mul. |
 | `reflection::directory_entry` | O(1) | O(1) | |
 | `reflection::reference_read`, `item_read` | O(1) | O(1) | check_index. |
-| `reflection::directory_read<T>` | O(1) in n | O(1) | |
+| `reflection::packing_prefix_valid<T, D>` | O(q) | O(1) | |
+| `reflection::directory_read<T, Verified, D>` | O(q) | O(1) | |
+| `reflection::too_little_data_if_truncated<T, D>` | O(n) | O(1) | Error path only: one items_skip. |
 | `reflection::index_arguments`, `index_argument` | O(L) compile time | O(1) | |
-| `reflection::path_valid`, `path_result` | O(p·(L + c·len)) compile time | O(p) instantiations | |
-| `reflection::path_walk` | O(p) | O(1) | check_index. |
+| `reflection::path_valid`, `path_result`, `fixed_path_result` | O(p·(L + c·len)) compile time | O(p) instantiations | |
+| `reflection::path_walk`, `fixed_walk` | O(p) | O(1) | check_index. |
 | `decode_cursor::reference_take` | O(1) | O(1) | Changes the cursor. |
 | `decode_cursor::value_read<Root, T>` | O(n); O(n + k log k) with an ordered map | O(n) output; O(d) stack | Allocates per string, list and node. |
+| `decode_cursor::constructed_read`, `element_read` | as value_read | as value_read | |
+| `decode_cursor::fixed_struct_read<S>` | O(fixed_width<S>) | O(1) | |
 | `reflection::root_read<T>` | as value_read | as value_read | |
-| `reflection::encoded_size<T>` | O(1) | O(1) | |
-| `reflection::encoded_write<Exact, T>` | O(n) | O(1) heap | |
-| `reflection::members_of<U>()` | O(c log c·len) compile time | O(c) static | |
+| `reflection::encoded_size<T, D>` | O(1) | O(1) | |
+| `reflection::encoded_write<Exact, D, T>` | O(n) | O(1) heap | |
 | `typed_array_view<E>` constructor | O(1) | O(1) | |
 | `typed_array_view::iterator` members | O(1) | O(1) | |
 | `typed_array_view::size`, `empty`, `begin`, `end` | O(1) | O(1) | |
@@ -387,16 +415,20 @@ All rows marked "compile time" have no run-time cost.
 | `reflection::fixed_size<T, Root>()` | compile time | O(1) | |
 | `reflection::member_offset` | O(c) compile time | O(1) | |
 | `schema::fixed_size`, `member_offset` | compile time | O(1) | |
+| `schema::description()` | O(1) | O(1), a static span | The compiler makes the bytes. |
 | `schema::accessor` constructors | O(1) | O(1) | |
 | `schema::accessor::at_path`, `view` | O(p) | O(1) | |
 | `schema::accessor::size()` | O(1) | O(1) | |
-| `schema::path(shared_ptr<string const>)` | O(1) in n | O(1) | |
-| `schema::at_path<Path>(string_view, Index...)` | O(q + p) | O(1) | |
-| `schema::path<Encoded>(Encoded&&)` | O(1) | O(1) | One make_shared. |
-| `schema::decode<Encoded>(Encoded&&)` | as decode(owner, view) | O(1) + output | |
-| `schema::decode(shared_ptr<string const>)` | O(n); + k log k ordered | O(n) output | |
-| `schema::encode(T const&)` | O(i + n) | O(n) | One std::string. |
-| `schema::encode<Target>(T const&, Target&&)` | O(i + n) | container O(n); span none; other message O(n) temporary | |
+| `schema::accessor::iterator` members, `begin`, `end` | O(1) | O(1) | A list of fixed-size structs. |
+| `schema::accessor<fixed_element<S>>::at_path` | O(p) | O(1) | |
+| `schema::path(shared_ptr<string const>)`, `path(shared_ptr<void const>, Encoded const&)` | O(q) in n | O(1) | An error can add too_little_data_if_truncated. |
+| `schema::path<Encoded>(Encoded&&)` | O(q) | O(1) | One make_shared. |
+| `schema::at_path<Path, D>(string_view, Index...)` | O(q + p) | O(1) | An error can add too_little_data_if_truncated. |
+| `schema::decode<D, Encoded>(Encoded&&)` | as decode(owner, view) | O(1) + output | |
+| `schema::decode(shared_ptr<string const>)` and the other forms | O(n); + k log k ordered | O(n) output | |
+| `schema::unverified_path`, `unverified_at_path`, `unverified_decode` | as path, at_path, decode | as path, at_path, decode | Fewer checks; no too_little_data_if_truncated. |
+| `schema::encode<D>(T const&)` | O(i + n) | O(n) | One std::string. |
+| `schema::encode<D, Target>(T const&, Target&&)` | O(i + n) | container O(n); span none; other message O(n) temporary | |
 
 ## structs.hpp
 
