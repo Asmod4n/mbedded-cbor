@@ -328,8 +328,18 @@ inline void preferred_float(std::string &out, double const v)
         for (int shift = 8 * (bytes - 1); shift >= 0; shift -= 8)
             out.push_back(static_cast<char>(bits >> shift));
     };
-    if (std::isnan(v))
-        return put(25, 0x7e00, 2);
+    if (std::isnan(v)) {
+        // RFC 8949 4.1: a NaN takes a shorter width only where zeros on the right of its significand give the
+        // same NaN back. Of the 52 bits of the significand, binary16 keeps the top 10 and binary32 the top 23.
+        std::uint64_t const bits = std::bit_cast<std::uint64_t>(v);
+        std::uint64_t const nan_sign = bits >> 63;
+        std::uint64_t const significand = bits & ((std::uint64_t{1} << 52) - 1);
+        if ((significand & ((std::uint64_t{1} << 42) - 1)) == 0)
+            return put(25, nan_sign << 15 | 0x7c00 | significand >> 42, 2);
+        if ((significand & ((std::uint64_t{1} << 29) - 1)) == 0)
+            return put(26, nan_sign << 31 | 0x7f800000 | significand >> 29, 4);
+        return put(27, bits, 8);
+    }
     std::uint64_t const sign = std::signbit(v) ? 1 : 0;
     if (std::isinf(v))
         return put(25, sign << 15 | 0x7c00, 2);

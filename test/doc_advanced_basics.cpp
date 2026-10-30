@@ -85,11 +85,9 @@ TEST_CASE("doc advanced basics: not_singular_query")
 // The table of the section "Every error value" says which errors structs gives besides the errors of a lazy.
 TEST_CASE("doc advanced basics: the errors of structs")
 {
-#ifdef __cpp_impl_reflection
     CHECK(cbor::structs<std::uint8_t>::decode("\x01\x02"s).has_value());
     CHECK(cbor::structs<std::map<std::string, int>>::decode(preferred(M("a"s, 1)) + "\x00"s).has_value());
     CHECK_EQ(cbor::structs<std::uint8_t>::decode("\x1c"s).error(), error::syntax_error);
-#endif
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01\xff"sv), "[_ 1]");
 }
 
@@ -105,7 +103,6 @@ TEST_CASE("doc advanced basics: limits")
     CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
 }
 
-#ifdef __cpp_impl_reflection
 // The section "Memory" shows that the caller bounds the memory of a decode with a std::pmr resource, and that
 // a resource that refuses after 64 bytes gives not_enough_memory.
 TEST_CASE("doc advanced basics: a std::pmr target")
@@ -122,7 +119,6 @@ TEST_CASE("doc advanced basics: a std::pmr target")
     REQUIRE(fits.has_value());
     CHECK_EQ((**fits).size(), 2u);
 }
-#endif
 
 // The section "Threads" states that a lazy holds only its bytes and its offset, so several threads read one lazy.
 TEST_CASE("doc advanced basics: threads")

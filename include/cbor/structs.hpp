@@ -939,7 +939,8 @@ class generic
             return true;
     }
 
-    static std::size_t float_size(double const value)
+    template <std::floating_point F>
+    static std::size_t float_size(F const value)
     {
         switch (heads::preferred_float_info(value)) {
         case rfc8949::simple_float_information::half_precision_float:
@@ -984,7 +985,7 @@ class generic
                 return heads::head_size(value);
         } else if constexpr (std::is_floating_point_v<U>) {
             static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::structs reads and writes float and double only.");
-            return float_size(static_cast<double>(value));
+            return float_size(value);
         } else if constexpr (is_tagged_standard_type<U>) {
             auto const content = tag_content_size(value);
             if (!content) [[unlikely]]
@@ -1178,9 +1179,8 @@ class generic
             }
             return at + heads::head_write(out, at, major_type::unsigned_integer, static_cast<std::uint64_t>(value));
         } else if constexpr (std::is_floating_point_v<U>) {
-            double const d = static_cast<double>(value);
-            rfc8949::simple_float_information const info = heads::preferred_float_info(d);
-            return at + heads::head_write(out, at, major_type::simple_float, std::to_underlying(info), heads::float_encode(info, d));
+            rfc8949::simple_float_information const info = heads::preferred_float_info(value);
+            return at + heads::head_write(out, at, major_type::simple_float, std::to_underlying(info), heads::float_encode(info, value));
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>) {
             at += heads::head_write(out, at, major_type::text_string, value.size());
             return bytes_write(out, at, value);

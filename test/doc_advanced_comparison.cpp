@@ -53,13 +53,11 @@ TEST_CASE("doc advanced comparison: shared values")
     // end shared
     CHECK_EQ(second->type(), cbor::type::tag);
     CHECK_EQ(second->get<std::uint64_t>(), 0u);
-#ifdef __cpp_impl_reflection
     // begin shared-structs
     auto const v = cbor::structs<std::vector<std::string>>::decode(owner);
     // v.error() is cbor::error::incorrect_type
     // end shared-structs
     CHECK_EQ(v.error(), error::incorrect_type);
-#endif
 }
 
 

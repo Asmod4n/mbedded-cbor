@@ -36,7 +36,6 @@ TEST_CASE("doc comparison: broken input")
     CHECK(broken);
 }
 
-#ifdef __cpp_impl_reflection
 
 namespace doc_comparison
 {
@@ -63,4 +62,3 @@ TEST_CASE("doc comparison: write a struct and read it back")
 
 } // namespace doc_comparison
 
-#endif

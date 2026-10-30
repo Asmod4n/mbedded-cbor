@@ -1164,7 +1164,7 @@ class reflection
 #endif
 #if defined(__STDCPP_BFLOAT16_T__)
         if constexpr (digits == std::numeric_limits<std::bfloat16_t>::digits)
-            return std::bit_cast<std::uint32_t>(static_cast<float>(value));
+            return std::uint32_t{std::bit_cast<std::uint16_t>(value)} << std::numeric_limits<std::uint16_t>::digits;
         else
 #endif
         if constexpr (digits == std::numeric_limits<float>::digits)
@@ -1564,6 +1564,11 @@ class reflection
                 using F = std::conditional_t<sizeof(B) == sizeof(std::uint16_t), std::float16_t,
                                              std::conditional_t<sizeof(B) == sizeof(std::uint32_t), float,
                                                                 double>>;
+#if defined(__STDCPP_BFLOAT16_T__)
+                if constexpr (std::same_as<U, std::bfloat16_t>)
+                    if (static_cast<std::uint16_t>(bits) == 0)
+                        return std::bit_cast<std::bfloat16_t>(static_cast<std::uint16_t>(bits >> std::numeric_limits<std::uint16_t>::digits));
+#endif
                 return static_cast<U>(std::bit_cast<F>(bits));
 #else
                 if constexpr (sizeof(B) == sizeof(std::uint16_t))

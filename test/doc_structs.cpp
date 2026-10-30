@@ -1,6 +1,5 @@
 #include "reference.hpp"
 
-#ifdef __cpp_impl_reflection
 
 #include <array>
 #include <cstddef>
@@ -156,4 +155,3 @@ TEST_CASE("doc structs: a vector of numbers reads only a typed array")
 
 } // namespace doc_structs
 
-#endif
