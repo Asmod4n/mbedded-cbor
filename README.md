@@ -102,8 +102,10 @@ The code of every library, task by task:
 | g++ 15, clang 23, `-std=c++23` | Linux | every part in C++23 |
 | AppleClang of Xcode 16 and 26 | macOS 15 | every part in C++23 |
 
-On g++ 15, clang 23 and AppleClang, `cbor::structs` and `cbor::schema`
-use Boost.PFR 1.84 or later. It is the only dependency.
+On g++ 15, clang 23 and AppleClang, `cbor::structs` reads the members
+through Boost.PFR 1.84 or later, and `cbor::schema` uses it to check that
+a description lists every member of an aggregate. It is the only
+dependency.
 
 CMake takes Boost 1.84 or later from the system, else its own copy in
 `third_party/boost_pfr`. Details: [doc/basics.md](doc/basics.md), section 5.
