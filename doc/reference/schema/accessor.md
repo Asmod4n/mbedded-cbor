@@ -55,8 +55,8 @@ call: u.at_path<"@.diameter">()
 result: 18
 call: root->view<"$.track">()->size()
 result: 3
-call: tires->at_path<"@[]">(2u)
-result: unexpected cbor::error::index_out_of_bounds
+call: tires->at_path<"@[]">(0u)
+result: accessor of a tire in a std::vector<tire>
 ```
 
 Reads the part `U` of a message of `T`. A path that starts with `@`

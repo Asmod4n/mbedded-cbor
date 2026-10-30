@@ -23,10 +23,10 @@ call: cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0u)
 result: 2.5
 call: cbor::schema<car>::at_path<"$.track[2]">(bytes)
 result: 3
-call: cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5u)
-result: unexpected cbor::error::index_out_of_bounds
-call: cbor::schema<car>::at_path<"$.make">(bytes)
-result: fault: at_path<"$.make"> with 0 indexes does not compile
+call: cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 1u)
+result: 18
+call: cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 1u)
+result: 2.25
 ```
 
 Reads one value at `Path` and returns a `std::expected` of it. It makes

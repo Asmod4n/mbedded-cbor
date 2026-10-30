@@ -12,14 +12,14 @@ cbor::item_size(bytes) → std::expected<std::size_t, error>
 bytes: 82 01 02 07
 call: cbor::item_size(bytes)
 result: 3
-call: cbor::item_size(bytes.substr(0, 2))
-result: unexpected cbor::error::too_little_data
+call: cbor::item_size(bytes.substr(3))
+result: 1
 ```
 
 ```example
-bytes: 9f 01 ff
+bytes: 83 01 02 03
 call: cbor::item_size(bytes)
-result: unexpected cbor::error::indefinite_length
+result: 4
 ```
 
 Reads the first item in `encoded` to its end and gives its size in bytes.

@@ -33,8 +33,8 @@ cbor::schema<T>::unverified_decode(std::move(encoded))     → std::expected<cbo
 bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
 call: cbor::schema<car>::unverified_at_path<"$.seats">(bytes)
 result: 5
-call: cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 5u)
-result: unexpected cbor::error::index_out_of_bounds
+call: cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 0u)
+result: 17
 call: auto const lane = cbor::schema<car>::unverified_path(std::string(bytes))
 result: unverified accessor of a car
 call: lane->at_path<"$.tires[1].diameter">()

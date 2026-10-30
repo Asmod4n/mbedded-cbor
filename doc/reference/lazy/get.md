@@ -28,10 +28,10 @@ call: **name
 result: "ann"
 call: doc->at("age")->get<std::int64_t>()
 result: 300
-call: doc->at("age")->get<std::uint8_t>().error()
-result: cbor::error::number_out_of_range
-call: doc->at("name")->get<int>().error()
-result: cbor::error::incorrect_type
+call: doc->at("age")->get<std::uint16_t>()
+result: 300
+call: doc->at("name")->type()
+result: cbor::type::text_string
 ```
 
 Reads the value at the lazy as `T`.

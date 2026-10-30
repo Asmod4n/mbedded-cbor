@@ -21,9 +21,9 @@ result: "[_ 1]"
 ```
 
 ```example
-bytes: 01 02
+bytes: c1 00
 call: cbor::diagnostic_notation(bytes)
-result: unexpected cbor::error::syntax_error
+result: "1(0)"
 ```
 
 Gives the text of the item in `encoded` in the diagnostic notation of
