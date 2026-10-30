@@ -3,7 +3,7 @@
 A plain CBOR message carries its keys and its structure in every
 message. To read one field, a reader walks over the items before it.
 `cbor::schema<T>` removes that walk. It writes a struct as Packed CBOR
-(draft-ietf-cbor-packed): the struct is the layout, a field of fixed size
+(draft-ietf-cbor-packed-19): the struct is the layout, a field of fixed size
 sits at an offset that the compiler computes, and a read goes to that
 offset directly. FlatBuffers and Cap'n Proto work the same way, but the
 message stays CBOR: a decoder of Packed CBOR reads it as a map with the
@@ -19,7 +19,9 @@ names of the members as keys.
 builds with C++23 on g++ 15, g++ 16, clang 23 and AppleClang. With C++26
 reflection (g++ 16 with `-std=c++26 -freflection`) it also checks each
 description against the members that reflection reads.
-[basics.md](basics.md) states how errors come back.
+[basics.md](basics.md) states how errors come back. The reference with
+examples that run in the browser:
+<https://asmod4n.github.io/mbedded-cbor/schema.html>.
 
 ## 1. Write a message and read one field
 
@@ -30,15 +32,8 @@ struct sensor {
     std::vector<double> readings;
 };
 
-template <>
-struct cbor::describe_members<sensor> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(sensor, name),
-        CBOR_MEMBER(sensor, id),
-        CBOR_MEMBER(sensor, readings),
-    };
-};
+CBOR_DEFINE_TYPE(sensor, cbor::tag{1700},
+                 CBOR_MEMBER(sensor, name), CBOR_MEMBER(sensor, id), CBOR_MEMBER(sensor, readings));
 
 auto bytes = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
 if (!bytes)
@@ -52,14 +47,12 @@ auto const second = cbor::schema<sensor>::at_path<"$.readings[1]">(*bytes);   //
 
 ## 2. Tags and keys
 
-`schema` reads each struct from its description, the specialization of
-`cbor::describe_members` that `cbor::structs` reads too
-([structs.md](structs.md), section 3). The description gives the tag of
-the struct and lists every public member with its key. Each struct in a
-message has its own tag number.
-
-`CBOR_DEFINE_TYPE(type, tag, members...)` writes the same
-specialization in one line, at global scope:
+`schema` reads each struct from its description.
+`CBOR_DEFINE_TYPE(type, tag, members...)` writes it at global scope: the
+tag of the struct and every public member with its key. Each struct in a
+message has its own tag number. The macro writes a specialization of
+`cbor::describe_members`, which `cbor::structs` reads too
+([structs.md](structs.md), section 3).
 
 ```cpp
 struct gauge {
@@ -133,8 +126,10 @@ if (readings)
 `at(i)`.
 
 A list of structs whose members all have a fixed width (numbers, `bool`,
-enums, `std::array`s of them other than bytes, and inner structs of the same kind) is one
-byte string of its elements: little endian, no padding, under tag 32873.
+enums, `std::array`s of them other than bytes, and inner structs of the
+same kind) is one byte string of its elements: little endian, no padding,
+under tag 32873. Where the struct in memory has the same bytes, `encode`
+writes the list with one copy, on every compiler.
 The table at the start of the message describes the element once: its
 class tag and the key and RFC 8746 type of each member. The accessor of
 such a list is a range of element accessors, so a page is
@@ -150,17 +145,8 @@ struct track {
     std::vector<point> points;
 };
 
-template <>
-struct cbor::describe_members<point> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
-    static constexpr std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
-};
-
-template <>
-struct cbor::describe_members<track> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
-    static constexpr std::tuple members{CBOR_MEMBER(track, points)};
-};
+CBOR_DEFINE_TYPE(point, cbor::tag{1703}, CBOR_MEMBER(point, x), CBOR_MEMBER(point, y));
+CBOR_DEFINE_TYPE(track, cbor::tag{1704}, CBOR_MEMBER(track, points));
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
 auto const lane = cbor::schema<track>::path(std::move(*message));
@@ -188,7 +174,22 @@ if (back)
 `decode` returns a `std::expected<cbor::ref<sensor>, cbor::error>`,
 as `structs` does.
 
-## 6. Errors
+## 6. Store the description apart
+
+The description of a struct is the same in every message of that struct.
+With `cbor::description_place::apart`, `encode` writes the message without
+it, and every read form reads such a message.
+`cbor::schema<T>::description()` gives the description once, for example
+to store it in one place and the data of each message in another.
+
+```cpp
+constexpr auto apart = cbor::description_place::apart;
+auto const data = cbor::schema<sensor>::encode<apart>(sensor{"t1", 7, {1.5, 2.5}});
+cbor::schema<sensor>::at_path<"$.id", apart>(*data);   // 7
+data->size() + cbor::schema<sensor>::description().size();   // the size of the message
+```
+
+## 7. Errors
 
 | Input | Error |
 |---|---|
@@ -200,7 +201,7 @@ as `structs` does.
 Every read checks the bytes that it reads. A read never goes outside the
 message, and a field with a wrong head gives an error.
 
-## 7. Read from a peer that you trust
+## 8. Read from a peer that you trust
 
 `unverified_path`, `unverified_at_path` and `unverified_decode` take the
 same arguments as `path`, `at_path` and `decode`. They do not check the
