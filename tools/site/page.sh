@@ -31,7 +31,8 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
       }"
     done
   done > $work/names.txt
-  /tmp/tokens /src $work "https://github.com/Asmod4n/mbedded-cbor/blob/$COMMIT/include/cbor" $work/names.txt > $work/tokens.txt
+  /tmp/tokens /src $work "https://github.com/Asmod4n/mbedded-cbor/blob/$COMMIT/include/cbor" $work/names.txt \
+    test/doc_types.hpp "https://github.com/Asmod4n/mbedded-cbor/blob/$COMMIT/test/doc_types.hpp" > $work/tokens.txt
   grep -v "^missing " $work/tokens.txt
   grep "^missing " $work/tokens.txt | cut -d" " -f2 | sort > $work/missing.txt
   if ! sort $site/concepts.txt | diff - $work/missing.txt; then
@@ -44,7 +45,7 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
   cp $site/style.css $site/site.js $site/examples.mjs /out/
   reference() {
     pandoc -f gfm -t html5 --template $site/reference.html --lua-filter $site/reference.lua \
-      -M tree=/src -M impl=$work/impl -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json "$2" -o /out/$1.html
+      -M tree=/src -M impl=$work/impl -M types=$work/types -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json "$2" -o /out/$1.html
   }
   reference index /src/doc/reference/index.md
   for g in ${SITE_GROUPS:-$groups}; do

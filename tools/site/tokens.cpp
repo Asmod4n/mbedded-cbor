@@ -281,14 +281,16 @@ std::vector<line_range> ranges_of(std::vector<declaration> const &all, std::stri
 
 int main(int const argc, char const *const *const argv)
 {
-    if (argc != 5) {
-        std::fprintf(stderr, "usage: tokens <tree> <out> <url of include/cbor at the commit> <names>\n");
+    if (argc != 7) {
+        std::fprintf(stderr, "usage: tokens <tree> <out> <url of include/cbor at the commit> <names> <types file> <url of the types file>\n");
         return 2;
     }
     std::filesystem::path const tree = argv[1];
     std::filesystem::path const out = argv[2];
     std::string const source_url = argv[3];
     std::filesystem::path const names = argv[4];
+    std::filesystem::path const types = argv[5];
+    std::string const types_url = argv[6];
     std::string const include = "-I" + (tree / "include").string();
     std::string const pfr = "-I" + (tree / "third_party/boost_pfr/include").string();
     char const *const arguments[] = {"-x", "c++", "-std=c++23", include.c_str(), pfr.c_str()};
@@ -357,6 +359,19 @@ int main(int const argc, char const *const *const argv)
         ++written;
     }
     clang_disposeTranslationUnit(unit);
+    std::string const types_path = (tree / types).string();
+    CXTranslationUnit types_unit = nullptr;
+    if (clang_parseTranslationUnit2(index, types_path.c_str(), arguments, std::size(arguments), nullptr, 0,
+                                    CXTranslationUnit_KeepGoing, &types_unit) != CXError_Success) {
+        std::fprintf(stderr, "tokens: libclang cannot parse %s\n", types_path.c_str());
+        return 1;
+    }
+    std::string const types_text = site::file_read(tree / types);
+    auto const types_tokens = site::tokens_read(types_unit, clang_getFile(types_unit, types_path.c_str()),
+                                                static_cast<std::uint32_t>(types_text.size()));
+    site::file_write(out / "types" / (types.filename().string() + ".html"),
+                     site::highlighted(types_text, types_tokens, 1, UINT32_MAX, types_url));
+    clang_disposeTranslationUnit(types_unit);
     clang_disposeIndex(index);
     std::printf("tokens: %zu headers, %zu pages with an implementation\n", files.size(), written);
     return 0;
