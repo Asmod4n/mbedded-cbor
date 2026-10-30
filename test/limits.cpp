@@ -40,7 +40,6 @@ TEST_CASE("limits: with no size limit a head of 2^64 - 1 finds too little data")
     CHECK_EQ(cbor::diagnostic_notation(array).error(), error::too_little_data);
 }
 
-#ifdef __cpp_impl_reflection
 
 namespace
 {
@@ -156,4 +155,3 @@ TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enoug
     }
 }
 
-#endif

@@ -181,7 +181,6 @@ TEST_CASE("simple value: simple_value_encode writes every simple value 0 to 255"
     }
 }
 
-#ifdef __cpp_impl_reflection
 // structs reads and writes cbor::simple_value with the same bytes.
 TEST_CASE("simple value: structs reads and writes every simple value 0 to 255")
 {
@@ -200,4 +199,3 @@ TEST_CASE("simple value: structs reads and writes every simple value 0 to 255")
         CHECK_EQ(*out, wire_of(v));
     }
 }
-#endif
