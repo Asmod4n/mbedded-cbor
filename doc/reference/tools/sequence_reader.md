@@ -37,8 +37,8 @@ call: auto first = bytes.substr(0, 2)
 result: 2 bytes: 82 01
 call: r.feed(std::move(first))
 result: void
-call: r.next()
-result: unexpected cbor::error::too_little_data
+call: r.empty()
+result: false
 call: auto second = bytes.substr(2)
 result: 2 bytes: 02 03
 call: r.feed(std::move(second))

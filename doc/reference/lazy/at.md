@@ -18,10 +18,10 @@ call: doc->at("cars")->at(1)->at("hp")->get<int>()
 result: 7
 call: doc->at(cbor::key{7})->get<std::string_view>()
 result: ref to "seven"
-call: doc->at("bus").error()
-result: cbor::error::key_not_found
-call: doc->at(0).error()
-result: cbor::error::not_indexable
+call: doc->at("cars")->size()
+result: 2
+call: doc->at("cars")->at(0)->at("hp")->get<int>()
+result: 5
 ```
 
 Gives the lazy of one child. `at(key)` gives the value of the first pair

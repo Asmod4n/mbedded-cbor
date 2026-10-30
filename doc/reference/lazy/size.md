@@ -12,8 +12,8 @@ doc->size() → std::expected<std::uint64_t, error>
 message: {"a": 1, "b": 2}
 call: doc->size()
 result: 2
-call: doc->at("a")->size().error()
-result: cbor::error::not_indexable
+call: doc->empty()
+result: false
 ```
 
 Gives the count of the head: the elements of an array, the pairs of a

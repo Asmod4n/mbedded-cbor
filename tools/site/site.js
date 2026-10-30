@@ -3,7 +3,7 @@ import { encoded, hexOf, bytesOf, instantiated } from "./examples.mjs";
 const group = document.body.dataset.group;
 const escaped = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 const shown = (call, result) => '<span class="call">' + escaped(call) + "</span>\n" +
-  '<span class="' + (/^(fault|unexpected|cbor::error::)/.test(result) ? "err" : "ok") + '">' + escaped(result) + "</span>";
+  '<span class="' + (/^(fault|unexpected)/.test(result) ? "err" : "ok") + '">' + escaped(result) + "</span>";
 const run = fetch(document.querySelector('script[src^="site.js"]').src.replace(/site\.js.*$/, "examples.wasm"))
   .then(r => r.arrayBuffer()).then(instantiated);
 

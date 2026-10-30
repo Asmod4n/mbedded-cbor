@@ -45,8 +45,8 @@ call: doc->at_path<"$.user.tags[-1]", std::string_view>()
 result: ref to "b"
 call: doc->at_path<"$.user.tags[*]", cbor::nodelist>()
 result: nodelist of 2 nodes: "a", "b"
-call: doc->at_path<"$.user.age", int>()
-result: unexpected cbor::error::key_not_found
+call: doc->at_path<"$.user">()
+result: lazy of {"id": 42, "tags": ["a", "b"]}
 ```
 
 Reads the JSONPath (RFC 9535) `Path` from this lazy as the root `$`.
