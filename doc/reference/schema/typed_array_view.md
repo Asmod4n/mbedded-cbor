@@ -46,7 +46,7 @@ O(1) for each member. No allocation.
 
 ```cpp
 // bytes: from schema<car>::encode(car{..., {1.0, 2.0, 3.0}}), track is std::vector<double>
-auto const root = cbor::packed<car>::path(std::move(bytes));
+auto const root = cbor::schema<car>::path(std::move(bytes));
 auto const track = root->view<"$.track">();
 std::accumulate(track->begin(), track->end(), 0.0);   // 6.0
 (*track)[1];                                          // 2.0

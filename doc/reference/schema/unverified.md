@@ -71,10 +71,10 @@ without the checks above.
 
 ```cpp
 // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})
-cbor::packed<car>::unverified_at_path<"$.seats">(bytes);                  // 5
-cbor::packed<car>::unverified_at_path<"$.tires[].diameter">(bytes, 5uz);  // error::index_out_of_bounds
+cbor::schema<car>::unverified_at_path<"$.seats">(bytes);                  // 5
+cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 5uz);  // error::index_out_of_bounds
 
-auto const lane = cbor::packed<car>::unverified_path(std::string(bytes));
+auto const lane = cbor::schema<car>::unverified_path(std::string(bytes));
 lane->at_path<"$.tires[1].diameter">();                                   // 18
 ```
 

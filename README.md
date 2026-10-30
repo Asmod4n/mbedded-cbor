@@ -26,8 +26,8 @@ struct cbor::describe_members<track> {
     static constexpr std::tuple members{CBOR_MEMBER(track, points)};
 };
 
-auto message = cbor::packed<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
-auto const lane = cbor::packed<track>::path(std::move(*message));
+auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
+auto const lane = cbor::schema<track>::path(std::move(*message));
 lane->at_path<"$.points[2].x">();   // 5: one jump to the field
 ```
 
@@ -42,7 +42,7 @@ and every other CBOR decoder can read it.
   the message.
 - **Reads only what you ask for.** A path reads the heads of the items on
   its way and skips the rest by their length.
-- **Fixed offsets.** `cbor::packed` lays out a struct at compile time,
+- **Fixed offsets.** `cbor::schema` lays out a struct at compile time,
   from the tag and the members that `cbor::describe_members` gives. A
   read of a field of fixed size is one jump.
 - **Raw arrays.** A list of numbers, and a list of structs whose fields
@@ -50,13 +50,13 @@ and every other CBOR decoder can read it.
   is checked once.
 - **Errors as values.** Bad input gives a `std::expected` with a
   `cbor::error`. A read gives every fault of the input as a value.
-- **One description, every compiler.** `cbor::packed` reads only
-  `cbor::describe_members` and builds in C++23. `cbor::schema` reads
-  the same description with reflection, checks it there, and writes the
-  same bytes. `CBOR_DEFINE_TYPE` writes a description in one line.
-- **Trusted peers.** The `unverified_` forms of `cbor::packed` skip the
+- **One description, every compiler.** `cbor::schema` reads only
+  `cbor::describe_members` and builds in C++23. With C++26 reflection it
+  also checks each description against the members of the struct.
+  `CBOR_DEFINE_TYPE` writes a description in one line.
+- **Trusted peers.** The `unverified_` forms of `cbor::schema` skip the
   checks of the data and keep every check of a bound.
-- **Description apart.** `cbor::packed` can store the description of a
+- **Description apart.** `cbor::schema` can store the description of a
   struct once and the data of each message apart from it.
 - **Limits.** Nesting depth, string length and element count are
   constants of the build. Memory grows with the items that were read.
@@ -70,7 +70,7 @@ length in its head, and it stops at the value.
 
 <img src="doc/img/walk-or-jump.svg" alt="a CBOR walk visits every item before the field; cbor::schema jumps to the field in one step" width="100%">
 
-With `cbor::packed`, the struct is the layout. The offset of a field
+With `cbor::schema`, the struct is the layout. The offset of a field
 comes from the compiler, so the read is one jump.
 
 <img src="doc/img/fixed-vector.svg" alt="a vector of fixed-size structs: the head is checked once, element i is at i times 8" width="100%">
@@ -99,11 +99,11 @@ The code of every library, task by task:
 
 | Compiler | System | What builds |
 |---|---|---|
-| g++ 16, `-std=c++26 -freflection` | Linux | every part, `cbor::schema` too |
-| g++ 15, clang 23, `-std=c++23` | Linux | every part in C++23, `cbor::packed` too |
+| g++ 16, `-std=c++26 -freflection` | Linux | every part, and the check of each description against the members |
+| g++ 15, clang 23, `-std=c++23` | Linux | every part in C++23 |
 | AppleClang of Xcode 16 and 26 | macOS 15 | every part in C++23 |
 
-On g++ 15, clang 23 and AppleClang, `cbor::structs` and `cbor::packed`
+On g++ 15, clang 23 and AppleClang, `cbor::structs` and `cbor::schema`
 use Boost.PFR 1.84 or later. It is the only dependency.
 
 ### Boost.PFR
@@ -198,8 +198,8 @@ struct cbor::describe_members<track> {
     static constexpr std::tuple members{CBOR_MEMBER(track, points)};
 };
 
-auto message = cbor::packed<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
-auto const lane = cbor::packed<track>::path(std::move(*message));
+auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
+auto const lane = cbor::schema<track>::path(std::move(*message));
 
 lane->at_path<"$.points[2].x">();                                   // 5
 
