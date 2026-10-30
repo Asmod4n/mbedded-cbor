@@ -2,6 +2,7 @@
 
 
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -90,32 +91,15 @@ concept decodes_beside = requires(std::shared_ptr<void const> const &o, Part p) 
 
 } // namespace doc_advanced_structs
 
-template <>
-struct cbor::describe_members<doc_advanced_structs::account> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160061};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_advanced_structs::account, user),
-        cbor::member{1, &doc_advanced_structs::account::level},
-    };
-};
+CBOR_DEFINE_TYPE(doc_advanced_structs::account, cbor::tag{160061}, CBOR_MEMBER(doc_advanced_structs::account, user),
+                 cbor::member{1, &doc_advanced_structs::account::level});
 
-template <>
-struct cbor::describe_members<doc_advanced_structs::tagged_person> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_advanced_structs::tagged_person, name),
-        CBOR_MEMBER(doc_advanced_structs::tagged_person, age),
-    };
-};
+CBOR_DEFINE_TYPE(doc_advanced_structs::tagged_person, cbor::tag{1800},
+                 CBOR_MEMBER(doc_advanced_structs::tagged_person, name),
+                 CBOR_MEMBER(doc_advanced_structs::tagged_person, age));
 
-template <>
-struct cbor::describe_members<doc_advanced_structs::senml> {
-    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
-    static constexpr std::tuple members{
-        cbor::member{0, &doc_advanced_structs::senml::n},
-        cbor::member{2, &doc_advanced_structs::senml::v},
-    };
-};
+CBOR_DEFINE_TYPE(doc_advanced_structs::senml, cbor::untagged, cbor::member{0, &doc_advanced_structs::senml::n},
+                 cbor::member{2, &doc_advanced_structs::senml::v});
 
 namespace doc_advanced_structs
 {
@@ -199,6 +183,31 @@ TEST_CASE("doc advanced structs: encode of an invalid date throws")
                     std::logic_error);
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<year_month_day>::encode(year_month_day{year{1970}, month{1}, day{2}})),
              "100(1)");
+}
+
+// The section "Every type" states the width of each NaN that encode writes and that decode keeps its bits. A NaN
+// that a float cannot hold exactly is out of range, because a float would lose bits of it.
+TEST_CASE("doc advanced structs: a NaN keeps its bits")
+{
+    auto const bits_of = [](double const d) { return std::bit_cast<std::uint64_t>(d); };
+    CHECK_EQ(*cbor::structs<double>::encode(std::bit_cast<double>(std::uint64_t{0x7ff8000000000000})), "\xf9\x7e\x00"s);
+    CHECK_EQ(*cbor::structs<double>::encode(std::bit_cast<double>(std::uint64_t{0x7ff8000020000000})),
+             "\xfa\x7f\xc0\x00\x01"s);
+    CHECK_EQ(*cbor::structs<double>::encode(std::bit_cast<double>(std::uint64_t{0x7ff8000000000001})),
+             "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s);
+    CHECK_EQ(*cbor::structs<float>::encode(std::bit_cast<float>(std::uint32_t{0x7fc00001})), "\xfa\x7f\xc0\x00\x01"s);
+    CHECK_EQ(*cbor::structs<float>::encode(std::bit_cast<float>(std::uint32_t{0x7fc00000})), "\xf9\x7e\x00"s);
+    for (std::uint64_t const nan : {std::uint64_t{0x7ff8000000000000}, std::uint64_t{0x7ff8000020000000},
+                                    std::uint64_t{0x7ff8000000000001}}) {
+        auto const back = cbor::structs<double>::decode(*cbor::structs<double>::encode(std::bit_cast<double>(nan)));
+        REQUIRE(back.has_value());
+        CHECK_EQ(bits_of(**back), nan);
+    }
+    auto const single = cbor::structs<float>::decode("\xfa\x7f\xc0\x00\x01"s);
+    REQUIRE(single.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>(**single), 0x7fc00001u);
+    CHECK_EQ(cbor::structs<float>::decode("\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s).error(),
+             error::number_out_of_range);
 }
 
 // The section "Structs and keys" shows a description of a class with a private member and an integer key, and

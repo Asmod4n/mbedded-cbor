@@ -59,7 +59,7 @@ view, for example a `std::string_view`.
 | an integer of 8 to 64 bits | an integer |
 | `__int128`, `unsigned __int128` | an integer, or a bignum (tag 2 or 3) |
 | an enum with a fixed underlying type | the integer of its underlying type |
-| `float`, `double` | the shortest float that holds the value exactly |
+| `float`, `double` | the shortest float that holds the value exactly; a NaN keeps its bits |
 | `std::string`, `std::pmr::string`, `std::string_view` | a text string |
 | `std::span<std::byte const>` | a byte string |
 | `std::vector<E>`, `std::array<E, N>` with E `std::byte` or an integer of 8 to 64 bits, `float` or `double` | an RFC 8746 typed array, little endian: tag 64 for `std::byte` and `std::uint8_t` |
@@ -104,8 +104,21 @@ brings a type of its own.
 An enum with no fixed underlying type does not compile in `decode`,
 because some values of its underlying type are not values of the enum.
 
+`encode` writes a NaN in the shortest width that holds its bits exactly
+(RFC 8949 4.1). A NaN whose low 42 bits of a binary64 are zero is a
+binary16, one whose low 29 bits are zero is a binary32, and any other
+NaN is a binary64. A `float` NaN keeps its own bits. `decode` gives the
+NaN back with the same bits.
+
+```cpp
+// a double NaN with the bits 7ff8000000000000 is f9 7e00
+// a double NaN with the bits 7ff8000020000000 is fa 7fc00001
+// a double NaN with the bits 7ff8000000000001 is fb 7ff8000000000001
+```
+
 A `float` takes a binary16, binary32 or binary64 item. A binary64 item
 that a `float` cannot hold exactly gives `error::number_out_of_range`.
+A binary64 NaN whose low 29 bits are not zero is such an item.
 
 `encode` throws `std::logic_error` for a `std::chrono::year_month_day`
 that is not a valid date. When an allocation is refused, `encode` throws
@@ -124,9 +137,20 @@ that `structs` reads do not compile. An aggregate with a base class
 needs a description. [cbor::schema](schema.md) reads the same
 description.
 
-A specialization of `cbor::describe_members<T>` describes a struct or a
-class. It holds `tag`, a `std::optional<cbor::tag>` with the tag, and
-`members`, a `std::tuple` of `cbor::member` entries.
+A description gives the tag and the members of a struct or a class.
+`CBOR_DEFINE_TYPE(T, tag, members...)` writes it at global scope. The
+macro writes this specialization of `cbor::describe_members<T>`:
+
+```cpp
+template <>
+struct cbor::describe_members<T> {
+    static constexpr std::optional<cbor::tag> tag = /* tag */;
+    static constexpr std::tuple members{/* members... */};
+};
+```
+
+`tag` is a `std::optional<cbor::tag>`, and `members` is a `std::tuple`
+of `cbor::member` entries.
 The tag `cbor::untagged` gives a map with no tag, an untagged message in
 the words of RFC 9052 2 (SenML, CTAP2, the COSE header). A decode of
 such a type refuses a tag in front of the map with
@@ -138,13 +162,18 @@ such a type refuses a tag in front of the map with
 | `cbor::member{"x", &T::m}` | the text `x` |
 | `cbor::member{4, &T::m}`, `cbor::member{-1, &T::m}` | the integer |
 
-- The specialization stands outside every namespace, after the type and
+- The description stands outside every namespace, after the type and
   after the description of each struct that the type holds.
-- `CBOR_MEMBER` takes a type alias for a type whose name holds a comma.
-  `cbor::member` takes the name as it is.
+- `CBOR_DEFINE_TYPE` and `CBOR_MEMBER` take a type alias for a type
+  whose name holds a comma, because the preprocessor splits the
+  arguments of a macro at each comma.
 - An entry names a public data member of the type or of a public base.
 - On a build with `-freflection`, the entries are exactly the public data
   members of the type and of its public bases. Another list does not
+  compile.
+- A member that comes twice, two members with one key, a tag that the
+  library takes for a standard type (for example 1, 258 or a tag of
+  RFC 8746) and a tag that the IANA registry calls always invalid do not
   compile.
 - A description is checked where `encode`, `decode` or the size of the
   type is compiled. A description that nothing uses is not checked.
@@ -163,28 +192,18 @@ public:
 private:
     std::string password;
 };
-template <>
-struct cbor::describe_members<account> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160061};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(account, user),
-        cbor::member{1, &account::level},
-    };
-};
+
+CBOR_DEFINE_TYPE(account, cbor::tag{160061}, CBOR_MEMBER(account, user), cbor::member{1, &account::level});
+
 // an account with user "ann" and level 2 is 160061({1: 2, "user": "ann"})
 
 struct senml {          // RFC 8428 6: n is 0, v is 2
     std::string n;
     double v;
 };
-template <>
-struct cbor::describe_members<senml> {
-    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
-    static constexpr std::tuple members{
-        cbor::member{0, &senml::n},
-        cbor::member{2, &senml::v},
-    };
-};
+
+CBOR_DEFINE_TYPE(senml, cbor::untagged, cbor::member{0, &senml::n}, cbor::member{2, &senml::v});
+
 // senml{"t", 1.5} is {0: "t", 2: 1.5}
 ```
 
@@ -208,14 +227,9 @@ compile in `structs`.
 
 ```cpp
 struct person { std::string name; std::int64_t age; };
-template <>
-struct cbor::describe_members<person> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(person, name),
-        CBOR_MEMBER(person, age),
-    };
-};
+
+CBOR_DEFINE_TYPE(person, cbor::tag{1800}, CBOR_MEMBER(person, name), CBOR_MEMBER(person, age));
+
 cbor::structs<person>::encode({"ann", 30});
 // 1800({"age": 30, "name": "ann"})
 ```
@@ -291,9 +305,10 @@ describes the memory of every API.
 | a variant with no alternative that accepts the item | `incorrect_type` |
 | a missing key of a member that is not optional | `key_not_found` |
 | a map key that is an array, a map or a tag | `unsupported_value` |
-| bytes after the item | `syntax_error` |
 | the input ends inside the item | `too_little_data` |
 | a refused allocation | `not_enough_memory` |
+
+`decode` reads the first item and does not read the bytes after it.
 
 | `encode` of | Result |
 |---|---|

@@ -1,6 +1,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -80,4 +81,59 @@ TEST_CASE("doc internals: the compiler parses a compile-time path")
 {
     CHECK((cbor::is_valid_path_v<"$.a[0]">));
     CHECK((!cbor::is_valid_path_v<"$.a[">));
+}
+
+// The section "The item tree" states that encode of an item keeps the sign and the payload of a NaN. The test exists
+// because a conversion of the processor can set the quiet bit or drop the payload.
+TEST_CASE("doc internals: an item keeps the bits of a NaN")
+{
+    std::string const single = "\xfa\xff\x80\x01\x23"s;
+    auto const tree = test::lazy_of_copy(single)->clone();
+    REQUIRE(tree.has_value());
+    std::string again;
+    REQUIRE(cbor::encode(**tree, again).has_value());
+    CHECK_EQ(again, single);
+}
+
+// The section "The width of a float" gives the width of a NaN from the zero bits at the right of its significand. The
+// test exists because a NaN that lost bits in a shorter width would read back as another NaN.
+TEST_CASE("doc internals: a NaN takes the shortest width that keeps its bits")
+{
+    auto const of_double = [](std::uint64_t const bits) { return cbor::structs<double>::encode(std::bit_cast<double>(bits))->size(); };
+    auto const of_float = [](std::uint32_t const bits) { return cbor::structs<float>::encode(std::bit_cast<float>(bits))->size(); };
+    CHECK_EQ(of_double(0x7ff8'0400'0000'0000), 3u);
+    CHECK_EQ(of_double(0x7ff8'0000'2000'0000), 5u);
+    CHECK_EQ(of_double(0x7ff8'0000'0000'0001), 9u);
+    CHECK_EQ(of_float(0x7fc0'2000), 3u);
+    CHECK_EQ(of_float(0x7fc0'0001), 5u);
+    auto const back = cbor::structs<float>::decode(*cbor::structs<float>::encode(std::bit_cast<float>(std::uint32_t{0x7fc0'0001})));
+    REQUIRE(back.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>(**back), 0x7fc0'0001u);
+}
+
+namespace doc_internals
+{
+
+struct reading {
+    std::uint16_t id;
+    std::string name;
+};
+
+} // namespace doc_internals
+
+CBOR_DEFINE_TYPE(doc_internals::reading, cbor::tag{1720}, CBOR_MEMBER(doc_internals::reading, id),
+                 CBOR_MEMBER(doc_internals::reading, name));
+
+// The section "The schema reads the descriptions" states that a message that ends too early gives too_little_data in
+// path, at_path and decode. The test exists because the root is read from the end, so a cut gives a wrong tag first.
+TEST_CASE("doc internals: a cut message gives too_little_data in a schema read")
+{
+    std::string const bytes = *cbor::schema<doc_internals::reading>::encode(doc_internals::reading{7, "t1"});
+    for (std::size_t n = 1; n < bytes.size(); ++n) {
+        std::string const cut = bytes.substr(0, n);
+        CAPTURE(n);
+        CHECK_EQ(cbor::schema<doc_internals::reading>::at_path<"$.id">(cut).error(), error::too_little_data);
+        CHECK_EQ(cbor::schema<doc_internals::reading>::path(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(cbor::schema<doc_internals::reading>::decode(std::string(cut)).error(), error::too_little_data);
+    }
 }
