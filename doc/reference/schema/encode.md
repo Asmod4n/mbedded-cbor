@@ -9,6 +9,23 @@ template <class Target>
 static std::expected<std::size_t, cbor::error> encode(T const &value, Target &&target);
 ```
 
+```call-seq
+cbor::schema<T>::encode(value)         → std::expected<std::string, cbor::error>
+cbor::schema<T>::encode(value, target) → std::expected<std::size_t, cbor::error>
+```
+
+```example
+bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
+call: cbor::schema<tire>::encode(tire{17, 2.5f})
+result: 66 bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
+call: std::string out = "x"
+result: "x"
+call: auto const n = cbor::schema<tire>::encode(tire{17, 2.5f}, out)
+result: 66
+call: out.size()
+result: 67
+```
+
 Writes `value` as one Packed CBOR message ([wire](wire.md)). The first
 form returns a new `std::string`. The second form appends to `target`
 and returns the count of bytes of the message. `target` is a

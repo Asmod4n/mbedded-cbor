@@ -6,6 +6,24 @@ template <auto Member, class U = T>
 static consteval std::size_t member_offset();
 ```
 
+```call-seq
+cbor::schema<T>::member_offset<&U::m>() → std::size_t
+```
+
+```example
+bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
+call: cbor::schema<tire>::member_offset<&tire::diameter>()
+result: 10
+call: cbor::schema<tire>::member_offset<&tire::pressure>()
+result: 13
+call: bytes.size()
+result: 66
+call: bytes[58]
+result: '\x19'
+call: bytes[61]
+result: '\xfa'
+```
+
 Gives the offset of the head of `Member` from the start of the record of
 `U`. `Member` is a pointer to a described member, `&U::m`. With
 reflection, `Member` can also be a reflection of the member, `^^U::m`. The record starts with the class tag, the table reference and the
