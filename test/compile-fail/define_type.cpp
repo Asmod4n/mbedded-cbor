@@ -30,5 +30,5 @@ CBOR_DEFINE_TYPE(ns::two_ints, cbor::tag{160110}, CBOR_MEMBER(ns::two_ints, a), 
 
 int main()
 {
-    return cbor::packed<ns::two_ints>::encode(ns::two_ints{1, 2}).has_value() ? 0 : 1;
+    return cbor::schema<ns::two_ints>::encode(ns::two_ints{1, 2}).has_value() ? 0 : 1;
 }

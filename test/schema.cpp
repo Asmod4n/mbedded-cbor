@@ -1,15 +1,6 @@
 #include "reference.hpp"
 #include "schema_golden.hpp"
 
-#ifndef CBOR_TEST_FORM
-#ifdef __cpp_impl_reflection
-#define CBOR_TEST_FORM schema
-#else
-#define CBOR_TEST_FORM packed
-#endif
-#define CBOR_TEST_FORM_NAME ""
-#endif
-
 
 #include <algorithm>
 #include <array>
@@ -48,7 +39,7 @@ namespace
 {
 
 template <class X>
-using form = cbor::CBOR_TEST_FORM<X>;
+using form = cbor::schema<X>;
 
 } // namespace
 
@@ -77,7 +68,7 @@ struct cbor::describe_members<wheel> {
 
 // Each kind of field has the size that RFC 8949 3 gives its head plus its argument, so a reader finds every
 // field at an offset the compiler knows. The expectations are counted from the specification by hand.
-TEST_CASE(CBOR_TEST_FORM_NAME "fixed_size: numbers and simple values have the size of head and argument")
+TEST_CASE("fixed_size: numbers and simple values have the size of head and argument")
 {
     // 0xf4 or 0xf5, one initial byte (RFC 8949 3.3).
     CHECK_EQ(form<wheel>::fixed_size<bool>(), 1u);
@@ -100,7 +91,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "fixed_size: numbers and simple values have the si
 // RFC 8949 3.3 has binary16, binary32 and binary64. binary128 is a typed array of one element under tag 83
 // (RFC 8746 2.1): two bytes of tag, one byte of byte string head, 16 bytes. The 80-bit extended precision of
 // x87 is widened to binary128, and bfloat16 to binary32, without loss.
-TEST_CASE(CBOR_TEST_FORM_NAME "fixed_size: floats by their digits")
+TEST_CASE("fixed_size: floats by their digits")
 {
 #if defined(__STDCPP_FLOAT16_T__)
     CHECK_EQ(form<wheel>::fixed_size<std::float16_t>(), 3u);
@@ -120,7 +111,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "fixed_size: floats by their digits")
 
 // A text or a byte string of fixed length has its head and its bytes. An array of fixed length has its head and
 // its elements, each of fixed size.
-TEST_CASE(CBOR_TEST_FORM_NAME "fixed_size: text, bytes and arrays of fixed length")
+TEST_CASE("fixed_size: text, bytes and arrays of fixed length")
 {
     CHECK_EQ(form<wheel>::fixed_size<char[32]>(), 34u);
     CHECK_EQ(form<wheel>::fixed_size<char8_t[3]>(), 4u);
@@ -138,7 +129,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "fixed_size: text, bytes and arrays of fixed lengt
 // that holds its keys. The tag of the class stands outside the reference; tag 1500 is d9 05 dc in preferred
 // serialization (RFC 8949 3.4 and 4.1). The reference is d8 80 to d8 87, the value array has a head of 9a and 4
 // bytes, so 10 bytes come before the values. wheel: 10, then 3 + 5 + 1.
-TEST_CASE(CBOR_TEST_FORM_NAME "fixed_size: a struct is a record of its values under the tag of its class")
+TEST_CASE("fixed_size: a struct is a record of its values under the tag of its class")
 {
     CHECK_EQ(form<wheel>::fixed_size(), 19u);
     CHECK_EQ(form<wheel>::fixed_size<std::array<wheel, 4>>(), 1u + 4u * 19u);
@@ -146,7 +137,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "fixed_size: a struct is a record of its values un
 
 // A part of variable size is a shared item in the table of tag 113. The record holds the reference c6 1a <N> or
 // c6 3a <N>: tag 6 with an argument of fixed width (draft-ietf-cbor-packed-19 2.2), so 6 bytes.
-TEST_CASE(CBOR_TEST_FORM_NAME "fixed_size: a part of variable size takes 6 bytes")
+TEST_CASE("fixed_size: a part of variable size takes 6 bytes")
 {
     CHECK_EQ(form<wheel>::fixed_size<std::string>(), 6u);
     CHECK_EQ(form<wheel>::fixed_size<std::vector<wheel>>(), 6u);
@@ -274,7 +265,7 @@ struct cbor::describe_members<größe> {
 // The offset points at the head of a value. The keys are in the table, so the 3 bytes of the class tag and the 7
 // bytes of the record head come first. The values follow the key order of RFC 8949 4.2.1, a shorter key first:
 // diameter (68 ...) at 10, snowTires (69 ...) behind its 3 bytes at 13, airPressure (6b ...) behind 1 byte at 14.
-TEST_CASE(CBOR_TEST_FORM_NAME "member_offset: the head of each value, behind the class tag and the head of the record")
+TEST_CASE("member_offset: the head of each value, behind the class tag and the head of the record")
 {
     CHECK_EQ(form<wheel>::member_offset<&wheel::diameter>(), 10u);
     CHECK_EQ(form<wheel>::member_offset<&wheel::snowTires>(), 13u);
@@ -285,7 +276,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "member_offset: the head of each value, behind the
 // A nested struct is a record at the offset of its member, so offsets add up. car in key order: motor (65 6d ...)
 // at 10, seats (65 73 ...) behind the engine record, hasNavSystem (6c ...) behind the 2 bytes of seats. engine in key
 // order: cc (62 ...) at 10, horsepower (6a ...) behind its 5 bytes at 15.
-TEST_CASE(CBOR_TEST_FORM_NAME "member_offset: offsets of nested structs add up")
+TEST_CASE("member_offset: offsets of nested structs add up")
 {
     CHECK_EQ(form<car>::member_offset<&car::motor>(), 10u);
     CHECK_EQ(form<engine>::member_offset<&engine::cc>(), 10u);
@@ -296,7 +287,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "member_offset: offsets of nested structs add up")
 
 // The count of values has a head of 9a and 4 bytes whatever the count, so a member added later moves no offset, and
 // a long name or a name in UTF-8 takes no place in the record.
-TEST_CASE(CBOR_TEST_FORM_NAME "member_offset: the record head has one width for any count and any name")
+TEST_CASE("member_offset: the record head has one width for any count and any name")
 {
     CHECK_EQ(form<thirty>::member_offset<&thirty::m00>(), 10u);
     CHECK_EQ(form<thirty>::member_offset<&thirty::m29>(), 10u + 29u * 2u);
@@ -478,7 +469,7 @@ void check_one_item(std::string const &bytes)
 // in the width of its type, and the string as 6(0) = c6 1a 00 00 00 00, which 2.2 resolves to index 16. The table
 // head counts 17 entries. The string starts at byte 45 (2d). The bytes are written from the draft and RFC 8949 3 by
 // hand.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: a struct with a number, a bool and a string")
+TEST_CASE("encode: a struct with a number, a bool and a string")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x11\xd8\x72\x83\x62id\x62ok\x64name"
@@ -543,7 +534,7 @@ struct cbor::describe_members<renamed> {
 // deterministic encodings", so a shorter key comes first. The encodings are 61 62 ("b"), 62 61 61 ("aa") and
 // 62 7a 7a ("zz"); the key list of tag 114 and the values of the record follow that order, whatever the order of
 // declaration. The bytes are written from the RFC by hand.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: members stand in the key order of RFC 8949 4.2.1, not in the order of declaration")
+TEST_CASE("encode: members stand in the key order of RFC 8949 4.2.1, not in the order of declaration")
 {
     std::string const bytes = schema_bytes(unsorted{3, 1, 2});
     CHECK_NE(bytes.find("\xd8\x72\x83\x61" "b\x62" "aa\x62zz"s), std::string::npos);
@@ -571,20 +562,20 @@ struct cbor::describe_members<listed_other_order> {
 
 // The description lists aa, zz, b: neither the order of declaration (zz, b, aa) nor the key order (b, aa, zz).
 // The test exists because the key order alone decides the bytes, so the order of the list changes nothing.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: the order of the description does not change the bytes")
+TEST_CASE("encode: the order of the description does not change the bytes")
 {
     CHECK_EQ(schema_bytes(listed_other_order{3, 1, 2}), schema_bytes(unsorted{3, 1, 2}));
     CHECK_EQ(at_path<listed_other_order, "$.zz">(schema_bytes(listed_other_order{3, 1, 2})), 3);
 }
 
 // The same members declared in another order give the same bytes, so a peer gets one encoding for one value.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: the order of declaration does not change the bytes")
+TEST_CASE("encode: the order of declaration does not change the bytes")
 {
     CHECK_EQ(schema_bytes(unsorted{3, 1, 2}), schema_bytes(unsorted_other_order{2, 3, 1}));
 }
 
 // A key that the description gives takes part in the order: "a" (61 61) comes before "first" (65 ...).
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: a key given in cbor::describe_members is sorted by that key")
+TEST_CASE("encode: a key given in cbor::describe_members is sorted by that key")
 {
     std::string const bytes = schema_bytes(renamed{7, 9});
     CHECK_NE(bytes.find("\xd8\x72\x82\x61" "a\x65" "first"s), std::string::npos);
@@ -631,7 +622,7 @@ struct cbor::describe_members<sorted_outer> {
 // The order holds at every depth: the outer keys are "B" (61 42), "a" (61 61) and "z"
 // (61 7a), keys of one length ordered by their bytes; the inner record holds x before y. A decode gives every value
 // back to its member, so the order of the bytes never mixes up members.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode and decode: the key order holds in an inner struct")
+TEST_CASE("encode and decode: the key order holds in an inner struct")
 {
     sorted_outer const value{5, {2, 1}, 4};
     std::string const bytes = schema_bytes(value);
@@ -659,7 +650,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode and decode: the key order holds in an inne
 // list of uint16 is shared item 17, a typed array of RFC 8746: tag 69 (uint16, little endian) = d8 45 over a byte
 // string of four bytes. Item 17 is 6(-1) = c6 3a 00 00 00 00, because 2.2 maps a negative N to index 16 - 2N - 1.
 // The items start at 46 (2e) and 51 (33). The rump starts with the class tag 1508 = d9 05 e4.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: signed numbers, floats, a list and an empty optional")
+TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
 {
     std::string const bytes = schema_bytes(measures{-5, 1.5f, {7, 8}, std::nullopt});
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x84\x61\x66\x61o\x61t\x61v"
@@ -676,7 +667,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode: signed numbers, floats, a list and an emp
 // of fixed size, each the class tag 1509 = d9 05 e5 over d8 81 for the second type. The strings of the elements
 // follow the list as items 17 and 18, in the order the encoder meets them: 6(-1) and 6(1). The items start at
 // 53 (35), 90 (5a) and 96 (60). The root is the class tag 1510 = d9 05 e6 over d8 80.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: a list of structs that hold strings")
+TEST_CASE("encode: a list of structs that hold strings")
 {
     std::string const bytes = schema_bytes(people{{{"x"}, {"yz"}}});
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x13\xd8\x72\x81\x66people\xd8\x72\x81\x61n"
@@ -694,7 +685,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode: a list of structs that hold strings")
 
 // path checks the least size of the message and the table of keys once, as decode does. The test exists so that a
 // change to either side shows here.
-TEST_CASE(CBOR_TEST_FORM_NAME "path: a message shorter than the least size is too_little_data, a foreign key is incorrect_type")
+TEST_CASE("path: a message shorter than the least size is too_little_data, a foreign key is incorrect_type")
 {
     std::string const bytes = schema_bytes(login{5, true, "ab"});
     CHECK_EQ(at_path<login, "$.id">(bytes), 5u);
@@ -762,7 +753,7 @@ vehicle const sample_vehicle{"Tesla", -7, {{{15, 2.5f}, {16, 2.0f}}}, {{17, 1.5f
 
 // A path over fixed fields becomes one offset at compile time. A text is copied into a std::string, so it cannot
 // outlive the bytes it came from.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: fixed fields give the value")
+TEST_CASE("at_path: fixed fields give the value")
 {
     std::string const bytes = schema_bytes(sample_vehicle);
     CHECK_EQ(at_path<vehicle, "$.balance">(bytes), -7);
@@ -777,7 +768,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "at_path: fixed fields give the value")
 
 // A step over a part of variable size reads an offset and a length from the wire. An empty pair of brackets takes
 // its index from the arguments, in the order of the path.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: parts of variable size")
+TEST_CASE("at_path: parts of variable size")
 {
     std::string const bytes = schema_bytes(sample_vehicle);
     CHECK_EQ(at_path<vehicle, "$.make">(bytes), "Tesla"s);
@@ -792,7 +783,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "at_path: parts of variable size")
 
 // A directory offset from the wire that points at bytes of another kind, or a length past the start of the next
 // item, is refused and reads nothing. The directory of vehicle starts behind the prefix and its head 5a.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: a broken offset is an error")
+TEST_CASE("at_path: a broken offset is an error")
 {
     std::string const bytes = schema_bytes(sample_vehicle);
     std::size_t const head = bytes.find("\x5a"s);
@@ -834,7 +825,7 @@ struct cbor::describe_members<badge> {
 
 // A fixed-length array of bytes is a byte string laid out inline (RFC 8949 3.1), the same as a fixed text.
 // The reader gives the bytes themselves, not an offset and a length read out of them.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: a fixed byte array is read inline")
+TEST_CASE("at_path: a fixed byte array is read inline")
 {
     badge const b{{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}, shade::light, "x"};
     std::string const bytes = schema_bytes(b);
@@ -921,7 +912,7 @@ struct cbor::describe_members<doubles> {
 // come from RFC 8746 figure 6: uint16le 69, uint32le 70, uint64le 71, sint8 72, sint16le 77, sint32le 78,
 // sint64le 79, float16le 84, float32le 85, float64le 86. The byte string holds the elements with the lowest byte
 // first. The test exists because the tag tells every other reader the type of the elements.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: a list of a fixed-width number is a typed array of RFC 8746")
+TEST_CASE("encode: a list of a fixed-width number is a typed array of RFC 8746")
 {
     std::string const bytes = schema_bytes(sample_numbers);
     check_one_item(bytes);
@@ -940,7 +931,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode: a list of a fixed-width number is a typed
 }
 
 // decode and path read every element type back from its typed array. The floats are compared by their bits.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode and at_path: every typed array gives its elements back")
+TEST_CASE("decode and at_path: every typed array gives its elements back")
 {
     std::string const bytes = schema_bytes(sample_numbers);
     auto const back = form<numbers>::decode(std::string(bytes));
@@ -983,7 +974,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "decode and at_path: every typed array gives its e
 
 // A list of doubles that does not carry tag 86, or whose byte string is not a multiple of eight bytes, is refused
 // as an error value by decode and by path. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746).
-TEST_CASE(CBOR_TEST_FORM_NAME "decode and at_path: a typed array with a wrong tag or a wrong length is refused")
+TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length is refused")
 {
     std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
     std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
@@ -1009,7 +1000,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "decode and at_path: a typed array with a wrong ta
 // value. It makes every check that path and accessor::at make: the table of keys, the undefined values after the
 // directory, the tag of the root, the tag and the length of the typed array, and the index. The expected bits of 1.0
 // and 2.0 are 3ff0000000000000 and 4000000000000000 in binary64 (IEEE 754).
-TEST_CASE(CBOR_TEST_FORM_NAME "schema::at: one number of a typed array, with every check of path")
+TEST_CASE("schema::at: one number of a typed array, with every check of path")
 {
     std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
     using S = form<doubles>;
@@ -1045,7 +1036,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "schema::at: one number of a typed array, with eve
 
 // schema::at gives only a value that holds no reference into the message, because no owner keeps the message alive.
 // A path to a text, a list or a struct has no form of schema::at, and a wrong use does not compile.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema::at: a path to a text or a list does not compile")
+TEST_CASE("schema::at: a path to a text or a list does not compile")
 {
     auto const at_compiles = []<class T, cbor::fixed_string Path>() { return requires { form<T>::template at_path<Path>(std::string_view{}); }; };
     CHECK(at_compiles.template operator()<doubles, "$.v[0]">());
@@ -1083,7 +1074,7 @@ std::uint64_t bits_of(E const value)
 // 754: 1.0 is 3c00 in binary16, 3f800000 in binary32 and 3ff0000000000000 in binary64; -2 is all ones but the lowest
 // bit in two's complement. at(i) with an index equal to the size is index_out_of_bounds, an error value and no read,
 // as std::vector::at gives std::out_of_range; operator[] with that index is a wrong use and throws std::logic_error.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: every typed array gives its elements back, and an index past the end is an error value")
+TEST_CASE("view: every typed array gives its elements back, and an index past the end is an error value")
 {
     std::string const bytes = schema_bytes(sample_numbers);
     auto check = [&]<cbor::fixed_string Path>(std::uint64_t const expected) {
@@ -1114,7 +1105,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: every typed array gives its elements back, 
 }
 
 // A view of an empty typed array has size 0, and index 0 is already out of bounds.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: an empty typed array has no element")
+TEST_CASE("view: an empty typed array has no element")
 {
     auto const root = form<doubles>::path(schema_bytes(doubles{}));
     REQUIRE(root.has_value());
@@ -1127,7 +1118,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: an empty typed array has no element")
 
 // view makes no view when the tag is not the one of the element type or the length is not a multiple of the element
 // size. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746). The errors are the same as at_path gives.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: a typed array with a wrong tag or a wrong length gives no view")
+TEST_CASE("view: a typed array with a wrong tag or a wrong length gives no view")
 {
     std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
     std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
@@ -1154,7 +1145,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: a typed array with a wrong tag or a wrong l
 
 // The view holds the owner of the bytes. The test reads it after the accessor and the string it came from are gone,
 // so that the sanitizer sees a read of freed memory if the view did not keep the bytes alive.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: the view keeps the bytes alive after the accessor is gone")
+TEST_CASE("view: the view keeps the bytes alive after the accessor is gone")
 {
     std::optional<cbor::typed_array_view<double>> kept;
     {
@@ -1198,7 +1189,7 @@ std::vector<std::uint64_t> bits_of_all(std::vector<E> const &values)
 // The iterator of a view yields each element by value. It is a random access iterator by the concepts of the
 // standard library, so that std::ranges algorithms and range-for take the view as they take a std::span. The view is
 // a sized random access range. It is not a borrowed range: its iterators read bytes that the view keeps alive.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: the iterator and the view model the standard concepts")
+TEST_CASE("view: the iterator and the view model the standard concepts")
 {
     using V = cbor::typed_array_view<double>;
     using I = V::iterator;
@@ -1223,7 +1214,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: the iterator and the view model the standar
 // Each element type of RFC 8746 that the schema writes is read three ways: range-for, the iterator with index and
 // arithmetic, and std::ranges algorithms. The expected bits are those of the values that were encoded. The order of
 // the values makes the maximum the middle element and the minimum the last one for the signed types.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: range-for, the iterator and std::ranges algorithms read every element type")
+TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every element type")
 {
     std::string const bytes = schema_bytes(three_numbers);
     auto check = [&]<cbor::fixed_string Path, class E>(std::vector<E> const &source) {
@@ -1279,7 +1270,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: range-for, the iterator and std::ranges alg
 // front and back read the first and the last element with one load each, and rbegin and rend walk the view
 // backwards, as std::span does. first(n) and last(n) give a sub-view of n elements. n equal to the size gives the
 // whole view; n one past it is index_out_of_bounds as an error value, where std::span would have undefined behaviour.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: front, back, first and last")
+TEST_CASE("view: front, back, first and last")
 {
     auto const root = form<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
@@ -1317,7 +1308,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: front, back, first and last")
 // reverse_iterator(a.begin()), a.crend() is const_cast<X const&>(a).rend(), and the distance from crbegin to crend is
 // the size. The test checks each requirement on a view of three elements and on an empty view, and walks from crend
 // back to crbegin, so that the last element read is the first element of the view.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: crend meets the requirements of a reversible container")
+TEST_CASE("view: crend meets the requirements of a reversible container")
 {
     using V = cbor::typed_array_view<double>;
     CHECK((std::same_as<decltype(std::declval<V const &>().crend()), std::reverse_iterator<V::iterator>>));
@@ -1345,7 +1336,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: crend meets the requirements of a reversibl
 // An empty view has no front and no back: each is a wrong use and throws std::logic_error, as the precondition of
 // std::span::front is. There is no element to iterate. first(0) and last(0)
 // are empty views, and first(1) is out of bounds.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: an empty view has no front, no back and no element")
+TEST_CASE("view: an empty view has no front, no back and no element")
 {
     auto const root = form<doubles>::path(schema_bytes(doubles{}));
     REQUIRE(root.has_value());
@@ -1367,7 +1358,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: an empty view has no front, no back and no 
 // reads the sub-views, so that the sanitizer sees a read of freed memory if a sub-view borrowed from its parent.
 // The sub-view of an rvalue view takes the owner over, and the test reads it after the same drops. A view made from
 // an rvalue accessor takes the owner over too.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: a view and a sub-view keep the bytes alive after the parent is gone")
+TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is gone")
 {
     std::optional<cbor::typed_array_view<double>> copied;
     std::optional<cbor::typed_array_view<double>> moved;
@@ -1403,7 +1394,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "view: a view and a sub-view keep the bytes alive 
 // moved-from object, so that the sanitizer sees a read of freed memory if a moved-from object kept its view. A
 // moved-from view is empty: operator[], front and back are a wrong use, at is index_out_of_bounds. A use of a
 // moved-from accessor is a wrong use. Each case is std::logic_error, as for any other wrong use of the library.
-TEST_CASE(CBOR_TEST_FORM_NAME "view: a moved-from view and a moved-from accessor read no bytes")
+TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
 {
     using V = cbor::typed_array_view<double>;
     std::optional<V> view;
@@ -1513,7 +1504,7 @@ garage const sample_garage{{{17, 1.5f}, {18, 3.0f}, {19, 0.5f}},
 // RFC 8949 3.1 major type 4: a list is an array. Each element has a fixed size, so element i lies at i times
 // that size behind the data, and a path reads it without walking the ones before. A list of lists takes one
 // index for each level.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: a list of structs, strings and lists, by index")
+TEST_CASE("at_path: a list of structs, strings and lists, by index")
 {
     std::string const bytes = schema_bytes(sample_garage);
     std::uint32_t sum = 0;
@@ -1536,7 +1527,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "at_path: a list of structs, strings and lists, by
 
 // RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. The key
 // 9 of the sample is written over with 7, the other key, and decode keeps the first entry with no error.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema: decode keeps the first entry of a repeated key")
+TEST_CASE("schema: decode keeps the first entry of a repeated key")
 {
     std::string bytes = schema_bytes(sample_garage);
     std::string const nine = "\x19\x00\x09"s;
@@ -1566,7 +1557,7 @@ concept path_reads_at = requires(typename form<T>::template accessor<> const &a,
 // indexes that does not match the empty brackets do not compile. A path starts at the root of the top-level item with $
 // (RFC 9535 2.2) or at the node of the accessor with @ (RFC 9535 2.3.5); on the root accessor both are the same
 // node.
-TEST_CASE(CBOR_TEST_FORM_NAME "path: a path compiles where it names a part of the type")
+TEST_CASE("path: a path compiles where it names a part of the type")
 {
     CHECK(path_reads<garage, "$.names[0]">);
     CHECK(path_reads<garage, "$.tires">);
@@ -1599,7 +1590,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "path: a path compiles where it names a part of th
 
 // An accessor of a list gives its size and its elements; an accessor of a struct gives its fields. A leaf through
 // several steps gives the same value as the same steps through named accessors.
-TEST_CASE(CBOR_TEST_FORM_NAME "path: an accessor reads relative to the part it names")
+TEST_CASE("path: an accessor reads relative to the part it names")
 {
     std::string const bytes = schema_bytes(sample_garage);
     auto const opened = form<garage>::path(std::string(bytes));
@@ -1632,7 +1623,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "path: an accessor reads relative to the part it n
 
 // The simple form: encode gives the bytes, decode gives the whole struct back. Every field takes the value it
 // went in with, the lists, the map and the optional included.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode and decode: a struct goes in and comes back whole")
+TEST_CASE("encode and decode: a struct goes in and comes back whole")
 {
     std::string const bytes = *form<garage>::encode(sample_garage);
     auto const decoded_back = *form<garage>::decode(std::string(bytes));
@@ -1660,7 +1651,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode and decode: a struct goes in and comes bac
 // member that takes an allocator, as uses-allocator construction ([allocator.uses.construction]) does for one
 // object. The test puts a counting resource as the default resource, so that a member that took the default
 // resource shows as a count above zero. Each name is longer than any short string buffer, so each one allocates.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode: a plain struct in a std::pmr::vector takes the resource of the vector for its members")
+TEST_CASE("decode: a plain struct in a std::pmr::vector takes the resource of the vector for its members")
 {
     std::string const long_name(40, 'n');
     std::string const bytes = schema_bytes(pmr_people{{{std::pmr::string(long_name)}, {std::pmr::string(long_name)}}});
@@ -1681,7 +1672,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "decode: a plain struct in a std::pmr::vector take
 }
 
 // Broken bytes give the error as a value, as with std::expected.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode: an error is read as a value")
+TEST_CASE("decode: an error is read as a value")
 {
     std::string const bytes = *form<vehicle>::encode(sample_vehicle);
     std::string_view const cut = std::string_view(bytes).substr(0, 3);
@@ -1715,7 +1706,7 @@ struct cbor::describe_members<keyed> {
 // 4.1), the record head of 7 bytes, the integer with its fixed width of 18 and 1 byte, and the simple value.
 // The test exists because a tag number above 65535 makes the head of the class tag 5 bytes long, and every
 // offset behind it moves by that.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema: the description gives the key of a member")
+TEST_CASE("schema: the description gives the key of a member")
 {
     CHECK_EQ(form<keyed>::fixed_size(), 15u);
     CHECK_EQ(form<keyed>::member_offset<&keyed::m1>(), 12u);
@@ -1737,7 +1728,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "schema: the description gives the key of a member
 // encode writes into a target of the caller: a growing container gets the message appended, a fixed span takes
 // it if it fits, and any other target gives an object with append and done through allocate. done carries the
 // final length of the message. A span that holds the message but not the padding of a head still takes it.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: into a string, a vector, a span and a writer of the caller")
+TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
 {
     std::string const expected = *form<garage>::encode(sample_garage);
     std::string text = "x";
@@ -1831,7 +1822,7 @@ struct cbor::describe_members<passkey_login> {
 // A store such as LMDB hands out exactly the bytes it was asked for, and the next record may sit right
 // behind them. A writer whose allocate returns a span gets the message written straight into it, and no
 // byte behind the span changes, also when the last item is a head with no content after it.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: into the exact span that a writer allocates")
+TEST_CASE("encode: into the exact span that a writer allocates")
 {
     struct reserving {
         std::array<char, 4096> store{};
@@ -1877,7 +1868,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode: into the exact span that a writer allocat
 // CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct lies in the
 // fixed item as an array of a presence flag and its fields. decode reads it; a path does not step into it. Both
 // forms stay two well-formed CBOR items.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema: an optional struct and an optional string, present and absent")
+TEST_CASE("schema: an optional struct and an optional string, present and absent")
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
     std::string const bytes = *form<passkey_login>::encode(full);
@@ -2215,7 +2206,7 @@ C chain_of(std::uint8_t const v)
 // index 21 to 6(-3) = c6 3a 00 00 00 02 and index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4
 // entries. A record of index 8 or more is one byte longer, so its size depends on the root. The class tag of chainK
 // is 1600 + K, 3 bytes in front of each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
+TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
 {
     CHECK_EQ(form<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
     CHECK_EQ(form<chain19>::fixed_size(), 3u + 2u + 5u + 2u + 6u + 6u);
@@ -2250,7 +2241,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "schema: a root with 20 struct types reaches index
 // draft-ietf-cbor-packed-19 2.2 Table 1: with 17 struct types the directory is index 17 and the first shared item
 // is index 18, which is 6(1) = c6 1a 00 00 00 01. The test exists because a reference below index 18 then names
 // no shared item: 6(0) is index 16, a record function, and the reader refuses it.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema: a root with 17 struct types starts its shared items at index 18")
+TEST_CASE("schema: a root with 17 struct types starts its shared items at index 18")
 {
     chain3 const value = chain_of<chain3>(3);
     std::string const bytes = *form<chain3>::encode(value);
@@ -2305,7 +2296,7 @@ struct cbor::describe_members<point_b> {
 // The tag of the class names the class on the wire. point_a and point_b have the same keys and the same layout,
 // so only the class tag tells them apart: 1520 = d9 05 f0 against 1521 = d9 05 f1 (RFC 8949 3.4). The test exists
 // because a reader that ignored the class tag would take a message of one class for the other.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema: a root of another class tag is incorrect_type")
+TEST_CASE("schema: a root of another class tag is incorrect_type")
 {
     std::string const bytes = *form<point_a>::encode(point_a{7});
     CHECK_EQ(bytes.substr(bytes.size() - form<point_a>::fixed_size(), 3), "\xd9\x05\xf0"s);
@@ -2319,7 +2310,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "schema: a root of another class tag is incorrect_
 // The class tag of a nested record is a fixed head like any other. car holds the engine record at offset 12, and
 // the low byte of its tag 1501 = d9 05 dd is changed to de. The test exists because a forged nested tag must stop
 // decode, and a path through that record must stop too, while the root and the other fields still read.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema: a forged class tag of a nested record is incorrect_type")
+TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 {
     std::string const bytes = *form<car>::encode(car{4, {300, 1800}, true});
     std::size_t const motor = bytes.size() - form<car>::fixed_size() + form<car>::member_offset<&car::motor>();
@@ -2368,7 +2359,7 @@ std::string ticket_bytes()
 // decode(bytes) copies the message once, and every view in the result points into that copy. The message here is a
 // temporary that is destroyed at the end of the full expression. The test exists because a view into the bytes of
 // the caller would read freed memory, and the address sanitizer reports that read.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode: the views of the result outlive the bytes of the caller")
+TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 {
     std::expected<cbor::ref<ticket>, cbor::error> const t = form<ticket>::decode(ticket_bytes());
     REQUIRE(t.has_value());
@@ -2381,7 +2372,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "decode: the views of the result outlive the bytes
 
 // decode(owner) copies nothing and keeps the owner. The caller releases its own pointer to the owner before
 // it reads. The test exists because the result alone must keep the bytes alive.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode: the result keeps the owner after the caller releases it")
+TEST_CASE("decode: the result keeps the owner after the caller releases it")
 {
     auto owner = std::make_shared<std::string const>(ticket_bytes());
     auto const t = form<ticket>::decode(std::move(owner));
@@ -2395,7 +2386,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "decode: the result keeps the owner after the call
 // The copying form of path holds its own copy of the message. The message here is a temporary that is destroyed at
 // the end of the full expression. The test exists because a view into those bytes would read freed memory, and the
 // address sanitizer reports that read.
-TEST_CASE(CBOR_TEST_FORM_NAME "path: the copying form outlives the message of the caller")
+TEST_CASE("path: the copying form outlives the message of the caller")
 {
     auto const opened = form<ticket>::path(ticket_bytes());
     REQUIRE(opened.has_value());
@@ -2406,7 +2397,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "path: the copying form outlives the message of th
 
 // The owner form keeps the owner in the root accessor. The caller releases its own pointer to the owner before it
 // reads. The test exists because the root alone must keep the bytes alive.
-TEST_CASE(CBOR_TEST_FORM_NAME "path: the root keeps the owner after the caller releases it")
+TEST_CASE("path: the root keeps the owner after the caller releases it")
 {
     auto owner = std::make_shared<std::string const>(ticket_bytes());
     auto const opened = form<ticket>::path(std::move(owner));
@@ -2607,7 +2598,7 @@ concept dereferenced_as_rvalue = requires(R &&r) { *std::move(r); } || requires(
 } // namespace
 
 // The whole message reads every path, and each value is the one that went in.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: the sample message reads every path")
+TEST_CASE("attack: the sample message reads every path")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     CHECK_EQ(probe_paths_read(bytes), probe_paths);
@@ -2622,7 +2613,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: the sample message reads every path")
 // A text is a view into the bytes that the root holds. An accessor is read through an lvalue only, so each accessor
 // on the way to a value has a name. A ref cannot be read through a temporary. An owner that is empty is a
 // wrong use and throws. The test exists because each of these would otherwise let a view outlive its bytes.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: no text result outlives its bytes")
+TEST_CASE("attack: no text result outlives its bytes")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     using A = form<probe>::accessor<>;
@@ -2641,7 +2632,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: no text result outlives its bytes")
 // (owner decision 2026-10-17: an LMDB read transaction keeps the bytes of its value alive); an owner beside a string
 // does not, because the string may die first. The test exists because each of these let a view outlive its bytes,
 // and a check of the stored pointer refused an owner that holds the bytes.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: path and decode check that the owner holds an object")
+TEST_CASE("attack: path and decode check that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>(*form<probe>::encode(sample_probe));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { form<probe>::path(o, std::string(*o)); }; }(bytes)));
@@ -2664,7 +2655,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: path and decode check that the owner hold
 
 // Each prefix of the message is a cut message. The test exists because a reader that trusted an offset from the
 // wire would read past the end of the cut. No prefix reads a value: the root lies at the end of the message.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: every prefix of a message is an error for every path")
+TEST_CASE("attack: every prefix of a message is an error for every path")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t values = 0;
@@ -2675,7 +2666,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: every prefix of a message is an error for
 
 // A byte in front of the message or behind it moves the root away from its place at the end. The test exists because
 // a reader that found the root by an offset from the start would read a record that is not there.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: a shifted root is incorrect_type")
+TEST_CASE("attack: a shifted root is incorrect_type")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     CHECK_EQ(at_path<probe, "$.i16">("\x00"s + bytes).error(), error::incorrect_type);
@@ -2691,7 +2682,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: a shifted root is incorrect_type")
 // and the fixed widths of the schema: a bool is f4 or f5, an int16 is 19 or 39, a uint64 is 1b, a double fb, a
 // float fa, an int128 the tag c2 or c3, a char[3] the text head 63. Every other head is incorrect_type. The test
 // exists because a reader that ignored the head would read the argument of another type.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: every forged head of a fixed field is incorrect_type")
+TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     auto const forged = [&bytes](std::size_t const member, int const head) {
@@ -2716,7 +2707,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: every forged head of a fixed field is inc
 // Every byte of the root record is forged in turn, with values that flip a head, a length or a reference. The test
 // exists because no forged byte may make a path read outside the message; the sanitizer and the check of each text
 // see that.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: a forged byte anywhere in the root reads nothing outside the message")
+TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the message")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const root = bytes.size() - form<probe>::fixed_size();
@@ -2733,7 +2724,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: a forged byte anywhere in the root reads 
 // A directory entry of the wire is forged to the edges of the message: before the shared items, inside the root,
 // past the end, and to the largest u32. The test exists because an item that begins in the directory or ends in the
 // root would overlap bytes that another path reads as another type.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: a directory entry out of range is an error")
+TEST_CASE("attack: a directory entry out of range is an error")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x0c"s);
@@ -2758,7 +2749,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: a directory entry out of range is an erro
 // of probe are text, maybe and tires; each pair of neighbours is forged once. The text item of login
 // is the last item; its length is forged to reach into the root record behind it. The test exists because a text
 // that reached into the root would give the bytes of the root's fields as text.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: overlapping items are an error")
+TEST_CASE("attack: overlapping items are an error")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x0c"s);
@@ -2785,7 +2776,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: overlapping items are an error")
 // 5a of its byte string, a text with the head 7a. A four-byte argument is read big endian (RFC 8949 Section 3).
 // A directory entry is forged so that the head of the last item no longer fits before the root record. The test
 // exists because the read of that head must stop at the bytes that are left and give too_little_data.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: an item head that does not fit before the root is too_little_data")
+TEST_CASE("attack: an item head that does not fit before the root is too_little_data")
 {
     auto const big_endian = [](std::size_t const x) {
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
@@ -2813,7 +2804,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: an item head that does not fit before the
 // The directory is a byte string with a four-byte argument (RFC 8949 Section 3.1, major type 2). Its length is
 // forged far past the end of the message, and the count in the prefix is forged to match it. The test exists
 // because the read of the directory must stop at the bytes that are left and give too_little_data.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: a directory longer than the message is too_little_data")
+TEST_CASE("attack: a directory longer than the message is too_little_data")
 {
     auto const big_endian = [](std::size_t const x) {
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
@@ -2837,7 +2828,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: a directory longer than the message is to
 // A vector of fixed-size structs refers to the description of its element in the header. The reference of the
 // tires is forged to name another table entry. The test exists because a path into the vector must check that
 // reference, while a path that does not touch the vector stays readable.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: a forged reference of a fixed-size vector is incorrect_type")
+TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const head = bytes.find("\xd9\x80\x69\x82"s);
@@ -3003,7 +2994,7 @@ concept temporary_car_reads = requires(D const &d) { (*d.template at_path<"$.car
 
 // An accessor reads each field of a list of several cars as decode reads it, in order, in the reverse order and in
 // a shuffled order. The test exists because a read that goes back must not take a value of another car.
-TEST_CASE(CBOR_TEST_FORM_NAME "path: an accessor gives the values of decode in every order")
+TEST_CASE("path: an accessor gives the values of decode in every order")
 {
     std::string const bytes = schema_bytes(sample_lot());
     auto const decoded = *form<parking_lot>::decode(std::string(bytes));
@@ -3030,7 +3021,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "path: an accessor gives the values of decode in e
 
 // An accessor is read through an lvalue. The test exists because a text and a nested accessor borrow the bytes of
 // the root, and a read through a temporary root would be the only use of a root that ends at once.
-TEST_CASE(CBOR_TEST_FORM_NAME "path: an accessor is not read through a temporary")
+TEST_CASE("path: an accessor is not read through a temporary")
 {
     using D = form<parking_lot>::accessor<>;
     CHECK(lot_reads<D, "$.cars[].seats">);
@@ -3044,7 +3035,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "path: an accessor is not read through a temporary
 
 // The copying form keeps its copy: a text and a car accessor stay valid after the caller frees the message, while the
 // root lives.
-TEST_CASE(CBOR_TEST_FORM_NAME "path: the copying form keeps its copy after the caller frees the message")
+TEST_CASE("path: the copying form keeps its copy after the caller frees the message")
 {
     auto bytes = std::make_unique<std::string>(schema_bytes(sample_lot()));
     auto lot = *form<parking_lot>::path(std::string(*bytes));
@@ -3058,7 +3049,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "path: the copying form keeps its copy after the c
 
 // Each prefix and each forged byte of a message of several cars is read through a new root and an accessor of each
 // car. The test exists because an accessor that trusted a list it read once would read a later item past the end.
-TEST_CASE(CBOR_TEST_FORM_NAME "attack: an accessor reads nothing outside a cut or forged message of several cars")
+TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of several cars")
 {
     std::string const bytes = schema_bytes(sample_lot());
     std::size_t differ = 0;
@@ -3102,7 +3093,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "attack: an accessor reads nothing outside a cut o
 // The value category of the bytes says what decode and path do. A moved std::string becomes the owner and is not
 // copied; an lvalue and a const rvalue are copied once. The result stays valid after the caller reuses or destroys
 // its buffer.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode and path: an rvalue string is moved, everything else is copied")
+TEST_CASE("decode and path: an rvalue string is moved, everything else is copied")
 {
     std::string const name(40, 'n');
     std::string const message = schema_bytes(login{7, true, name});
@@ -3324,7 +3315,7 @@ bool same(gauge const &a, gauge const &b)
 // finds the description in its place. The directory takes index 3, the fillers 4 to 15. The vector is item 16 at
 // 61 (3d): d9 80 69 82 e2 and a byte string of 16 bytes. 1.0f is 3f800000, 2.0f is 40000000, 0.5f is 3f000000,
 // -1.0f is bf800000 (IEEE 754), low byte first. The bytes are written from the draft and the RFCs by hand.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: a vector of fixed-size structs is one byte string under tag 32873")
+TEST_CASE("encode: a vector of fixed-size structs is one byte string under tag 32873")
 {
     std::string const bytes = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x11\xd8\x72\x81\x66points\xd8\x72\x82\x61x\x61y"
@@ -3342,7 +3333,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode: a vector of fixed-size structs is one byt
 // std::array takes [key, tag, count]. bool takes uint8 (tag 64), the enum color the tag of its underlying uint16
 // (69, little endian), int8 the tag 72. An element is at.x, at.y, on, range[0], range[1], shade: 9 bytes. The table
 // holds gauges, gauge and sorted_inner, so the description is index 3 and the reference simple(3) = e3.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode: a fixed-size struct with bool, enum, an inner struct and an array")
+TEST_CASE("encode: a fixed-size struct with bool, enum, an inner struct and an array")
 {
     std::string const bytes = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
     CHECK_NE(bytes.find("\x82\x19\x06\x66\x84"
@@ -3356,7 +3347,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode: a fixed-size struct with bool, enum, an i
 }
 
 // A path reads one leaf of one element at an offset the compiler knows, after the vector was checked once.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: a leaf of one element of a fixed-size vector")
+TEST_CASE("at_path: a leaf of one element of a fixed-size vector")
 {
     std::string const bytes = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}});
     CHECK_EQ(at_path<gauges, "$.g[0].on">(bytes), true);
@@ -3376,7 +3367,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "at_path: a leaf of one element of a fixed-size ve
 
 // An accessor of the vector gives its size; an accessor of one element or of its inner struct reads the leaves
 // relative to it.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: an accessor of a fixed-size vector and of one element")
+TEST_CASE("at_path: an accessor of a fixed-size vector and of one element")
 {
     auto const owner = std::make_shared<std::string const>(
         schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}}));
@@ -3398,7 +3389,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "at_path: an accessor of a fixed-size vector and o
 }
 
 // A decode gives every leaf of every element back, also for no element and one.
-TEST_CASE(CBOR_TEST_FORM_NAME "encode and decode: a fixed-size vector round trip")
+TEST_CASE("encode and decode: a fixed-size vector round trip")
 {
     for (std::size_t const n : {0uz, 1uz, 3uz}) {
         gauges value;
@@ -3419,7 +3410,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode and decode: a fixed-size vector round trip
 // The table index of the description depends on how many record entries come before it. With 14 record entries the
 // description is index 14, simple(14) = ee, and no filler is left. With 17 record entries the description is index
 // 17, beyond the 16 one-byte references, so the reference is 6(-1) = c6 20 (draft Table 1: 16 - 2N - 1 = 17).
-TEST_CASE(CBOR_TEST_FORM_NAME "encode and decode: the reference to a description at every table index")
+TEST_CASE("encode and decode: the reference to a description at every table index")
 {
     fifteen_entries fifteen{};
     fifteen.p = {{1.0f, 2.0f}};
@@ -3449,7 +3440,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "encode and decode: the reference to a description
 
 // The bytes of the vector come from the wire. The head of the vector, the description in the header, the length
 // of the byte string and every bool are checked before a value is read.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path and decode: a broken fixed-size vector is an error")
+TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
 {
     std::string const bytes = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
     std::size_t const head = bytes.find("\xd9\x80\x69\x82\xe2\x5a"s);
@@ -3482,7 +3473,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "at_path and decode: a broken fixed-size vector is
 
 // The accessor of a fixed-size vector is a random access range of element accessors, so a loop, a page through
 // std::views::drop and std::views::take, and a count work as with any std range. A page reads only its elements.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: a fixed-size vector is a range of its elements")
+TEST_CASE("at_path: a fixed-size vector is a range of its elements")
 {
     auto const owner = std::make_shared<std::string const>(schema_bytes(
         gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}, {true, color::black, {0, 9}, {0, 0}}}}));
@@ -3613,7 +3604,7 @@ void unverified_reads(std::string const &bytes)
 
 // The verified decode checks the head of a fixed string and of a std::array as the verified path does. Before,
 // only the path checked them, so a forged head gave incorrect_type to a path and a value to decode.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode: the head of a fixed string and of a std::array is checked")
+TEST_CASE("decode: the head of a fixed string and of a std::array is checked")
 {
     std::string const bytes = schema_bytes(sample_vehicle);
     std::size_t const code = bytes.find("\x64" "ABCD"s);
@@ -3634,7 +3625,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "decode: the head of a fixed string and of a std::
 // Owner decision 2026-10-18: the unverified_ forms read a message from a trusted peer without the checks of its
 // data, as FlatBuffers does without its Verifier. On a message that the encoder wrote they give what the verified
 // forms give.
-TEST_CASE(CBOR_TEST_FORM_NAME "unverified: the same results as the verified forms on a message that the encoder wrote")
+TEST_CASE("unverified: the same results as the verified forms on a message that the encoder wrote")
 {
     std::string const bytes = schema_bytes(sample_everything);
     CHECK_EQ(form<everything>::unverified_at_path<"$.big">(bytes), at_path<everything, "$.big">(bytes));
@@ -3666,7 +3657,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "unverified: the same results as the verified form
 
 // The unverified forms skip the checks of the data: a forged class tag, a forged head of a number, a forged tag of
 // a typed array and a forged head of a fixed-size vector give a value where the verified forms give incorrect_type.
-TEST_CASE(CBOR_TEST_FORM_NAME "unverified: a forged type byte gives a value, not an error")
+TEST_CASE("unverified: a forged type byte gives a value, not an error")
 {
     std::string const bytes = schema_bytes(sample_everything);
     auto const forged = [&bytes](std::string const &find, std::size_t const at, char const to) {
@@ -3694,7 +3685,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "unverified: a forged type byte gives a value, not
 
 // An accessor inside an optional shares the owner of the message like every other accessor, so a read through it
 // does not see a moved-from accessor.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema: an accessor inside an optional reads its fields")
+TEST_CASE("schema: an accessor inside an optional reads its fields")
 {
     auto const root = form<everything>::path(schema_bytes(sample_everything));
     REQUIRE(root.has_value());
@@ -3707,7 +3698,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "schema: an accessor inside an optional reads its 
 
 // The check for a moved-from accessor compares the control block of the owner, not its count. An owner that shares a
 // control block and holds a null pointer is still an owner; an owner with no control block is empty.
-TEST_CASE(CBOR_TEST_FORM_NAME "schema: an owner is empty only when it has no control block")
+TEST_CASE("schema: an owner is empty only when it has no control block")
 {
     std::string const bytes = schema_bytes(sample_everything);
     auto const held = std::make_shared<std::string const>(bytes);
@@ -3728,7 +3719,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "schema: an owner is empty only when it has no con
 
 // The unverified forms keep every check of a bound: a cut message, an index past the end and a length past the
 // end give the same error in both forms.
-TEST_CASE(CBOR_TEST_FORM_NAME "unverified: a bound is checked as in the verified forms")
+TEST_CASE("unverified: a bound is checked as in the verified forms")
 {
     std::string const bytes = schema_bytes(sample_everything);
     CHECK_EQ(form<everything>::unverified_path(bytes.substr(0, 20)).error(), error::too_little_data);
@@ -3750,7 +3741,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "unverified: a bound is checked as in the verified
 
 // Every accessor that an unverified accessor gives is unverified, and every accessor that a verified accessor
 // gives is verified, so a read never changes its form in the middle of a path.
-TEST_CASE(CBOR_TEST_FORM_NAME "unverified: the form of an accessor passes to its parts")
+TEST_CASE("unverified: the form of an accessor passes to its parts")
 {
     using unverified = unverified_root<everything>;
     using verified = form<everything>::accessor<>;
@@ -3768,7 +3759,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "unverified: the form of an accessor passes to its
 // The unverified forms read where the data says, so the test changes every byte of a message that holds every kind
 // of part, and cuts it at every length. Each call must return; in the build with AddressSanitizer and
 // UndefinedBehaviorSanitizer no read leaves the input.
-TEST_CASE(CBOR_TEST_FORM_NAME "unverified: every changed byte and every cut stays inside the input")
+TEST_CASE("unverified: every changed byte and every cut stays inside the input")
 {
     std::string const bytes = schema_bytes(sample_everything);
     for (std::size_t i = 0; i < bytes.size(); ++i)
@@ -3798,7 +3789,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "unverified: every changed byte and every cut stay
 
 // A bool in a fixed-size struct is one byte. The verified form refuses a byte other than 0 and 1; the unverified
 // form reads any byte other than 0 as true.
-TEST_CASE(CBOR_TEST_FORM_NAME "unverified: a bool byte 2 reads true")
+TEST_CASE("unverified: a bool byte 2 reads true")
 {
     std::string const flags = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
     std::size_t const element = flags.find("\x03\xfe\x01\x01\x00"s);
@@ -3851,7 +3842,7 @@ void check_description_apart(T const &value)
 // Owner decision 2026-10-20: the description of a struct is stored once, apart from the data of each key, so the
 // data does not repeat it. The data form is the message without the table entries of the description; this
 // library reads it with the type, which knows the description at compile time.
-TEST_CASE(CBOR_TEST_FORM_NAME "description apart: the data and the description together hold what the message holds")
+TEST_CASE("description apart: the data and the description together hold what the message holds")
 {
     check_description_apart(sample_everything);
     check_description_apart(sample_vehicle);
@@ -3864,7 +3855,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "description apart: the data and the description t
 }
 
 // Every read form gives on the data form what it gives on the message.
-TEST_CASE(CBOR_TEST_FORM_NAME "description apart: each read form reads the data form")
+TEST_CASE("description apart: each read form reads the data form")
 {
     std::string const data = apart_bytes(sample_everything);
     CHECK_EQ((form<everything>::at_path<"$.big", apart>(data)), -5);
@@ -3891,7 +3882,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "description apart: each read form reads the data 
 }
 
 // Each target of encode writes the same data form.
-TEST_CASE(CBOR_TEST_FORM_NAME "description apart: every target of encode writes the same bytes")
+TEST_CASE("description apart: every target of encode writes the same bytes")
 {
     std::string const data = apart_bytes(sample_everything);
     std::string appended = "ab";
@@ -3914,7 +3905,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "description apart: every target of encode writes 
 // A message read as the data form and the data form read as a message are refused: the byte after the head of
 // the table is the head of the directory in one form and the first entry of the description in the other. A short
 // input ends as too_little_data before that byte is read.
-TEST_CASE(CBOR_TEST_FORM_NAME "description apart: one form read as the other is refused")
+TEST_CASE("description apart: one form read as the other is refused")
 {
     for (std::string const &inside : {schema_bytes(sample_everything), schema_bytes(empty{}), schema_bytes(eighteen_entries{})}) {
         auto const as_data = form<everything>::path<apart>(std::string(inside));
@@ -3934,7 +3925,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "description apart: one form read as the other is 
 
 // The data form keeps every check of the message: a cut gives too_little_data, a forged directory entry and a
 // forged filler give an error in the verified forms.
-TEST_CASE(CBOR_TEST_FORM_NAME "description apart: the checks of the message hold for the data form")
+TEST_CASE("description apart: the checks of the message hold for the data form")
 {
     std::string const data = apart_bytes(sample_everything);
     for (std::size_t n = 0; n < data.size(); ++n) {
@@ -3957,7 +3948,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "description apart: the checks of the message hold
 
 // The unverified forms read the data form inside its bounds: every changed byte and every cut, and a message read
 // as the data form, stay inside the input under AddressSanitizer.
-TEST_CASE(CBOR_TEST_FORM_NAME "description apart: the unverified forms stay inside the input")
+TEST_CASE("description apart: the unverified forms stay inside the input")
 {
     std::string const data = apart_bytes(sample_everything);
     auto const reads = [](std::string const &bytes) {
@@ -4072,7 +4063,7 @@ struct cbor::describe_members<pmr_station> {
 // of the description, as mrb_cpp_new of mruby-c-ext-helpers forwards its arguments to new T(...). The wire does not
 // show how a class is built, so the same description gives the bytes of an aggregate. The key order (unit before
 // value) differs from the order of the description, so a mix-up of the two orders shows here.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode: a class with a constructor takes its described members in the order of the description")
+TEST_CASE("decode: a class with a constructor takes its described members in the order of the description")
 {
     std::string const bytes = schema_bytes(reading{7, "kg"});
     CHECK_EQ(bytes, schema_bytes(reading_plain{7, "kg"}));
@@ -4088,7 +4079,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "decode: a class with a constructor takes its desc
 
 // Each place that makes an element builds a class with a constructor the same way: an element of a vector, the
 // value of an optional and the value of a map.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode: a class with a constructor in a vector, an optional and a map")
+TEST_CASE("decode: a class with a constructor in a vector, an optional and a map")
 {
     station const full{{reading{1, "a"}, reading{2, "bb"}}, reading{3, "ccc"}, {{9, reading{4, "dddd"}}}};
     std::string const bytes = schema_bytes(full);
@@ -4111,7 +4102,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "decode: a class with a constructor in a vector, a
 
 // The arguments of the constructor are made with the allocator of the vector (std::tuple with std::allocator_arg,
 // [tuple.cnstr]), so a std::pmr member keeps the resource of the vector through the move into the class.
-TEST_CASE(CBOR_TEST_FORM_NAME "decode: a class with a constructor in a std::pmr::vector takes the resource of the vector")
+TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the resource of the vector")
 {
     std::string const long_unit(40, 'u');
     pmr_station value;
@@ -4266,7 +4257,7 @@ std::string golden_report()
 // The bytes of every described type of this file, with values that differ in each leaf, as the commit before
 // cbor::packed wrote them (dc787da): the message with the description inside, the data form apart, and the
 // description. A change of the walk that changes one byte fails here.
-TEST_CASE(CBOR_TEST_FORM_NAME "golden bytes: every type of this file encodes as before")
+TEST_CASE("golden bytes: every type of this file encodes as before")
 {
     std::string expected(golden_expected);
 #if !defined(__STDCPP_FLOAT16_T__)
@@ -4322,7 +4313,7 @@ byte_fields byte_fields_value()
 
 // A user reads one byte of an array of bytes with [n], as one number of a list. The array is one byte string in
 // the message: inline in the root for a fixed size, a part for a vector. The byte is the end of the path.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: [n] reads one byte of a byte string")
+TEST_CASE("at_path: [n] reads one byte of a byte string")
 {
     std::string const bytes = *form<byte_fields>::encode(byte_fields_value());
     CHECK_EQ(form<byte_fields>::at_path<"$.fixed[2]">(bytes), std::uint8_t{3});
@@ -4352,7 +4343,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "at_path: [n] reads one byte of a byte string")
 }
 
 // A path ends at the byte, and a literal index lies inside a byte string of fixed size. A text stays a text.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: [n] into a byte string does not compile past its end or into a text")
+TEST_CASE("at_path: [n] into a byte string does not compile past its end or into a text")
 {
     CHECK(message_path_reads<byte_fields, "$.fixed[2]">);
     CHECK_FALSE(message_path_reads<byte_fields, "$.fixed[3]">);
@@ -4363,7 +4354,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "at_path: [n] into a byte string does not compile 
 }
 
 // A verified read checks the head of a byte string before it reads a byte of it.
-TEST_CASE(CBOR_TEST_FORM_NAME "at_path: [n] into a byte string with a wrong head is incorrect_type")
+TEST_CASE("at_path: [n] into a byte string with a wrong head is incorrect_type")
 {
     std::string bytes = *form<byte_fields>::encode(byte_fields_value());
     std::size_t const head = bytes.find("\x43\x01\x02\x03"sv);
@@ -4374,7 +4365,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "at_path: [n] into a byte string with a wrong head
 
 // The root of a message stands at its end. A message with a missing end gave incorrect_type, because the last bytes
 // are not the root. Every verified entry gives too_little_data for each length that cuts the message.
-TEST_CASE(CBOR_TEST_FORM_NAME "a message cut at any length is too_little_data")
+TEST_CASE("a message cut at any length is too_little_data")
 {
     std::string const bytes = schema_bytes(reading{7, "kg"});
     std::string const apart_bytes = *form<byte_fields>::template encode<cbor::description_place::apart>(byte_fields_value());
@@ -4402,7 +4393,7 @@ TEST_CASE(CBOR_TEST_FORM_NAME "a message cut at any length is too_little_data")
 
 // Only a cut message of the type is too_little_data: a message of another type, a message with a byte after it and
 // text that is not CBOR keep their error.
-TEST_CASE(CBOR_TEST_FORM_NAME "a whole message of another type keeps its error")
+TEST_CASE("a whole message of another type keeps its error")
 {
     std::string const whole = *form<byte_fields>::encode(byte_fields_value());
     CHECK_EQ(form<reading>::decode(std::string(whole)).error(), error::incorrect_type);

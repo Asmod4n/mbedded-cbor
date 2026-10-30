@@ -30,10 +30,8 @@
 namespace cbor
 {
 
-enum class member_source;
-
-template <class T, member_source Source>
-class basic_schema;
+template <class T>
+class schema;
 
 template <class Target>
 class encoder;
@@ -156,8 +154,8 @@ private:
     template <class>
     friend class structs;
 
-    template <class, member_source>
-    friend class basic_schema;
+    template <class>
+    friend class schema;
 };
 
 template <class Writer>
