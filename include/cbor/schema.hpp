@@ -807,19 +807,24 @@ class reflection
                       sizeof(S) != fixed_width<S>()) {
             return false;
         } else {
-#ifdef __cpp_impl_reflection
             bool same = true;
-            template for (constexpr std::meta::info m :
-                          std::define_static_array(std::meta::nonstatic_data_members_of(^^S, std::meta::access_context::unprivileged()))) {
-                using M = std::remove_cv_t<typename[:std::meta::type_of(m):]>;
-                same = same && std::meta::offset_of(m).bytes == static_cast<std::ptrdiff_t>(fixed_offset<S, member_index_of<S, m>()>());
-                if constexpr (fixed_struct_valid<M>())
-                    same = same && fixed_layout_native<M>();
-            }
+            for_each_field<S>([&](auto i) {
+                constexpr std::size_t I = decltype(i)::value;
+                using M = std::remove_cv_t<describe::member_t<S, I>>;
+                if constexpr (!std::is_trivially_copyable_v<M> || sizeof(M) != fixed_width<M>()) {
+                    same = false;
+                } else {
+                    constexpr std::size_t at = fixed_offset<S, I>();
+                    std::array<std::byte, sizeof(S)> bytes{};
+                    std::ranges::fill(std::span(bytes).subspan(at, sizeof(M)), std::byte{1});
+                    auto const probe = std::bit_cast<S>(bytes);
+                    auto const read = std::bit_cast<std::array<std::byte, sizeof(M)>>(describe::get<I>(probe));
+                    same = same && std::ranges::all_of(read, [](std::byte const b) { return b == std::byte{1}; });
+                    if constexpr (fixed_struct_valid<M>())
+                        same = same && fixed_layout_native<M>();
+                }
+            });
             return same;
-#else
-            return false;
-#endif
         }
     }
 
@@ -1370,7 +1375,7 @@ class reflection
             heads::u32_write(out, item + head.size(), length * width);
             std::size_t at = item + head.size() + sizeof(std::uint32_t);
             c.position = at + length * width;
-            if constexpr (Source == member_source::reflection && fixed_layout_native<E>() && std::ranges::contiguous_range<U>) {
+            if constexpr (fixed_layout_native<E>() && std::ranges::contiguous_range<U>) {
                 auto const from = std::as_bytes(std::span(value));
                 std::ranges::copy(from, std::as_writable_bytes(out.subspan(at, from.size())).begin());
             } else {
