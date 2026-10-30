@@ -112,7 +112,7 @@ inline void encoder_target(std::string_view const input)
                 if (in.byte() & 1) {
                     auto const f = std::bit_cast<float>(static_cast<std::uint32_t>(bits));
                     require(out.fixed_width_float_encode(f).has_value());
-                    items.push_back({{static_cast<double>(f)}, 5});
+                    items.push_back({{widened(f)}, 5});
                 } else {
                     auto const d = std::bit_cast<double>(bits);
                     require(out.fixed_width_float_encode(d).has_value());

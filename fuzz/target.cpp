@@ -7,6 +7,7 @@
 #include "path.hpp"
 #include "sequence_reader.hpp"
 #include "schema.hpp"
+#include "structs.hpp"
 
 #include <cstddef>
 #include <cstdint>
