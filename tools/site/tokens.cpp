@@ -92,10 +92,11 @@ std::string highlighted(std::string_view const text, std::vector<token> const &t
     auto const line_open = [&] {
         if (line < first || line > last)
             return;
-        out += "<a id=\"L" + std::to_string(line) + "\"";
-        if (!link.empty())
-            out += " href=\"" + std::string(link) + "#L" + std::to_string(line) + "\"";
-        out += "></a>";
+        if (link.empty())
+            out += "<a id=\"L" + std::to_string(line) + "\"></a>";
+        else
+            out += "<a class=\"line\" data-line=\"" + std::to_string(line) + "\" href=\"" + std::string(link) + "#L" +
+                   std::to_string(line) + "\"></a>";
     };
     auto const plain = [&](std::string_view const piece) {
         for (char const c : piece) {
@@ -173,12 +174,13 @@ CXChildVisitResult member_visit(CXCursor const cursor, CXCursor, CXClientData co
 
 int main(int const argc, char const *const *const argv)
 {
-    if (argc != 3) {
-        std::fprintf(stderr, "usage: tokens <tree> <out>\n");
+    if (argc != 4) {
+        std::fprintf(stderr, "usage: tokens <tree> <out> <url of include/cbor at the commit>\n");
         return 2;
     }
     std::filesystem::path const tree = argv[1];
     std::filesystem::path const out = argv[2];
+    std::string const source_url = argv[3];
     std::string const include = "-I" + (tree / "include").string();
     std::string const pfr = "-I" + (tree / "third_party/boost_pfr/include").string();
     char const *const arguments[] = {"-x", "c++", "-std=c++23", include.c_str(), pfr.c_str()};
@@ -224,7 +226,7 @@ int main(int const argc, char const *const *const argv)
         std::string const name = std::filesystem::path(range.path).filename().string();
         auto const file = std::ranges::find(files, "include/cbor/" + name, &site::token_file::path);
         impl += "<pre><code>" +
-                site::highlighted(file->text, file->tokens, range.first, range.last, {}) +
+                site::highlighted(file->text, file->tokens, range.first, range.last, source_url + "/" + name) +
                 "</code></pre>\n";
     }
     site::file_write(out / "impl/lazy/at_path.html", impl);

@@ -6,11 +6,12 @@ set -eu
 tree=$(cd "$(dirname "$0")/../.." && pwd)
 out=${1:?output directory}
 mkdir -p "$out"
-podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-site sh -ec '
+commit=$(git -C "$tree" rev-parse HEAD)
+podman run --rm --network none -e SOURCE_URL="https://github.com/Asmod4n/mbedded-cbor/blob/$commit/include/cbor" -v "$tree":/src:ro -v "$out":/out mbedded-cbor-site sh -ec '
   flags="-std=c++23 -O1 -Wall -Wextra -Werror -I/src/include -I/src/third_party/boost_pfr/include -I/usr/lib/llvm-23/include"
   g++-16 $flags /src/tools/site/tokens.cpp -L/usr/lib/llvm-23/lib -lclang -Wl,-rpath,/usr/lib/llvm-23/lib -o /tmp/tokens
   g++-16 $flags /src/tools/site/check.cpp -o /tmp/check
-  /tmp/tokens /src /tmp/work
+  /tmp/tokens /src /tmp/work "$SOURCE_URL"
   /tmp/check /src /tmp/work
   page=/src/doc/reference/lazy/at_path.md
   mkdir -p /out/reference/lazy
@@ -31,4 +32,5 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-si
   done
   grep -q "key_not_found" /tmp/at_path.txt
   grep -q "singular_query_walk" /tmp/at_path.txt
+  grep -q "href=\"$SOURCE_URL/query.hpp#L" /out/reference/lazy/at_path.html
   echo "page: reference/lazy/at_path.html, every section in lynx"'
