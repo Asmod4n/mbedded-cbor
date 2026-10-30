@@ -8,6 +8,23 @@ template <fixed_string Path>
 inline constexpr bool is_singular_query_v = is_singular_query<Path>::value;
 ```
 
+```call-seq
+cbor::is_singular_query_v<"$.a[0]">                           → bool
+cbor::jsonpath::compile<cbor::lazy>("$.a[0]").has_value()     → bool
+```
+
+```example
+message: {"a": [{"b": 1}]}
+call: cbor::jsonpath::compile<cbor::lazy>("$.a[0]['b']").has_value()
+result: true
+call: cbor::jsonpath::compile<cbor::lazy>("$.a[*]").has_value()
+result: false
+call: cbor::jsonpath::compile<cbor::lazy>("$..a").has_value()
+result: false
+call: cbor::jsonpath::compile<cbor::lazy>("$.a[").has_value()
+result: false
+```
+
 True when `Path` is valid and is a singular query (RFC 9535 2.3.5.1): a
 name or an index in each segment, and no descendant segment. A singular
 query selects one node at most. An EDN key in brackets is a name.

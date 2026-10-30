@@ -10,6 +10,28 @@ public:
 };
 ```
 
+```call-seq
+cbor::category().name()                            → char const *
+cbor::category().message(condition)                → std::string
+cbor::category().default_error_condition(condition) → std::error_condition
+```
+
+```example
+message: {}
+call: std::error_code const e{cbor::error::no_buffer_space}
+result: std::error_code cbor:21
+call: e.default_error_condition().category().name()
+result: "generic"
+call: std::error_code const t{cbor::error::too_little_data}
+result: std::error_code cbor:1
+call: t.default_error_condition().category().name()
+result: "cbor"
+call: cbor::category().message(13)
+result: "key not found"
+call: cbor::category().message(0)
+result: "unknown cbor error"
+```
+
 The `std::error_category` of `cbor::error`. A program reaches it through
 [category](category.md). `name()` gives `"cbor"`. `message` gives the
 text of the error, for example `"key not found"`, and

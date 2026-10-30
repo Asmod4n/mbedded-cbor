@@ -28,6 +28,23 @@ public:
 };
 ```
 
+```call-seq
+cbor::structs<std::string_view>::decode(std::move(bytes)) → std::expected<ref<std::string_view>, error>
+*r                                                        → std::string_view
+r->member                                                 → the member of T
+r.clone()                                                 → std::string
+```
+
+```example
+message: "abc"
+call: auto const r = cbor::structs<std::string_view>::decode(std::move(bytes))
+result: ref to "abc"
+call: std::string_view const v = **r
+result: "abc"
+call: r->clone()
+result: "abc"
+```
+
 A value and a `std::shared_ptr` to the owner of the bytes that it views.
 `*r` gives a view by value and any other `T` as `T const &`. `r->`
 reaches the members. `==` compares the values. A copy shares the owner
