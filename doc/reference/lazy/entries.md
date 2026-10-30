@@ -4,6 +4,16 @@
 std::expected<lazy_entries, error> entries() const;
 ```
 
+```call-seq
+doc->entries() → std::expected<lazy_entries, error>
+```
+
+```example
+message: {"a": 1, "b": 2}
+call: doc->entries()
+result: lazy_entries of 2 pairs: "a": 1, "b": 2
+```
+
 Gives the pairs of a map, in the order of the bytes, as a view. Each
 element of the view is a `std::expected<std::pair<lazy, lazy>, error>`:
 the key in `first`, the value in `second`. A key that occurs twice

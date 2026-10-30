@@ -4,6 +4,18 @@
 std::expected<owning<item>, error> clone() const;
 ```
 
+```call-seq
+doc->clone() → std::expected<owning<item>, error>
+```
+
+```example
+message: {"a": [1, "x"]}
+call: doc->at("a")->clone()
+result: owning item of [1, "x"]
+call: (*doc->at("a")->clone())->type
+result: cbor::type::array
+```
+
 Decodes the whole item at the lazy into a tree of
 [cbor::item](../item/item.md), as [cbor::decode](../item/decode.md) does.
 The tree holds a copy of each text and byte string. It does not view the

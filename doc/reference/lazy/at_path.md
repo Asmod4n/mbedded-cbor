@@ -30,6 +30,25 @@ template <class E>
 std::expected<typename E::result_type, error> at_path(E const &e) const;
 ```
 
+```call-seq
+doc->at_path<"$.user.id", std::int64_t>()      → std::expected<std::int64_t, error>
+doc->at_path<"$.user.name", std::string_view>() → std::expected<ref<std::string_view>, error>
+doc->at_path<"$.user.tags[*]", cbor::nodelist>() → std::expected<nodelist, error>
+doc->at_path<"$.user">()                     → std::expected<lazy, error>
+```
+
+```example
+message: {"user": {"id": 42, "tags": ["a", "b"]}}
+call: doc->at_path<"$.user.id", std::int64_t>()
+result: 42
+call: doc->at_path<"$.user.tags[-1]", std::string_view>()
+result: ref to "b"
+call: doc->at_path<"$.user.tags[*]", cbor::nodelist>()
+result: nodelist of 2 nodes: "a", "b"
+call: doc->at_path<"$.user.age", int>()
+result: unexpected cbor::error::key_not_found
+```
+
 Reads the JSONPath (RFC 9535) `Path` from this lazy as the root `$`.
 
 ## Parameters

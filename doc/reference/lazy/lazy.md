@@ -10,6 +10,19 @@ struct lazy {
 using nodelist = std::vector<lazy>;
 ```
 
+```call-seq
+cbor::lazy::take_ownership(bytes) → std::expected<lazy, error>
+cbor::lazy const copy = *doc
+```
+
+```example
+message: [1, 2]
+call: cbor::lazy const copy = *doc
+result: lazy of [1, 2]
+call: copy.at(1)->get<int>()
+result: 2
+```
+
 A lazy is a position in one top-level item. It holds the owner of the
 bytes, the bytes and an offset. It holds no decoded value. Each member
 function reads the bytes at the offset when it is called.

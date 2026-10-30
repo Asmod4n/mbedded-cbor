@@ -5,6 +5,18 @@ template <owning_range_of_chars Encoded>
 static std::expected<lazy, error> take_ownership(Encoded &&encoded);
 ```
 
+```call-seq
+cbor::lazy::take_ownership(std::move(bytes)) → std::expected<lazy, error>
+```
+
+```example
+message: {"id": 42}
+call: auto const doc2 = cbor::lazy::take_ownership(std::move(bytes))
+result: lazy of {"id": 42}
+call: doc2->at("id")->get<std::int64_t>()
+result: 42
+```
+
 Makes the lazy of the top-level item in `encoded`. The bytes move into a
 new owner; nothing is copied. Every lazy, view and `ref` that comes from
 the result holds that owner, so the bytes stay alive as long as one of

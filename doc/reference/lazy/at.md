@@ -6,6 +6,24 @@ std::expected<lazy, error> at(key k) const;
 std::expected<lazy, error> at(std::size_t index) const;
 ```
 
+```call-seq
+doc->at("key")            → std::expected<lazy, error>
+doc->at(cbor::key{7})      → std::expected<lazy, error>
+doc->at(1)                 → std::expected<lazy, error>
+```
+
+```example
+bytes: a2 64 63 61 72 73 82 a1 62 68 70 05 a1 62 68 70 07 07 65 73 65 76 65 6e
+call: doc->at("cars")->at(1)->at("hp")->get<int>()
+result: 7
+call: doc->at(cbor::key{7})->get<std::string_view>()
+result: ref to "seven"
+call: doc->at("bus").error()
+result: cbor::error::key_not_found
+call: doc->at(0).error()
+result: cbor::error::not_indexable
+```
+
 Gives the lazy of one child. `at(key)` gives the value of the first pair
 of a map whose key is the text `key`. `at(cbor::key{n})` gives the value
 of the first pair whose key is the integer `n`; a bignum key that holds

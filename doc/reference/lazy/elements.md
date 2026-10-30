@@ -4,6 +4,18 @@
 std::expected<lazy_elements, error> elements() const;
 ```
 
+```call-seq
+doc->elements() → std::expected<lazy_elements, error>
+```
+
+```example
+message: [1, 2, 3]
+call: doc->elements()
+result: lazy_elements of 3 elements: 1, 2, 3
+call: doc->at(0)->elements().error()
+result: cbor::error::not_indexable
+```
+
 Gives the elements of an array, or of a typed array, as a view. Each
 element of the view is a `std::expected<lazy, error>`. The call reads
 only the head. The view reads one element at each step.

@@ -20,6 +20,19 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
 };
 ```
 
+```call-seq
+auto const view = *doc->entries()
+view.size() → std::uint64_t
+```
+
+```example
+message: {"a": 1, "b": 2, "c": 3}
+call: auto const view = *doc->entries()
+result: lazy_entries of 3 pairs: "a": 1, "b": 2, "c": 3
+call: view.size()
+result: 3
+```
+
 The pairs of one map, from [entries](entries.md), in the order of the
 bytes. It is a forward range, a sized range and a borrowed range.
 `size()` gives the count of pairs in the head. `*it` gives the key in
