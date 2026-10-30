@@ -2,7 +2,31 @@ name: linux
 
 on:
   push:
+    paths:
+      - 'include/**'
+      - 'test/**'
+      - 'fuzz/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'third_party/**'
+      - 'cbor-test-vectors/**'
+      - 'test-vectors/**'
+      - 'containers/tumbleweed.Containerfile'
+      - 'containers/tumbleweed-gcc15.Containerfile'
+      - '.github/workflows/linux.yml'
   pull_request:
+    paths:
+      - 'include/**'
+      - 'test/**'
+      - 'fuzz/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'third_party/**'
+      - 'cbor-test-vectors/**'
+      - 'test-vectors/**'
+      - 'containers/tumbleweed.Containerfile'
+      - 'containers/tumbleweed-gcc15.Containerfile'
+      - '.github/workflows/linux.yml'
   workflow_dispatch:
 
 permissions:

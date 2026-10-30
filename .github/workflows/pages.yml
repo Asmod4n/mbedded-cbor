@@ -3,6 +3,13 @@ name: pages
 on:
   push:
     branches: [main]
+    paths:
+      - 'include/**'
+      - 'doc/reference/**'
+      - 'tools/site/**'
+      - 'test/doc_types.hpp'
+      - 'containers/site.Containerfile'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
