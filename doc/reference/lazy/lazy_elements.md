@@ -20,6 +20,19 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
 };
 ```
 
+```call-seq
+auto const view = *doc->elements()
+view.size() → std::uint64_t
+```
+
+```example
+message: [{"age": 31}, {"age": 20}, {"age": 40}]
+call: auto const view = *doc->elements()
+result: lazy_elements of 3 elements: {"age": 31}, {"age": 20}, {"age": 40}
+call: view.size()
+result: 3
+```
+
 The elements of one array, from [elements](elements.md). It is a forward
 range, a sized range and a borrowed range. `size()` gives the count of
 the head. `*it` gives the lazy of the element, or the error of the
