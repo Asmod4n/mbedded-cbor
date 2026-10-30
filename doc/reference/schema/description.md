@@ -25,8 +25,8 @@ call: bytes.size()
 result: 206
 call: cbor::schema<car>::at_path<"$.seats", cbor::description_place::apart>(*data)
 result: 5
-call: cbor::schema<car>::at_path<"$.seats">(*data)
-result: unexpected cbor::error::too_little_data
+call: cbor::schema<car>::decode<cbor::description_place::apart>(*data)
+result: ref to car{"Volvo", 5, {tire{17, 2.5f}, tire{18, 2.25f}}, {1, 2, 3}}
 call: auto const owner = std::make_shared<std::string const>(*data)
 result: shared_ptr to 130 bytes: d8 71 82 9a 00 00 00 10 5a 00 00 00 0c 00 00 00 25 00 00 00 2f 00 00 00 45 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
 call: auto const root = cbor::schema<car>::path<cbor::description_place::apart>(owner)
