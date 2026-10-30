@@ -4,6 +4,32 @@
 std::expected<void, error> typed_array(cbor::typed_array const value);
 ```
 
+```call-seq
+e.typed_array(value) → std::expected<void, error>
+```
+
+```example
+bytes: d8 40 42 01 02
+call: std::array<std::uint8_t, 2> two{1, 2};
+result: {1, 2}
+call: std::string out;
+result: ""
+call: cbor::encoder e(out);
+result: encoder over a std::string
+call: e.typed_array(cbor::typed_array{64, std::as_bytes(std::span(two))})
+result: void
+call: e.finish()
+result: 5
+call: out
+result: 5 bytes: d8 40 42 01 02
+call: std::string out2;
+result: ""
+call: cbor::encoder e2(out2);
+result: encoder over a std::string
+call: e2.typed_array(cbor::typed_array{66, std::as_bytes(std::span(two))})
+result: unexpected cbor::error::inadmissible_type_for_tag_content
+```
+
 Writes a typed array (RFC 8746): the tag `value.tag` and then
 `value.bytes` as a byte string. The bytes are copied as they are, in
 the byte order that the tag names.

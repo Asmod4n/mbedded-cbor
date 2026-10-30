@@ -9,6 +9,24 @@ template <std::floating_point T>
 std::expected<void, error> floating_point(T const value);
 ```
 
+```call-seq
+e.floating_point(value) → std::expected<void, error>
+```
+
+```example
+bytes: fa 3f c0 00 00
+call: std::string out;
+result: ""
+call: cbor::encoder e(out);
+result: encoder over a std::string
+call: e.floating_point(1.5f)
+result: void
+call: e.finish()
+result: 5
+call: out
+result: 5 bytes: fa 3f c0 00 00
+```
+
 Writes `value` as a float in the width of `T`: 16, 32 or 64 bits. It
 does not choose a shorter form. A NaN keeps its bits.
 

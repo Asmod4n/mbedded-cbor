@@ -9,6 +9,26 @@ std::expected<void, error> text_string(std::shared_ptr<std::string const> const 
 std::expected<void, error> text_string(ref<std::string_view> const &text);
 ```
 
+```call-seq
+e.text_string(text) → std::expected<void, error>
+```
+
+```example
+bytes: 63 61 62 63
+call: std::string out;
+result: ""
+call: cbor::encoder e(out);
+result: encoder over a std::string
+call: e.text_string("abc")
+result: void
+call: e.finish()
+result: 4
+call: out
+result: "cabc"
+call: cbor::decode(out)
+result: owning item of "abc"
+```
+
 Writes `text` as a text string, with the shortest head for the length.
 The call does not check UTF-8. Over an [iov_writer](iov_writer.md), the
 last three forms do not copy a text of 32 bytes or more: the result
