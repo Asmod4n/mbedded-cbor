@@ -1,6 +1,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include "doc_types.hpp"
 #include "reference.hpp"
 
 
@@ -28,57 +29,6 @@ using cbor::error;
 
 // Each test in this file is one example of a page in doc/reference/schema/. The tests exist so that every example
 // compiles and gives the result that its page states.
-
-namespace doc_reference_schema
-{
-
-struct tire {
-    std::uint16_t diameter;
-    float pressure;
-};
-
-struct car {
-    std::string make;
-    std::uint8_t seats;
-    std::vector<tire> tires;
-    std::vector<double> track;
-};
-
-struct point {
-    float x;
-    float y;
-};
-
-} // namespace doc_reference_schema
-
-template <>
-struct cbor::describe_members<doc_reference_schema::tire> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1800};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_reference_schema::tire, diameter),
-        CBOR_MEMBER(doc_reference_schema::tire, pressure),
-    };
-};
-
-template <>
-struct cbor::describe_members<doc_reference_schema::car> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1801};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_reference_schema::car, make),
-        CBOR_MEMBER(doc_reference_schema::car, seats),
-        CBOR_MEMBER(doc_reference_schema::car, tires),
-        CBOR_MEMBER(doc_reference_schema::car, track),
-    };
-};
-
-template <>
-struct cbor::describe_members<doc_reference_schema::point> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1802};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_reference_schema::point, x),
-        CBOR_MEMBER(doc_reference_schema::point, y),
-    };
-};
 
 namespace doc_reference_schema
 {

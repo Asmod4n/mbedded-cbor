@@ -9,6 +9,19 @@ struct member {
 };
 ```
 
+```call-seq
+cbor::member{0, &senml::n}       → cbor::member<std::string senml::*>
+cbor::member{"name", &person::name} → cbor::member<std::string person::*>
+```
+
+```example
+bytes: a2 00 61 74 02 f9 3e 00
+call: auto const encoded = cbor::structs<senml>::encode(senml{"t", 1.5})
+result: 8 bytes: a2 00 61 74 02 f9 3e 00
+call: cbor::lazy::take_ownership(*encoded)
+result: lazy of {0: "t", 2: 1.5}
+```
+
 One entry of [describe_members](describe_members.md): the key of a
 member and a pointer to that member. The key is a text literal or an
 integer from -2^63 to 2^64 - 1. The text is the name as it is written.
