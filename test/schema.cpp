@@ -4276,3 +4276,137 @@ TEST_CASE(CBOR_TEST_FORM_NAME "golden bytes: every type of this file encodes as 
     CHECK_EQ(golden_report(), expected);
 }
 
+
+namespace
+{
+
+struct byte_fields {
+    std::array<std::uint8_t, 3> fixed;
+    std::uint8_t plain[2];
+    std::array<std::byte, 2> bytes;
+    std::vector<std::uint8_t> list;
+    std::vector<std::byte> byte_list;
+    std::array<std::uint8_t, 0> none;
+};
+
+struct byte_record {
+    std::string name;
+    std::array<std::uint8_t, 4> code;
+};
+
+struct byte_lists {
+    std::vector<byte_record> records;
+    std::vector<std::array<std::uint8_t, 4>> codes;
+};
+
+} // namespace
+
+CBOR_DEFINE_TYPE(byte_fields, cbor::tag{1733}, CBOR_MEMBER(byte_fields, fixed), CBOR_MEMBER(byte_fields, plain),
+                 CBOR_MEMBER(byte_fields, bytes), CBOR_MEMBER(byte_fields, list), CBOR_MEMBER(byte_fields, byte_list),
+                 CBOR_MEMBER(byte_fields, none));
+CBOR_DEFINE_TYPE(byte_record, cbor::tag{1734}, CBOR_MEMBER(byte_record, name), CBOR_MEMBER(byte_record, code));
+CBOR_DEFINE_TYPE(byte_lists, cbor::tag{1735}, CBOR_MEMBER(byte_lists, records), CBOR_MEMBER(byte_lists, codes));
+
+namespace
+{
+
+template <class T, cbor::fixed_string Path, class... Index>
+concept message_path_reads = requires(std::string_view const s, Index const... i) { form<T>::template at_path<Path>(s, i...); };
+
+byte_fields byte_fields_value()
+{
+    return byte_fields{{1, 2, 3}, {4, 5}, {std::byte{6}, std::byte{7}}, {8, 9}, {std::byte{10}}, {}};
+}
+
+} // namespace
+
+// A user reads one byte of an array of bytes with [n], as one number of a list. The array is one byte string in
+// the message: inline in the root for a fixed size, a part for a vector. The byte is the end of the path.
+TEST_CASE(CBOR_TEST_FORM_NAME "at_path: [n] reads one byte of a byte string")
+{
+    std::string const bytes = *form<byte_fields>::encode(byte_fields_value());
+    CHECK_EQ(form<byte_fields>::at_path<"$.fixed[2]">(bytes), std::uint8_t{3});
+    CHECK_EQ(form<byte_fields>::at_path<"$.plain[1]">(bytes), std::uint8_t{5});
+    CHECK_EQ(form<byte_fields>::at_path<"$.bytes[1]">(bytes), std::byte{7});
+    CHECK_EQ(form<byte_fields>::at_path<"$.list[1]">(bytes), std::uint8_t{9});
+    CHECK_EQ(form<byte_fields>::at_path<"$.byte_list[0]">(bytes), std::byte{10});
+    CHECK_EQ(form<byte_fields>::at_path<"$.fixed[]">(bytes, 1uz), std::uint8_t{2});
+    CHECK_EQ(form<byte_fields>::at_path<"$.list[]">(bytes, 0uz), std::uint8_t{8});
+    CHECK_EQ(form<byte_fields>::at_path<"$.fixed[]">(bytes, 3uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(form<byte_fields>::at_path<"$.list[]">(bytes, 2uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(form<byte_fields>::at_path<"$.none[]">(bytes, 0uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(form<byte_fields>::unverified_at_path<"$.fixed[2]">(bytes), std::uint8_t{3});
+    CHECK_EQ(form<byte_fields>::unverified_at_path<"$.list[1]">(bytes), std::uint8_t{9});
+    auto const root = form<byte_fields>::path(std::string(bytes));
+    REQUIRE(root.has_value());
+    CHECK_EQ(root->at_path<"$.fixed[0]">(), std::uint8_t{1});
+    CHECK_EQ(root->at_path<"$.list[0]">(), std::uint8_t{8});
+    std::string const lists = *form<byte_lists>::encode(byte_lists{{{"x", {1, 2, 3, 4}}, {"y", {5, 6, 7, 8}}}, {{9, 10, 11, 12}}});
+    CHECK_EQ(form<byte_lists>::at_path<"$.records[1].code[2]">(lists), std::uint8_t{7});
+    CHECK_EQ(form<byte_lists>::at_path<"$.codes[0][3]">(lists), std::uint8_t{12});
+    auto const records = form<byte_lists>::path(std::string(lists));
+    REQUIRE(records.has_value());
+    auto const second = records->at_path<"$.records[1]">();
+    REQUIRE(second.has_value());
+    CHECK_EQ(second->at_path<"@.code[0]">(), std::uint8_t{5});
+}
+
+// A path ends at the byte, and a literal index lies inside a byte string of fixed size. A text stays a text.
+TEST_CASE(CBOR_TEST_FORM_NAME "at_path: [n] into a byte string does not compile past its end or into a text")
+{
+    CHECK(message_path_reads<byte_fields, "$.fixed[2]">);
+    CHECK_FALSE(message_path_reads<byte_fields, "$.fixed[3]">);
+    CHECK_FALSE(message_path_reads<byte_fields, "$.none[0]">);
+    CHECK_FALSE(message_path_reads<byte_fields, "$.fixed[0].x">);
+    CHECK_FALSE(message_path_reads<byte_fields, "$.list[0][0]">);
+    CHECK_FALSE(message_path_reads<byte_record, "$.name[0]">);
+}
+
+// A verified read checks the head of a byte string before it reads a byte of it.
+TEST_CASE(CBOR_TEST_FORM_NAME "at_path: [n] into a byte string with a wrong head is incorrect_type")
+{
+    std::string bytes = *form<byte_fields>::encode(byte_fields_value());
+    std::size_t const head = bytes.find("\x43\x01\x02\x03"sv);
+    REQUIRE_NE(head, std::string::npos);
+    bytes[head] = '\x63';
+    CHECK_EQ(form<byte_fields>::at_path<"$.fixed[2]">(bytes).error(), error::incorrect_type);
+}
+
+// The root of a message stands at its end. A message with a missing end gave incorrect_type, because the last bytes
+// are not the root. Every verified entry gives too_little_data for each length that cuts the message.
+TEST_CASE(CBOR_TEST_FORM_NAME "a message cut at any length is too_little_data")
+{
+    std::string const bytes = schema_bytes(reading{7, "kg"});
+    std::string const apart_bytes = *form<byte_fields>::template encode<cbor::description_place::apart>(byte_fields_value());
+    std::string const whole = *form<byte_fields>::encode(byte_fields_value());
+    for (std::size_t n = 0; n < whole.size(); ++n) {
+        CAPTURE(n);
+        std::string const cut = whole.substr(0, n);
+        CHECK_EQ(form<byte_fields>::decode(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(form<byte_fields>::decode(std::make_shared<std::string const>(cut), byte_fields{}).error(), error::too_little_data);
+        CHECK_EQ(form<byte_fields>::path(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(form<byte_fields>::at_path<"$.list[1]">(cut).error(), error::too_little_data);
+        CHECK_EQ(form<byte_fields>::at_path<"$.list[]">(cut, 1uz).error(), error::too_little_data);
+    }
+    for (std::size_t n = 0; n < bytes.size(); ++n) {
+        CAPTURE(n);
+        CHECK_EQ(form<reading>::decode(bytes.substr(0, n)).error(), error::too_little_data);
+    }
+    for (std::size_t n = 0; n < apart_bytes.size(); ++n) {
+        CAPTURE(n);
+        std::string const cut = apart_bytes.substr(0, n);
+        CHECK_EQ(form<byte_fields>::template decode<cbor::description_place::apart>(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(form<byte_fields>::template at_path<"$.list[1]", cbor::description_place::apart>(cut).error(), error::too_little_data);
+    }
+}
+
+// Only a cut message of the type is too_little_data: a message of another type, a message with a byte after it and
+// text that is not CBOR keep their error.
+TEST_CASE(CBOR_TEST_FORM_NAME "a whole message of another type keeps its error")
+{
+    std::string const whole = *form<byte_fields>::encode(byte_fields_value());
+    CHECK_EQ(form<reading>::decode(std::string(whole)).error(), error::incorrect_type);
+    CHECK_EQ(form<byte_fields>::decode(whole + "\x01").error(), error::incorrect_type);
+    std::string const text(whole.size(), '{');
+    CHECK_EQ(form<byte_fields>::decode(std::string(text)).error(), error::incorrect_type);
+}

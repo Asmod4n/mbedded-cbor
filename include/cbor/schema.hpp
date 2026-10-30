@@ -39,6 +39,7 @@
 #include "encode.hpp"
 #include "error.hpp"
 #include "head.hpp"
+#include "item_size.hpp"
 #include "ref.hpp"
 #include "rfc8746.hpp"
 #include "rfc8943.hpp"
@@ -1770,6 +1771,32 @@ class reflection
         return item_reference_read<Root, Major, E, Verified>(encoded, item, end, element);
     }
 
+    template <class T, description_place D>
+    static bool packing_prefix_valid(std::string_view const encoded)
+    {
+        static constexpr auto prefix = packing_prefix_of<T, D>();
+        return encoded.size() > prefix.size() &&
+               std::ranges::equal(std::span(encoded).template first<4>(), std::span(prefix).template first<4>()) &&
+               std::ranges::equal(std::span(encoded).template subspan<8, prefix.size() - 8>(),
+                                  std::span(prefix).template subspan<8>()) &&
+               encoded[prefix.size()] ==
+                   heads::initial_byte(major_type::byte_string,
+                                       std::to_underlying(rfc8949::additional_information::four_byte_argument));
+    }
+
+    template <class T, description_place D>
+    static error too_little_data_if_truncated(std::string_view const encoded, error const e)
+    {
+        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded) || encoded.size() < fixed_size<T, T>())
+            return e;
+        if (class_tag_valid<T, T>(std::span<char const>(encoded).subspan(encoded.size() - fixed_size<T, T>()).template first<fixed_size<T, T>()>()))
+            return e;
+        heads::decoder<true> d{encoded};
+        if (well_formedness::items_skip(d, 1).error_or(error{}) != error::too_little_data)
+            return e;
+        return error::too_little_data;
+    }
+
     template <class T, bool Verified, description_place D>
     static std::expected<cbor::directory, error> directory_read(std::string_view const encoded)
     {
@@ -1784,14 +1811,7 @@ class reflection
         if (!validity::pending_items_fit(least, encoded.size())) [[unlikely]]
             return std::unexpected(error::too_little_data);
         if constexpr (Verified)
-            if (!std::ranges::equal(std::span(encoded).template first<4>(),
-                                    std::span(prefix).template first<4>()) ||
-                !std::ranges::equal(std::span(encoded).template subspan<8, prefix.size() - 8>(),
-                                    std::span(prefix).template subspan<8>()) ||
-                encoded[prefix.size()] !=
-                    heads::initial_byte(major_type::byte_string,
-                                        std::to_underlying(rfc8949::additional_information::four_byte_argument)))
-                [[unlikely]]
+            if (!packing_prefix_valid<T, D>(encoded)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
         std::size_t const length =
             heads::unsigned_read<std::uint32_t>(std::span<char const>(encoded)
@@ -1861,7 +1881,15 @@ class reflection
             }
         } else if constexpr (path[At] == '[' && index_end(path, At) < path.size()) {
             constexpr std::size_t close = index_end(path, At);
-            if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U> || is_map<U> || is_optional<U>) {
+            if constexpr (is_byte_range<U>) {
+                if constexpr (close + 1 != path.size())
+                    return false;
+                else if constexpr (requires { fixed_length<U>::value; })
+                    return close == At + 1 ||
+                           index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1))) < fixed_length<U>::value;
+                else
+                    return true;
+            } else if constexpr (is_fixed_string<U> || is_text_range<U> || is_map<U> || is_optional<U>) {
                 return false;
             } else if constexpr (requires { fixed_length<U>::value; }) {
                 if constexpr (close != At + 1 && index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1))) >= fixed_length<U>::value)
@@ -1899,7 +1927,9 @@ class reflection
             return path_result<Root, Source, describe::member_t<U, m>, Path, end, Verified>();
         } else {
             constexpr std::size_t close = index_end(path, At);
-            if constexpr (requires { fixed_length<U>::value; })
+            if constexpr (is_byte_range<U>)
+                return std::type_identity<std::remove_cv_t<std::ranges::range_value_t<U>>>{};
+            else if constexpr (requires { fixed_length<U>::value; })
                 return path_result<Root, Source, typename fixed_length<U>::element, Path, close + 1, Verified>();
             else if constexpr (is_fixed_vector<U>)
                 return fixed_path_result<Root, Source, std::remove_cv_t<std::ranges::range_value_t<U>>, Path, close + 1, Verified>();
@@ -2058,6 +2088,30 @@ class reflection
             return path_walk<Root, Source, M, Path, end, Verified>(
                 encoded, field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(), floor,
                 indexes);
+        } else if constexpr (is_byte_range<U>) {
+            using B = std::remove_cv_t<std::ranges::range_value_t<U>>;
+            constexpr std::size_t close = index_end(path, At);
+            std::size_t i;
+            if constexpr (close == At + 1)
+                i = std::get<index_argument<Path, At>()>(indexes);
+            else
+                i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
+            if constexpr (requires { fixed_length<U>::value; }) {
+                constexpr std::size_t n = fixed_length<U>::value;
+                if constexpr (Verified)
+                    if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
+                        return std::unexpected(error::incorrect_type);
+                if (error const c = validity::check_index(i, n).error_or(error{}); c != error{}) [[unlikely]]
+                    return std::unexpected(c);
+                return std::bit_cast<B>(field.template last<n>()[i]);
+            } else {
+                auto const r = reference_read<Root, major_type::byte_string, void, Verified>(encoded, field, floor, 1);
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{}) [[unlikely]]
+                    return std::unexpected(c);
+                return std::bit_cast<B>(encoded[r->data + i]);
+            }
         } else {
             constexpr std::size_t close = index_end(path, At);
             if constexpr (requires { fixed_length<U>::value; }) {
@@ -3452,12 +3506,16 @@ private:
         if (!dir) [[unlikely]]
             return std::expected<X, error>(std::unexpect, dir.error());
         std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
-        return std::expected<X, error>(
+        std::expected<X, error> read =
             reflection::path_walk<T, Source, T, Path, 1, Verified>(encoded,
                                                            std::span<char const>(encoded)
                                                                .subspan(encoded.size() - fixed_size())
                                                                .template first<fixed_size()>(),
-                                                           *dir, i));
+                                                           *dir, i);
+        if constexpr (Verified)
+            if (!read) [[unlikely]]
+                return std::expected<X, error>(std::unexpect, reflection::too_little_data_if_truncated<T, D>(encoded, read.error()));
+        return read;
     }
 
     template <bool Verified, description_place D, owning_range_of_chars Encoded>
@@ -3479,7 +3537,7 @@ private:
         auto const root = std::span<char const>(encoded).subspan(encoded.size() - fixed_size()).template first<fixed_size()>();
         if constexpr (Verified)
             if (!reflection::class_tag_valid<T, T>(root)) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
+                return std::unexpected(reflection::too_little_data_if_truncated<T, D>(encoded, error::incorrect_type));
         return accessor<T, Verified>(std::move(owner), encoded, root, *dir);
     }
 
@@ -3517,7 +3575,7 @@ private:
 #endif
                 std::optional<T> made;
                 if (auto const r = reflection::root_read<T, Verified, D>(made, encoded, limits::nesting_depth); !r) [[unlikely]]
-                    return std::unexpected(r.error());
+                    return std::unexpected(Verified ? reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
                 return ref<T>(std::move(owner), std::move(*made));
 #if defined(__cpp_exceptions)
             } catch (std::bad_alloc const &) {
@@ -3546,7 +3604,7 @@ private:
 #endif
             if (auto const r = reflection::root_read<T, Verified, D>(target, encoded, limits::nesting_depth); !r)
                 [[unlikely]]
-                return std::unexpected(r.error());
+                return std::unexpected(Verified ? reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
             return ref<T>(std::move(owner), std::move(target));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {

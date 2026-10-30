@@ -23,7 +23,8 @@ root once. It reads no field.
 
 ## Errors
 
-- `too_little_data`: the message is shorter than its table and root.
+- `too_little_data`: the message is shorter than its table and root, or
+  its end is missing.
 - `incorrect_type`: a message of another layout, or a wrong tag of the
   root.
 - A null or empty owner throws `std::logic_error`.
