@@ -5,6 +5,24 @@ template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 ```
 
+```call-seq
+cbor::encode(**tree, out) → std::expected<std::size_t, error>
+```
+
+```example
+message: [1, "a"]
+call: auto const tree = cbor::decode(bytes)
+result: owning item of [1, "a"]
+call: std::string out;
+result: ""
+call: cbor::encode(**tree, out)
+result: 4
+call: out
+result: 4 bytes: 82 01 61 61
+call: bytes
+result: 4 bytes: 82 01 61 61
+```
+
 Writes the tree at `root` and gives the count of bytes written. Each
 integer, length and tag number keeps the width of its head, from
 `additional_information`. A float keeps its width. A tag 28 and a tag 29
