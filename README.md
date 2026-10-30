@@ -14,22 +14,21 @@ struct track {
     std::vector<point> points;
 };
 
-template <>
-struct cbor::describe_members<point> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
-    static constexpr std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
-};
-
-template <>
-struct cbor::describe_members<track> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
-    static constexpr std::tuple members{CBOR_MEMBER(track, points)};
-};
+CBOR_DEFINE_TYPE(point, cbor::tag{1703}, CBOR_MEMBER(point, x), CBOR_MEMBER(point, y));
+CBOR_DEFINE_TYPE(track, cbor::tag{1704}, CBOR_MEMBER(track, points));
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
 auto const lane = cbor::schema<track>::path(std::move(*message));
-lane->at_path<"$.points[2].x">();   // 5: one jump to the field
+
+lane->at_path<"$.points[2].x">();                                   // 5: one jump to the field
+
+auto const points = lane->at_path<"$.points">();
+for (auto const p : *points | std::views::drop(1) | std::views::take(1))
+    use(*p.at_path<"@.y">());                                       // 4
 ```
+
+The reference with examples that run in the browser:
+<https://asmod4n.github.io/mbedded-cbor/>.
 
 It implements CBOR (RFC 8949), CBOR sequences (RFC 8742), typed arrays
 (RFC 8746), JSONPath (RFC 9535) and Packed CBOR
@@ -106,20 +105,8 @@ The code of every library, task by task:
 On g++ 15, clang 23 and AppleClang, `cbor::structs` and `cbor::schema`
 use Boost.PFR 1.84 or later. It is the only dependency.
 
-### Boost.PFR
-
-CMake looks for Boost 1.84 or later on the system and uses it. Else
-the library uses its own copy of Boost.PFR 1.92.0 in
-`third_party/boost_pfr`, the files of boostorg/pfr, under the Boost
-Software License 1.0. An install then places this copy in
-`include/mbedded-cbor/boost_pfr`, and the CMake package and the
-pkg-config file add it to the include path. The configure output says
-which of the two the build takes.
-
-Every translation unit of a program must see the same Boost.PFR. A
-program that also uses another Boost.PFR of its own breaks the
-one-definition rule. An older Boost.PFR that comes first on the include
-path stops the build with an error that names version 1.84.
+CMake takes Boost 1.84 or later from the system, else its own copy in
+`third_party/boost_pfr`. Details: [doc/basics.md](doc/basics.md), section 5.
 
 ## Installation
 
@@ -174,42 +161,10 @@ auto const name = doc.at_path<"$.user.name", std::string_view>();  // "ann", a v
 auto const age = doc.at_path<"$.user.age", int>();                 // cbor::error::key_not_found
 ```
 
-### Write structs, read one field
-
-```cpp
-struct point {
-    float x;
-    float y;
-};
-
-struct track {
-    std::vector<point> points;
-};
-
-template <>
-struct cbor::describe_members<point> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
-    static constexpr std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
-};
-
-template <>
-struct cbor::describe_members<track> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
-    static constexpr std::tuple members{CBOR_MEMBER(track, points)};
-};
-
-auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
-auto const lane = cbor::schema<track>::path(std::move(*message));
-
-lane->at_path<"$.points[2].x">();                                   // 5
-
-auto const points = lane->at_path<"$.points">();
-for (auto const p : *points | std::views::drop(1) | std::views::take(1))
-    use(*p.at_path<"@.y">());                                       // 4
-```
-
 ## Documentation
 
+- <https://asmod4n.github.io/mbedded-cbor/>: every function and type,
+  with examples that run in the browser.
 - [doc/basics.md](doc/basics.md): errors, limits, memory, threads.
 - [doc/path.md](doc/path.md): JSONPath on CBOR.
 - [doc/schema.md](doc/schema.md): structs as Packed CBOR.
@@ -220,16 +175,17 @@ for (auto const p : *points | std::views::drop(1) | std::views::take(1))
 ## Testing
 
 The tests run the examples of RFC 8949 Appendix A, the test vectors of
-the IETF CBOR working group and the JSONPath Compliance Test Suite. They
-run with g++ 15, g++ 16 and clang 23 on Linux and with Xcode 16 and 26
-on macOS, with AddressSanitizer and UndefinedBehaviorSanitizer. Fuzz
-targets cover decode, encode, the encoder, item_size, lazy, path and
-schema.
+the IETF CBOR working group and the JSONPath Compliance Test Suite. Each
+push runs nine Linux builds (g++ 15, g++ 16 and clang 23, with
+AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer), two
+macOS builds (Xcode 16 and 26) and a run in which other decoders read the
+output. Fuzz targets cover decode, diagnostic notation, encode, the
+encoder, item_size, lazy, path, sequence_reader, structs and schema.
 
 ## Status
 
-Version 0.9, before the first release. The API can still change. The fuzzing runs before the
-first release.
+Version 0.9, before the first release. The API can still change. The
+fuzzing runs before the first release.
 
 ## License
 
