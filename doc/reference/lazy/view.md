@@ -7,6 +7,18 @@ template <owning_range_of_chars Encoded>
 static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
 ```
 
+```call-seq
+cbor::lazy::view(owner) → std::expected<lazy, error>
+```
+
+```example
+message: {"id": 42}
+call: auto const owner = std::make_shared<std::string const>(bytes)
+result: shared_ptr to 6 bytes: a1 62 69 64 18 2a
+call: cbor::lazy::view(owner)->at("id")->get<std::int64_t>()
+result: 42
+```
+
 Makes the lazy of the top-level item in the bytes, in place. Nothing is
 copied. The first form reads `encoded`, and `owner` keeps those bytes
 alive. The second form reads `*owner`. Every lazy, view and `ref` that

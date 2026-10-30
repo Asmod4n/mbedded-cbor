@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>$pagetitle$ – mbedded-cbor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Source+Sans+3:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css?v=$commit$">
+</head>
+<body data-group="$group$">
+<header class="top">
+<a class="name" href="index.html">mbedded-cbor</a>
+$if(methods)$<a href="#console">Console</a>
+$endif$<a href="https://github.com/Asmod4n/mbedded-cbor">GitHub</a>
+</header>
+<div class="wrap" id="top">
+<nav class="side" aria-label="Classes and methods">
+<h3>Classes</h3>
+<ul>
+$for(groups)$<li><a $if(groups.here)$class="here" $endif$href="$groups.href$">$groups.name$</a></li>
+$endfor$</ul>
+$if(methods)$<h3>Methods</h3>
+<ul>
+$for(methods)$<li><a href="#$methods.id$">$methods.name$</a></li>
+$endfor$</ul>
+$endif$</nav>
+<main>
+<h1>$pagetitle$</h1>
+$if(lead)$<p class="lead">$lead$</p>
+$endif$$body$
+$if(methods)$<section class="method" id="console">
+<h2>Console</h2>
+<p>Type calls on <code>doc</code>, the message below, or on <code>bytes</code>, its bytes. Each call runs in the library, compiled to WebAssembly. It is not a C++ compiler: a loop or a new struct does not run here.</p>
+<div class="play" data-console>
+<div class="fields">
+<div class="field"><label for="co-m">Message</label><textarea id="co-m" data-message spellcheck="false">{"user": {"id": 42, "name": "ann", "tags": ["a", "b"]}}</textarea></div>
+<div class="field"><label for="co-b">Bytes</label><input id="co-b" class="hex" data-bytes spellcheck="false" value=""></div>
+</div>
+<div class="log" id="co-log" aria-live="polite"></div>
+<form id="co-form" autocomplete="off">
+<span class="prompt">»</span>
+<input id="co-line" value='doc.at("user").at("name").get&lt;std::string_view&gt;()' spellcheck="false" aria-label="A call on doc">
+<button class="run" type="submit">Run</button>
+</form>
+</div>
+</section>
+$endif$</main>
+</div>
+<script type="module" src="site.js?v=$commit$"></script>
+</body>
+</html>

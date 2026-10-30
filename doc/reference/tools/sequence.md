@@ -26,6 +26,25 @@ public:
 };
 ```
 
+```call-seq
+cbor::sequence(owner) → sequence
+s.begin()             → sequence::iterator
+*it                   → std::expected<std::string_view, error>
+s.empty()             → bool
+```
+
+```example
+bytes: 01 02 03
+call: auto const owner = std::make_shared<std::string const>(bytes)
+result: shared_ptr to 3 bytes: 01 02 03
+call: auto const s = cbor::sequence(owner)
+result: sequence of 3 items: 1, 2, 3
+call: s.empty()
+result: false
+call: cbor::at_path<"$", std::int64_t>(**s.begin())
+result: 1
+```
+
 Splits a CBOR sequence (RFC 8742), items one after the other, into its
 items. Each item is a `std::string_view` into the bytes, with no copy.
 The sequence holds the owner, so a view stays valid while the sequence or

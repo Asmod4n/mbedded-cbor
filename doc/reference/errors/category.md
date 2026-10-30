@@ -4,6 +4,21 @@
 std::error_category const &category() noexcept;
 ```
 
+```call-seq
+cbor::category()        → std::error_category const &
+cbor::category().name() → char const *
+```
+
+```example
+message: {}
+call: std::error_code const e{cbor::error::syntax_error}
+result: std::error_code cbor:2
+call: e.category().name()
+result: "cbor"
+call: cbor::category()
+result: std::error_category "cbor"
+```
+
 Gives the one [error_category](error_category.md) of `cbor::error`. Each
 call gives the same object. Its name is `"cbor"`. A `std::error_code`
 made from a `cbor::error` holds this category.

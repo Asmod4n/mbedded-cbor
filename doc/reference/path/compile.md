@@ -6,6 +6,24 @@ template <class T>
 static std::expected<query<T>, error> compile(std::string_view const path);
 ```
 
+```call-seq
+cbor::jsonpath::compile<T>(path) → std::expected<query<T>, error>
+```
+
+```example
+message: {"a": [1, 2, 3]}
+call: auto const owner = std::make_shared<std::string const>(bytes)
+result: shared_ptr to 7 bytes: a1 61 61 83 01 02 03
+call: auto const q = cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]")
+result: cbor::jsonpath::query<cbor::nodelist>
+call: cbor::at_path(owner, *q)->size()
+result: 2
+call: cbor::jsonpath::compile<int>("$.a[*]").error()
+result: cbor::error::not_singular_query
+call: cbor::jsonpath::compile<cbor::lazy>("$.a[").error()
+result: cbor::error::invalid_path
+```
+
 Parses a JSONPath (RFC 9535) at run time and gives a
 [query](query.md). The query owns its data, so `path` can end after the
 call. An apply of the query does not parse again. `T` is the result type:

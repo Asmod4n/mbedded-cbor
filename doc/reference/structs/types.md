@@ -5,6 +5,25 @@ template <class T>
 class structs;
 ```
 
+```call-seq
+cbor::structs<T>::encode(value)              → std::expected<std::string, cbor::error>
+cbor::structs<T>::decode(std::move(encoded)) → std::expected<cbor::ref<T>, cbor::error>
+```
+
+```example
+message: {"id": 4}
+call: auto const r = cbor::structs<reading>::encode(reading{4, std::nullopt})
+result: 5 bytes: a1 62 69 64 04
+call: cbor::lazy::take_ownership(*r)
+result: lazy of {"id": 4}
+call: auto const s = cbor::structs<std::set<std::uint8_t>>::encode(std::set<std::uint8_t>{3, 1})
+result: 6 bytes: d9 01 02 82 01 03
+call: cbor::lazy::take_ownership(*s)
+result: lazy of 258([1, 3])
+call: cbor::structs<reading>::decode(std::move(bytes))
+result: ref to reading{4, std::nullopt}
+```
+
 `T`, and each member of a struct in `T`, is one of the types in this
 table. `encode` writes the item of the right column. `decode` takes only
 that item, under its own tag.

@@ -7,6 +7,19 @@ template <class Target>
 static std::expected<std::size_t, cbor::error> encode(T const &value, Target &&target);
 ```
 
+```call-seq
+cbor::structs<T>::encode(value)         → std::expected<std::string, cbor::error>
+cbor::structs<T>::encode(value, target) → std::expected<std::size_t, cbor::error>
+```
+
+```example
+message: {"name": "ann", "age": 30}
+call: auto const encoded = cbor::structs<person>::encode(person{"ann", 30})
+result: 16 bytes: a2 63 61 67 65 18 1e 64 6e 61 6d 65 63 61 6e 6e
+call: cbor::lazy::take_ownership(*encoded)
+result: lazy of {"age": 30, "name": "ann"}
+```
+
 Writes `value` as one CBOR item in preferred serialization. A struct is
 a map, and its keys come in the order of RFC 8949 4.2.1. The first form
 returns the bytes in a new `std::string`.

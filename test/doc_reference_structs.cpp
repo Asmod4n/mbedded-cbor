@@ -1,6 +1,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include "doc_types.hpp"
 #include "reference.hpp"
 
 #include <array>
@@ -22,62 +23,6 @@ using namespace std::string_literals;
 // Each test in this file is one example of a page in doc/reference/structs/. The tests exist so that every
 // example compiles and gives the result that the page states. The input of each example is built with
 // preferred() from the text in the comment of the page.
-
-
-namespace reference_structs
-{
-
-struct person {
-    std::string name;
-    int age;
-};
-
-struct header {
-    std::string content_type;
-};
-
-struct senml {
-    std::string n;
-    double v;
-};
-
-struct account {
-    std::string user;
-    std::uint8_t level;
-};
-
-struct reading {
-    std::uint8_t id;
-    std::optional<std::uint8_t> unit;
-};
-
-} // namespace reference_structs
-
-template <>
-struct cbor::describe_members<reference_structs::header> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060};
-    static constexpr std::tuple members{
-        cbor::member{"content-type", &reference_structs::header::content_type},
-    };
-};
-
-template <>
-struct cbor::describe_members<reference_structs::senml> {
-    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
-    static constexpr std::tuple members{
-        cbor::member{0, &reference_structs::senml::n},
-        cbor::member{2, &reference_structs::senml::v},
-    };
-};
-
-template <>
-struct cbor::describe_members<reference_structs::account> {
-    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
-    static constexpr std::tuple members{
-        CBOR_MEMBER(reference_structs::account, user),
-        CBOR_MEMBER(reference_structs::account, level),
-    };
-};
 
 using reference_structs::account;
 using reference_structs::header;
@@ -209,19 +154,6 @@ TEST_CASE("doc reference structs: member types")
     REQUIRE(back.has_value());
     CHECK_FALSE((*back)->unit.has_value());
 }
-
-
-namespace reference_structs
-{
-
-struct trailer {
-    std::uint8_t checksum;
-};
-
-} // namespace reference_structs
-
-CBOR_DEFINE_TYPE(reference_structs::trailer, cbor::tag{160061},
-                 cbor::member{"checksum", &reference_structs::trailer::checksum});
 
 // describe_members.md: CBOR_DEFINE_TYPE writes the description; 160061 = 0x0002713d, "checksum" is 68 + 8 bytes.
 TEST_CASE("doc reference structs: CBOR_DEFINE_TYPE")

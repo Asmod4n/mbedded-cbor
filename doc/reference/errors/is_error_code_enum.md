@@ -5,6 +5,21 @@ template <>
 struct std::is_error_code_enum<cbor::error> : std::true_type {};
 ```
 
+```call-seq
+std::is_error_code_enum_v<cbor::error>  → bool
+std::error_code e{cbor::error::x}       → std::error_code
+```
+
+```example
+message: {}
+call: std::is_error_code_enum_v<cbor::error>
+result: true
+call: std::error_code const e{cbor::error::index_out_of_bounds}
+result: std::error_code cbor:12
+call: e.message()
+result: "index outside of array bounds"
+```
+
 Marks `cbor::error` as an error code enum. So a `cbor::error` converts to
 a `std::error_code` with no cast, through
 [make_error_code](make_error_code.md). A `std::error_code` also compares

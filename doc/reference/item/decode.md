@@ -4,6 +4,30 @@
 std::expected<owning<item>, error> decode(std::string_view encoded);
 ```
 
+```call-seq
+cbor::decode(bytes) → std::expected<owning<item>, error>
+```
+
+```example
+message: ["hi", 1]
+call: auto const tree = cbor::decode(bytes)
+result: owning item of ["hi", 1]
+call: (*tree)->get<cbor::type::array>()->size()
+result: 2
+```
+
+```example
+bytes: 01 02
+call: cbor::decode(bytes)
+result: owning item of 1
+```
+
+```example
+bytes: 9f 01 ff
+call: cbor::decode(bytes).error()
+result: cbor::error::indefinite_length
+```
+
 Decodes the one top-level item in `encoded` into a tree of
 [item](item.md). It checks every head. The tree holds a copy of each
 text and byte string, so it stays valid after `encoded` ends. A bignum

@@ -4,6 +4,30 @@
 std::expected<void, error> simple_value(cbor::simple_value const value);
 ```
 
+```call-seq
+e.simple_value(value) → std::expected<void, error>
+```
+
+```example
+bytes: f6
+call: std::string out;
+result: ""
+call: cbor::encoder e(out);
+result: encoder over a std::string
+call: e.simple_value(cbor::simple_value::null)
+result: void
+call: e.finish()
+result: 1
+call: out
+result: 1 bytes: f6
+call: std::string out2;
+result: ""
+call: cbor::encoder e2(out2);
+result: encoder over a std::string
+call: e2.simple_value(cbor::simple_value{24})
+result: unexpected cbor::error::reserved_simple_value
+```
+
 Writes a simple value (major type 7), for example `false_value`,
 `true_value`, `null` or `undefined`. A value from 0 to 23 takes one
 byte, and a value from 32 to 255 takes two.

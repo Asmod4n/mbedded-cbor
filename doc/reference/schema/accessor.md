@@ -24,6 +24,41 @@ public:
 };
 ```
 
+```call-seq
+accessor.at_path<"@.member">(indexes...) → std::expected<V, cbor::error>
+accessor.at_path<"$.member">(indexes...) → std::expected<V, cbor::error>
+root.view<"$.list">(indexes...)          → std::expected<cbor::typed_array_view<E>, cbor::error>
+accessor.size()                          → std::size_t
+accessor.begin()                         → iterator
+accessor.end()                           → iterator
+```
+
+```example
+bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+call: auto const root = cbor::schema<car>::path(std::move(bytes))
+result: accessor of a car
+call: auto const tires = root->at_path<"$.tires">()
+result: accessor of a std::vector<tire> of 2 elements
+call: tires->size()
+result: 2
+call: tires->at_path<"@[1].diameter">()
+result: 18
+call: tires->at_path<"$.seats">()
+result: 5
+call: auto const t = *tires->begin()
+result: accessor of a tire in a std::vector<tire>
+call: t.at_path<"@.diameter">()
+result: 17
+call: auto const u = tires->begin()[1]
+result: accessor of a tire in a std::vector<tire>
+call: u.at_path<"@.diameter">()
+result: 18
+call: root->view<"$.track">()->size()
+result: 3
+call: tires->at_path<"@[]">(2u)
+result: unexpected cbor::error::index_out_of_bounds
+```
+
 Reads the part `U` of a message of `T`. A path that starts with `@`
 starts at `U`. A path that starts with `$` starts at the root. The
 result is a `std::expected`: the value of a number, `bool` or enum; a

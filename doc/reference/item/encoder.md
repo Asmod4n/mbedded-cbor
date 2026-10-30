@@ -21,6 +21,30 @@ template <class Element>
 encoder(std::span<Element>) -> encoder<std::span<Element>>;
 ```
 
+```call-seq
+cbor::encoder e(out)                     → encoder<std::string>
+cbor::encoder e{std::span<char>(buffer)} → encoder<std::span<char>>
+cbor::encoder e(w)                       → encoder<iov_writer>
+```
+
+```example
+bytes: a1 61 61 18 05
+call: std::string out;
+result: ""
+call: cbor::encoder e(out);
+result: encoder over a std::string
+call: e.map(1)
+result: void
+call: e.text_string("a")
+result: void
+call: e.unsigned_integer(std::uint8_t{5})
+result: void
+call: e.finish()
+result: 5
+call: out
+result: 5 bytes: a1 61 61 18 05
+```
+
 Writes CBOR one data item per call, in the order of the bytes. The
 encoder counts nothing: the counts of [array](encoder_array.md) and
 [map](encoder_map.md) come from the program. The target is one of

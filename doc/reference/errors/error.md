@@ -32,6 +32,21 @@ enum class error {
 };
 ```
 
+```call-seq
+cbor::error::key_not_found      → cbor::error
+std::error_code{e}.message()    → std::string
+```
+
+```example
+message: {"user": {"id": 42}}
+call: auto const age = cbor::at_path<"$.user.age", std::int64_t>(bytes)
+result: unexpected cbor::error::key_not_found
+call: age.error()
+result: cbor::error::key_not_found
+call: std::error_code{age.error()}.message()
+result: "key not found"
+```
+
 The fault that a call returns in its `std::expected<T, cbor::error>`.
 Bad input never throws. The first value is 1. So a `std::error_code`
 from a `cbor::error` is always true as a `bool`. A wrong use of the library is not an

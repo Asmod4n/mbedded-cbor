@@ -22,6 +22,35 @@ public:
 };
 ```
 
+```call-seq
+cbor::sequence_reader r  → sequence_reader
+r.feed(std::move(piece)) → void
+r.next()                 → std::expected<lazy, error>
+r.empty()                → bool
+```
+
+```example
+bytes: 82 01 02 03
+call: cbor::sequence_reader r
+result: sequence_reader that holds no unread byte
+call: auto first = bytes.substr(0, 2)
+result: 2 bytes: 82 01
+call: r.feed(std::move(first))
+result: void
+call: r.next()
+result: unexpected cbor::error::too_little_data
+call: auto second = bytes.substr(2)
+result: 2 bytes: 02 03
+call: r.feed(std::move(second))
+result: void
+call: r.next()->size()
+result: 2
+call: r.next()->get<std::int64_t>()
+result: 3
+call: r.empty()
+result: true
+```
+
 Reads a CBOR sequence (RFC 8742) whose bytes arrive in pieces, for
 example from a socket. `feed` gives the reader the next piece. `next`
 gives the next item as a `lazy` when all of its bytes are there, and

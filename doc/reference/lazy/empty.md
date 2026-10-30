@@ -4,6 +4,18 @@
 std::expected<bool, error> empty() const;
 ```
 
+```call-seq
+doc->empty() → std::expected<bool, error>
+```
+
+```example
+message: {"a": [], "b": [1]}
+call: doc->at("a")->empty()
+result: true
+call: doc->at("b")->empty()
+result: false
+```
+
 Gives `true` when [size](size.md) gives 0, and `false` when it gives
 another count.
 

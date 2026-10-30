@@ -4,6 +4,24 @@
 std::expected<std::size_t, error> item_size(std::string_view encoded);
 ```
 
+```call-seq
+cbor::item_size(bytes) → std::expected<std::size_t, error>
+```
+
+```example
+bytes: 82 01 02 07
+call: cbor::item_size(bytes)
+result: 3
+call: cbor::item_size(bytes.substr(0, 2))
+result: unexpected cbor::error::too_little_data
+```
+
+```example
+bytes: 9f 01 ff
+call: cbor::item_size(bytes)
+result: unexpected cbor::error::indefinite_length
+```
+
 Reads the first item in `encoded` to its end and gives its size in bytes.
 It checks that the item is well-formed: each head, each string and each
 element. Bytes after the item are not read and are not an error.

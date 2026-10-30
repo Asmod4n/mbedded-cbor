@@ -14,6 +14,26 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                                ref<T>, T>, error> get() const;
 ```
 
+```call-seq
+doc->get<std::int64_t>()     → std::expected<std::int64_t, error>
+doc->get<double>()           → std::expected<double, error>
+doc->get<std::string_view>() → std::expected<ref<std::string_view>, error>
+```
+
+```example
+message: {"name": "ann", "age": 300}
+call: auto const name = doc->at("name")->get<std::string_view>()
+result: ref to "ann"
+call: **name
+result: "ann"
+call: doc->at("age")->get<std::int64_t>()
+result: 300
+call: doc->at("age")->get<std::uint8_t>().error()
+result: cbor::error::number_out_of_range
+call: doc->at("name")->get<int>().error()
+result: cbor::error::incorrect_type
+```
+
 Reads the value at the lazy as `T`.
 
 | T | Reads |
