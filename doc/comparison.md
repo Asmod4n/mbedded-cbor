@@ -8,7 +8,7 @@ FlatBuffers and Cap'n Proto. Each code example was compiled and run.
 |---|---|---|---|---|---|
 | Format | CBOR | JSON; CBOR through `from_cbor` and `to_cbor` | CBOR | its own | its own |
 | Read one field | a path; the rest is not decoded | decodes the whole input first | decodes the whole input; no lookup of a key | direct | direct |
-| Write a struct | no extra code (C++26 reflection) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
+| Write a struct | no extra code (C++26 reflection, or Boost.PFR in C++23) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
 | Shared values, tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
 | A list of numbers with no copy | `cbor::schema` | copies | reads each number | direct | direct |
 | Broken input | a `std::expected` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |

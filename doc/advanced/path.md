@@ -36,8 +36,13 @@ and is applied to any number of items. `T` of a `compile` that is
 not `nodelist` needs a singular path, else the result is
 `not_singular_query`. `nodelist` is `std::vector<lazy>`. A
 compile-time path that is not valid leaves no form to call: the compiler
-reports that no function matches. `schema<T>::at_path` reads a member of
-a packed message ([schema.md](schema.md)).
+reports that no function matches.
+
+`cbor::schema<T>::at_path` reads a member of a message that
+`cbor::schema<T>` wrote ([schema.md](schema.md)). Its path names members
+and indexes only. On a `std::array` or a `std::vector` of `std::uint8_t`
+or `std::byte`, `[n]` there reads one byte. A path of this page that
+indexes a byte string gives `not_indexable`.
 
 A wrong use that the compiler cannot see throws `std::logic_error`:
 

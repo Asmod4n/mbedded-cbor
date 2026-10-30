@@ -70,13 +70,8 @@ struct series {
 };
 } // namespace doc_advanced_comparison
 
-template <>
-struct cbor::describe_members<doc_advanced_comparison::series> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1900};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_advanced_comparison::series, values),
-    };
-};
+CBOR_DEFINE_TYPE(doc_advanced_comparison::series, cbor::tag{1900},
+                 CBOR_MEMBER(doc_advanced_comparison::series, values));
 
 namespace doc_advanced_comparison
 {

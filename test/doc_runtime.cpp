@@ -144,7 +144,8 @@ TEST_CASE("doc runtime: print CBOR as text")
     CHECK_EQ(cbor::diagnostic_notation("\xff"sv).error(), error::syntax_error);
 }
 
-// The section "Write CBOR" writes {"a": 5} with the encoder, one item per call.
+// The section "Write CBOR" writes {"a": 5} with the encoder, one item per call, and the integer in the width of its
+// type.
 TEST_CASE("doc runtime: write CBOR")
 {
     std::string out;
@@ -153,6 +154,7 @@ TEST_CASE("doc runtime: write CBOR")
     REQUIRE(e.text_string("a").has_value());
     REQUIRE(e.unsigned_integer(std::uint8_t{5}).has_value());
     REQUIRE(e.finish().has_value());
+    CHECK_EQ(out, "\xa1\x61" "a\x18\x05"s);
     CHECK_EQ(cbor::diagnostic_notation(out), "{\"a\": 5_0}");
 }
 
