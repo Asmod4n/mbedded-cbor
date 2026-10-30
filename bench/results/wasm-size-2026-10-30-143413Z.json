@@ -1,0 +1,40 @@
+{
+ "what": "size of tools/wasm/showcase.wasm: the build of commit 7275db1 (14.10.), the build of main b2e5007 with the flags of the old build.sh, and the build of this branch with its source map; and a file that calls lazy, at_path, decode, encode, item_size, structs and schema",
+ "how": "each arm built once in the image mbedded-cbor-wasm; showcase-new built twice gave the same bytes; gzip -9, brotli -q 11",
+ "commit": "main b2e5007 for the library, branch wasm-site for build.sh; the arm 7275db1 from git archive",
+ "flags": {
+  "old build.sh": "clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -flto -fno-exceptions -Wall -Wextra -Werror -Wl,--strip-all,--gc-sections",
+  "map build.sh": "clang++-23 ... -O2 -flto -g --no-wasm-opt -Wl,--gc-sections; wasm-opt -O2 -g; wasm-sourcemap.py; wasm-strip"
+ },
+ "tools": [
+  "Debian clang version 23.1.4 (2)",
+  "wasm-opt version 131",
+  "emscripten 6.0.5+dfsg+~1.41.5-2",
+  "wasi-libc 0.0~git20260423.161b319-2"
+ ],
+ "kernel": "6.18.44-fc-v185",
+ "sizes_bytes": {
+  "showcase 7275db1, old build.sh": {
+   "raw": 339196,
+   "gzip9": 134288,
+   "brotli": 107773
+  },
+  "showcase b2e5007, old build.sh": {
+   "raw": 294479,
+   "gzip9": 122847,
+   "brotli": 99330
+  },
+  "showcase b2e5007, map build.sh": {
+   "raw": 306414,
+   "gzip9": 123274,
+   "brotli": 99832,
+   "map": 157744
+  },
+  "six parts b2e5007, old build.sh flags with boost_pfr": {
+   "raw": 85035,
+   "gzip9": 34092,
+   "brotli": 28546
+  }
+ },
+ "note": "showcase.cpp changed between 7275db1 and b2e5007 (29 lines added, 21 removed), so the first two rows differ in the library and in the showcase. The map build keeps 1067 data segments; the clang driver runs wasm-opt without -g, which drops the line table."
+}
