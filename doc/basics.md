@@ -12,11 +12,13 @@ This page states them, and where Boost.PFR comes from.
 | Read one field of a large message | `cbor::schema` | [schema.md](schema.md) |
 
 The library needs C++23: g++ 15 or later, clang 23, or the AppleClang
-of Xcode 16. Every part builds on each of them. With g++ 16 and
+of Xcode 16 or 26. Every part builds on each of them, and `cbor::schema`
+is one class for all of them. With g++ 16 and
 `-std=c++26 -freflection`, `structs` reads the members by reflection and
 `schema` checks each description against the members. On every other
 compiler, `structs` reads the members through Boost.PFR (section 5).
-Every example includes `<cbor/cbor.hpp>`.
+Every example includes `<cbor/cbor.hpp>`. The reference with examples
+that run in the browser: <https://asmod4n.github.io/mbedded-cbor/>.
 A comment shows the CBOR in `bytes` as text, in the diagnostic notation
 of RFC 8949, which looks like JSON.
 
@@ -146,7 +148,9 @@ the library uses its own copy of Boost.PFR 1.92.0 in
 Software License 1.0. An install then places this copy in
 `include/mbedded-cbor/boost_pfr`, and the CMake package and the
 pkg-config file add it to the include path. The configure output says
-which of the two the build takes.
+which of the two the build takes. Where a build has Boost.PFR and no
+reflection, `schema` also checks that the description of an aggregate
+lists as many members as Boost.PFR counts.
 
 Every translation unit of a program must see the same Boost.PFR. A
 program that also uses another Boost.PFR of its own breaks the
