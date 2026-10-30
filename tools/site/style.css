@@ -84,6 +84,15 @@ ul { padding-left: 1.4rem; }
 .comment, .co { color: var(--comment); font-style: italic; }
 .punctuation, .op { color: var(--punctuation); }
 pre a[id^="L"] { color: var(--muted); text-decoration: none; user-select: none; }
+pre a.line { color: var(--muted); text-decoration: none; user-select: none; }
+pre a.line::before {
+  content: attr(data-line);
+  display: inline-block;
+  width: 3.5em;
+  margin-right: 1em;
+  text-align: right;
+}
+pre a.line:hover { color: var(--link); text-decoration: underline; }
 .source pre { counter-reset: line; }
 .source pre a[id^="L"]::before {
   counter-increment: line;
@@ -96,3 +105,4 @@ pre a[id^="L"] { color: var(--muted); text-decoration: none; user-select: none; 
 }
 .source pre a[id^="L"]:target::before { color: var(--keyword); font-weight: 700; }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+td code { border: 0; background: none; padding: 0; white-space: nowrap; }
