@@ -94,7 +94,9 @@ one number do not compile.
 
 `schema<T>::at_path<Path>(bytes)` reads a number, a `bool`, an enum, or a
 `std::optional` of one. A path names members with `.name` and elements
-with `[n]`. `[]` takes the index from the next argument:
+with `[n]`. On a `std::array` or a `std::vector` of `std::uint8_t` or
+`std::byte`, `[n]` reads one byte. `[]` takes the index from the next
+argument:
 
 ```cpp
 std::size_t const i = 1;
@@ -134,7 +136,7 @@ if (readings)
 `at(i)`.
 
 A list of structs whose members all have a fixed width (numbers, `bool`,
-enums, `std::array`s of them and inner structs of the same kind) is one
+enums, `std::array`s of them other than bytes, and inner structs of the same kind) is one
 byte string of its elements: little endian, no padding, under tag 32873.
 The table at the start of the message describes the element once: its
 class tag and the key and RFC 8746 type of each member. The accessor of

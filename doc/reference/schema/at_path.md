@@ -14,8 +14,9 @@ nothing. It exists only for a value that holds no view into the bytes:
 a number, a `bool`, an enum, or a `std::optional` of one.
 
 A path starts with `$`, names a member with `.name` and an element with
-`[n]`. `[]` takes its index from the next argument. A text, a list or a
-struct needs an [accessor](accessor.md).
+`[n]`. `[]` takes its index from the next argument. On an array or a
+vector of `std::uint8_t` or `std::byte`, `[n]` reads one byte. A text, a
+list or a struct needs an [accessor](accessor.md).
 
 ## Errors
 
