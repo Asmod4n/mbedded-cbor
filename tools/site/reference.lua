@@ -1,4 +1,4 @@
-local tree, group, impl, commit, examples_path
+local tree, group, impl, commit, examples_path, types_dir
 
 local function read_file(path)
   local f = io.open(path, "rb")
@@ -118,24 +118,47 @@ local function implementation_html(file)
     .. "</details>"
 end
 
+local function line_of(text, at)
+  local _, n = text:sub(1, at - 1):gsub("\n", "")
+  return n + 1
+end
+
 local function types_html(path, namespace)
   local text = read_file(tree .. "/" .. path)
   if text == nil then error("reference.lua: cannot read " .. path) end
+  local html = read_file(types_dir .. "/" .. path:match("[^/]+$") .. ".html")
+  if html == nil then error("reference.lua: no highlighted form of " .. path) end
   local open = "namespace " .. namespace .. "\n{\n"
   local close = "} // namespace " .. namespace .. "\n"
   local first = text:find(open, 1, true)
   local _, last = text:find(close, first or 1, true)
   if first == nil or last == nil then error("reference.lua: " .. path .. " has no namespace " .. namespace) end
-  local parts = { text:sub(first, last) }
-  for chunk in (text:sub(last + 1) .. "\n\n"):gmatch("(.-)\n\n+") do
-    if chunk:find(namespace .. "::", 1, true) and not chunk:find("^namespace ") then
-      parts[#parts + 1] = chunk:gsub("^\n+", "") .. "\n"
+  local ranges = { { line_of(text, first), line_of(text, last) } }
+  local at = last + 1
+  while true do
+    local s, e = text:find("[^\n].-\n\n", at)
+    if s == nil then
+      s = text:find("[^\n]", at)
+      if s == nil then break end
+      e = #text
     end
+    local chunk = text:sub(s, e)
+    if chunk:find(namespace .. "::", 1, true) and not chunk:find("^namespace ") then
+      ranges[#ranges + 1] = { line_of(text, s), line_of(text, s) + select(2, chunk:gsub("\n+$", ""):gsub("\n", "")) }
+    end
+    at = e + 1
+  end
+  local parts = {}
+  for _, r in ipairs(ranges) do
+    local from = html:find('<a class="line" data-line="' .. r[1] .. '"', 1, true)
+    local to = html:find('<a class="line" data-line="' .. (r[2] + 1) .. '"', 1, true)
+    if from == nil then error("reference.lua: no line " .. r[1] .. " in the highlighted " .. path) end
+    parts[#parts + 1] = html:sub(from, to and to - 1 or #html)
   end
   return '<section class="method" id="types"><h2>Types of the examples</h2>\n'
     .. '<p>The WebAssembly module of this page holds these types, from <a href="https://github.com/Asmod4n/mbedded-cbor/blob/'
-    .. commit .. "/" .. path .. '">' .. path .. "</a>.</p>\n"
-    .. '<pre class="types"><code>' .. html_escaped(table.concat(parts, "\n")) .. "</code></pre>\n</section>"
+    .. commit .. "/" .. path .. '">' .. path .. "</a>. Each line number opens that line on GitHub.</p>\n"
+    .. '<pre class="types"><code>' .. table.concat(parts, "\n") .. "</code></pre>\n</section>"
 end
 
 local examples = {}
@@ -206,6 +229,7 @@ function Pandoc(doc)
   tree = pandoc.utils.stringify(doc.meta.tree)
   group = pandoc.utils.stringify(doc.meta.group)
   impl = pandoc.utils.stringify(doc.meta.impl)
+  types_dir = pandoc.utils.stringify(doc.meta.types)
   commit = pandoc.utils.stringify(doc.meta.commit)
   examples_path = pandoc.utils.stringify(doc.meta.examples)
   local groups = {}
