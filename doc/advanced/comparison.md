@@ -139,7 +139,7 @@ person const copy = p;
 
 ### mbedded-cbor
 
-structs reads the members of an aggregate by reflection (C++26). The struct needs no macro and no tag.
+structs reads the members of an aggregate by C++26 reflection on g++ 16, and through Boost.PFR on every other compiler. The struct needs no macro and no tag.
 
 ```cpp
 struct person {
@@ -341,18 +341,14 @@ double const sum = std::accumulate(values.begin(), values.end(), 0.0);
 
 ### mbedded-cbor
 
-cbor::schema writes a std::vector<double> as an RFC 8746 typed array. view gives a typed_array_view, a random access range over the bytes of the input, with no copy.
+cbor::schema reads the struct from its description, which CBOR_DEFINE_TYPE writes. It writes a std::vector<double> as an RFC 8746 typed array. view gives a typed_array_view, a random access range over the bytes of the input, with no copy.
 
 ```cpp
 struct series {
     std::vector<double> values;
 };
 
-template <>
-struct cbor::describe_members<series> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1900};
-    static constexpr std::tuple members{CBOR_MEMBER(series, values)};
-};
+CBOR_DEFINE_TYPE(series, cbor::tag{1900}, CBOR_MEMBER(series, values));
 
 auto const root = cbor::schema<series>::path(std::move(bytes));
 auto const values = root->view<"$.values">();
@@ -497,7 +493,7 @@ does not count.
 | shared | mbedded-cbor | 1 |
 | shared | FlatBuffers | 5 |
 | numbers | C++ in memory | 3 |
-| numbers | mbedded-cbor | 6 |
+| numbers | mbedded-cbor | 7 |
 | numbers | nlohmann/json | 2 |
 | numbers | libcbor | 6 |
 | numbers | FlatBuffers | 2 |
@@ -567,8 +563,8 @@ number for them.
 the cbor-wg test vectors, the bench corpora, every integer and float
 width, tags 28 and 29, and typed arrays. Each decoder below reads the
 output. The script then compares the value with the value that was
-written. `test/run.sh full` runs it. The decoders are the packages of
-Debian sid.
+written. `test/run.sh full` runs it, and the CI runs it at each push.
+The decoders are the packages of Debian sid.
 
 | Decoder | Version | Reads all output | Does not support |
 |---|---|---|---|

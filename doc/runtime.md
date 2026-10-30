@@ -3,7 +3,9 @@
 `cbor::lazy` reads CBOR step by step. It reads only the parts that you
 ask for, and a text comes back as a view into the bytes, with no copy.
 [basics.md](basics.md) states how errors come back and how long a result
-stays valid.
+stays valid. The reference with examples that run in the browser:
+<https://asmod4n.github.io/mbedded-cbor/lazy.html> and
+<https://asmod4n.github.io/mbedded-cbor/item.html>.
 
 ## 1. Read step by step
 
@@ -145,9 +147,9 @@ not CBOR give an error.
 
 ## 6. Write CBOR
 
-`cbor::structs<T>::encode` writes a C++ value as CBOR
-([structs.md](structs.md)). It needs `-freflection`. Without
-reflection, `cbor::encoder` writes one item per call:
+`cbor::structs<T>::encode` writes a C++ value as CBOR, on every
+compiler ([structs.md](structs.md)). `cbor::encoder` writes one item
+per call:
 
 ```cpp
 std::string out;
@@ -155,8 +157,11 @@ cbor::encoder e(out);
 e.map(1);
 e.text_string("a");
 e.unsigned_integer(std::uint8_t{5});
-e.finish();   // out holds {"a": 5}
+e.finish();   // out holds a1 61 61 18 05, {"a": 5_0}
 ```
+
+An integer takes the width of its type, so `std::uint8_t{5}` takes a head of
+two bytes.
 
 ## 7. Read items from a socket
 
