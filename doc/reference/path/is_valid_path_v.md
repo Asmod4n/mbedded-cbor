@@ -8,6 +8,21 @@ template <fixed_string Path>
 inline constexpr bool is_valid_path_v = is_valid_path<Path>::value;
 ```
 
+```call-seq
+cbor::is_valid_path_v<"$..a">                                 → bool
+cbor::jsonpath::compile<cbor::nodelist>("$..a").has_value()   → bool
+```
+
+```example
+message: {"a": 1}
+call: cbor::jsonpath::compile<cbor::nodelist>("$..a").has_value()
+result: true
+call: cbor::jsonpath::compile<cbor::nodelist>("$.a[").has_value()
+result: false
+call: cbor::jsonpath::compile<cbor::nodelist>("$[?match(@.t, 'a.c')]").has_value()
+result: false
+```
+
 True when the grammar of RFC 9535, with EDN literals, accepts `Path`, and
 the path is not deeper than [limits](../errors/limits.md)`::nesting_depth`.
 `is_valid_path<Path>` is a `std::bool_constant` with the same value.

@@ -17,6 +17,27 @@ public:
 };
 ```
 
+```call-seq
+cbor::jsonpath::compile<std::int64_t>("$.id").value() → query<std::int64_t>
+cbor::at_path(bytes, q)                               → std::expected<std::int64_t, error>
+```
+
+```example
+message: {"id": 1}
+call: auto const q = cbor::jsonpath::compile<std::int64_t>("$.id").value()
+result: cbor::jsonpath::query<long long>
+call: cbor::at_path(bytes, q)
+result: 1
+```
+
+```example
+message: {"id": 2, "x": 0}
+call: auto const q = cbor::jsonpath::compile<std::int64_t>("$.id").value()
+result: cbor::jsonpath::query<long long>
+call: cbor::at_path(bytes, q)
+result: 2
+```
+
 A parsed run-time path with the result type `T`. Only
 [compile](compile.md) makes one: the default constructor is private.
 The query holds its own copy of the path data, and no view into the text

@@ -4,6 +4,28 @@
 std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 ```
 
+```call-seq
+cbor::diagnostic_notation(bytes) → std::expected<std::string, error>
+```
+
+```example
+bytes: a1 61 61 83 01 f9 41 00 41 01
+call: cbor::diagnostic_notation(bytes)
+result: "{\"a\": [1, 2.5, h'01']}"
+```
+
+```example
+bytes: 9f 01 ff
+call: cbor::diagnostic_notation(bytes)
+result: "[_ 1]"
+```
+
+```example
+bytes: 01 02
+call: cbor::diagnostic_notation(bytes)
+result: unexpected cbor::error::syntax_error
+```
+
 Gives the text of the item in `encoded` in the diagnostic notation of
 RFC 8949 section 8. A head that is not in preferred form carries its
 encoding indicator, for example `1_0`. Indefinite length is printed, for

@@ -11,6 +11,19 @@ struct fixed_string {
 };
 ```
 
+```call-seq
+cbor::at_path<"$.id", std::int64_t>(bytes) → std::expected<std::int64_t, error>
+Path.view()                                → std::string_view
+```
+
+```example
+message: {"id": 42}
+call: cbor::at_path<"$.id", std::int64_t>(bytes).value_or(0)
+result: 42
+call: cbor::at_path<"$.age", std::int64_t>(bytes).value_or(0)
+result: 0
+```
+
 The type of a path at compile time. A string literal converts to it, so
 `at_path<"$.id", int>` names no `fixed_string`. A program names it in its
 own template that passes a path on. `value` holds the characters and the

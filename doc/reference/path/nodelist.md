@@ -4,6 +4,25 @@
 using nodelist = std::vector<lazy>;
 ```
 
+```call-seq
+doc->at_path<"$.a[*]", cbor::nodelist>() → std::expected<nodelist, error>
+nodes->size()                            → std::size_t
+(*nodes)[i]                              → lazy const &
+nodes->empty()                           → bool
+```
+
+```example
+message: {"a": [1, 2, 3]}
+call: auto const nodes = doc->at_path<"$.a[*]", cbor::nodelist>()
+result: nodelist of 3 nodes: 1, 2, 3
+call: nodes->size()
+result: 3
+call: (*nodes)[2].get<int>()
+result: 3
+call: doc->at_path<"$.b", cbor::nodelist>()->empty()
+result: true
+```
+
 The result of a path that can select many nodes: a wildcard, a
 descendant segment, a slice, a filter or several selectors. Each node is a
 `cbor::lazy` and holds the owner of the bytes. A nodelist holds the
