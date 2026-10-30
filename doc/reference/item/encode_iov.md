@@ -4,6 +4,22 @@
 std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
 ```
 
+```call-seq
+cbor::encode_iov(**tree) → std::expected<ref<std::span<std::string_view const>>, error>
+```
+
+```example
+message: [1, "a"]
+call: auto const tree = cbor::decode(bytes)
+result: owning item of [1, "a"]
+call: auto const pieces = cbor::encode_iov(**tree)
+result: ref to span of 1 piece: 82 01 61 61
+call: (*pieces)->size()
+result: 1
+call: bytes
+result: 4 bytes: 82 01 61 61
+```
+
 Writes the tree at `root` into a list of pieces, not into one buffer.
 The result gives the pieces in order and holds their storage. A
 program gives the pieces to `writev` or to a socket, or joins them. The

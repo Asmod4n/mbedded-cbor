@@ -5,6 +5,27 @@ auto finish()
     -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>;
 ```
 
+```call-seq
+e.finish() → std::expected<std::size_t, error>
+e.finish() → std::expected<ref<std::span<std::string_view const>>, error>
+```
+
+```example
+bytes: 63 61 62 63
+call: std::array<char, 16> buffer{};
+result: 16 bytes: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+call: cbor::encoder e{std::span<char>(buffer)};
+result: encoder over a std::span<char>
+call: e.text_string("abc")
+result: void
+call: e.finish()
+result: 4
+call: buffer
+result: 16 bytes: 63 61 62 63 00 00 00 00 00 00 00 00 00 00 00 00
+call: e.array(0)
+result: fault: the call ended the program (a wrong use; exceptions are off in this build)
+```
+
 Ends the encoder. It writes the buffer of the encoder to the target and
 calls `done` of a writer. It gives the count of bytes written, or the
 pieces over an [iov_writer](iov_writer.md). After the call, each call

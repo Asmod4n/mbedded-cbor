@@ -6,6 +6,27 @@ template <class U = T>
 static consteval std::size_t fixed_size();
 ```
 
+```call-seq
+cbor::schema<T>::fixed_size()    → std::size_t
+cbor::schema<T>::fixed_size<U>() → std::size_t
+```
+
+```example
+bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
+call: cbor::schema<tire>::fixed_size()
+result: 18
+call: cbor::schema<tire>::fixed_size<std::uint16_t>()
+result: 3
+call: cbor::schema<tire>::fixed_size<double>()
+result: 9
+call: cbor::schema<car>::fixed_size<std::string>()
+result: 6
+call: bytes.size()
+result: 66
+call: bytes[48]
+result: '\xd9'
+```
+
 Gives the count of bytes that a field of type `U` takes in a message of
 `T`. With no argument, it gives the size of the root record of `T`. The
 root record is the end of the message.

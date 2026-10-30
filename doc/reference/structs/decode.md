@@ -18,6 +18,24 @@ static std::expected<cbor::ref<T>, cbor::error> decode(std::shared_ptr<void cons
                                                        T &&target);
 ```
 
+```call-seq
+cbor::structs<T>::decode(std::move(encoded))     → std::expected<cbor::ref<T>, cbor::error>
+cbor::structs<T>::decode(owner)                  → std::expected<cbor::ref<T>, cbor::error>
+cbor::structs<T>::decode(owner, std::move(target)) → std::expected<cbor::ref<T>, cbor::error>
+cbor::structs<T>::decode(owner, encoded)         → std::expected<cbor::ref<T>, cbor::error>
+cbor::structs<T>::decode(owner, encoded, std::move(target)) → std::expected<cbor::ref<T>, cbor::error>
+```
+
+```example
+message: {"name": "ann", "age": 30}
+call: auto const p = cbor::structs<person>::decode(std::move(bytes))
+result: ref to person{"ann", 30}
+call: (*p)->age
+result: 30
+call: (*p)->name
+result: "ann"
+```
+
 Reads one item into a `T`. The result is a [ref](../ref/ref.md) that
 holds the owner of the bytes, so a `std::string_view` in `T` stays
 valid. No form copies the bytes. The first form moves an rvalue into a

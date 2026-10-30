@@ -4,6 +4,28 @@
 std::expected<void, error> map(std::uint64_t const count);
 ```
 
+```call-seq
+e.map(count) → std::expected<void, error>
+```
+
+```example
+bytes: a1 61 61 18 05
+call: std::string out;
+result: ""
+call: cbor::encoder e(out);
+result: encoder over a std::string
+call: e.map(1)
+result: void
+call: e.text_string("a")
+result: void
+call: e.unsigned_integer(std::uint8_t{5})
+result: void
+call: e.finish()
+result: 5
+call: out
+result: 5 bytes: a1 61 61 18 05
+```
+
 Writes the head of a map (major type 5) with `count` pairs, with the shortest head for `count`. The
 next calls write each key and then its value. The encoder does not count them: a wrong
 count gives bytes that are not one item.

@@ -56,6 +56,29 @@ std::expected<typename jsonpath::query<T>::result_type, error> at_path(Encoded &
                                                                        jsonpath::query<T> const &e);
 ```
 
+```call-seq
+cbor::at_path<"$.user.id", std::int64_t>(bytes)       → std::expected<std::int64_t, error>
+cbor::at_path<"$.user.name", std::string_view>(owner) → std::expected<ref<std::string_view>, error>
+cbor::at_path(bytes, q)                               → std::expected<T, error>
+cbor::at_path(owner, q)                               → std::expected<query<T>::result_type, error>
+```
+
+```example
+message: {"user": {"id": 42, "name": "ann"}}
+call: cbor::at_path<"$.user.id", std::int64_t>(bytes)
+result: 42
+call: auto const owner = std::make_shared<std::string const>(std::move(bytes))
+result: shared_ptr to 21 bytes: a1 64 75 73 65 72 a2 62 69 64 18 2a 64 6e 61 6d 65 63 61 6e 6e
+call: auto const name = cbor::at_path<"$.user.name", std::string_view>(owner)
+result: ref to "ann"
+call: **name
+result: "ann"
+call: auto const q = cbor::jsonpath::compile<std::int64_t>("$.user.id")
+result: cbor::jsonpath::query<long long>
+call: cbor::at_path(*owner, *q)
+result: 42
+```
+
 Reads the value at a JSONPath (RFC 9535) in `encoded`, with no decode of
 the rest. The first five forms take the path as a string literal, and the
 compiler checks it. The other forms take a [query](query.md) that

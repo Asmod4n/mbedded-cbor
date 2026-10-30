@@ -9,6 +9,26 @@ std::expected<void, error> byte_string(std::shared_ptr<std::vector<std::byte> co
 std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes);
 ```
 
+```call-seq
+e.byte_string(bytes) → std::expected<void, error>
+```
+
+```example
+bytes: 42 61 62
+call: std::string out;
+result: ""
+call: cbor::encoder e(out);
+result: encoder over a std::string
+call: e.byte_string(std::as_bytes(std::span("ab", 2)))
+result: void
+call: e.finish()
+result: 3
+call: out
+result: "Bab"
+call: cbor::decode(out)
+result: owning item of h'6162'
+```
+
 Writes `bytes` as a byte string, with the shortest head for the length.
 Over an [iov_writer](iov_writer.md), the last three forms do not copy 32
 bytes or more: the result keeps the moved vector or the owner. Over any

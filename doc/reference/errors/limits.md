@@ -20,6 +20,22 @@ struct limits {
 };
 ```
 
+```call-seq
+cbor::limits::nesting_depth      → std::size_t
+cbor::limits::string_length      → std::size_t
+cbor::limits::container_elements → std::size_t
+```
+
+```example
+message: {}
+call: cbor::limits::nesting_depth
+result: 128
+call: cbor::limits::string_length
+result: 4294967295
+call: cbor::limits::container_elements
+result: 4294967295
+```
+
 The limits of the build, in `<cbor/validity.hpp>`. A macro on the
 command line sets a limit; a macro that the build does not set gets its
 default. No call reads a limit at run time. A limit at `SIZE_MAX` is not

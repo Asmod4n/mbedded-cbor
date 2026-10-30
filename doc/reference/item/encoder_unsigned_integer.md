@@ -6,6 +6,24 @@ template <class T>
 std::expected<void, error> unsigned_integer(T const value);
 ```
 
+```call-seq
+e.unsigned_integer(value) → std::expected<void, error>
+```
+
+```example
+bytes: 19 00 05
+call: std::string out;
+result: ""
+call: cbor::encoder e(out);
+result: encoder over a std::string
+call: e.unsigned_integer(std::uint16_t{5})
+result: void
+call: e.finish()
+result: 3
+call: out
+result: 3 bytes: 19 00 05
+```
+
 Writes `value` as an unsigned integer (major type 0). The head takes the
 width of `T`: one byte of argument for `std::uint8_t`, eight for
 `std::uint64_t`, also when a shorter head holds the value.

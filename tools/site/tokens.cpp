@@ -144,18 +144,71 @@ std::string spelling_of(CXCursor const cursor)
     return out;
 }
 
-struct member_query {
-    std::string parent_usr;
-    std::string name;
-    std::vector<line_range> found;
+struct declaration {
+    std::string qualified;
+    std::string display;
+    bool definition;
+    bool record;
+    line_range range;
 };
 
-CXChildVisitResult member_visit(CXCursor const cursor, CXCursor, CXClientData const data)
+std::string display_of(CXCursor const cursor)
 {
-    auto &query = *static_cast<member_query *>(data);
+    CXString const s = clang_getCursorDisplayName(cursor);
+    std::string out = clang_getCString(s);
+    clang_disposeString(s);
+    return out;
+}
+
+std::string qualified_of(CXCursor const cursor)
+{
+    std::string out = spelling_of(cursor);
+    for (CXCursor p = clang_getCursorSemanticParent(cursor);
+         !clang_Cursor_isNull(p) && clang_getCursorKind(p) != CXCursor_TranslationUnit; p = clang_getCursorSemanticParent(p))
+        out = spelling_of(p) + "::" + out;
+    return out;
+}
+
+bool kind_named(CXCursorKind const kind)
+{
+    switch (kind) {
+    case CXCursor_FunctionDecl:
+    case CXCursor_FunctionTemplate:
+    case CXCursor_CXXMethod:
+    case CXCursor_ClassDecl:
+    case CXCursor_StructDecl:
+    case CXCursor_ClassTemplate:
+    case CXCursor_ClassTemplatePartialSpecialization:
+    case CXCursor_VarDecl:
+    case CXCursor_TypeAliasDecl:
+    case CXCursor_TypeAliasTemplateDecl:
+    case CXCursor_TypedefDecl:
+    case CXCursor_EnumDecl:
+    case CXCursor_ConceptDecl:
+    case CXCursor_MacroDefinition:
+    case CXCursor_UnexposedDecl:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool kind_record(CXCursorKind const kind)
+{
+    return kind == CXCursor_ClassDecl || kind == CXCursor_StructDecl || kind == CXCursor_ClassTemplate ||
+           kind == CXCursor_ClassTemplatePartialSpecialization || kind == CXCursor_EnumDecl;
+}
+
+struct declaration_walk {
+    std::string include;
+    std::vector<declaration> found;
+};
+
+CXChildVisitResult declaration_visit(CXCursor const cursor, CXCursor, CXClientData const data)
+{
+    auto &walk = *static_cast<declaration_walk *>(data);
     CXCursorKind const kind = clang_getCursorKind(cursor);
-    if ((kind == CXCursor_FunctionTemplate || kind == CXCursor_CXXMethod) && spelling_of(cursor) == query.name &&
-        usr_of(clang_getCursorSemanticParent(cursor)) == query.parent_usr) {
+    if (kind_named(kind)) {
         CXSourceRange const extent = clang_getCursorExtent(cursor);
         CXFile file = nullptr;
         unsigned first = 0;
@@ -163,24 +216,79 @@ CXChildVisitResult member_visit(CXCursor const cursor, CXCursor, CXClientData co
         clang_getSpellingLocation(clang_getRangeStart(extent), &file, &first, nullptr, nullptr);
         clang_getSpellingLocation(clang_getRangeEnd(extent), nullptr, &last, nullptr, nullptr);
         CXString const name = clang_getFileName(file);
-        query.found.push_back(line_range{clang_getCString(name), first, last});
+        std::string const path = file ? clang_getCString(name) : "";
         clang_disposeString(name);
-        return CXChildVisit_Continue;
+        if (path.starts_with(walk.include))
+            walk.found.push_back({kind == CXCursor_MacroDefinition ? spelling_of(cursor) : qualified_of(cursor),
+                                  display_of(cursor), clang_isCursorDefinition(cursor) != 0, kind_record(kind),
+                                  line_range{path, first, last}});
     }
+    if (kind == CXCursor_FunctionDecl || kind == CXCursor_FunctionTemplate || kind == CXCursor_CXXMethod ||
+        kind == CXCursor_VarDecl || kind == CXCursor_MacroDefinition)
+        return CXChildVisit_Continue;
     return CXChildVisit_Recurse;
+}
+
+std::string template_arguments_stripped(std::string_view const name)
+{
+    std::string out;
+    std::size_t depth = 0;
+    for (char const c : name) {
+        if (c == '<')
+            ++depth;
+        else if (c == '>')
+            --depth;
+        else if (depth == 0)
+            out += c;
+    }
+    return out;
+}
+
+std::vector<line_range> ranges_of(std::vector<declaration> const &all, std::string_view const name)
+{
+    std::size_t cut = 0;
+    std::size_t depth = 0;
+    for (std::size_t i = 0; i + 1 < name.size(); ++i) {
+        if (name[i] == '<')
+            ++depth;
+        else if (name[i] == '>')
+            --depth;
+        else if (depth == 0 && name[i] == ':' && name[i + 1] == ':')
+            cut = i + 2;
+    }
+    std::string_view const last = name.substr(cut);
+    std::string const qualified = template_arguments_stripped(name);
+    bool const by_display = last.find('<') != std::string_view::npos;
+    auto const named = [&](declaration const &d) {
+        if (d.qualified != qualified)
+            return false;
+        return !by_display || d.display.starts_with(last.substr(0, last.size() - 1));
+    };
+    bool const defined = std::ranges::any_of(all, [&](declaration const &d) { return named(d) && d.record && d.definition; });
+    std::vector<line_range> out;
+    for (declaration const &d : all) {
+        if (!named(d) || (d.record && defined && !d.definition))
+            continue;
+        if (std::ranges::contains(out, std::pair{d.range.path, d.range.first},
+                                  [](line_range const &r) { return std::pair{r.path, r.first}; }))
+            continue;
+        out.push_back(d.range);
+    }
+    return out;
 }
 
 } // namespace site
 
 int main(int const argc, char const *const *const argv)
 {
-    if (argc != 4) {
-        std::fprintf(stderr, "usage: tokens <tree> <out> <url of include/cbor at the commit>\n");
+    if (argc != 5) {
+        std::fprintf(stderr, "usage: tokens <tree> <out> <url of include/cbor at the commit> <names>\n");
         return 2;
     }
     std::filesystem::path const tree = argv[1];
     std::filesystem::path const out = argv[2];
     std::string const source_url = argv[3];
+    std::filesystem::path const names = argv[4];
     std::string const include = "-I" + (tree / "include").string();
     std::string const pfr = "-I" + (tree / "third_party/boost_pfr/include").string();
     char const *const arguments[] = {"-x", "c++", "-std=c++23", include.c_str(), pfr.c_str()};
@@ -188,7 +296,7 @@ int main(int const argc, char const *const *const argv)
     CXIndex const index = clang_createIndex(0, 1);
     CXTranslationUnit unit = nullptr;
     if (clang_parseTranslationUnit2(index, root.c_str(), arguments, std::size(arguments), nullptr, 0,
-                                    CXTranslationUnit_KeepGoing, &unit) != CXError_Success) {
+                                    CXTranslationUnit_KeepGoing | CXTranslationUnit_DetailedPreprocessingRecord, &unit) != CXError_Success) {
         std::fprintf(stderr, "tokens: libclang cannot parse %s\n", root.c_str());
         return 1;
     }
@@ -219,19 +327,37 @@ int main(int const argc, char const *const *const argv)
         site::file_write(out / "tokens" / (name + ".cbor"), *encoded);
         files.push_back(std::move(entry));
     }
-    site::member_query query{"c:@N@cbor@S@lazy", "at_path", {}};
-    clang_visitChildren(clang_getTranslationUnitCursor(unit), site::member_visit, &query);
-    std::string impl;
-    for (site::line_range const &range : query.found) {
-        std::string const name = std::filesystem::path(range.path).filename().string();
-        auto const file = std::ranges::find(files, "include/cbor/" + name, &site::token_file::path);
-        impl += "<pre><code>" +
-                site::highlighted(file->text, file->tokens, range.first, range.last, source_url + "/" + name) +
-                "</code></pre>\n";
+    site::declaration_walk walk{(std::filesystem::canonical(tree / "include/cbor").string() + "/"), {}};
+    clang_visitChildren(clang_getTranslationUnitCursor(unit), site::declaration_visit, &walk);
+    std::ifstream pages(names);
+    std::size_t written = 0;
+    for (std::string line; std::getline(pages, line);) {
+        std::size_t const tab = line.find('\t');
+        std::string const page = line.substr(0, tab);
+        std::vector<site::line_range> ranges;
+        for (std::size_t at = tab; at != std::string::npos;) {
+            std::size_t const next = line.find('\t', at + 1);
+            auto const found = site::ranges_of(walk.found, line.substr(at + 1, next == std::string::npos ? next : next - at - 1));
+            ranges.insert(ranges.end(), found.begin(), found.end());
+            at = next;
+        }
+        if (ranges.empty()) {
+            std::printf("missing %s\n", page.c_str());
+            continue;
+        }
+        std::string impl;
+        for (site::line_range const &range : ranges) {
+            std::string const name = std::filesystem::path(range.path).filename().string();
+            auto const file = std::ranges::find(files, "include/cbor/" + name, &site::token_file::path);
+            impl += "<pre><code>" +
+                    site::highlighted(file->text, file->tokens, range.first, range.last, source_url + "/" + name) +
+                    "</code></pre>\n";
+        }
+        site::file_write(out / "impl" / (page + ".html"), impl);
+        ++written;
     }
-    site::file_write(out / "impl/lazy/at_path.html", impl);
     clang_disposeTranslationUnit(unit);
     clang_disposeIndex(index);
-    std::printf("tokens: %zu headers, %zu ranges of lazy::at_path\n", files.size(), query.found.size());
+    std::printf("tokens: %zu headers, %zu pages with an implementation\n", files.size(), written);
     return 0;
 }

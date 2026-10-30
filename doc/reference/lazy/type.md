@@ -4,6 +4,22 @@
 std::expected<cbor::type, error> type() const;
 ```
 
+```call-seq
+doc->type() → std::expected<cbor::type, error>
+```
+
+```example
+bytes: 84 01 61 61 c2 41 05 c1 00
+call: doc->at(0)->type()
+result: cbor::type::unsigned_integer
+call: doc->at(1)->type()
+result: cbor::type::text_string
+call: doc->at(2)->type()
+result: cbor::type::unsigned_integer
+call: doc->at(3)->type()
+result: cbor::type::tag
+```
+
 Gives the kind of the value at the lazy. A tag 2 or 3 whose magnitude
 fits 64 bits gives `unsigned_integer` or `negative_integer`. A larger
 bignum gives `unsigned_bignum` or `negative_bignum`. A typed array

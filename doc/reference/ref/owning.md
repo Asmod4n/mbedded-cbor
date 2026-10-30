@@ -11,6 +11,22 @@ public:
 };
 ```
 
+```call-seq
+p.clone()  → owning<person>
+*own       → person const &
+own->name  → std::string_view
+```
+
+```example
+message: {"name": "ann", "age": 30}
+call: auto const p = cbor::structs<person>::decode(std::move(bytes)).value()
+result: ref to person{"ann", 30}
+call: auto const own = p.clone()
+result: owning of person{"ann", 30}
+call: own->name
+result: "ann"
+```
+
 A value that holds its own copy of the bytes of each view in it.
 [ref::clone](ref.md) makes it for a `T` that is not a single text or
 byte view. The copy and the value share one `std::shared_ptr`, so a
