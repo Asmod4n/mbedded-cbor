@@ -1,0 +1,44 @@
+name: linux
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [gcc-asan, gcc-release, clang-asan, clang-release, clang-libcxx, gcc15-release, gcc-describe, gcc-describe-bundled, tsan]
+    env:
+      CBOR_BUILD_ROOT: ${{ github.workspace }}/../build
+      CCACHE_HOST_DIR: ${{ github.workspace }}/../ccache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/../ccache
+          key: ccache-${{ matrix.build }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.build }}-
+      - name: Build the image
+        run: podman build -q -t mbedded-cbor-tw -f containers/tumbleweed.Containerfile containers
+      - name: Build and test
+        run: test/run.sh ${{ matrix.build }}
+
+  interop:
+    runs-on: ubuntu-24.04
+    env:
+      CBOR_BUILD_ROOT: ${{ github.workspace }}/../build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Decode the output of the library with other decoders
+        run: test/interop/run.sh
