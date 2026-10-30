@@ -1,18 +1,10 @@
 #pragma once
 
 #include "lazy.hpp"
+#include "../../../../test/doc_types.hpp"
 
 #include <format>
 
-namespace reference_ref
-{
-
-struct person {
-    std::string_view name;
-    int age;
-};
-
-}
 
 namespace site
 {

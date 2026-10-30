@@ -1,6 +1,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include "doc_types.hpp"
 #include "reference.hpp"
 
 #include <memory>
@@ -15,16 +16,6 @@ using namespace std::string_literals;
 // Each test in this file is one example of a page in doc/reference/ref/. The tests exist so that every example
 // compiles and gives the result that the page states.
 
-
-namespace reference_ref
-{
-
-struct person {
-    std::string_view name;
-    int age;
-};
-
-} // namespace reference_ref
 
 using reference_ref::person;
 
