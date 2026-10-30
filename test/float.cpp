@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <initializer_list>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -32,14 +33,19 @@ std::string encoded_float(double d)
     return encoded(value{d});
 }
 
-#ifdef __cpp_impl_reflection
 std::string preferred_float(double d)
 {
     auto const e = cbor::structs<double>::encode(d);
     REQUIRE(e.has_value());
     return *e;
 }
-#endif
+
+std::string preferred_float(float f)
+{
+    auto const e = cbor::structs<float>::encode(f);
+    REQUIRE(e.has_value());
+    return *e;
+}
 
 } // namespace
 
@@ -102,14 +108,13 @@ TEST_CASE("major 7: ±zero and sample floats")
 }
 
 // The encoder writes a double at its native width, binary64. structs writes deterministic CBOR,
-// so the width tests below go through structs, which needs reflection.
+// so the width tests below go through structs.
 TEST_CASE("major 7: the encoder writes a double as binary64")
 {
     for (double const v : {0.0, 1.5, 65504.0, 3.14})
         CHECK_EQ(encoded_float(v).size(), 9);
 }
 
-#ifdef __cpp_impl_reflection
 // Ported from test.rb: '§4.1 float wire: exact bytes for well-known f16 values'.
 TEST_CASE("§4.1 float wire: exact bytes for well-known f16 values")
 {
@@ -126,8 +131,9 @@ TEST_CASE("§4.1 float wire: exact bytes for well-known f16 values")
         CHECK_EQ(preferred_float(c.value), c.wire);
 }
 
-// Ported from test.rb: '§4.1 float wire: NaN canonicalizes to f16 0xF97E00'.
-TEST_CASE("§4.1 float wire: NaN canonicalizes to f16 0xF97E00")
+// Ported from test.rb: '§4.1 float wire: NaN canonicalizes to f16 0xF97E00'. The quiet NaN with no payload
+// fits binary16.
+TEST_CASE("§4.1 float wire: the quiet NaN is f97e00")
 {
     CHECK_EQ(preferred_float(NAN), "\xf9\x7e\x00"sv);
 }
@@ -232,4 +238,51 @@ TEST_CASE("major 7: every finite exponent takes the shortest width that keeps th
                 CHECK_EQ(wire.size(), expected);
             }
 }
-#endif
+
+// RFC 8949 4.1: a NaN takes a shorter width only where zeros on the right of its significand give the same NaN
+// back. Before, every NaN took binary16: the low bits of the payload were lost, and a NaN whose payload stood only
+// there became infinity. A float goes by its own bits, because a conversion to double sets the quiet bit of a
+// signaling NaN. The bytes are written from the RFC by hand. Each wire decodes to the bits it came from, and the
+// size that structs reserves is the size it writes.
+TEST_CASE("§4.1 float width: a NaN takes the shortest width that keeps its sign and payload")
+{
+    struct {
+        std::uint64_t bits;
+        std::string_view wire;
+    } const doubles[] = {
+        {0x7ff0000000000001, "\xfb\x7f\xf0\x00\x00\x00\x00\x00\x01"sv},
+        {0x7ff8000000000001, "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"sv},
+        {0x7ff8000020000000, "\xfa\x7f\xc0\x00\x01"sv},
+        {0x7ff8000000000000, "\xf9\x7e\x00"sv},
+        {0xfff8000000000000, "\xf9\xfe\x00"sv},
+        {0x7ff4000000000000, "\xf9\x7d\x00"sv},
+    };
+    for (auto const &c : doubles) {
+        CAPTURE(c.bits);
+        std::string const wire = preferred_float(std::bit_cast<double>(c.bits));
+        CHECK_EQ(wire, c.wire);
+        CHECK_EQ(bits_of(float_of(wire)), c.bits);
+        std::string exact(c.wire.size(), '\0');
+        CHECK_EQ(cbor::structs<double>::encode(std::bit_cast<double>(c.bits), std::span(exact)), c.wire.size());
+        CHECK_EQ(exact, c.wire);
+    }
+    struct {
+        std::uint32_t bits;
+        std::string_view wire;
+    } const floats[] = {
+        {0x7f800001, "\xfa\x7f\x80\x00\x01"sv},
+        {0x7fc00000, "\xf9\x7e\x00"sv},
+        {0x7f802000, "\xf9\x7c\x01"sv},
+    };
+    for (auto const &c : floats) {
+        CAPTURE(c.bits);
+        std::string const wire = preferred_float(std::bit_cast<float>(c.bits));
+        CHECK_EQ(wire, c.wire);
+        auto const back = cbor::structs<float>::decode(std::string(wire));
+        REQUIRE(back.has_value());
+        CHECK_EQ(std::bit_cast<std::uint32_t>(**back), c.bits);
+        std::string exact(c.wire.size(), '\0');
+        CHECK_EQ(cbor::structs<float>::encode(std::bit_cast<float>(c.bits), std::span(exact)), c.wire.size());
+        CHECK_EQ(exact, c.wire);
+    }
+}

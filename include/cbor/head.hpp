@@ -443,6 +443,8 @@ class heads
         std::uint32_t const exp = static_cast<std::uint32_t>(bits >> d.significand_bits & d.exponent_max);
         constexpr int narrow = d.significand_bits - f.significand_bits;
         std::uint64_t const mant = bits & ((std::uint64_t{1} << d.significand_bits) - 1u);
+        if (is_nan(d, bits)) [[unlikely]]
+            return preferred_nan_info(bits);
         if (exp == d.exponent_max)
             return rfc8949::simple_float_information::half_precision_float;
         if ((mant & ((std::uint64_t{1} << narrow) - 1u)) != 0)
@@ -472,21 +474,56 @@ class heads
         return rfc8949::simple_float_information::single_precision_float;
     }
 
+    static constexpr rfc8949::simple_float_information preferred_float_info(float const value)
+    {
+        std::uint32_t const bits = std::bit_cast<std::uint32_t>(value);
+        if (is_nan(single_precision, bits)) [[unlikely]]
+            return preferred_nan_info(std::bit_cast<std::uint64_t>(nan_decode(single_precision, bits)));
+        return preferred_float_info(static_cast<double>(value));
+    }
+
+    static constexpr rfc8949::simple_float_information preferred_nan_info(std::uint64_t const bits)
+    {
+        constexpr precision d = double_precision;
+        auto const low_bits_zero = [bits](precision const p) {
+            return (bits & ((std::uint64_t{1} << (d.significand_bits - p.significand_bits)) - 1u)) == 0;
+        };
+        if (low_bits_zero(half_precision))
+            return rfc8949::simple_float_information::half_precision_float;
+        if (low_bits_zero(single_precision))
+            return rfc8949::simple_float_information::single_precision_float;
+        return rfc8949::simple_float_information::double_precision_float;
+    }
+
+    static constexpr std::uint64_t nan_encode(rfc8949::simple_float_information const info, std::uint64_t const bits)
+    {
+        constexpr precision d = double_precision;
+        if (info == rfc8949::simple_float_information::double_precision_float)
+            return bits;
+        precision const p =
+            info == rfc8949::simple_float_information::half_precision_float ? half_precision : single_precision;
+        return bits >> (d.significand_bits + std::bit_width(d.exponent_max))
+                           << (p.significand_bits + std::bit_width(p.exponent_max)) |
+               std::uint64_t{p.exponent_max} << p.significand_bits |
+               (bits & ((std::uint64_t{1} << d.significand_bits) - 1u)) >> (d.significand_bits - p.significand_bits);
+    }
+
+    static constexpr std::uint64_t float_encode(rfc8949::simple_float_information const info,
+                                                float const value)
+    {
+        std::uint32_t const bits = std::bit_cast<std::uint32_t>(value);
+        if (is_nan(single_precision, bits)) [[unlikely]]
+            return nan_encode(info, std::bit_cast<std::uint64_t>(nan_decode(single_precision, bits)));
+        return float_encode(info, static_cast<double>(value));
+    }
+
     static constexpr std::uint64_t float_encode(rfc8949::simple_float_information const info,
                                                 double const value)
     {
         constexpr precision d = double_precision;
-        constexpr precision f = single_precision;
         std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
-        if (info != rfc8949::simple_float_information::double_precision_float && is_nan(d, bits)) [[unlikely]] {
-            precision const p =
-                info == rfc8949::simple_float_information::half_precision_float ? half_precision : f;
-            return bits >> (d.significand_bits + std::bit_width(d.exponent_max))
-                               << (p.significand_bits + std::bit_width(p.exponent_max)) |
-                   std::uint64_t{p.exponent_max} << p.significand_bits |
-                   (bits & ((std::uint64_t{1} << d.significand_bits) - 1u)) >>
-                       (d.significand_bits - p.significand_bits);
-        }
+        if (is_nan(d, bits)) [[unlikely]]
+            return nan_encode(info, bits);
         switch (info) {
         case rfc8949::simple_float_information::half_precision_float:
             return float_encode_binary16(static_cast<float>(value));
