@@ -16,6 +16,8 @@
 namespace cbor
 {
 
+class reflection;
+
 struct lazy;
 
 struct lazy_elements;
@@ -197,6 +199,8 @@ class well_formedness
     friend class jsonpath;
 
     friend class generic;
+
+    friend class reflection;
 };
 
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
