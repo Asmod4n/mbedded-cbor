@@ -65,8 +65,9 @@ one() {
 		{
 			printf "compiler\t%s\n" "$($CXX_NAME --version | head -1)"
 			printf "comment\t%s\n" "$(readelf -p .comment $t 2>&1 | grep -o "\] .*" | sed "s/^\] *//" | sort -u | paste -sd";")"
-			printf "libstdcxx\t%s\n" "$(readlink -f "$(ldd $t | awk "/libstdc\+\+/{print \$3}")")"
-			printf "libc\t%s\n" "$(readlink -f "$(ldd $t | awk "/libc\.so/{print \$3}")")"
+			printf "libstdcxx\t%s\n" "$(readlink -f "$(ldd $t | grep -o "/[^ ]*libstdc++[^ ]*")")"
+			printf "libc\t%s\n" "$(readlink -f "$(ldd $t | grep -o "/[^ ]*/libc\.so[^ ]*")")"
+			printf "libc_version\t%s\n" "$(ldd --version | head -1)"
 			printf "glibcxx_needed\t%s\n" "$(objdump -T $t | grep -o "GLIBCXX_[0-9.]*" | sort -uV | tail -1)"
 			printf "glibc_needed\t%s\n" "$(objdump -T $t | grep -o "GLIBC_[0-9.]*" | sort -uV | tail -1)"
 			case $CXX_NAME in
