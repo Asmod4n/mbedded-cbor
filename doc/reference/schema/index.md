@@ -5,6 +5,8 @@ fixed size at an offset that the compiler computes. It reads only the
 description of each struct and builds on every compiler. With
 reflection it also checks each description against the members.
 
+The examples use the types in [test/doc_types.hpp](../../../test/doc_types.hpp), namespace `doc_reference_schema`.
+
 | Function | Does |
 |---|---|
 | [encode](encode.md) | writes a struct as one Packed CBOR message |
