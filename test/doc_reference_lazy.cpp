@@ -95,7 +95,8 @@ TEST_CASE("doc reference lazy: operator[]")
     CHECK_EQ((*doc)["bus"].error(), cbor::error::key_not_found);
 }
 
-// at_path.md: a scalar, a text as a ref, a nodelist, and a query compiled at run time.
+// at_path.md: each row of the table of examples (a scalar, a text as a ref, a nodelist, a missing key), the lazy of
+// a node, and a query compiled at run time.
 TEST_CASE("doc reference lazy: at_path")
 {
     std::string bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "tags"s, test::A("a"s, "b"s))));

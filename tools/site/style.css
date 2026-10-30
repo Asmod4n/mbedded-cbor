@@ -1,0 +1,10 @@
+:root { color-scheme: light dark; --keyword: #8250df; --literal: #0a3069; --comment: #6e7781; --identifier: inherit; }
+@media (prefers-color-scheme: dark) { :root { --keyword: #d2a8ff; --literal: #a5d6ff; --comment: #8b949e; } }
+body { max-width: 50rem; margin: 0 auto; padding: 0 1rem; font-family: sans-serif; line-height: 1.5; }
+pre { overflow-x: auto; }
+table { border-collapse: collapse; }
+th, td { border: 1px solid; padding: 0.2rem 0.5rem; }
+.keyword { color: var(--keyword); }
+.literal { color: var(--literal); }
+.comment { color: var(--comment); }
+.identifier { color: var(--identifier); }
