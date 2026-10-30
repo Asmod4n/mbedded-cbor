@@ -219,9 +219,9 @@ CBOR sequence (RFC 8742) is read item by item.
 `unsigned_integer`, `negative_integer`, `byte_string`, `text_string`,
 `array`, `map`, `tag`, `simple_value`, `floating_point` and
 `typed_array`.
-An integer and a float take the width of their type; a count, a length and
-a tag number take the shortest head. The encoder counts nothing: the counts
-of `array` and `map` are yours.
+An integer and a float take the width of their type, and a NaN keeps its
+bits. A count, a length and a tag number take the shortest head. The
+encoder counts nothing: the counts of `array` and `map` are yours.
 
 Each call gives `std::expected<void, error>`. After an error, and after
 `finish()`, every call throws `std::logic_error`. `finish()` gives the size
@@ -233,7 +233,7 @@ The target of the encoder is one of:
   `std::vector<std::byte>`: the encoder appends to it;
 - a fixed span of bytes: the encoder writes into it, allocates nothing, and
   gives `no_buffer_space` when an item does not fit;
-- a `cbor::iov_writer` ([13](#13-encode_iov));
+- a `cbor::iov_writer` ([section 12](#12-encode_iov));
 - a writer of your own with `allocate`, `append` and `done`. An error of
   the writer comes back as a `cbor::error` ([basics.md](basics.md)).
 
@@ -316,7 +316,7 @@ value of the n-th tag 28 ([value-sharing](http://cbor.schmorp.de/value-sharing))
   and `get` pass both tags, as they pass every tag that they do not
   interpret.
 - `cbor::structs` decode resolves them, with a table that exists for one
-  call. See doc/advanced/structs.md.
+  call ([structs.md](structs.md)).
 - A lazy holds only its owner, its bytes and its offset. Several threads
   read one lazy at the same time.
 

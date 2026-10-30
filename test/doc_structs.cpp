@@ -74,13 +74,8 @@ struct kinds {
 
 } // namespace doc_structs
 
-template <>
-struct cbor::describe_members<doc_structs::header> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060};
-    static constexpr std::tuple members{
-        cbor::member{"content-type", &doc_structs::header::content_type},
-    };
-};
+CBOR_DEFINE_TYPE(doc_structs::header, cbor::tag{160060},
+                 cbor::member{"content-type", &doc_structs::header::content_type});
 
 namespace doc_structs
 {
@@ -138,6 +133,7 @@ TEST_CASE("doc structs: input from other programs")
     CHECK_EQ(cbor::structs<int>::decode(preferred(V("a"s))).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::uint8_t>::decode(preferred(V(256))).error(), error::number_out_of_range);
     CHECK_EQ((cbor::structs<std::array<int, 2>>::decode(preferred(A(1))).error()), error::incorrect_type);
+    // The row "bytes after the value" states that decode does not read past the first value.
     auto const first = cbor::structs<int>::decode(preferred(V(1)) + preferred(V(2)));
     REQUIRE(first.has_value());
     CHECK_EQ(**first, 1);

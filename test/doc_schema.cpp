@@ -33,15 +33,8 @@ struct untagged {
 
 } // namespace doc_packed
 
-template <>
-struct cbor::describe_members<doc_packed::sensor> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1700};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_packed::sensor, name),
-        CBOR_MEMBER(doc_packed::sensor, id),
-        CBOR_MEMBER(doc_packed::sensor, readings),
-    };
-};
+CBOR_DEFINE_TYPE(doc_packed::sensor, cbor::tag{1700}, CBOR_MEMBER(doc_packed::sensor, name),
+                 CBOR_MEMBER(doc_packed::sensor, id), CBOR_MEMBER(doc_packed::sensor, readings));
 
 namespace doc_packed
 {
@@ -155,6 +148,20 @@ struct cbor::describe_members<doc_packed::other> {
 namespace doc_packed
 {
 
+// The section "Store the description apart" reads the data form with apart, and the data form and the description
+// together have the size of the message.
+TEST_CASE("doc schema: store the description apart")
+{
+    using namespace doc_packed;
+    constexpr auto apart = cbor::description_place::apart;
+    auto const data = cbor::schema<sensor>::encode<apart>(sensor{"t1", 7, {1.5, 2.5}});
+    REQUIRE(data.has_value());
+    CHECK_EQ((cbor::schema<sensor>::at_path<"$.id", apart>(*data)), 7);
+    auto const whole = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
+    REQUIRE(whole.has_value());
+    CHECK_EQ(data->size() + cbor::schema<sensor>::description().size(), whole->size());
+}
+
 // The section "Errors" gives one input for each row, and states that a field with a wrong head gives an error.
 TEST_CASE("doc schema: errors")
 {
@@ -186,22 +193,9 @@ struct track {
 
 } // namespace doc_packed
 
-template <>
-struct cbor::describe_members<doc_packed::point> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1703};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_packed::point, x),
-        CBOR_MEMBER(doc_packed::point, y),
-    };
-};
-
-template <>
-struct cbor::describe_members<doc_packed::track> {
-    static constexpr std::optional<cbor::tag> tag = cbor::tag{1704};
-    static constexpr std::tuple members{
-        CBOR_MEMBER(doc_packed::track, points),
-    };
-};
+CBOR_DEFINE_TYPE(doc_packed::point, cbor::tag{1703}, CBOR_MEMBER(doc_packed::point, x),
+                 CBOR_MEMBER(doc_packed::point, y));
+CBOR_DEFINE_TYPE(doc_packed::track, cbor::tag{1704}, CBOR_MEMBER(doc_packed::track, points));
 
 TEST_CASE("doc schema: a list of fixed-size structs is a range of elements")
 {
@@ -232,8 +226,8 @@ struct gauge {
 
 CBOR_DEFINE_TYPE(doc_packed::gauge, cbor::tag{1710}, CBOR_MEMBER(doc_packed::gauge, level));
 
-// The section "Tags and keys" writes a description with CBOR_DEFINE_TYPE, which packed reads as the explicit form.
-TEST_CASE("doc packed: a description through CBOR_DEFINE_TYPE")
+// The section "Tags and keys" writes a description with CBOR_DEFINE_TYPE, which schema reads as the explicit form.
+TEST_CASE("doc schema: a description through CBOR_DEFINE_TYPE")
 {
     auto const bytes = cbor::schema<doc_packed::gauge>::encode(doc_packed::gauge{3});
     REQUIRE(bytes.has_value());

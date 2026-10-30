@@ -74,6 +74,30 @@ TEST_CASE("doc advanced basics: the error values")
     CHECK_EQ(cbor::lazy::view(owner)->get<std::uint8_t>().error(), error::number_out_of_range);
 }
 
+namespace doc_advanced_basics
+{
+
+struct gauge {
+    std::uint16_t level;
+};
+
+} // namespace doc_advanced_basics
+
+CBOR_DEFINE_TYPE(doc_advanced_basics::gauge, cbor::tag{1710}, CBOR_MEMBER(doc_advanced_basics::gauge, level));
+
+// The row too_little_data of the section "Every error value" names schema too, because a reader of a schema message
+// goes to an offset and could meet the end of a cut message there.
+TEST_CASE("doc advanced basics: a cut schema message is too_little_data")
+{
+    using schema = cbor::schema<doc_advanced_basics::gauge>;
+    auto const bytes = schema::encode(doc_advanced_basics::gauge{3});
+    REQUIRE(bytes.has_value());
+    std::string const cut = bytes->substr(0, bytes->size() - 1);
+    CHECK_EQ(schema::at_path<"$.level">(cut).error(), error::too_little_data);
+    CHECK_EQ(schema::decode(std::string(cut)).error(), error::too_little_data);
+    CHECK_EQ(schema::path(std::string(cut)).error(), error::too_little_data);
+}
+
 // The row not_singular_query of the section "Every error value" names the call that gives it.
 TEST_CASE("doc advanced basics: not_singular_query")
 {
