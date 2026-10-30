@@ -31,11 +31,22 @@ std::expected<typename E::result_type, error> at_path(E const &e) const;
 ```
 
 Reads the JSONPath (RFC 9535) `Path` from this lazy as the root `$`.
+
+## Parameters
+
+- `Path`: a JSONPath as a string literal. A path that is not valid does
+  not compile.
+- `T`: the type of the result. Without `T` the result is the lazy of the
+  node.
+- `e`: a query from `cbor::jsonpath::compile<T>(path)`, which parses the
+  path at run time.
+
+## Return value
+
 Without `T` it gives the lazy of the node. With a scalar `T` it reads
 the value as [get](get.md) does. A text, a byte string and a typed array
 come back as a `ref` that holds the owner. `nodelist` gives every
-selected node. The last form applies a query from
-`cbor::jsonpath::compile<T>(path)`, which parses the path at run time.
+selected node. The form with `e` gives the result type of the query.
 
 ## Errors
 
@@ -52,7 +63,14 @@ selected node. The last form applies a query from
 O(bytes before the target) for a singular path. No allocation, except
 `nodelist`, which allocates the nodes.
 
-## Example
+## Examples
+
+| Input | Path | `T` | Result |
+|---|---|---|---|
+| `{"user": {"id": 42, "tags": ["a", "b"]}}` | `$.user.id` | `std::int64_t` | `42` |
+| `{"user": {"id": 42, "tags": ["a", "b"]}}` | `$.user.tags[-1]` | `std::string_view` | `"b"` |
+| `{"user": {"id": 42, "tags": ["a", "b"]}}` | `$.user.tags[*]` | `cbor::nodelist` | 2 nodes |
+| `{"user": {"id": 42, "tags": ["a", "b"]}}` | `$.user.age` | `int` | `error::key_not_found` |
 
 ```cpp
 // bytes: a std::string with {"user": {"id": 42, "tags": ["a", "b"]}}
