@@ -31,7 +31,7 @@ $endif$$if(methods)$<p class="note">Each example runs in your browser. The calls
 $endif$$body$
 $if(methods)$<section class="method" id="console">
 <h2>Console</h2>
-<p>Type calls on <code>doc</code>, the message below, or on <code>bytes</code>, its bytes. Each call runs in the library, compiled to WebAssembly. It is not a C++ compiler: a loop or a new struct does not run here.</p>
+<p>Type calls on <code>doc</code>, the message below, or on <code>bytes</code>, its bytes. <code>doc</code> is a <code>std::expected&lt;cbor::lazy, cbor::error&gt;</code>, so <code>-&gt;</code> reads the lazy, as in C++. Each call runs in the library, compiled to WebAssembly. It is not a C++ compiler: a loop or a new struct does not run here.</p>
 <div class="play" data-console>
 <div class="fields">
 <div class="field"><label for="co-m">Message</label><textarea id="co-m" data-message spellcheck="false">{"user": {"id": 42, "name": "ann", "tags": ["a", "b"]}}</textarea></div>
@@ -40,7 +40,7 @@ $if(methods)$<section class="method" id="console">
 <div class="log" id="co-log" aria-live="polite"></div>
 <form id="co-form" autocomplete="off">
 <span class="prompt">»</span>
-<input id="co-line" value='doc.at("user").at("name").get&lt;std::string_view&gt;()' spellcheck="false" aria-label="A call on doc">
+<input id="co-line" value='doc-&gt;at("user")-&gt;at("name")-&gt;get&lt;std::string_view&gt;()' spellcheck="false" aria-label="A call on doc">
 <button class="run" type="submit">Run</button>
 </form>
 </div>
