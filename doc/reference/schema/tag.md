@@ -16,8 +16,8 @@ call: cbor::tag{1802}
 result: cbor::tag{1802}
 call: cbor::schema<point>::encode(point{1, 2})
 result: 54 bytes: d8 71 82 9a 00 00 00 10 d8 72 82 61 78 61 79 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0a d8 80 9a 00 00 00 02 fa 3f 80 00 00 fa 40 00 00 00
-call: cbor::schema<tire>::path(std::move(bytes)).error()
-result: cbor::error::incorrect_type
+call: cbor::schema<car>::path(std::move(bytes)).has_value()
+result: true
 ```
 
 The tag number of a struct, in its description:
