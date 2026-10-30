@@ -224,7 +224,7 @@ int main(int const argc, char const *const *const argv)
         std::string const name = std::filesystem::path(range.path).filename().string();
         auto const file = std::ranges::find(files, "include/cbor/" + name, &site::token_file::path);
         impl += "<pre><code>" +
-                site::highlighted(file->text, file->tokens, range.first, range.last, "../../source/" + name + ".html") +
+                site::highlighted(file->text, file->tokens, range.first, range.last, {}) +
                 "</code></pre>\n";
     }
     site::file_write(out / "impl/lazy/at_path.html", impl);
