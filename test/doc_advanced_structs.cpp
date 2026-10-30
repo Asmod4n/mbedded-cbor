@@ -1,6 +1,5 @@
 #include "reference.hpp"
 
-#ifdef __cpp_impl_reflection
 
 #include <array>
 #include <cstddef>
@@ -305,4 +304,3 @@ TEST_CASE("doc advanced structs: errors")
 
 } // namespace doc_advanced_structs
 
-#endif

@@ -86,18 +86,25 @@ inline test::value canonical(test::value const &v)
     return v;
 }
 
-// A float compares by its bits, so -0.0 and 0.0 differ; two NaN are the same, as the encoder may give a NaN
-// its shortest form (RFC 8949 4.2.2).
+// A float compares by its bits, so -0.0 and 0.0 differ, and a NaN keeps its sign and payload: a shorter NaN is
+// held as the double with zeros on the right of its significand (RFC 8949 4.1, 4.2.1).
+// The double that holds a float with every bit: a static_cast sets the quiet bit of a signaling NaN, so a NaN takes
+// its sign, an exponent of all ones and its significand with 29 zeros on the right (RFC 8949 4.1).
+inline double widened(float const f)
+{
+    std::uint32_t const bits = std::bit_cast<std::uint32_t>(f);
+    if (!std::isnan(f))
+        return static_cast<double>(f);
+    return std::bit_cast<double>(std::uint64_t{bits >> 31} << 63 | std::uint64_t{0x7ff} << 52 |
+                                 std::uint64_t{bits & 0x7fffff} << 29);
+}
+
 inline bool same(test::value const &a, test::value const &b)
 {
     if (a.kind.index() != b.kind.index())
         return false;
-    if (auto const *x = std::get_if<double>(&a.kind)) {
-        double const y = std::get<double>(b.kind);
-        if (std::isnan(*x) || std::isnan(y))
-            return std::isnan(*x) && std::isnan(y);
-        return std::bit_cast<std::uint64_t>(*x) == std::bit_cast<std::uint64_t>(y);
-    }
+    if (auto const *x = std::get_if<double>(&a.kind))
+        return std::bit_cast<std::uint64_t>(*x) == std::bit_cast<std::uint64_t>(std::get<double>(b.kind));
     if (auto const *x = std::get_if<test::array *>(&a.kind)) {
         auto const &y = *std::get<test::array *>(b.kind);
         if ((*x)->size() != y.size())

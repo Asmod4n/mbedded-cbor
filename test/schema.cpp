@@ -4401,3 +4401,58 @@ TEST_CASE("a whole message of another type keeps its error")
     std::string const text(whole.size(), '{');
     CHECK_EQ(form<byte_fields>::decode(std::string(text)).error(), error::incorrect_type);
 }
+
+namespace
+{
+
+struct nan_fields {
+    float single;
+    double twice;
+};
+
+} // namespace
+
+CBOR_DEFINE_TYPE(nan_fields, cbor::tag{1736}, CBOR_MEMBER(nan_fields, single), CBOR_MEMBER(nan_fields, twice));
+
+// Owner decision 2026-10-12: a NaN keeps its bits. A signaling NaN of a float and a double, with its payload in the
+// lowest bit, goes through encode, decode and at_path with every bit; a conversion of the processor would set the
+// quiet bit.
+TEST_CASE("schema: a NaN keeps its bits through encode, decode and at_path")
+{
+    nan_fields const value{std::bit_cast<float>(0x7f800001u), std::bit_cast<double>(0x7ff0000000000001ull)};
+    std::string const bytes = *form<nan_fields>::encode(value);
+    auto const back = form<nan_fields>::decode(std::string(bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ(std::bit_cast<std::uint32_t>((*back)->single), 0x7f800001u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>((*back)->twice), 0x7ff0000000000001ull);
+    CHECK_EQ(std::bit_cast<std::uint32_t>(*form<nan_fields>::at_path<"$.single">(bytes)), 0x7f800001u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*form<nan_fields>::at_path<"$.twice">(bytes)), 0x7ff0000000000001ull);
+}
+
+#if defined(__STDCPP_BFLOAT16_T__)
+
+namespace
+{
+
+struct brain_float {
+    std::bfloat16_t value;
+};
+
+} // namespace
+
+CBOR_DEFINE_TYPE(brain_float, cbor::tag{1737}, CBOR_MEMBER(brain_float, value));
+
+// A bfloat16 is the top 16 bits of a binary32, so the wire takes its bits shifted, not converted. A conversion through
+// float set the quiet bit of the signaling NaN 7f81 (7fc10000), and a read through float lost its payload.
+TEST_CASE("schema: a bfloat16 NaN keeps its bits")
+{
+    brain_float const value{std::bit_cast<std::bfloat16_t>(std::uint16_t{0x7f81})};
+    std::string const bytes = *form<brain_float>::encode(value);
+    CHECK_NE(bytes.find("\xfa\x7f\x81\x00\x00"s), std::string::npos);
+    auto const back = form<brain_float>::decode(std::string(bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ(std::bit_cast<std::uint16_t>((*back)->value), 0x7f81u);
+    CHECK_EQ(std::bit_cast<std::uint16_t>(*form<brain_float>::at_path<"$.value">(bytes)), 0x7f81u);
+}
+
+#endif
