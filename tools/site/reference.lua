@@ -88,7 +88,7 @@ local function example_html(spec, n)
   for _, c in ipairs(spec.calls) do
     calls[#calls + 1] = c.call
     shown[#shown + 1] = '<span class="call">' .. html_escaped(c.call) .. '</span>\n'
-      .. '<span class="' .. ((c.result:match("^fault") or c.result:match("^unexpected") or c.result:match("^cbor::error::")) and "err" or "ok") .. '">'
+      .. '<span class="' .. ((c.result:match("^fault") or c.result:match("^unexpected")) and "err" or "ok") .. '">'
       .. html_escaped(c.result) .. "</span>"
   end
   local id = "x" .. n

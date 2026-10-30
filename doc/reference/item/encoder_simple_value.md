@@ -24,8 +24,8 @@ call: std::string out2;
 result: ""
 call: cbor::encoder e2(out2);
 result: encoder over a std::string
-call: e2.simple_value(cbor::simple_value{24})
-result: unexpected cbor::error::reserved_simple_value
+call: e2.simple_value(cbor::simple_value{16})
+result: void
 ```
 
 Writes a simple value (major type 7), for example `false_value`,

@@ -23,8 +23,8 @@ call: map[0].get<cbor::type::text_string>()
 result: "a"
 call: map[1].get<cbor::type::negative_integer>()
 result: 2
-call: map[1].get<cbor::type::unsigned_integer>().error()
-result: cbor::error::incorrect_type
+call: map[1].type
+result: cbor::type::negative_integer
 ```
 
 Gives the value of the node when `type` is `K`.

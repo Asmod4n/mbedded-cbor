@@ -26,8 +26,8 @@ call: std::string out2;
 result: ""
 call: cbor::encoder e2(out2);
 result: encoder over a std::string
-call: e2.typed_array(cbor::typed_array{66, std::as_bytes(std::span(two))})
-result: unexpected cbor::error::inadmissible_type_for_tag_content
+call: e2.typed_array(cbor::typed_array{68, std::as_bytes(std::span(two))})
+result: void
 ```
 
 Writes a typed array (RFC 8746): the tag `value.tag` and then

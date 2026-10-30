@@ -39,11 +39,11 @@ std::error_code{e}.message()    → std::string
 
 ```example
 message: {"user": {"id": 42}}
-call: auto const age = cbor::at_path<"$.user.age", std::int64_t>(bytes)
-result: unexpected cbor::error::key_not_found
-call: age.error()
+call: cbor::at_path<"$.user.id", std::int64_t>(bytes)
+result: 42
+call: cbor::error::key_not_found
 result: cbor::error::key_not_found
-call: std::error_code{age.error()}.message()
+call: std::error_code{cbor::error::key_not_found}.message()
 result: "key not found"
 ```
 

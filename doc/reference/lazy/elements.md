@@ -12,8 +12,8 @@ doc->elements() → std::expected<lazy_elements, error>
 message: [1, 2, 3]
 call: doc->elements()
 result: lazy_elements of 3 elements: 1, 2, 3
-call: doc->at(0)->elements().error()
-result: cbor::error::not_indexable
+call: doc->elements()->size()
+result: 3
 ```
 
 Gives the elements of an array, or of a typed array, as a view. Each

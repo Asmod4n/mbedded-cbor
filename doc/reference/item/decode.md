@@ -23,9 +23,9 @@ result: owning item of 1
 ```
 
 ```example
-bytes: 9f 01 ff
-call: cbor::decode(bytes).error()
-result: cbor::error::indefinite_length
+bytes: c1 00
+call: cbor::decode(bytes)
+result: owning item of 1(0)
 ```
 
 Decodes the one top-level item in `encoded` into a tree of

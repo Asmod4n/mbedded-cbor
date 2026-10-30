@@ -16,8 +16,8 @@ std::expected<lazy, error> operator[](std::size_t index) const;
 message: {"cars": [5, 7]}
 call: (*(*doc)["cars"])[1]->get<int>()
 result: 7
-call: (*doc)["bus"].error()
-result: cbor::error::key_not_found
+call: (*(*doc)["cars"])[0]->get<int>()
+result: 5
 ```
 
 Gives the same result as [at](at.md) with the same argument. It does not
