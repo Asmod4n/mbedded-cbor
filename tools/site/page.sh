@@ -21,15 +21,19 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-si
     printf "\n</details>\n\n"
     sed -n "/^## See also/,\$p" "$page"
   } > /tmp/at_path.md
-  pandoc -s -f gfm -t html5 --css ../../style.css -M document-css=false -M pagetitle="cbor::lazy::at_path" \
-    /tmp/at_path.md -o /out/reference/lazy/at_path.html
-  pandoc -s -f gfm -t html5 --css style.css -M document-css=false -M pagetitle=mbedded-cbor \
-    /src/tools/site/index.md -o /out/index.html
+  page() { pandoc -s -f gfm -t html5 --template /src/tools/site/template.html "$@"; }
+  page -V root=../../ -M pagetitle="cbor::lazy::at_path" /tmp/at_path.md -o /out/reference/lazy/at_path.html
+  page -V root= -M pagetitle=mbedded-cbor /src/tools/site/index.md -o /out/index.html
+  for f in /out/source/*.hpp.html; do
+    n=$(basename "$f" .html)
+    { printf "# include/cbor/%s\n\n<div class=\"source\">\n\n" "$n"; cat "$f"; printf "\n</div>\n"; } > /tmp/source-page.md
+    page -V root=../ -V wide=true -M pagetitle="$n" /tmp/source-page.md -o "$f"
+  done
   {
     printf "# include/cbor\n\n"
     for f in /out/source/*.hpp.html; do n=$(basename "$f" .html); printf -- "- [%s](%s.html)\n" "$n" "$n"; done
   } > /tmp/source.md
-  pandoc -s -f gfm -t html5 --css ../style.css -M document-css=false -M pagetitle=include/cbor /tmp/source.md -o /out/source/index.html
+  page -V root=../ -M pagetitle=include/cbor /tmp/source.md -o /out/source/index.html
   lynx -dump -nolist /out/reference/lazy/at_path.html > /out/reference/lazy/at_path.txt
   for heading in Parameters "Return value" Errors Cost Examples Implementation "See also"; do
     grep -q "^$heading\$\|^   $heading\$" /out/reference/lazy/at_path.txt || { echo "page: no section $heading in lynx"; exit 1; }
