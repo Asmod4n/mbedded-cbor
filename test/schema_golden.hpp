@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-// Written by the commit before cbor::packed (dc787da) for the golden test of test/schema.cpp: per type its name, the
+// Written by the commit before cbor::packed (dc787da) for the golden test of test/schema_apart.cpp: per type its name, the
 // message with the description inside, the data form apart and the description, in hex.
 inline constexpr std::string_view golden_expected =
     "wheel d871829a00000010d87283686469616d6574657269736e6f7754697265736b61697250726573737572655a00000000f7f7f7f7f7f7f7f7f7f7f7f7f7f7d905dcd8809a0000000319004af4fa42de0000 d871829a0000000f5a00000000f7f7f7f7f7f7f7f7f7f7f7f7f7f7d905dcd8809a0000000319004af4fa42de0000 d87283686469616d6574657269736e6f7754697265736b6169725072657373757265\n"
