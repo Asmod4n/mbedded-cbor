@@ -15,14 +15,6 @@ inline value node_view_of(value const &owner, cbor::item const &node)
             std::shared_ptr<void>(owner.held, const_cast<cbor::item *>(&node)), text_of<cbor::item>, false};
 }
 
-template <class T>
-value expected_view_of(value const &owner, std::expected<T, cbor::error> const &v)
-{
-    value out = v ? view_of(owner, *v) : value_of(v.error());
-    out.expected = true;
-    return out;
-}
-
 inline std::expected<cbor::item const *, fault> node_of(value const &v)
 {
     if (auto const *node = held_if<cbor::item>(v))

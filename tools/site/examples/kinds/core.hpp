@@ -3,6 +3,7 @@
 #include "../value.hpp"
 
 #include <algorithm>
+#include <array>
 #include <format>
 #include <variant>
 
@@ -62,6 +63,14 @@ struct kind<std::monostate> {
 inline value value_of(std::expected<void, cbor::error> const v)
 {
     value out = v ? value_of(std::monostate{}) : value_of(v.error());
+    out.expected = true;
+    return out;
+}
+
+template <class T>
+value expected_view_of(value const &owner, std::expected<T, cbor::error> v)
+{
+    value out = v ? view_of(owner, std::move(*v)) : value_of(v.error());
     out.expected = true;
     return out;
 }
@@ -194,6 +203,27 @@ struct kind<std::shared_ptr<std::string const>> {
     {
         return "shared_ptr to " + string_text(*v);
     }
+};
+
+template <>
+struct kind<std::span<char const>> {
+    static constexpr std::string_view name = "std::span<char const>";
+    static std::string text(std::span<char const> const v)
+    {
+        return number_text(v.size()) + " bytes: " + hex_text({v.data(), v.size()});
+    }
+};
+
+template <std::string_view const &First, std::string_view const &Second, std::string_view const &Third>
+struct joined_name {
+    static constexpr auto chars = [] {
+        std::array<char, First.size() + Second.size() + Third.size()> out{};
+        auto at = std::ranges::copy(First, out.begin()).out;
+        at = std::ranges::copy(Second, at).out;
+        std::ranges::copy(Third, at);
+        return out;
+    }();
+    static constexpr std::string_view value{chars.data(), chars.size()};
 };
 
 }

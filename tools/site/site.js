@@ -1,5 +1,6 @@
 import { encoded, hexOf, bytesOf, instantiated } from "./examples.mjs";
 
+const group = document.body.dataset.group;
 const escaped = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 const shown = (call, result) => '<span class="call">' + escaped(call) + "</span>\n" +
   '<span class="' + (/^(fault|unexpected|cbor::error::)/.test(result) ? "err" : "ok") + '">' + escaped(result) + "</span>";
@@ -17,7 +18,7 @@ const boxOf = box => {
   const toNotation = async () => {
     if (!notation) return;
     try {
-      const text = (await (await run)(bytes(), "cbor::diagnostic_notation(bytes).value()"))[0];
+      const text = (await (await run)(bytes(), "cbor::diagnostic_notation(bytes).value()", group))[0];
       try { notation.value = JSON.parse(text); } catch { notation.value = text; }
     }
     catch (e) { notation.value = e.message; }
@@ -35,7 +36,7 @@ document.querySelectorAll(".play:not([data-console])").forEach(box => {
     let bytes;
     try { bytes = b.bytes(); } catch (e) { out.innerHTML = shown("bytes", "fault: " + e.message); return; }
     const lines = calls.value.split("\n").filter(l => l.trim());
-    const results = await (await run)(bytes, lines.join("\n"));
+    const results = await (await run)(bytes, lines.join("\n"), group);
     out.innerHTML = lines.map((l, i) => shown(l, results[i] ?? "")).join("\n");
   };
   button.hidden = false;
@@ -54,7 +55,7 @@ if (consoleBox) {
     if (!line.trim()) return;
     let bytes;
     try { bytes = b.bytes(); } catch (err) { log.insertAdjacentHTML("beforeend", shown(line, "fault: " + err.message) + "\n"); return; }
-    const results = await (await run)(bytes, [...history, line].join("\n"));
+    const results = await (await run)(bytes, [...history, line].join("\n"), group);
     const last = results[results.length - 1] ?? "";
     if (!last.startsWith("fault")) history.push(line);
     log.insertAdjacentHTML("beforeend", shown("» " + line, last) + "\n");
