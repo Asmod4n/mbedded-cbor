@@ -8,8 +8,8 @@ template <class T>
 concept has_describe_members = requires { describe_members<T>::members; };
 ```
 
-A specialization describes how `cbor::structs`, `cbor::packed` and
-`cbor::schema` write and read `T`. It
+A specialization describes how `cbor::structs` and `cbor::schema`
+write and read `T`. It
 holds `tag`, a `std::optional<cbor::tag>`, and `members`, a `std::tuple`
 of [member](member.md) entries. `cbor::untagged` gives a map with no
 tag. The specialization stands outside every namespace, after `T`.

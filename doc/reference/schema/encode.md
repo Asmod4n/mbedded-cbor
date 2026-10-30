@@ -35,9 +35,9 @@ allocates nothing.
 ## Example
 
 ```cpp
-auto const bytes = cbor::packed<tire>::encode(tire{17, 2.5f});
+auto const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
 std::string out = "x";
-auto const n = cbor::packed<tire>::encode(tire{17, 2.5f}, out);
+auto const n = cbor::schema<tire>::encode(tire{17, 2.5f}, out);
 use(out.size() == 1 + *n);   // true
 ```
 
