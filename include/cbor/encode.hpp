@@ -220,7 +220,7 @@ struct encoding::encoder {
             return {};
         } else if constexpr (blocks) {
             std::size_t const size = used - closed;
-            std::string_view const part(block.data() + closed, size);
+            std::string_view const part(block.subspan(closed).first(size));
             closed = used;
             written += size;
             writer.block_close(part);
@@ -431,9 +431,9 @@ struct encoding::encoder {
         if constexpr (blocks)
             if (bytes.size() >= ref_size) {
                 auto const owner = std::make_shared<std::vector<std::byte> const>(std::move(bytes));
-                return piece_encode(major_type::byte_string, chars_of(*owner), owner);
+                return piece_encode(major_type::byte_string, heads::as_string_view(*owner), owner);
             }
-        return byte_string_encode(chars_of(bytes));
+        return byte_string_encode(heads::as_string_view(bytes));
     }
 
     std::expected<void, std::errc> byte_string_encode(std::shared_ptr<std::vector<std::byte> const> const bytes)
@@ -441,21 +441,16 @@ struct encoding::encoder {
         validity::throw_logic_error_if_null(bytes, "cbor::encoder::byte_string_encode: the bytes are null");
         if constexpr (blocks)
             if (bytes->size() >= ref_size)
-                return piece_encode(major_type::byte_string, chars_of(*bytes), bytes);
-        return byte_string_encode(chars_of(*bytes));
+                return piece_encode(major_type::byte_string, heads::as_string_view(*bytes), bytes);
+        return byte_string_encode(heads::as_string_view(*bytes));
     }
 
     std::expected<void, std::errc> byte_string_encode(ref<std::span<std::byte const>> const bytes)
     {
         if constexpr (blocks)
             if ((*bytes).size() >= ref_size)
-                return piece_encode(major_type::byte_string, chars_of(*bytes), bytes.owner);
-        return byte_string_encode(chars_of(*bytes));
-    }
-
-    static std::string_view chars_of(std::span<std::byte const> const bytes)
-    {
-        return {reinterpret_cast<char const *>(bytes.data()), bytes.size()};
+                return piece_encode(major_type::byte_string, heads::as_string_view(*bytes), bytes.owner);
+        return byte_string_encode(heads::as_string_view(*bytes));
     }
 
     std::expected<void, std::errc> piece_encode(major_type const major, std::string_view const piece,
@@ -672,7 +667,7 @@ public:
     std::expected<void, error> byte_string(std::span<std::byte const> const bytes)
     {
         throw_logic_error_if_unusable();
-        return written(out.byte_string_encode(encoding::encoder<std::remove_reference_t<message_type>>::chars_of(bytes)));
+        return written(out.byte_string_encode(heads::as_string_view(bytes)));
     }
 
     template <class V>
@@ -841,7 +836,7 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
     case cbor::type::negative_bignum:
         if (node.via.tag.content->type == cbor::type::byte_string) {
             std::string_view const magnitude =
-                heads::magnitude_without_leading_zeros(encoder<Writer>::chars_of(node.via.tag.content->via.bin));
+                heads::magnitude_without_leading_zeros(heads::as_string_view(node.via.tag.content->via.bin));
             if (validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
                 std::expected<void, std::errc> const fits =
                     out.head_encode(node.type == cbor::type::negative_bignum ? major_type::negative_integer
@@ -886,7 +881,7 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
         return std::unexpected(validity::writer_error(written.error()));
     switch (major) {
     case major_type::byte_string:
-        written = out.payload_encode(encoder<Writer>::chars_of(node.via.bin));
+        written = out.payload_encode(heads::as_string_view(node.via.bin));
         break;
     case major_type::text_string:
         written = out.payload_encode(node.via.str);
