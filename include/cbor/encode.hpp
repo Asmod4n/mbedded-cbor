@@ -220,7 +220,7 @@ struct encoding::encoder {
             return {};
         } else if constexpr (blocks) {
             std::size_t const size = used - closed;
-            std::string_view const part(block.subspan(closed, size));
+            std::string_view const part(block.subspan(closed).first(size));
             closed = used;
             written += size;
             writer.block_close(part);
