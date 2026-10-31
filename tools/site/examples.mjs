@@ -67,10 +67,10 @@ export const instantiated = async source => {
     new Uint8Array(memory.buffer, p, data.length).set(data);
     return p;
   };
-  const once = (bytes, lines, group) => {
-    const text = textEncoder.encode(lines), name = textEncoder.encode(group);
-    const b = put(bytes), l = put(text), g = put(name);
-    const p = x.run(b, bytes.length, l, text.length, g, name.length);
+  const call = (name, bytes, lines, group) => {
+    const text = textEncoder.encode(lines), label = textEncoder.encode(group);
+    const b = put(bytes), l = put(text), g = put(label);
+    const p = x[name](b, bytes.length, l, text.length, g, label.length);
     x.release(b);
     x.release(l);
     x.release(g);
@@ -79,16 +79,16 @@ export const instantiated = async source => {
     x.release(p);
     return out.split("\n").slice(0, -1);
   };
-  return async (bytes, lines, group) => {
+  const run = async (bytes, lines, group) => {
     try {
-      return once(bytes, lines, group);
+      return call("run", bytes, lines, group);
     } catch {
       x = await made();
     }
     const kept = [], results = [];
     for (const line of lines.split("\n").filter(l => l.trim())) {
       try {
-        results.push(once(bytes, [...kept, line].join("\n"), group).at(-1));
+        results.push(call("run", bytes, [...kept, line].join("\n"), group).at(-1));
         kept.push(line);
       } catch {
         x = await made();
@@ -97,4 +97,13 @@ export const instantiated = async source => {
     }
     return results;
   };
+  const completed = async (bytes, lines, group) => {
+    try {
+      return call("complete", bytes, lines, group);
+    } catch {
+      x = await made();
+      return [];
+    }
+  };
+  return { run, completed };
 };

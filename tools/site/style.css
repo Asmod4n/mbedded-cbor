@@ -129,3 +129,7 @@ main > table td, main > table th { border-bottom: 1px solid var(--rule); padding
 .play form input { flex: 1; min-width: 0; background: var(--bg); color: var(--fg); border: 0; padding: 0.3rem; }
 .note { font-size: 0.82rem; color: var(--muted); margin-top: 0.4rem; }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+.play .completions { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.4rem 0.5rem; border-top: 1px solid var(--rule); max-height: 9rem; overflow-y: auto; }
+.play .completions button { font-family: var(--mono); font-size: 0.8rem; background: var(--panel); color: var(--fg); border: 1px solid var(--rule); border-radius: 4px; padding: 0.2rem 0.45rem; cursor: pointer; }
+.play .completions button[aria-selected="true"] { border-color: var(--link); color: var(--link); }
+button.complete { font: 600 0.9rem var(--sans); background: var(--panel); color: var(--fg); border: 1px solid var(--rule); border-radius: 4px; padding: 0.25rem 0.6rem; cursor: pointer; }
