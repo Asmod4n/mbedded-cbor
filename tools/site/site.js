@@ -4,8 +4,9 @@ const group = document.body.dataset.group;
 const escaped = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 const shown = (call, result) => '<span class="call">' + escaped(call) + "</span>\n" +
   '<span class="' + (/^(fault|unexpected)/.test(result) ? "err" : "ok") + '">' + escaped(result) + "</span>";
-const run = fetch(document.querySelector('script[src^="site.js"]').src.replace(/site\.js.*$/, "examples.wasm"))
+const module = fetch(document.querySelector('script[src^="site.js"]').src.replace(/site\.js.*$/, "examples.wasm"))
   .then(r => r.arrayBuffer()).then(instantiated);
+const run = module.then(m => m.run);
 
 const boxOf = box => {
   const message = box.querySelector("[data-message]"), notation = box.querySelector("[data-notation]");
@@ -63,4 +64,50 @@ if (consoleBox) {
     entry.select();
   });
   [b.message, b.hex].forEach(el => el?.addEventListener("input", () => { history.length = 0; }));
+  const list = consoleBox.querySelector("[data-completions]");
+  let options = [], chosen = -1;
+  const shut = () => { list.hidden = true; list.replaceChildren(); options = []; chosen = -1; entry.setAttribute("aria-expanded", "false"); };
+  const take = text => { entry.value = text; shut(); entry.focus(); listed(); };
+  const marked = () => options.forEach((o, i) => o.setAttribute("aria-selected", i === chosen ? "true" : "false"));
+  const listed = async () => {
+    let bytes;
+    try { bytes = b.bytes(); } catch { shut(); return; }
+    const found = await (await module).completed(bytes, [...history, entry.value].join("\n"), group);
+    shut();
+    if (!found.length || (found.length === 1 && found[0] === entry.value)) return;
+    options = found.slice(0, 40).map((text, i) => {
+      const o = document.createElement("button");
+      o.type = "button";
+      o.id = "co-option-" + i;
+      o.setAttribute("role", "option");
+      o.textContent = text.slice(entry.value.length - entry.value.match(/[A-Za-z0-9_:]*$/)[0].length);
+      o.addEventListener("click", () => take(text));
+      list.append(o);
+      return Object.assign(o, { full: text });
+    });
+    list.hidden = false;
+    entry.setAttribute("aria-expanded", "true");
+  };
+  entry.addEventListener("input", () => {
+    if (/(->|\.|::)$/.test(entry.value) || !list.hidden) listed(); else shut();
+  });
+  entry.addEventListener("keydown", e => {
+    if (e.key === "Tab" && !e.shiftKey) {
+      if (options.length === 1) { e.preventDefault(); take(options[0].full); return; }
+      if (options.length > 1) {
+        e.preventDefault();
+        const all = options.map(o => o.full);
+        let common = all[0];
+        for (const t of all) while (!t.startsWith(common)) common = common.slice(0, -1);
+        if (common.length > entry.value.length) { entry.value = common; listed(); } else { chosen = (chosen + 1) % options.length; marked(); }
+        return;
+      }
+      e.preventDefault();
+      listed();
+    } else if (e.key === "ArrowDown" && options.length) { e.preventDefault(); chosen = (chosen + 1) % options.length; marked(); }
+    else if (e.key === "ArrowUp" && options.length) { e.preventDefault(); chosen = (chosen + options.length - 1) % options.length; marked(); }
+    else if (e.key === "Enter" && chosen >= 0) { e.preventDefault(); take(options[chosen].full); }
+    else if (e.key === "Escape") shut();
+  });
+  consoleBox.querySelector("[data-complete]").addEventListener("click", () => { entry.focus(); listed(); });
 }
