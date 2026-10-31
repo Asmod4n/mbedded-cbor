@@ -35,17 +35,17 @@ jobs:
       - id: image
         uses: actions/cache@v4
         with:
-          path: ${{ github.workspace }}/../image-site
+          path: ${{ runner.temp }}/image-site
           key: image-site-${{ steps.snapshot.outputs.snapshot }}-${{ hashFiles('containers/site.Containerfile') }}
       - if: steps.image.outputs.cache-hit != 'true'
         name: Build the image
         run: |
-          mkdir -p ../image-site
+          mkdir -p "$RUNNER_TEMP/image-site"
           podman build -q -t mbedded-cbor-site -f containers/site.Containerfile containers
-          podman save -o ../image-site/image.tar mbedded-cbor-site
+          podman save -o "$RUNNER_TEMP/image-site/image.tar" mbedded-cbor-site
       - if: steps.image.outputs.cache-hit == 'true'
         name: Load the image
-        run: podman load -q -i ../image-site/image.tar
+        run: podman load -q -i "$RUNNER_TEMP/image-site/image.tar"
       - name: Build the site
         run: sh tools/site/page.sh "$RUNNER_TEMP/site"
       - uses: actions/upload-pages-artifact@v3
