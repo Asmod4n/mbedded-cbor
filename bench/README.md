@@ -7,6 +7,9 @@ The script measures two commits of mbedded-cbor on a desktop.
     bench/run-desktop.sh <commit-a> <commit-b>
 
 Run it as a normal user. It refuses to run as root.
+The image of containers/bench-desktop.Containerfile holds the compilers and Google Benchmark;
+it is built with `podman build -t mbedded-cbor-bench-desktop -f containers/bench-desktop.Containerfile containers`
+after the image mbedded-cbor-tw.
 Close other programs first. The script does not pin the process.
 
 ## What it measures
