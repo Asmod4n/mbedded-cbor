@@ -563,7 +563,7 @@ class iov_writer
         validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         if (part.empty())
             return;
-        if (piece_open)
+        if (piece_open && std::to_address(kept->pieces.back().end()) == part.data())
             kept->pieces.back() = std::string_view(kept->pieces.back().data(), kept->pieces.back().size() + part.size());
         else
             kept->pieces.push_back(part);
