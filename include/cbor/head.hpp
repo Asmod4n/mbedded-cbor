@@ -57,6 +57,11 @@ std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
 class heads
 {
+    static std::string_view as_string_view(std::span<std::byte const> const bytes)
+    {
+        return {reinterpret_cast<char const *>(bytes.data()), bytes.size()};
+    }
+
     template <class V>
     static V unsigned_read(std::span<char const, sizeof(V)> const field)
     {
