@@ -1,3 +1,6 @@
+// Gives cbor::item, one node of a decoded CBOR tree. item::get<K>
+// gives the value of the node as a C++ type, or incorrect_type when
+// the node is not of type K.
 #ifndef CBOR_ITEM_HPP
 #define CBOR_ITEM_HPP
 

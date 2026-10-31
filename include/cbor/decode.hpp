@@ -1,3 +1,8 @@
+// Decodes the first CBOR data item in a buffer into a tree of
+// cbor::item. The tree holds a copy of each string in its own memory.
+// Decodes a bignum that fits in 64 bits as an integer. Decodes the
+// content of a tag 24 as one more data item.
+// https://www.rfc-editor.org/rfc/rfc8949
 #ifndef CBOR_DECODE_HPP
 #define CBOR_DECODE_HPP
 

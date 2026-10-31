@@ -1,3 +1,8 @@
+// Writes one encoded CBOR data item as text in diagnostic notation,
+// with its encoding indicators. Reads a literal in this notation into
+// CBOR for the path parser.
+// https://www.rfc-editor.org/rfc/rfc8949#section-8
+// https://datatracker.ietf.org/doc/html/draft-ietf-cbor-edn-literals-28
 #pragma once
 
 #include <algorithm>

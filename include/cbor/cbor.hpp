@@ -1,3 +1,4 @@
+// Includes all headers of the library.
 #pragma once
 
 #include "error.hpp"

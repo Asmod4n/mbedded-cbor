@@ -1,3 +1,11 @@
+// Gives cbor::limits. Gives the checks for safety: limits, nesting
+// depth, overflow of sums and products, number ranges, heads, tag
+// content and typed arrays. Throws std::logic_error on a wrong use, or
+// ends the process when the build has no exceptions. Gives the tag
+// numbers of Packed CBOR.
+// https://www.rfc-editor.org/rfc/rfc8949
+// https://www.rfc-editor.org/rfc/rfc8746#section-2
+// https://datatracker.ietf.org/doc/html/draft-ietf-cbor-packed-19
 #pragma once
 
 #include <algorithm>

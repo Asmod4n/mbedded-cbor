@@ -1,3 +1,10 @@
+// Reads a CBOR data item in place, in bytes with a shared owner.
+// Finds a value by key, by index or by path. Gives a number, a text
+// string, a byte string, an array or a map. Gives a string, an array
+// and a map as a view of these bytes. Reads one element of a typed
+// array. clone copies the data item into a tree of cbor::item.
+// https://www.rfc-editor.org/rfc/rfc8949
+// https://www.rfc-editor.org/rfc/rfc8746#section-2
 #pragma once
 
 #include <algorithm>
