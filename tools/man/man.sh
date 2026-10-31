@@ -11,7 +11,7 @@ podman run --rm --network none -e VERSION="$version" -e TODAY="$today" -v "$tree
   work=/tmp/man
   mkdir -p $work
   pandoc lua /src/tools/man/man.lua /src $work "$VERSION" "$TODAY"
-  body() { sed "/^\.TH /s/\" \"[0-9-]*\" \"/\" \"\" \"/" "$1"; }
+  body() { sed "s/^\(\.TH \"[^\"]*\" \"[^\"]*\" \)\"[^\"]*\"/\1\"\"/" "$1"; }
   for page in $work/*.3; do
     file=$(basename $page)
     committed=/src/doc/man/man3/$file
