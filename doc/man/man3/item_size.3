@@ -1,0 +1,50 @@
+.TH "cbor::item_size" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::item_size \- checks the first item and gives its size in bytes
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+std::expected<std::size_t, error> item_size(std::string_view encoded);
+.EE
+.SH DESCRIPTION
+Reads the first item in \f[CR]encoded\f[R] to its end and gives its size
+in bytes.
+It checks that the item is well\-formed: each head, each string and each
+element.
+Bytes after the item are not read and are not an error.
+.PP
+The call keeps no stack, so it checks no nesting depth: an item deeper
+than \f[CR]limits::nesting_depth\f[R] gives its size.
+It does not check tag content, UTF\-8 or duplicate keys.
+.SH ERRORS
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the bytes end before the item ends, or a
+container claims more items than the bytes left.
+.IP \(bu 2
+\f[CR]syntax_error\f[R]: a head is not well\-formed, for example
+\f[CR]1c\f[R] or the reserved simple value \f[CR]f8 1f\f[R].
+.IP \(bu 2
+\f[CR]indefinite_length\f[R]: a head uses indefinite length.
+.IP \(bu 2
+\f[CR]string_length_exceeded\f[R],
+\f[CR]container_elements_exceeded\f[R]: a limit is set and a string or a
+container goes past it.
+.SH NOTES
+O(i), i the items, bounded by O(n).
+Memory O(1).
+No allocation.
+.SH EXAMPLES
+.IP
+.EX
+\f[I]// bytes: [1, 2] followed by 7, 4 bytes\f[R]
+cbor::item_size(bytes);                    \f[I]// 3\f[R]
+cbor::item_size(bytes.substr(0, 2));       \f[I]// too_little_data\f[R]
+\f[I]// bytes: [_ 1]\f[R]
+cbor::item_size(bytes);                    \f[I]// indefinite_length\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)

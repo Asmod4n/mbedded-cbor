@@ -1,0 +1,670 @@
+'\" t
+.TH "cbor::lazy" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::lazy, cbor::lazy::take_ownership, cbor::lazy::view, cbor::lazy::at, cbor::lazy::operator[], cbor::lazy::at_path, cbor::lazy::get, cbor::lazy::type, cbor::lazy::size, cbor::lazy::empty, cbor::lazy::elements, cbor::lazy::entries, cbor::lazy::clone, cbor::lazy_elements, cbor::lazy_entries \- read a message in place, step by step
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]struct\f[R] lazy {
+    top_level_item top_level;
+    validity::offset offset;
+    std::uint64_t typed_array_tag{};
+};
+
+\f[B]using\f[R] nodelist = std::vector<lazy>;
+.EE
+.IP
+.EX
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<lazy, error> take_ownership(Encoded &&encoded);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
+.EE
+.IP
+.EX
+std::expected<lazy, error> at(std::string_view key) const;
+std::expected<lazy, error> at(key k) const;
+std::expected<lazy, error> at(std::size_t index) const;
+.EE
+.IP
+.EX
+std::expected<lazy, error> \f[B]operator\f[R][](std::string_view key) const;
+std::expected<lazy, error> \f[B]operator\f[R][](key k) const;
+std::expected<lazy, error> \f[B]operator\f[R][](std::size_t index) const;
+.EE
+.IP
+.EX
+\f[B]template\f[R] <fixed_string Path>
+    \f[B]requires\f[R] is_valid_path_v<Path>
+std::expected<lazy, error> at_path() const;
+
+\f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T>
+    \f[B]requires\f[R](is_singular_query_v<Path> &&
+             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
+              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+              || std::is_same_v<T, std::float128_t>
+#endif
+              ))
+std::expected<T, error> at_path() const;
+
+\f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T>
+    \f[B]requires\f[R](is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<ref<T>, error> at_path() const;
+
+\f[B]template\f[R] <fixed_string Path, std::same_as<nodelist> T>
+    \f[B]requires\f[R] is_valid_path_v<Path>
+std::expected<nodelist, error> at_path() const;
+
+\f[B]template\f[R] <\f[B]class\f[R] E>
+    \f[B]requires\f[R] is_path_query_v<E>
+std::expected<\f[B]typename\f[R] E::result_type, error> at_path(E const &e) const;
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] T>
+    \f[B]requires\f[R](std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
+             std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
+             std::is_same_v<T, std::string_view> ||
+             std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
+#ifdef __STDCPP_FLOAT128_T__
+             || std::is_same_v<T, std::float128_t>
+#endif
+std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                                   std::is_same_v<T, typed_array>,
+                               ref<T>, T>, error> get() const;
+.EE
+.IP
+.EX
+std::expected<cbor::type, error> type() const;
+.EE
+.IP
+.EX
+std::expected<std::uint64_t, error> size() const;
+.EE
+.IP
+.EX
+std::expected<bool, error> empty() const;
+.EE
+.IP
+.EX
+std::expected<lazy_elements, error> elements() const;
+.EE
+.IP
+.EX
+std::expected<lazy_entries, error> entries() const;
+.EE
+.IP
+.EX
+std::expected<owning<item>, error> clone() const;
+.EE
+.IP
+.EX
+\f[B]struct\f[R] lazy_elements : std::ranges::view_interface<lazy_elements> {
+    \f[B]struct\f[R] iterator {
+        \f[B]using\f[R] iterator_concept = std::forward_iterator_tag;
+        \f[B]using\f[R] value_type = std::expected<lazy, error>;
+        \f[B]using\f[R] difference_type = std::ptrdiff_t;
+        iterator() = \f[B]default\f[R];
+        value_type \f[B]operator\f[R]*() const;
+        iterator &\f[B]operator\f[R]++();
+        iterator \f[B]operator\f[R]++(int);
+        bool \f[B]operator\f[R]==(iterator const &) const;
+        bool \f[B]operator\f[R]==(std::default_sentinel_t) const;
+    };
+    iterator begin() const;
+    std::default_sentinel_t end() const;
+    std::uint64_t size() const;
+    void front() const = \f[B]delete\f[R];
+};
+.EE
+.IP
+.EX
+\f[B]struct\f[R] lazy_entries : std::ranges::view_interface<lazy_entries> {
+    \f[B]struct\f[R] iterator {
+        \f[B]using\f[R] iterator_concept = std::forward_iterator_tag;
+        \f[B]using\f[R] value_type = std::expected<std::pair<lazy, lazy>, error>;
+        \f[B]using\f[R] difference_type = std::ptrdiff_t;
+        iterator() = \f[B]default\f[R];
+        value_type \f[B]operator\f[R]*() const;
+        iterator &\f[B]operator\f[R]++();
+        iterator \f[B]operator\f[R]++(int);
+        bool \f[B]operator\f[R]==(iterator const &) const;
+        bool \f[B]operator\f[R]==(std::default_sentinel_t) const;
+    };
+    iterator begin() const;
+    std::default_sentinel_t end() const;
+    std::uint64_t size() const;
+    void front() const = \f[B]delete\f[R];
+};
+.EE
+.SH DESCRIPTION
+\f[CR]cbor::lazy\f[R] reads a message in place, one step at a time, and
+copies no byte.
+.SS cbor::lazy
+A lazy is a position in one top\-level item.
+It holds the owner of the bytes, the bytes and an offset.
+It holds no decoded value.
+Each member function reads the bytes at the offset when it is called.
+.PP
+view and take_ownership set the data members.
+A copy of a lazy is a second position in the same bytes.
+Several threads read one lazy at the same time.
+A \f[CR]nodelist\f[R] is the result of a path that selects many nodes.
+.SS cbor::lazy::take_ownership
+Makes the lazy of the top\-level item in \f[CR]encoded\f[R].
+The bytes move into a new owner; nothing is copied.
+Every lazy, view and \f[CR]ref\f[R] that comes from the result holds
+that owner, so the bytes stay alive as long as one of them lives.
+.PP
+\f[CR]Encoded\f[R] is a container of \f[CR]char\f[R] that owns its
+bytes, for example \f[CR]std::string\f[R].
+An lvalue, a \f[CR]std::string_view\f[R] and a literal do not compile.
+.SS cbor::lazy::view
+Makes the lazy of the top\-level item in the bytes, in place.
+Nothing is copied.
+The first form reads \f[CR]encoded\f[R], and \f[CR]owner\f[R] keeps
+those bytes alive.
+The second form reads \f[CR]*owner\f[R].
+Every lazy, view and \f[CR]ref\f[R] that comes from the result holds
+\f[CR]owner\f[R].
+.PP
+The call does not check that the bytes are one complete item.
+A step on the lazy finds a missing part.
+No step reads bytes after the item.
+.SS cbor::lazy::at
+Gives the lazy of one child.
+\f[CR]at(key)\f[R] gives the value of the first pair of a map whose key
+is the text \f[CR]key\f[R].
+\f[CR]at(cbor::key{n})\f[R] gives the value of the first pair whose key
+is the integer \f[CR]n\f[R]; a bignum key that holds \f[CR]n\f[R]
+matches too.
+\f[CR]at(index)\f[R] gives the element of an array or of a typed array,
+counted from 0.
+.PP
+A text key does not match a byte string with the same bytes.
+The call passes a tag that it does not interpret, and reads into a tag
+24.
+It reads no value; get does.
+.SS cbor::lazy::operator[]
+Gives the same result as at with the same argument.
+It does not throw for a missing key or a wrong index.
+The result is a \f[CR]std::expected\f[R], so
+\f[CR]l[\(dqa\(dq][\(dqb\(dq]\f[R] does not compile.
+A path reads a chain (at_path).
+.SS cbor::lazy::at_path
+Reads the JSONPath (RFC 9535) \f[CR]Path\f[R] from this lazy as the root
+\f[CR]$\f[R].
+.PP
+\f[B]Parameters\f[R]
+.IP \(bu 2
+\f[CR]Path\f[R]: a JSONPath as a string literal.
+A path that is not valid does not compile.
+.IP \(bu 2
+\f[CR]T\f[R]: the type of the result.
+Without \f[CR]T\f[R] the result is the lazy of the node.
+.IP \(bu 2
+\f[CR]e\f[R]: a query from \f[CR]cbor::jsonpath::compile<T>(path)\f[R],
+which parses the path at run time.
+.SS cbor::lazy::get
+Reads the value at the lazy as \f[CR]T\f[R].
+.PP
+.TS
+tab(@);
+l l.
+T{
+T
+T}@T{
+Reads
+T}
+_
+T{
+an integer type
+T}@T{
+an integer or a bignum that fits \f[CR]T\f[R]
+T}
+T{
+\f[CR]double\f[R]
+T}@T{
+a float, or an integer that a \f[CR]double\f[R] holds exactly
+T}
+T{
+\f[CR]bool\f[R], \f[CR]std::nullptr_t\f[R]
+T}@T{
+\f[CR]false\f[R] or \f[CR]true\f[R], \f[CR]null\f[R]
+T}
+T{
+\f[CR]cbor::simple_value\f[R]
+T}@T{
+a simple value
+T}
+T{
+\f[CR]std::string_view\f[R], \f[CR]std::span<std::byte const>\f[R]
+T}@T{
+a text, a byte string, as a \f[CR]ref\f[R]
+T}
+T{
+\f[CR]cbor::typed_array\f[R]
+T}@T{
+a typed array (RFC 8746), as a \f[CR]ref\f[R]
+T}
+T{
+\f[CR]std::float128_t\f[R]
+T}@T{
+an element of a typed array of 128\-bit floats
+T}
+.TE
+.PP
+A \f[CR]ref\f[R] views the bytes and holds their owner.
+Nothing is copied.
+The call passes a tag that it does not interpret.
+.SS cbor::lazy::type
+Gives the kind of the value at the lazy.
+A tag 2 or 3 whose magnitude fits 64 bits gives
+\f[CR]unsigned_integer\f[R] or \f[CR]negative_integer\f[R].
+A larger bignum gives \f[CR]unsigned_bignum\f[R] or
+\f[CR]negative_bignum\f[R].
+A typed array (RFC 8746) gives \f[CR]typed_array\f[R].
+Every other tag gives \f[CR]tag\f[R]; the call does not pass it.
+.SS cbor::lazy::size
+Gives the count of the head: the elements of an array, the pairs of a
+map, or the elements of a typed array.
+It reads only the head.
+It does not read the children.
+.SS cbor::lazy::empty
+Gives \f[CR]true\f[R] when size gives 0, and \f[CR]false\f[R] when it
+gives another count.
+.SS cbor::lazy::elements
+Gives the elements of an array, or of a typed array, as a view.
+Each element of the view is a \f[CR]std::expected<lazy, error>\f[R].
+The call reads only the head.
+The view reads one element at each step.
+.SS cbor::lazy::entries
+Gives the pairs of a map, in the order of the bytes, as a view.
+Each element of the view is a
+\f[CR]std::expected<std::pair<lazy, lazy>, error>\f[R]: the key in
+\f[CR]first\f[R], the value in \f[CR]second\f[R].
+A key that occurs twice occurs twice in the view.
+.SS cbor::lazy::clone
+Decodes the whole item at the lazy into a tree of cbor::item, as
+cbor::decode does.
+The tree holds a copy of each text and byte string.
+It does not view the bytes of the lazy, and stays valid after the lazy
+and its owner end.
+.SS cbor::lazy_elements
+The elements of one array, from elements.
+It is a forward range, a sized range and a borrowed range.
+\f[CR]size()\f[R] gives the count of the head.
+\f[CR]*it\f[R] gives the lazy of the element, or the error of the
+element.
+An iterator holds the owner of the bytes, so it stays valid after the
+lazy and the view end.
+\f[CR]front()\f[R] does not compile.
+.SS cbor::lazy_entries
+The pairs of one map, from entries, in the order of the bytes.
+It is a forward range, a sized range and a borrowed range.
+\f[CR]size()\f[R] gives the count of pairs in the head.
+\f[CR]*it\f[R] gives the key in \f[CR]first\f[R] and the value in
+\f[CR]second\f[R], or the error of the pair.
+An iterator holds the owner of the bytes, so it stays valid after the
+lazy and the view end.
+\f[CR]front()\f[R] does not compile.
+.SH RETURN VALUE
+.SS cbor::lazy::at_path
+Without \f[CR]T\f[R] it gives the lazy of the node.
+With a scalar \f[CR]T\f[R] it reads the value as get does.
+A text, a byte string and a typed array come back as a \f[CR]ref\f[R]
+that holds the owner.
+\f[CR]nodelist\f[R] gives every selected node.
+The form with \f[CR]e\f[R] gives the result type of the query.
+.SH ERRORS
+.SS cbor::lazy
+A lazy made with \f[CR]cbor::lazy{}\f[R] holds no top\-level item.
+Each member function then throws \f[CR]std::logic_error\f[R].
+.SS cbor::lazy::take_ownership
+None from the bytes.
+The call reads only the first head, to skip one tag 55799.
+A step on the lazy reports broken input (at, get).
+.SS cbor::lazy::view
+None from the bytes.
+The call reads only the first head, to skip one tag 55799.
+A null \f[CR]owner\f[R] in the second form throws
+\f[CR]std::logic_error\f[R].
+An empty \f[CR]owner\f[R] in the first form throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::lazy::at
+.IP \(bu 2
+\f[CR]key_not_found\f[R]: no pair has the key.
+.IP \(bu 2
+\f[CR]index_out_of_bounds\f[R]: \f[CR]index\f[R] is not less than the
+count.
+.IP \(bu 2
+\f[CR]not_indexable\f[R]: a key on a value that is not a map, or an
+index on a value that is not an array.
+.IP \(bu 2
+\f[CR]too_little_data\f[R], \f[CR]syntax_error\f[R],
+\f[CR]indefinite_length\f[R]: the bytes up to the child are broken.
+.SS cbor::lazy::operator[]
+The errors of at.
+.SS cbor::lazy::at_path
+.IP \(bu 2
+\f[CR]key_not_found\f[R], \f[CR]index_out_of_bounds\f[R],
+\f[CR]not_indexable\f[R]: a step finds no node.
+.IP \(bu 2
+\f[CR]incorrect_type\f[R], \f[CR]number_out_of_range\f[R]: the node does
+not read as \f[CR]T\f[R].
+.IP \(bu 2
+\f[CR]nesting_depth_exceeded\f[R]: the path is deeper than the limit.
+.IP \(bu 2
+A path that is not valid does not compile.
+A path that can select more than one node does not compile, except with
+\f[CR]nodelist\f[R].
+.IP \(bu 2
+A query that is empty or moved from throws \f[CR]std::logic_error\f[R].
+.SS cbor::lazy::get
+.IP \(bu 2
+\f[CR]incorrect_type\f[R]: the value is of another kind.
+.IP \(bu 2
+\f[CR]number_out_of_range\f[R]: the number does not fit \f[CR]T\f[R].
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: a string is longer than the bytes that are
+left.
+.SS cbor::lazy::type
+\f[CR]too_little_data\f[R] or \f[CR]syntax_error\f[R]: the head is
+broken.
+.SS cbor::lazy::size
+.IP \(bu 2
+\f[CR]not_indexable\f[R]: the value is not an array, a map or a typed
+array.
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the count is larger than the bytes that are
+left.
+.SS cbor::lazy::empty
+The errors of size.
+.SS cbor::lazy::elements
+.IP \(bu 2
+\f[CR]not_indexable\f[R]: the value is not an array or a typed array.
+.IP \(bu 2
+\f[CR]indefinite_length\f[R]: the array has an indefinite length.
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the count is larger than the bytes that are
+left.
+.SS cbor::lazy::entries
+.IP \(bu 2
+\f[CR]not_indexable\f[R]: the value is not a map.
+.IP \(bu 2
+\f[CR]indefinite_length\f[R]: the map has an indefinite length.
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the count is larger than the bytes that are
+left.
+.SS cbor::lazy::clone
+The errors of cbor::decode: \f[CR]too_little_data\f[R],
+\f[CR]syntax_error\f[R], \f[CR]indefinite_length\f[R],
+\f[CR]nesting_depth_exceeded\f[R] and others for a broken item.
+.SS cbor::lazy_elements
+\f[CR]too_little_data\f[R] or another error of the bytes, when the
+iterator cannot step over an element.
+Each later position gives that error.
+The view gives at most \f[CR]size()\f[R] values.
+.SS cbor::lazy_entries
+\f[CR]too_little_data\f[R] or another error of the bytes, when the
+iterator cannot step over a key or a value.
+Each later position gives that error.
+The view gives at most \f[CR]size()\f[R] values.
+.SH NOTES
+.SS cbor::lazy
+A copy is O(1): one atomic increment of the owner.
+No allocation.
+.SS cbor::lazy::take_ownership
+O(1).
+One allocation: the owner, which holds the moved container.
+.SS cbor::lazy::view
+O(1).
+No allocation: the lazy holds a copy of \f[CR]owner\f[R].
+.SS cbor::lazy::at
+A key: O(bytes up to the pair), at most O(bytes of the map).
+An index: O(bytes before the element); O(1) in a typed array.
+No allocation.
+.SS cbor::lazy::operator[]
+The cost of at.
+.SS cbor::lazy::at_path
+O(bytes before the target) for a singular path.
+No allocation, except \f[CR]nodelist\f[R], which allocates the nodes.
+.SS cbor::lazy::get
+O(1).
+O(bytes of the magnitude) for a bignum.
+No allocation.
+.SS cbor::lazy::type
+O(1).
+O(bytes of the magnitude) for a bignum.
+No allocation.
+.SS cbor::lazy::size
+O(1).
+No allocation.
+.SS cbor::lazy::empty
+O(1).
+No allocation.
+.SS cbor::lazy::elements
+O(1).
+No allocation.
+A full loop is O(bytes of the array).
+.SS cbor::lazy::entries
+O(1).
+No allocation.
+A full loop is O(bytes of the map).
+.SS cbor::lazy::clone
+O(bytes of the item).
+The tree takes one memory zone, which grows in chunks, and one
+\f[CR]std::shared_ptr\f[R].
+.SS cbor::lazy_elements
+\f[CR]begin\f[R], \f[CR]end\f[R], \f[CR]size\f[R], \f[CR]*it\f[R]: O(1).
+\f[CR]++it\f[R]: O(bytes of the element).
+No allocation.
+.SS cbor::lazy_entries
+\f[CR]end\f[R], \f[CR]size\f[R], \f[CR]*it\f[R]: O(1).
+\f[CR]begin\f[R]: O(bytes of the first key).
+\f[CR]++it\f[R]: O(bytes of the value and of the next key).
+No allocation.
+.SH EXAMPLES
+.SS cbor::lazy
+.IP
+.EX
+\f[I]// bytes: a std::string with [1, 2]\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+cbor::lazy const copy = *doc;
+use(copy.at(1)\->get<int>());   \f[I]// 2\f[R]
+cbor::lazy{}.size();           \f[I]// throws std::logic_error\f[R]
+.EE
+.SS cbor::lazy::take_ownership
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqid\(dq: 42}\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]if\f[R] (doc)
+    use(doc\->at(\(dqid\(dq)\->get<std::int64_t>());   \f[I]// 42\f[R]
+.EE
+.SS cbor::lazy::view
+.IP
+.EX
+\f[I]// owner: a std::shared_ptr<std::string const> with {\(dqid\(dq: 42}\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::view(owner);
+use(doc\->at(\(dqid\(dq)\->get<std::int64_t>());   \f[I]// 42\f[R]
+.EE
+.SS cbor::lazy::at
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqcars\(dq: [{\(dqhp\(dq: 5}, {\(dqhp\(dq: 7}], 7: \(dqseven\(dq}\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+doc\->at(\(dqcars\(dq)\->at(1)\->at(\(dqhp\(dq)\->get<int>();   \f[I]// 7\f[R]
+doc\->at(cbor::key{7})\->get<std::string_view>(); \f[I]// a ref to \(dqseven\(dq\f[R]
+doc\->at(\(dqbus\(dq).error();                         \f[I]// key_not_found\f[R]
+doc\->at(0).error();                             \f[I]// not_indexable\f[R]
+.EE
+.SS cbor::lazy::operator[]
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqcars\(dq: [5, 7]}\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+(*(*doc)[\(dqcars\(dq])[1]\->get<int>();   \f[I]// 7\f[R]
+(*doc)[\(dqbus\(dq].error();              \f[I]// key_not_found\f[R]
+.EE
+.SS cbor::lazy::at_path
+.TS
+tab(@);
+l l l l.
+T{
+Input
+T}@T{
+Path
+T}@T{
+\f[CR]T\f[R]
+T}@T{
+Result
+T}
+_
+T{
+\f[CR]{\(dquser\(dq: {\(dqid\(dq: 42, \(dqtags\(dq: [\(dqa\(dq, \(dqb\(dq]}}\f[R]
+T}@T{
+\f[CR]$.user.id\f[R]
+T}@T{
+\f[CR]std::int64_t\f[R]
+T}@T{
+\f[CR]42\f[R]
+T}
+T{
+\f[CR]{\(dquser\(dq: {\(dqid\(dq: 42, \(dqtags\(dq: [\(dqa\(dq, \(dqb\(dq]}}\f[R]
+T}@T{
+\f[CR]$.user.tags[\-1]\f[R]
+T}@T{
+\f[CR]std::string_view\f[R]
+T}@T{
+\f[CR]\(dqb\(dq\f[R]
+T}
+T{
+\f[CR]{\(dquser\(dq: {\(dqid\(dq: 42, \(dqtags\(dq: [\(dqa\(dq, \(dqb\(dq]}}\f[R]
+T}@T{
+\f[CR]$.user.tags[*]\f[R]
+T}@T{
+\f[CR]cbor::nodelist\f[R]
+T}@T{
+2 nodes
+T}
+T{
+\f[CR]{\(dquser\(dq: {\(dqid\(dq: 42, \(dqtags\(dq: [\(dqa\(dq, \(dqb\(dq]}}\f[R]
+T}@T{
+\f[CR]$.user.age\f[R]
+T}@T{
+\f[CR]int\f[R]
+T}@T{
+\f[CR]error::key_not_found\f[R]
+T}
+.TE
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dquser\(dq: {\(dqid\(dq: 42, \(dqtags\(dq: [\(dqa\(dq, \(dqb\(dq]}}\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+doc\->at_path<\(dq$.user.id\(dq, std::int64_t>();                 \f[I]// 42\f[R]
+\f[B]auto\f[R] const last = doc\->at_path<\(dq$.user.tags[\-1]\(dq, std::string_view>();
+**last;                                                     \f[I]// \(dqb\(dq\f[R]
+doc\->at_path<\(dq$.user.tags[*]\(dq, cbor::nodelist>()\->size();   \f[I]// 2\f[R]
+.EE
+.SS cbor::lazy::get
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqname\(dq: \(dqann\(dq, \(dqage\(dq: 300}\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const name = doc\->at(\(dqname\(dq)\->get<std::string_view>();
+**name;                                       \f[I]// \(dqann\(dq\f[R]
+doc\->at(\(dqage\(dq)\->get<std::int64_t>();          \f[I]// 300\f[R]
+doc\->at(\(dqage\(dq)\->get<std::uint8_t>().error();  \f[I]// number_out_of_range\f[R]
+doc\->at(\(dqname\(dq)\->get<int>().error();          \f[I]// incorrect_type\f[R]
+.EE
+.SS cbor::lazy::type
+.IP
+.EX
+\f[I]// bytes: a std::string with [1, \(dqa\(dq, 2(h\(aq05\(aq), 1(0)]\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+doc\->at(0)\->type();   \f[I]// cbor::type::unsigned_integer\f[R]
+doc\->at(1)\->type();   \f[I]// cbor::type::text_string\f[R]
+doc\->at(2)\->type();   \f[I]// cbor::type::unsigned_integer\f[R]
+doc\->at(3)\->type();   \f[I]// cbor::type::tag\f[R]
+.EE
+.SS cbor::lazy::size
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqa\(dq: 1, \(dqb\(dq: 2}\f[R]
+\f[B]auto\f[R] const map = cbor::lazy::take_ownership(std::move(bytes));
+map\->size();                     \f[I]// 2\f[R]
+map\->at(\(dqa\(dq)\->size().error();    \f[I]// not_indexable\f[R]
+.EE
+.SS cbor::lazy::empty
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqa\(dq: [], \(dqb\(dq: [1]}\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+doc\->at(\(dqa\(dq)\->empty();   \f[I]// true\f[R]
+doc\->at(\(dqb\(dq)\->empty();   \f[I]// false\f[R]
+.EE
+.SS cbor::lazy::elements
+.IP
+.EX
+\f[I]// bytes: a std::string with [1, 2, 3]\f[R]
+\f[B]auto\f[R] const array = cbor::lazy::take_ownership(std::move(bytes));
+int sum = 0;
+\f[B]for\f[R] (\f[B]auto\f[R] const element : *array\->elements())
+    \f[B]if\f[R] (element)
+        sum += element\->get<int>().value_or(0);
+use(sum);   \f[I]// 6\f[R]
+.EE
+.SS cbor::lazy::entries
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqa\(dq: 1, \(dqb\(dq: 2}\f[R]
+\f[B]auto\f[R] const map = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]for\f[R] (\f[B]auto\f[R] const pair : *map\->entries()) {
+    \f[B]auto\f[R] const key = pair\->first.get<std::string_view>();
+    use(**key, *pair\->second.get<int>());   \f[I]// \(dqa\(dq 1, then \(dqb\(dq 2\f[R]
+}
+.EE
+.SS cbor::lazy::clone
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqa\(dq: [1, \(dqx\(dq]}\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const tree = doc\->at(\(dqa\(dq)\->clone();
+(*tree)\->type;                                     \f[I]// cbor::type::array\f[R]
+(*tree)\->get<cbor::type::array>()\->size();         \f[I]// 2\f[R]
+.EE
+.SS cbor::lazy_elements
+.IP
+.EX
+\f[I]// bytes: a std::string with [{\(dqage\(dq: 31}, {\(dqage\(dq: 20}, {\(dqage\(dq: 40}]\f[R]
+\f[B]auto\f[R] const people = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const view = *people\->elements();
+view.size();   \f[I]// 3\f[R]
+std::ranges::count_if(view, [](std::expected<cbor::lazy, cbor::error> const &e) {
+    \f[B]return\f[R] e && e\->at(\(dqage\(dq)\->get<int>().value_or(0) > 30;
+});            \f[I]// 2\f[R]
+.EE
+.SS cbor::lazy_entries
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqa\(dq: 1, \(dqb\(dq: 2, \(dqc\(dq: 3}\f[R]
+\f[B]auto\f[R] const map = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const view = *map\->entries();
+view.size();                                         \f[I]// 3\f[R]
+std::ranges::distance(view | std::views::drop(1));   \f[I]// 2\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)

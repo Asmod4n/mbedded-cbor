@@ -1,0 +1,121 @@
+.TH "cbor::ref" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::ref, cbor::ref<T>, cbor::owning<T> \- results that hold the bytes
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] T>
+\f[B]class\f[R] ref {
+\f[B]public\f[R]:
+    ref(ref const &) = \f[B]default\f[R];
+    ref &\f[B]operator\f[R]=(ref const &) = \f[B]default\f[R];
+    ref(ref &&o) \f[B]noexcept\f[R](std::is_nothrow_move_constructible_v<T> &&
+                          std::is_nothrow_default_constructible_v<T>)
+        \f[B]requires\f[R] std::is_default_constructible_v<T>;
+    ref &\f[B]operator\f[R]=(ref &&o) \f[B]noexcept\f[R](std::is_nothrow_move_assignable_v<T> &&
+                                     std::is_nothrow_default_constructible_v<T>)
+        \f[B]requires\f[R] std::is_default_constructible_v<T>;
+
+    std::conditional_t<is_view<T>, T, T const &> \f[B]operator\f[R]*() const &;
+    void \f[B]operator\f[R]*() const && = \f[B]delete\f[R];
+    T const *\f[B]operator\f[R]\->() const &;
+    void \f[B]operator\f[R]\->() const && = \f[B]delete\f[R];
+
+    std::string clone() const \f[B]requires\f[R] std::same_as<T, std::string_view>;
+    std::vector<std::byte> clone() const \f[B]requires\f[R] std::same_as<T, std::span<std::byte const>>;
+    owning<T> clone() const
+        \f[B]requires\f[R](!std::same_as<T, std::string_view> && !std::same_as<T, std::span<std::byte const>>);
+
+    \f[B]friend\f[R] bool \f[B]operator\f[R]==(ref const &a, ref const &b) \f[B]requires\f[R] std::equality_comparable<T>;
+    \f[B]friend\f[R] bool \f[B]operator\f[R]==(ref const &a, T const &b) \f[B]requires\f[R] std::equality_comparable<T>;
+};
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] T>
+\f[B]class\f[R] owning {
+\f[B]public\f[R]:
+    T const &\f[B]operator\f[R]*() const &;
+    void \f[B]operator\f[R]*() const && = \f[B]delete\f[R];
+    T const *\f[B]operator\f[R]\->() const &;
+    void \f[B]operator\f[R]\->() const && = \f[B]delete\f[R];
+};
+.EE
+.SH DESCRIPTION
+\f[CR]cbor::ref<T>\f[R] and \f[CR]cbor::owning<T>\f[R] hold a result
+together with the owner of the bytes that its views point into.
+.PP
+The examples use the types in test/doc_types.hpp, namespace
+\f[CR]reference_ref\f[R].
+.SS cbor::ref<T>
+A value and a \f[CR]std::shared_ptr\f[R] to the owner of the bytes that
+it views.
+\f[CR]*r\f[R] gives a view by value and any other \f[CR]T\f[R] as
+\f[CR]T const &\f[R].
+\f[CR]r\->\f[R] reaches the members.
+\f[CR]==\f[R] compares the values.
+A copy shares the owner and copies no bytes.
+A move leaves \f[CR]T{}\f[R] and no owner behind.
+.PP
+A view in the value stays valid while one \f[CR]ref\f[R] with that owner
+lives.
+A view copied out of the \f[CR]ref\f[R] does not keep the bytes.
+\f[CR]clone\f[R] copies the bytes: into a \f[CR]std::string\f[R], a byte
+vector, or an owning.
+Only the library makes a \f[CR]ref\f[R].
+.SS cbor::owning<T>
+A value that holds its own copy of the bytes of each view in it.
+ref::clone makes it for a \f[CR]T\f[R] that is not a single text or byte
+view.
+The copy and the value share one \f[CR]std::shared_ptr\f[R], so a view
+in it stays valid after the bytes of the \f[CR]ref\f[R] end.
+.PP
+A copy of an \f[CR]owning\f[R] shares the value and copies nothing.
+It has no \f[CR]==\f[R] and no public constructor.
+The value is \f[CR]const\f[R].
+.SH ERRORS
+.SS cbor::ref<T>
+None.
+\f[CR]*\f[R] and \f[CR]\->\f[R] on a temporary \f[CR]ref\f[R] do not
+compile.
+.SS cbor::owning<T>
+None.
+\f[CR]*\f[R] and \f[CR]\->\f[R] on a temporary \f[CR]owning\f[R] do not
+compile.
+.SH NOTES
+.SS cbor::ref<T>
+O(1) for \f[CR]*\f[R], \f[CR]\->\f[R], copy and move; a copy changes an
+atomic count.
+\f[CR]clone\f[R] is O(n) and allocates.
+.SS cbor::owning<T>
+O(1) for \f[CR]*\f[R], \f[CR]\->\f[R] and copy.
+\f[CR]ref::clone\f[R] is O(n): one \f[CR]make_shared\f[R], and the
+buffer of the copied views.
+.SH EXAMPLES
+.SS cbor::ref<T>
+.IP
+.EX
+\f[I]// bytes: a std::string with \(dqabc\(dq\f[R]
+\f[B]auto\f[R] const r = cbor::structs<std::string_view>::decode(std::move(bytes));
+\f[B]if\f[R] (r) {
+    std::string_view const v = **r;   \f[I]// \(dqabc\(dq, valid while *r lives\f[R]
+    *r == \(dqabc\(dq;                       \f[I]// true\f[R]
+}
+.EE
+.SS cbor::owning<T>
+.IP
+.EX
+\f[B]struct\f[R] person {
+    std::string_view name;
+    int age;
+};
+\f[I]// p: the cbor::ref<person> of {\(dqname\(dq: \(dqann\(dq, \(dqage\(dq: 30}\f[R]
+\f[B]auto\f[R] const own = p.clone();
+use(own\->name);   \f[I]// \(dqann\(dq, valid after p ends\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)
