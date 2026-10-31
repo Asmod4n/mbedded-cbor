@@ -3,6 +3,8 @@
 #include "kinds/kinds.hpp"
 
 #include <algorithm>
+#include <optional>
+#include <set>
 #include <cctype>
 #include <ranges>
 
@@ -28,9 +30,24 @@ inline std::string shown(value const &v)
     return text;
 }
 
+struct completion {
+    bool found = false;
+    std::optional<value> object;
+    std::string partial;
+};
+
 struct parser {
     std::string_view rest;
     session &s;
+    completion *point = nullptr;
+
+    result completion_found(std::optional<value> object, std::string partial)
+    {
+        point->found = true;
+        point->object = std::move(object);
+        point->partial = std::move(partial);
+        return std::unexpected("completion");
+    }
 
     static bool name_char(char const c)
     {
@@ -318,6 +335,8 @@ struct parser {
             return value_of(std::move(*t));
         }
         spaces_skip();
+        if (point && rest.empty())
+            return completion_found(std::nullopt, "");
         if (!rest.empty() && (std::isdigit(static_cast<unsigned char>(rest.front())) || rest.front() == '-'))
             return number_read();
         if (!identifier_next()) [[unlikely]]
@@ -328,6 +347,8 @@ struct parser {
             return std::unexpected(q.error());
         std::string const &name = q->name;
         auto *const targs = &q->template_arguments;
+        if (point && rest.empty() && targs->empty())
+            return completion_found(std::nullopt, name);
         if (name == "true" || name == "false")
             return value_of(name == "true");
         if (name == "nullptr")
@@ -355,9 +376,14 @@ struct parser {
 
     result member_read(value v, bool const constant)
     {
+        spaces_skip();
+        if (point && rest.empty())
+            return completion_found(std::move(v), "");
         if (!identifier_next()) [[unlikely]]
             return std::unexpected("a member needs a name");
         std::string const name = identifier_read();
+        if (point && rest.empty())
+            return completion_found(std::move(v), name);
         auto targs = template_arguments_read();
         if (!targs) [[unlikely]]
             return std::unexpected(targs.error());
@@ -473,4 +499,66 @@ inline std::string line_run(session &s, std::string_view const line)
     return shown(*v);
 }
 
+inline std::vector<std::string> member_names(session const &s, value const &object)
+{
+    if (object.expected)
+        return {"error(", "has_value(", "value(", "value_or("};
+    std::vector<std::string> out;
+    std::string const prefix = std::string(object.kind) + ".";
+    for (std::span<entry const> const table : s.tables)
+        for (entry const &e : table) {
+            if (!e.name.starts_with(prefix))
+                continue;
+            std::string_view member = e.name.substr(prefix.size());
+            if (member.starts_with("operator"))
+                continue;
+            out.emplace_back(member.ends_with("()") ? std::string(member.substr(0, member.size() - 1)) : std::string(member));
+        }
+    return out;
 }
+
+inline std::vector<std::string> free_names(session const &s)
+{
+    std::vector<std::string> out;
+    for (std::span<entry const> const table : s.tables)
+        for (entry const &e : table) {
+            std::string_view const name = e.name;
+            if (name.find('.') != std::string_view::npos)
+                continue;
+            if (name.ends_with("()") || name.ends_with("{}"))
+                out.emplace_back(std::string(name.substr(0, name.size() - 1)));
+            else
+                out.emplace_back(name);
+        }
+    for (variable const &v : s.variables)
+        if (!v.name.empty())
+            out.push_back(v.name);
+    for (std::string_view const n : error_names)
+        if (!n.empty())
+            out.push_back("cbor::error::" + std::string(n));
+    for (std::string_view const n : type_names)
+        out.push_back("cbor::type::" + std::string(n));
+    for (std::string_view const n : {"true", "false", "nullptr"})
+        out.emplace_back(n);
+    return out;
+}
+
+inline std::vector<std::string> completions(session &s, std::string_view const line)
+{
+    completion point;
+    parser p{line, s, &point};
+    (void)p.statement();
+    if (!point.found)
+        return {};
+    std::string_view const head = line.substr(0, line.size() - point.partial.size());
+    std::vector<std::string> const names = point.object ? member_names(s, *point.object) : free_names(s);
+    std::vector<std::string> out;
+    std::set<std::string> seen;
+    for (std::string const &n : names)
+        if (n.starts_with(point.partial) && seen.insert(n).second)
+            out.push_back(std::string(head) + n);
+    return out;
+}
+
+}
+
