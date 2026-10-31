@@ -1,3 +1,8 @@
+// Reads values from CBOR with a JSONPath query. Parses a path at
+// compile time or with jsonpath::compile at run time. A key or a
+// literal in a path can be in diagnostic notation.
+// https://www.rfc-editor.org/rfc/rfc9535
+// https://datatracker.ietf.org/doc/html/draft-ietf-cbor-edn-literals-28
 #pragma once
 
 #include <algorithm>

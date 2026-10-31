@@ -1,3 +1,6 @@
+// Gives cbor::ref, a value with views into encoded bytes, together
+// with a shared owner of those bytes. Gives cbor::owning, a value that
+// holds its own memory. ref::clone copies the views into new memory.
 #pragma once
 
 #include <concepts>

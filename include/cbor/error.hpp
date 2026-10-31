@@ -1,3 +1,6 @@
+// Gives cbor::error, the error codes of the library, and their
+// std::error_category. Maps four codes to std::errc conditions.
+// Stops the build with g++ older than 15.
 #pragma once
 
 #if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 15

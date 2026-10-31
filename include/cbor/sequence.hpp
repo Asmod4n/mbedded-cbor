@@ -1,3 +1,7 @@
+// Gives a range over the data items of a CBOR Sequence in a shared
+// buffer. Each element is the bytes of one item or an error. The range
+// ends after the first error.
+// https://www.rfc-editor.org/rfc/rfc8742#section-2
 #pragma once
 
 #include <concepts>
