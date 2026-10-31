@@ -1,0 +1,25 @@
+name: Request private fuzzing
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Request a private run
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_FUZZ_TOKEN }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo 'The private fuzzing credential is not configured.' >&2
+            exit 1
+          fi
+          gh api --method POST repos/Asmod4n/Claude-state/actions/workflows/cbor-fuzz.yml/dispatches \
+            -f ref=main -f "inputs[source_sha]=$SOURCE_SHA"
