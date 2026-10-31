@@ -1,3 +1,7 @@
+// Writes CBOR into a span, a byte container or a writer.
+// cbor::encoder writes one head or one value for each call.
+// cbor::encode and cbor::encode_iov write a tree of cbor::item.
+// https://www.rfc-editor.org/rfc/rfc8949#section-3
 #pragma once
 
 #include <algorithm>

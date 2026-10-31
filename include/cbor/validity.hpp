@@ -1,3 +1,9 @@
+// Gives checks for safety: limits, nesting depth, overflow of sums and
+// products, heads, tag content and typed arrays. Throws
+// std::logic_error on a wrong use, or ends the process without
+// exceptions.
+// https://www.rfc-editor.org/rfc/rfc8949
+// https://www.rfc-editor.org/rfc/rfc8746#section-2
 #pragma once
 
 #include <algorithm>

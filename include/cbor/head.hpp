@@ -1,3 +1,8 @@
+// Reads and writes the head of a CBOR data item: the initial byte
+// and the argument. Converts floats of half, single and double
+// precision. Reads one element of a typed array.
+// https://www.rfc-editor.org/rfc/rfc8949#section-3
+// https://www.rfc-editor.org/rfc/rfc8746#section-2
 #pragma once
 
 #include <algorithm>

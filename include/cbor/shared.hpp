@@ -1,3 +1,7 @@
+// Checks the index of a sharedref (tag 29) against the count of values
+// marked as shareable (tag 28). Gives a decoder that keeps a record of
+// each mark.
+// http://cbor.schmorp.de/value-sharing
 #pragma once
 
 #include <cstddef>

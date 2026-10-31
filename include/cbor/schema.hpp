@@ -1,3 +1,8 @@
+// Writes a described struct as Packed CBOR and reads it back. Reads a
+// member of fixed size at an offset that the compiler computes. decode
+// reads the whole struct into a cbor::ref.
+// https://datatracker.ietf.org/doc/html/draft-ietf-cbor-packed-19
+// https://www.rfc-editor.org/rfc/rfc8746
 #pragma once
 
 #include <algorithm>

@@ -1,3 +1,7 @@
+// Gives the major types, the simple values and the item types of
+// CBOR. Gives the values of the additional information and the tag
+// numbers that the library reads.
+// https://www.rfc-editor.org/rfc/rfc8949#section-3
 #pragma once
 
 #include <cstddef>
