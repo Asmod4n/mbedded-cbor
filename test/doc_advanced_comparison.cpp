@@ -70,8 +70,7 @@ struct series {
 };
 } // namespace doc_advanced_comparison
 
-CBOR_DEFINE_TYPE(doc_advanced_comparison::series, cbor::tag{1900},
-                 CBOR_MEMBER(doc_advanced_comparison::series, values));
+CBOR_DEFINE_TYPE_MEMBERS(doc_advanced_comparison::series, cbor::tag{1900}, values);
 
 namespace doc_advanced_comparison
 {

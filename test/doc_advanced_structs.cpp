@@ -94,9 +94,7 @@ concept decodes_beside = requires(std::shared_ptr<void const> const &o, Part p) 
 CBOR_DEFINE_TYPE(doc_advanced_structs::account, cbor::tag{160061}, CBOR_MEMBER(doc_advanced_structs::account, user),
                  cbor::member{1, &doc_advanced_structs::account::level});
 
-CBOR_DEFINE_TYPE(doc_advanced_structs::tagged_person, cbor::tag{1800},
-                 CBOR_MEMBER(doc_advanced_structs::tagged_person, name),
-                 CBOR_MEMBER(doc_advanced_structs::tagged_person, age));
+CBOR_DEFINE_TYPE_MEMBERS(doc_advanced_structs::tagged_person, cbor::tag{1800}, name, age);
 
 CBOR_DEFINE_TYPE(doc_advanced_structs::senml, cbor::untagged, cbor::member{0, &doc_advanced_structs::senml::n},
                  cbor::member{2, &doc_advanced_structs::senml::v});
