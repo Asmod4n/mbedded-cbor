@@ -2,6 +2,7 @@
 // cbor::encoder writes one head or one value for each call.
 // cbor::encode and cbor::encode_iov write a tree of cbor::item.
 // https://www.rfc-editor.org/rfc/rfc8949#section-3
+// https://www.rfc-editor.org/rfc/rfc8746#section-2
 #pragma once
 
 #include <algorithm>

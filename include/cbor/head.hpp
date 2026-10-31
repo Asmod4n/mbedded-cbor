@@ -1,6 +1,7 @@
 // Reads and writes the head of a CBOR data item: the initial byte
 // and the argument. Converts floats of half, single and double
-// precision. Reads one element of a typed array.
+// precision, reads the magnitude of a bignum and one element of a
+// typed array, and skips the self-described CBOR tag.
 // https://www.rfc-editor.org/rfc/rfc8949#section-3
 // https://www.rfc-editor.org/rfc/rfc8746#section-2
 #pragma once

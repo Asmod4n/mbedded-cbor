@@ -1,5 +1,5 @@
 // Gives the base16 and base64 alphabets and their group sizes in bits
-// to the diagnostic notation parser.
+// to cbor::extended_diagnostic_notation.
 // https://www.rfc-editor.org/rfc/rfc4648
 #pragma once
 
