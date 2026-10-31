@@ -16,7 +16,7 @@ podman run --rm --network none -e VERSION="$version" -e TODAY="$today" -v "$tree
     file=$(basename $page)
     committed=/src/doc/man/man3/$file
     if [ -f $committed ] && [ "$(body $committed)" = "$(body $page)" ]; then
-      cp $committed /out/$file
+      [ $committed -ef /out/$file ] || cp $committed /out/$file
     else
       cp $page /out/$file
     fi
