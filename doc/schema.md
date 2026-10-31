@@ -32,8 +32,7 @@ struct sensor {
     std::vector<double> readings;
 };
 
-CBOR_DEFINE_TYPE(sensor, cbor::tag{1700},
-                 CBOR_MEMBER(sensor, name), CBOR_MEMBER(sensor, id), CBOR_MEMBER(sensor, readings));
+CBOR_DEFINE_TYPE_MEMBERS(sensor, cbor::tag{1700}, name, id, readings);
 
 auto bytes = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
 if (!bytes)
@@ -59,7 +58,7 @@ struct gauge {
     std::uint16_t level;
 };
 
-CBOR_DEFINE_TYPE(gauge, cbor::tag{1710}, CBOR_MEMBER(gauge, level));
+CBOR_DEFINE_TYPE_MEMBERS(gauge, cbor::tag{1710}, level);
 
 cbor::schema<gauge>::encode(gauge{3});
 ```
@@ -73,6 +72,8 @@ A class with no default constructor is read through a constructor that
 takes the described members in the order of the description.
 
 `CBOR_MEMBER(type, member)` takes the name of the member as the key.
+`CBOR_DEFINE_TYPE_MEMBERS(type, tag, names...)` writes the description
+from the names, and each name is its key.
 `cbor::member{"x", &type::member}` takes the text `x`. A key in `schema`
 is a text.
 
@@ -145,8 +146,8 @@ struct track {
     std::vector<point> points;
 };
 
-CBOR_DEFINE_TYPE(point, cbor::tag{1703}, CBOR_MEMBER(point, x), CBOR_MEMBER(point, y));
-CBOR_DEFINE_TYPE(track, cbor::tag{1704}, CBOR_MEMBER(track, points));
+CBOR_DEFINE_TYPE_MEMBERS(point, cbor::tag{1703}, x, y);
+CBOR_DEFINE_TYPE_MEMBERS(track, cbor::tag{1704}, points);
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
 auto const lane = cbor::schema<track>::path(std::move(*message));

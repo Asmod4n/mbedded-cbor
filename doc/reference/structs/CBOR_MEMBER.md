@@ -43,4 +43,4 @@ cbor::structs<account>::encode(account{"ann", 2});   // {"user": "ann", "level":
 
 ## See also
 
-[member](member.md) · [describe_members](describe_members.md)
+[member](member.md) · [describe_members](describe_members.md) · [CBOR_DEFINE_TYPE_MEMBERS](CBOR_DEFINE_TYPE_MEMBERS.md)

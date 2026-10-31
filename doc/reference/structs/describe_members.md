@@ -75,8 +75,9 @@ cbor::structs<trailer>::encode(trailer{7});   // 160061({"checksum": 7})
 ```
 
 The macro stands at global scope. A type whose name holds a comma goes
-through an alias.
+through an alias. Where each key is the name of its member,
+[CBOR_DEFINE_TYPE_MEMBERS](CBOR_DEFINE_TYPE_MEMBERS.md) takes the names only.
 
 ## See also
 
-[member](member.md) · [CBOR_MEMBER](CBOR_MEMBER.md) · [../../advanced/structs.md](../../advanced/structs.md), section 4
+[member](member.md) · [CBOR_MEMBER](CBOR_MEMBER.md) · [CBOR_DEFINE_TYPE_MEMBERS](CBOR_DEFINE_TYPE_MEMBERS.md) · [../../advanced/structs.md](../../advanced/structs.md), section 4
