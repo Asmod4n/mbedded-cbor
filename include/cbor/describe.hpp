@@ -1,7 +1,7 @@
 // Declares cbor::describe_members, which a specialization fills with
 // the tag of a type and its members, each with a cbor::map_key.
-// CBOR_DEFINE_TYPE writes this specialization, and CBOR_MEMBER writes
-// one member.
+// CBOR_DEFINE_TYPE writes this specialization. CBOR_MEMBER writes one
+// member.
 #pragma once
 
 #include <concepts>
