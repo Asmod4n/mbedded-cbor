@@ -1,7 +1,7 @@
 '\" t
 .TH "cbor::structs" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
-cbor::structs, cbor::structs<T>::encode, cbor::structs<T>::decode, cbor::describe_members, cbor::member, CBOR_MEMBER \- any CBOR into a C++ struct and back
+cbor::structs, cbor::structs<T>::encode, cbor::structs<T>::decode, cbor::describe_members, cbor::member, CBOR_MEMBER, CBOR_DEFINE_TYPE_MEMBERS \- any CBOR into a C++ struct and back
 .SH SYNOPSIS
 .IP
 .EX
@@ -52,6 +52,10 @@ static std::expected<cbor::ref<T>, cbor::error> decode(std::shared_ptr<void cons
 .IP
 .EX
 #define CBOR_MEMBER(T, m) cbor::member{cbor::map_key(std::string_view{#m}), &T::m}
+.EE
+.IP
+.EX
+#define CBOR_DEFINE_TYPE_MEMBERS(T, TAG, ...) CBOR_DEFINE_TYPE(T, TAG, CBOR_MEMBERS(T, __VA_ARGS__))
 .EE
 .IP
 .EX
@@ -106,6 +110,17 @@ The text is the name as it is written.
 Makes the member entry of \f[CR]T::m\f[R] with the text of the name
 \f[CR]m\f[R] as its key.
 A type whose name holds a comma needs a type alias.
+.SS CBOR_DEFINE_TYPE_MEMBERS
+Writes the describe_members specialization of \f[CR]T\f[R] with the tag
+\f[CR]TAG\f[R] and one CBOR_MEMBER entry for each name in the list.
+The key of each member is its name.
+The list takes up to 343 names.
+The macro stands outside every namespace, after \f[CR]T\f[R].
+A type whose name holds a comma needs a type alias.
+.PP
+The macro expands each name before it makes the key.
+A name that is also an object\-like macro gives the key of what the
+macro expands to.
 .SS Member types
 \f[CR]T\f[R], and each member of a struct in \f[CR]T\f[R], is one of the
 types in this table.
@@ -264,6 +279,13 @@ A pointer to a static member or to a member function does not compile.
 A \f[CR]bool\f[R] or a character type as the key does not compile.
 .SS CBOR_MEMBER
 As member.
+.SS CBOR_DEFINE_TYPE_MEMBERS
+.IP \(bu 2
+A name that is not a member of \f[CR]T\f[R] does not compile.
+.IP \(bu 2
+A list of more than 343 names does not compile.
+.IP \(bu 2
+The errors of describe_members apply.
 .SS Member types
 \f[CR]decode\f[R] gives \f[CR]incorrect_type\f[R] for another item: a
 \f[CR]std::vector<int>\f[R] takes a typed array, not an array.
@@ -286,6 +308,8 @@ The checks run where \f[CR]encode\f[R] or \f[CR]decode\f[R] compiles.
 .SS cbor::member
 None at run time.
 .SS CBOR_MEMBER
+None at run time.
+.SS CBOR_DEFINE_TYPE_MEMBERS
 None at run time.
 .SS Member types
 As encode and decode.
@@ -332,6 +356,8 @@ cbor::structs<trailer>::encode(trailer{7});   \f[I]// 160061({\(dqchecksum\(dq: 
 .PP
 The macro stands at global scope.
 A type whose name holds a comma goes through an alias.
+Where each key is the name of its member, CBOR_DEFINE_TYPE_MEMBERS takes
+the names only.
 .SS cbor::member
 .IP
 .EX
@@ -357,6 +383,18 @@ cbor::structs<senml>::encode(senml{\(dqt\(dq, 1.5});   \f[I]// {0: \(dqt\(dq, 2:
     };
 };
 cbor::structs<account>::encode(account{\(dqann\(dq, 2});   \f[I]// {\(dquser\(dq: \(dqann\(dq, \(dqlevel\(dq: 2}\f[R]
+.EE
+.SS CBOR_DEFINE_TYPE_MEMBERS
+.IP
+.EX
+\f[B]struct\f[R] device {
+    std::string name;
+    std::uint8_t port;
+};
+
+CBOR_DEFINE_TYPE_MEMBERS(device, cbor::untagged, name, port);
+
+cbor::structs<device>::encode(device{\(dqlamp\(dq, 3});   \f[I]// {\(dqname\(dq: \(dqlamp\(dq, \(dqport\(dq: 3}\f[R]
 .EE
 .SS Member types
 .IP
