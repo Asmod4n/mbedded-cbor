@@ -14,8 +14,8 @@ struct track {
     std::vector<point> points;
 };
 
-CBOR_DEFINE_TYPE(point, cbor::tag{1703}, CBOR_MEMBER(point, x), CBOR_MEMBER(point, y));
-CBOR_DEFINE_TYPE(track, cbor::tag{1704}, CBOR_MEMBER(track, points));
+CBOR_DEFINE_TYPE_MEMBERS(point, cbor::tag{1703}, x, y);
+CBOR_DEFINE_TYPE_MEMBERS(track, cbor::tag{1704}, points);
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
 auto const lane = cbor::schema<track>::path(std::move(*message));
@@ -52,7 +52,8 @@ and every other CBOR decoder can read it.
 - **One description, every compiler.** `cbor::schema` reads only
   `cbor::describe_members` and builds in C++23. With C++26 reflection it
   also checks each description against the members of the struct.
-  `CBOR_DEFINE_TYPE` writes a description in one line.
+  `CBOR_DEFINE_TYPE_MEMBERS` writes a description from the names of the
+  members in one line.
 - **Trusted peers.** The `unverified_` forms of `cbor::schema` skip the
   checks of the data and keep every check of a bound.
 - **Description apart.** `cbor::schema` can store the description of a

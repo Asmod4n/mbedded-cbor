@@ -159,12 +159,15 @@ such a type refuses a tag in front of the map with
 | Entry | Key |
 |---|---|
 | `CBOR_MEMBER(T, m)` | the text of the name `m` |
+| `m` in `CBOR_DEFINE_TYPE_MEMBERS(T, tag, m...)` | the text of the name `m` |
 | `cbor::member{"x", &T::m}` | the text `x` |
 | `cbor::member{4, &T::m}`, `cbor::member{-1, &T::m}` | the integer |
 
 - The description stands outside every namespace, after the type and
   after the description of each struct that the type holds.
-- `CBOR_DEFINE_TYPE` and `CBOR_MEMBER` take a type alias for a type
+- `CBOR_DEFINE_TYPE_MEMBERS(T, tag, m...)` takes up to 343 names.
+- `CBOR_DEFINE_TYPE`, `CBOR_DEFINE_TYPE_MEMBERS` and `CBOR_MEMBER` take a
+  type alias for a type
   whose name holds a comma, because the preprocessor splits the
   arguments of a macro at each comma.
 - An entry names a public data member of the type or of a public base.
@@ -228,7 +231,7 @@ compile in `structs`.
 ```cpp
 struct person { std::string name; std::int64_t age; };
 
-CBOR_DEFINE_TYPE(person, cbor::tag{1800}, CBOR_MEMBER(person, name), CBOR_MEMBER(person, age));
+CBOR_DEFINE_TYPE_MEMBERS(person, cbor::tag{1800}, name, age);
 
 cbor::structs<person>::encode({"ann", 30});
 // 1800({"age": 30, "name": "ann"})

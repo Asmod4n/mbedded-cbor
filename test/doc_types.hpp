@@ -86,6 +86,11 @@ struct trailer {
     std::uint8_t checksum;
 };
 
+struct device {
+    std::string name;
+    std::uint8_t port;
+};
+
 } // namespace reference_structs
 
 CBOR_DEFINE_TYPE(reference_structs::header, cbor::tag{160060},
@@ -101,3 +106,5 @@ CBOR_DEFINE_TYPE(reference_structs::account, cbor::untagged,
 
 CBOR_DEFINE_TYPE(reference_structs::trailer, cbor::tag{160061},
                  cbor::member{"checksum", &reference_structs::trailer::checksum});
+
+CBOR_DEFINE_TYPE_MEMBERS(reference_structs::device, cbor::untagged, name, port);

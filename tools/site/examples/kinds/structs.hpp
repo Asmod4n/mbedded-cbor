@@ -103,6 +103,15 @@ struct kind<reference_structs::account> {
 };
 
 template <>
+struct kind<reference_structs::device> {
+    static constexpr std::string_view name = "device";
+    static std::string text(reference_structs::device const &v)
+    {
+        return std::format("device{{{:?}, {}}}", v.name, number_text(static_cast<unsigned>(v.port)));
+    }
+};
+
+template <>
 struct kind<reference_structs::reading> {
     static constexpr std::string_view name = "reading";
     static std::string text(reference_structs::reading const &v)
