@@ -131,7 +131,7 @@ std::expected<void, error> tree_decoder<Checked>::scalar_decode(item &node, head
         std::span<char> const own = decoded.bump_allocate(string->size(), d.encoded.size());
         std::ranges::copy(*string, own.begin());
         if (h.major == major_type::text_string)
-            node.via.str = std::string_view(own.data(), own.size());
+            node.via.str = std::string_view(own);
         else
             node.via.bin = std::as_bytes(own);
         return {};
