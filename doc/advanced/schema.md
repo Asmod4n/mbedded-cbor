@@ -20,10 +20,8 @@ struct car {
     std::optional<std::string> note;
 };
 
-CBOR_DEFINE_TYPE(tire, cbor::tag{1700}, CBOR_MEMBER(tire, diameter), CBOR_MEMBER(tire, pressure));
-CBOR_DEFINE_TYPE(car, cbor::tag{1701},
-                 CBOR_MEMBER(car, make), CBOR_MEMBER(car, seats), CBOR_MEMBER(car, tires),
-                 CBOR_MEMBER(car, track), CBOR_MEMBER(car, note));
+CBOR_DEFINE_TYPE_MEMBERS(tire, cbor::tag{1700}, diameter, pressure);
+CBOR_DEFINE_TYPE_MEMBERS(car, cbor::tag{1701}, make, seats, tires, track, note);
 
 car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}, std::nullopt};
 auto const owner = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));
@@ -84,6 +82,7 @@ The description gives the key of each member:
 | Entry | Key |
 |---|---|
 | `CBOR_MEMBER(T, m)` | the name `m` |
+| `m` in `CBOR_DEFINE_TYPE_MEMBERS(T, tag, m...)` | the name `m` |
 | `cbor::member{"x", &T::m}` | the text `x` |
 
 ```cpp
@@ -169,7 +168,7 @@ struct frame {
     std::vector<std::byte> payload;
 };
 
-CBOR_DEFINE_TYPE(frame, cbor::tag{1711}, CBOR_MEMBER(frame, code), CBOR_MEMBER(frame, payload));
+CBOR_DEFINE_TYPE_MEMBERS(frame, cbor::tag{1711}, code, payload);
 
 auto const packet = cbor::schema<frame>::encode(frame{{1, 2, 3, 4}, {std::byte{9}, std::byte{8}}});
 cbor::schema<frame>::at_path<"$.code[2]">(*packet);      // 3

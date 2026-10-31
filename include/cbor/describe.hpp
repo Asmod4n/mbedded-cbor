@@ -1,7 +1,8 @@
 // Declares cbor::describe_members, which a specialization fills with
 // the tag of a type and its members, each with a cbor::map_key.
 // CBOR_DEFINE_TYPE writes this specialization. CBOR_MEMBER writes one
-// member.
+// member. CBOR_DEFINE_TYPE_MEMBERS writes it from the names of the
+// members, and each key is the name of its member.
 #pragma once
 
 #include <concepts>
@@ -93,3 +94,17 @@ class describe
         static constexpr std::optional<cbor::tag> tag = TAG;                                                           \
         static constexpr std::tuple members{__VA_ARGS__};                                                              \
     }
+
+#define CBOR_PARENS ()
+
+#define CBOR_EXPAND(...) CBOR_EXPAND4(CBOR_EXPAND4(CBOR_EXPAND4(CBOR_EXPAND4(__VA_ARGS__))))
+#define CBOR_EXPAND4(...) CBOR_EXPAND3(CBOR_EXPAND3(CBOR_EXPAND3(CBOR_EXPAND3(__VA_ARGS__))))
+#define CBOR_EXPAND3(...) CBOR_EXPAND2(CBOR_EXPAND2(CBOR_EXPAND2(CBOR_EXPAND2(__VA_ARGS__))))
+#define CBOR_EXPAND2(...) CBOR_EXPAND1(CBOR_EXPAND1(CBOR_EXPAND1(CBOR_EXPAND1(__VA_ARGS__))))
+#define CBOR_EXPAND1(...) __VA_ARGS__
+
+#define CBOR_MEMBERS(T, ...) __VA_OPT__(CBOR_EXPAND(CBOR_MEMBERS_HELPER(T, __VA_ARGS__)))
+#define CBOR_MEMBERS_HELPER(T, m, ...) CBOR_MEMBER(T, m) __VA_OPT__(, CBOR_MEMBERS_AGAIN CBOR_PARENS(T, __VA_ARGS__))
+#define CBOR_MEMBERS_AGAIN() CBOR_MEMBERS_HELPER
+
+#define CBOR_DEFINE_TYPE_MEMBERS(T, TAG, ...) CBOR_DEFINE_TYPE(T, TAG, CBOR_MEMBERS(T, __VA_ARGS__))

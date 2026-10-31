@@ -66,8 +66,8 @@ struct track {
 
 } // namespace
 
-CBOR_DEFINE_TYPE(point, cbor::tag{1703}, CBOR_MEMBER(point, x), CBOR_MEMBER(point, y));
-CBOR_DEFINE_TYPE(track, cbor::tag{1704}, CBOR_MEMBER(track, points));
+CBOR_DEFINE_TYPE_MEMBERS(point, cbor::tag{1703}, x, y);
+CBOR_DEFINE_TYPE_MEMBERS(track, cbor::tag{1704}, points);
 
 // "Write structs, read one field" reads one leaf at its offset and a page of the fixed-size vector.
 TEST_CASE("doc readme: write structs, read one field")

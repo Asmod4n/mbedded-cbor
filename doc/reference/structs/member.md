@@ -51,4 +51,4 @@ cbor::structs<senml>::encode(senml{"t", 1.5});   // {0: "t", 2: 1.5}
 
 ## See also
 
-[CBOR_MEMBER](CBOR_MEMBER.md) · [describe_members](describe_members.md) · [../../advanced/structs.md](../../advanced/structs.md), section 4
+[CBOR_MEMBER](CBOR_MEMBER.md) · [CBOR_DEFINE_TYPE_MEMBERS](CBOR_DEFINE_TYPE_MEMBERS.md) · [describe_members](describe_members.md) · [../../advanced/structs.md](../../advanced/structs.md), section 4

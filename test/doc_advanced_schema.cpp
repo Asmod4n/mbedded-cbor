@@ -66,18 +66,13 @@ struct frame {
 
 } // namespace doc_advanced_schema
 
-CBOR_DEFINE_TYPE(doc_advanced_schema::tire, cbor::tag{1700}, CBOR_MEMBER(doc_advanced_schema::tire, diameter),
-                 CBOR_MEMBER(doc_advanced_schema::tire, pressure));
-CBOR_DEFINE_TYPE(doc_advanced_schema::car, cbor::tag{1701}, CBOR_MEMBER(doc_advanced_schema::car, make),
-                 CBOR_MEMBER(doc_advanced_schema::car, seats), CBOR_MEMBER(doc_advanced_schema::car, tires),
-                 CBOR_MEMBER(doc_advanced_schema::car, track), CBOR_MEMBER(doc_advanced_schema::car, note));
-CBOR_DEFINE_TYPE(doc_advanced_schema::twin, cbor::tag{1700}, CBOR_MEMBER(doc_advanced_schema::twin, a));
+CBOR_DEFINE_TYPE_MEMBERS(doc_advanced_schema::tire, cbor::tag{1700}, diameter, pressure);
+CBOR_DEFINE_TYPE_MEMBERS(doc_advanced_schema::car, cbor::tag{1701}, make, seats, tires, track, note);
+CBOR_DEFINE_TYPE_MEMBERS(doc_advanced_schema::twin, cbor::tag{1700}, a);
 CBOR_DEFINE_TYPE(doc_advanced_schema::chosen, cbor::tag{1710}, cbor::member{"id", &doc_advanced_schema::chosen::number},
                  CBOR_MEMBER(doc_advanced_schema::chosen, kept));
-CBOR_DEFINE_TYPE(doc_advanced_schema::pair_of_tags, cbor::tag{1702}, CBOR_MEMBER(doc_advanced_schema::pair_of_tags, t),
-                 CBOR_MEMBER(doc_advanced_schema::pair_of_tags, w));
-CBOR_DEFINE_TYPE(doc_advanced_schema::frame, cbor::tag{1711}, CBOR_MEMBER(doc_advanced_schema::frame, code),
-                 CBOR_MEMBER(doc_advanced_schema::frame, payload));
+CBOR_DEFINE_TYPE_MEMBERS(doc_advanced_schema::pair_of_tags, cbor::tag{1702}, t, w);
+CBOR_DEFINE_TYPE_MEMBERS(doc_advanced_schema::frame, cbor::tag{1711}, code, payload);
 
 namespace doc_advanced_schema
 {
