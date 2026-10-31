@@ -118,6 +118,10 @@ cmake -S mbedded-cbor -B build -DBUILD_TESTING=OFF
 cmake --install build --prefix /usr/local
 ```
 
+On Linux and macOS the install also writes the reference as man pages in
+section 3: `man mbedded-cbor` gives the overview, and `man cbor::lazy`
+gives one class.
+
 ```cmake
 find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
@@ -174,6 +178,7 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 - [doc/structs.md](doc/structs.md): any CBOR into a struct.
 - [doc/comparison.md](doc/comparison.md): other libraries, task by task.
 - [doc/reference/](doc/reference/index.md): every function and type, one page each.
+- [doc/man/man3/](doc/man/man3): the same reference as man pages, one page per class.
 
 ## Testing
 

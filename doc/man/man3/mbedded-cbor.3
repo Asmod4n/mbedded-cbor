@@ -1,0 +1,66 @@
+.TH "mbedded\-cbor" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+mbedded\-cbor \- a header\-only C++ library for CBOR (RFC 8949)
+.SH DESCRIPTION
+mbedded\-cbor is a header\-only C++ library for CBOR (RFC 8949).
+Its goal: a read touches only the bytes that it needs, and copies none
+of them.
+A read goes to one value and skips every other item by its length.
+A text comes back as a view into the message.
+A struct that you describe is written as Packed CBOR, so a read of a
+field is one jump to an offset that the compiler knows.
+Every message that the library writes is standard CBOR, and every other
+CBOR decoder reads it.
+Bad input comes back as a \f[CR]cbor::error\f[R] value, and no read goes
+outside the message.
+.SS lazy
+Use it to walk a message whose shape you learn while you read it: a map,
+then a key, then an element.
+Cost: a step by key or index reads the heads up to the child, O(bytes
+before the child).
+No allocation.
+A text is a view into the message.
+.SS path
+Use it to read one value when you know its path, for example
+\f[CR]$.user.id\f[R].
+The path is checked at compile time.
+Cost: O(bytes up to the value).
+No allocation for a number, a \f[CR]bool\f[R] or a view.
+A path that selects many nodes allocates its list.
+.SS item
+Use it when you need the whole message as a tree that lives on after the
+bytes are gone, or to write CBOR item by item with the encoder.
+Cost: \f[CR]decode\f[R] is O(bytes) and copies every string into one
+memory zone.
+The encoder is O(1) per head and allocates nothing over a
+\f[CR]std::span<char>\f[R].
+.SS structs
+Use it to read CBOR that any program wrote into the members of a struct,
+and to write it back.
+Cost: O(bytes) for a read and a write.
+The result allocates its strings and containers.
+.SS schema
+Use it for messages that your own programs write and read.
+Cost: \f[CR]path\f[R] opens a message in O(1) of its size, and a read of
+a field of fixed size is one jump that checks only the bytes it reads.
+\f[CR]at_path\f[R] with no accessor allocates nothing.
+\f[CR]encode\f[R] is O(bytes), and a list of fixed\-size structs is one
+copy.
+.SS ref
+Use it to keep a result that points into the message valid: it holds the
+owner of the bytes.
+Cost: O(1) for each access; a copy changes one atomic count.
+\f[CR]clone\f[R] copies, O(bytes).
+.SS tools
+Use \f[CR]item_size\f[R] to find where an item ends, \f[CR]sequence\f[R]
+and \f[CR]sequence_reader\f[R] to read many items one after the other,
+and \f[CR]diagnostic_notation\f[R] to print an item as text.
+Cost: \f[CR]item_size\f[R] is O(items) with no allocation.
+\f[CR]sequence_reader\f[R] keeps only the bytes not yet read.
+\f[CR]diagnostic_notation\f[R] is O(bytes) and allocates its text.
+.SS errors
+Use it to read why a call failed: each failure is one
+\f[CR]cbor::error\f[R], and it converts to \f[CR]std::error_code\f[R].
+Cost: none; an error is a small value.
+.SH SEE ALSO
+cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)

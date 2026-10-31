@@ -1,0 +1,704 @@
+'\" t
+.TH "cbor::item" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::item, cbor::item::get, cbor::decode, cbor::encoded_cbor_data_item, cbor::encode, cbor::encode_iov, cbor::encoder, cbor::encoder::unsigned_integer, cbor::encoder::negative_integer, cbor::encoder::byte_string, cbor::encoder::text_string, cbor::encoder::array, cbor::encoder::map, cbor::encoder::tag, cbor::encoder::simple_value, cbor::encoder::floating_point, cbor::encoder::typed_array, cbor::encoder::finish, cbor::iov_writer \- a decoded tree and the encoder
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]struct\f[R] item {
+    cbor::type const type;
+    std::uint8_t const additional_information;
+
+    \f[B]template\f[R] <cbor::type K>
+    std::expected<item_alternative_t<K>, error> get() const;
+};
+
+\f[B]template\f[R] <cbor::type K>
+\f[B]using\f[R] item_alternative_t = \f[B]typename\f[R] item_alternative<K>::type;
+.EE
+.IP
+.EX
+\f[B]template\f[R] <cbor::type K>
+std::expected<item_alternative_t<K>, error> get() const;
+.EE
+.IP
+.EX
+std::expected<owning<item>, error> decode(std::string_view encoded);
+.EE
+.IP
+.EX
+\f[B]inline\f[R] std::expected<std::reference_wrapper<item const>, error>
+encoded_cbor_data_item(owning<item> const &tree, item const &tagged);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] Target>
+std::expected<std::size_t, error> encode(item const &root, Target &&target);
+.EE
+.IP
+.EX
+std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] Target>
+\f[B]class\f[R] encoder
+{
+\f[B]public\f[R]:
+    \f[B]explicit\f[R] encoder(Target &target)
+        \f[B]requires\f[R](!pieces && !\f[B]requires\f[R] { \f[B]typename\f[R] Target::element_type; });
+    \f[B]explicit\f[R] encoder(Target const target)
+        \f[B]requires\f[R] \f[B]requires\f[R] { \f[B]typename\f[R] Target::element_type; };
+    \f[B]explicit\f[R] encoder(Target &target)
+        \f[B]requires\f[R] pieces;
+    encoder(encoder const &) = \f[B]delete\f[R];
+    encoder &\f[B]operator\f[R]=(encoder const &) = \f[B]delete\f[R];
+};
+
+\f[B]template\f[R] <\f[B]class\f[R] Target>
+encoder(Target &) \-> encoder<Target>;
+\f[B]template\f[R] <\f[B]class\f[R] Element>
+encoder(std::span<Element>) \-> encoder<std::span<Element>>;
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] T>
+    \f[B]requires\f[R] integer_argument<T>
+std::expected<void, error> unsigned_integer(T const value);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] T>
+    \f[B]requires\f[R] integer_argument<T>
+std::expected<void, error> negative_integer(T const argument);
+.EE
+.IP
+.EX
+std::expected<void, error> byte_string(std::span<std::byte const> const bytes);
+\f[B]template\f[R] <\f[B]class\f[R] V>
+    \f[B]requires\f[R] std::same_as<V, std::vector<std::byte>>
+std::expected<void, error> byte_string(V &&bytes);
+std::expected<void, error> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes);
+std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes);
+.EE
+.IP
+.EX
+std::expected<void, error> text_string(std::string_view const text);
+\f[B]template\f[R] <\f[B]class\f[R] S>
+    \f[B]requires\f[R] std::same_as<S, std::string>
+std::expected<void, error> text_string(S &&text);
+std::expected<void, error> text_string(std::shared_ptr<std::string const> const &text);
+std::expected<void, error> text_string(ref<std::string_view> const &text);
+.EE
+.IP
+.EX
+std::expected<void, error> array(std::uint64_t const count);
+.EE
+.IP
+.EX
+std::expected<void, error> map(std::uint64_t const count);
+.EE
+.IP
+.EX
+std::expected<void, error> tag(std::uint64_t const number);
+.EE
+.IP
+.EX
+std::expected<void, error> simple_value(cbor::simple_value const value);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <std::floating_point T>
+    \f[B]requires\f[R](std::numeric_limits<T>::is_iec559 &&
+             (\f[B]sizeof\f[R](T) == \f[B]sizeof\f[R](std::uint32_t) || \f[B]sizeof\f[R](T) == \f[B]sizeof\f[R](std::uint64_t) ||
+              (\f[B]sizeof\f[R](T) == \f[B]sizeof\f[R](std::uint16_t) &&
+               std::numeric_limits<T>::digits == heads::half_precision.significand_bits + 1)))
+std::expected<void, error> floating_point(T const value);
+.EE
+.IP
+.EX
+std::expected<void, error> typed_array(cbor::typed_array const value);
+.EE
+.IP
+.EX
+\f[B]auto\f[R] finish()
+    \-> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>;
+.EE
+.IP
+.EX
+\f[B]class\f[R] iov_writer;
+.EE
+.SH DESCRIPTION
+\f[CR]cbor::item\f[R] is a decoded tree, and \f[CR]cbor::encoder\f[R]
+writes CBOR one data item per call.
+.SS cbor::item
+One node of a tree from decode or lazy::clone.
+\f[CR]type\f[R] gives the kind of the node.
+\f[CR]additional_information\f[R] gives the low 5 bits of the initial
+byte (RFC 8949 3).
+get gives the value.
+.PP
+The constructor is private: only a decode makes an item.
+An item owns no memory and has no destructor to run.
+The tree owns every node and every string.
+.SS cbor::item::get
+Gives the value of the node when \f[CR]type\f[R] is \f[CR]K\f[R].
+.PP
+.TS
+tab(@);
+l l.
+T{
+K
+T}@T{
+Result
+T}
+_
+T{
+\f[CR]unsigned_integer\f[R], \f[CR]negative_integer\f[R]
+T}@T{
+\f[CR]std::uint64_t\f[R], the argument
+T}
+T{
+\f[CR]half_float\f[R], \f[CR]single_float\f[R], \f[CR]double_float\f[R]
+T}@T{
+\f[CR]double\f[R]
+T}
+T{
+\f[CR]text_string\f[R]
+T}@T{
+\f[CR]std::string_view\f[R]
+T}
+T{
+\f[CR]byte_string\f[R]
+T}@T{
+\f[CR]std::span<std::byte const>\f[R]
+T}
+T{
+\f[CR]array\f[R]
+T}@T{
+\f[CR]std::span<item const>\f[R], the elements
+T}
+T{
+\f[CR]map\f[R]
+T}@T{
+\f[CR]std::span<item const>\f[R], each key and its value one after the
+other
+T}
+T{
+\f[CR]tag\f[R], \f[CR]unsigned_bignum\f[R], \f[CR]negative_bignum\f[R],
+\f[CR]typed_array\f[R]
+T}@T{
+\f[CR]std::pair<std::uint64_t, item const *>\f[R]: the tag number and
+the content
+T}
+T{
+\f[CR]false_value\f[R], \f[CR]true_value\f[R], \f[CR]null\f[R],
+\f[CR]undefined\f[R], \f[CR]simple_value\f[R]
+T}@T{
+\f[CR]cbor::simple_value\f[R]
+T}
+.TE
+.PP
+A negative integer gives its argument n, for the value \-1 \- n.
+A view and a pointer in the result point into the tree.
+.SS cbor::decode
+Decodes the one top\-level item in \f[CR]encoded\f[R] into a tree of
+item.
+It checks every head.
+The tree holds a copy of each text and byte string, so it stays valid
+after \f[CR]encoded\f[R] ends.
+A bignum whose magnitude fits 64 bits becomes an integer node.
+A tag 24 is a tag node, and encoded_cbor_data_item gives its decoded
+content.
+Tags 28 and 29 stay tag nodes.
+A leading tag 55799 stays a tag node.
+.SS cbor::encoded_cbor_data_item
+Gives the root of the item that a tag 24 (RFC 8949 3.4.5.1) holds in its
+byte string.
+\f[CR]tagged\f[R] is the tag node in \f[CR]tree\f[R].
+decode decodes that content when it decodes the tree, so the call only
+looks it up.
+.SS cbor::encode
+Writes the tree at \f[CR]root\f[R] and gives the count of bytes written.
+Each integer, length and tag number keeps the width of its head, from
+\f[CR]additional_information\f[R].
+A float keeps its width.
+A tag 28 and a tag 29 are written as they are.
+The target is one of these:
+.IP \(bu 2
+a container of bytes, for example \f[CR]std::string\f[R]: the call
+appends;
+.IP \(bu 2
+a \f[CR]std::span\f[R] of bytes: the call writes into it and allocates
+nothing;
+.IP \(bu 2
+an object with \f[CR]allocate(std::size_t)\f[R], which gives a writer
+with \f[CR]append(std::string_view)\f[R] and
+\f[CR]done(std::size_t)\f[R].
+.SS cbor::encode_iov
+Writes the tree at \f[CR]root\f[R] into a list of pieces, not into one
+buffer.
+The result gives the pieces in order and holds their storage.
+A program gives the pieces to \f[CR]writev\f[R] or to a socket, or joins
+them.
+The bytes are those of encode.
+.SS cbor::encoder
+Writes CBOR one data item per call, in the order of the bytes.
+The encoder counts nothing: the counts of array and map come from the
+program.
+The target is one of these:
+.IP \(bu 2
+a container of bytes, for example \f[CR]std::string\f[R]: the encoder
+appends;
+.IP \(bu 2
+a \f[CR]std::span\f[R] of bytes: the encoder writes into it and
+allocates nothing;
+.IP \(bu 2
+an iov_writer: the encoder gives pieces;
+.IP \(bu 2
+an object with \f[CR]allocate(std::size_t)\f[R], which gives a writer
+with \f[CR]append(std::string_view)\f[R] and
+\f[CR]done(std::size_t)\f[R].
+.PP
+The encoder does not write tags 28 and 29.
+.SS cbor::encoder::unsigned_integer
+Writes \f[CR]value\f[R] as an unsigned integer (major type 0).
+The head takes the width of \f[CR]T\f[R]: one byte of argument for
+\f[CR]std::uint8_t\f[R], eight for \f[CR]std::uint64_t\f[R], also when a
+shorter head holds the value.
+.PP
+\f[CR]T\f[R] is an unsigned integer type.
+\f[CR]bool\f[R] and the character types do not compile.
+.SS cbor::encoder::negative_integer
+Writes a negative integer (major type 1) with the argument
+\f[CR]argument\f[R].
+The value is \-1 \- \f[CR]argument\f[R].
+The head takes the width of \f[CR]T\f[R].
+.PP
+\f[CR]T\f[R] is an unsigned integer type.
+\f[CR]bool\f[R] and the character types do not compile.
+.SS cbor::encoder::byte_string
+Writes \f[CR]bytes\f[R] as a byte string, with the shortest head for the
+length.
+Over an iov_writer, the last three forms do not copy 32 bytes or more:
+the result keeps the moved vector or the owner.
+Over any other target, each form copies the bytes.
+.SS cbor::encoder::text_string
+Writes \f[CR]text\f[R] as a text string, with the shortest head for the
+length.
+The call does not check UTF\-8.
+Over an iov_writer, the last three forms do not copy a text of 32 bytes
+or more: the result keeps the moved string or the owner.
+Over any other target, each form copies the text.
+.SS cbor::encoder::array
+Writes the head of an array (major type 4) with \f[CR]count\f[R]
+elements, with the shortest head for \f[CR]count\f[R].
+The next calls write the elements.
+The encoder does not count them: a wrong count gives bytes that are not
+one item.
+.SS cbor::encoder::map
+Writes the head of a map (major type 5) with \f[CR]count\f[R] pairs,
+with the shortest head for \f[CR]count\f[R].
+The next calls write each key and then its value.
+The encoder does not count them: a wrong count gives bytes that are not
+one item.
+.SS cbor::encoder::tag
+Writes the head of a tag (major type 6) with the tag number
+\f[CR]number\f[R], with the shortest head.
+The next call writes the content.
+The call does not check that the content fits the tag.
+.SS cbor::encoder::simple_value
+Writes a simple value (major type 7), for example
+\f[CR]false_value\f[R], \f[CR]true_value\f[R], \f[CR]null\f[R] or
+\f[CR]undefined\f[R].
+A value from 0 to 23 takes one byte, and a value from 32 to 255 takes
+two.
+.SS cbor::encoder::floating_point
+Writes \f[CR]value\f[R] as a float in the width of \f[CR]T\f[R]: 16, 32
+or 64 bits.
+It does not choose a shorter form.
+A NaN keeps its bits.
+.PP
+\f[CR]T\f[R] is an IEEE 754 type of 16, 32 or 64 bits.
+Another float type does not compile.
+.SS cbor::encoder::typed_array
+Writes a typed array (RFC 8746): the tag \f[CR]value.tag\f[R] and then
+\f[CR]value.bytes\f[R] as a byte string.
+The bytes are copied as they are, in the byte order that the tag names.
+.SS cbor::encoder::finish
+Ends the encoder.
+It writes the buffer of the encoder to the target and calls
+\f[CR]done\f[R] of a writer.
+It gives the count of bytes written, or the pieces over an iov_writer.
+After the call, each call of the encoder throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::iov_writer
+A target of encoder that collects pieces, not one buffer.
+The encoder writes heads and short strings into blocks of 16 KiB.
+A text or a byte string of 32 bytes or more that the program hands over
+with its owner becomes a piece of its own, with no copy.
+finish gives the pieces, as a \f[CR]ref\f[R] that holds the blocks and
+the owners.
+.PP
+The class has no public member function.
+.SH ERRORS
+.SS cbor::item
+None.
+\f[CR]type\f[R] and \f[CR]additional_information\f[R] are data members.
+.SS cbor::item::get
+\f[CR]incorrect_type\f[R]: \f[CR]type\f[R] is not \f[CR]K\f[R].
+.SS cbor::decode
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the item is not complete, or a count is
+larger than the bytes that are left.
+.IP \(bu 2
+\f[CR]syntax_error\f[R]: a head is not well\-formed.
+A byte after the item is not read, so the input can be a CBOR sequence
+(RFC 8742).
+.IP \(bu 2
+\f[CR]indefinite_length\f[R]: a string, an array or a map has an
+indefinite length.
+.IP \(bu 2
+\f[CR]nesting_depth_exceeded\f[R]: the item is deeper than the limit.
+.IP \(bu 2
+\f[CR]reserved_simple_value\f[R],
+\f[CR]inadmissible_type_for_tag_content\f[R]: a value that RFC 8949 or
+RFC 8746 does not allow.
+.SS cbor::encoded_cbor_data_item
+.IP \(bu 2
+\f[CR]incorrect_type\f[R]: the content of the tag 24 is not a byte
+string.
+.IP \(bu 2
+\f[CR]tagged\f[R] is not a tag 24 of \f[CR]tree\f[R]: the call throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encode
+.IP \(bu 2
+\f[CR]no_buffer_space\f[R]: the span is too short.
+.IP \(bu 2
+\f[CR]nesting_depth_exceeded\f[R]: the tree is deeper than the limit.
+.IP \(bu 2
+\f[CR]value_too_large\f[R], \f[CR]not_enough_memory\f[R],
+\f[CR]io_error\f[R]: the error of a writer, from its
+\f[CR]std::errc\f[R].
+.SS cbor::encode_iov
+\f[CR]nesting_depth_exceeded\f[R]: the tree is deeper than the limit.
+.SS cbor::encoder
+Each call gives \f[CR]std::expected<void, error>\f[R].
+After an error, and after finish, each call throws
+\f[CR]std::logic_error\f[R].
+A copy does not compile.
+.SS cbor::encoder::unsigned_integer
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::negative_integer
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::byte_string
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+A null \f[CR]std::shared_ptr\f[R] throws \f[CR]std::logic_error\f[R].
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::text_string
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+A null \f[CR]std::shared_ptr\f[R] throws \f[CR]std::logic_error\f[R].
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::array
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::map
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::tag
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::simple_value
+.IP \(bu 2
+\f[CR]reserved_simple_value\f[R]: \f[CR]value\f[R] is from 24 to 31 (RFC
+8949 3.3).
+.IP \(bu 2
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+.IP \(bu 2
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::floating_point
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::typed_array
+.IP \(bu 2
+\f[CR]unsupported_value\f[R]: \f[CR]value.tag\f[R] is not the tag of a
+typed array.
+.IP \(bu 2
+\f[CR]inadmissible_type_for_tag_content\f[R]: the count of bytes is not
+a multiple of the size of one element.
+.IP \(bu 2
+\f[CR]no_buffer_space\f[R] over a span that is too short.
+The error of a writer.
+.IP \(bu 2
+A call after an error or after \f[CR]finish\f[R] throws
+\f[CR]std::logic_error\f[R].
+.SS cbor::encoder::finish
+\f[CR]no_buffer_space\f[R], \f[CR]value_too_large\f[R],
+\f[CR]not_enough_memory\f[R], \f[CR]io_error\f[R]: the error of the
+target.
+A second \f[CR]finish\f[R] throws \f[CR]std::logic_error\f[R].
+.SS cbor::iov_writer
+A write after \f[CR]finish\f[R] throws \f[CR]std::logic_error\f[R].
+.SH NOTES
+.SS cbor::item
+A read of \f[CR]type\f[R], \f[CR]additional_information\f[R] or get is
+O(1) and allocates nothing.
+The tree comes from decode: it copies every string of the item and
+allocates the nodes, O(bytes of the item).
+.SS cbor::item::get
+O(1).
+No allocation.
+.SS cbor::decode
+O(bytes of the item).
+The tree takes one memory zone, which grows in chunks, and one
+\f[CR]std::shared_ptr\f[R].
+A count in the input reserves nothing.
+.SS cbor::encoded_cbor_data_item
+O(log t), t the tag 24 nodes of the tree.
+No allocation.
+.SS cbor::encode
+O(nodes + bytes of the strings).
+A container grows; a span takes no allocation.
+The stack grows with the depth of the tree.
+.SS cbor::encode_iov
+O(nodes + bytes of the strings).
+The call copies each byte once, into blocks of 16 KiB.
+One allocation for each block, and one for the storage.
+.SS cbor::encoder
+O(1) for each head, O(bytes) for each string.
+Over a \f[CR]std::span<char>\f[R] the encoder allocates nothing.
+Over a container, a writer or a span of \f[CR]std::byte\f[R], it holds a
+buffer of 16 KiB.
+Over an \f[CR]iov_writer\f[R], it takes one block of 16 KiB at once.
+.SS cbor::encoder::unsigned_integer
+O(1).
+A container target can grow.
+.SS cbor::encoder::negative_integer
+O(1).
+A container target can grow.
+.SS cbor::encoder::byte_string
+O(bytes).
+A container target can grow.
+.SS cbor::encoder::text_string
+O(bytes of the text).
+A container target can grow.
+.SS cbor::encoder::array
+O(1).
+A container target can grow.
+.SS cbor::encoder::map
+O(1).
+A container target can grow.
+.SS cbor::encoder::tag
+O(1).
+A container target can grow.
+.SS cbor::encoder::simple_value
+O(1).
+A container target can grow.
+.SS cbor::encoder::floating_point
+O(1).
+A container target can grow.
+.SS cbor::encoder::typed_array
+O(bytes).
+A container target can grow.
+.SS cbor::encoder::finish
+O(bytes in the buffer of the encoder), at most 16 KiB.
+.SS cbor::iov_writer
+The storage and its lists allocate.
+Each block of 16 KiB is one allocation.
+A piece of its own adds one \f[CR]std::shared_ptr\f[R] copy.
+.SH EXAMPLES
+.SS cbor::item
+.IP
+.EX
+\f[I]// bytes: a std::string with [1, {\(dqa\(dq: 2}]\f[R]
+\f[B]auto\f[R] const tree = cbor::decode(bytes);
+(*tree)\->type;                                  \f[I]// cbor::type::array\f[R]
+(*tree)\->get<cbor::type::array>()\->size();      \f[I]// 2\f[R]
+.EE
+.SS cbor::item::get
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqa\(dq: \-3}\f[R]
+\f[B]auto\f[R] const tree = cbor::decode(bytes);
+\f[B]auto\f[R] const map = *(*tree)\->get<cbor::type::map>();
+map[0].get<cbor::type::text_string>();          \f[I]// \(dqa\(dq\f[R]
+map[1].get<cbor::type::negative_integer>();     \f[I]// 2, for \-3\f[R]
+map[1].get<cbor::type::unsigned_integer>().error();   \f[I]// incorrect_type\f[R]
+.EE
+.SS cbor::decode
+.IP
+.EX
+\f[I]// bytes: a std::string with [\(dqhi\(dq, 1]\f[R]
+\f[B]auto\f[R] const tree = cbor::decode(bytes);
+(*tree)\->get<cbor::type::array>()\->size();   \f[I]// 2\f[R]
+cbor::decode(\(dq\(rsx01\(rsx02\(dqs);                   \f[I]// the item 1; the byte 02 is not read\f[R]
+.EE
+.SS cbor::encoded_cbor_data_item
+.IP
+.EX
+\f[I]// bytes: a std::string with 24(h\(aq6161\(aq), a tag 24 over the text \(dqa\(dq\f[R]
+\f[B]auto\f[R] const tree = cbor::decode(bytes);
+\f[B]auto\f[R] const inner = cbor::encoded_cbor_data_item(*tree, **tree);
+inner\->get().get<cbor::type::text_string>();   \f[I]// \(dqa\(dq\f[R]
+.EE
+.SS cbor::encode
+.IP
+.EX
+\f[I]// bytes: a std::string with [1, \(dqa\(dq]\f[R]
+\f[B]auto\f[R] const tree = cbor::decode(bytes);
+std::string out;
+cbor::encode(**tree, out);   \f[I]// 4\f[R]
+out == bytes;                \f[I]// true\f[R]
+.EE
+.SS cbor::encode_iov
+.IP
+.EX
+\f[I]// bytes: a std::string with [1, \(dqa\(dq]\f[R]
+\f[B]auto\f[R] const tree = cbor::decode(bytes);
+\f[B]auto\f[R] const pieces = cbor::encode_iov(**tree);
+std::string joined;
+\f[B]for\f[R] (std::string_view const piece : **pieces)
+    joined += piece;
+joined == bytes;   \f[I]// true\f[R]
+.EE
+.SS cbor::encoder
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.map(1);
+e.text_string(\(dqa\(dq);
+e.unsigned_integer(std::uint8_t{5});
+e.finish();   \f[I]// 5: out holds {\(dqa\(dq: 5}, a1 61 61 18 05\f[R]
+.EE
+.SS cbor::encoder::unsigned_integer
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.unsigned_integer(std::uint16_t{5});
+e.finish();   \f[I]// out holds 19 00 05\f[R]
+.EE
+.SS cbor::encoder::negative_integer
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.negative_integer(std::uint16_t{499});
+e.finish();   \f[I]// out holds 39 01 f3, the value \-500\f[R]
+.EE
+.SS cbor::encoder::byte_string
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.byte_string(std::as_bytes(std::span(\(dqab\(dq, 2)));
+e.finish();   \f[I]// out holds 42 61 62\f[R]
+.EE
+.SS cbor::encoder::text_string
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.text_string(\(dqabc\(dq);
+e.finish();   \f[I]// out holds 63 61 62 63\f[R]
+.EE
+.SS cbor::encoder::array
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.array(2);
+e.unsigned_integer(std::uint8_t{1});
+e.unsigned_integer(std::uint8_t{2});
+e.finish();   \f[I]// out holds 82 18 01 18 02\f[R]
+.EE
+.SS cbor::encoder::map
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.map(1);
+e.text_string(\(dqa\(dq);
+e.unsigned_integer(std::uint8_t{5});
+e.finish();   \f[I]// out holds a1 61 61 18 05\f[R]
+.EE
+.SS cbor::encoder::tag
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.tag(55799);
+e.unsigned_integer(std::uint8_t{1});
+e.finish();   \f[I]// out holds d9 d9 f7 18 01\f[R]
+.EE
+.SS cbor::encoder::simple_value
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.simple_value(cbor::simple_value::null);
+e.finish();   \f[I]// out holds f6\f[R]
+.EE
+.SS cbor::encoder::floating_point
+.IP
+.EX
+std::string out;
+cbor::encoder e(out);
+e.floating_point(1.5f);
+e.finish();   \f[I]// out holds fa 3f c0 00 00\f[R]
+.EE
+.SS cbor::encoder::typed_array
+.IP
+.EX
+\f[I]// two: a std::array<std::uint8_t, 2> with {1, 2}\f[R]
+std::string out;
+cbor::encoder e(out);
+e.typed_array(cbor::typed_array{64, std::as_bytes(std::span(two))});
+e.finish();   \f[I]// out holds d8 40 42 01 02, the tag 64 for uint8\f[R]
+.EE
+.SS cbor::encoder::finish
+.IP
+.EX
+std::array<char, 16> buffer{};
+cbor::encoder e{std::span<char>(buffer)};
+e.text_string(\(dqabc\(dq);
+e.finish();   \f[I]// 4: buffer starts with 63 61 62 63\f[R]
+e.array(0);   \f[I]// throws std::logic_error\f[R]
+.EE
+.SS cbor::iov_writer
+.IP
+.EX
+\f[I]// text: a std::shared_ptr<std::string const> with 40 times \(dqx\(dq\f[R]
+cbor::iov_writer w;
+cbor::encoder e(w);
+e.text_string(text);
+\f[B]auto\f[R] const pieces = e.finish();
+(*pieces)\->size();   \f[I]// 2: the head 78 28, then *text with no copy\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)
