@@ -1,0 +1,411 @@
+'\" t
+.TH "cbor::error" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::error, cbor::category, cbor::error_category, cbor::make_error_code, std::is_error_code_enum<cbor::error>, cbor::limits \- the error values of the library, their conversion to std::error_code, and the limits of a build
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]enum\f[R] \f[B]class\f[R] error {
+    too_little_data = 1,
+    syntax_error,
+    indefinite_length,
+    nesting_depth_exceeded,
+    inadmissible_type_for_tag_content,
+    sharedref_index_not_marked,
+    sharedref_index_out_of_range,
+    sharedref_not_complete,
+    reserved_simple_value,
+    unsupported_value,
+    not_indexable,
+    index_out_of_bounds,
+    key_not_found,
+    invalid_path,
+    incorrect_type,
+    number_out_of_range,
+    cyclic_data_structure,
+    unpopulated_table_index,
+    nodelist_too_long,
+    duplicate_key,
+    no_buffer_space,
+    value_too_large,
+    not_enough_memory,
+    io_error,
+    string_length_exceeded,
+    container_elements_exceeded,
+    not_singular_query
+};
+.EE
+.IP
+.EX
+std::error_category const &category() \f[B]noexcept\f[R];
+.EE
+.IP
+.EX
+\f[B]class\f[R] error_category : \f[B]public\f[R] std::error_category
+{
+\f[B]public\f[R]:
+    char const *name() const \f[B]noexcept\f[R] \f[B]override\f[R];
+    std::string message(int const condition) const \f[B]override\f[R];
+    std::error_condition default_error_condition(int const condition) const \f[B]noexcept\f[R] \f[B]override\f[R];
+};
+.EE
+.IP
+.EX
+std::error_code make_error_code(error const e) \f[B]noexcept\f[R];
+.EE
+.IP
+.EX
+\f[B]template\f[R] <>
+\f[B]struct\f[R] std::is_error_code_enum<cbor::error> : std::true_type {};
+.EE
+.IP
+.EX
+#ifndef CBOR_NESTING_DEPTH_DEFAULT
+#define CBOR_NESTING_DEPTH_DEFAULT 128
+#endif
+
+#ifndef CBOR_STRING_LENGTH_DEFAULT
+#define CBOR_STRING_LENGTH_DEFAULT SIZE_MAX
+#endif
+
+#ifndef CBOR_CONTAINER_ELEMENTS_DEFAULT
+#define CBOR_CONTAINER_ELEMENTS_DEFAULT SIZE_MAX
+#endif
+
+\f[B]struct\f[R] limits {
+    static \f[B]constexpr\f[R] std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
+    static \f[B]constexpr\f[R] std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
+    static \f[B]constexpr\f[R] std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
+};
+.EE
+.SH DESCRIPTION
+The error values of the library, their conversion to
+\f[CR]std::error_code\f[R], and the limits of a build.
+.SS cbor::error
+The fault that a call returns in its
+\f[CR]std::expected<T, cbor::error>\f[R].
+Bad input never throws.
+The first value is 1.
+So a \f[CR]std::error_code\f[R] from a \f[CR]cbor::error\f[R] is always
+true as a \f[CR]bool\f[R].
+A wrong use of the library is not an error value: it does not compile,
+or it throws \f[CR]std::logic_error\f[R].
+.PP
+.TS
+tab(@);
+l l.
+T{
+Error
+T}@T{
+When
+T}
+_
+T{
+\f[CR]too_little_data\f[R]
+T}@T{
+The bytes end before the item ends.
+T}
+T{
+\f[CR]syntax_error\f[R]
+T}@T{
+A head is not well\-formed, or a simple value is reserved in the
+two\-byte form.
+Bytes after the item, where a call reads one item.
+T}
+T{
+\f[CR]indefinite_length\f[R]
+T}@T{
+A head uses indefinite length, and the call does not read it.
+T}
+T{
+\f[CR]nesting_depth_exceeded\f[R]
+T}@T{
+The item or the path is deeper than limits\f[CR]::nesting_depth\f[R].
+T}
+T{
+\f[CR]inadmissible_type_for_tag_content\f[R]
+T}@T{
+A tag has content that its definition does not allow.
+T}
+T{
+\f[CR]sharedref_index_not_marked\f[R]
+T}@T{
+A tag 29 names no tag 28 before it.
+T}
+T{
+\f[CR]sharedref_index_out_of_range\f[R]
+T}@T{
+A tag 29 has an index that does not fit \f[CR]std::size_t\f[R].
+T}
+T{
+\f[CR]sharedref_not_complete\f[R]
+T}@T{
+\f[CR]structs\f[R] decode meets a tag 29 that names a tag 28 in a
+skipped member.
+T}
+T{
+\f[CR]reserved_simple_value\f[R]
+T}@T{
+An encode meets a simple value from 24 to 31.
+T}
+T{
+\f[CR]unsupported_value\f[R]
+T}@T{
+The encoder meets a typed array with a reserved tag or a tag outside RFC
+8746.
+\f[CR]structs\f[R] meets a map key that is an array, a map or a tag.
+T}
+T{
+\f[CR]not_indexable\f[R]
+T}@T{
+A key or an index meets an item that is not a map or an array.
+T}
+T{
+\f[CR]index_out_of_bounds\f[R]
+T}@T{
+The index is outside the array.
+T}
+T{
+\f[CR]key_not_found\f[R]
+T}@T{
+The key is not in the map.
+T}
+T{
+\f[CR]invalid_path\f[R]
+T}@T{
+The path text is not valid.
+T}
+T{
+\f[CR]incorrect_type\f[R]
+T}@T{
+A typed read finds another kind of item than T takes.
+T}
+T{
+\f[CR]number_out_of_range\f[R]
+T}@T{
+The number does not fit T.
+T}
+T{
+\f[CR]cyclic_data_structure\f[R]
+T}@T{
+The library does not return it.
+A writer of the program can return it for a cycle.
+T}
+T{
+\f[CR]unpopulated_table_index\f[R]
+T}@T{
+A reference in a \f[CR]schema<T>\f[R] message names an entry that its
+table does not have.
+T}
+T{
+\f[CR]nodelist_too_long\f[R]
+T}@T{
+One step of a path selects more nodes than the item has bytes.
+T}
+T{
+\f[CR]duplicate_key\f[R]
+T}@T{
+A deterministic check finds a key twice in one map.
+T}
+T{
+\f[CR]no_buffer_space\f[R], \f[CR]value_too_large\f[R],
+\f[CR]not_enough_memory\f[R], \f[CR]io_error\f[R]
+T}@T{
+The writer of an encode gives this error.
+\f[CR]not_enough_memory\f[R] also comes from a refused allocation in
+\f[CR]structs\f[R] and \f[CR]schema\f[R] decode.
+T}
+T{
+\f[CR]string_length_exceeded\f[R]
+T}@T{
+A string is longer than limits\f[CR]::string_length\f[R].
+T}
+T{
+\f[CR]container_elements_exceeded\f[R]
+T}@T{
+A container has more items than limits\f[CR]::container_elements\f[R].
+T}
+T{
+\f[CR]not_singular_query\f[R]
+T}@T{
+\f[CR]jsonpath::compile<T>\f[R] gets a path that is not singular, and
+\f[CR]T\f[R] is not \f[CR]nodelist\f[R].
+T}
+.TE
+.SS cbor::category
+Gives the one error_category of \f[CR]cbor::error\f[R].
+Each call gives the same object.
+Its name is \f[CR]\(dqcbor\(dq\f[R].
+A \f[CR]std::error_code\f[R] made from a \f[CR]cbor::error\f[R] holds
+this category.
+.SS cbor::error_category
+The \f[CR]std::error_category\f[R] of \f[CR]cbor::error\f[R].
+A program reaches it through category.
+\f[CR]name()\f[R] gives \f[CR]\(dqcbor\(dq\f[R].
+\f[CR]message\f[R] gives the text of the error, for example
+\f[CR]\(dqkey not found\(dq\f[R], and
+\f[CR]\(dqunknown cbor error\(dq\f[R] for a value that is no
+\f[CR]cbor::error\f[R].
+.PP
+\f[CR]default_error_condition\f[R] maps four errors to a
+\f[CR]std::errc\f[R]: \f[CR]no_buffer_space\f[R],
+\f[CR]value_too_large\f[R], \f[CR]not_enough_memory\f[R] and
+\f[CR]io_error\f[R], each to the \f[CR]std::errc\f[R] of the same name.
+Every other error maps to a condition of this category.
+So only these four compare equal to a \f[CR]std::errc\f[R].
+.SS cbor::make_error_code
+Makes a \f[CR]std::error_code\f[R] with the value of \f[CR]e\f[R] and
+the category of \f[CR]cbor::error\f[R].
+The constructor of \f[CR]std::error_code\f[R] from a
+\f[CR]cbor::error\f[R] calls it by argument\-dependent lookup.
+So a program seldom calls it by name.
+.SS std::is_error_code_enum<cbor::error>
+Marks \f[CR]cbor::error\f[R] as an error code enum.
+So a \f[CR]cbor::error\f[R] converts to a \f[CR]std::error_code\f[R]
+with no cast, through make_error_code.
+A \f[CR]std::error_code\f[R] also compares equal to a
+\f[CR]cbor::error\f[R] with \f[CR]==\f[R].
+.PP
+A \f[CR]cbor::error\f[R] and a \f[CR]std::errc\f[R] do not compare
+directly: that does not compile.
+Put a \f[CR]std::error_code\f[R] on the left.
+.SS cbor::limits
+The limits of the build, in \f[CR]<cbor/validity.hpp>\f[R].
+A macro on the command line sets a limit; a macro that the build does
+not set gets its default.
+No call reads a limit at run time.
+A limit at \f[CR]SIZE_MAX\f[R] is not set, and its check is not in the
+program.
+.PP
+.TS
+tab(@);
+l l l l.
+T{
+Constant
+T}@T{
+Counts
+T}@T{
+Default
+T}@T{
+Error
+T}
+_
+T{
+\f[CR]nesting_depth\f[R]
+T}@T{
+the arrays, maps and tags around an item
+T}@T{
+128, at most 512
+T}@T{
+\f[CR]nesting_depth_exceeded\f[R]
+T}
+T{
+\f[CR]string_length\f[R]
+T}@T{
+the bytes of one text or byte string
+T}@T{
+\f[CR]SIZE_MAX\f[R]
+T}@T{
+\f[CR]string_length_exceeded\f[R]
+T}
+T{
+\f[CR]container_elements\f[R]
+T}@T{
+the elements of an array, or the pairs of a map
+T}@T{
+\f[CR]SIZE_MAX\f[R]
+T}@T{
+\f[CR]container_elements_exceeded\f[R]
+T}
+.TE
+.PP
+A limit counts what a call reads or decodes.
+An item that a call only skips does not count.
+Every translation unit of one program uses the same values.
+.SH ERRORS
+.SS cbor::error
+Not applicable: the type is the error.
+.SS cbor::category
+None.
+.SS cbor::error_category
+None.
+.SS cbor::make_error_code
+None.
+.SS std::is_error_code_enum<cbor::error>
+None.
+.SS cbor::limits
+A \f[CR]CBOR_NESTING_DEPTH_DEFAULT\f[R] above 512 does not compile.
+.SH NOTES
+.SS cbor::error
+O(1).
+An error is one \f[CR]int\f[R].
+It does not allocate.
+.SS cbor::category
+O(1).
+The object is a function\-local static: the first call constructs it.
+No allocation.
+.SS cbor::error_category
+\f[CR]name\f[R] and \f[CR]default_error_condition\f[R] are O(1).
+\f[CR]message\f[R] allocates the \f[CR]std::string\f[R].
+.SS cbor::make_error_code
+O(1).
+No allocation.
+.SS std::is_error_code_enum<cbor::error>
+None at run time.
+.SS cbor::limits
+None at run time.
+.SH EXAMPLES
+.SS cbor::error
+.IP
+.EX
+\f[I]// bytes: {\(dquser\(dq: {\(dqid\(dq: 42}}\f[R]
+\f[B]auto\f[R] const age = cbor::at_path<\(dq$.user.age\(dq, std::int64_t>(bytes);
+age.error();                                \f[I]// key_not_found\f[R]
+std::error_code{age.error()}.message();     \f[I]// \(dqkey not found\(dq\f[R]
+.EE
+.SS cbor::category
+.IP
+.EX
+std::error_code const e = cbor::error::syntax_error;
+e.category() == cbor::category();   \f[I]// true\f[R]
+cbor::category().name();            \f[I]// \(dqcbor\(dq\f[R]
+.EE
+.SS cbor::error_category
+.IP
+.EX
+std::error_code{cbor::error::no_buffer_space} == std::errc::no_buffer_space;   \f[I]// true\f[R]
+std::error_code{cbor::error::too_little_data} != std::errc::no_message;        \f[I]// true\f[R]
+cbor::category().message(0);                                                   \f[I]// \(dqunknown cbor error\(dq\f[R]
+.EE
+.SS cbor::make_error_code
+.IP
+.EX
+std::error_code const e = cbor::make_error_code(cbor::error::invalid_path);
+e.message();                                   \f[I]// \(dqinvalid path\(dq\f[R]
+e == std::error_code{cbor::error::invalid_path};   \f[I]// true\f[R]
+.EE
+.SS std::is_error_code_enum<cbor::error>
+.IP
+.EX
+std::error_code const e = cbor::error::index_out_of_bounds;
+e.message();                               \f[I]// \(dqindex outside of array bounds\(dq\f[R]
+e == cbor::error::index_out_of_bounds;     \f[I]// true\f[R]
+.EE
+.SS cbor::limits
+.IP
+.EX
+g++ \-DCBOR_NESTING_DEPTH_DEFAULT=16 \-DCBOR_STRING_LENGTH_DEFAULT=1024 ...
+.EE
+.IP
+.EX
+\f[I]// a build that sets no macro\f[R]
+cbor::limits::nesting_depth;        \f[I]// 128\f[R]
+cbor::limits::string_length;        \f[I]// SIZE_MAX\f[R]
+cbor::limits::container_elements;   \f[I]// SIZE_MAX\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3)

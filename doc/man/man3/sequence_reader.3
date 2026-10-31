@@ -1,0 +1,89 @@
+.TH "cbor::sequence_reader" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::sequence_reader \- gives the items of a CBOR sequence whose bytes arrive in pieces
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]class\f[R] sequence_reader
+{
+\f[B]public\f[R]:
+    sequence_reader();
+    sequence_reader(sequence_reader &&);
+    sequence_reader &\f[B]operator\f[R]=(sequence_reader &&);
+
+    \f[B]template\f[R] <borrowed_range_of_chars Piece>
+    void feed(Piece piece);
+    \f[B]template\f[R] <owning_range_of_chars Piece>
+    void feed(Piece const &piece);
+    \f[B]template\f[R] <owning_range_of_chars Piece>
+    void feed(Piece &&piece);
+    \f[B]template\f[R] <owning_range_of_chars Piece>
+    void feed(std::shared_ptr<Piece const> piece);
+
+    std::expected<lazy, error> next();
+    bool empty() const;
+};
+.EE
+.SH DESCRIPTION
+Reads a CBOR sequence (RFC 8742) whose bytes arrive in pieces, for
+example from a socket.
+\f[CR]feed\f[R] gives the reader the next piece.
+\f[CR]next\f[R] gives the next item as a \f[CR]lazy\f[R] when all of its
+bytes are there, and \f[CR]too_little_data\f[R] while it waits.
+\f[CR]empty\f[R] is true when the reader holds no byte that no item
+took.
+.PP
+\f[CR]feed(std::move(s))\f[R] takes a \f[CR]std::string\f[R] without a
+copy.
+\f[CR]feed(shared_ptr)\f[R] holds the piece without a copy.
+\f[CR]feed(view)\f[R] and \f[CR]feed(s)\f[R] copy the bytes.
+An item whole in a piece that the reader holds is a view into that
+piece.
+The reader copies an item that the end of a piece cuts, and only the
+bytes of that item.
+.PP
+Each item keeps its bytes alive after later feeds and after the reader
+is gone.
+A char array, such as a literal, does not compile, because it holds a
+NUL after its last byte.
+A \f[CR]std::shared_ptr\f[R] to bytes that are not const does not
+compile.
+The reader cannot be copied.
+.SH ERRORS
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the item is not complete yet.
+Feed more bytes.
+.IP \(bu 2
+\f[CR]syntax_error\f[R], \f[CR]indefinite_length\f[R]: the bytes are not
+a well\-formed item with definite lengths.
+.IP \(bu 2
+\f[CR]nesting_depth_exceeded\f[R]: the item is nested deeper than
+\f[CR]limits::nesting_depth\f[R].
+.PP
+After any other error than \f[CR]too_little_data\f[R], every call of
+\f[CR]next\f[R] gives that error, and \f[CR]feed\f[R] keeps no byte.
+A null \f[CR]std::shared_ptr\f[R] and a call on a reader that was moved
+from throw \f[CR]std::logic_error\f[R].
+.SH NOTES
+Each byte is scanned once.
+Memory O(n) of the bytes not yet read.
+A feed and a \f[CR]next\f[R] allocate nothing once the buffer has grown,
+except \f[CR]feed(std::move(s))\f[R], which allocates the block that
+holds \f[CR]s\f[R].
+.SH EXAMPLES
+.IP
+.EX
+cbor::sequence_reader r;
+r.feed(std::move(first));     \f[I]// 82 01: the start of [1, 2]\f[R]
+r.next();                     \f[I]// too_little_data\f[R]
+r.feed(std::move(second));    \f[I]// 02 03\f[R]
+r.next()\->size();             \f[I]// 2\f[R]
+r.next()\->get<std::int64_t>(); \f[I]// 3\f[R]
+r.empty();                    \f[I]// true\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::diagnostic_notation(3), cbor::error(3)

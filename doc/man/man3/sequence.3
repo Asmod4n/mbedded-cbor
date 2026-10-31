@@ -1,0 +1,69 @@
+.TH "cbor::sequence" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::sequence \- gives the items of a CBOR sequence (RFC 8742) one by one
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]class\f[R] sequence
+{
+\f[B]public\f[R]:
+    \f[B]template\f[R] <owning_range_of_chars Encoded>
+    \f[B]explicit\f[R] sequence(std::shared_ptr<Encoded const> e);
+
+    \f[B]template\f[R] <borrowed_range_of_chars Encoded>
+    sequence(std::shared_ptr<void const> o, Encoded const &e);
+
+    \f[B]struct\f[R] iterator {
+        \f[B]using\f[R] value_type = std::expected<std::string_view, error>;
+        \f[B]using\f[R] difference_type = std::ptrdiff_t;
+
+        value_type \f[B]operator\f[R]*() const;
+        iterator &\f[B]operator\f[R]++();
+        void \f[B]operator\f[R]++(int);
+        bool \f[B]operator\f[R]==(std::default_sentinel_t) const;
+    };
+
+    iterator begin() const;
+    std::default_sentinel_t end() const;
+    bool empty() const;
+};
+.EE
+.SH DESCRIPTION
+Splits a CBOR sequence (RFC 8742), items one after the other, into its
+items.
+Each item is a \f[CR]std::string_view\f[R] into the bytes, with no copy.
+The sequence holds the owner, so a view stays valid while the sequence
+or the owner lives.
+Read an item with \f[CR]at_path\f[R] or
+\f[CR]lazy::view(owner, *item)\f[R].
+.PP
+The sequence is an input range: it has no size, and \f[CR]begin()\f[R]
+reads the first item again.
+item_size finds the end of each item.
+.SH ERRORS
+Each item gives the errors of item_size.
+After an item with an error, the next \f[CR]++\f[R] ends the loop,
+because the end of that item is not known.
+A null \f[CR]std::shared_ptr\f[R] or an empty owner throws
+\f[CR]std::logic_error\f[R].
+.SH NOTES
+The constructor is O(1) and reads nothing.
+Each \f[CR]++\f[R] and \f[CR]begin()\f[R] is O(n_item).
+Memory O(1).
+No allocation.
+.SH EXAMPLES
+.IP
+.EX
+\f[I]// owner: a std::shared_ptr<std::string const> with the sequence 1, 2, 3\f[R]
+std::int64_t sum = 0;
+\f[B]for\f[R] (\f[B]auto\f[R] const item : cbor::sequence(owner))
+    \f[B]if\f[R] (item)
+        sum += cbor::at_path<\(dq$\(dq, std::int64_t>(*item).value_or(0);
+use(sum);   \f[I]// 6\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)
