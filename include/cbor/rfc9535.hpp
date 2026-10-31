@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <span>
 #include <string_view>
 #ifdef __cpp_impl_reflection
 #include <meta>
@@ -45,7 +46,7 @@ struct fixed_string {
 
     consteval std::string_view view() const
     {
-        return {value.data(), N - 1};
+        return std::string_view(std::span(value).first(N - 1));
     }
 };
 
