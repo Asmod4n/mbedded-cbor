@@ -1,0 +1,51 @@
+.TH "cbor::diagnostic_notation" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::diagnostic_notation \- prints an item as diagnostic notation (RFC 8949 section 8)
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
+.EE
+.SH DESCRIPTION
+Gives the text of the item in \f[CR]encoded\f[R] in the diagnostic
+notation of RFC 8949 section 8.
+A head that is not in preferred form carries its encoding indicator, for
+example \f[CR]1_0\f[R].
+Indefinite length is printed, for example \f[CR][_ 1]\f[R].
+A tag is printed as its number and its content; tag 29 is not resolved.
+.PP
+\f[CR]encoded\f[R] holds exactly one item.
+The call does not check tag content, UTF\-8 or duplicate keys.
+.SH ERRORS
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the bytes end before the item ends.
+.IP \(bu 2
+\f[CR]syntax_error\f[R]: a head is not well\-formed, a chunk of an
+indefinite string has the wrong type, or bytes follow the item.
+.IP \(bu 2
+\f[CR]nesting_depth_exceeded\f[R]: the item is deeper than
+limits\f[CR]::nesting_depth\f[R].
+.IP \(bu 2
+\f[CR]string_length_exceeded\f[R],
+\f[CR]container_elements_exceeded\f[R]: a limit is set and the item goes
+past it.
+.SH NOTES
+O(n).
+The string allocates; its size is O(n).
+The stack is O(d), d the nesting depth.
+.SH EXAMPLES
+.IP
+.EX
+\f[I]// bytes: {\(dqa\(dq: [1, 2.5, h\(aq01\(aq]}\f[R]
+cbor::diagnostic_notation(bytes);   \f[I]// \(dq{\(rs\(dqa\(rs\(dq: [1, 2.5, h\(aq01\(aq]}\(dq\f[R]
+\f[I]// bytes: 9f 01 ff\f[R]
+cbor::diagnostic_notation(bytes);   \f[I]// \(dq[_ 1]\(dq\f[R]
+\f[I]// bytes: 01 02\f[R]
+cbor::diagnostic_notation(bytes);   \f[I]// syntax_error\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::error(3)

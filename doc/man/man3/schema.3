@@ -1,0 +1,741 @@
+'\" t
+.TH "cbor::schema" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::schema, cbor::schema::encode, cbor::schema::decode, cbor::schema::path, cbor::schema::at_path, cbor::schema::unverified_path, cbor::schema::unverified_at_path, cbor::schema::unverified_decode, cbor::schema::description, cbor::schema::description_place, cbor::schema::fixed_size, cbor::schema::member_offset, cbor::schema::accessor, cbor::schema::accessor<fixed_element<S>>, cbor::typed_array_view, cbor::tag \- structs as Packed CBOR, fields at fixed offsets
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+static std::expected<std::string, cbor::error> encode(T const &value)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+
+\f[B]template\f[R] <\f[B]class\f[R] Target>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+static std::expected<std::size_t, cbor::error> encode(T const &value, Target &&target);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+static std::expected<ref<T>, cbor::error> decode(Encoded &&encoded);
+
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<Encoded const> encoded)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<Encoded const> encoded, T target)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>);
+
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+static std::expected<accessor<>, cbor::error> path(Encoded &&encoded);
+
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<accessor<>, cbor::error> path(std::shared_ptr<Encoded const> encoded)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<accessor<>, cbor::error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+.EE
+.IP
+.EX
+\f[B]template\f[R] <fixed_string Path, std::convertible_to<std::size_t>... Index>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with(\(aq$\(aq) &&
+             reflection::path_valid<T, Path, 1>() && \f[B]sizeof\f[R]...(Index) == reflection::index_arguments<Path>() &&
+             value_holds_no_view<\f[B]typename\f[R] \f[B]decltype\f[R](reflection::path_result<T, T, Path, 1>())::type>)
+static \f[B]auto\f[R] at_path(std::string_view const encoded, Index const... indexes);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<accessor<T, \f[B]false\f[R]>, error> unverified_path(Encoded &&encoded);
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<accessor<T, \f[B]false\f[R]>, error> unverified_path(std::shared_ptr<Encoded const> encoded);
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<accessor<T, \f[B]false\f[R]>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded);
+
+\f[B]template\f[R] <fixed_string Path, std::convertible_to<std::size_t>... Index>
+static \f[B]auto\f[R] unverified_at_path(std::string_view const encoded, Index const... indexes);
+
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, error> unverified_decode(Encoded &&encoded);
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded);
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target);
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded);
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target);
+.EE
+.IP
+.EX
+\f[B]enum\f[R] \f[B]class\f[R] description_place { inside, apart };
+
+static \f[B]constexpr\f[R] std::span<char const> description();
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] U = T>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+static \f[B]consteval\f[R] std::size_t fixed_size();
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]auto\f[R] Member, \f[B]class\f[R] U = T>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+static \f[B]consteval\f[R] std::size_t member_offset();
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] U = T>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+\f[B]class\f[R] accessor {
+\f[B]public\f[R]:
+    \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] Self, std::convertible_to<std::size_t>... Index>
+        \f[B]requires\f[R](((Path.view().starts_with(\(aq\(at\(aq) && reflection::path_valid<U, Path, 1>()) ||
+                  (Path.view().starts_with(\(aq$\(aq) && reflection::path_valid<T, Path, 1>())) &&
+                 \f[B]sizeof\f[R]...(Index) == reflection::index_arguments<Path>() && std::is_lvalue_reference_v<Self>)
+    \f[B]auto\f[R] at_path(\f[B]this\f[R] Self &&self, Index const... indexes);
+
+    \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] Self, std::convertible_to<std::size_t>... Index>
+        \f[B]requires\f[R](std::same_as<U, T> && Path.view().starts_with(\(aq$\(aq) && reflection::path_valid<T, Path, 1>() &&
+                 \f[B]sizeof\f[R]...(Index) == reflection::index_arguments<Path>())
+    \f[B]auto\f[R] view(\f[B]this\f[R] Self &&self, Index const... indexes);
+
+    std::size_t size() const \f[B]requires\f[R](listed);
+
+    \f[B]class\f[R] iterator;   \f[I]// value_type is accessor<fixed_element<element>>\f[R]
+    iterator begin() const \f[B]requires\f[R](reflection::is_fixed_vector<U>);
+    iterator end() const \f[B]requires\f[R](reflection::is_fixed_vector<U>);
+};
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] S>
+\f[B]struct\f[R] fixed_element {};
+
+\f[B]template\f[R] <\f[B]class\f[R] S>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+\f[B]class\f[R] accessor<fixed_element<S>> {
+\f[B]public\f[R]:
+    \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] Self, std::convertible_to<std::size_t>... Index>
+        \f[B]requires\f[R](((Path.view().starts_with(\(aq\(at\(aq) && reflection::path_valid<S, Path, 1>()) ||
+                  (Path.view().starts_with(\(aq$\(aq) && reflection::path_valid<T, Path, 1>())) &&
+                 \f[B]sizeof\f[R]...(Index) == reflection::index_arguments<Path>() && std::is_lvalue_reference_v<Self>)
+    \f[B]auto\f[R] at_path(\f[B]this\f[R] Self &&self, Index const... indexes);
+};
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] E>
+\f[B]class\f[R] typed_array_view {
+\f[B]public\f[R]:
+    \f[B]class\f[R] iterator;   \f[I]// random access; operator* returns E\f[R]
+    std::size_t size() const;
+    bool empty() const;
+    \f[B]template\f[R] <\f[B]class\f[R] Self> \f[B]requires\f[R] std::is_lvalue_reference_v<Self> iterator begin(\f[B]this\f[R] Self &&self);
+    \f[B]template\f[R] <\f[B]class\f[R] Self> \f[B]requires\f[R] std::is_lvalue_reference_v<Self> iterator end(\f[B]this\f[R] Self &&self);
+    iterator cbegin() const;
+    iterator cend() const;
+    std::reverse_iterator<iterator> rbegin() const;
+    std::reverse_iterator<iterator> rend() const;
+    std::reverse_iterator<iterator> crbegin() const;
+    std::reverse_iterator<iterator> crend() const;
+    E front() const;
+    E back() const;
+    std::expected<typed_array_view, error> first(std::size_t const n) const &;
+    std::expected<typed_array_view, error> first(std::size_t const n) &&;
+    std::expected<typed_array_view, error> last(std::size_t const n) const &;
+    std::expected<typed_array_view, error> last(std::size_t const n) &&;
+    std::expected<E, error> at(std::size_t const i) const;
+    E \f[B]operator\f[R][](std::size_t const i) const;
+};
+.EE
+.IP
+.EX
+\f[B]struct\f[R] tag {
+    std::uint64_t number;
+};
+.EE
+.SH DESCRIPTION
+\f[CR]cbor::schema<T>\f[R] writes a struct as Packed CBOR and reads each
+field of fixed size at an offset that the compiler computes.
+It reads only the description of each struct and builds on every
+compiler.
+With reflection it also checks each description against the members.
+.PP
+The examples use the types in test/doc_types.hpp, namespace
+\f[CR]doc_reference_schema\f[R].
+.SS cbor::schema::encode
+Writes \f[CR]value\f[R] as one Packed CBOR message (wire).
+The first form returns a new \f[CR]std::string\f[R].
+The second form appends to \f[CR]target\f[R] and returns the count of
+bytes of the message.
+\f[CR]target\f[R] is a \f[CR]std::string\f[R], a container of
+\f[CR]char\f[R], a \f[CR]std::span<char>\f[R] or a message writer.
+Only public members are written.
+.PP
+Each field has a head of fixed width.
+So a value does not change the offset of a field.
+.SS cbor::schema::decode
+Reads the whole message into a \f[CR]T\f[R] and returns it in a
+\f[CR]cbor::ref<T>\f[R] that holds the owner of the bytes.
+A \f[CR]std::string_view\f[R] member views the bytes.
+Nothing is copied: an rvalue moves into a new owner, and an owner is
+read in place.
+An lvalue \f[CR]std::string\f[R] does not compile.
+\f[CR]target\f[R] gives the start value, for example \f[CR]std::pmr\f[R]
+containers with their memory resource; the forms with \f[CR]target\f[R]
+need a default constructor of \f[CR]T\f[R].
+.PP
+A struct with a default constructor is made with it, and then each
+described member is set.
+A class with no default constructor is made by a constructor that takes
+the described members in the order of the description: decode reads them
+into a \f[CR]std::tuple\f[R] and calls \f[CR]std::make_from_tuple\f[R].
+An element of a container with an allocator makes that tuple with the
+allocator of the container.
+.SS cbor::schema::path
+Opens a message and gives the root accessor.
+An rvalue moves into a new owner.
+An owner is read in place.
+Nothing is copied.
+An lvalue \f[CR]std::string\f[R] does not compile.
+.PP
+\f[CR]path\f[R] checks the length, the table, the directory and the tag
+of the root once.
+It reads no field.
+.SS cbor::schema::at_path
+Reads one value at \f[CR]Path\f[R] and returns a
+\f[CR]std::expected\f[R] of it.
+It makes the checks of path and of an accessor in one call and keeps
+nothing.
+It exists only for a value that holds no view into the bytes: a number,
+a \f[CR]bool\f[R], an enum, or a \f[CR]std::optional\f[R] of one.
+.PP
+A path starts with \f[CR]$\f[R], names a member with \f[CR].name\f[R]
+and an element with \f[CR][n]\f[R].
+\f[CR][]\f[R] takes its index from the next argument.
+On an array or a vector of \f[CR]std::uint8_t\f[R] or
+\f[CR]std::byte\f[R], \f[CR][n]\f[R] reads one byte.
+A text, a list or a struct needs an accessor.
+.SS cbor::schema::unverified_path, unverified_at_path, unverified_decode
+Each function takes the arguments of path, at_path or decode and gives
+the same result for a message that \f[CR]encode\f[R] wrote.
+It does not check the data of the message.
+It checks every bound, so no read leaves the input.
+Use it for a message from a peer that you trust.
+.PP
+\f[CR]unverified_path\f[R] gives an \f[CR]accessor<T, false>\f[R].
+Every accessor that it gives on a path is unverified too, and so is each
+element of a vector of fixed\-size structs.
+\f[CR]view\f[R] of an unverified accessor does not check the tag of the
+typed array.
+.PP
+\f[B]What is not checked\f[R]
+.IP \(bu 2
+the tag of each struct;
+.IP \(bu 2
+the head of a number, a \f[CR]bool\f[R], a fixed string and a
+\f[CR]std::array\f[R];
+.IP \(bu 2
+the head byte of a text, a list and a map, and the tag of a typed array;
+.IP \(bu 2
+the prefix of a vector of fixed\-size structs;
+.IP \(bu 2
+the start of the table and the fillers before the items;
+.IP \(bu 2
+that the length of a typed array is a multiple of its element size;
+.IP \(bu 2
+that a \f[CR]bool\f[R] byte is 0 or 1: any other byte reads as
+\f[CR]true\f[R];
+.IP \(bu 2
+in \f[CR]unverified_decode\f[R], the order of the references and of the
+items.
+.PP
+\f[B]What is checked\f[R]
+.IP \(bu 2
+that each head, length and item lies inside the message;
+.IP \(bu 2
+that each directory entry lies between the start and the end of the
+items;
+.IP \(bu 2
+each index against the count of its list, its table or its directory;
+.IP \(bu 2
+the limits of the build and, in \f[CR]unverified_decode\f[R], the
+nesting depth.
+.SS cbor::schema::description, description_place
+\f[CR]description()\f[R] gives the table entries that are the same in
+every message of \f[CR]T\f[R]: the 114 entry of each struct and the
+description of each element type of a vector of fixed\-size structs
+(wire).
+The bytes are a CBOR sequence (RFC 8742).
+The compiler makes them.
+.PP
+Each of \f[CR]encode\f[R], \f[CR]path\f[R], \f[CR]at_path\f[R],
+\f[CR]decode\f[R] and the unverified forms takes
+\f[CR]description_place\f[R] as a template argument.
+The default is \f[CR]inside\f[R]: the message holds the description.
+With \f[CR]apart\f[R], \f[CR]encode\f[R] writes the message without the
+description, and the read forms read such a message.
+Use it to store the description once and the data of each key in another
+place, for example in two named databases of LMDB.
+.IP
+.EX
+\f[B]template\f[R] <description_place D = description_place::inside, ...> static ... encode(T const &value, ...);
+\f[B]template\f[R] <description_place D = description_place::inside, ...> static ... path(...);
+\f[B]template\f[R] <fixed_string Path, description_place D = description_place::inside, ...> static \f[B]auto\f[R] at_path(...);
+\f[B]template\f[R] <description_place D = description_place::inside, ...> static ... decode(...);
+.EE
+.PP
+The data form is one well\-formed CBOR item: tag 113 on the table
+without the description and the rump.
+The count of the table counts only the entries that it holds.
+The references keep the indices of the message with the description, so
+only \f[CR]cbor::schema<T>\f[R] with \f[CR]apart\f[R] reads the data
+form.
+A generic decoder of Packed CBOR does not.
+.PP
+The size of the data form plus the size of \f[CR]description()\f[R] is
+the size of the message.
+.SS cbor::schema::fixed_size
+Gives the count of bytes that a field of type \f[CR]U\f[R] takes in a
+message of \f[CR]T\f[R].
+With no argument, it gives the size of the root record of \f[CR]T\f[R].
+The root record is the end of the message.
+.PP
+A number takes its head and its argument of fixed width.
+A struct takes its class tag, its table reference, a record head of 5
+bytes and its fields.
+A text, a list, a map or an optional of variable size takes a reference
+\f[CR]6(N)\f[R] of 6 bytes.
+.SS cbor::schema::member_offset
+Gives the offset of the head of \f[CR]Member\f[R] from the start of the
+record of \f[CR]U\f[R].
+\f[CR]Member\f[R] is a pointer to a described member, \f[CR]&U::m\f[R].
+With reflection, \f[CR]Member\f[R] can also be a reflection of the
+member, \f[CR]\(ha\(haU::m\f[R].
+The record starts with the class tag, the table reference and the record
+head.
+The fields follow the key order of RFC 8949 4.2.1: a shorter key first,
+then the bytes of the key.
+This order is not the order of declaration.
+.PP
+The root record of \f[CR]T\f[R] starts at
+\f[CR]size \- fixed_size()\f[R] of the message.
+.SS cbor::schema::accessor
+Reads the part \f[CR]U\f[R] of a message of \f[CR]T\f[R].
+A path that starts with \f[CR]\(at\f[R] starts at \f[CR]U\f[R].
+A path that starts with \f[CR]$\f[R] starts at the root.
+The result is a \f[CR]std::expected\f[R]: the value of a number,
+\f[CR]bool\f[R] or enum; a \f[CR]std::string_view\f[R] of a text; the
+accessor of a struct, a list or a map.
+Every result holds the owner of the bytes.
+.PP
+\f[CR]view\f[R] gives a typed_array_view of a list of numbers.
+It exists on the root accessor only.
+\f[CR]size()\f[R] gives the count of a list or a map.
+An accessor of a vector of fixed\-size structs is a random access range
+of fixed_element accessors.
+.SS cbor::schema::accessor<fixed_element<S>>
+Reads one element of type \f[CR]S\f[R] in a vector of fixed\-size
+structs.
+Such a vector is one byte string of its elements under tag 32873 (wire).
+A path that starts with \f[CR]\(at\f[R] reads a member of the element at
+its offset.
+A path that starts with \f[CR]$\f[R] starts at the root.
+.PP
+\f[CR]*it\f[R] of the accessor of the vector, and
+\f[CR]at_path<\(dq\(at[]\(dq>\f[R] on it, give this accessor.
+It holds the owner of the bytes.
+.SS cbor::typed_array_view
+A random access, sized range over an RFC 8746 typed array in the
+message.
+accessor::view makes it.
+It holds the owner of the bytes.
+Each element is a value of \f[CR]E\f[R], read from little endian, not a
+reference.
+.SS cbor::tag
+The tag number of a struct, in its description:
+\f[CR]static constexpr std::optional<cbor::tag> tag = cbor::tag{1802};\f[R]
+in cbor::describe_members\f[CR]<point>\f[R].
+\f[CR]schema\f[R] writes the number as the first item of each record of
+the struct.
+A read compares it, so a message of another struct gives
+\f[CR]incorrect_type\f[R].
+\f[CR]structs\f[R] takes the same description.
+.SS The bytes that cbor::schema::encode writes
+A message is Packed CBOR
+(\f[CR]refs/draft\-ietf\-cbor\-packed\-19.txt\f[R]):
+.IP
+.EX
+113([table, rump])
+.EE
+.PP
+.TS
+tab(@);
+l l.
+T{
+Part
+T}@T{
+Bytes
+T}
+_
+T{
+tag 113
+T}@T{
+Basic\-Packed\-CBOR, on an array of two
+T}
+T{
+table
+T}@T{
+an array with a count of 4 bytes
+T}
+T{
+114([keys])
+T}@T{
+the record function: the keys of one struct, one entry for each struct
+T}
+T{
+description
+T}@T{
+\f[CR][class tag, [[key, RFC 8746 tag], ...]]\f[R]: one entry for each
+element type of a vector of fixed\-size structs
+T}
+T{
+directory
+T}@T{
+a byte string of 4\-byte offsets of the parts of variable size
+T}
+T{
+fillers
+T}@T{
+\f[CR]undefined\f[R], so that the parts start at index 16 or later
+T}
+T{
+parts
+T}@T{
+the texts, byte strings, lists and maps
+T}
+T{
+rump
+T}@T{
+the root record, at the end of the message
+T}
+.TE
+.PP
+A record is the class tag (tag), a straight reference tag 128 to 135 (or
+\f[CR]6([n, ...])\f[R]) to its 114 entry, and an array with a count of 4
+bytes of its fields.
+Each field has a head of fixed width.
+A field of variable size is \f[CR]6(N)\f[R], a shared reference with a
+4\-byte \f[CR]N\f[R], into the table.
+.PP
+A list of a number is an RFC 8746 typed array, little endian.
+A \f[CR]std::vector<double>\f[R] is tag 86.
+.PP
+A vector of fixed\-size structs is
+\f[CR]32873([simple(j), h\(aq...\(aq])\f[R].
+\f[CR]j\f[R] is the index of its description in the table; from index 16
+on, \f[CR]6(N)\f[R] stands in place of \f[CR]simple(j)\f[R].
+The byte string holds the elements with no padding, little endian.
+Tag 32873 is provisional: the IANA registry does not have it yet.
+.PP
+A decoder of Packed CBOR reads the message as a map with the keys of the
+members.
+.SH ERRORS
+.SS cbor::schema::encode
+.IP \(bu 2
+\f[CR]no_buffer_space\f[R]: a \f[CR]std::span<char>\f[R] is shorter than
+the message.
+.IP \(bu 2
+\f[CR]value_too_large\f[R]: the message is longer than 2\(ha32 \- 1
+bytes.
+.IP \(bu 2
+An error of the message writer comes back as its \f[CR]cbor::error\f[R].
+.IP \(bu 2
+A struct with no tag, two structs with one tag, or a tag of a standard
+type does not compile.
+.SS cbor::schema::decode
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the message is shorter than its table and
+root.
+.IP \(bu 2
+\f[CR]incorrect_type\f[R]: a message of another struct, or a wrong head.
+.IP \(bu 2
+\f[CR]syntax_error\f[R], \f[CR]unpopulated_table_index\f[R]: a broken
+directory.
+.IP \(bu 2
+\f[CR]inadmissible_type_for_tag_content\f[R]: a typed array whose length
+is not a multiple of its element size.
+.IP \(bu 2
+\f[CR]nesting_depth_exceeded\f[R], \f[CR]not_enough_memory\f[R].
+.IP \(bu 2
+A null or empty owner throws \f[CR]std::logic_error\f[R].
+.SS cbor::schema::path
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the message is shorter than its table and
+root, or its end is missing.
+.IP \(bu 2
+\f[CR]incorrect_type\f[R]: a message of another layout, or a wrong tag
+of the root.
+.IP \(bu 2
+A null or empty owner throws \f[CR]std::logic_error\f[R].
+.SS cbor::schema::at_path
+.IP \(bu 2
+\f[CR]too_little_data\f[R], \f[CR]incorrect_type\f[R]: as path.
+.IP \(bu 2
+\f[CR]index_out_of_bounds\f[R]: an index past the end of a list.
+.IP \(bu 2
+\f[CR]unpopulated_table_index\f[R], \f[CR]syntax_error\f[R]: a broken
+reference.
+.IP \(bu 2
+A member that \f[CR]T\f[R] does not have, a wrong count of indexes, or a
+path to a text does not compile.
+.SS cbor::schema::unverified_path, unverified_at_path, unverified_decode
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: a message that ends too early, or a length
+past the end.
+.IP \(bu 2
+\f[CR]index_out_of_bounds\f[R]: an index past the end of a list.
+.IP \(bu 2
+\f[CR]unpopulated_table_index\f[R], \f[CR]syntax_error\f[R]: a reference
+or a directory entry outside the table or the items.
+.IP \(bu 2
+A wrong byte of data gives a value, not an error.
+.SS cbor::schema::description, description_place
+.IP \(bu 2
+\f[CR]incorrect_type\f[R]: a message with the description read with
+\f[CR]apart\f[R], or the data form read with \f[CR]inside\f[R].
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the data form read with \f[CR]inside\f[R],
+when it is shorter than the least message of \f[CR]T\f[R].
+.IP \(bu 2
+Every other error of path, at_path and decode.
+.SS cbor::schema::fixed_size
+None.
+A type that has no fixed size, for example a struct with a base class,
+does not compile.
+.SS cbor::schema::member_offset
+None.
+A \f[CR]Member\f[R] of another struct, or a member that the description
+does not list, does not compile.
+.SS cbor::schema::accessor
+.IP \(bu 2
+\f[CR]index_out_of_bounds\f[R]: an index past the end of a list.
+.IP \(bu 2
+\f[CR]incorrect_type\f[R]: a wrong head or tag on the path.
+.IP \(bu 2
+\f[CR]unpopulated_table_index\f[R], \f[CR]syntax_error\f[R]: a broken
+reference.
+.IP \(bu 2
+\f[CR]at_path\f[R] on a temporary does not compile.
+A moved\-from accessor throws \f[CR]std::logic_error\f[R].
+.SS cbor::schema::accessor<fixed_element<S>>
+.IP \(bu 2
+\f[CR]index_out_of_bounds\f[R]: an index past the end of the vector,
+from the step that gave the element.
+.IP \(bu 2
+A path with \f[CR]$\f[R] gives the errors of accessor.
+.IP \(bu 2
+\f[CR]at_path\f[R] on a temporary does not compile.
+A moved\-from accessor throws \f[CR]std::logic_error\f[R].
+.SS cbor::typed_array_view
+.IP \(bu 2
+\f[CR]at\f[R], \f[CR]first\f[R], \f[CR]last\f[R]:
+\f[CR]index_out_of_bounds\f[R] as a value.
+.IP \(bu 2
+\f[CR]operator[]\f[R] outside the view, \f[CR]front\f[R] and
+\f[CR]back\f[R] on an empty view throw \f[CR]std::logic_error\f[R].
+.IP \(bu 2
+\f[CR]begin\f[R] and \f[CR]end\f[R] on a temporary do not compile.
+.SS cbor::tag
+These do not compile in \f[CR]schema<T>\f[R]:
+.IP \(bu 2
+a struct in \f[CR]T\f[R] with no description, or with
+\f[CR]cbor::untagged\f[R];
+.IP \(bu 2
+two structs in \f[CR]T\f[R] with one number;
+.IP \(bu 2
+a number of a standard type: 0, 1, 2, 3, 24, 64 to 87, 100, 258, 1004
+and 32873;
+.IP \(bu 2
+a number that the IANA registry calls always invalid: 21334, 65535,
+4294967295 and 18446744073709551615.
+.SH NOTES
+.SS cbor::schema::encode
+O(i + n), i the count of items of the value, n the size of the message.
+The first form makes one \f[CR]std::string\f[R].
+A container grows once.
+A span allocates nothing.
+.SS cbor::schema::decode
+O(n), n the size of the message; a \f[CR]std::map\f[R] adds O(k log k).
+One allocation for each text, list and node of the result.
+.SS cbor::schema::path
+O(1) in the size of the message.
+The rvalue form makes one \f[CR]std::shared_ptr\f[R].
+.SS cbor::schema::at_path
+O(q + p): q the size of the table prefix, p the count of steps of the
+path.
+No allocation.
+.SS cbor::schema::unverified_path, unverified_at_path, unverified_decode
+As path, at_path and decode, without the checks above.
+.SS cbor::schema::description, description_place
+As encode, path, at_path and decode.
+\f[CR]description()\f[R] costs nothing at run time.
+.SS cbor::schema::fixed_size
+Compile time.
+No cost at run time.
+.SS cbor::schema::member_offset
+Compile time.
+No cost at run time.
+.SS cbor::schema::accessor
+\f[CR]at_path\f[R], \f[CR]view\f[R]: O(p), p the count of steps.
+\f[CR]size\f[R], \f[CR]begin\f[R], \f[CR]end\f[R]: O(1).
+No allocation.
+.SS cbor::schema::accessor<fixed_element<S>>
+O(p), p the count of steps.
+No allocation.
+.SS cbor::typed_array_view
+O(1) for each member.
+No allocation.
+.SS cbor::tag
+Compile time.
+The head of the number takes 1 to 9 bytes in each record.
+.SH EXAMPLES
+.SS cbor::schema::encode
+.IP
+.EX
+\f[B]auto\f[R] const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
+std::string out = \(dqx\(dq;
+\f[B]auto\f[R] const n = cbor::schema<tire>::encode(tire{17, 2.5f}, out);
+use(out.size() == 1 + *n);   \f[I]// true\f[R]
+.EE
+.SS cbor::schema::decode
+.IP
+.EX
+\f[I]// bytes: a std::string from schema<car>::encode(car{\(dqVolvo\(dq, 5, ...})\f[R]
+\f[B]auto\f[R] const back = cbor::schema<car>::decode(std::move(bytes));
+\f[B]if\f[R] (back)
+    use((*back)\->make);   \f[I]// \(dqVolvo\(dq\f[R]
+.EE
+.SS cbor::schema::path
+.IP
+.EX
+\f[I]// bytes: a std::string from schema<car>::encode(car{\(dqVolvo\(dq, 5, ...})\f[R]
+\f[B]auto\f[R] const root = cbor::schema<car>::path(std::move(bytes));
+\f[B]if\f[R] (root)
+    use(root\->at_path<\(dq$.make\(dq>());   \f[I]// \(dqVolvo\(dq\f[R]
+.EE
+.SS cbor::schema::at_path
+.IP
+.EX
+\f[I]// bytes: from schema<car>::encode(car{\(dqVolvo\(dq, 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})\f[R]
+cbor::schema<car>::at_path<\(dq$.seats\(dq>(bytes);                    \f[I]// 5\f[R]
+cbor::schema<car>::at_path<\(dq$.tires[1].diameter\(dq>(bytes);        \f[I]// 18\f[R]
+cbor::schema<car>::at_path<\(dq$.tires[].diameter\(dq>(bytes, 5uz);    \f[I]// error::index_out_of_bounds\f[R]
+.EE
+.SS cbor::schema::unverified_path, unverified_at_path, unverified_decode
+.IP
+.EX
+\f[I]// bytes: from schema<car>::encode(car{\(dqVolvo\(dq, 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})\f[R]
+cbor::schema<car>::unverified_at_path<\(dq$.seats\(dq>(bytes);                  \f[I]// 5\f[R]
+cbor::schema<car>::unverified_at_path<\(dq$.tires[].diameter\(dq>(bytes, 5uz);  \f[I]// error::index_out_of_bounds\f[R]
+
+\f[B]auto\f[R] const lane = cbor::schema<car>::unverified_path(std::string(bytes));
+lane\->at_path<\(dq$.tires[1].diameter\(dq>();                                   \f[I]// 18\f[R]
+.EE
+.SS cbor::schema::description, description_place
+.IP
+.EX
+\f[B]constexpr\f[R] \f[B]auto\f[R] apart = cbor::description_place::apart;
+\f[B]auto\f[R] const data = cbor::schema<car>::encode<apart>(car{\(dqVolvo\(dq, 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
+\f[B]auto\f[R] const description = cbor::schema<car>::description();
+data\->size() + description.size();                          \f[I]// the size of the message\f[R]
+cbor::schema<car>::at_path<\(dq$.seats\(dq, apart>(*data);        \f[I]// 5\f[R]
+cbor::schema<car>::at_path<\(dq$.seats\(dq>(*data);               \f[I]// error::incorrect_type or error::too_little_data\f[R]
+cbor::schema<car>::path<apart>(std::string(*data))\->at_path<\(dq$.tires[1].diameter\(dq>();   \f[I]// 18\f[R]
+.EE
+.SS cbor::schema::fixed_size
+.IP
+.EX
+cbor::schema<tire>::fixed_size();                  \f[I]// 18\f[R]
+cbor::schema<tire>::fixed_size<std::uint16_t>();   \f[I]// 3\f[R]
+cbor::schema<car>::fixed_size<std::string>();      \f[I]// 6\f[R]
+.EE
+.SS cbor::schema::member_offset
+.IP
+.EX
+\f[I]// tire: std::uint16_t diameter; float pressure;\f[R]
+cbor::schema<tire>::member_offset<&tire::diameter>();   \f[I]// 10\f[R]
+cbor::schema<tire>::member_offset<&tire::pressure>();   \f[I]// 13\f[R]
+\f[I]// bytes[bytes.size() \- fixed_size() + 13] is 0xfa, the head of a float\f[R]
+.EE
+.SS cbor::schema::accessor
+.IP
+.EX
+\f[I]// bytes: from schema<car>::encode(car{\(dqVolvo\(dq, 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})\f[R]
+\f[B]auto\f[R] const root = cbor::schema<car>::path(std::move(bytes));
+\f[B]auto\f[R] const tires = root\->at_path<\(dq$.tires\(dq>();
+tires\->size();                       \f[I]// 2\f[R]
+tires\->at_path<\(dq\(at[1].diameter\(dq>();   \f[I]// 18\f[R]
+tires\->at_path<\(dq$.seats\(dq>();         \f[I]// 5\f[R]
+\f[B]for\f[R] (\f[B]auto\f[R] const t : *tires)
+    use(*t.at_path<\(dq\(at.diameter\(dq>()); \f[I]// 17, then 18\f[R]
+root\->view<\(dq$.track\(dq>()\->size();     \f[I]// 3\f[R]
+.EE
+.SS cbor::schema::accessor<fixed_element<S>>
+.IP
+.EX
+\f[I]// bytes: from schema<car>::encode(car{\(dqVolvo\(dq, 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})\f[R]
+\f[B]auto\f[R] const root = cbor::schema<car>::path(std::move(bytes));
+\f[B]auto\f[R] const second = root\->at_path<\(dq$.tires[]\(dq>(1uz);
+second\->at_path<\(dq\(at.diameter\(dq>();   \f[I]// 18\f[R]
+second\->at_path<\(dq\(at.pressure\(dq>();   \f[I]// 2.25f\f[R]
+second\->at_path<\(dq$.seats\(dq>();      \f[I]// 5\f[R]
+.EE
+.SS cbor::typed_array_view
+.IP
+.EX
+\f[I]// bytes: from schema<car>::encode(car{..., {1.0, 2.0, 3.0}}), track is std::vector<double>\f[R]
+\f[B]auto\f[R] const root = cbor::schema<car>::path(std::move(bytes));
+\f[B]auto\f[R] const track = root\->view<\(dq$.track\(dq>();
+std::accumulate(track\->begin(), track\->end(), 0.0);   \f[I]// 6.0\f[R]
+(*track)[1];                                          \f[I]// 2.0\f[R]
+track\->at(3);                                         \f[I]// error::index_out_of_bounds\f[R]
+track\->last(2)\->front();                              \f[I]// 2.0\f[R]
+.EE
+.SS cbor::tag
+.IP
+.EX
+\f[B]struct\f[R] point {
+    float x;
+    float y;
+};
+
+\f[B]template\f[R] <>
+\f[B]struct\f[R] cbor::describe_members<point> {
+    static \f[B]constexpr\f[R] std::optional<cbor::tag> tag = cbor::tag{1802};
+    static \f[B]constexpr\f[R] std::tuple members{CBOR_MEMBER(point, x), CBOR_MEMBER(point, y)};
+};
+\f[B]auto\f[R] const bytes = cbor::schema<point>::encode(point{1, 2});
+\f[I]// the root record starts with d9 07 0a, the head of tag 1802\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)

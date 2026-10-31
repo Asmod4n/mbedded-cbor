@@ -1,0 +1,331 @@
+.TH "cbor::at_path" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::at_path, cbor::jsonpath::compile, cbor::jsonpath::query, cbor::nodelist, cbor::fixed_string, cbor::is_valid_path_v, cbor::is_singular_query_v \- read one value by its JSONPath
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T>
+    \f[B]requires\f[R](is_singular_query_v<Path> &&
+             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
+              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+              || std::is_same_v<T, std::float128_t>
+#endif
+              ))
+std::expected<T, error> at_path(std::string_view encoded);
+
+\f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T, borrowed_range_of_chars Encoded>
+    \f[B]requires\f[R](is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
+
+\f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T, owning_range_of_chars Encoded>
+    \f[B]requires\f[R](is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
+
+\f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T, owning_range_of_chars Encoded>
+    \f[B]requires\f[R](is_singular_query_v<Path> &&
+             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+              std::is_same_v<T, typed_array>))
+std::expected<ref<T>, error> at_path(Encoded &&encoded);
+
+\f[B]template\f[R] <fixed_string Path, copied_value T>
+    \f[B]requires\f[R] is_singular_query_v<Path>
+std::expected<T, error> at_path(std::string_view encoded);
+
+\f[B]template\f[R] <scalar_result T>
+std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e);
+
+\f[B]template\f[R] <view_result T, borrowed_range_of_chars Encoded>
+std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
+                                     jsonpath::query<T> const &e);
+
+\f[B]template\f[R] <\f[B]class\f[R] T, borrowed_range_of_chars Encoded>
+    \f[B]requires\f[R](std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
+std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
+                                jsonpath::query<T> const &e);
+
+\f[B]template\f[R] <\f[B]class\f[R] T, owning_range_of_chars Encoded>
+    \f[B]requires\f[R](view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
+std::expected<\f[B]typename\f[R] jsonpath::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
+                                                                       jsonpath::query<T> const &e);
+
+\f[B]template\f[R] <\f[B]class\f[R] T, owning_range_of_chars Encoded>
+    \f[B]requires\f[R](view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
+std::expected<\f[B]typename\f[R] jsonpath::query<T>::result_type, error> at_path(Encoded &&encoded,
+                                                                       jsonpath::query<T> const &e);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] T>
+    \f[B]requires\f[R] path_result<T>
+static std::expected<query<T>, error> compile(std::string_view const path);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] T>
+    \f[B]requires\f[R] path_result<T>
+\f[B]class\f[R] query
+{
+\f[B]public\f[R]:
+    \f[B]using\f[R] value_type = T;
+    \f[B]using\f[R] result_type = std::conditional_t<view_result<T>, ref<T>, T>;
+
+    query(query const &) = \f[B]default\f[R];
+    query &\f[B]operator\f[R]=(query const &) = \f[B]default\f[R];
+    query(query &&other) \f[B]noexcept\f[R];
+    query &\f[B]operator\f[R]=(query &&other) \f[B]noexcept\f[R];
+    \(tiquery() = \f[B]default\f[R];
+};
+.EE
+.IP
+.EX
+\f[B]using\f[R] nodelist = std::vector<lazy>;
+.EE
+.IP
+.EX
+\f[B]template\f[R] <std::size_t N>
+\f[B]struct\f[R] fixed_string {
+    std::array<char, N> value;
+
+    \f[B]consteval\f[R] fixed_string(char const (&text)[N]);
+
+    \f[B]consteval\f[R] std::string_view view() const;
+};
+.EE
+.IP
+.EX
+\f[B]template\f[R] <fixed_string Path>
+\f[B]class\f[R] is_valid_path;
+
+\f[B]template\f[R] <fixed_string Path>
+\f[B]inline\f[R] \f[B]constexpr\f[R] bool is_valid_path_v = is_valid_path<Path>::value;
+.EE
+.IP
+.EX
+\f[B]template\f[R] <fixed_string Path>
+\f[B]class\f[R] is_singular_query;
+
+\f[B]template\f[R] <fixed_string Path>
+\f[B]inline\f[R] \f[B]constexpr\f[R] bool is_singular_query_v = is_singular_query<Path>::value;
+.EE
+.SH DESCRIPTION
+The functions and types that read a value by its JSONPath (RFC 9535).
+.SS cbor::at_path
+Reads the value at a JSONPath (RFC 9535) in \f[CR]encoded\f[R], with no
+decode of the rest.
+The first five forms take the path as a string literal, and the compiler
+checks it.
+The other forms take a query that compile made at run time.
+.PP
+A number, \f[CR]bool\f[R], \f[CR]std::nullptr_t\f[R] or
+\f[CR]simple_value\f[R] comes back as a value from a
+\f[CR]std::string_view\f[R].
+A text, a byte string or a typed array comes back as a view in a
+\f[CR]ref<T>\f[R], and the \f[CR]ref\f[R] holds the owner of the bytes.
+\f[CR]T\f[R] \f[CR]std::string\f[R] or \f[CR]std::vector<std::byte>\f[R]
+copies the value out of the bytes.
+A \f[CR]lazy\f[R] or a nodelist comes only from a query.
+No form copies the input bytes.
+The \f[CR]Encoded &&\f[R] forms move the bytes into a new owner.
+.SS cbor::jsonpath::compile
+Parses a JSONPath (RFC 9535) at run time and gives a query.
+The query owns its data, so \f[CR]path\f[R] can end after the call.
+An apply of the query does not parse again.
+\f[CR]T\f[R] is the result type: a scalar, a view type,
+\f[CR]cbor::lazy\f[R] or nodelist.
+.PP
+The call reads no CBOR.
+A path at run time reads the same grammar as a path at compile time,
+with EDN literals in brackets and in filters.
+.SS cbor::jsonpath::query
+A parsed run\-time path with the result type \f[CR]T\f[R].
+Only compile makes one: the default constructor is private.
+The query holds its own copy of the path data, and no view into the text
+of the path.
+One query reads any number of items.
+.PP
+at_path and \f[CR]lazy::at_path(e)\f[R] apply it.
+\f[CR]result_type\f[R] is what an apply gives: \f[CR]ref<T>\f[R] for a
+view type, \f[CR]T\f[R] for all other types.
+.SS cbor::nodelist
+The result of a path that can select many nodes: a wildcard, a
+descendant segment, a slice, a filter or several selectors.
+Each node is a \f[CR]cbor::lazy\f[R] and holds the owner of the bytes.
+A nodelist holds the values, not their places in the item.
+.PP
+\f[CR]lazy.at_path<Path, cbor::nodelist>()\f[R],
+\f[CR]compile<cbor::nodelist>\f[R] and at_path with such a query give a
+nodelist.
+A path that selects nothing gives an empty nodelist and no error.
+.SS cbor::fixed_string
+The type of a path at compile time.
+A string literal converts to it, so
+\f[CR]at_path<\(dq$.id\(dq, int>\f[R] names no \f[CR]fixed_string\f[R].
+A program names it in its own template that passes a path on.
+\f[CR]value\f[R] holds the characters and the closing zero.
+\f[CR]view()\f[R] gives the characters without the zero.
+.PP
+The constructor is \f[CR]consteval\f[R]: a \f[CR]fixed_string\f[R]
+exists only at compile time.
+It checks no grammar; is_valid_path_v does.
+.SS cbor::is_valid_path_v
+True when the grammar of RFC 9535, with EDN literals, accepts
+\f[CR]Path\f[R], and the path is not deeper than
+limits\f[CR]::nesting_depth\f[R].
+\f[CR]is_valid_path<Path>\f[R] is a \f[CR]std::bool_constant\f[R] with
+the same value.
+.PP
+A path with \f[CR]match\f[R] or \f[CR]search\f[R] is not valid here.
+\f[CR]lazy.at_path<Path>()\f[R] and
+\f[CR]lazy.at_path<Path, cbor::nodelist>()\f[R] require a valid path.
+.SS cbor::is_singular_query_v
+True when \f[CR]Path\f[R] is valid and is a singular query (RFC 9535
+2.3.5.1): a name or an index in each segment, and no descendant segment.
+A singular query selects one node at most.
+An EDN key in brackets is a name.
+\f[CR]is_singular_query<Path>\f[R] is a \f[CR]std::bool_constant\f[R]
+with the same value.
+.PP
+Every form of at_path with a path at compile time requires it.
+A path that is not singular reads only into a nodelist.
+.SH ERRORS
+.SS cbor::at_path
+\f[CR]key_not_found\f[R], \f[CR]index_out_of_bounds\f[R],
+\f[CR]not_indexable\f[R], \f[CR]incorrect_type\f[R],
+\f[CR]number_out_of_range\f[R], \f[CR]too_little_data\f[R],
+\f[CR]syntax_error\f[R], \f[CR]indefinite_length\f[R] and the limit
+errors, as ../../advanced/path.md, section 10, states.
+A path that is not valid or not singular does not compile.
+A null or empty owner and a moved\-from query throw
+\f[CR]std::logic_error\f[R].
+.SS cbor::jsonpath::compile
+.IP \(bu 2
+\f[CR]invalid_path\f[R]: the text is not valid, or it calls
+\f[CR]match\f[R] or \f[CR]search\f[R].
+.IP \(bu 2
+\f[CR]not_singular_query\f[R]: the path selects many nodes and
+\f[CR]T\f[R] is not \f[CR]nodelist\f[R].
+.IP \(bu 2
+\f[CR]nesting_depth_exceeded\f[R]: the path is deeper than
+limits\f[CR]::nesting_depth\f[R].
+.PP
+\f[CR]T\f[R] outside \f[CR]path_result\f[R] does not compile.
+.SS cbor::jsonpath::query
+The query itself gives no error.
+An apply of a moved\-from query throws \f[CR]std::logic_error\f[R].
+.SS cbor::nodelist
+The errors of the walk (at_path).
+\f[CR]nodelist_too_long\f[R]: one step selects more nodes than the
+top\-level item has bytes, which tag 29 makes possible.
+.SS cbor::fixed_string
+None.
+A text that is not a constant expression does not compile.
+.SS cbor::is_valid_path_v
+None.
+The value is a constant.
+.SS cbor::is_singular_query_v
+None.
+The value is a constant.
+.SH NOTES
+.SS cbor::at_path
+O(n): the bytes from the start up to the target.
+No allocation for a scalar or a view from an owner.
+A tag 29 on the way, or a key that is not a text, reads through a lazy
+and allocates.
+The \f[CR]Encoded &&\f[R] forms allocate the owner once.
+A nodelist allocates its vector.
+.SS cbor::jsonpath::compile
+O(t), t the characters of the path.
+It allocates the parsed path once.
+.SS cbor::jsonpath::query
+A copy copies the parsed path and allocates.
+A move allocates nothing.
+.SS cbor::nodelist
+The walk visits each node that a segment selects.
+The vector allocates; it holds N nodes at most, N the bytes of the
+top\-level item.
+.SS cbor::fixed_string
+None at run time.
+.SS cbor::is_valid_path_v
+O(t) at compile time, t the characters of the path.
+None at run time.
+.SS cbor::is_singular_query_v
+O(t) at compile time, t the characters of the path.
+None at run time.
+.SH EXAMPLES
+.SS cbor::at_path
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dquser\(dq: {\(dqid\(dq: 42, \(dqname\(dq: \(dqann\(dq}}\f[R]
+\f[B]auto\f[R] const id = cbor::at_path<\(dq$.user.id\(dq, std::int64_t>(bytes);          \f[I]// 42\f[R]
+\f[B]auto\f[R] const owner = std::make_shared<std::string const>(std::move(bytes));
+\f[B]auto\f[R] const name = cbor::at_path<\(dq$.user.name\(dq, std::string_view>(owner);  \f[I]// **name: \(dqann\(dq\f[R]
+\f[B]auto\f[R] const q = cbor::jsonpath::compile<std::int64_t>(\(dq$.user.id\(dq);
+\f[B]if\f[R] (q)
+    use(cbor::at_path(*owner, *q));                                       \f[I]// 42\f[R]
+.EE
+.SS cbor::jsonpath::compile
+.IP
+.EX
+\f[I]// owner: a std::shared_ptr<std::string const> with {\(dqa\(dq: [1, 2, 3]}\f[R]
+\f[B]auto\f[R] const q = cbor::jsonpath::compile<cbor::nodelist>(\(dq$.a[?\(at > 1]\(dq);
+\f[B]if\f[R] (q)
+    use(cbor::at_path(owner, *q)\->size());                   \f[I]// 2\f[R]
+cbor::jsonpath::compile<int>(\(dq$.a[*]\(dq).error();              \f[I]// not_singular_query\f[R]
+cbor::jsonpath::compile<cbor::lazy>(\(dq$.a[\(dq).error();         \f[I]// invalid_path\f[R]
+.EE
+.SS cbor::jsonpath::query
+.IP
+.EX
+\f[I]// first: {\(dqid\(dq: 1}, second: {\(dqid\(dq: 2, \(dqx\(dq: 0}\f[R]
+\f[B]auto\f[R] const q = cbor::jsonpath::compile<std::int64_t>(\(dq$.id\(dq).value();
+use(cbor::at_path(first, q));    \f[I]// 1\f[R]
+use(cbor::at_path(second, q));   \f[I]// 2\f[R]
+.EE
+.SS cbor::nodelist
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqa\(dq: [1, 2, 3]}\f[R]
+\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes)).value();
+\f[B]auto\f[R] const nodes = doc.at_path<\(dq$.a[*]\(dq, cbor::nodelist>();
+\f[B]if\f[R] (nodes)
+    use((*nodes)[2].get<int>());                       \f[I]// 3, of 3 nodes\f[R]
+doc.at_path<\(dq$.b\(dq, cbor::nodelist>()\->empty();         \f[I]// true\f[R]
+.EE
+.SS cbor::fixed_string
+.IP
+.EX
+\f[B]template\f[R] <cbor::fixed_string Path>
+std::int64_t read_or_zero(std::string_view bytes)
+{
+    \f[B]return\f[R] cbor::at_path<Path, std::int64_t>(bytes).value_or(0);
+}
+\f[I]// bytes: {\(dqid\(dq: 42}\f[R]
+read_or_zero<\(dq$.id\(dq>(bytes);    \f[I]// 42\f[R]
+read_or_zero<\(dq$.age\(dq>(bytes);   \f[I]// 0\f[R]
+.EE
+.SS cbor::is_valid_path_v
+.IP
+.EX
+cbor::is_valid_path_v<\(dq$..a\(dq>;                     \f[I]// true\f[R]
+cbor::is_valid_path_v<\(dq$.a[\(dq>;                     \f[I]// false\f[R]
+cbor::is_valid_path_v<\(dq$[?match(\(at.t, \(aqa.c\(aq)]\(dq>;    \f[I]// false\f[R]
+.EE
+.SS cbor::is_singular_query_v
+.IP
+.EX
+cbor::is_singular_query_v<\(dq$.a[0][\(aqb\(aq]\(dq>;    \f[I]// true\f[R]
+cbor::is_singular_query_v<\(dq$.a[*]\(dq>;         \f[I]// false\f[R]
+cbor::is_singular_query_v<\(dq$..a\(dq>;           \f[I]// false\f[R]
+cbor::is_singular_query_v<\(dq$.a[\(dq>;           \f[I]// false: not valid\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)
