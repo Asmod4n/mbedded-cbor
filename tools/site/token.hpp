@@ -29,7 +29,5 @@ struct line_range {
 
 } // namespace site
 
-CBOR_DEFINE_TYPE(site::token, cbor::tag{1970}, CBOR_MEMBER(site::token, kind), CBOR_MEMBER(site::token, offset),
-                 CBOR_MEMBER(site::token, length));
-CBOR_DEFINE_TYPE(site::token_file, cbor::tag{1971}, CBOR_MEMBER(site::token_file, path),
-                 CBOR_MEMBER(site::token_file, text), CBOR_MEMBER(site::token_file, tokens));
+CBOR_DEFINE_TYPE_MEMBERS(site::token, cbor::tag{1970}, kind, offset, length);
+CBOR_DEFINE_TYPE_MEMBERS(site::token_file, cbor::tag{1971}, path, text, tokens);
