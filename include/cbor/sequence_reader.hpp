@@ -1,3 +1,7 @@
+// Reads a CBOR Sequence that arrives in pieces. next() gives each
+// complete data item as a cbor::lazy, or too_little_data while the
+// item is not complete. Keeps an owned piece without a copy.
+// https://www.rfc-editor.org/rfc/rfc8742#section-2
 #pragma once
 
 #include <algorithm>

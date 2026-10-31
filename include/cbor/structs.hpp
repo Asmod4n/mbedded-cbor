@@ -1,3 +1,7 @@
+// Writes a C++ value as CBOR and reads it back into a value of the
+// same type. Writes a struct as a map with one key for each member.
+// Finds the members by reflection, by Boost.PFR or in describe_members.
+// https://www.rfc-editor.org/rfc/rfc8949
 #pragma once
 
 #include <algorithm>

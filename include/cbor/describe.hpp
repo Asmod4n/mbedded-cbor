@@ -1,3 +1,6 @@
+// Gives cbor::describe_members: the tag of a type and its members,
+// each with a CBOR map key. CBOR_DEFINE_TYPE and CBOR_MEMBER write
+// this description for one type.
 #pragma once
 
 #include <concepts>

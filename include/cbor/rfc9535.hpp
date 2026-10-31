@@ -1,3 +1,7 @@
+// Gives cbor::key, a map key for a lookup, and cbor::fixed_string, a
+// path as a template argument. Declares the checks of a valid path and
+// of a singular query, and the largest exact integer of JSONPath.
+// https://www.rfc-editor.org/rfc/rfc9535
 #pragma once
 
 #include <algorithm>

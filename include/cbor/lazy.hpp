@@ -1,3 +1,7 @@
+// Reads a CBOR data item in place, in bytes with a shared owner.
+// Finds a value by key, by index or by path. Gives a text, a byte
+// string, an array or a map as a view of these bytes.
+// https://www.rfc-editor.org/rfc/rfc8949
 #pragma once
 
 #include <algorithm>

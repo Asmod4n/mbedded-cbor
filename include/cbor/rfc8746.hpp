@@ -1,3 +1,6 @@
+// Gives cbor::typed_array, a typed array tag and its bytes. Gives the
+// tag numbers 64 to 87 and the bit fields of a typed array tag.
+// https://www.rfc-editor.org/rfc/rfc8746#section-2
 #pragma once
 
 #include <cstddef>
