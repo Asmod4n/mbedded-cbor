@@ -41,19 +41,11 @@ struct point {
 
 } // namespace doc_reference_schema
 
-CBOR_DEFINE_TYPE(doc_reference_schema::tire, cbor::tag{1800},
-                 CBOR_MEMBER(doc_reference_schema::tire, diameter),
-                 CBOR_MEMBER(doc_reference_schema::tire, pressure));
+CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::tire, cbor::tag{1800}, diameter, pressure);
 
-CBOR_DEFINE_TYPE(doc_reference_schema::car, cbor::tag{1801},
-                 CBOR_MEMBER(doc_reference_schema::car, make),
-                 CBOR_MEMBER(doc_reference_schema::car, seats),
-                 CBOR_MEMBER(doc_reference_schema::car, tires),
-                 CBOR_MEMBER(doc_reference_schema::car, track));
+CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::car, cbor::tag{1801}, make, seats, tires, track);
 
-CBOR_DEFINE_TYPE(doc_reference_schema::point, cbor::tag{1802},
-                 CBOR_MEMBER(doc_reference_schema::point, x),
-                 CBOR_MEMBER(doc_reference_schema::point, y));
+CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::point, cbor::tag{1802}, x, y);
 
 namespace reference_structs
 {
