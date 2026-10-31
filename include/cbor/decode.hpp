@@ -268,7 +268,7 @@ std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const s
         }
         std::span<std::byte const> const encoded = bytes_item->via.bin;
         tree_decoder inner{decoded,
-                           {std::string_view(reinterpret_cast<char const *>(encoded.data()), encoded.size())},
+                           {heads::as_string_view(encoded)},
                            depth_max};
         auto const data_item =
             inner.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 2);
