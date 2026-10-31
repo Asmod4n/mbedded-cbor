@@ -921,7 +921,7 @@ class jsonpath
             std::ranges::copy(parsed.keys, std::get<2>(c).begin());
             return c;
         }();
-        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys), {}};
+        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled)), {}};
         return bytes_walk<T>(v, top, depth_reached, encoded);
     }
 
@@ -941,7 +941,7 @@ class jsonpath
             std::ranges::copy(parsed.keys, std::get<2>(c).begin());
             return c;
         }();
-        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled).data(), keys), {}};
+        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled)), {}};
         return lazy_walk<T>(v, top, depth_reached, root);
     }
     template <fixed_string Path, class T>
@@ -1707,7 +1707,7 @@ auto jsonpath::compiled_apply(Walk const &walk)
     return walk(query_view{std::get<0>(compiled),
                            std::get<1>(compiled),
                            std::get<2>(compiled),
-                           std::string_view(std::get<3>(compiled).data(), keys),
+                           std::string_view(std::get<3>(compiled)),
                            {}},
                 top);
 }
@@ -1718,7 +1718,7 @@ class is_singular_query
           [] {
     std::array const text = Path.value;
     auto const q =
-        jsonpath::query_parse(std::string_view(text.data(), text.size() - 1), limits::nesting_depth);
+        jsonpath::query_parse(std::string_view(std::span(text).first(text.size() - 1)), limits::nesting_depth);
     return q.has_value() && q->top.singular;
 }()>
 {

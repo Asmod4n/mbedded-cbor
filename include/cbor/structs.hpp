@@ -1450,7 +1450,7 @@ void copy_views_into_zone(T &value, std::pmr::memory_resource &zone)
     if constexpr (std::is_same_v<T, std::string_view>) {
         std::span<char> const owned(std::pmr::polymorphic_allocator<char>(&zone).allocate(value.size()), value.size());
         std::ranges::copy(value, owned.begin());
-        value = std::string_view(owned.data(), owned.size());
+        value = std::string_view(owned);
     } else if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
         std::span<std::byte> const owned(std::pmr::polymorphic_allocator<std::byte>(&zone).allocate(value.size()),
                                          value.size());
