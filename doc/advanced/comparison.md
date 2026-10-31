@@ -348,7 +348,7 @@ struct series {
     std::vector<double> values;
 };
 
-CBOR_DEFINE_TYPE(series, cbor::tag{1900}, CBOR_MEMBER(series, values));
+CBOR_DEFINE_TYPE_MEMBERS(series, cbor::tag{1900}, values);
 
 auto const root = cbor::schema<series>::path(std::move(bytes));
 auto const values = root->view<"$.values">();

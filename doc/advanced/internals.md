@@ -103,7 +103,7 @@ float at the width of its type and copies its bits.
 ## 9. The schema reads the descriptions
 
 `cbor::schema<T>` takes the members, the keys and the tag of each struct
-from `cbor::describe_members<T>`, which `CBOR_DEFINE_TYPE` writes. It
+from `cbor::describe_members<T>`, which `CBOR_DEFINE_TYPE` or `CBOR_DEFINE_TYPE_MEMBERS` writes. It
 needs no reflection to lay out, write or read a message, so one class
 builds on every compiler. With reflection, `schema` also compares each
 description with the public members that reflection reads, with

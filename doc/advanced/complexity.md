@@ -333,7 +333,7 @@ All rows are compile time and have no run-time cost.
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `map_key` constructors | O(1); O(len) for a text | O(1), a view | consteval. |
-| `CBOR_MEMBER(T, m)`, `CBOR_DEFINE_TYPE(T, tag, members...)` | O(c) | O(c) static | Macros. CBOR_DEFINE_TYPE writes the specialization of describe_members. |
+| `CBOR_MEMBER(T, m)`, `CBOR_DEFINE_TYPE(T, tag, members...)`, `CBOR_DEFINE_TYPE_MEMBERS(T, tag, m...)` | O(c) | O(c) static | Macros. CBOR_DEFINE_TYPE and CBOR_DEFINE_TYPE_MEMBERS write the specialization of describe_members. |
 | `describe::get<I>` | O(1) | O(1) | |
 
 ## schema.hpp

@@ -33,8 +33,7 @@ struct untagged {
 
 } // namespace doc_packed
 
-CBOR_DEFINE_TYPE(doc_packed::sensor, cbor::tag{1700}, CBOR_MEMBER(doc_packed::sensor, name),
-                 CBOR_MEMBER(doc_packed::sensor, id), CBOR_MEMBER(doc_packed::sensor, readings));
+CBOR_DEFINE_TYPE_MEMBERS(doc_packed::sensor, cbor::tag{1700}, name, id, readings);
 
 namespace doc_packed
 {
@@ -193,9 +192,8 @@ struct track {
 
 } // namespace doc_packed
 
-CBOR_DEFINE_TYPE(doc_packed::point, cbor::tag{1703}, CBOR_MEMBER(doc_packed::point, x),
-                 CBOR_MEMBER(doc_packed::point, y));
-CBOR_DEFINE_TYPE(doc_packed::track, cbor::tag{1704}, CBOR_MEMBER(doc_packed::track, points));
+CBOR_DEFINE_TYPE_MEMBERS(doc_packed::point, cbor::tag{1703}, x, y);
+CBOR_DEFINE_TYPE_MEMBERS(doc_packed::track, cbor::tag{1704}, points);
 
 TEST_CASE("doc schema: a list of fixed-size structs is a range of elements")
 {
@@ -224,7 +222,7 @@ struct gauge {
 
 } // namespace doc_packed
 
-CBOR_DEFINE_TYPE(doc_packed::gauge, cbor::tag{1710}, CBOR_MEMBER(doc_packed::gauge, level));
+CBOR_DEFINE_TYPE_MEMBERS(doc_packed::gauge, cbor::tag{1710}, level);
 
 // The section "Tags and keys" writes a description with CBOR_DEFINE_TYPE, which schema reads as the explicit form.
 TEST_CASE("doc schema: a description through CBOR_DEFINE_TYPE")

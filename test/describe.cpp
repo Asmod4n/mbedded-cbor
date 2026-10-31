@@ -752,6 +752,25 @@ struct renamed {
     std::uint8_t user_id;
 };
 
+struct point_by_names {
+    std::uint8_t x;
+    std::uint8_t y;
+};
+
+using two_bytes = two<std::uint8_t, std::uint8_t>;
+
+struct one_by_name {
+    std::uint8_t id;
+};
+
+struct none_by_name {
+};
+
+struct trailing_comma {
+    std::uint8_t a;
+    std::uint8_t b;
+};
+
 } // namespace define_type_test
 
 namespace
@@ -772,6 +791,11 @@ CBOR_DEFINE_TYPE(define_type_test::sample, cbor::tag{160102}, CBOR_MEMBER(define
 CBOR_DEFINE_TYPE(define_type_test::renamed, cbor::untagged,
                  cbor::member{cbor::map_key("user-id"), &define_type_test::renamed::user_id});
 CBOR_DEFINE_TYPE(hidden, cbor::tag{160103}, CBOR_MEMBER(hidden, h));
+CBOR_DEFINE_TYPE_MEMBERS(define_type_test::point_by_names, cbor::tag{160106}, x, y);
+CBOR_DEFINE_TYPE_MEMBERS(define_type_test::two_bytes, cbor::tag{160104}, a, b);
+CBOR_DEFINE_TYPE_MEMBERS(define_type_test::one_by_name, cbor::untagged, id);
+CBOR_DEFINE_TYPE_MEMBERS(define_type_test::none_by_name, cbor::tag{160105});
+CBOR_DEFINE_TYPE_MEMBERS(define_type_test::trailing_comma, cbor::untagged, a, b, );
 
 // CBOR_DEFINE_TYPE writes the specialization of cbor::describe_members that a user writes by hand: the tag and a
 // std::tuple of the members, so cbor::structs and cbor::schema read it alike. The tag 160100 is 0x00027164 (RFC
@@ -813,3 +837,37 @@ TEST_CASE("CBOR_DEFINE_TYPE: a rename, a class with a constructor and a type in 
     describe_test::round_trip("\xda\x00\x02\x71\x67\xa1\x61h\x07"s, hidden{7});
 }
 
+// CBOR_DEFINE_TYPE_MEMBERS takes the type once and the names of the members. It writes the same description as
+// CBOR_DEFINE_TYPE with one CBOR_MEMBER for each name: the key of each member is its name, in the order of the
+// list. The tag 160106 is 0x0002716a (RFC 8949 3.4); "x" (61 78) comes before "y" (61 79).
+TEST_CASE("CBOR_DEFINE_TYPE_MEMBERS: the names give the description that CBOR_DEFINE_TYPE gives with CBOR_MEMBER")
+{
+    using described = cbor::describe_members<define_type_test::point_by_names>;
+    CHECK_EQ(described::tag->number, 160106u);
+    CHECK_EQ(std::get<0>(described::members).key.text, "x");
+    CHECK_EQ(std::get<1>(described::members).key.text, "y");
+    CHECK(std::get<1>(described::members).pointer == &define_type_test::point_by_names::y);
+    describe_test::round_trip("\xda\x00\x02\x71\x6a\xa2\x61x\x01\x61y\x02"s, define_type_test::point_by_names{1, 2});
+    auto const bytes = cbor::schema<define_type_test::point_by_names>::encode(define_type_test::point_by_names{1, 2});
+    REQUIRE(bytes.has_value());
+    auto const y = cbor::schema<define_type_test::point_by_names>::at_path<"$.y">(*bytes);
+    REQUIRE(y.has_value());
+    CHECK_EQ(*y, 2u);
+}
+
+// A type alias of a template, one member with no tag, an empty list and a list that ends with a comma: each is a
+// form that a user writes, and each gives the map that the same description by hand gives. The tag 160104 is
+// 0x00027168 and 160105 is 0x00027169; a0 is the empty map (RFC 8949 3.1).
+TEST_CASE("CBOR_DEFINE_TYPE_MEMBERS: an alias, one member, no member and a trailing comma")
+{
+    describe_test::round_trip("\xda\x00\x02\x71\x68\xa2\x61"
+                              "a\x01\x61"
+                              "b\x02"s,
+                              define_type_test::two_bytes{1, 2});
+    describe_test::round_trip("\xa1\x62id\x07"s, define_type_test::one_by_name{7});
+    describe_test::round_trip("\xda\x00\x02\x71\x69\xa0"s, define_type_test::none_by_name{});
+    describe_test::round_trip("\xa2\x61"
+                              "a\x01\x61"
+                              "b\x02"s,
+                              define_type_test::trailing_comma{1, 2});
+}

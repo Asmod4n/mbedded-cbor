@@ -24,6 +24,7 @@ using namespace std::string_literals;
 // example compiles and gives the result that the page states. The input of each example is built with
 // preferred() from the text in the comment of the page.
 
+using reference_structs::device;
 using reference_structs::account;
 using reference_structs::header;
 using reference_structs::person;
@@ -138,6 +139,14 @@ TEST_CASE("doc reference structs: CBOR_MEMBER")
     auto const bytes = cbor::structs<account>::encode(account{"ann", 2});
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::preferred(test::M("user"s, "ann"s, "level"s, 2)));
+}
+
+// CBOR_DEFINE_TYPE_MEMBERS.md: the macro takes the names of the members, and each name is its key.
+TEST_CASE("doc reference structs: CBOR_DEFINE_TYPE_MEMBERS")
+{
+    auto const bytes = cbor::structs<device>::encode(device{"lamp", 3});
+    REQUIRE(bytes.has_value());
+    CHECK_EQ(*bytes, test::preferred(test::M("name"s, "lamp"s, "port"s, 3)));
 }
 
 // types.md: one row of each kind that the table shows with a tag, and an empty optional member.

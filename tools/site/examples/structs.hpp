@@ -181,6 +181,8 @@ inline result has_describe_members_read(call const &c)
         return describe_members_had<reference_structs::reading>(c);
     if (t == "trailer")
         return describe_members_had<reference_structs::trailer>(c);
+    if (t == "device")
+        return describe_members_had<reference_structs::device>(c);
     return std::unexpected(std::string(t) + " is not a type known here");
 }
 
@@ -193,6 +195,7 @@ inline constexpr entry structs_functions[] = {
     {"account{}", aggregate_made<reference_structs::account, std::string, std::uint8_t>},
     {"reading{}", aggregate_made<reference_structs::reading, std::uint8_t, std::optional<std::uint8_t>>},
     {"trailer{}", aggregate_made<reference_structs::trailer, std::uint8_t>},
+    {"device{}", aggregate_made<reference_structs::device, std::string, std::uint8_t>},
     {"cbor::has_describe_members", has_describe_members_read},
     {"cbor::structs<person>::encode()", structs_encode<reference_structs::person>},
     {"cbor::structs<header>::encode()", structs_encode<reference_structs::header>},
@@ -200,6 +203,7 @@ inline constexpr entry structs_functions[] = {
     {"cbor::structs<account>::encode()", structs_encode<reference_structs::account>},
     {"cbor::structs<reading>::encode()", structs_encode<reference_structs::reading>},
     {"cbor::structs<trailer>::encode()", structs_encode<reference_structs::trailer>},
+    {"cbor::structs<device>::encode()", structs_encode<reference_structs::device>},
     {"cbor::structs<std::set<std::uint8_t>>::encode()", structs_encode<std::set<std::uint8_t>>},
     {"cbor::tag{}", tag_made},
     {"cbor::structs<person>::decode()", structs_decode<reference_structs::person>},
