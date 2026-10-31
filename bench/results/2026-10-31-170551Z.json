@@ -1,0 +1,390 @@
+{
+ "time": "2026-10-31-170551Z",
+ "commit_a": {
+  "given": "9126904",
+  "id": "9126904f11c51cd791d7ef80b76ba982fc66caa1"
+ },
+ "commit_b": {
+  "given": "9126904",
+  "id": "9126904f11c51cd791d7ef80b76ba982fc66caa1"
+ },
+ "bench_sources_commit": "041bac3",
+ "what": "run length of this machine: S_IOV (iov block writer encode), a = aa = b = 9126904, MIN_TIME 3s; a = commit a, aa = commit a built again, b = commit b",
+ "documents": "twitter floats records; MB_STRUCT on twitter only",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -Wall -Wextra -Werror",
+ "pie": "-fPIE -pie",
+ "elf_type_count": {
+  "Type: DYN": 18
+ },
+ "rounds": 5,
+ "min_time": "3s",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "clang version 23.1.4"
+ ],
+ "gxx_binary": {
+  "binary": "a.gxx.floats.S_IOV",
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (SUSE Linux) 16.2.1 20260929",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang.floats.S_IOV",
+  "comment": "String dump of section '.comment':\n  [     0]  clang version 23.1.4",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "libc": "ldd (GNU libc) 2.44",
+ "kernel": "6.18.44-fc-v185",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "unknown",
+ "container": "yes",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 1000,
+ "priority": "nice 0 (nice -10 refused)",
+ "threads": 1,
+ "pinned": false,
+ "cpus_in_machine": 4,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; builds used 3 of 4 cpus",
+ "gate": [
+  "gate: vmstat 1 5",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 1  0      0 13695880 50784 2042088  0    0   278  2127  691    2  7  2 90  0  0  0",
+  " 0  0      0 13720272 50784 2041976  0    0     0     0  261  206  0  0 100 0  0  0",
+  " 0  0      0 13744464 50784 2041976  0    0     0     0  253  298  0  0 100 0  0  0",
+  " 0  0      0 13768656 50784 2041976  0    0     0     0  172  174  0  0 100 0  0  0",
+  " 0  0      0 13792848 50784 2041976  0    0     0     0  136  140  0  0 100 0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  129 root      2.8   0 claude",
+  " 8861 root      1.4   0 podman",
+  " 8886 ubuntu    0.9   0 bash",
+  "   86 root      0.0   0 environment-man",
+  "    1 root      0.0   0 process_api",
+  "   45 root      0.0   0 kworker/u16:2-kvfree_rcu_reclaim",
+  "   21 root      0.0   - migration/1",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 8.603931766397842
+ },
+ "rounds_detail": [
+  {
+   "round": 1,
+   "wall_s": 121.42094254493713,
+   "steal_ticks": 101,
+   "steal_percent_of_cpu_time": 0.2080201017444854
+  },
+  {
+   "round": 2,
+   "wall_s": 113.22048115730286,
+   "steal_ticks": 102,
+   "steal_percent_of_cpu_time": 0.22525506823903538
+  },
+  {
+   "round": 3,
+   "wall_s": 129.0819811820984,
+   "steal_ticks": 129,
+   "steal_percent_of_cpu_time": 0.24989829720462603
+  },
+  {
+   "round": 4,
+   "wall_s": 118.79197406768799,
+   "steal_ticks": 131,
+   "steal_percent_of_cpu_time": 0.2757720565016946
+  },
+  {
+   "round": 5,
+   "wall_s": 127.75677919387817,
+   "steal_ticks": 150,
+   "steal_percent_of_cpu_time": 0.293559308765681
+  }
+ ],
+ "steal_percent_of_cpu_time_max": 0.293559308765681,
+ "failed": [],
+ "cells": {
+  "clang.floats.S_IOV": {
+   "a": {
+    "repetitions_ns": [
+     219378.21270521634,
+     206816.3624090714,
+     210303.53319949209,
+     216858.36614107218,
+     216010.81778820872
+    ],
+    "median_ns": 216010.81778820872,
+    "spread": 0.060739151147520376,
+    "check": "540003",
+    "copies": "1626"
+   },
+   "aa": {
+    "repetitions_ns": [
+     266909.2321102475,
+     225932.3989687246,
+     235111.44706330026,
+     234596.24115874417,
+     226458.92144595095
+    ],
+    "median_ns": 234596.24115874417,
+    "spread": 0.18136767160691836,
+    "check": "540003",
+    "copies": "1626"
+   },
+   "b": {
+    "repetitions_ns": [
+     225071.61736538415,
+     212021.8125229274,
+     210483.1865777049,
+     233169.05722732528,
+     221170.69326059343
+    ],
+    "median_ns": 221170.69326059343,
+    "spread": 0.10777996579430038,
+    "check": "540003",
+    "copies": "1626"
+   },
+   "a_over_a_ratio": 1.0860393176639784,
+   "b_over_a_ratio": 1.0238871160491776,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "clang.records.S_IOV": {
+   "a": {
+    "repetitions_ns": [
+     304558.05139999936,
+     278734.1569758465,
+     307537.9621694232,
+     320793.8156000182,
+     286647.2264305312
+    ],
+    "median_ns": 304558.05139999936,
+    "spread": 0.15089524398624854,
+    "check": "363481",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     320413.7347679952,
+     288975.2734806479,
+     284401.5244397794,
+     314381.22899999144,
+     320048.0556999992
+    ],
+    "median_ns": 314381.22899999144,
+    "spread": 0.12662453339219426,
+    "check": "363481",
+    "copies": "1656"
+   },
+   "b": {
+    "repetitions_ns": [
+     291522.1123015163,
+     320061.1351999669,
+     285162.24276243785,
+     286001.8330778809,
+     293189.1199310359
+    ],
+    "median_ns": 291522.1123015163,
+    "spread": 0.12238258508368705,
+    "check": "363481",
+    "copies": "1656"
+   },
+   "a_over_a_ratio": 1.0322538759190134,
+   "b_over_a_ratio": 0.9571971942998743,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "clang.twitter.S_IOV": {
+   "a": {
+    "repetitions_ns": [
+     242968.77401621168,
+     304641.7866999946,
+     212198.95112487124,
+     244854.59011774388,
+     242447.39487233813
+    ],
+    "median_ns": 242968.77401621168,
+    "spread": 0.43564228326804577,
+    "check": "415576",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     239122.153421014,
+     261823.5232823173,
+     235338.0111500801,
+     235538.3692327847,
+     264777.8671298865
+    ],
+    "median_ns": 239122.153421014,
+    "spread": 0.12509605157252723,
+    "check": "415576",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     274000.62486243143,
+     215024.42101302563,
+     251040.38658800581,
+     230324.45811609612,
+     254158.24759306828
+    ],
+    "median_ns": 251040.38658800581,
+    "spread": 0.27427677085028956,
+    "check": "415576",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9841682512052309,
+   "b_over_a_ratio": 1.0332207815777001,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "gxx.floats.S_IOV": {
+   "a": {
+    "repetitions_ns": [
+     157762.61109721355,
+     205241.18510398825,
+     180579.5175906496,
+     205022.59112514582,
+     208855.41637736463
+    ],
+    "median_ns": 205022.59112514582,
+    "spread": 0.3238587706225755,
+    "check": "540003",
+    "copies": "1626"
+   },
+   "aa": {
+    "repetitions_ns": [
+     207264.65191586237,
+     225756.27728016357,
+     189695.9631494198,
+     200638.52100476713,
+     210120.0966409503
+    ],
+    "median_ns": 207264.65191586237,
+    "spread": 0.19009531637918808,
+    "check": "540003",
+    "copies": "1626"
+   },
+   "b": {
+    "repetitions_ns": [
+     212948.98245612794,
+     203084.10671982935,
+     187974.88125174955,
+     197442.87542808606,
+     190916.88697808533
+    ],
+    "median_ns": 197442.87542808606,
+    "spread": 0.13285871515424064,
+    "check": "540003",
+    "copies": "1626"
+   },
+   "a_over_a_ratio": 1.0109356767876765,
+   "b_over_a_ratio": 0.9630298512204779,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "gxx.records.S_IOV": {
+   "a": {
+    "repetitions_ns": [
+     296416.3564104014,
+     271786.0856540632,
+     259986.74827970855,
+     273519.9723516959,
+     253988.80105166786
+    ],
+    "median_ns": 271786.0856540632,
+    "spread": 0.16704498459403605,
+    "check": "363481",
+    "copies": "1656"
+   },
+   "aa": {
+    "repetitions_ns": [
+     275793.27613274404,
+     306648.87789998826,
+     273450.5300296577,
+     256885.46952327777,
+     261276.97379141444
+    ],
+    "median_ns": 273450.5300296577,
+    "spread": 0.19371826856949248,
+    "check": "363481",
+    "copies": "1656"
+   },
+   "b": {
+    "repetitions_ns": [
+     294203.102713036,
+     262785.61355055973,
+     232664.82447644128,
+     273014.8139193178,
+     270251.4829598359
+    ],
+    "median_ns": 270251.4829598359,
+    "spread": 0.2644932613903819,
+    "check": "363481",
+    "copies": "1656"
+   },
+   "a_over_a_ratio": 1.006124097087564,
+   "b_over_a_ratio": 0.9943536377495771,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "gxx.twitter.S_IOV": {
+   "a": {
+    "repetitions_ns": [
+     218417.14253908597,
+     191021.23858322593,
+     213912.95558643443,
+     197116.01326347952,
+     189767.1469979462
+    ],
+    "median_ns": 197116.01326347952,
+    "spread": 0.15097447579506396,
+    "check": "415576",
+    "copies": "1354"
+   },
+   "aa": {
+    "repetitions_ns": [
+     212696.21115645726,
+     185789.71604405335,
+     211601.83275737302,
+     185464.7783649954,
+     188203.80385206634
+    ],
+    "median_ns": 188203.80385206634,
+    "spread": 0.14682805560994594,
+    "check": "415576",
+    "copies": "1354"
+   },
+   "b": {
+    "repetitions_ns": [
+     254681.07842941867,
+     204510.08029766366,
+     199415.52401321937,
+     200334.25085252553,
+     203740.97539369809
+    ],
+    "median_ns": 203740.97539369809,
+    "spread": 0.2771376736574216,
+    "check": "415576",
+    "copies": "1354"
+   },
+   "a_over_a_ratio": 0.9547869842542905,
+   "b_over_a_ratio": 1.0336094567890999,
+   "same_check": true,
+   "difference_over_noise": false
+  }
+ }
+}
