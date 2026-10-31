@@ -1,6 +1,8 @@
 // Reads a CBOR Sequence that arrives in pieces. next() gives each
 // complete data item as a cbor::lazy, or too_little_data while the
-// item is not complete. Keeps an owned piece without a copy.
+// item is not complete. Keeps a piece that it takes by move or in a
+// std::shared_ptr without a copy, and copies an item that spans two
+// pieces.
 // https://www.rfc-editor.org/rfc/rfc8742#section-2
 #pragma once
 

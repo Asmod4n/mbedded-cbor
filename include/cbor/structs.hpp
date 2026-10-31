@@ -1,7 +1,14 @@
 // Writes a C++ value as CBOR and reads it back into a value of the
-// same type. Writes a struct as a map with one key for each member.
-// Finds the members by reflection, by Boost.PFR or in describe_members.
+// same type. Writes a struct as a map with one key for each member
+// that holds a value, and finds the members by reflection, by Boost.PFR
+// or in describe_members. Writes std::chrono times and dates, sets and
+// arrays of numbers under their standard tags, and reads values marked
+// as shareable.
 // https://www.rfc-editor.org/rfc/rfc8949
+// https://www.rfc-editor.org/rfc/rfc8943#section-2.1
+// https://www.rfc-editor.org/rfc/rfc8746#section-2
+// https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
+// http://cbor.schmorp.de/value-sharing
 #pragma once
 
 #include <algorithm>
