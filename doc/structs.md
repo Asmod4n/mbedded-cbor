@@ -80,7 +80,9 @@ global scope, after the struct: the tag of the struct and one entry for
 each public member. The tag is a `cbor::tag{n}`, or `cbor::untagged`
 for a map with no tag. The entry `cbor::member{key, &type::member}`
 gives the key. A key is a text or an integer.
-`CBOR_MEMBER(type, member)` takes the name as the key. The macro writes
+`CBOR_MEMBER(type, member)` takes the name as the key.
+`CBOR_DEFINE_TYPE_MEMBERS(type, tag, names...)` takes the names only, and
+each name is its key. The macro writes
 a specialization of `cbor::describe_members`, which
 [cbor::schema](schema.md) reads too. An annotation
 `[[=cbor::key("x")]]` or `[[=cbor::tag(n)]]` on a type that `structs`
