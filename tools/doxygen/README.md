@@ -48,3 +48,16 @@ owner adopts header comments, a later step can adapt the current renderer
 to consume Doxygen XML and retain the established manual structure and
 interactive website. Do not remove Markdown until that path reproduces
 the examples and reference information. No wider migration is included.
+
+## Compact revision
+
+The header now shares lifetime and allocation rules at class level.
+Each operation keeps its own complexity statement. The example is in
+`sequence-example.cpp` and Doxygen includes it in the generated pages.
+The header has 150 lines, compared with 218 in the first pilot and 101
+before API comments. The example compiled and ran; preprocessing again
+matched the original header. Four sequence reference tests passed with
+13 assertions. Doxygen generated the pages without warnings.
+
+The earlier manual-format and HTML-navigation limitations still apply.
+This revision does not change the installed documentation pipeline.
