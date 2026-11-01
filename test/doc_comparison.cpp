@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include <cbor/structs.hpp>
 
 #include <cstdint>
 #include <expected>

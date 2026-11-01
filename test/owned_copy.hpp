@@ -1,8 +1,10 @@
 #pragma once
 
-#include <cbor/cbor.hpp>
+#include <cbor/error.hpp>
+#include <cbor/lazy.hpp>
 
 #include <string>
+#include <expected>
 #include <string_view>
 
 namespace test

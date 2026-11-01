@@ -1,5 +1,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
+#include <cbor/schema.hpp>
+#include <cbor/structs.hpp>
 
 #include <array>
 #include <cstddef>

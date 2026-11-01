@@ -1,6 +1,9 @@
 #pragma once
 
-#include <cbor/cbor.hpp>
+#include <cbor/error.hpp>
+#include <cbor/lazy.hpp>
+#include <cbor/sequence.hpp>
+#include <cbor/sequence_reader.hpp>
 #include <doctest/doctest.h>
 
 #include <algorithm>

@@ -18,6 +18,7 @@
 
 #include "item_head.hpp"
 #include "reference.hpp"
+#include <cbor/structs.hpp>
 
 #include <span>
 #include <unordered_map>
