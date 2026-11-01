@@ -1,6 +1,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "sequence_reader.hpp"
+#include <cbor/structs.hpp>
 
 #include <cstddef>
 #include <string>

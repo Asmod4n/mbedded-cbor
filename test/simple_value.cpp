@@ -1,6 +1,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
+#include <cbor/structs.hpp>
 
 #include <cstdint>
 #include <memory>

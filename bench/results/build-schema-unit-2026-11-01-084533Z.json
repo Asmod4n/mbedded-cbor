@@ -1,0 +1,58 @@
+{
+ "measured": "wall time of compiling the schema test unit(s) once, gcc-16, -Og -fsanitize=address,undefined (gcc-asan flags of test/run.sh), no PCH (cmake_pch.hxx included as text), no ccache; base = unity_schema of bb7f6be (schema.cpp + schema_depth.cpp, one unit, one core); split = the four units of acc235e (branch split-schema: schema_size+depth, read, decode, apart) compiled at the same time on 4 cpus, wall = until the last ends; debug arms -g, -g -fno-var-tracking, -g1",
+ "how": "2 rounds; per round the three base arms ran at the same time (3 cpus), then each split arm alone (4 cpus); each compile in its own podman run of localhost/mbedded-cbor-tw (Tumbleweed 20261030, g++ 16.2.1); script measure.sh embedded",
+ "runs_s": {
+  "base_g1": [
+   218.55,
+   217.941
+  ],
+  "base_novt": [
+   225.725,
+   223.283
+  ],
+  "base_g": [
+   268.237,
+   260.65
+  ],
+  "split_g": [
+   163.839,
+   161.377
+  ],
+  "split_novt": [
+   141.948,
+   132.159
+  ],
+  "split_g1": [
+   130.051,
+   127.11
+  ]
+ },
+ "median_s": {
+  "base_g1": 218.2455,
+  "base_novt": 224.504,
+  "base_g": 264.4435,
+  "split_g": 162.608,
+  "split_novt": 137.05349999999999,
+  "split_g1": 128.5805
+ },
+ "aa_spread_percent": {
+  "base_g1": 0.3,
+  "base_novt": 1.1,
+  "base_g": 2.9,
+  "split_g": 1.5,
+  "split_novt": 7.4,
+  "split_g1": 2.3
+ },
+ "steal_ticks": [
+  "3651",
+  "5711",
+  "5711",
+  "7934"
+ ],
+ "context": {
+  "commits": "bb7f6be, acc235e (clean worktrees)",
+  "machine": "4 cpus, Intel Xeon @ 2.80GHz, kernel 6.18.44-fc-v185, KVM, podman as root, user 0, nice 0",
+  "compiler": "g++-16 (SUSE Linux) 16.2.1 20260929"
+ },
+ "script": "set -u\nF='-DCBOR_TEST_VECTORS=\"/src/cbor-test-vectors\" -DDOCTEST_COUNTER=__COUNTER__ -DJSONPATH_CTS=\"/src/test/jsonpath\" -DTEST_VECTORS=\"/src/test-vectors\" -D_GLIBCXX_ASSERTIONS -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST -I/src/include -Og -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -std=gnu++26 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -freflection -include /b/CMakeFiles/mbedded-cbor-test.dir/cmake_pch.hxx'\nc() { # tree debugflags unit\n  podman run --rm --network none -v /home/user/mbedded-cbor-build/fast-iteration/$1:/src:ro -v /home/user/mbedded-cbor-build/fast-iteration/cfg-$1:/b -w /b localhost/mbedded-cbor-tw:latest bash -c \"g++-16 $F $2 -c CMakeFiles/mbedded-cbor-test.dir/Unity/$3 -o /tmp/o.o\" ; }\nt() { s=${EPOCHREALTIME/./}; \"$@\"; r=$?; e=${EPOCHREALTIME/./}; echo \"$(((e-s)/1000)) $r\"; }\nsplit() { c wt-split \"$1\" unity_schema_size_cxx.cxx & c wt-split \"$1\" unity_schema_read_cxx.cxx & c wt-split \"$1\" unity_schema_decode_cxx.cxx & c wt-split \"$1\" unity_schema_apart_cxx.cxx & wait; }\nfor round in 1 2; do\n  echo \"round $round $(date -u +%T) steal0 $(awk '/^cpu /{print $9}' /proc/stat)\"\n  (echo \"base_g $(t c wt-base -g unity_schema_cxx.cxx)\") &\n  (echo \"base_novt $(t c wt-base '-g -fno-var-tracking' unity_schema_cxx.cxx)\") &\n  (echo \"base_g1 $(t c wt-base -g1 unity_schema_cxx.cxx)\") &\n  wait\n  echo \"split_g $(t split -g)\"\n  echo \"split_novt $(t split '-g -fno-var-tracking')\"\n  echo \"split_g1 $(t split -g1)\"\n  echo \"round $round end $(date -u +%T) steal1 $(awk '/^cpu /{print $9}' /proc/stat)\"\ndone\n"
+}
