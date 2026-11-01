@@ -18,7 +18,7 @@ const node = (v) => {
   if (typeof v === "number") return String(v);
   if (Array.isArray(v)) return v.map(node).join("");
   if (v.type === "time") { const d = new Date(v.epoch * 1000).toISOString().slice(0, 10); return `<time datetime="${d}">${d}</time>`; }
-  if (v.type === "table") return `<table><thead><tr>${v.head.map((h) => `<th>${node(h)}</th>`).join("")}</tr></thead><tbody>${v.rows.map((r) => `<tr>${r.map((c) => `<td>${node(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  if (v.type === "table") return `<table><thead><tr>${v.head.map((h) => `<th>${node(h)}</th>`).join("")}</tr></thead><tbody>${v.rows.map((r) => `<tr><td>${node(r.name)}</td><td>${node(r.amount)}</td><td>${node(r.time)}</td></tr>`).join("")}</tbody></table>`;
   if (v.type === "form") return `<form action="${node(v.action)}">${v.fields.map(node).join("")}<button>Send</button></form>`;
   if (v.type === "field") return `<label>${node(v.label)} <input name="${node(v.name)}" type="${node(v.input)}"></label>`;
   return "";
