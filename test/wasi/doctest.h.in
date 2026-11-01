@@ -1,0 +1,21 @@
+// doctest 2.5.3 turns exceptions off on every WASI target (doctest/parts/public/config.h:50). This header reads
+// the standard headers first, so that the C library sees __wasi__, and then reads doctest with __wasi__ set aside, so
+// that doctest takes the exceptions of -fwasm-exceptions. Under __wasi__ doctest does nothing else than
+// DOCTEST_CONFIG_NO_MULTITHREADING and DOCTEST_CONFIG_NO_POSIX_SIGNALS, which the target doctest::doctest of the WASI
+// build defines.
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <istream>
+#include <ostream>
+#include <string>
+#include <type_traits>
+#include <utility>
+
+#pragma push_macro("__wasi__")
+#undef __wasi__
+#include "@CBOR_DOCTEST_HEADER@"
+#pragma pop_macro("__wasi__")
