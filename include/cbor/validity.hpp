@@ -1,5 +1,6 @@
 // Gives cbor::limits. Gives the checks for safety: limits, nesting
-// depth, overflow of sums and products, number ranges, heads, tag
+// depth (on WebAssembly also the stack that is left), overflow of sums
+// and products, number ranges, heads, tag
 // content and typed arrays. Throws std::logic_error on a wrong use, or
 // ends the process when the build has no exceptions. Gives the tag
 // numbers of Packed CBOR.
@@ -43,6 +44,10 @@
 #define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
 #define CBOR_NEVER_INLINE [[gnu::noinline]]
 #define CBOR_ASSUME(condition) [[assume(condition)]]
+#endif
+
+#if defined(__wasm__)
+extern "C" unsigned char __stack_low;
 #endif
 
 #ifndef CBOR_NESTING_DEPTH_DEFAULT
@@ -103,6 +108,8 @@ public:
 
     static constexpr std::size_t nesting_depth_limit = 512;
 
+    static constexpr std::size_t stack_red_zone = 8192;
+
     static constexpr std::size_t size_limit = std::numeric_limits<std::size_t>::max();
 
     static constexpr std::size_t initial_size_limit = std::size_t{1} << 20;
@@ -120,6 +127,13 @@ public:
     static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth,
                                                                     std::size_t const depth_max)
     {
+#if defined(__wasm__)
+        if !consteval {
+            if (reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0)) <
+                reinterpret_cast<std::uintptr_t>(&__stack_low) + stack_red_zone) [[unlikely]]
+                return std::unexpected(error::nesting_depth_exceeded);
+        }
+#endif
         return check_limit(depth, depth_max, error::nesting_depth_exceeded);
     }
 
@@ -368,7 +382,7 @@ public:
         return std::size_t{1} << (f + ll);
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_whole_elements(std::size_t const size,
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_whole_elements(std::uint64_t const size,
                                                                                         std::size_t const element)
     {
         if (size % element != 0) [[unlikely]]
@@ -377,7 +391,7 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag,
-                                                                                     std::size_t const size)
+                                                                                     std::uint64_t const size)
     {
         if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
             tag > std::to_underlying(rfc8746::tag_number::typed_array_last) ||
@@ -387,7 +401,7 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_typed_array_content(std::uint64_t const tag, major_type const content, std::size_t const size)
+    check_typed_array_content(std::uint64_t const tag, major_type const content, std::uint64_t const size)
     {
         if (auto const r = check_tag_content(tag, content); !r) [[unlikely]]
             return r;

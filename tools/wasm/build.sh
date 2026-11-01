@@ -8,7 +8,7 @@ tree=$(cd "$(dirname "$0")/../.." && pwd)
 out=${1:?output directory}
 podman run --rm -v "$tree":/src:ro,Z -v "$out":/out:Z localhost/mbedded-cbor-wasm sh -ec '
   clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -flto -g --no-wasm-opt -fno-exceptions \
-    -Wall -Wextra -Werror -I/src/include -Wl,--gc-sections -o /out/showcase.debug.wasm /src/tools/wasm/showcase.cpp
+    -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Wnull-dereference -Werror -I/src/include -Wl,--gc-sections -o /out/showcase.debug.wasm /src/tools/wasm/showcase.cpp
   wasm-opt -O2 -g /out/showcase.debug.wasm -o /out/showcase.debug.wasm
   python3 /usr/share/emscripten/tools/wasm-sourcemap.py /out/showcase.debug.wasm --dwarfdump=/usr/bin/llvm-dwarfdump-23 \
     -o /out/showcase.wasm.map -w /out/showcase.mapped.wasm --prefix /src=

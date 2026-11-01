@@ -40,7 +40,7 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
     exit 1
   fi
   /tmp/check /src $work
-  clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -fno-exceptions -Wall -Wextra -Werror \
+  clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -fno-exceptions -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Wnull-dereference -Werror \
     -I/src/include -I/src/third_party/boost_pfr/include -Wl,--strip-all,--gc-sections -o /out/examples.wasm $site/examples.cpp
   cp $site/style.css $site/site.js $site/examples.mjs /out/
   reference() {

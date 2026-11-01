@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "threads.hpp"
 #include "owned_copy.hpp"
 
 #include <cstddef>
@@ -133,7 +134,7 @@ TEST_CASE("doc basics: results that point into the bytes")
 
 // The section "Threads" shows two threads that read the same bytes, one with a path over the bytes and one with a
 // lazy of its own.
-TEST_CASE("doc basics: threads")
+TEST_CASE("doc basics: threads" * doctest::skip(!test::threads_available))
 {
     auto const owner = std::make_shared<std::string const>(preferred(M("id"s, 42)));
     std::int64_t first_read = 0;

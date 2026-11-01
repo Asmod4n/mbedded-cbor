@@ -49,6 +49,12 @@ class extended_diagnostic_notation
         std::size_t depth_max;
     };
 
+    struct string_literal {
+        std::size_t at;
+        major_type major;
+        std::string content;
+    };
+
     static constexpr int no_indicator = -1;
     static constexpr int immediate_indicator = -2;
 
@@ -60,6 +66,7 @@ class extended_diagnostic_notation
     static constexpr std::uint32_t high_surrogate_first = 0xd800;
     static constexpr std::uint32_t low_surrogate_first = 0xdc00;
     static constexpr std::uint32_t low_surrogate_last = 0xdfff;
+    static constexpr unsigned char unescaped_first = 0x20;
 
     static constexpr bool blank(char const c)
     {
@@ -71,6 +78,46 @@ class extended_diagnostic_notation
         while (at < text.size() && blank(text[at]))
             ++at;
         return at;
+    }
+
+    static constexpr bool eol_comment_starts(std::string_view const text, std::size_t const at)
+    {
+        return std::string_view{std::span(text).subspan(at)}.starts_with('#') ||
+               std::string_view{std::span(text).subspan(at)}.starts_with("//");
+    }
+
+    static constexpr std::size_t eol_comment_end(std::string_view const text, std::size_t const at)
+    {
+        std::size_t const lf = text.find('\n', at);
+        return lf == std::string_view::npos ? text.size() : lf + 1;
+    }
+
+    static constexpr std::expected<std::size_t, error> comment_end(std::string_view const text, std::size_t const at)
+    {
+        if (eol_comment_starts(text, at)) {
+            std::size_t const end = eol_comment_end(text, at);
+            if (text[end - 1] != '\n') [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            return end;
+        }
+        bool const block = std::string_view{std::span(text).subspan(at)}.starts_with("/*");
+        std::size_t const close = block ? text.find("*/", at + std::string_view("/*").size()) : text.find('/', at + 1);
+        if (close == std::string_view::npos) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        return close + (block ? std::string_view("*/").size() : std::string_view("/").size());
+    }
+
+    static constexpr std::expected<std::size_t, error> optional_space_end(std::string_view const text, std::size_t at)
+    {
+        for (;;) {
+            at = blank_end(text, at);
+            if (at >= text.size() || (text[at] != '/' && text[at] != '#'))
+                return at;
+            auto const end = comment_end(text, at);
+            if (!end) [[unlikely]]
+                return end;
+            at = *end;
+        }
     }
 
     static constexpr bool digit(char const c)
@@ -187,7 +234,9 @@ class extended_diagnostic_notation
             char const c = text[at++];
             if (c == quote)
                 return at;
-            if (static_cast<unsigned char>(c) < 0x20) [[unlikely]]
+            if (c == '\r')
+                continue;
+            if (c != '\n' && static_cast<unsigned char>(c) < unescaped_first) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             if (c != '\\') {
                 out.push_back(c);
@@ -262,18 +311,27 @@ class extended_diagnostic_notation
         }
     }
 
-    static constexpr std::expected<std::size_t, error> hex_string_parse(std::string_view const text, std::size_t at,
-                                                                        std::string &out)
+    static constexpr std::expected<void, error> hex_string_parse(std::string_view const content, std::string &out)
     {
         int high = -1;
-        for (;; ++at) {
-            if (at >= text.size()) [[unlikely]]
-                return std::unexpected(error::invalid_path);
-            char const c = text[at];
-            if (c == '\'')
-                break;
-            if (blank(c))
+        std::size_t at = 0;
+        while (at < content.size()) {
+            char const c = content[at];
+            if (blank(c)) {
+                ++at;
                 continue;
+            }
+            if (eol_comment_starts(content, at)) {
+                at = eol_comment_end(content, at);
+                continue;
+            }
+            if (c == '/') {
+                auto const end = comment_end(content, at);
+                if (!end) [[unlikely]]
+                    return std::unexpected(end.error());
+                at = *end;
+                continue;
+            }
             int const v = hex_digit_value(c);
             if (v < 0) [[unlikely]]
                 return std::unexpected(error::invalid_path);
@@ -283,26 +341,26 @@ class extended_diagnostic_notation
                 out.push_back(static_cast<char>(high << rfc4648::base16_group_bits | v));
                 high = -1;
             }
+            ++at;
         }
         if (high >= 0) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        return at + 1;
+        return {};
     }
 
-    static constexpr std::expected<std::size_t, error> base64_string_parse(std::string_view const text, std::size_t at,
-                                                                           std::string &out)
+    static constexpr std::expected<void, error> base64_string_parse(std::string_view const content, std::string &out)
     {
         std::uint32_t bits = 0;
         int count = 0;
         int padding = 0;
-        for (;; ++at) {
-            if (at >= text.size()) [[unlikely]]
-                return std::unexpected(error::invalid_path);
-            char const c = text[at];
-            if (c == '\'')
-                break;
+        for (std::size_t at = 0; at < content.size(); ++at) {
+            char const c = content[at];
             if (blank(c))
                 continue;
+            if (c == '#') {
+                at = eol_comment_end(content, at) - 1;
+                continue;
+            }
             int v;
             if (c >= 'A' && c <= 'Z')
                 v = c - 'A';
@@ -338,7 +396,7 @@ class extended_diagnostic_notation
             out.push_back(static_cast<char>(bits >> 10));
             out.push_back(static_cast<char>(bits >> 2));
         }
-        return at + 1;
+        return {};
     }
 
     static constexpr std::expected<void, error> float_append(std::string &out, double const value, int const indicator)
@@ -366,6 +424,28 @@ class extended_diagnostic_notation
                       info - std::to_underlying(rfc8949::simple_float_information::half_precision_float))]
                 : heads::float_encode(static_cast<rfc8949::simple_float_information>(info), value);
         return head_append(out, major_type::simple_float, argument, info);
+    }
+
+    static constexpr std::expected<double, error> decimal_exact_value(std::uint64_t mantissa, int exponent, bool const overflow)
+    {
+        constexpr std::uint64_t exact_max = std::uint64_t{1} << std::numeric_limits<double>::digits;
+        constexpr std::array<double, 23> powers{1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
+                                                1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
+        constexpr int exponent_exact_max = static_cast<int>(powers.size()) - 1;
+        if (overflow) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        while (exponent > exponent_exact_max && mantissa <= exact_max / decimal) {
+            mantissa *= decimal;
+            --exponent;
+        }
+        while (exponent < 0 && mantissa % decimal == 0) {
+            mantissa /= decimal;
+            ++exponent;
+        }
+        if (mantissa > exact_max || exponent > exponent_exact_max || exponent < -exponent_exact_max) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        return exponent >= 0 ? static_cast<double>(mantissa) * powers[static_cast<std::size_t>(exponent)]
+                             : static_cast<double>(mantissa) / powers[static_cast<std::size_t>(-exponent)];
     }
 
     static constexpr std::expected<std::size_t, error> number_parse(std::string_view const text, std::size_t at,
@@ -464,9 +544,9 @@ class extended_diagnostic_notation
         if (!next) [[unlikely]]
             return std::unexpected(next.error());
         int const indicator = next->indicator;
-        if (overflow) [[unlikely]]
-            return std::unexpected(error::invalid_path);
         if (!real) {
+            if (overflow) [[unlikely]]
+                return std::unexpected(error::invalid_path);
             if (negative && mantissa != 0) {
                 if (auto const r = head_append(out, major_type::negative_integer, mantissa - 1, indicator); !r) [[unlikely]]
                     return std::unexpected(r.error());
@@ -480,7 +560,7 @@ class extended_diagnostic_notation
         if (mantissa == 0) {
             value = 0.0;
         } else if (base == hexadecimal) {
-            if (mantissa > exact_max) [[unlikely]]
+            if (overflow || mantissa > exact_max) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             value = static_cast<double>(mantissa);
             for (int i = 0; i < exponent; ++i)
@@ -488,20 +568,24 @@ class extended_diagnostic_notation
             for (int i = 0; i > exponent; --i)
                 value *= 0.5;
         } else {
-            constexpr std::array<double, 23> powers{1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
-                                                    1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
-            while (exponent > 22 && mantissa <= exact_max / decimal) {
-                mantissa *= decimal;
-                --exponent;
+#if defined(__cpp_lib_to_chars) || (defined(_LIBCPP_VERSION) && _LIBCPP_AVAILABILITY_HAS_FROM_CHARS_FLOATING_POINT)
+            if !consteval {
+                std::string_view const number{std::span(text).subspan(first, at - first)};
+                if (std::from_chars(std::to_address(number.begin()), std::to_address(number.end()), value).ec != std::errc{})
+                    [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+            } else {
+                auto const exact = decimal_exact_value(mantissa, exponent, overflow);
+                if (!exact) [[unlikely]]
+                    return std::unexpected(exact.error());
+                value = *exact;
             }
-            while (exponent < 0 && mantissa % decimal == 0) {
-                mantissa /= decimal;
-                ++exponent;
-            }
-            if (mantissa > exact_max || exponent > 22 || exponent < -22) [[unlikely]]
-                return std::unexpected(error::invalid_path);
-            value = exponent >= 0 ? static_cast<double>(mantissa) * powers[static_cast<std::size_t>(exponent)]
-                                  : static_cast<double>(mantissa) / powers[static_cast<std::size_t>(-exponent)];
+#else
+            auto const exact = decimal_exact_value(mantissa, exponent, overflow);
+            if (!exact) [[unlikely]]
+                return std::unexpected(exact.error());
+            value = *exact;
+#endif
         }
         if (auto const r = float_append(out, negative ? -value : value, indicator); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -510,13 +594,17 @@ class extended_diagnostic_notation
 
     static constexpr std::expected<parsed, error> separator_parse(std::string_view const text, std::size_t const at)
     {
-        std::size_t next = blank_end(text, at);
-        bool separated = next != at;
-        if (next < text.size() && text[next] == ',') {
-            next = blank_end(text, next + 1);
+        auto next = optional_space_end(text, at);
+        if (!next) [[unlikely]]
+            return std::unexpected(next.error());
+        bool separated = *next != at;
+        if (*next < text.size() && text[*next] == ',') {
+            next = optional_space_end(text, *next + 1);
+            if (!next) [[unlikely]]
+                return std::unexpected(next.error());
             separated = true;
         }
-        return parsed{next, separated};
+        return parsed{*next, separated};
     }
 
     static constexpr std::expected<std::size_t, error> container_parse(literal_cursor const cursor, std::string &out,
@@ -530,7 +618,10 @@ class extended_diagnostic_notation
         if (!after) [[unlikely]]
             return std::unexpected(after.error());
         int const indicator = after->indicator;
-        at = blank_end(text, after->at);
+        auto const first = optional_space_end(text, after->at);
+        if (!first) [[unlikely]]
+            return first;
+        at = *first;
         std::string items;
         std::uint64_t count = 0;
         bool separated = true;
@@ -541,10 +632,15 @@ class extended_diagnostic_notation
             if (!next) [[unlikely]]
                 return next;
             if (map) {
-                std::size_t const colon = blank_end(text, *next);
-                if (colon >= text.size() || text[colon] != ':') [[unlikely]]
+                auto const colon = optional_space_end(text, *next);
+                if (!colon) [[unlikely]]
+                    return colon;
+                if (*colon >= text.size() || text[*colon] != ':') [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                next = literal_parse({text, blank_end(text, colon + 1)}, items, {n.depth + 1, n.depth_max});
+                auto const value = optional_space_end(text, *colon + 1);
+                if (!value) [[unlikely]]
+                    return value;
+                next = literal_parse({text, *value}, items, {n.depth + 1, n.depth_max});
                 if (!next) [[unlikely]]
                     return next;
             }
@@ -595,6 +691,105 @@ class extended_diagnostic_notation
         return next->at;
     }
 
+    static constexpr bool string_literal_starts(std::string_view const rest)
+    {
+        return rest.starts_with('"') || rest.starts_with('\'') || rest.starts_with("h'") || rest.starts_with("b64'") ||
+               rest.starts_with("<<");
+    }
+
+    static constexpr std::expected<string_literal, error> string_literal_parse(literal_cursor const cursor, nesting const n)
+    {
+        std::string_view const text = cursor.text;
+        std::size_t const at = cursor.at;
+        std::string_view const rest{std::span(text).subspan(at)};
+        if (rest.starts_with('"') || rest.starts_with('\'')) {
+            string_literal string{0, rest.front() == '"' ? major_type::text_string : major_type::byte_string, {}};
+            auto const next = quoted_parse(text, at, string.content);
+            if (!next) [[unlikely]]
+                return std::unexpected(next.error());
+            string.at = *next;
+            return string;
+        }
+        if (rest.starts_with("h'") || rest.starts_with("b64'")) {
+            bool const hex = rest.front() == 'h';
+            std::string quoted;
+            auto const next = quoted_parse(text, at + (hex ? std::string_view("h").size() : std::string_view("b64").size()), quoted);
+            if (!next) [[unlikely]]
+                return std::unexpected(next.error());
+            string_literal string{*next, major_type::byte_string, {}};
+            auto const r = hex ? hex_string_parse(quoted, string.content) : base64_string_parse(quoted, string.content);
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            return string;
+        }
+        string_literal string{0, major_type::byte_string, {}};
+        auto first = optional_space_end(text, at + std::string_view("<<").size());
+        if (!first) [[unlikely]]
+            return std::unexpected(first.error());
+        std::size_t next = *first;
+        bool separated = true;
+        while (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view(">>"))) {
+            if (!separated || next >= text.size()) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            auto const item = literal_parse({text, next}, string.content, {n.depth + 1, n.depth_max});
+            if (!item) [[unlikely]]
+                return std::unexpected(item.error());
+            auto const s = separator_parse(text, *item);
+            if (!s) [[unlikely]]
+                return std::unexpected(s.error());
+            next = s->at;
+            separated = s->separated;
+        }
+        string.at = next + std::string_view(">>").size();
+        return string;
+    }
+
+    static constexpr std::expected<std::size_t, error> streamstring_parse(literal_cursor const cursor, std::string &out,
+                                                                          nesting const n)
+    {
+        std::string_view const text = cursor.text;
+        std::size_t const open = cursor.at + std::string_view("(_").size();
+        auto const first = optional_space_end(text, open);
+        if (!first) [[unlikely]]
+            return first;
+        if (*first == open) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        std::size_t at = *first;
+        std::string chunks;
+        major_type major{};
+        bool separated = true;
+        bool empty = true;
+        while (at < text.size() && text[at] != ')') {
+            if (!separated || !string_literal_starts(std::string_view{std::span(text).subspan(at)})) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            auto const chunk = string_literal_parse({text, at}, {n.depth + 1, n.depth_max});
+            if (!chunk) [[unlikely]]
+                return std::unexpected(chunk.error());
+            if (chunk->at < text.size() && text[chunk->at] == '_') [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            if (empty)
+                major = chunk->major;
+            if (!validity::check_chunk(major, chunk->major, heads::preferred_argument_info(chunk->content.size()))) [[unlikely]]
+                return std::unexpected(error::invalid_path);
+            if (auto const r = head_append(chunks, chunk->major, chunk->content.size(), no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            chunks += chunk->content;
+            empty = false;
+            auto const s = separator_parse(text, chunk->at);
+            if (!s) [[unlikely]]
+                return std::unexpected(s.error());
+            at = s->at;
+            separated = s->separated;
+        }
+        if (at >= text.size() || empty) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        out.push_back(heads::initial_byte(major, std::to_underlying(rfc8949::additional_information::indefinite_length)));
+        out += chunks;
+        out.push_back(heads::initial_byte(major_type::simple_float,
+                                          std::to_underlying(rfc8949::simple_float_information::break_stop_code)));
+        return at + 1;
+    }
+
     static constexpr std::expected<std::size_t, error> literal_parse(literal_cursor const cursor, std::string &out, nesting const n)
     {
         if (auto const r = validity::check_nesting_depth(n.depth, n.depth_max); !r) [[unlikely]]
@@ -607,40 +802,14 @@ class extended_diagnostic_notation
         char const c = rest.front();
         if (c == '[' || c == '{')
             return container_parse(cursor, out, n);
-        if (c == '"' || c == '\'') {
-            std::string content;
-            auto const next = quoted_parse(text, at, content);
-            if (!next) [[unlikely]]
-                return next;
-            return string_finish(text, *next, out, c == '"' ? major_type::text_string : major_type::byte_string, content);
+        if (string_literal_starts(rest)) {
+            auto const string = string_literal_parse(cursor, n);
+            if (!string) [[unlikely]]
+                return std::unexpected(string.error());
+            return string_finish(text, string->at, out, string->major, string->content);
         }
-        if (rest.starts_with("h'") || rest.starts_with("b64'")) {
-            std::string content;
-            bool const hex = rest.front() == 'h';
-            auto const next = hex ? hex_string_parse(text, at + 2, content) : base64_string_parse(text, at + 4, content);
-            if (!next) [[unlikely]]
-                return next;
-            return string_finish(text, *next, out, major_type::byte_string, content);
-        }
-        if (rest.starts_with("<<")) {
-            std::string content;
-            std::size_t next = blank_end(text, at + std::string_view("<<").size());
-            bool separated = true;
-            while (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view(">>"))) {
-                if (!separated || next >= text.size()) [[unlikely]]
-                    return std::unexpected(error::invalid_path);
-                auto const item = literal_parse({text, next}, content, {n.depth + 1, n.depth_max});
-                if (!item) [[unlikely]]
-                    return item;
-                auto const s = separator_parse(text, *item);
-                if (!s) [[unlikely]]
-                    return std::unexpected(s.error());
-                next = s->at;
-                separated = s->separated;
-            }
-            return string_finish(text, next + std::string_view(">>").size(), out, major_type::byte_string,
-                                 content);
-        }
+        if (rest.starts_with("(_"))
+            return streamstring_parse(cursor, out, n);
         constexpr auto names = std::to_array<std::string_view>({"false", "true", "null", "undefined"});
         for (std::size_t i = 0; i < names.size(); ++i)
             if (rest.starts_with(names[i])) {
@@ -648,14 +817,20 @@ class extended_diagnostic_notation
                 return at + names[i].size();
             }
         if (rest.starts_with("simple(")) {
-            std::size_t next = blank_end(text, at + std::string_view("simple(").size());
+            auto const opened = optional_space_end(text, at + std::string_view("simple(").size());
+            if (!opened) [[unlikely]]
+                return opened;
+            std::size_t next = *opened;
             std::size_t const first = next;
             unsigned value = 0;
             while (next < text.size() && digit(text[next]) && value < 1000)
                 value = value * decimal + static_cast<unsigned>(text[next++] - '0');
             if (next == first || (text[first] == '0' && next > first + 1)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            next = blank_end(text, next);
+            auto const closed = optional_space_end(text, next);
+            if (!closed) [[unlikely]]
+                return closed;
+            next = *closed;
             if (next >= text.size() || text[next] != ')' ||
                 value > std::numeric_limits<std::uint8_t>::max() ||
                 !validity::check_simple_value(heads::preferred_argument_info(value), value)) [[unlikely]]
@@ -687,13 +862,18 @@ class extended_diagnostic_notation
             }
             if (auto const r = head_append(out, major_type::tag, number, indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            auto const content = literal_parse({text, blank_end(text, tag_open->at + 1)}, out, {n.depth + 1, n.depth_max});
+            auto const opened = optional_space_end(text, tag_open->at + 1);
+            if (!opened) [[unlikely]]
+                return opened;
+            auto const content = literal_parse({text, *opened}, out, {n.depth + 1, n.depth_max});
             if (!content) [[unlikely]]
                 return content;
-            std::size_t const close = blank_end(text, *content);
-            if (close >= text.size() || text[close] != ')') [[unlikely]]
+            auto const close = optional_space_end(text, *content);
+            if (!close) [[unlikely]]
+                return close;
+            if (*close >= text.size() || text[*close] != ')') [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            return close + 1;
+            return *close + 1;
         }
         return number_parse(text, at, out);
     }
