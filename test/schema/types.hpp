@@ -1698,3 +1698,25 @@ byte_fields byte_fields_value()
 }
 
 } // namespace schema_types
+
+namespace schema_types
+{
+
+// Each position outside of a list is a wrong use. The iterator gives the position to the element function of its
+// list, and that function refuses it. So the dereference throws std::logic_error and reads no byte. The positions
+// are the end, one before the begin, the extremes of std::ptrdiff_t, and a default iterator, which holds no list.
+template <class R>
+void check_positions_outside(R const &range)
+{
+    using I = typename R::iterator;
+    auto const n = static_cast<std::ptrdiff_t>(range.size());
+    CHECK_THROWS_AS((void)*range.end(), std::logic_error);
+    CHECK_THROWS_AS((void)range.begin()[n], std::logic_error);
+    CHECK_THROWS_AS((void)range.begin()[-1], std::logic_error);
+    CHECK_THROWS_AS((void)*(range.begin() - 1), std::logic_error);
+    CHECK_THROWS_AS((void)*(range.begin() + std::numeric_limits<std::ptrdiff_t>::max()), std::logic_error);
+    CHECK_THROWS_AS((void)*(range.begin() - std::numeric_limits<std::ptrdiff_t>::min()), std::logic_error);
+    CHECK_THROWS_AS((void)*I{}, std::logic_error);
+}
+
+} // namespace schema_types
