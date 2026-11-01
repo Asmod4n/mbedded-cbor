@@ -191,6 +191,23 @@ TEST_CASE("encode_iov: write, flush, write, flush in one block")
     CHECK_EQ((*p).size(), 1);
 }
 
+// Two encoders on one writer close parts of two blocks one after the other. A part joins the piece before it
+// only where its bytes follow that piece in memory, so each part of another block stays a piece of its own.
+TEST_CASE("encode_iov: two encoders on one writer close parts of two blocks")
+{
+    cbor::iov_writer w;
+    iov_encoder first{w};
+    iov_encoder second{w};
+    REQUIRE(first.head_encode(cbor::major_type::unsigned_integer, 1).has_value());
+    REQUIRE(first.flush().has_value());
+    REQUIRE(second.head_encode(cbor::major_type::unsigned_integer, 2).has_value());
+    REQUIRE(second.flush().has_value());
+    pieces const p = second.release();
+    REQUIRE_EQ((*p).size(), 2);
+    CHECK_EQ((*p)[0], "\x01"sv);
+    CHECK_EQ((*p)[1], "\x02"sv);
+}
+
 // A head and a float write nine bytes before they count their own size. At each of the nine offsets
 // before the end of a block, the encoder must take a new block in time and lose no byte.
 TEST_CASE("encode_iov: a head and a float at each offset before the end of a block")
