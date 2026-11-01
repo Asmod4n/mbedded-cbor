@@ -1165,8 +1165,8 @@ inline std::expected<owning<item>, error> lazy::clone() const
         return cbor::decode(encoded);
     }
     if (offset == validity::offset{})
-        return decode_tree<true>(top_level.encoded, limits::nesting_depth)
-            .transform([](decoded_tree<true> const &d) { return d.tree; });
+        return detail::decode_tree<true>(top_level.encoded, limits::nesting_depth)
+            .transform([](detail::decoded_tree<true> const &d) { return d.tree; });
     std::string_view const rest = validity::subspan(top_level.encoded, offset);
     auto const size = item_size(rest);
     if (!size) [[unlikely]]
