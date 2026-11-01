@@ -88,7 +88,7 @@ one() {
 	fi
 	podman run --rm --network none \
 		-v "$src":/src:ro -v "$root/$branch/$n":/b -v "$cache":/ccache \
-		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=9G -e CMAKE_BUILD_PARALLEL_LEVEL="$parallel_level" -e CBOR_TEST_PATTERN="$pattern" \
+		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=9G ${CCACHE_DISABLE:+-e CCACHE_DISABLE=$CCACHE_DISABLE} -e CMAKE_BUILD_PARALLEL_LEVEL="$parallel_level" -e CBOR_TEST_PATTERN="$pattern" \
 		-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 		"$img" bash -c '
 		s=${EPOCHREALTIME/./}
@@ -121,7 +121,7 @@ iter() {
 		podman container exists "$name" && { podman rm -f "$name" >/dev/null || return 1; }
 		podman run -d --name "$name" --network none $user \
 			-v "$src":/src:ro -v "$dir":/b -v "$cache":/ccache \
-			-e HOME=/tmp -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=9G -e CMAKE_BUILD_PARALLEL_LEVEL="$jobs" -e CBOR_TEST_PATTERN="$pattern" \
+			-e HOME=/tmp -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=9G ${CCACHE_DISABLE:+-e CCACHE_DISABLE=$CCACHE_DISABLE} -e CMAKE_BUILD_PARALLEL_LEVEL="$jobs" -e CBOR_TEST_PATTERN="$pattern" \
 			-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 			"$image" sleep infinity >/dev/null || return 1
 	fi
@@ -153,6 +153,12 @@ iter() {
 		exit $r' >"$root/$branch/iter.result" 2>&1
 }
 
+first_error() {
+	local at
+	at=$(grep -m1 -n -E 'error:|FAILED:' "$1" | cut -d: -f1)
+	[ -n "$at" ] && sed -n "$((at > 20 ? at - 20 : 1)),$((at + 30))p" "$1"
+}
+
 start=${EPOCHREALTIME/./}
 rc=0
 for n in "$@"; do
@@ -162,7 +168,7 @@ for n in "$@"; do
 	cat "$root/$branch/$n.result"
 	[ "$n" = iter ] && continue
 	[ -s "$root/$branch/$n.result" ] && grep -q "rc=0" "$root/$branch/$n.result" ||
-		tail -n 30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log"
+		{ first_error "$root/$branch/$n/build.log"; tail -n 30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log"; }
 done
 if [ $interop = 1 ]; then
 	"$src/test/interop/run.sh" | tail -40
