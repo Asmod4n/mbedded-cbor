@@ -10,7 +10,8 @@ EXTRACT_STATIC = NO
 HIDE_UNDOC_MEMBERS = YES
 HIDE_UNDOC_CLASSES = YES
 FULL_PATH_NAMES = NO
-EXCLUDE_SYMBOLS = cbor::sequence::iterator::encoded cbor::sequence::iterator::size
+EXCLUDE_SYMBOLS = cbor::detail cbor::detail::* \
+                  cbor::sequence::iterator::encoded cbor::sequence::iterator::size
 QUIET = YES
 WARNINGS = YES
 WARN_IF_UNDOCUMENTED = YES

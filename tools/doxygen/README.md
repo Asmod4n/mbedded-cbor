@@ -85,3 +85,7 @@ the navigation after the targeted fix. Unsupported XML documentation
 markup fails before the existing manual pages are replaced. The pilot
 example still compiles and runs, and preprocessing confirms that the
 header's C++ tokens did not change.
+
+Declarations in `cbor::detail` are excluded from the generated
+reference. The pilot input remains `sequence.hpp`; the exclusion also
+applies when the input is extended to other headers.
