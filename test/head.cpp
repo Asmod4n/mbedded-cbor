@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <string>
 #include <string_view>
 #include <system_error>
 
@@ -131,42 +132,51 @@ TEST_CASE("head: an indefinite length is indefinite_length")
 namespace
 {
 
-std::string head_of(cbor::major_type const major, std::uint64_t const argument)
+std::string tag_head_of(std::uint64_t const number)
 {
-    string_writer w;
-    cbor::encoding::encoder<string_writer> e{w};
-    REQUIRE(e.head_encode(major, argument).has_value());
-    REQUIRE(e.flush().has_value());
-    return w.encoded;
+    std::string out;
+    cbor::encoder e{out};
+    REQUIRE(e.tag(number).has_value());
+    REQUIRE(e.finish().has_value());
+    return out;
+}
+
+std::string array_head_of(std::uint64_t const count)
+{
+    std::string out;
+    cbor::encoder e{out};
+    REQUIRE(e.array(count).has_value());
+    REQUIRE(e.finish().has_value());
+    return out;
 }
 
 } // namespace
 
-// Lengths and tag numbers take the shortest head of RFC 8949 4.1. head_encode writes them; a run-time
-// integer value goes through the fixed width instead, tested below.
-// Ported from test.rb: the major 0 roundtrip tests, here as the exact bytes of RFC 8949 4.1.
-TEST_CASE("major 0: head_encode writes the shortest form")
+// Lengths and tag numbers take the shortest head of RFC 8949 4.1. The encoder writes an integer at a fixed
+// width, tested below, so the shortest form is tested through the tag number and the count of an array.
+// Ported from test.rb: the major 0 roundtrip tests, here as the exact bytes of RFC 8949 4.1 under major type 6.
+TEST_CASE("tag: the head of a tag number takes the shortest form")
 {
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 0), "\x00"sv);
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 23), "\x17"sv);
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 24), "\x18\x18"sv);
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 255), "\x18\xff"sv);
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 256), "\x19\x01\x00"sv);
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 65535), "\x19\xff\xff"sv);
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 65536), "\x1a\x00\x01\x00\x00"sv);
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 0xffffffff), "\x1a\xff\xff\xff\xff"sv);
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, 1ull << 40), "\x1b\x00\x00\x01\x00\x00\x00\x00\x00"sv);
-    CHECK_EQ(head_of(cbor::major_type::unsigned_integer, ~0ull), "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+    CHECK_EQ(tag_head_of(0), "\xc0"sv);
+    CHECK_EQ(tag_head_of(23), "\xd7"sv);
+    CHECK_EQ(tag_head_of(24), "\xd8\x18"sv);
+    CHECK_EQ(tag_head_of(255), "\xd8\xff"sv);
+    CHECK_EQ(tag_head_of(256), "\xd9\x01\x00"sv);
+    CHECK_EQ(tag_head_of(65535), "\xd9\xff\xff"sv);
+    CHECK_EQ(tag_head_of(65536), "\xda\x00\x01\x00\x00"sv);
+    CHECK_EQ(tag_head_of(0xffffffff), "\xda\xff\xff\xff\xff"sv);
+    CHECK_EQ(tag_head_of(1ull << 40), "\xdb\x00\x00\x01\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(tag_head_of(~0ull), "\xdb\xff\xff\xff\xff\xff\xff\xff\xff"sv);
 }
 
-// Ported from test.rb: the major 1 wire tests, in the other direction.
-TEST_CASE("major 1: head_encode writes the shortest form")
+// Ported from test.rb: the major 1 wire tests, in the other direction, here under major type 4.
+TEST_CASE("array: the head of a count takes the shortest form")
 {
-    CHECK_EQ(head_of(cbor::major_type::negative_integer, 0), "\x20"sv);
-    CHECK_EQ(head_of(cbor::major_type::negative_integer, 24), "\x38\x18"sv);
-    CHECK_EQ(head_of(cbor::major_type::negative_integer, 0xffffffff), "\x3a\xff\xff\xff\xff"sv);
-    CHECK_EQ(head_of(cbor::major_type::negative_integer, 1ull << 63), "\x3b\x80\x00\x00\x00\x00\x00\x00\x00"sv);
-    CHECK_EQ(head_of(cbor::major_type::negative_integer, ~0ull), "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+    CHECK_EQ(array_head_of(0), "\x80"sv);
+    CHECK_EQ(array_head_of(24), "\x98\x18"sv);
+    CHECK_EQ(array_head_of(0xffffffff), "\x9a\xff\xff\xff\xff"sv);
+    CHECK_EQ(array_head_of(1ull << 63), "\x9b\x80\x00\x00\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(array_head_of(~0ull), "\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
 }
 
 // The encoder writes an integer at its native width: the reference model gives std::uint64_t, so the head
