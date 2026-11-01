@@ -568,7 +568,7 @@ class extended_diagnostic_notation
             for (int i = 0; i > exponent; --i)
                 value *= 0.5;
         } else {
-#if defined(__cpp_lib_to_chars)
+#if defined(__cpp_lib_to_chars) || (defined(_LIBCPP_VERSION) && _LIBCPP_AVAILABILITY_HAS_FROM_CHARS_FLOATING_POINT)
             if !consteval {
                 std::string_view const number{std::span(text).subspan(first, at - first)};
                 if (std::from_chars(std::to_address(number.begin()), std::to_address(number.end()), value).ec != std::errc{})

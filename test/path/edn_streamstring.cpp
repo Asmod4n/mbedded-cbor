@@ -1,7 +1,6 @@
 #include "edn.hpp"
 #include <cbor/diagnostic_notation.hpp>
 
-#include <charconv>
 #include <string>
 #include <string_view>
 
@@ -52,11 +51,10 @@ TEST_CASE("path edn streamstring: the diagnostic notation of each example of RFC
         REQUIRE(text.has_value());
         selects(*text, hex);
     }
-#if defined(__cpp_lib_to_chars)
-    for (std::string_view const hex : {"fa7f7fffff"sv, "fb7e37e43c8800759c"sv, "f90001"sv}) {
-        auto const text = cbor::diagnostic_notation(bytes_of_hex(hex));
-        REQUIRE(text.has_value());
-        selects(*text, hex);
-    }
-#endif
+    if (from_chars_reads_double)
+        for (std::string_view const hex : {"fa7f7fffff"sv, "fb7e37e43c8800759c"sv, "f90001"sv}) {
+            auto const text = cbor::diagnostic_notation(bytes_of_hex(hex));
+            REQUIRE(text.has_value());
+            selects(*text, hex);
+        }
 }

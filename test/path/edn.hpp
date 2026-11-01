@@ -8,6 +8,7 @@
 #include <cbor/query.hpp>
 
 #include <array>
+#include <charconv>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -18,6 +19,15 @@ using cbor::error;
 
 namespace path_edn
 {
+
+// The library converts a decimal float with std::from_chars where the standard library has it for double: libstdc++
+// says so with __cpp_lib_to_chars, libc++ from LLVM 20 with its availability macro, which on Apple depends on the
+// deployment target.
+#if defined(__cpp_lib_to_chars) || (defined(_LIBCPP_VERSION) && _LIBCPP_AVAILABILITY_HAS_FROM_CHARS_FLOATING_POINT)
+inline constexpr bool from_chars_reads_double = true;
+#else
+inline constexpr bool from_chars_reads_double = false;
+#endif
 
 inline std::string bytes_of_hex(std::string_view const hex)
 {
