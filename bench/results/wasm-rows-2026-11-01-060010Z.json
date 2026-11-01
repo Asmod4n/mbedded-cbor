@@ -1,0 +1,1108 @@
+{
+ "context": {
+  "time": "2026-11-01T06:00:10.358Z",
+  "node": "v22.23.4",
+  "v8": "12.4.254.21-node.57",
+  "kernel": "6.18.44-fc-v185",
+  "cpus": 4,
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+  "reps": 10,
+  "iterations_per_process": "7, first and median of the last 5; each iteration includes JSON.parse or the copy into Wasm memory, the load and the row index",
+  "data": "rows {id, label} as in js-framework-benchmark (krausest), labels from its word lists with a fixed LCG; CBOR encoded by the bench (definite lengths, shortest heads)",
+  "scenarios": "full: read id and label of every row; window: read 30 rows from the middle (virtual list); find: index of the row with id n/2+1",
+  "arms": "json: JSON.parse + plain objects; proxy: a Proxy per row whose get trap calls Wasm (Vue, Solid, Svelte 5 style); columns: one Wasm call fills ids and label views, JS builds plain objects",
+  "commit": "70565d2"
+ },
+ "summary": {
+  "full:1000:json": {
+   "result": 518536,
+   "first_median_ms": 0.347,
+   "median_ms": 0.282,
+   "spread": 1.338
+  },
+  "full:1000:proxy": {
+   "result": 518536,
+   "first_median_ms": 4.184,
+   "median_ms": 1.307,
+   "spread": 0.825
+  },
+  "full:1000:columns": {
+   "result": 518536,
+   "first_median_ms": 2.344,
+   "median_ms": 0.867,
+   "spread": 1.188
+  },
+  "window:1000:json": {
+   "result": 16005,
+   "first_median_ms": 0.253,
+   "median_ms": 0.217,
+   "spread": 1.48
+  },
+  "window:1000:proxy": {
+   "result": 16005,
+   "first_median_ms": 1.4,
+   "median_ms": 0.11,
+   "spread": 1.163
+  },
+  "find:1000:json": {
+   "result": 500,
+   "first_median_ms": 0.253,
+   "median_ms": 0.236,
+   "spread": 1.006
+  },
+  "find:1000:proxy": {
+   "result": 500,
+   "first_median_ms": 1.177,
+   "median_ms": 0.182,
+   "spread": 0.993
+  },
+  "full:10000:json": {
+   "result": 50185007,
+   "first_median_ms": 2.574,
+   "median_ms": 2.341,
+   "spread": 1.163
+  },
+  "full:10000:proxy": {
+   "result": 50185007,
+   "first_median_ms": 14.36,
+   "median_ms": 8.645,
+   "spread": 0.419
+  },
+  "full:10000:columns": {
+   "result": 50185007,
+   "first_median_ms": 12.242,
+   "median_ms": 5.687,
+   "spread": 0.327
+  },
+  "window:10000:json": {
+   "result": 150997,
+   "first_median_ms": 1.803,
+   "median_ms": 1.991,
+   "spread": 1.093
+  },
+  "window:10000:proxy": {
+   "result": 150997,
+   "first_median_ms": 2.669,
+   "median_ms": 0.535,
+   "spread": 0.626
+  },
+  "find:10000:json": {
+   "result": 5000,
+   "first_median_ms": 2.116,
+   "median_ms": 2.055,
+   "spread": 1.882
+  },
+  "find:10000:proxy": {
+   "result": 5000,
+   "first_median_ms": 3.278,
+   "median_ms": 0.869,
+   "spread": 0.992
+  },
+  "full:10000:json_aa": {
+   "result": 50185007,
+   "first_median_ms": 2.525,
+   "median_ms": 2.394,
+   "spread": 0.995
+  },
+  "full:10000:columns_aa": {
+   "result": 50185007,
+   "first_median_ms": 12.36,
+   "median_ms": 6.111,
+   "spread": 0.932
+  }
+ },
+ "results": {
+  "full:1000:json": [
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.30275199999999813,
+    "ms": 0.21593099999999765
+   },
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.3383540000000025,
+    "ms": 0.26445400000000063
+   },
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.6755099999999956,
+    "ms": 0.5048519999999996
+   },
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.6624120000000033,
+    "ms": 0.47163499999999203
+   },
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.6089580000000012,
+    "ms": 0.48507399999999734
+   },
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.3234339999999989,
+    "ms": 0.22486700000000326
+   },
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.5112799999999993,
+    "ms": 0.3281559999999928
+   },
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.3406090000000006,
+    "ms": 0.2824690000000061
+   },
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.303955000000002,
+    "ms": 0.23614800000000002
+   },
+   {
+    "arm": "full:1000:json",
+    "result": 518536,
+    "first_ms": 0.34732600000000247,
+    "ms": 0.2429819999999978
+   }
+  ],
+  "full:1000:proxy": [
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 4.183702999999994,
+    "ms": 1.3666290000000032
+   },
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 4.908909999999999,
+    "ms": 1.6166680000000042
+   },
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 5.394960000000012,
+    "ms": 1.0743499999999955
+   },
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 5.796320999999992,
+    "ms": 1.9602310000000074
+   },
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 3.745125999999992,
+    "ms": 1.2523369999999971
+   },
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 4.068069000000001,
+    "ms": 1.1731630000000024
+   },
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 4.284594999999996,
+    "ms": 1.3074349999999981
+   },
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 4.037987000000001,
+    "ms": 1.2778629999999964
+   },
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 3.9828879999999955,
+    "ms": 1.178060000000002
+   },
+   {
+    "arm": "full:1000:proxy",
+    "result": 518536,
+    "first_ms": 3.8750189999999947,
+    "ms": 1.311052999999994
+   }
+  ],
+  "full:1000:columns": [
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 2.3571489999999997,
+    "ms": 0.8860109999999963
+   },
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 3.0017429999999976,
+    "ms": 0.8667980000000028
+   },
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 2.3439260000000033,
+    "ms": 0.7766379999999984
+   },
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 2.167109999999994,
+    "ms": 0.8616040000000069
+   },
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 2.2709779999999995,
+    "ms": 0.8828359999999975
+   },
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 2.261439000000003,
+    "ms": 0.7751239999999981
+   },
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 2.2157689999999945,
+    "ms": 0.8112749999999949
+   },
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 4.052280999999994,
+    "ms": 1.6963480000000004
+   },
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 3.089838999999998,
+    "ms": 1.0006740000000036
+   },
+   {
+    "arm": "full:1000:columns",
+    "result": 518536,
+    "first_ms": 2.237845,
+    "ms": 0.8042330000000035
+   }
+  ],
+  "window:1000:json": [
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.24784799999999763,
+    "ms": 0.2167299999999983
+   },
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.47659300000000826,
+    "ms": 0.3784950000000009
+   },
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.2407789999999963,
+    "ms": 0.1829050000000052
+   },
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.4523499999999956,
+    "ms": 0.16393600000000674
+   },
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.4715450000000061,
+    "ms": 0.40656799999999294
+   },
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.25336699999999723,
+    "ms": 0.17506100000000657
+   },
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.25432599999999894,
+    "ms": 0.25277600000000433
+   },
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.23847900000000521,
+    "ms": 0.18994300000000663
+   },
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.24103900000000067,
+    "ms": 0.2017319999999998
+   },
+   {
+    "arm": "window:1000:json",
+    "result": 16005,
+    "first_ms": 0.22747400000000084,
+    "ms": 0.22365299999999877
+   }
+  ],
+  "window:1000:proxy": [
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 2.114533999999992,
+    "ms": 0.2147810000000021
+   },
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 1.3997109999999964,
+    "ms": 0.10734200000000271
+   },
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 1.3908400000000114,
+    "ms": 0.10645300000000191
+   },
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 1.345766999999995,
+    "ms": 0.10570299999999833
+   },
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 2.078171999999995,
+    "ms": 0.2045049999999975
+   },
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 1.3409499999999994,
+    "ms": 0.10514600000000485
+   },
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 1.4334369999999979,
+    "ms": 0.11151399999999967
+   },
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 1.5610649999999993,
+    "ms": 0.11010600000000181
+   },
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 1.3900089999999992,
+    "ms": 0.22106399999999837
+   },
+   {
+    "arm": "window:1000:proxy",
+    "result": 16005,
+    "first_ms": 1.3335149999999985,
+    "ms": 0.10221800000000059
+   }
+  ],
+  "find:1000:json": [
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.25259899999998936,
+    "ms": 0.2304449999999889
+   },
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.2682179999999974,
+    "ms": 0.23630400000000407
+   },
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.2971649999999997,
+    "ms": 0.2033789999999982
+   },
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.40664200000000505,
+    "ms": 0.322973999999995
+   },
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.24013800000000174,
+    "ms": 0.23705300000000307
+   },
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.3350330000000028,
+    "ms": 0.2628209999999953
+   },
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.23181000000000296,
+    "ms": 0.38454300000000075
+   },
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.23842600000000402,
+    "ms": 0.2146460000000019
+   },
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.23787599999999998,
+    "ms": 0.1917049999999989
+   },
+   {
+    "arm": "find:1000:json",
+    "result": 500,
+    "first_ms": 0.2210760000000036,
+    "ms": 0.208402999999997
+   }
+  ],
+  "find:1000:proxy": [
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 2.1337159999999997,
+    "ms": 0.3143570000000011
+   },
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 1.816793000000004,
+    "ms": 0.3296789999999987
+   },
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 1.1718950000000063,
+    "ms": 0.17800199999999933
+   },
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 1.1277669999999986,
+    "ms": 0.1733910000000023
+   },
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 1.1295750000000027,
+    "ms": 0.1829660000000004
+   },
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 1.1766800000000046,
+    "ms": 0.16545499999999436
+   },
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 1.1478969999999933,
+    "ms": 0.17855700000000496
+   },
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 1.1299490000000105,
+    "ms": 0.18175799999998787
+   },
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 1.1991230000000002,
+    "ms": 0.18134899999999732
+   },
+   {
+    "arm": "find:1000:proxy",
+    "result": 500,
+    "first_ms": 1.6525919999999985,
+    "ms": 0.31366799999999273
+   }
+  ],
+  "full:10000:json": [
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 2.404465000000002,
+    "ms": 2.2387839999999954
+   },
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 2.540871999999993,
+    "ms": 2.2805779999999913
+   },
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 4.497247999999999,
+    "ms": 4.707144999999997
+   },
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 2.5735250000000036,
+    "ms": 2.4530890000000056
+   },
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 4.139275000000012,
+    "ms": 2.3504449999999935
+   },
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 2.4862719999999996,
+    "ms": 2.341186999999991
+   },
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 2.4918890000000005,
+    "ms": 2.319357999999994
+   },
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 3.8962219999999945,
+    "ms": 4.843061999999989
+   },
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 2.613259999999997,
+    "ms": 2.3115080000000034
+   },
+   {
+    "arm": "full:10000:json",
+    "result": 50185007,
+    "first_ms": 2.460308999999995,
+    "ms": 2.287922999999992
+   }
+  ],
+  "full:10000:proxy": [
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 20.837654,
+    "ms": 10.784688000000017
+   },
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 14.692283000000003,
+    "ms": 9.948968999999991
+   },
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 13.261668,
+    "ms": 7.666824000000005
+   },
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 13.725533999999996,
+    "ms": 9.087631999999985
+   },
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 27.376768,
+    "ms": 8.644733000000002
+   },
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 13.244590000000002,
+    "ms": 7.602267000000012
+   },
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 14.229787000000002,
+    "ms": 7.919088000000002
+   },
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 13.749270999999993,
+    "ms": 7.703018000000014
+   },
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 14.360422999999997,
+    "ms": 9.117733000000001
+   },
+   {
+    "arm": "full:10000:proxy",
+    "result": 50185007,
+    "first_ms": 14.462831000000008,
+    "ms": 7.671729999999997
+   }
+  ],
+  "full:10000:columns": [
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 12.241601000000003,
+    "ms": 5.9842160000000035
+   },
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 11.947253000000003,
+    "ms": 5.840326999999988
+   },
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 10.570589999999996,
+    "ms": 4.890714000000003
+   },
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 11.557108,
+    "ms": 4.812793999999997
+   },
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 12.33208900000001,
+    "ms": 4.61424199999999
+   },
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 10.626204999999999,
+    "ms": 4.821849
+   },
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 12.585227000000003,
+    "ms": 5.997638999999992
+   },
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 10.974067000000005,
+    "ms": 4.7443250000000035
+   },
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 12.77913199999999,
+    "ms": 5.687471000000016
+   },
+   {
+    "arm": "full:10000:columns",
+    "result": 50185007,
+    "first_ms": 12.425125999999992,
+    "ms": 6.124759999999981
+   }
+  ],
+  "window:10000:json": [
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 2.0601470000000006,
+    "ms": 2.0689140000000066
+   },
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 1.7971190000000092,
+    "ms": 1.9025900000000036
+   },
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 1.8222350000000063,
+    "ms": 1.9807720000000018
+   },
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 1.7626580000000018,
+    "ms": 1.966300000000004
+   },
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 1.754800000000003,
+    "ms": 1.9938240000000036
+   },
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 2.207388000000009,
+    "ms": 1.9909710000000018
+   },
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 1.8030200000000036,
+    "ms": 3.5987209999999976
+   },
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 1.7649470000000065,
+    "ms": 1.9500549999999919
+   },
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 1.7723709999999926,
+    "ms": 1.878395999999995
+   },
+   {
+    "arm": "window:10000:json",
+    "result": 150997,
+    "first_ms": 2.030783999999997,
+    "ms": 3.930634999999995
+   }
+  ],
+  "window:10000:proxy": [
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 2.6693909999999903,
+    "ms": 0.5352900000000034
+   },
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 2.6853300000000075,
+    "ms": 0.5437459999999987
+   },
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 2.6027330000000006,
+    "ms": 0.5288789999999892
+   },
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 2.583370000000002,
+    "ms": 0.5269000000000119
+   },
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 3.9351999999999805,
+    "ms": 0.6966319999999939
+   },
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 2.599133000000009,
+    "ms": 0.5239080000000058
+   },
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 4.156675999999976,
+    "ms": 0.7730249999999899
+   },
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 2.6637680000000046,
+    "ms": 0.5127360000000039
+   },
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 2.5230099999999993,
+    "ms": 0.5318430000000092
+   },
+   {
+    "arm": "window:10000:proxy",
+    "result": 150997,
+    "first_ms": 4.080622000000005,
+    "ms": 0.8337360000000018
+   }
+  ],
+  "find:10000:json": [
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 2.0524190000000004,
+    "ms": 1.965354000000005
+   },
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 2.0589080000000024,
+    "ms": 1.9981980000000021
+   },
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 2.2086979999999983,
+    "ms": 2.016570999999999
+   },
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 2.0055479999999903,
+    "ms": 2.024016000000003
+   },
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 1.9920279999999906,
+    "ms": 5.663295000000005
+   },
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 2.116185999999999,
+    "ms": 2.1025259999999975
+   },
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 2.096882999999991,
+    "ms": 2.0545610000000067
+   },
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 2.3652429999999924,
+    "ms": 1.9665549999999996
+   },
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 2.3527190000000076,
+    "ms": 2.153576000000001
+   },
+   {
+    "arm": "find:10000:json",
+    "result": 5000,
+    "first_ms": 2.118249000000006,
+    "ms": 2.0818900000000014
+   }
+  ],
+  "find:10000:proxy": [
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 3.2141539999999935,
+    "ms": 0.8273250000000019
+   },
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 3.2248830000000055,
+    "ms": 0.9349189999999936
+   },
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 3.1953730000000036,
+    "ms": 0.8893710000000112
+   },
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 3.5606610000000103,
+    "ms": 0.8211490000000055
+   },
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 3.436312000000001,
+    "ms": 0.8562980000000096
+   },
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 3.277901,
+    "ms": 0.8686259999999919
+   },
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 6.379550999999992,
+    "ms": 0.9605729999999966
+   },
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 3.039506000000003,
+    "ms": 0.8214830000000006
+   },
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 3.0575899999999905,
+    "ms": 0.8588990000000081
+   },
+   {
+    "arm": "find:10000:proxy",
+    "result": 5000,
+    "first_ms": 5.183470999999997,
+    "ms": 1.6353990000000067
+   }
+  ],
+  "full:10000:json_aa": [
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 2.590260999999998,
+    "ms": 2.585121000000001
+   },
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 2.433295000000001,
+    "ms": 2.3940319999999957
+   },
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 2.4712080000000043,
+    "ms": 2.3156510000000026
+   },
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 2.4823750000000047,
+    "ms": 2.298952
+   },
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 2.5249529999999965,
+    "ms": 2.4921799999999905
+   },
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 4.930692000000008,
+    "ms": 4.540339999999986
+   },
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 2.4522019999999998,
+    "ms": 2.298267999999993
+   },
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 2.529837999999998,
+    "ms": 2.275706999999997
+   },
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 2.3829589999999996,
+    "ms": 2.280270999999999
+   },
+   {
+    "arm": "full:10000:json_aa",
+    "result": 50185007,
+    "first_ms": 3.9713370000000054,
+    "ms": 3.945151999999993
+   }
+  ],
+  "full:10000:columns_aa": [
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 16.87846300000001,
+    "ms": 6.258609000000007
+   },
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 12.477964999999998,
+    "ms": 5.234827999999993
+   },
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 12.09793400000001,
+    "ms": 6.122224000000003
+   },
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 10.590412,
+    "ms": 4.879732000000018
+   },
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 11.82804999999999,
+    "ms": 6.110750999999993
+   },
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 20.936553999999973,
+    "ms": 8.767826000000014
+   },
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 12.359572999999997,
+    "ms": 6.090006999999986
+   },
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 10.548022000000003,
+    "ms": 4.730728999999997
+   },
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 11.064042,
+    "ms": 8.71104600000001
+   },
+   {
+    "arm": "full:10000:columns_aa",
+    "result": 50185007,
+    "first_ms": 15.592621000000008,
+    "ms": 4.537610000000001
+   }
+  ]
+ }
+}
