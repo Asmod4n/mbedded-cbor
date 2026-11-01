@@ -426,6 +426,28 @@ class extended_diagnostic_notation
         return head_append(out, major_type::simple_float, argument, info);
     }
 
+    static constexpr std::expected<double, error> decimal_exact_value(std::uint64_t mantissa, int exponent, bool const overflow)
+    {
+        constexpr std::uint64_t exact_max = std::uint64_t{1} << std::numeric_limits<double>::digits;
+        constexpr std::array<double, 23> powers{1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
+                                                1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
+        constexpr int exponent_exact_max = static_cast<int>(powers.size()) - 1;
+        if (overflow) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        while (exponent > exponent_exact_max && mantissa <= exact_max / decimal) {
+            mantissa *= decimal;
+            --exponent;
+        }
+        while (exponent < 0 && mantissa % decimal == 0) {
+            mantissa /= decimal;
+            ++exponent;
+        }
+        if (mantissa > exact_max || exponent > exponent_exact_max || exponent < -exponent_exact_max) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        return exponent >= 0 ? static_cast<double>(mantissa) * powers[static_cast<std::size_t>(exponent)]
+                             : static_cast<double>(mantissa) / powers[static_cast<std::size_t>(-exponent)];
+    }
+
     static constexpr std::expected<std::size_t, error> number_parse(std::string_view const text, std::size_t at,
                                                                     std::string &out)
     {
@@ -522,9 +544,9 @@ class extended_diagnostic_notation
         if (!next) [[unlikely]]
             return std::unexpected(next.error());
         int const indicator = next->indicator;
-        if (overflow) [[unlikely]]
-            return std::unexpected(error::invalid_path);
         if (!real) {
+            if (overflow) [[unlikely]]
+                return std::unexpected(error::invalid_path);
             if (negative && mantissa != 0) {
                 if (auto const r = head_append(out, major_type::negative_integer, mantissa - 1, indicator); !r) [[unlikely]]
                     return std::unexpected(r.error());
@@ -538,7 +560,7 @@ class extended_diagnostic_notation
         if (mantissa == 0) {
             value = 0.0;
         } else if (base == hexadecimal) {
-            if (mantissa > exact_max) [[unlikely]]
+            if (overflow || mantissa > exact_max) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             value = static_cast<double>(mantissa);
             for (int i = 0; i < exponent; ++i)
@@ -546,20 +568,24 @@ class extended_diagnostic_notation
             for (int i = 0; i > exponent; --i)
                 value *= 0.5;
         } else {
-            constexpr std::array<double, 23> powers{1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
-                                                    1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
-            while (exponent > 22 && mantissa <= exact_max / decimal) {
-                mantissa *= decimal;
-                --exponent;
+#if defined(__cpp_lib_to_chars)
+            if !consteval {
+                std::string_view const number{std::span(text).subspan(first, at - first)};
+                if (std::from_chars(std::to_address(number.begin()), std::to_address(number.end()), value).ec != std::errc{})
+                    [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+            } else {
+                auto const exact = decimal_exact_value(mantissa, exponent, overflow);
+                if (!exact) [[unlikely]]
+                    return std::unexpected(exact.error());
+                value = *exact;
             }
-            while (exponent < 0 && mantissa % decimal == 0) {
-                mantissa /= decimal;
-                ++exponent;
-            }
-            if (mantissa > exact_max || exponent > 22 || exponent < -22) [[unlikely]]
-                return std::unexpected(error::invalid_path);
-            value = exponent >= 0 ? static_cast<double>(mantissa) * powers[static_cast<std::size_t>(exponent)]
-                                  : static_cast<double>(mantissa) / powers[static_cast<std::size_t>(-exponent)];
+#else
+            auto const exact = decimal_exact_value(mantissa, exponent, overflow);
+            if (!exact) [[unlikely]]
+                return std::unexpected(exact.error());
+            value = *exact;
+#endif
         }
         if (auto const r = float_append(out, negative ? -value : value, indicator); !r) [[unlikely]]
             return std::unexpected(r.error());
