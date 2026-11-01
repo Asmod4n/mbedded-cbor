@@ -446,10 +446,10 @@ public:
         return view(std::views::drop(whole, static_cast<std::ranges::range_difference_t<view>>(std::to_underlying(at))));
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::span<char const> element_span(std::string_view const elements,
+    CBOR_ALWAYS_INLINE static constexpr std::span<char const> element_span(std::span<char const> const elements,
                                                                            index const i, std::size_t const size)
     {
-        return std::span(elements).subspan(static_cast<std::size_t>(std::to_underlying(i)) * size, size);
+        return elements.subspan(static_cast<std::size_t>(std::to_underlying(i)) * size, size);
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<std::string_view, error>
