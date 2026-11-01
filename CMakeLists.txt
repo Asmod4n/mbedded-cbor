@@ -58,6 +58,7 @@ if(PROJECT_IS_TOP_LEVEL)
 	include(CTest)
 endif()
 if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
+	include(cmake/job_pools.cmake)
 	find_package(doctest REQUIRED)
 	include(doctest)
 	include(CheckCXXCompilerFlag)
@@ -178,7 +179,7 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
 			add_custom_command(OUTPUT ${stamp}
 				COMMAND ${CMAKE_COMMAND} -DPROGRAM=$<TARGET_FILE:${program}> "-DPATTERN=${CBOR_TEST_PATTERN}" -DLOG=${PROJECT_BINARY_DIR}/${program}.log -DSTAMP=${stamp} -P ${PROJECT_SOURCE_DIR}/cmake/test_stamp.cmake
 				DEPENDS ${program} ${data} ${PROJECT_SOURCE_DIR}/cmake/test_stamp.cmake
-				COMMENT "Running ${program}" VERBATIM)
+				COMMENT "Running ${program}" JOB_POOL compile_job_pool VERBATIM)
 			set(CBOR_TEST_STAMPS ${CBOR_TEST_STAMPS} ${stamp} PARENT_SCOPE)
 		endfunction()
 		foreach(program IN LISTS CBOR_TEST_FILE_PROGRAMS)
@@ -239,7 +240,7 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
 	endif()
 	add_custom_command(OUTPUT ${CBOR_COMPILE_FAIL_PCH}
 		COMMAND ${CMAKE_CXX_COMPILER} ${CBOR_COMPILE_FAIL_FLAGS} -x c++-header ${PROJECT_SOURCE_DIR}/include/cbor/cbor.hpp -o ${CBOR_COMPILE_FAIL_PCH} -MD -MF ${CBOR_COMPILE_FAIL_PCH}.d
-		DEPFILE ${CBOR_COMPILE_FAIL_PCH}.d COMMAND_EXPAND_LISTS VERBATIM)
+		DEPFILE ${CBOR_COMPILE_FAIL_PCH}.d JOB_POOL compile_job_pool COMMAND_EXPAND_LISTS VERBATIM)
 	add_custom_target(compile_fail_pch ALL DEPENDS ${CBOR_COMPILE_FAIL_PCH})
 	list(APPEND CBOR_COMPILE_FAIL_FLAGS -fsyntax-only)
 	function(cbor_compile_fail name file regex)
