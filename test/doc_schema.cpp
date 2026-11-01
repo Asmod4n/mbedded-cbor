@@ -1,4 +1,6 @@
 #include "reference.hpp"
+#include <cbor/encode.hpp>
+#include <cbor/schema.hpp>
 
 
 #include <cstddef>

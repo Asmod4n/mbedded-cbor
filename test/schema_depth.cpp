@@ -1,4 +1,6 @@
 #include "reference.hpp"
+#include <cbor/describe.hpp>
+#include <cbor/schema.hpp>
 
 #include <cstddef>
 #include <cstdint>

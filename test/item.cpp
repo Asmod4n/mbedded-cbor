@@ -25,11 +25,11 @@
 #include <stdfloat>
 #endif
 
-namespace item_test
-{
-
 using namespace std::string_literals;
 using namespace std::string_view_literals;
+
+namespace item_test
+{
 
 // RFC 8949 section 3: every data item starts with a head of major type,
 // additional information and argument. An integer is its type, its

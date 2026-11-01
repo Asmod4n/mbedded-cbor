@@ -1,5 +1,6 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
+#include <cbor/structs.hpp>
 
 #include <algorithm>
 #include <bit>

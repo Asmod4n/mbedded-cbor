@@ -182,7 +182,7 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | `lazy::view(shared_ptr<void const>, Encoded const&)` | O(1) | O(1) | No allocation. |
 | `lazy::container_resolve(top_level_item, offset)` (private) | Common O(1); worst O(t), t = tag 24 levels <= n/2 | O(1) | No allocation. The nesting depth does not bound tag 24 nesting. |
 | `validity::keys_equivalent<Checked>` | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | Defined in lazy.hpp. check_nesting_depth bounds d. Not checked again. |
-| `lazy::clone()` | as `tree_decoder::item_decode` | as `tree_decoder::item_decode` | Returns `owning<item>`. |
+| `lazy::clone()` | as `detail::tree_decoder::item_decode` | as `detail::tree_decoder::item_decode` | Returns `owning<item>`. |
 | `lazy::type()` | O(1) | O(1) | |
 | `lazy::key_find<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
 | `lazy::key_find<Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to the end) | O(1) | No allocation. |
@@ -201,7 +201,7 @@ Assumption, not checked: item_skip is O(bytes skipped).
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `tree_decoder::item_decode` | O(n) heads; O(len) for each string | one `item` per data item in a `std::pmr::monotonic_buffer_resource`; the children of a container in one block; each text and byte string copied into the resource; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. |
+| `detail::tree_decoder::item_decode` | O(n) heads; O(len) for each string | one `item` per data item in a `std::pmr::monotonic_buffer_resource`; the children of a container in one block; each text and byte string copied into the resource; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. |
 | `decode(string_view)` | as item_decode, plus O(t log t), t = tag 24 items | as item_decode, plus one sorted vector of the tag 24 items | Returns `owning<item>`. |
 | `encoded_cbor_data_item(owning<item> const&, item const&)` | O(log t) | O(1) | Binary search in the sorted vector. |
 
@@ -285,10 +285,8 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | `encoder::head_encode(major, argument)` | O(1) | O(1) | |
 | `encoder::byte_string_encode` | O(len) | O(1); writer may allocate | |
 | `encoder::text_string_encode` | O(len) | O(1); writer may allocate | |
-| `encoder::float_encode` | O(1) | O(1) | |
 | `encoder::fixed_width_head_encode<T>` | O(1) | O(1) | |
-| `encoder::simple_value_encode` | O(1) | O(1) | |
-| `encoder::fixed_width_unsigned_encode`, `signed`, `float` | O(1) | O(1) | |
+| `encoder::fixed_width_float_encode` | O(1) | O(1) | |
 | `cbor::encoder<Target>` calls | O(1) per head; O(len) per string | O(1); a container target grows; a span target allocates nothing | Each call checks that no earlier call failed. |
 | `cbor::encoder::finish` | O(1) plus one flush | O(1); an iov_writer gives its storage | |
 | `encoding::item_encode(encoder&, item const&, size_t, size_t)` | O(items + string bytes) | stack O(d) | Recursive, bounded by the nesting depth. A tag 29 is written as stored and not followed. |
@@ -343,7 +341,7 @@ the struct types in a message.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `no_fixed_size<T>()` | O(1) compile time | O(1) | |
+| `detail::no_fixed_size<T>()` | O(1) compile time | O(1) | |
 | `reflection::descriptions_valid<Root>()` | O(t·c²) compile time | O(c) | pointers_unique compares each pair. |
 | `reflection::description_valid<U>()`, `tag_declared`, `tag_number_of`, `members_of_class`, `decode_form_valid` | O(c²) compile time | O(c) | |
 | `reflection::tag_taken_by_standard_type`, `tag_invalid` | O(1) compile time | O(1) | |
@@ -467,7 +465,7 @@ Above linear in the input:
 
 Allocation on a success path:
 
-- `value_sharing::sharing_decoder::mark`, `tree_decoder::item_decode`.
+- `value_sharing::sharing_decoder::mark`, `detail::tree_decoder::item_decode`.
 - `lazy::take_ownership`, `at_path(Encoded&&)`, `schema::path(Encoded&&)`, `schema::decode`, `structs::decode`, `lazy::clone`, `decode`, `ref::clone`.
 - jsonpath: every parser, `compile`, a `nodelist` read, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
 - `string_sink`, `container_message`.

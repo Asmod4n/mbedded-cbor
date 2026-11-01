@@ -1,4 +1,6 @@
 #include "reference.hpp"
+#include <cbor/schema.hpp>
+#include <cbor/structs.hpp>
 
 #include <algorithm>
 #include <array>

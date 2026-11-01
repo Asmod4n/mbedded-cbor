@@ -1,12 +1,12 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
+#include <cbor/structs.hpp>
 
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <utility>
 #include <variant>
 
@@ -163,21 +163,21 @@ TEST_CASE("simple value: diagnostic_notation gives every simple value 0 to 255")
 
 // The encoder writes every simple value in its shortest head and refuses the values 24 to 31, which have no
 // well-formed encoding.
-TEST_CASE("simple value: simple_value_encode writes every simple value 0 to 255")
+TEST_CASE("simple value: cbor::encoder::simple_value writes every simple value 0 to 255")
 {
     for (unsigned i = 0; i < 256; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
-        string_writer w;
-        cbor::encoding::encoder<string_writer> e{w};
-        auto const r = e.simple_value_encode(static_cast<cbor::simple_value>(v));
+        std::string out;
+        cbor::encoder e{out};
+        auto const r = e.simple_value(static_cast<cbor::simple_value>(v));
         if (reserved(v)) {
-            CHECK_EQ(r.error(), std::errc::invalid_argument);
+            CHECK_EQ(r.error(), error::reserved_simple_value);
             continue;
         }
         REQUIRE(r.has_value());
-        REQUIRE(e.flush().has_value());
-        CHECK_EQ(w.encoded, wire_of(v));
+        REQUIRE(e.finish().has_value());
+        CHECK_EQ(out, wire_of(v));
     }
 }
 

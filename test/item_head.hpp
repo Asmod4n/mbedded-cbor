@@ -1,6 +1,8 @@
 #pragma once
 
-#include <cbor/cbor.hpp>
+#include <cbor/encode.hpp>
+#include <cbor/item.hpp>
+#include <cbor/rfc8949.hpp>
 #include "owned_copy.hpp"
 
 #include <algorithm>

@@ -1,4 +1,8 @@
 #include "reference.hpp"
+#include <cbor/describe.hpp>
+#include <cbor/encode.hpp>
+#include <cbor/schema.hpp>
+#include <cbor/structs.hpp>
 
 #include <cstdint>
 #include <limits>

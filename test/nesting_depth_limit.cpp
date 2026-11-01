@@ -1,6 +1,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "sequence_reader.hpp"
+#include <cbor/structs.hpp>
 
 #include <cstddef>
 #include <string>
@@ -49,7 +50,8 @@ TEST_CASE("nesting depth depth_limit: decode of the item tree")
              error::nesting_depth_exceeded);
 }
 
-// lazy::tree_decoder::item_decode counts one level for each tag, and none for an array or a map.
+// lazy::clone decodes through cbor::detail::tree_decoder::item_decode. It counts one level for each tag, and
+// none for an array or a map.
 TEST_CASE("nesting depth depth_limit: lazy::clone")
 {
     auto const deepest = test::lazy_of_copy(repeat("\xd8\x64"sv, depth_limit) + '\x00');
