@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "threads.hpp"
 #include "owned_copy.hpp"
 #include <cbor/encode.hpp>
 #include <cbor/schema.hpp>
@@ -354,7 +355,7 @@ TEST_CASE("doc advanced path: the limits")
 }
 
 // The section "Threads" shows that a lazy is read from another thread, and that a tag 29 is a plain tag there too.
-TEST_CASE("doc advanced path: a lazy in another thread")
+TEST_CASE("doc advanced path: a lazy in another thread" * doctest::skip(!test::threads_available))
 {
     auto const l = *test::lazy_of_copy(preferred(A(1, 2)));
     std::int64_t read = 0;

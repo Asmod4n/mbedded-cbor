@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "threads.hpp"
 #include "owned_copy.hpp"
 #include <cbor/encode.hpp>
 #include <cbor/sequence.hpp>
@@ -148,7 +149,7 @@ TEST_CASE("doc advanced basics: a std::pmr target")
 }
 
 // The section "Threads" states that a lazy holds only its bytes and its offset, so several threads read one lazy.
-TEST_CASE("doc advanced basics: threads")
+TEST_CASE("doc advanced basics: threads" * doctest::skip(!test::threads_available))
 {
     cbor::lazy const l = *test::lazy_of_copy(preferred(A(1, 2)));
     std::int64_t first = 0;
@@ -164,7 +165,7 @@ TEST_CASE("doc advanced basics: threads")
 }
 
 // A user moved a lazy out of the std::expected of lazy::take_ownership. The section "Threads" shows the move.
-TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thread")
+TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thread" * doctest::skip(!test::threads_available))
 {
     std::string bytes = preferred(A(1, 2));
     auto l = cbor::lazy::take_ownership(std::move(bytes));

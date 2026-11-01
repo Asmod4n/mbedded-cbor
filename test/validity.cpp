@@ -438,7 +438,7 @@ TEST_CASE("validity: check_index against Normalize of RFC 9535")
                 CHECK_EQ(*r, validity::index{static_cast<std::uint64_t>(normalized)});
             else
                 CHECK_EQ(r.error(), error::index_out_of_bounds);
-            if (index >= 0) {
+            if (index >= 0 && std::in_range<std::size_t>(index)) {
                 auto const u = validity::check_index(static_cast<std::size_t>(index), length);
                 CHECK_EQ(u.has_value(), selects);
             }

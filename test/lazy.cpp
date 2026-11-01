@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "threads.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
 
@@ -1112,7 +1113,7 @@ TEST_CASE("lazy: elements and entries refuse indefinite length")
 // lazy at the same time. Two threads read one root lazy through every reader; a thread sanitizer build reports
 // any state that they share. The document holds tags 28 and 29, which a lazy reads as plain tags, and a typed
 // array, whose element is a lazy of its own kind.
-TEST_CASE("lazy: two threads read one root lazy")
+TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_available))
 {
     constexpr std::size_t threads = 2;
     std::string const s("\x84\xd8\x1c\x65hello\xd8\x1d\x00\xa1\x61k\xd8\x1d\x00\xd8\x40\x42\x01\x02", 23);
@@ -1719,7 +1720,7 @@ TEST_CASE("lazy: the compile of a query checks its depth against the nesting dep
 
 // A query has no mutable member, so threads apply one const query at once. The run under the thread
 // sanitizer shows that no access races.
-TEST_CASE("lazy: threads apply one query at once")
+TEST_CASE("lazy: threads apply one query at once" * doctest::skip(!test::threads_available))
 {
     std::string const doc = encoded(M("a"s, A(1, 2, 3)));
     cbor::lazy const l = *test::lazy_of_copy(doc);
