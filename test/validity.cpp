@@ -329,7 +329,7 @@ TEST_CASE("validity: typed_array_element_size for every typed array tag")
 {
     for (std::uint64_t tag = 64; tag <= 87; ++tag)
         if (tag != 76)
-            CHECK_EQ(validity::typed_array_element_size(tag), element_bytes[tag - 64]);
+            CHECK_EQ(validity::typed_array_element_size(tag), element_bytes[static_cast<std::size_t>(tag - 64)]);
 }
 
 // A typed array tag must lie in 64 to 87 and must not be the reserved tag 76, and its byte string must hold a
@@ -342,7 +342,7 @@ TEST_CASE("validity: typed_array_check for the tags around 64 to 87 and the leng
             auto const r = validity::typed_array_check(tag, size);
             if (tag < 64 || tag > 87 || tag == 76)
                 CHECK_EQ(r.error(), error::incorrect_type);
-            else if (size % element_bytes[tag - 64] != 0)
+            else if (size % element_bytes[static_cast<std::size_t>(tag - 64)] != 0)
                 CHECK_EQ(r.error(), error::inadmissible_type_for_tag_content);
             else
                 CHECK(r.has_value());

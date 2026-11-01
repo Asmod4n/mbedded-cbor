@@ -368,7 +368,7 @@ public:
         return std::size_t{1} << (f + ll);
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_whole_elements(std::size_t const size,
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_whole_elements(std::uint64_t const size,
                                                                                         std::size_t const element)
     {
         if (size % element != 0) [[unlikely]]
@@ -377,7 +377,7 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag,
-                                                                                     std::size_t const size)
+                                                                                     std::uint64_t const size)
     {
         if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
             tag > std::to_underlying(rfc8746::tag_number::typed_array_last) ||
@@ -387,7 +387,7 @@ public:
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_typed_array_content(std::uint64_t const tag, major_type const content, std::size_t const size)
+    check_typed_array_content(std::uint64_t const tag, major_type const content, std::uint64_t const size)
     {
         if (auto const r = check_tag_content(tag, content); !r) [[unlikely]]
             return r;

@@ -913,10 +913,12 @@ TEST_CASE("decode: every major type and additional information gives the type of
             std::uint64_t const argument = info < 24 ? info : major == 7 && info == 24 ? 32 : 1;
             for (std::size_t i = width; i > 0; --i)
                 wire += static_cast<char>(argument >> (8 * (i - 1)) & 0xff);
+            REQUIRE(std::in_range<std::size_t>(argument));
+            std::size_t const length = static_cast<std::size_t>(argument);
             if (major == 2 || major == 3)
-                wire.append(argument, 'a');
+                wire.append(length, 'a');
             else if (major == 4)
-                wire.append(argument, '\x00');
+                wire.append(length, '\x00');
             else if (major == 6)
                 wire += argument == 0                     ? "\x60"s
                         : argument == 2 || argument == 3  ? "\x41\x05"s
@@ -926,7 +928,7 @@ TEST_CASE("decode: every major type and additional information gives the type of
             if (major == 6 && argument == 29)
                 continue;
             else if (major == 5)
-                wire.append(2 * argument, '\x00');
+                wire.append(2 * length, '\x00');
             cbor::type expected = cbor::type::simple_value;
             switch (major) {
             case 0:
