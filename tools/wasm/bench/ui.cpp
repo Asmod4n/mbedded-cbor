@@ -4,7 +4,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <algorithm>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -97,6 +99,13 @@ std::string date_of(std::uint64_t const seconds)
 
 void render(cbor::item const &i, std::string &out);
 
+cbor::item const &value_of(cbor::item const &map, std::string_view const key)
+{
+    auto const pairs = *map.get<cbor::type::map>();
+    auto const at = std::ranges::find(pairs | std::views::stride(2), key, [](cbor::item const &k) { return *k.get<cbor::type::text_string>(); });
+    return *std::ranges::next(at.base());
+}
+
 void render_children(std::span<cbor::item const> const children, std::string &out)
 {
     for (cbor::item const &c : children)
@@ -121,23 +130,23 @@ void render(cbor::item const &i, std::string &out)
     if (!t)
         return;
     auto const [number, content] = *t;
-    auto const parts = content->get<cbor::type::array>();
+    cbor::item const &m = *content;
     if (number == epoch_time) {
         std::string const d = date_of(*content->get<cbor::type::unsigned_integer>());
         out += "<time datetime=\"" + d + "\">" + d + "</time>";
     } else if (number == ui_table) {
         out += "<table><thead><tr>";
-        for (cbor::item const &h : *(*parts)[0].get<cbor::type::array>()) {
+        for (cbor::item const &h : *value_of(m, "head").get<cbor::type::array>()) {
             out += "<th>";
             render(h, out);
             out += "</th>";
         }
         out += "</tr></thead><tbody>";
-        for (cbor::item const &row : *(*parts)[1].get<cbor::type::array>()) {
+        for (cbor::item const &row : *value_of(m, "rows").get<cbor::type::array>()) {
             out += "<tr>";
-            for (cbor::item const &cell : *row.get<cbor::type::array>()) {
+            for (std::string_view const key : {"name", "amount", "time"}) {
                 out += "<td>";
-                render(cell, out);
+                render(value_of(row, key), out);
                 out += "</td>";
             }
             out += "</tr>";
@@ -145,17 +154,17 @@ void render(cbor::item const &i, std::string &out)
         out += "</tbody></table>";
     } else if (number == ui_form) {
         out += "<form action=\"";
-        render((*parts)[0], out);
+        render(value_of(m, "action"), out);
         out += "\">";
-        render((*parts)[1], out);
+        render(value_of(m, "fields"), out);
         out += "<button>Send</button></form>";
     } else if (number == ui_field) {
         out += "<label>";
-        render((*parts)[1], out);
+        render(value_of(m, "label"), out);
         out += " <input name=\"";
-        render((*parts)[0], out);
+        render(value_of(m, "name"), out);
         out += "\" type=\"";
-        render((*parts)[2], out);
+        render(value_of(m, "input"), out);
         out += "\"></label>";
     }
 }
@@ -185,28 +194,38 @@ __attribute__((export_name("server_encode"))) std::uint64_t server_encode(std::u
     cbor::encoder<std::string> e{wire};
     std::ignore = e.array(2);
     std::ignore = e.tag(ui_table);
-    std::ignore = e.array(2);
+    std::ignore = e.map(2);
+    std::ignore = e.text_string("head");
     std::ignore = e.array(3);
     std::ignore = e.text_string("Name <user>");
     std::ignore = e.text_string("Amount");
     std::ignore = e.text_string("Time");
+    std::ignore = e.text_string("rows");
     std::ignore = e.array(rows);
     for (std::uint32_t r = 0; r < rows; ++r) {
-        std::ignore = e.array(3);
+        std::ignore = e.map(3);
+        std::ignore = e.text_string("name");
         std::ignore = e.text_string(std::string(names[r % std::size(names)]) + " & co " + std::to_string(r));
+        std::ignore = e.text_string("amount");
         std::ignore = e.unsigned_integer(std::uint64_t{r * 37u % 10000u});
+        std::ignore = e.text_string("time");
         std::ignore = e.tag(epoch_time);
         std::ignore = e.unsigned_integer(std::uint64_t{1700000000u + r * 86400u});
     }
     std::ignore = e.tag(ui_form);
-    std::ignore = e.array(2);
+    std::ignore = e.map(2);
+    std::ignore = e.text_string("action");
     std::ignore = e.text_string("/send");
+    std::ignore = e.text_string("fields");
     std::ignore = e.array(form_fields);
     for (std::uint32_t f = 0; f < form_fields; ++f) {
         std::ignore = e.tag(ui_field);
-        std::ignore = e.array(3);
+        std::ignore = e.map(3);
+        std::ignore = e.text_string("name");
         std::ignore = e.text_string("field" + std::to_string(f));
+        std::ignore = e.text_string("label");
         std::ignore = e.text_string("Field " + std::to_string(f));
+        std::ignore = e.text_string("input");
         std::ignore = e.text_string(f % 2 ? "number" : "text");
     }
     std::ignore = e.finish();

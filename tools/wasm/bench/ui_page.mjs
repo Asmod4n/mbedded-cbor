@@ -22,7 +22,7 @@ const schema_cbor = Buffer.from(memory.buffer.slice(Number(sk >> 32n), Number(sk
 const html = Buffer.from(memory.buffer.slice(Number(hq >> 32n), Number(hq >> 32n) + Number(hq & 0xffffffffn))).toString("utf8");
 const names = ["Ada", "Grace", "Linus", "Barbara", "Ken", "Margaret", "Dennis"];
 const screen = [{ type: "table", head: ["Name <user>", "Amount", "Time"], rows: [] }, { type: "form", action: "/send", fields: [] }];
-for (let r = 0; r < rows; ++r) screen[0].rows.push([`${names[r % names.length]} & co ${r}`, (r * 37) % 10000, { type: "time", epoch: 1700000000 + r * 86400 }]);
+for (let r = 0; r < rows; ++r) screen[0].rows.push({ name: `${names[r % names.length]} & co ${r}`, amount: (r * 37) % 10000, time: { type: "time", epoch: 1700000000 + r * 86400 } });
 for (let f = 0; f < 5; ++f) screen[1].fields.push({ type: "field", name: `field${f}`, label: `Field ${f}`, input: f % 2 ? "number" : "text" });
 const json = JSON.stringify(screen);
 
