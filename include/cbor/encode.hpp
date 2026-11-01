@@ -51,10 +51,15 @@ std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item con
 class encoding
 {
 public:
+    static constexpr std::size_t block_size = 16384;
+    static constexpr std::size_t item_size_max = heads::initial_byte_size + sizeof(std::uint64_t);
+    static constexpr std::size_t ref_size = 32;
+    static_assert(block_size >= item_size_max, "A block must hold one whole head or float.");
+
+private:
     template <class Writer>
     struct encoder;
 
-private:
     struct string_sink {
         std::string encoded;
 
@@ -169,10 +174,6 @@ struct encoding::encoder {
     static constexpr bool blocks = requires(Writer &w, std::size_t const n) {
         { w.block_next(n) } -> std::same_as<std::span<char>>;
     };
-    static constexpr std::size_t block_size = 16384;
-    static constexpr std::size_t item_size_max = heads::initial_byte_size + sizeof(std::uint64_t);
-    static constexpr std::size_t ref_size = 32;
-    static_assert(block_size >= item_size_max, "A block must hold one whole head or float.");
 
     Writer &writer;
     std::conditional_t<direct || blocks, std::span<char>, std::array<char, block_size>> block;
@@ -476,17 +477,6 @@ struct encoding::encoder {
         return writer.release();
     }
 
-    CBOR_ALWAYS_INLINE std::expected<void, std::errc> float_encode(double const value)
-    {
-        if (block.size() - used >= item_size_max) [[likely]] {
-            item_put(heads::initial_byte(major_type::simple_float,
-                                         std::to_underlying(rfc8949::simple_float_information::double_precision_float)),
-                     std::bit_cast<std::uint64_t>(value));
-            return {};
-        }
-        return fixed_width_float_encode(value);
-    }
-
     template <std::unsigned_integral T>
         requires(sizeof(T) <= sizeof(std::uint64_t))
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> fixed_width_head_encode(major_type const major, T const argument)
@@ -502,29 +492,6 @@ struct encoding::encoder {
                            std::to_underlying(rfc8949::additional_information::one_byte_argument) +
                                std::countr_zero(sizeof(T)),
                            argument);
-    }
-
-    std::expected<void, std::errc> simple_value_encode(simple_value const value)
-    {
-        std::uint8_t const info = heads::preferred_argument_info(std::to_underlying(value));
-        if (!validity::check_simple_value(info, std::to_underlying(value))) [[unlikely]]
-            return std::unexpected(std::errc::invalid_argument);
-        return head_encode(major_type::simple_float, info, std::to_underlying(value));
-    }
-
-    template <std::unsigned_integral T>
-        requires(!std::is_same_v<T, bool>)
-    std::expected<void, std::errc> fixed_width_unsigned_encode(T value)
-    {
-        return fixed_width_head_encode(major_type::unsigned_integer, value);
-    }
-
-    template <std::signed_integral T>
-    std::expected<void, std::errc> fixed_width_signed_encode(T value)
-    {
-        using U = std::make_unsigned_t<T>;
-        U const sign = static_cast<U>(value >> std::numeric_limits<T>::digits);
-        return fixed_width_head_encode(static_cast<major_type>(sign & 1), static_cast<U>(static_cast<U>(value) ^ sign));
     }
 
     template <std::floating_point T>
@@ -547,14 +514,12 @@ class iov_writer
     };
 
     std::shared_ptr<storage> kept = std::make_shared<storage>();
-    bool piece_open = false;
     bool released = false;
 
     std::span<char> block_next(std::size_t const size)
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         kept->blocks.push_back(std::make_unique_for_overwrite<char[]>(size));
-        piece_open = false;
         return {kept->blocks.back().get(), size};
     }
 
@@ -563,11 +528,7 @@ class iov_writer
         validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         if (part.empty())
             return;
-        if (piece_open && std::to_address(kept->pieces.back().end()) == part.data())
-            kept->pieces.back() = std::string_view(kept->pieces.back().data(), kept->pieces.back().size() + part.size());
-        else
-            kept->pieces.push_back(part);
-        piece_open = true;
+        kept->pieces.push_back(part);
     }
 
     void piece_reference(std::string_view const piece, std::shared_ptr<void const> owner)
@@ -575,7 +536,6 @@ class iov_writer
         validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         kept->owners.push_back(std::move(owner));
         kept->pieces.push_back(piece);
-        piece_open = false;
     }
 
     ref<std::span<std::string_view const>> release()
@@ -586,8 +546,7 @@ class iov_writer
         return {std::move(kept), pieces};
     }
 
-    template <class>
-    friend struct encoding::encoder;
+    friend class encoding;
 };
 
 template <class Target>
