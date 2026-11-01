@@ -2458,7 +2458,8 @@ namespace
 
 ticket const sample_ticket{"a holder name longer than the small string buffer", {"seat one of the long list", "seat two"}, 12};
 
-[[maybe_unused]] std::string ticket_bytes()
+template <class = void>
+std::string ticket_bytes()
 {
     return *form<ticket>::encode(sample_ticket);
 }
@@ -2580,12 +2581,14 @@ namespace
 probe const sample_probe{true, -300, 1ull << 40, 2.5, -1.5f, cbor::int128{-5}, {'x', 'y', 'z'}, "probe text",
                          {{17, 1.5f}, {18, 2.0f}}, -9, {300, 1800}, {{7, 8}}};
 
-[[maybe_unused]] std::size_t probe_offset(std::size_t const size, std::size_t const member)
+template <class = void>
+std::size_t probe_offset(std::size_t const size, std::size_t const member)
 {
     return size - form<probe>::fixed_size() + member;
 }
 
-[[maybe_unused]] bool lies_inside(std::string_view const part, std::string_view const message)
+template <class = void>
+bool lies_inside(std::string_view const part, std::string_view const message)
 {
     std::less<char const *> const before;
     return part.empty() || (!before(part.data(), message.data()) &&
@@ -2594,7 +2597,8 @@ probe const sample_probe{true, -300, 1ull << 40, 2.5, -1.5f, cbor::int128{-5}, {
 
 // Reads every leaf path of probe, each through a new root and through a root with an owner, from a copy of the message. Gives the count of
 // paths that gave a value.
-[[maybe_unused]] std::size_t probe_paths_read(std::string_view const message)
+template <class = void>
+std::size_t probe_paths_read(std::string_view const message)
 {
     auto const block = std::make_shared<std::string const>(message);
     std::string_view const bytes = *block;
@@ -2635,7 +2639,8 @@ constexpr std::size_t probe_paths = 6 + 2 + 2 + 3 * 2 + 3;
 // Reads every leaf path of probe through one root accessor, first in order and then in the reverse order, and the
 // tires through an accessor of each tire. Gives the count of paths that gave a value in the first pass. Each value of
 // a later pass is the value of the first pass.
-[[maybe_unused]] std::size_t probe_lot_read(std::string_view const message)
+template <class = void>
+std::size_t probe_lot_read(std::string_view const message)
 {
     auto const block = std::make_shared<std::string const>(message);
     std::string_view const bytes = *block;
@@ -3064,7 +3069,8 @@ struct cbor::describe_members<parking_lot> {
 namespace
 {
 
-[[maybe_unused]] parking_lot sample_lot()
+template <class = void>
+parking_lot sample_lot()
 {
     parking_lot l;
     for (std::uint16_t i = 0; i < 5; ++i) {
@@ -3079,14 +3085,16 @@ namespace
     return l;
 }
 
-[[maybe_unused]] std::string text_of(std::expected<std::string_view, cbor::error> const &r)
+template <class = void>
+std::string text_of(std::expected<std::string_view, cbor::error> const &r)
 {
     return r ? std::string(*r) : "(error)"s;
 }
 
 // One read of every field of car i, through leaf paths from the root and through an accessor of the car and of each
 // wheel, compared with the decoded car.
-[[maybe_unused]] void lot_car_matches(form<parking_lot>::accessor<> const &lot, parking_lot const &back, std::size_t const i)
+template <class = void>
+void lot_car_matches(form<parking_lot>::accessor<> const &lot, parking_lot const &back, std::size_t const i)
 {
     CAPTURE(i);
     lot_car const &c = back.cars.at(i);
@@ -3450,7 +3458,8 @@ struct cbor::describe_members<eighteen_entries> {
 namespace
 {
 
-[[maybe_unused]] bool same(gauge const &a, gauge const &b)
+template <class = void>
+bool same(gauge const &a, gauge const &b)
 {
     return a.on == b.on && a.shade == b.shade && a.at.x == b.at.x && a.at.y == b.at.y && a.range == b.range;
 }
@@ -3736,7 +3745,8 @@ using unverified_root = std::remove_cvref_t<decltype(*form<T>::unverified_path(s
 
 // Reads every kind of part through the unverified forms and returns nothing: the sweep below only needs each call
 // to return.
-[[maybe_unused]] void unverified_reads(std::string const &bytes)
+template <class = void>
+void unverified_reads(std::string const &bytes)
 {
     auto const owner = std::make_shared<std::string const>(bytes);
     (void)form<everything>::unverified_at_path<"$.big">(bytes);
@@ -4373,7 +4383,8 @@ void golden_fill(T &value, unsigned &seed)
     }
 }
 
-[[maybe_unused]] std::string golden_hex(std::string_view const bytes)
+template <class = void>
+std::string golden_hex(std::string_view const bytes)
 {
     std::string out;
     for (char const c : bytes) {
@@ -4400,7 +4411,8 @@ std::string golden_line(std::string_view const name)
            golden_hex(std::string_view(description.data(), description.size())) + "\n";
 }
 
-[[maybe_unused]] std::string golden_report()
+template <class = void>
+std::string golden_report()
 {
     std::string report;
     report += golden_line<wheel>("wheel");
@@ -4509,7 +4521,8 @@ namespace
 template <class T, cbor::fixed_string Path, class... Index>
 concept message_path_reads = requires(std::string_view const s, Index const... i) { form<T>::template at_path<Path>(s, i...); };
 
-[[maybe_unused]] byte_fields byte_fields_value()
+template <class = void>
+byte_fields byte_fields_value()
 {
     return byte_fields{{1, 2, 3}, {4, 5}, {std::byte{6}, std::byte{7}}, {8, 9}, {std::byte{10}}, {}};
 }
