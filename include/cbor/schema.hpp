@@ -9,6 +9,7 @@
 #include <array>
 #include <bit>
 #include <charconv>
+#include <compare>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -91,6 +92,127 @@ namespace detail
 struct directory {
     std::size_t at;
     std::size_t count;
+};
+
+template <class Value, class Context, auto Element>
+class indexing_iterator
+{
+    std::shared_ptr<void const> owner;
+    std::string_view encoded;
+    std::span<char const> list;
+    std::size_t position = 0;
+    std::uint64_t length = 0;
+    [[no_unique_address]] Context context{};
+
+    indexing_iterator(std::shared_ptr<void const> o, std::string_view const b, std::span<char const> const l, std::size_t const p,
+                      std::uint64_t const n, Context const c)
+        : owner(std::move(o)), encoded(b), list(l), position(p), length(n), context(c)
+    {
+    }
+
+    Value element_read(std::size_t const at) const
+    {
+        auto element = [&] {
+            if constexpr (std::same_as<Context, std::monostate>)
+                return Element(list, length, at);
+            else
+                return Element(owner, encoded, list, length, at, context);
+        }();
+        validity::throw_logic_error_if(!element.has_value(), "cbor::schema: the iterator is outside of its list");
+        return *std::move(element);
+    }
+
+    template <class>
+    friend class cbor::schema;
+
+    template <class>
+    friend class cbor::typed_array_view;
+
+public:
+    using iterator_concept = std::random_access_iterator_tag;
+    using iterator_category = std::input_iterator_tag;
+    using value_type = Value;
+    using difference_type = std::ptrdiff_t;
+
+    indexing_iterator() = default;
+
+    Value operator*() const
+    {
+        return element_read(position);
+    }
+
+    Value operator[](difference_type const n) const
+    {
+        return element_read(position + static_cast<std::size_t>(n));
+    }
+
+    indexing_iterator &operator++()
+    {
+        ++position;
+        return *this;
+    }
+
+    indexing_iterator operator++(int)
+    {
+        indexing_iterator const was = *this;
+        ++position;
+        return was;
+    }
+
+    indexing_iterator &operator--()
+    {
+        --position;
+        return *this;
+    }
+
+    indexing_iterator operator--(int)
+    {
+        indexing_iterator const was = *this;
+        --position;
+        return was;
+    }
+
+    indexing_iterator &operator+=(difference_type const n)
+    {
+        position += static_cast<std::size_t>(n);
+        return *this;
+    }
+
+    indexing_iterator &operator-=(difference_type const n)
+    {
+        position -= static_cast<std::size_t>(n);
+        return *this;
+    }
+
+    friend indexing_iterator operator+(indexing_iterator i, difference_type const n)
+    {
+        return i += n;
+    }
+
+    friend indexing_iterator operator+(difference_type const n, indexing_iterator i)
+    {
+        return i += n;
+    }
+
+    friend indexing_iterator operator-(indexing_iterator i, difference_type const n)
+    {
+        return i -= n;
+    }
+
+    friend difference_type operator-(indexing_iterator const &a, indexing_iterator const &b)
+    {
+        return static_cast<difference_type>(a.position - b.position);
+    }
+
+    friend bool operator==(indexing_iterator const &a, indexing_iterator const &b)
+    {
+        return a.position == b.position;
+    }
+
+    friend std::strong_ordering operator<=>(indexing_iterator const &a, indexing_iterator const &b)
+    {
+        return a.position <=> b.position;
+    }
 };
 
 }
@@ -780,6 +902,15 @@ class reflection
     static constexpr bool is_fixed_vector = requires {
         requires is_list<U> && !is_typed_array<U>;
         requires fixed_struct_valid<std::remove_cv_t<std::ranges::range_value_t<U>>>();
+    };
+
+    template <class U>
+    static constexpr bool is_record_list = requires {
+        requires is_list<U> && !is_typed_array<U> && !is_fixed_vector<U>;
+        requires is_struct<std::remove_cv_t<std::ranges::range_value_t<U>>> &&
+                     !is_list<std::remove_cv_t<std::ranges::range_value_t<U>>> &&
+                     !is_map<std::remove_cv_t<std::ranges::range_value_t<U>>> &&
+                     !is_optional<std::remove_cv_t<std::ranges::range_value_t<U>>>;
     };
 
     template <class M>
@@ -1979,22 +2110,23 @@ class reflection
     }
 
     template <class Root, class S, fixed_string Path, std::size_t At, bool Verified = true>
-    CBOR_ALWAYS_INLINE static auto fixed_walk(std::string_view const encoded, std::size_t const at, detail::directory const floor,
+    CBOR_ALWAYS_INLINE static auto fixed_walk(std::string_view const encoded, std::span<char const, fixed_width<S>()> const element,
+                                              detail::directory const floor,
                                               std::array<std::size_t, index_arguments<Path>()> const &indexes)
         -> std::expected<typename decltype(fixed_path_result<Root, S, Path, At, Verified>())::type, error>
     {
         constexpr std::string_view path = Path.view();
         if constexpr (At == path.size()) {
-            return typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified>(encoded, at, floor);
+            return typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified>(encoded, element, floor);
         } else {
             constexpr std::size_t end = step_end(path, At);
             constexpr std::size_t m = member_named<S>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
             using M = describe::member_t<S, m>;
-            std::size_t const place = at + fixed_offset<S, m>();
+            auto const member = element.template subspan<fixed_offset<S, m>(), fixed_width<M>()>();
             if constexpr (fixed_struct_valid<M>()) {
-                return fixed_walk<Root, M, Path, end, Verified>(encoded, place, floor, indexes);
+                return fixed_walk<Root, M, Path, end, Verified>(encoded, member, floor, indexes);
             } else if constexpr (is_fixed_leaf<M>) {
-                return fixed_leaf_read<M, Verified>(std::span<char const>(encoded).subspan(place).template first<sizeof(fixed_leaf_t<M>)>());
+                return fixed_leaf_read<M, Verified>(member.template first<sizeof(fixed_leaf_t<M>)>());
             } else {
                 using L = std::remove_cv_t<typename fixed_length<M>::element>;
                 constexpr std::size_t close = index_end(path, end);
@@ -2003,12 +2135,70 @@ class reflection
                     j = std::get<index_argument<Path, end>()>(indexes);
                 else
                     j = index_of<S>(std::string_view(std::span(path).subspan(end + 1, close - end - 1)));
-                if (error const c = validity::check_index(j, fixed_length<M>::value).error_or(error{}); c != error{}) [[unlikely]]
-                    return std::unexpected(c);
-                return fixed_leaf_read<L, Verified>(std::span<char const>(encoded)
-                                              .subspan(place + j * sizeof(fixed_leaf_t<L>))
-                                              .template first<sizeof(fixed_leaf_t<L>)>());
+                auto const position = validity::check_index(j, fixed_length<M>::value);
+                if (!position) [[unlikely]]
+                    return std::unexpected(position.error());
+                return fixed_leaf_read<L, Verified>(
+                    validity::element_span(member, *position, sizeof(fixed_leaf_t<L>)).template first<sizeof(fixed_leaf_t<L>)>());
             }
+        }
+    }
+
+    CBOR_ALWAYS_INLINE static std::span<char const> list_span(std::string_view const encoded, reference const r,
+                                                              std::size_t const stride)
+    {
+        return std::span<char const>(encoded).subspan(r.data).first(r.length * stride);
+    }
+
+    template <class E>
+    CBOR_ALWAYS_INLINE static std::expected<E, error> typed_array_element_at(std::span<char const> const list,
+                                                                             std::uint64_t const length, std::size_t const i)
+    {
+        auto const position = validity::check_index(i, length);
+        if (!position) [[unlikely]]
+            return std::unexpected(position.error());
+        return typed_array_element_read<E>(validity::element_span(list, *position, sizeof(E)).template first<sizeof(E)>());
+    }
+
+    template <class Root, class S, bool Verified>
+    CBOR_ALWAYS_INLINE static std::expected<typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified>, error>
+    fixed_element_at(std::shared_ptr<void const> const &owner, std::string_view const encoded, std::span<char const> const list,
+                     std::uint64_t const length, std::size_t const i, detail::directory const dir)
+    {
+        auto const position = validity::check_index(i, length);
+        if (!position) [[unlikely]]
+            return std::unexpected(position.error());
+        typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified> element(
+            encoded, validity::element_span(list, *position, fixed_width<S>()).template first<fixed_width<S>()>(), dir);
+        element.owner = owner;
+        return element;
+    }
+
+    template <class Root, class E, bool Verified>
+    CBOR_ALWAYS_INLINE static std::expected<typename cbor::schema<Root>::template accessor<E, Verified>, error>
+    record_element_at(std::shared_ptr<void const> const &owner, std::string_view const encoded, std::span<char const> const list,
+                      std::uint64_t const length, std::size_t const i, detail::directory const dir)
+    {
+        auto const position = validity::check_index(i, length);
+        if (!position) [[unlikely]]
+            return std::unexpected(position.error());
+        return typename cbor::schema<Root>::template accessor<E, Verified>(
+            owner, encoded, validity::element_span(list, *position, fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(), dir);
+    }
+
+    template <class Root, class U, bool Verified>
+    static consteval auto list_iterator_result()
+    {
+        if constexpr (is_fixed_vector<U>) {
+            using S = std::remove_cv_t<std::ranges::range_value_t<U>>;
+            return std::type_identity<detail::indexing_iterator<typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified>,
+                                                                detail::directory, &fixed_element_at<Root, S, Verified>>>{};
+        } else if constexpr (is_record_list<U>) {
+            using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+            return std::type_identity<detail::indexing_iterator<typename cbor::schema<Root>::template accessor<E, Verified>,
+                                                                detail::directory, &record_element_at<Root, E, Verified>>>{};
+        } else {
+            return std::type_identity<void>{};
         }
     }
 
@@ -2120,16 +2310,18 @@ class reflection
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
                         return std::unexpected(error::incorrect_type);
-                if (error const c = validity::check_index(i, n).error_or(error{}); c != error{}) [[unlikely]]
-                    return std::unexpected(c);
-                return std::bit_cast<B>(field.template last<n>()[i]);
+                auto const position = validity::check_index(i, n);
+                if (!position) [[unlikely]]
+                    return std::unexpected(position.error());
+                return std::bit_cast<B>(validity::element_span(field.template last<n>(), *position, 1).front());
             } else {
                 auto const r = reference_read<Root, major_type::byte_string, void, Verified>(encoded, field, floor, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{}) [[unlikely]]
-                    return std::unexpected(c);
-                return std::bit_cast<B>(encoded[r->data + i]);
+                auto const position = validity::check_index(i, r->length);
+                if (!position) [[unlikely]]
+                    return std::unexpected(position.error());
+                return std::bit_cast<B>(validity::element_span(list_span(encoded, *r, 1), *position, 1).front());
             }
         } else {
             constexpr std::size_t close = index_end(path, At);
@@ -2148,20 +2340,19 @@ class reflection
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
                         return std::unexpected(error::incorrect_type);
+                auto const elements = field.template subspan<head, n * fixed_size<E, Root>()>();
                 if constexpr (close == At + 1) {
-                    std::size_t const i = std::get<index_argument<Path, At>()>(indexes);
-                    if (error const c = validity::check_index(i, n).error_or(error{}); c != error{})
-                        [[unlikely]]
-                        return std::unexpected(c);
-                    return path_walk<Root, E, Path, close + 1, Verified>(encoded,
-                                                               field.subspan(head + i * fixed_size<E, Root>())
-                                                                   .template first<fixed_size<E, Root>()>(),
-                                                               floor, indexes);
-                } else {
-                    constexpr std::size_t i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
+                    auto const position = validity::check_index(std::get<index_argument<Path, At>()>(indexes), n);
+                    if (!position) [[unlikely]]
+                        return std::unexpected(position.error());
                     return path_walk<Root, E, Path, close + 1, Verified>(
-                        encoded,
-                        field.template subspan<head + i * fixed_size<E, Root>(), fixed_size<E, Root>()>(),
+                        encoded, validity::element_span(elements, *position, fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(),
+                        floor, indexes);
+                } else {
+                    constexpr validity::index position =
+                        validity::check_index(index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1))), n).value();
+                    return path_walk<Root, E, Path, close + 1, Verified>(
+                        encoded, validity::element_span(elements, position, fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(),
                         floor, indexes);
                 }
             } else {
@@ -2177,32 +2368,33 @@ class reflection
                         reference_read<Root, major_type::array, F, Verified>(encoded, field, floor, sizeof(F));
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
-                        [[unlikely]]
-                        return std::unexpected(c);
-                    return typed_array_element_read<F>(std::span<char const>(encoded).subspan(r->data + i * sizeof(F)).template first<sizeof(F)>());
+                    return typed_array_element_at<F>(list_span(encoded, *r, sizeof(F)), r->length, i);
                 } else if constexpr (is_fixed_vector<U>) {
                     using S = std::remove_cv_t<E>;
                     auto const r = reference_read<Root, major_type::array, S, Verified>(encoded, field, floor, fixed_width<S>());
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
-                        [[unlikely]]
-                        return std::unexpected(c);
-                    return fixed_walk<Root, S, Path, close + 1, Verified>(encoded, r->data + i * fixed_width<S>(), floor, indexes);
+                    auto const position = validity::check_index(i, r->length);
+                    if (!position) [[unlikely]]
+                        return std::unexpected(position.error());
+                    return fixed_walk<Root, S, Path, close + 1, Verified>(
+                        encoded,
+                        validity::element_span(list_span(encoded, *r, fixed_width<S>()), *position, fixed_width<S>())
+                            .template first<fixed_width<S>()>(),
+                        floor, indexes);
                 } else {
                     auto const r =
                         reference_read<Root, major_type::array, void, Verified>(encoded, field, floor, fixed_size<E, Root>());
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    if (error const c = validity::check_index(i, r->length).error_or(error{}); c != error{})
-                        [[unlikely]]
-                        return std::unexpected(c);
-                    return path_walk<Root, E, Path, close + 1, Verified>(encoded,
-                                                               std::span<char const>(encoded)
-                                                                   .subspan(r->data + i * fixed_size<E, Root>())
-                                                                   .template first<fixed_size<E, Root>()>(),
-                                                               floor, indexes);
+                    auto const position = validity::check_index(i, r->length);
+                    if (!position) [[unlikely]]
+                        return std::unexpected(position.error());
+                    return path_walk<Root, E, Path, close + 1, Verified>(
+                        encoded,
+                        validity::element_span(list_span(encoded, *r, fixed_size<E, Root>()), *position, fixed_size<E, Root>())
+                            .template first<fixed_size<E, Root>()>(),
+                        floor, indexes);
                 }
             }
         }
@@ -2274,13 +2466,16 @@ class reflection
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
                         return std::unexpected(error::incorrect_type);
                 std::expected<void, error> done;
+                auto const elements = field.template subspan<heads::head_size(n), n * fixed_size<E, Root>()>();
+                auto const element_read = [&]<std::size_t I>() {
+                    constexpr validity::index position = validity::check_index(I, n).value();
+                    return value_read<Root>(std::span(out).template subspan<I, 1>().front(),
+                                            validity::element_span(elements, position, fixed_size<E, Root>())
+                                                .template first<fixed_size<E, Root>()>(),
+                                            depth, depth_max);
+                };
                 [&]<std::size_t... I>(std::index_sequence<I...>) {
-                    ((done = done ? value_read<Root>(std::span(out).template subspan<I, 1>().front(),
-                                                     field.template subspan<heads::head_size(n) + I * fixed_size<E, Root>(),
-                                                                            fixed_size<E, Root>()>(),
-                                                     depth, depth_max)
-                                  : done),
-                     ...);
+                    ((done = done ? element_read.template operator()<I>() : done), ...);
                 }(std::make_index_sequence<n>{});
                 return done;
             } else if constexpr (is_inline_optional<U>) {
@@ -2354,8 +2549,9 @@ class reflection
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
                 out.clear();
+                auto const entries = list_span(encoded, *r, pair);
                 for (std::size_t i = 0; i < r->length; ++i) {
-                    auto const entry = std::span<char const>(encoded).subspan(r->data + i * pair).template first<pair>();
+                    auto const entry = validity::element_span(entries, *validity::check_index(i, r->length), pair).template first<pair>();
                     if constexpr (std::is_default_constructible_v<K> && std::is_default_constructible_v<V>) {
                         K key = element_make<K>(out);
                         V value = element_make<V>(out);
@@ -2384,7 +2580,7 @@ class reflection
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
-                auto const from = std::span<char const>(encoded).subspan(r->data, r->length * sizeof(E));
+                auto const from = list_span(encoded, *r, sizeof(E));
                 if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U> &&
                               requires { out.resize(std::size_t{}); }) {
                     out.resize(r->length);
@@ -2393,7 +2589,8 @@ class reflection
                     out.clear();
                     out.reserve(r->length);
                     for (std::size_t i = 0; i < r->length; ++i)
-                        out.push_back(typed_array_element_read<E>(from.subspan(i * sizeof(E)).template first<sizeof(E)>()));
+                        out.push_back(typed_array_element_read<E>(
+                            validity::element_span(from, *validity::check_index(i, r->length), sizeof(E)).template first<sizeof(E)>()));
                 }
                 return {};
             } else if constexpr (is_fixed_vector<U>) {
@@ -2404,11 +2601,13 @@ class reflection
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
+                auto const elements = list_span(encoded, *r, width);
                 out.clear();
                 out.reserve(r->length);
                 for (std::size_t i = 0; i < r->length; ++i) {
                     E element = element_make<E>(out);
-                    if (auto const e = fixed_struct_read<E>(element, std::span<char const>(encoded).subspan(r->data + i * width).template first<width>());
+                    if (auto const e = fixed_struct_read<E>(
+                            element, validity::element_span(elements, *validity::check_index(i, r->length), width).template first<width>());
                         !e) [[unlikely]]
                         return e;
                     out.push_back(std::move(element));
@@ -2421,11 +2620,12 @@ class reflection
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
+                auto const entries = list_span(encoded, *r, fixed_size<E, Root>());
                 out.clear();
                 out.reserve(r->length);
                 for (std::size_t i = 0; i < r->length; ++i) {
-                    auto const entry =
-                        std::span<char const>(encoded).subspan(r->data + i * fixed_size<E, Root>()).template first<fixed_size<E, Root>()>();
+                    auto const entry = validity::element_span(entries, *validity::check_index(i, r->length), fixed_size<E, Root>())
+                                           .template first<fixed_size<E, Root>()>();
                     if constexpr (std::is_default_constructible_v<E>) {
                         E element = element_make<E>(out);
                         if (auto const e = value_read<Root>(element, entry, depth + 1, depth_max); !e) [[unlikely]]
@@ -2501,7 +2701,10 @@ class reflection
                     } else if constexpr (requires { fixed_length<M>::value; }) {
                         using L = std::remove_cv_t<typename fixed_length<M>::element>;
                         for (std::size_t k = 0; k < fixed_length<M>::value && done; ++k) {
-                            auto const v = fixed_leaf_read<L, Verified>(in.subspan(at + k * sizeof(fixed_leaf_t<L>)).template first<sizeof(fixed_leaf_t<L>)>());
+                            auto const v = fixed_leaf_read<L, Verified>(
+                                validity::element_span(in.template subspan<at, fixed_width<M>()>(),
+                                                       *validity::check_index(k, fixed_length<M>::value), sizeof(fixed_leaf_t<L>))
+                                    .template first<sizeof(fixed_leaf_t<L>)>());
                             if (v)
                                 describe::get<I>(out)[k] = *v;
                             else [[unlikely]]
@@ -2600,8 +2803,6 @@ class reflection
 template <class E>
 class typed_array_view
 {
-    static constexpr std::ptrdiff_t stride = sizeof(E);
-
     std::shared_ptr<void const> owner;
     std::span<char const> bytes;
 
@@ -2631,102 +2832,7 @@ public:
 
     ~typed_array_view() = default;
 
-    class iterator
-    {
-        std::span<char const>::iterator at;
-
-        explicit iterator(std::span<char const>::iterator const i) : at(i)
-        {
-        }
-
-        friend class typed_array_view;
-
-    public:
-        using iterator_concept = std::random_access_iterator_tag;
-        using iterator_category = std::input_iterator_tag;
-        using value_type = E;
-        using difference_type = std::ptrdiff_t;
-
-        iterator() = default;
-
-        CBOR_ALWAYS_INLINE E operator*() const
-        {
-            return reflection::typed_array_element_read<E>(std::span<char const, sizeof(E)>(at, sizeof(E)));
-        }
-
-        CBOR_ALWAYS_INLINE E operator[](difference_type const n) const
-        {
-            return *(*this + n);
-        }
-
-        CBOR_ALWAYS_INLINE iterator &operator++()
-        {
-            at += stride;
-            return *this;
-        }
-
-        CBOR_ALWAYS_INLINE iterator operator++(int)
-        {
-            iterator const was = *this;
-            at += stride;
-            return was;
-        }
-
-        CBOR_ALWAYS_INLINE iterator &operator--()
-        {
-            at -= stride;
-            return *this;
-        }
-
-        CBOR_ALWAYS_INLINE iterator operator--(int)
-        {
-            iterator const was = *this;
-            at -= stride;
-            return was;
-        }
-
-        CBOR_ALWAYS_INLINE iterator &operator+=(difference_type const n)
-        {
-            at += n * stride;
-            return *this;
-        }
-
-        CBOR_ALWAYS_INLINE iterator &operator-=(difference_type const n)
-        {
-            at -= n * stride;
-            return *this;
-        }
-
-        CBOR_ALWAYS_INLINE friend iterator operator+(iterator const i, difference_type const n)
-        {
-            return iterator(i.at + n * stride);
-        }
-
-        CBOR_ALWAYS_INLINE friend iterator operator+(difference_type const n, iterator const i)
-        {
-            return iterator(i.at + n * stride);
-        }
-
-        CBOR_ALWAYS_INLINE friend iterator operator-(iterator const i, difference_type const n)
-        {
-            return iterator(i.at - n * stride);
-        }
-
-        CBOR_ALWAYS_INLINE friend difference_type operator-(iterator const a, iterator const b)
-        {
-            return (a.at - b.at) / stride;
-        }
-
-        CBOR_ALWAYS_INLINE friend bool operator==(iterator const a, iterator const b)
-        {
-            return a.at == b.at;
-        }
-
-        CBOR_ALWAYS_INLINE friend auto operator<=>(iterator const a, iterator const b)
-        {
-            return a.at <=> b.at;
-        }
-    };
+    using iterator = detail::indexing_iterator<E, std::monostate, &reflection::typed_array_element_at<E>>;
 
     CBOR_ALWAYS_INLINE std::size_t size() const
     {
@@ -2742,58 +2848,70 @@ public:
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE iterator begin(this Self &&self)
     {
-        return iterator(self.bytes.begin());
+        return iterator(self.owner, std::string_view(), self.bytes, 0, self.size(), {});
     }
 
     template <class Self>
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE iterator end(this Self &&self)
     {
-        return iterator(self.bytes.end());
+        return iterator(self.owner, std::string_view(), self.bytes, self.size(), self.size(), {});
     }
 
-    CBOR_ALWAYS_INLINE iterator cbegin() const
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    CBOR_ALWAYS_INLINE iterator cbegin(this Self &&self)
     {
-        return begin();
+        return self.begin();
     }
 
-    CBOR_ALWAYS_INLINE iterator cend() const
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    CBOR_ALWAYS_INLINE iterator cend(this Self &&self)
     {
-        return end();
+        return self.end();
     }
 
-    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> rbegin() const
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> rbegin(this Self &&self)
     {
-        return std::reverse_iterator<iterator>(end());
+        return std::reverse_iterator<iterator>(self.end());
     }
 
-    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> rend() const
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> rend(this Self &&self)
     {
-        return std::reverse_iterator<iterator>(begin());
+        return std::reverse_iterator<iterator>(self.begin());
     }
 
-    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> crbegin() const
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> crbegin(this Self &&self)
     {
-        return rbegin();
+        return self.rbegin();
     }
 
-    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> crend() const
+    template <class Self>
+        requires std::is_lvalue_reference_v<Self>
+    CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> crend(this Self &&self)
     {
-        return rend();
+        return self.rend();
     }
 
     CBOR_ALWAYS_INLINE E front() const
     {
-        if (!validity::check_index(std::size_t{0}, size())) [[unlikely]]
-            validity::throw_logic_error("cbor::typed_array_view::front: the view is empty");
-        return reflection::typed_array_element_read<E>(bytes.template first<sizeof(E)>());
+        auto const element = reflection::typed_array_element_at<E>(bytes, size(), 0);
+        validity::throw_logic_error_if(!element.has_value(), "cbor::typed_array_view::front: the view is empty");
+        return *element;
     }
 
     CBOR_ALWAYS_INLINE E back() const
     {
-        if (!validity::check_index(std::size_t{0}, size())) [[unlikely]]
-            validity::throw_logic_error("cbor::typed_array_view::back: the view is empty");
-        return reflection::typed_array_element_read<E>(bytes.template last<sizeof(E)>());
+        auto const element = reflection::typed_array_element_at<E>(bytes, size(), size() - 1);
+        validity::throw_logic_error_if(!element.has_value(), "cbor::typed_array_view::back: the view is empty");
+        return *element;
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) const &
@@ -2826,16 +2944,14 @@ public:
 
     CBOR_ALWAYS_INLINE std::expected<E, error> at(std::size_t const i) const
     {
-        if (error const c = validity::check_index(i, size()).error_or(error{}); c != error{}) [[unlikely]]
-            return std::unexpected(c);
-        return reflection::typed_array_element_read<E>(bytes.subspan(i * sizeof(E)).template first<sizeof(E)>());
+        return reflection::typed_array_element_at<E>(bytes, size(), i);
     }
 
     CBOR_ALWAYS_INLINE E operator[](std::size_t const i) const
     {
-        if (!validity::check_index(i, size())) [[unlikely]]
-            validity::throw_logic_error("cbor::typed_array_view::operator[]: the index is outside of the view");
-        return reflection::typed_array_element_read<E>(bytes.subspan(i * sizeof(E)).template first<sizeof(E)>());
+        auto const element = reflection::typed_array_element_at<E>(bytes, size(), i);
+        validity::throw_logic_error_if(!element.has_value(), "cbor::typed_array_view::operator[]: the index is outside of the view");
+        return *element;
     }
 };
 
@@ -3028,6 +3144,16 @@ public:
         {
         }
 
+        static consteval std::size_t stride()
+            requires(reflection::is_fixed_vector<U> || reflection::is_record_list<U>)
+        {
+            using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+            if constexpr (reflection::is_fixed_vector<U>)
+                return reflection::fixed_width<E>();
+            else
+                return reflection::fixed_size<E, T>();
+        }
+
         friend class schema;
 
         friend class reflection;
@@ -3036,6 +3162,28 @@ public:
         friend class accessor;
 
     public:
+        accessor(accessor const &) = default;
+
+        accessor(accessor &&other) noexcept
+            : owner(std::move(other.owner)), encoded(std::exchange(other.encoded, std::string_view())), field(other.field),
+              dir(other.dir), items(std::exchange(other.items, {}))
+        {
+        }
+
+        accessor &operator=(accessor const &) = default;
+
+        accessor &operator=(accessor &&other) noexcept
+        {
+            owner = std::move(other.owner);
+            encoded = std::exchange(other.encoded, std::string_view());
+            field = other.field;
+            dir = other.dir;
+            items = std::exchange(other.items, {});
+            return *this;
+        }
+
+        ~accessor() = default;
+
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(((Path.view().starts_with('@') && reflection::path_valid<U, Path, 1>()) ||
                       (Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>())) &&
@@ -3063,11 +3211,8 @@ public:
                         at = std::get<0>(i);
                     else
                         at = reflection::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
-                    if (error const c = validity::check_index(at, self.items.length).error_or(error{});
-                        c != error{}) [[unlikely]]
-                        return std::expected<E, error>(std::unexpect, c);
-                    return std::expected<E, error>(reflection::typed_array_element_read<E>(
-                        std::span<char const>(self.encoded).subspan(self.items.data + at * sizeof(E)).template first<sizeof(E)>()));
+                    return reflection::typed_array_element_at<E>(reflection::list_span(self.encoded, self.items, sizeof(E)),
+                                                                  self.items.length, at);
                 } else if constexpr (reflection::is_fixed_vector<U> && path.size() > 1) {
                     using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
                     constexpr std::size_t close = reflection::index_end(path, 1);
@@ -3077,11 +3222,15 @@ public:
                         at = std::get<0>(i);
                     else
                         at = reflection::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
-                    if (error const c = validity::check_index(at, self.items.length).error_or(error{});
-                        c != error{}) [[unlikely]]
-                        return std::expected<X, error>(std::unexpect, c);
+                    constexpr std::size_t width = reflection::fixed_width<E>();
+                    auto const position = validity::check_index(at, self.items.length);
+                    if (!position) [[unlikely]]
+                        return std::expected<X, error>(std::unexpect, position.error());
                     return reflection::fixed_walk<T, E, Path, close + 1, Verified>(
-                        self.encoded, self.items.data + at * reflection::fixed_width<E>(), self.dir, i);
+                        self.encoded,
+                        validity::element_span(reflection::list_span(self.encoded, self.items, width), *position, width)
+                            .template first<width>(),
+                        self.dir, i);
                 } else if constexpr (reflection::is_list<U> && path.size() > 1) {
                     using E = std::ranges::range_value_t<U>;
                     constexpr std::size_t close = reflection::index_end(path, 1);
@@ -3091,14 +3240,14 @@ public:
                         at = std::get<0>(i);
                     else
                         at = reflection::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
-                    if (error const c = validity::check_index(at, self.items.length).error_or(error{});
-                        c != error{}) [[unlikely]]
-                        return std::expected<X, error>(std::unexpect, c);
+                    constexpr std::size_t width = reflection::fixed_size<E, T>();
+                    auto const position = validity::check_index(at, self.items.length);
+                    if (!position) [[unlikely]]
+                        return std::expected<X, error>(std::unexpect, position.error());
                     return reflection::path_walk<T, E, Path, close + 1, Verified>(
                         self.encoded,
-                        std::span<char const>(self.encoded)
-                            .subspan(self.items.data + at * reflection::fixed_size<E, T>())
-                            .template first<reflection::fixed_size<E, T>()>(),
+                        validity::element_span(reflection::list_span(self.encoded, self.items, width), *position, width)
+                            .template first<width>(),
                         self.dir, i);
                 } else {
                     return reflection::path_walk<T, U, Path, 1, Verified>(self.encoded, self.field, self.dir, i);
@@ -3128,7 +3277,7 @@ public:
             if (!list) [[unlikely]]
                 return std::expected<typed_array_view<E>, error>(std::unexpect, list.error());
             return std::expected<typed_array_view<E>, error>(
-                typed_array_view<E>(std::forward_like<Self>(self.owner), std::span<char const>(self.encoded).subspan(list->items.data, list->items.length * sizeof(E))));
+                typed_array_view<E>(std::forward_like<Self>(self.owner), reflection::list_span(self.encoded, list->items, sizeof(E))));
         }
 
         std::size_t size() const
@@ -3137,120 +3286,65 @@ public:
             return items.length;
         }
 
-        class iterator
+        using iterator = typename decltype(reflection::list_iterator_result<T, U, Verified>())::type;
+
+        template <class Self>
+            requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+        iterator begin(this Self &&self)
         {
-            using element = std::remove_cv_t<std::ranges::range_value_t<U>>;
-            static constexpr std::size_t width = reflection::fixed_width<element>();
-
-            std::shared_ptr<void const> owner;
-            std::string_view encoded;
-            std::size_t at = 0;
-            detail::directory dir{};
-
-            iterator(std::shared_ptr<void const> o, std::string_view const b, std::size_t const a, detail::directory const d)
-                : owner(std::move(o)), encoded(b), at(a), dir(d)
-            {
-            }
-
-            friend class accessor;
-
-        public:
-            using value_type = accessor<fixed_element<element>, Verified>;
-            using difference_type = std::ptrdiff_t;
-
-            iterator() = default;
-
-            value_type operator*() const
-            {
-                value_type e(encoded, at, dir);
-                e.owner = owner;
-                return e;
-            }
-
-            value_type operator[](difference_type const n) const
-            {
-                return *(*this + n);
-            }
-
-            iterator &operator++()
-            {
-                at += width;
-                return *this;
-            }
-
-            iterator operator++(int)
-            {
-                iterator const was = *this;
-                at += width;
-                return was;
-            }
-
-            iterator &operator--()
-            {
-                at -= width;
-                return *this;
-            }
-
-            iterator operator--(int)
-            {
-                iterator const was = *this;
-                at -= width;
-                return was;
-            }
-
-            iterator &operator+=(difference_type const n)
-            {
-                at = static_cast<std::size_t>(static_cast<difference_type>(at) + n * static_cast<difference_type>(width));
-                return *this;
-            }
-
-            iterator &operator-=(difference_type const n)
-            {
-                return *this += -n;
-            }
-
-            friend iterator operator+(iterator i, difference_type const n)
-            {
-                return i += n;
-            }
-
-            friend iterator operator+(difference_type const n, iterator i)
-            {
-                return i += n;
-            }
-
-            friend iterator operator-(iterator i, difference_type const n)
-            {
-                return i -= n;
-            }
-
-            friend difference_type operator-(iterator const &a, iterator const &b)
-            {
-                return (static_cast<difference_type>(a.at) - static_cast<difference_type>(b.at)) /
-                       static_cast<difference_type>(width);
-            }
-
-            friend bool operator==(iterator const &a, iterator const &b)
-            {
-                return a.at == b.at;
-            }
-
-            friend auto operator<=>(iterator const &a, iterator const &b)
-            {
-                return a.at <=> b.at;
-            }
-        };
-
-        iterator begin() const
-            requires(reflection::is_fixed_vector<U>)
-        {
-            return iterator(owner, encoded, items.data, dir);
+            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::begin: the accessor was moved from");
+            return iterator(self.owner, self.encoded, reflection::list_span(self.encoded, self.items, stride()), 0, self.items.length,
+                            self.dir);
         }
 
-        iterator end() const
-            requires(reflection::is_fixed_vector<U>)
+        template <class Self>
+            requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+        iterator end(this Self &&self)
         {
-            return iterator(owner, encoded, items.data + items.length * iterator::width, dir);
+            return iterator(self.owner, self.encoded, reflection::list_span(self.encoded, self.items, stride()), self.items.length,
+                            self.items.length, self.dir);
+        }
+
+        template <class Self>
+            requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+        iterator cbegin(this Self &&self)
+        {
+            return self.begin();
+        }
+
+        template <class Self>
+            requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+        iterator cend(this Self &&self)
+        {
+            return self.end();
+        }
+
+        template <class Self>
+            requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+        std::reverse_iterator<iterator> rbegin(this Self &&self)
+        {
+            return std::reverse_iterator<iterator>(self.end());
+        }
+
+        template <class Self>
+            requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+        std::reverse_iterator<iterator> rend(this Self &&self)
+        {
+            return std::reverse_iterator<iterator>(self.begin());
+        }
+
+        template <class Self>
+            requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+        std::reverse_iterator<iterator> crbegin(this Self &&self)
+        {
+            return self.rbegin();
+        }
+
+        template <class Self>
+            requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+        std::reverse_iterator<iterator> crend(this Self &&self)
+        {
+            return self.rend();
         }
     };
 
@@ -3259,10 +3353,11 @@ public:
     {
         std::shared_ptr<void const> owner;
         std::string_view encoded;
-        std::size_t at;
+        std::span<char const, reflection::fixed_width<S>()> element;
         detail::directory dir;
 
-        accessor(std::string_view const b, std::size_t const a, detail::directory const d) : encoded(b), at(a), dir(d)
+        accessor(std::string_view const b, std::span<char const, reflection::fixed_width<S>()> const e, detail::directory const d)
+            : encoded(b), element(e), dir(d)
         {
         }
 
@@ -3289,7 +3384,7 @@ public:
                         self.encoded, std::span<char const>(self.encoded).subspan(self.encoded.size() - root).template first<root>(),
                         self.dir, i);
                 } else {
-                    return reflection::fixed_walk<T, S, Path, 1, Verified>(self.encoded, self.at, self.dir, i);
+                    return reflection::fixed_walk<T, S, Path, 1, Verified>(self.encoded, self.element, self.dir, i);
                 }
             }();
             if constexpr (requires { result->owner; })
