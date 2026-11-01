@@ -5,7 +5,7 @@ on:
     paths:
       - 'include/**'
       - 'doc/reference/**'
-      - 'doc/man/**'
+      - 'man/**'
       - 'tools/man/**'
       - 'tools/doxygen/**'
       - 'containers/man.Containerfile'
@@ -15,7 +15,7 @@ on:
     paths:
       - 'include/**'
       - 'doc/reference/**'
-      - 'doc/man/**'
+      - 'man/**'
       - 'tools/man/**'
       - 'tools/doxygen/**'
       - 'containers/man.Containerfile'
@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build the image
         run: podman build -q -t mbedded-cbor-man -f containers/man.Containerfile containers
-      - name: Make the man pages and compare them with doc/man/man3
+      - name: Make the man pages and compare them with man/man3
         run: |
           sh tools/man/man.sh "$RUNNER_TEMP/man3"
-          diff -r doc/man/man3 "$RUNNER_TEMP/man3"
+          diff -r man/man3 "$RUNNER_TEMP/man3"

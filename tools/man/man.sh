@@ -20,7 +20,7 @@ podman run --rm --network none -e VERSION="$version" -e TODAY="$today" -v "$tree
   body() { sed "s/^\(\.TH \"[^\"]*\" \"[^\"]*\" \)\"[^\"]*\"/\1\"\"/" "$1"; }
   for page in $work/*.3; do
     file=$(basename $page)
-    committed=/src/doc/man/man3/$file
+    committed=/src/man/man3/$file
     if [ -f $committed ] && [ "$(body $committed)" = "$(body $page)" ]; then
       [ $committed -ef /out/$file ] || cp $committed /out/$file
     else
