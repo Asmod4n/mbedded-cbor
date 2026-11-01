@@ -113,6 +113,26 @@ __attribute__((export_name("get_text"))) std::uint64_t get_text(std::uint32_t co
     return (static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>((**t).data())) << 32) | (**t).size();
 }
 
+__attribute__((export_name("ints_fill"))) std::uint32_t ints_fill(std::uint32_t const doc, std::uint32_t offset,
+                                                                 std::uint32_t const n, std::int32_t *const out)
+{
+    std::string_view const bytes = bytes_of(doc);
+    for (std::uint32_t i = 0; i < n; ++i) {
+        out[i] = static_cast<std::int32_t>(*lazy_at(doc, offset).get<std::int64_t>());
+        offset += static_cast<std::uint32_t>(*cbor::item_size(bytes.substr(offset)));
+    }
+    return offset;
+}
+
+__attribute__((export_name("ints_iterate"))) std::uint32_t ints_iterate(std::uint32_t const doc, std::int32_t *const out)
+{
+    auto const root = cbor::lazy::view(documents[doc].bytes);
+    std::uint32_t i = 0;
+    for (auto const e : *root->elements())
+        out[i++] = static_cast<std::int32_t>(*e->get<std::int64_t>());
+    return i;
+}
+
 __attribute__((export_name("h_new"))) std::uint32_t h_new(std::uint32_t const doc, std::uint32_t const offset)
 {
     ++documents[doc].references;

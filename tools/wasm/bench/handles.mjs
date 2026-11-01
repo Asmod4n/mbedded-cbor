@@ -40,12 +40,62 @@ function loaded(x, memory, bytes) {
 
 const median = (a) => { const s = [...a].sort((p, q) => p - q); return s[s.length >> 1]; };
 
+function json_of(kind) {
+  const values = new Array(count);
+  for (let i = 0; i < count; ++i) values[i] = kind === "int" ? 1000 + (i % 1000) : String(10000000 + (i % 1000));
+  return JSON.stringify(values);
+}
+
 const arms = {
+  json_int_access() {
+    const values = JSON.parse(json_of("int"));
+    return () => { let sum = 0; for (let i = 0; i < count; ++i) sum += values[i]; return sum; };
+  },
+  json_int_load() {
+    const text = json_of("int");
+    return () => { const values = JSON.parse(text); let sum = 0; for (let i = 0; i < count; ++i) sum += values[i]; return sum; };
+  },
+  json_text_access() {
+    const values = JSON.parse(json_of("text"));
+    return () => { let total = 0; for (let i = 0; i < count; ++i) total += values[i].length; return total; };
+  },
+  offsets_int_load(x, memory) {
+    const bytes = document_of("int");
+    return () => {
+      const doc = loaded(x, memory, bytes);
+      let sum = 0n, off = x.arr_first(doc);
+      for (let i = 0; i < count; ++i) { sum += x.get_int(doc, off); off = x.arr_next(doc, off); }
+      x.doc_release(doc);
+      return sum;
+    };
+  },
   offsets_int(x, memory) {
     const doc = loaded(x, memory, document_of("int"));
     return () => {
       let sum = 0n, off = x.arr_first(doc);
       for (let i = 0; i < count; ++i) { sum += x.get_int(doc, off); off = x.arr_next(doc, off); }
+      return sum;
+    };
+  },
+  batch_int(x, memory) {
+    const doc = loaded(x, memory, document_of("int"));
+    const out = x.alloc(count * 4);
+    return () => {
+      x.ints_fill(doc, x.arr_first(doc), count, out);
+      const values = new Int32Array(memory.buffer, out, count);
+      let sum = 0;
+      for (let i = 0; i < count; ++i) sum += values[i];
+      return sum;
+    };
+  },
+  iterate_int(x, memory) {
+    const doc = loaded(x, memory, document_of("int"));
+    const out = x.alloc(count * 4);
+    return () => {
+      const n = x.ints_iterate(doc, out);
+      const values = new Int32Array(memory.buffer, out, n);
+      let sum = 0;
+      for (let i = 0; i < n; ++i) sum += values[i];
       return sum;
     };
   },
@@ -128,7 +178,7 @@ if (mode === "facts") {
   console.log(JSON.stringify({ arm, ms: median(times.slice(2)), rss_mib: +(process.memoryUsage().rss / 1048576).toFixed(1) }));
 } else if (mode === "run") {
   const reps = Number(extra ?? 10);
-  const names = ["offsets_int", "offsets_int_aa", "handles_int", "text_global", "text_global_aa", "text_new"];
+  const names = ["offsets_int", "offsets_int_aa", "handles_int", "text_global", "text_global_aa", "text_new", "json_int_access", "json_int_load", "json_text_access", "offsets_int_load", "batch_int", "iterate_int"];
   const results = Object.fromEntries(names.map((n) => [n, []]));
   for (let r = 0; r < reps; ++r) {
     const order = r % 2 ? [...names].reverse() : names;
