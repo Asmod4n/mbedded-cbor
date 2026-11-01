@@ -587,13 +587,14 @@ class jsonpath
     static std::expected<bool, error> value_less(lazy const &a, lazy const &b);
 
     static std::expected<std::optional<lazy>, error> comparable_value(query_view const &v, std::size_t index,
-                                                                      lazy const &current, lazy const &root);
+                                                                      lazy const &current, lazy const &root,
+                                                                      std::size_t depth);
 
     static std::expected<bool, error> expression_test(query_view const &v, std::size_t index,
-                                                      lazy const &current, lazy const &root);
+                                                      lazy const &current, lazy const &root, std::size_t depth);
 
     static std::expected<void, error> selector_apply(query_view const &v, selector const &s, lazy const &node,
-                                                     lazy const &root, std::vector<lazy> &nodes);
+                                                     lazy const &root, std::vector<lazy> &nodes, std::size_t depth);
 
     static std::expected<void, error> segment_apply(query_view const &v, segment const &s, lazy const &node,
                                                     lazy const &root, std::vector<lazy> &nodes,
@@ -1389,8 +1390,11 @@ inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const
 inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(query_view const &v,
                                                                             std::size_t const index,
                                                                             lazy const &current,
-                                                                            lazy const &root)
+                                                                            lazy const &root,
+                                                                            std::size_t const depth)
 {
+    if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+        return std::unexpected(r.error());
     logical_expr const &e = v.expressions[index];
     auto const unsigned_integer = [](std::uint64_t const n) -> std::expected<std::optional<lazy>, error> {
         std::string encoded;
@@ -1429,7 +1433,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
         return nodes->front();
     }
     case logical_expr::kind::length: {
-        auto const argument = comparable_value(v, e.first, current, root);
+        auto const argument = comparable_value(v, e.first, current, root, depth);
         if (!argument || !*argument) [[unlikely]]
             return argument;
         (*argument)->throw_logic_error_if_no_top_level();
@@ -1455,12 +1459,15 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
 }
 
 inline std::expected<bool, error> jsonpath::expression_test(query_view const &v, std::size_t const index,
-                                                            lazy const &current, lazy const &root)
+                                                            lazy const &current, lazy const &root,
+                                                            std::size_t const depth)
 {
+    if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+        return std::unexpected(r.error());
     std::size_t at = index;
     while (v.expressions[at].kind == logical_expr::kind::logical_or || v.expressions[at].kind == logical_expr::kind::logical_and) {
         logical_expr const &chain = v.expressions[at];
-        auto const left = expression_test(v, chain.first, current, root);
+        auto const left = expression_test(v, chain.first, current, root, depth);
         if (!left || *left == (chain.kind == logical_expr::kind::logical_or))
             return left;
         at = chain.second;
@@ -1468,7 +1475,7 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
     logical_expr const &e = v.expressions[at];
     switch (e.kind) {
     case logical_expr::kind::logical_not: {
-        auto const operand = expression_test(v, e.first, current, root);
+        auto const operand = expression_test(v, e.first, current, root, depth);
         if (!operand) [[unlikely]]
             return operand;
         return !*operand;
@@ -1487,10 +1494,10 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
     [[unlikely]] default:
         return std::unexpected(error::invalid_path);
     }
-    auto const a = comparable_value(v, e.first, current, root);
+    auto const a = comparable_value(v, e.first, current, root, depth);
     if (!a) [[unlikely]]
         return std::unexpected(a.error());
-    auto const b = comparable_value(v, e.second, current, root);
+    auto const b = comparable_value(v, e.second, current, root, depth);
     if (!b) [[unlikely]]
         return std::unexpected(b.error());
     auto const equal = [&]() -> std::expected<bool, error> {
@@ -1532,7 +1539,7 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
 
 inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, selector const &s,
                                                            lazy const &node, lazy const &root,
-                                                           std::vector<lazy> &nodes)
+                                                           std::vector<lazy> &nodes, std::size_t const depth)
 {
     std::size_t const limit = root.top_level.encoded.size();
     auto const append = [&nodes, limit](lazy const &l) -> std::expected<void, error> {
@@ -1602,7 +1609,7 @@ inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, 
             }
             for (lazy const &child : children) {
                 if (s.kind == selector::kind::filter) {
-                    auto const chosen = expression_test(v, s.expression, child, root);
+                    auto const chosen = expression_test(v, s.expression, child, root, depth);
                     if (!chosen) [[unlikely]]
                         return std::unexpected(chosen.error());
                     if (!*chosen)
@@ -1621,13 +1628,13 @@ inline std::expected<void, error> jsonpath::segment_apply(query_view const &v, s
     if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     for (selector const &each : v.selectors.subspan(s.selector_at, s.selector_count))
-        if (auto const r = selector_apply(v, each, node, root, nodes); !r) [[unlikely]]
+        if (auto const r = selector_apply(v, each, node, root, nodes, depth); !r) [[unlikely]]
             return r;
     if (!s.descendant)
         return {};
     std::vector<lazy> children;
     selector const wildcard{selector::kind::wildcard, 0, 0, 0, std::nullopt, std::nullopt, 1, 0};
-    if (auto const r = selector_apply(v, wildcard, node, root, children); !r) [[unlikely]]
+    if (auto const r = selector_apply(v, wildcard, node, root, children, depth); !r) [[unlikely]]
         return r;
     for (lazy const &child : children)
         if (auto const r = segment_apply(v, s, child, root, nodes, depth + 1); !r) [[unlikely]]

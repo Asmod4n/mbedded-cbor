@@ -964,8 +964,10 @@ class generic
     }
 
     template <class U>
-    static std::expected<std::size_t, std::errc> generic_size(U const &value)
+    static std::expected<std::size_t, error> generic_size(U const &value, std::size_t const depth)
     {
+        if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+            return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool> || std::same_as<U, std::nullptr_t>) {
             return heads::initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
@@ -985,9 +987,9 @@ class generic
             return heads::initial_byte_size + heads::head_size(digits) + digits;
 #endif
         } else if constexpr (is_std_variant<U>) {
-            return std::visit([](auto const &e) { return generic_size(e); }, value);
+            return std::visit([depth](auto const &e) { return generic_size(e, depth); }, value);
         } else if constexpr (std::is_enum_v<U>) {
-            return generic_size(std::to_underlying(value));
+            return generic_size(std::to_underlying(value), depth);
         } else if constexpr (std::is_integral_v<U>) {
             if constexpr (std::is_signed_v<U>)
                 return heads::head_size(value < 0 ? static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(value))
@@ -998,29 +1000,29 @@ class generic
             static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::structs reads and writes float and double only.");
             return float_size(value);
         } else if constexpr (is_tagged_standard_type<U>) {
-            auto const content = tag_content_size(value);
+            auto const content = tag_content_size(value, depth);
             if (!content) [[unlikely]]
                 return content;
-            return validity::checked_add(heads::head_size(tag_of_standard_type<U>()), *content);
+            return validity::checked_add(heads::head_size(tag_of_standard_type<U>()), *content).transform_error(validity::writer_error);
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view> ||
                              std::same_as<U, std::span<std::byte const>>) {
-            return validity::checked_add(heads::head_size(value.size()), value.size());
+            return validity::checked_add(heads::head_size(value.size()), value.size()).transform_error(validity::writer_error);
         } else if constexpr (reflection::is_optional<U>) {
             if (!value)
                 return heads::initial_byte_size;
-            return generic_size(*value);
+            return generic_size(*value, depth);
         } else if constexpr (is_tagged_item<U>) {
-            auto const content = generic_size(value.content);
+            auto const content = generic_size(value.content, depth + 1);
             if (!content) [[unlikely]]
                 return content;
-            return validity::checked_add(heads::head_size(U::number), *content);
+            return validity::checked_add(heads::head_size(U::number), *content).transform_error(validity::writer_error);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
-            std::expected<std::size_t, std::errc> size = heads::head_size(std::tuple_size_v<U>);
+            std::expected<std::size_t, error> size = heads::head_size(std::tuple_size_v<U>);
             std::apply(
                 [&](auto const &...e) {
                     ((size = size.and_then([&](std::size_t const sum) {
-                          return generic_size(e).and_then(
-                              [sum](std::size_t const n) { return validity::checked_add(sum, n); });
+                          return generic_size(e, depth + 1).and_then(
+                              [sum](std::size_t const n) { return validity::checked_add(sum, n).transform_error(validity::writer_error); });
                       })),
                      ...);
                 },
@@ -1028,20 +1030,21 @@ class generic
             return size;
         } else if constexpr (is_multimap<U>) {
             auto groups = key_groups(value);
-            std::expected<std::size_t, std::errc> size =
+            std::expected<std::size_t, error> size =
                 heads::head_size(std::ranges::fold_left(groups, std::uint64_t{0}, element_count));
             for (auto const group : groups) {
                 size = size.and_then([&](std::size_t const sum) {
-                    return generic_size(group.front().first).and_then([&](std::size_t const n) {
-                        return validity::checked_add(sum, n).and_then([&group](std::size_t const total) {
+                    return generic_size(group.front().first, depth + 1).and_then([&](std::size_t const n) {
+                        return validity::checked_add(sum, n).transform_error(validity::writer_error).and_then([&group](std::size_t const total) {
                             return validity::checked_add(
-                                total, heads::head_size(std::ranges::fold_left(group, std::uint64_t{0}, element_count)));
+                                       total, heads::head_size(std::ranges::fold_left(group, std::uint64_t{0}, element_count)))
+                                .transform_error(validity::writer_error);
                         });
                     });
                 });
                 for (auto const &[k, v] : group)
-                    size = size.and_then([&v](std::size_t const sum) {
-                        return generic_size(v).and_then([sum](std::size_t const n) { return validity::checked_add(sum, n); });
+                    size = size.and_then([&v, depth](std::size_t const sum) {
+                        return generic_size(v, depth + 1).and_then([sum](std::size_t const n) { return validity::checked_add(sum, n).transform_error(validity::writer_error); });
                     });
                 if (!size) [[unlikely]]
                     return size;
@@ -1050,10 +1053,10 @@ class generic
         } else if constexpr (reflection::is_map<U>) {
             std::size_t size = heads::head_size(value.size());
             for (auto const &[k, v] : value) {
-                auto const key = generic_size(k).and_then([size](std::size_t const n) { return validity::checked_add(size, n); });
+                auto const key = generic_size(k, depth + 1).and_then([size](std::size_t const n) { return validity::checked_add(size, n).transform_error(validity::writer_error); });
                 if (!key) [[unlikely]]
                     return key;
-                auto const mapped = generic_size(v).and_then([&key](std::size_t const n) { return validity::checked_add(*key, n); });
+                auto const mapped = generic_size(v, depth + 1).and_then([&key](std::size_t const n) { return validity::checked_add(*key, n).transform_error(validity::writer_error); });
                 if (!mapped) [[unlikely]]
                     return mapped;
                 size = *mapped;
@@ -1063,31 +1066,31 @@ class generic
                                  value.size();
                                  typename U::value_type;
                              }) {
-            return elements_size(value);
+            return elements_size(value, depth);
         } else {
             static_assert(pfr::struct_readable<U>());
             std::size_t present = 0;
             auto const member_size =
                 [&]<std::size_t I>(std::integral_constant<std::size_t, I>,
-                                   std::size_t const sum) -> std::expected<std::size_t, std::errc> {
+                                   std::size_t const sum) -> std::expected<std::size_t, error> {
                 auto const &m = pfr::get<I>(value);
                 if (!member_present(m))
                     return sum;
                 ++present;
                 constexpr map_key key = pfr::key_of<I, U>();
                 auto const keyed =
-                    validity::checked_add(sum, heads::head_size(key.argument) + key.text.size());
+                    validity::checked_add(sum, heads::head_size(key.argument) + key.text.size()).transform_error(validity::writer_error);
                 if (!keyed) [[unlikely]]
                     return keyed;
-                std::expected<std::size_t, std::errc> encoded_size;
+                std::expected<std::size_t, error> encoded_size;
                 if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
-                    encoded_size = generic_size(*m);
+                    encoded_size = generic_size(*m, depth + 1);
                 else
-                    encoded_size = generic_size(m);
+                    encoded_size = generic_size(m, depth + 1);
                 return encoded_size.and_then(
-                    [&keyed](std::size_t const n) { return validity::checked_add(*keyed, n); });
+                    [&keyed](std::size_t const n) { return validity::checked_add(*keyed, n).transform_error(validity::writer_error); });
             };
-            std::expected<std::size_t, std::errc> size = std::size_t{0};
+            std::expected<std::size_t, error> size = std::size_t{0};
             [&]<std::size_t... I>(std::index_sequence<I...>) {
                 ((size = size.and_then([&](std::size_t const sum) {
                      return member_size(std::integral_constant<std::size_t, I>{}, sum);
@@ -1099,17 +1102,17 @@ class generic
             std::size_t head = heads::head_size(present);
             if constexpr (constexpr std::optional<std::uint64_t> tag = reflection::tag_number_of<U>(); tag.has_value())
                 head += heads::head_size(*tag);
-            return validity::checked_add(*size, head);
+            return validity::checked_add(*size, head).transform_error(validity::writer_error);
         }
     }
 
     template <class U>
-    static std::expected<std::size_t, std::errc> elements_size(U const &value)
+    static std::expected<std::size_t, error> elements_size(U const &value, std::size_t const depth)
     {
         std::size_t size = heads::head_size(value.size());
         for (typename U::value_type const &e : value) {
-            auto const sum = generic_size(e).and_then(
-                [size](std::size_t const n) { return validity::checked_add(size, n); });
+            auto const sum = generic_size(e, depth + 1).and_then(
+                [size](std::size_t const n) { return validity::checked_add(size, n).transform_error(validity::writer_error); });
             if (!sum) [[unlikely]]
                 return sum;
             size = *sum;
@@ -1118,23 +1121,23 @@ class generic
     }
 
     template <class U>
-    static std::expected<std::size_t, std::errc> tag_content_size(U const &value)
+    static std::expected<std::size_t, error> tag_content_size(U const &value, std::size_t const depth)
     {
         if constexpr (is_sys_time<U>) {
             static_assert(std::same_as<typename U::duration, std::chrono::seconds>,
                           "cbor::structs writes tag 1 from std::chrono::sys_seconds only.");
-            return generic_size(value.time_since_epoch().count());
+            return generic_size(value.time_since_epoch().count(), depth);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
             if (!value.ok()) [[unlikely]]
                 validity::throw_logic_error("cbor::structs::encode: the year_month_day is no valid date");
-            return generic_size(std::chrono::sys_days{value}.time_since_epoch().count());
+            return generic_size(std::chrono::sys_days{value}.time_since_epoch().count(), depth);
         } else if constexpr (is_set<U>) {
-            return elements_size(value);
+            return elements_size(value, depth);
         } else {
-            auto const bytes = validity::checked_mul(value.size(), sizeof(typename U::value_type));
+            auto const bytes = validity::checked_mul(value.size(), sizeof(typename U::value_type)).transform_error(validity::writer_error);
             if (!bytes) [[unlikely]]
                 return bytes;
-            return validity::checked_add(heads::head_size(*bytes), *bytes);
+            return validity::checked_add(heads::head_size(*bytes), *bytes).transform_error(validity::writer_error);
         }
     }
 
@@ -1351,9 +1354,9 @@ public:
 
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
-        auto const counted = generic::generic_size(value);
+        auto const counted = generic::generic_size(value, 0);
         if (!counted) [[unlikely]]
-            return std::unexpected(validity::writer_error(counted.error()));
+            return std::unexpected(counted.error());
         auto const sum = validity::checked_add(*counted, heads::head_padding);
         if (!sum) [[unlikely]]
             return std::unexpected(validity::writer_error(sum.error()));
@@ -1369,9 +1372,9 @@ public:
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
         using U = std::remove_cvref_t<Target>;
-        auto const counted = generic::generic_size(value);
+        auto const counted = generic::generic_size(value, 0);
         if (!counted) [[unlikely]]
-            return std::unexpected(validity::writer_error(counted.error()));
+            return std::unexpected(counted.error());
         auto const sum = validity::checked_add(*counted, heads::head_padding);
         if (!sum) [[unlikely]]
             return std::unexpected(validity::writer_error(sum.error()));
