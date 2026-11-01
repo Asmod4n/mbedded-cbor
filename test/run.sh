@@ -20,7 +20,9 @@
 #   changed since its last run that passed. CBOR_TEST_PATTERN selects the test cases of these runs.
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
-# The builds run one after the other, and each runs as many jobs as there are processors.
+# The builds run one after the other. Each build compiles as many jobs at once as its share of the memory
+# allows (cmake/job_pools.cmake). CBOR_CONCURRENT_BUILDS is the number of runs of this script at the same time;
+# a second run without it stops.
 set -u
 src=$(cd "$(dirname "$0")/.." && pwd)
 root=${CBOR_BUILD_ROOT:-/home/user/mbedded-cbor-build}
@@ -28,6 +30,13 @@ cache=${CCACHE_HOST_DIR:-/home/user/.ccache}
 image=${CBOR_IMAGE:-mbedded-cbor-tw}
 branch=$(git -C "$src" rev-parse --abbrev-ref HEAD | tr / -)
 parallel_level=$(nproc)
+concurrent_builds=${CBOR_CONCURRENT_BUILDS:-1}
+mkdir -p "$root"
+exec 9>"$root/run.lock"
+if ! flock -n 9 && [ -z "${CBOR_CONCURRENT_BUILDS:-}" ]; then
+	echo "another test/run.sh runs; set CBOR_CONCURRENT_BUILDS to the number of runs at the same time" >&2
+	exit 2
+fi
 
 interop=0
 [ "${1:-check}" = full ] && interop=1
@@ -85,11 +94,12 @@ one() {
 		s=${EPOCHREALTIME/./}
 		cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE='"$type"' \
 			-DCMAKE_CXX_COMPILER='"$cxx"' -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" -DCBOR_COMPILE_FAIL='"$compile_fail"' '"$options"' >/b/configure.log 2>&1 &&
+			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" -DCBOR_COMPILE_FAIL='"$compile_fail"' -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' '"$options"' >/b/configure.log 2>&1 &&
 		cmake --build /b >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
 		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test ${CBOR_TEST_PATTERN:+"-tc=*$CBOR_TEST_PATTERN*"} >/b/test.log 2>&1; r=$?; }
-		[ $r = 0 ] && { ctest --test-dir /b -j"$CMAKE_BUILD_PARALLEL_LEVEL" -R "^(cmake|clang_query|compile_fail|limits)_.*$CBOR_TEST_PATTERN" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
+		jobs=$(sed -n "s/^CBOR_PARALLEL_COMPILE_JOBS:INTERNAL=//p" /b/CMakeCache.txt)
+		[ $r = 0 ] && { ctest --test-dir /b -j"$jobs" -R "^(cmake|clang_query|compile_fail|limits)_.*$CBOR_TEST_PATTERN" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
 			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log | head -1)"
@@ -118,10 +128,11 @@ iter() {
 	podman exec -e CBOR_TEST_PATTERN="$pattern" "$name" bash -c '
 		s=${EPOCHREALTIME/./}
 		if [ ! -f /b/build.ninja ] || ! grep -q "^CBOR_TEST_GROUPS:BOOL=ON$" /b/CMakeCache.txt ||
-			! grep -qxF "CBOR_TEST_PATTERN:STRING=$CBOR_TEST_PATTERN" /b/CMakeCache.txt; then
+			! grep -qxF "CBOR_TEST_PATTERN:STRING=$CBOR_TEST_PATTERN" /b/CMakeCache.txt ||
+			! grep -qxF "CBOR_CONCURRENT_BUILDS:STRING='"$concurrent_builds"'" /b/CMakeCache.txt; then
 			cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE=Debug \
 				-DCMAKE_CXX_COMPILER=g++-16 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-				-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$asan"'" -DCBOR_COMPILE_FAIL=OFF -DCBOR_TEST_GROUPS=ON "-DCBOR_TEST_PATTERN=$CBOR_TEST_PATTERN" >/b/configure.log 2>&1 ||
+				-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$asan"'" -DCBOR_COMPILE_FAIL=OFF -DCBOR_TEST_GROUPS=ON -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' "-DCBOR_TEST_PATTERN=$CBOR_TEST_PATTERN" >/b/configure.log 2>&1 ||
 				{ tail -n 30 /b/configure.log; exit 1; }
 		fi
 		ccache -z >/dev/null
