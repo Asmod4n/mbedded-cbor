@@ -5,6 +5,10 @@
 // https://www.rfc-editor.org/rfc/rfc8746#section-2
 #pragma once
 
+#ifndef CBOR_ENCODER_BLOCK_SIZE
+#define CBOR_ENCODER_BLOCK_SIZE 16384
+#endif
+
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -51,7 +55,7 @@ std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item con
 class encoding
 {
 public:
-    static constexpr std::size_t block_size = 16384;
+    static constexpr std::size_t block_size = CBOR_ENCODER_BLOCK_SIZE;
     static constexpr std::size_t item_size_max = heads::initial_byte_size + sizeof(std::uint64_t);
     static constexpr std::size_t ref_size = 32;
     static_assert(block_size >= item_size_max, "A block must hold one whole head or float.");
