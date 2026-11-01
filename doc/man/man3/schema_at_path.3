@@ -1,0 +1,57 @@
+.TH "cbor::schema::at_path" "3" "2026-11-01" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::schema::at_path \- reads one number, \(gabool\(ga or enum with no accessor
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]template\f[R] <fixed_string Path, std::convertible_to<std::size_t>... Index>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with(\(aq$\(aq) &&
+             reflection::path_valid<T, Path, 1>() && \f[B]sizeof\f[R]...(Index) == reflection::index_arguments<Path>() &&
+             value_holds_no_view<\f[B]typename\f[R] \f[B]decltype\f[R](reflection::path_result<T, T, Path, 1>())::type>)
+static \f[B]auto\f[R] at_path(std::string_view const encoded, Index const... indexes);
+.EE
+.SH DESCRIPTION
+Member of cbor::schema<T>.
+.PP
+Reads one value at \f[CR]Path\f[R] and returns a
+\f[CR]std::expected\f[R] of it.
+It makes the checks of path and of an accessor in one call and keeps
+nothing.
+It exists only for a value that holds no view into the bytes: a number,
+a \f[CR]bool\f[R], an enum, or a \f[CR]std::optional\f[R] of one.
+.PP
+A path starts with \f[CR]$\f[R], names a member with \f[CR].name\f[R]
+and an element with \f[CR][n]\f[R].
+\f[CR][]\f[R] takes its index from the next argument.
+On an array or a vector of \f[CR]std::uint8_t\f[R] or
+\f[CR]std::byte\f[R], \f[CR][n]\f[R] reads one byte.
+A text, a list or a struct needs an accessor.
+.SH ERRORS
+.IP \(bu 2
+\f[CR]too_little_data\f[R], \f[CR]incorrect_type\f[R]: as path.
+.IP \(bu 2
+\f[CR]index_out_of_bounds\f[R]: an index past the end of a list.
+.IP \(bu 2
+\f[CR]unpopulated_table_index\f[R], \f[CR]syntax_error\f[R]: a broken
+reference.
+.IP \(bu 2
+A member that \f[CR]T\f[R] does not have, a wrong count of indexes, or a
+path to a text does not compile.
+.SH NOTES
+O(q + p): q the size of the table prefix, p the count of steps of the
+path.
+No allocation.
+.SH EXAMPLES
+.IP
+.EX
+\f[I]// bytes: from schema<car>::encode(car{\(dqVolvo\(dq, 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})\f[R]
+cbor::schema<car>::at_path<\(dq$.seats\(dq>(bytes);                    \f[I]// 5\f[R]
+cbor::schema<car>::at_path<\(dq$.tires[1].diameter\(dq>(bytes);        \f[I]// 18\f[R]
+cbor::schema<car>::at_path<\(dq$.tires[].diameter\(dq>(bytes, 5uz);    \f[I]// error::index_out_of_bounds\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3), cbor::schema::encode(3), cbor::schema::decode(3), cbor::schema::path(3)

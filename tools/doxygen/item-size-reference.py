@@ -4,10 +4,7 @@ import argparse
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-
-
-def text(element):
-    return ' '.join(''.join(element.itertext()).split()) if element is not None else ''
+from doc_grammar import par_sections, text
 
 
 def direct_text(element):
@@ -17,21 +14,6 @@ def direct_text(element):
     parts = [element.text or '']
     parts.extend(child.tail or '' for child in element)
     return ' '.join(' '.join(parts).split())
-
-
-def verbatim(section):
-    node = section.find('./para/verbatim')
-    if node is None:
-        raise ValueError('reference section has no verbatim content')
-    lines = (node.text or '').splitlines()
-    result = []
-    for line in lines:
-        if not line.strip():
-            continue
-        if not re.match(r'^\s*\*(?: |$)', line):
-            raise ValueError('unexpected verbatim format')
-        result.append(re.sub(r'^\s*\* ?', '', line))
-    return '\n'.join(result).strip()
 
 
 def main():
@@ -50,19 +32,26 @@ def main():
     description = function.find('detaileddescription')
     sections = {}
     examples = {}
-    for section in description.findall('./para/simplesect'):
-        if section.get('kind') != 'par':
+    for section in par_sections(description.findall('./para/simplesect')):
+        if section.kind != 'par':
             continue
-        title = text(section.find('title'))
+        title = section.title
         if title.startswith('Interactive example'):
             key = title
             if key in examples:
                 raise ValueError('duplicate example: ' + key)
-            examples[key] = verbatim(section)
+            if section.verbatim is None:
+                raise ValueError('reference section has no verbatim content')
+            examples[key] = section.verbatim
         elif title in ('Limits and errors', 'Example', 'See also'):
             if title in sections:
                 raise ValueError('duplicate reference section: ' + title)
-            sections[title] = verbatim(section) if title in ('Example', 'See also') else text(section.find('para'))
+            if title in ('Example', 'See also'):
+                if section.verbatim is None:
+                    raise ValueError('reference section has no verbatim content')
+                sections[title] = section.verbatim
+            else:
+                sections[title] = section.paragraph
     required = {'Limits and errors', 'Example', 'See also'}
     if set(sections) != required or set(examples) != {'Interactive example', 'Interactive example 2'}:
         raise ValueError('incomplete item_size reference metadata')

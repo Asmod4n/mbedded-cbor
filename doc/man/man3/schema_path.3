@@ -1,0 +1,56 @@
+.TH "cbor::schema::path" "3" "2026-11-01" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::schema::path \- opens a message and gives the root accessor
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+static std::expected<accessor<>, cbor::error> path(Encoded &&encoded);
+
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<accessor<>, cbor::error> path(std::shared_ptr<Encoded const> encoded)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<accessor<>, cbor::error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+.EE
+.SH DESCRIPTION
+Member of cbor::schema<T>.
+.PP
+Opens a message and gives the root accessor.
+An rvalue moves into a new owner.
+An owner is read in place.
+Nothing is copied.
+An lvalue \f[CR]std::string\f[R] does not compile.
+.PP
+\f[CR]path\f[R] checks the length, the table, the directory and the tag
+of the root once.
+It reads no field.
+.SH ERRORS
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the message is shorter than its table and
+root, or its end is missing.
+.IP \(bu 2
+\f[CR]incorrect_type\f[R]: a message of another layout, or a wrong tag
+of the root.
+.IP \(bu 2
+A null or empty owner throws \f[CR]std::logic_error\f[R].
+.SH NOTES
+O(1) in the size of the message.
+The rvalue form makes one \f[CR]std::shared_ptr\f[R].
+.SH EXAMPLES
+.IP
+.EX
+\f[I]// bytes: a std::string from schema<car>::encode(car{\(dqVolvo\(dq, 5, ...})\f[R]
+\f[B]auto\f[R] const root = cbor::schema<car>::path(std::move(bytes));
+\f[B]if\f[R] (root)
+    use(root\->at_path<\(dq$.make\(dq>());   \f[I]// \(dqVolvo\(dq\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3), cbor::schema::encode(3), cbor::schema::decode(3), cbor::schema::at_path(3)

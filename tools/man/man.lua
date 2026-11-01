@@ -114,7 +114,10 @@ local function man_page(name, lead, intro, paths)
   return blocks
 end
 
-local pages = {}
+local pages, split_pages = {}, {}
+
+-- Related overloads stay together; the group page keeps the remaining topics.
+local split = {schema = {encode = true, decode = true, path = true, at_path = true}}
 
 local index = pandoc.read(text_of(reference .. 'index.md'), 'gfm')
 local goal, choice, in_choice = pandoc.Blocks{}, pandoc.Blocks{}, false
@@ -149,16 +152,29 @@ for _, row in ipairs(rows(text_of(reference .. 'index.md'))) do
     local name = first:gsub('<.*>', '')
     local lead = row.rest:match(': (.*)$') or first_sentence(intro):gsub('^%u', string.lower)
     local paths = {}
-    for _, e in ipairs(entries) do paths[#paths + 1] = reference .. group .. '/' .. e.file end
+    for _, e in ipairs(entries) do
+      local path = reference .. group .. '/' .. e.file
+      if split[group] and split[group][e.label] then
+        local title = 'cbor::' .. group .. '::' .. e.label
+        local member_intro = pandoc.Blocks{pandoc.Para{pandoc.Str('Member of cbor::schema<T>.')}}
+        split_pages[#split_pages + 1] = {file = group .. '_' .. e.label, name = title,
+          lead = e.rest, intro = member_intro, paths = {path}, parent = name}
+      else
+        paths[#paths + 1] = path
+      end
+    end
     pages[#pages + 1] = {file = name:gsub('^cbor::', ''), name = name, lead = lead, intro = intro, paths = paths}
   end
 end
 
-local function see_also(except)
+local function see_also(except, parent)
   local names = {}
   if except ~= 'mbedded-cbor' then names[#names + 1] = 'mbedded-cbor(3)' end
   for _, p in ipairs(pages) do
     if p.name ~= except then names[#names + 1] = p.name .. '(3)' end
+  end
+  for _, p in ipairs(split_pages) do
+    if (p.parent == except or p.parent == parent) and p.name ~= except then names[#names + 1] = p.name .. '(3)' end
   end
   return pandoc.Blocks{pandoc.Header(1, 'SEE ALSO'), pandoc.Para{pandoc.Str(table.concat(names, ', '))}}
 end
@@ -181,5 +197,11 @@ page_written('mbedded-cbor', 'mbedded-cbor', library)
 for _, p in ipairs(pages) do
   local blocks = man_page(p.name, p.lead, p.intro, p.paths)
   blocks:extend(see_also(p.name))
+  page_written(p.file, p.name, blocks)
+end
+
+for _, p in ipairs(split_pages) do
+  local blocks = man_page(p.name, p.lead, p.intro, p.paths)
+  blocks:extend(see_also(p.name, p.parent))
   page_written(p.file, p.name, blocks)
 end

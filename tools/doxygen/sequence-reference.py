@@ -1,27 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-
-
-def text(element):
-    return ' '.join(''.join(element.itertext()).split()) if element is not None else ''
-
-
-def verbatim(section):
-    node = section.find('./para/verbatim')
-    if node is None:
-        raise ValueError('reference section has no verbatim content')
-    lines = (node.text or '').splitlines()
-    result = []
-    for line in lines:
-        if not line.strip():
-            continue
-        if not re.match(r'^\s*\*(?: |$)', line):
-            raise ValueError('unexpected verbatim format')
-        result.append(re.sub(r'^\s*\* ?', '', line))
-    return '\n'.join(result).strip()
+from doc_grammar import par_sections, text
 
 
 def main():
@@ -33,13 +14,15 @@ def main():
     if root.findtext('compoundname') != 'cbor::sequence':
         raise ValueError('unexpected class')
     metadata = {}
-    for section in root.findall('./detaileddescription/para/simplesect'):
-        title = text(section.find('title'))
+    for section in par_sections(root.findall('./detaileddescription/para/simplesect')):
+        title = section.title
         if title in metadata:
             raise ValueError('duplicate reference section: ' + title)
-        if title not in ('Call sequence', 'Interactive example', 'See also'):
+        if section.kind != 'par' or title not in ('Call sequence', 'Interactive example', 'See also'):
             raise ValueError('unsupported reference section: ' + title)
-        metadata[title] = verbatim(section)
+        if section.verbatim is None:
+            raise ValueError('reference section has no verbatim content')
+        metadata[title] = section.verbatim
     if set(metadata) != {'Call sequence', 'Interactive example', 'See also'}:
         raise ValueError('incomplete reference metadata')
     example = metadata['Interactive example'].splitlines()

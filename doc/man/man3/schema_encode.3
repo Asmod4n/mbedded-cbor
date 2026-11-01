@@ -1,0 +1,57 @@
+.TH "cbor::schema::encode" "3" "2026-11-01" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::schema::encode \- writes a struct as one Packed CBOR message
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+static std::expected<std::string, cbor::error> encode(T const &value)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+
+\f[B]template\f[R] <\f[B]class\f[R] Target>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+static std::expected<std::size_t, cbor::error> encode(T const &value, Target &&target);
+.EE
+.SH DESCRIPTION
+Member of cbor::schema<T>.
+.PP
+Writes \f[CR]value\f[R] as one Packed CBOR message (wire).
+The first form returns a new \f[CR]std::string\f[R].
+The second form appends to \f[CR]target\f[R] and returns the count of
+bytes of the message.
+\f[CR]target\f[R] is a \f[CR]std::string\f[R], a container of
+\f[CR]char\f[R], a \f[CR]std::span<char>\f[R] or a message writer.
+Only public members are written.
+.PP
+Each field has a head of fixed width.
+So a value does not change the offset of a field.
+.SH ERRORS
+.IP \(bu 2
+\f[CR]no_buffer_space\f[R]: a \f[CR]std::span<char>\f[R] is shorter than
+the message.
+.IP \(bu 2
+\f[CR]value_too_large\f[R]: the message is longer than 2\(ha32 \- 1
+bytes.
+.IP \(bu 2
+An error of the message writer comes back as its \f[CR]cbor::error\f[R].
+.IP \(bu 2
+A struct with no tag, two structs with one tag, or a tag of a standard
+type does not compile.
+.SH NOTES
+O(i + n), i the count of items of the value, n the size of the message.
+The first form makes one \f[CR]std::string\f[R].
+A container grows once.
+A span allocates nothing.
+.SH EXAMPLES
+.IP
+.EX
+\f[B]auto\f[R] const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
+std::string out = \(dqx\(dq;
+\f[B]auto\f[R] const n = cbor::schema<tire>::encode(tire{17, 2.5f}, out);
+use(out.size() == 1 + *n);   \f[I]// true\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3), cbor::schema::decode(3), cbor::schema::path(3), cbor::schema::at_path(3)

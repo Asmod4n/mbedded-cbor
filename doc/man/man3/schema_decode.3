@@ -1,0 +1,79 @@
+.TH "cbor::schema::decode" "3" "2026-11-01" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::schema::decode \- reads a whole message into a struct
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+static std::expected<ref<T>, cbor::error> decode(Encoded &&encoded);
+
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<Encoded const> encoded)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<Encoded const> encoded, T target)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>);
+
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>());
+
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<ref<T>, cbor::error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
+    \f[B]requires\f[R](has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>);
+.EE
+.SH DESCRIPTION
+Member of cbor::schema<T>.
+.PP
+Reads the whole message into a \f[CR]T\f[R] and returns it in a
+\f[CR]cbor::ref<T>\f[R] that holds the owner of the bytes.
+A \f[CR]std::string_view\f[R] member views the bytes.
+Nothing is copied: an rvalue moves into a new owner, and an owner is
+read in place.
+An lvalue \f[CR]std::string\f[R] does not compile.
+\f[CR]target\f[R] gives the start value, for example \f[CR]std::pmr\f[R]
+containers with their memory resource; the forms with \f[CR]target\f[R]
+need a default constructor of \f[CR]T\f[R].
+.PP
+A struct with a default constructor is made with it, and then each
+described member is set.
+A class with no default constructor is made by a constructor that takes
+the described members in the order of the description: decode reads them
+into a \f[CR]std::tuple\f[R] and calls \f[CR]std::make_from_tuple\f[R].
+An element of a container with an allocator makes that tuple with the
+allocator of the container.
+.SH ERRORS
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the message is shorter than its table and
+root.
+.IP \(bu 2
+\f[CR]incorrect_type\f[R]: a message of another struct, or a wrong head.
+.IP \(bu 2
+\f[CR]syntax_error\f[R], \f[CR]unpopulated_table_index\f[R]: a broken
+directory.
+.IP \(bu 2
+\f[CR]inadmissible_type_for_tag_content\f[R]: a typed array whose length
+is not a multiple of its element size.
+.IP \(bu 2
+\f[CR]nesting_depth_exceeded\f[R], \f[CR]not_enough_memory\f[R].
+.IP \(bu 2
+A null or empty owner throws \f[CR]std::logic_error\f[R].
+.SH NOTES
+O(n), n the size of the message; a \f[CR]std::map\f[R] adds O(k log k).
+One allocation for each text, list and node of the result.
+.SH EXAMPLES
+.IP
+.EX
+\f[I]// bytes: a std::string from schema<car>::encode(car{\(dqVolvo\(dq, 5, ...})\f[R]
+\f[B]auto\f[R] const back = cbor::schema<car>::decode(std::move(bytes));
+\f[B]if\f[R] (back)
+    use((*back)\->make);   \f[I]// \(dqVolvo\(dq\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3), cbor::schema::encode(3), cbor::schema::path(3), cbor::schema::at_path(3)

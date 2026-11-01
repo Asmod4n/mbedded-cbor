@@ -7,10 +7,7 @@ import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
-
-
-def text(node):
-    return ' '.join(''.join(node.itertext()).split()) if node is not None else ''
+from doc_grammar import text, verbatim
 
 
 def listing(node):
@@ -62,19 +59,17 @@ def output_item_size(source, target, version, today):
                 notes.append(value)
                 required['NOTES'] = bool(value)
             elif title == 'Example':
-                code = '\n'.join((node.text or '').strip('\n') for node in body.findall('verbatim')) if body is not None else ''
+                code = verbatim(simple, preserve_blank_lines=True)
                 if code:
-                    examples.append('\n'.join(line.removeprefix('* ').rstrip() for line in code.splitlines() if line.strip() != '*'))
+                    examples.append(code)
                     required['EXAMPLES'] = True
             elif title == 'See also':
-                for node in simple.iter('verbatim'):
-                    for target_name in re.findall(r'\[([^\]]+)\]\(([^)]+)\)', node.text or ''):
-                        mapping = {'sequence.md': 'cbor::sequence(3)', '../errors/limits.md': 'cbor::error(3)',
-                                   '../../advanced/basics.md': 'advanced/basics.md, section 5'}
-                        label, path = target_name
-                        if path not in mapping:
-                            raise ValueError('unsupported cross-reference: ' + path)
-                        see_also.append(mapping[path])
+                for path in re.findall(r'\[[^\]]+\]\(([^)]+)\)', verbatim(simple)):
+                    mapping = {'sequence.md': 'cbor::sequence(3)', '../errors/limits.md': 'cbor::error(3)',
+                               '../../advanced/basics.md': 'advanced/basics.md, section 5'}
+                    if path not in mapping:
+                        raise ValueError('unsupported cross-reference: ' + path)
+                    see_also.append(mapping[path])
                 required['SEE ALSO'] = bool(see_also)
     missing = [name for name, found in required.items() if not found]
     if not description:
@@ -219,10 +214,7 @@ def output_page(source, target, related, version, today):
     for node in root.findall('./detaileddescription/para/simplesect'):
         if text(node.find('title')) != 'See also':
             continue
-        value = node.find('./para/verbatim')
-        if value is None:
-            raise ValueError('See also has no verbatim content')
-        targets = re.findall(r'\[[^\]]+\]\(([^)]+)\)', value.text or '')
+        targets = re.findall(r'\[[^\]]+\]\(([^)]+)\)', verbatim(node))
         mapping = {'item_size.md': 'cbor::item_size(3)', '../lazy/index.md': 'cbor::lazy(3)',
                    '../../advanced/basics.md': 'advanced/basics.md, section 8'}
         for target_name in targets:
