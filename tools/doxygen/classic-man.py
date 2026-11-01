@@ -23,6 +23,87 @@ def listing(node):
     return '\n'.join(collect(line) for line in node.findall('codeline'))
 
 
+def output_item_size(source, target, version, today):
+    root = ET.parse(source).getroot().find('compounddef')
+    member = next((m for m in root.findall('.//memberdef[@kind="function"]')
+                   if m.findtext('qualifiedname') == 'cbor::item_size'), None)
+    if member is None:
+        raise ValueError('missing cbor::item_size documentation')
+    brief = text(member.find('briefdescription'))
+    params = member.findall('./param')
+    args = []
+    for p in params:
+        arg = text(p.find('type'))
+        if p.findtext('declname'):
+            arg += ' ' + p.findtext('declname')
+        args.append(arg)
+    signature = text(member.find('type')) + ' item_size(' + ', '.join(args) + ');'
+    description, errors, notes, examples, see_also = [], [], [], [], []
+    required = {'RETURN VALUE': False, 'ERRORS': False, 'NOTES': False,
+                'EXAMPLES': False, 'SEE ALSO': False}
+    detail = member.find('detaileddescription')
+    returns = ''
+    for para in detail.findall('para'):
+        # Only paragraph text before nested Doxygen blocks is DESCRIPTION.
+        direct = ' '.join((para.text or '').split())
+        if direct:
+            description.append(direct)
+        for simple in para.findall('simplesect'):
+            title = text(simple.find('title'))
+            body = simple.find('para')
+            value = text(body)
+            if simple.get('kind') == 'return':
+                returns = value
+                required['RETURN VALUE'] = bool(returns)
+            elif title == 'Limits and errors':
+                errors.extend(re.findall(r'(too_little_data|syntax_error|indefinite_length|string_length_exceeded|container_elements_exceeded):\s*(.*?)(?=(?:too_little_data|syntax_error|indefinite_length|string_length_exceeded|container_elements_exceeded):|$)', value))
+                required['ERRORS'] = len(errors) == 5
+            elif title == 'Complexity':
+                notes.append(value)
+                required['NOTES'] = bool(value)
+            elif title == 'Example':
+                code = '\n'.join((node.text or '').strip('\n') for node in body.findall('verbatim')) if body is not None else ''
+                if code:
+                    examples.append('\n'.join(line.removeprefix('* ').rstrip() for line in code.splitlines() if line.strip() != '*'))
+                    required['EXAMPLES'] = True
+            elif title == 'See also':
+                for node in simple.iter('verbatim'):
+                    for target_name in re.findall(r'\[([^\]]+)\]\(([^)]+)\)', node.text or ''):
+                        mapping = {'sequence.md': 'cbor::sequence(3)', '../errors/limits.md': 'cbor::error(3)',
+                                   '../../advanced/basics.md': 'advanced/basics.md, section 5'}
+                        label, path = target_name
+                        if path not in mapping:
+                            raise ValueError('unsupported cross-reference: ' + path)
+                        see_also.append(mapping[path])
+                required['SEE ALSO'] = bool(see_also)
+    missing = [name for name, found in required.items() if not found]
+    if not description:
+        missing.insert(0, 'DESCRIPTION')
+    if missing:
+        raise ValueError('missing required item_size documentation sections: ' + ', '.join(missing))
+    date = datetime.date.fromisoformat(today).strftime('%B %d, %Y')
+    md = '% cbor::item_size(3)\n%\n% ' + date + '\n\n'
+    def section(title, content):
+        return '\n# ' + title + '\n\n' + content + '\n'
+    md += section('NAME', html.escape('cbor::item_size - ' + brief))
+    md += section('SYNOPSIS', '```cpp\n#include <cbor/item_size.hpp>\n\nnamespace cbor {\n' + signature + '\n}\n```')
+    md += section('DESCRIPTION', '\n\n'.join(html.escape(p) for p in description))
+    if returns:
+        md += section('RETURN VALUE', html.escape(returns))
+    if errors:
+        md += section('ERRORS', '\n'.join('- `' + name + '`: ' + html.escape(message.strip()) for name, message in errors))
+    if notes:
+        md += section('NOTES', '\n\n'.join(html.escape(n) for n in notes))
+    if examples:
+        md += section('EXAMPLES', '\n\n'.join('```cpp\n' + e + '\n```' for e in examples))
+    links = ['mbedded-cbor(3)', 'cbor::lazy(3)', 'cbor::at_path(3)', 'cbor::item(3)',
+             'cbor::structs(3)', 'cbor::schema(3)', 'cbor::ref(3)'] + see_also + [
+             'cbor::sequence(3)', 'cbor::sequence_reader(3)', 'cbor::diagnostic_notation(3)', 'cbor::error(3)']
+    md += section('SEE ALSO', ', '.join(dict.fromkeys(links)))
+    result = subprocess.run(['pandoc', '-s', '-f', 'markdown', '-t', 'man', '-V', 'footer=mbedded-cbor ' + version, '-V', 'header=mbedded-cbor'], input=md, text=True, capture_output=True, check=True)
+    target.write_text(result.stdout)
+
+
 def output_page(source, target, related, version, today):
     root = ET.parse(source).getroot().find('compounddef')
     supported = {'briefdescription', 'detaileddescription', 'para', 'simplesect',
@@ -162,10 +243,14 @@ def main():
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     pages = [('classcbor_1_1sequence.xml', 'cbor::sequence.3', 'cbor::sequence::iterator'),
-             ('structcbor_1_1sequence_1_1iterator.xml', 'cbor::sequence::iterator.3', 'cbor::sequence')]
+             ('structcbor_1_1sequence_1_1iterator.xml', 'cbor::sequence::iterator.3', 'cbor::sequence'),
+             ('namespacecbor.xml', 'cbor::item_size.3', None)]
     with tempfile.TemporaryDirectory(dir=args.output) as tmp:
         for xml, name, other in pages:
-            output_page(args.xml / xml, Path(tmp) / name, other, args.version, args.date)
+            if xml == 'namespacecbor.xml':
+                output_item_size(args.xml / xml, Path(tmp) / name, args.version, args.date)
+            else:
+                output_page(args.xml / xml, Path(tmp) / name, other, args.version, args.date)
         for _, name, _ in pages:
             (Path(tmp) / name).replace(args.output / name)
 

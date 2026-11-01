@@ -207,6 +207,50 @@ class well_formedness
     friend class reflection;
 };
 
+/**
+ * @brief Return the encoded size of the first CBOR data item.
+ *
+ * The item must be well-formed. Bytes after it are ignored. This function
+ * does not check nesting depth, UTF-8, tag content, or duplicate map keys.
+ * @param encoded Bytes that begin with the item.
+ * @return The item's size in bytes, or an error if it is incomplete,
+ * malformed, indefinite-length, or exceeds an active size limit.
+ * @par Limits and errors
+ * too_little_data: input ends before the item or its claimed children.
+ * syntax_error: an invalid head or reserved simple value.
+ * indefinite_length: a head uses indefinite length.
+ * string_length_exceeded: a string exceeds an active limit.
+ * container_elements_exceeded: a container exceeds an active limit.
+ * @par Complexity
+ * O(i), where i is the number of item heads examined, bounded by O(n) for
+ * n bytes in the item. Uses O(1) auxiliary memory and allocates nothing.
+ * @par Interactive example
+ * @verbatim
+ * bytes: 82 01 02 07
+ * call: cbor::item_size(bytes)
+ * result: 3
+ * call: cbor::item_size(bytes.substr(3))
+ * result: 1
+ * @endverbatim
+ * @par Interactive example 2
+ * @verbatim
+ * bytes: 83 01 02 03
+ * call: cbor::item_size(bytes)
+ * result: 4
+ * @endverbatim
+ * @par Example
+ * @verbatim
+ * // bytes: [1, 2] followed by 7, 4 bytes
+ * cbor::item_size(bytes);                    // 3
+ * cbor::item_size(bytes.substr(0, 2));       // too_little_data
+ * // bytes: [_ 1]
+ * cbor::item_size(bytes);                    // indefinite_length
+ * @endverbatim
+ * @par See also
+ * @verbatim
+ * [sequence](sequence.md) · [limits](../errors/limits.md) · [basics](../../advanced/basics.md), section 5
+ * @endverbatim
+ */
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
 {
     heads::decoder<true> d{encoded};

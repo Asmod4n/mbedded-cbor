@@ -16,6 +16,7 @@ podman run --rm --network none -e VERSION="$version" -e TODAY="$today" -v "$tree
   python3 /src/tools/doxygen/classic-man.py $work/doxygen/xml $work/classic --version "$VERSION" --date "$TODAY"
   cp $work/classic/cbor::sequence.3 $work/sequence.3
   cp $work/classic/cbor::sequence::iterator.3 $work/sequence_iterator.3
+  cp $work/classic/cbor::item_size.3 $work/item_size.3
   body() { sed "s/^\(\.TH \"[^\"]*\" \"[^\"]*\" \)\"[^\"]*\"/\1\"\"/" "$1"; }
   for page in $work/*.3; do
     file=$(basename $page)
