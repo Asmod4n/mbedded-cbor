@@ -4,10 +4,11 @@
 <script type="module">
 const params = new URLSearchParams(location.search);
 const arm = params.get("arm").replace(/_aa$/, "");
-const [html_text, json_text, cbor, module_bytes] = await Promise.all([
+const [html_text, json_text, cbor, schema_bytes, module_bytes] = await Promise.all([
   fetch("/data/screen.html").then((r) => r.text()),
   fetch("/data/screen.json").then((r) => r.text()),
   fetch("/data/screen.cbor").then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b)),
+  fetch("/data/screen.schema.cbor").then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b)),
   fetch("/wasm/ui.wasm").then((r) => r.arrayBuffer()),
 ]);
 const out = document.getElementById("out");
@@ -30,9 +31,12 @@ else {
   const memory = new WebAssembly.Memory({ initial: 2, maximum: 16384 });
   const x = (await WebAssembly.instantiate(await WebAssembly.compile(module_bytes), { env: { memory }, wasi_snapshot_preview1: new Proxy({}, { get: () => () => 0 }) })).exports;
   const decoder = new TextDecoder();
+  const bytes = arm === "wasm_schema" ? schema_bytes : cbor;
   render = () => {
-    const p = x.alloc(cbor.length); new Uint8Array(memory.buffer).set(cbor, p); x.ui_load(p, cbor.length); x.release(p);
-    const q = x.ui_html();
+    const p = x.alloc(bytes.length); new Uint8Array(memory.buffer).set(bytes, p);
+    if (arm === "wasm_schema") x.schema_load(p, bytes.length); else x.ui_load(p, bytes.length);
+    x.release(p);
+    const q = arm === "wasm_schema" ? x.schema_html() : x.ui_html();
     return decoder.decode(new Uint8Array(memory.buffer, Number(q >> 32n), Number(q & 0xffffffffn)));
   };
 }

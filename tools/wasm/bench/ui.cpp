@@ -8,6 +8,45 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
+
+struct moment {
+    std::uint32_t epoch;
+};
+
+struct row {
+    std::string name;
+    std::uint32_t amount;
+    moment time;
+};
+
+struct table {
+    std::vector<std::string> head;
+    std::vector<row> rows;
+};
+
+struct field {
+    std::string name;
+    std::string label;
+    std::string input;
+};
+
+struct form {
+    std::string action;
+    std::vector<field> fields;
+};
+
+struct screen {
+    table list;
+    form entry;
+};
+
+CBOR_DEFINE_TYPE_MEMBERS(moment, cbor::tag{40103}, epoch);
+CBOR_DEFINE_TYPE_MEMBERS(row, cbor::tag{40104}, name, amount, time);
+CBOR_DEFINE_TYPE_MEMBERS(table, cbor::tag{40100}, head, rows);
+CBOR_DEFINE_TYPE_MEMBERS(field, cbor::tag{40102}, name, label, input);
+CBOR_DEFINE_TYPE_MEMBERS(form, cbor::tag{40101}, action, fields);
+CBOR_DEFINE_TYPE_MEMBERS(screen, cbor::tag{40105}, list, entry);
 
 namespace
 {
@@ -22,6 +61,8 @@ constexpr std::uint32_t form_fields = 5;
 std::string wire;
 std::string html;
 std::optional<cbor::owning<cbor::item>> tree;
+std::string schema_wire;
+std::optional<cbor::schema<screen>::accessor<>> root;
 
 void escaped_append(std::string &out, std::string_view const text)
 {
@@ -185,6 +226,64 @@ __attribute__((export_name("ui_html"))) std::uint64_t ui_html()
 {
     html.clear();
     render(**tree, html);
+    return packed(html);
+}
+
+__attribute__((export_name("schema_encode"))) std::uint64_t schema_encode(std::uint32_t const rows)
+{
+    screen s{{{"Name <user>", "Amount", "Time"}, {}}, {"/send", {}}};
+    for (std::uint32_t r = 0; r < rows; ++r)
+        s.list.rows.push_back(row{std::string(names[r % std::size(names)]) + " & co " + std::to_string(r), r * 37u % 10000u,
+                                  moment{1700000000u + r * 86400u}});
+    for (std::uint32_t f = 0; f < form_fields; ++f)
+        s.entry.fields.push_back(field{"field" + std::to_string(f), "Field " + std::to_string(f), f % 2 ? "number" : "text"});
+    schema_wire = *cbor::schema<screen>::encode(s);
+    return packed(schema_wire);
+}
+
+__attribute__((export_name("schema_load"))) std::int32_t schema_load(char const *const ptr, std::size_t const len)
+{
+    auto r = cbor::schema<screen>::path(std::string(ptr, len));
+    if (!r)
+        return -static_cast<std::int32_t>(r.error());
+    root.emplace(std::move(*r));
+    return 0;
+}
+
+__attribute__((export_name("schema_html"))) std::uint64_t schema_html()
+{
+    html.clear();
+    html += "<table><thead><tr>";
+    std::size_t const heads = (*root->at_path<"$.list.head">()).size();
+    for (std::size_t i = 0; i < heads; ++i) {
+        html += "<th>";
+        escaped_append(html, *root->at_path<"$.list.head[]">(i));
+        html += "</th>";
+    }
+    html += "</tr></thead><tbody>";
+    std::size_t const rows = (*root->at_path<"$.list.rows">()).size();
+    for (std::size_t i = 0; i < rows; ++i) {
+        html += "<tr><td>";
+        escaped_append(html, *root->at_path<"$.list.rows[].name">(i));
+        html += "</td><td>";
+        html += std::to_string(*root->at_path<"$.list.rows[].amount">(i));
+        std::string const d = date_of(*root->at_path<"$.list.rows[].time.epoch">(i));
+        html += "</td><td><time datetime=\"" + d + "\">" + d + "</time></td></tr>";
+    }
+    html += "</tbody></table><form action=\"";
+    escaped_append(html, *root->at_path<"$.entry.action">());
+    html += "\">";
+    std::size_t const fields = (*root->at_path<"$.entry.fields">()).size();
+    for (std::size_t i = 0; i < fields; ++i) {
+        html += "<label>";
+        escaped_append(html, *root->at_path<"$.entry.fields[].label">(i));
+        html += " <input name=\"";
+        escaped_append(html, *root->at_path<"$.entry.fields[].name">(i));
+        html += "\" type=\"";
+        escaped_append(html, *root->at_path<"$.entry.fields[].input">(i));
+        html += "\"></label>";
+    }
+    html += "<button>Send</button></form>";
     return packed(html);
 }
 }
