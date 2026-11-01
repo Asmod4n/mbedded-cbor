@@ -62,8 +62,13 @@ concept borrowed_range_of_chars = std::ranges::contiguous_range<R> && std::range
 template <class T>
 class owning;
 
+namespace detail
+{
+
 template <class T>
 void copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
+
+}
 
 template <class T>
 class CBOR_OWNER ref
@@ -147,7 +152,7 @@ public:
             }
         };
         auto const h = std::make_shared<held>(value);
-        copy_views_into_zone(h->value, h->zone);
+        detail::copy_views_into_zone(h->value, h->zone);
         return owning<T>(std::shared_ptr<T const>(h, &h->value));
     }
 
@@ -164,7 +169,12 @@ public:
     }
 };
 
+namespace detail
+{
+
 struct zone_owner;
+
+}
 
 template <class T>
 class CBOR_OWNER owning
@@ -175,7 +185,7 @@ class CBOR_OWNER owning
     {
     }
 
-    friend struct zone_owner;
+    friend struct detail::zone_owner;
 
     template <class>
     friend class ref;
