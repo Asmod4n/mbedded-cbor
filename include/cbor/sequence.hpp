@@ -70,6 +70,7 @@ public:
 
     /// @brief An input iterator that borrows the encoded bytes.
     /// @headerfile sequence.hpp cbor/sequence.hpp
+    ///
     /// Dereferencing or incrementing requires a valid, non-end iterator.
     struct iterator {
         /// Encoded item bytes or an error from item_size().

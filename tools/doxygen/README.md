@@ -61,3 +61,27 @@ matched the original header. Four sequence reference tests passed with
 
 The earlier manual-format and HTML-navigation limitations still apply.
 This revision does not change the installed documentation pipeline.
+
+## Classic manual revision
+
+Install Doxygen, Pandoc, Python and mandoc from the distribution. From
+this repository's root, generate the pilot outside the source tree:
+
+```sh
+sh tools/doxygen/build.sh /absolute/path/out
+mandoc -Tlint -Wwarning /absolute/path/out/classic-man/man3/*.3
+```
+
+The script reads Doxygen XML and writes the pilot's two classic manual
+pages under `classic-man/man3`. It also corrects the two Doxygen sidebar
+assignments that double-escape operator names. The raw Doxygen man pages
+remain under `man/man3` for comparison. This is a pilot for these two
+classes, not a general C++ API documentation generator. The existing
+website and installed manual pipeline remain unchanged.
+
+The classic pages were regenerated with the script above and passed
+`mandoc -Tlint -Wwarning`. Chromium displayed `operator==` correctly in
+the navigation after the targeted fix. Unsupported XML documentation
+markup fails before the existing manual pages are replaced. The pilot
+example still compiles and runs, and preprocessing confirms that the
+header's C++ tokens did not change.
