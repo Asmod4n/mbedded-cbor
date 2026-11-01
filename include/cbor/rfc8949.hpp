@@ -10,8 +10,13 @@
 namespace cbor
 {
 
+namespace detail
+{
+
 template <bool>
 struct tree_decoder;
+
+}
 
 
 template <std::size_t N>
@@ -106,7 +111,7 @@ class rfc8949
     friend struct lazy;
 
     template <bool>
-    friend struct tree_decoder;
+    friend struct detail::tree_decoder;
 
     template <class Target>
     friend class encoder;

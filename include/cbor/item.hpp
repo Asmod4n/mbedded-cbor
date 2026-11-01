@@ -18,8 +18,13 @@
 namespace cbor
 {
 
+namespace detail
+{
+
 template <bool>
 struct tree_decoder;
+
+}
 
 class encoding;
 
@@ -121,7 +126,7 @@ private:
     }
 
     template <bool>
-    friend struct tree_decoder;
+    friend struct detail::tree_decoder;
 
     friend class encoding;
 };

@@ -30,6 +30,9 @@
 namespace cbor
 {
 
+namespace detail
+{
+
 template <bool Checked>
 struct tree_decoder;
 
@@ -86,13 +89,15 @@ struct zone_owner {
 
 };
 
+}
+
 inline std::expected<std::reference_wrapper<item const>, error>
 encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
 {
     constexpr char const *what = "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree";
-    zone const &z = zone_owner::zone_found(tree, what);
-    item const *const embedded = zone_owner::link_found(z.encoded_cbor_data_items, tagged,
-                                                              &zone::link::first, what)
+    detail::zone const &z = detail::zone_owner::zone_found(tree, what);
+    item const *const embedded = detail::zone_owner::link_found(z.encoded_cbor_data_items, tagged,
+                                                                &detail::zone::link::first, what)
                                      .second;
     if (embedded == nullptr) [[unlikely]]
         return std::unexpected(error::incorrect_type);
@@ -101,6 +106,9 @@ encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
 
 static_assert(std::is_trivially_destructible_v<item>,
               "The zone runs no destructor of an item, so an item must have no destructor to run.");
+
+namespace detail
+{
 
 template <bool Checked>
 struct tree_decoder {
@@ -306,9 +314,11 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
     return decoded_tree<Checked>{zone_owner::tree_owned(*built, std::move(decoded)), tree.d.encoded};
 }
 
+}
+
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
-    auto const decoded = decode_tree<true>(encoded, limits::nesting_depth);
+    auto const decoded = detail::decode_tree<true>(encoded, limits::nesting_depth);
     if (!decoded) [[unlikely]]
         return std::unexpected(decoded.error());
     return decoded->tree;
