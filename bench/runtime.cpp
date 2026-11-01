@@ -350,7 +350,7 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
 }
 #endif
 
-#if defined(ARM_S_STRING) || defined(ARM_S_STRING_REUSE) || defined(ARM_TC_WRITE) || defined(ARM_S_IOV) || defined(ARM_S_PUSH_IOV)
+#if defined(ARM_S_STRING) || defined(ARM_S_STRING_REUSE) || defined(ARM_TC_WRITE) || defined(ARM_S_IOV)
 #define ARM_S_TREE 1
 #endif
 #if defined(ARM_TC_WRITE)
@@ -896,40 +896,6 @@ static std::uint64_t fb_path(flexbuffers::Reference const root)
 }
 #endif
 
-#if defined(ARM_S_PUSH_IOV)
-static std::expected<void, std::errc> push_walk(cbor::encoding::encoder<cbor::iov_writer> &e, bench::value const &x)
-{
-    bench::reader b;
-    switch (b.kind_of(x)) {
-    case cbor::type::unsigned_integer: return e.head_encode(cbor::major_type::unsigned_integer, b.unsigned_of(x));
-    case cbor::type::negative_integer: return e.head_encode(cbor::major_type::negative_integer, b.unsigned_of(x) - 1);
-    case cbor::type::double_float: return e.float_encode(b.float_of(x));
-    case cbor::type::simple_value: return e.head_encode(cbor::major_type::simple_float, b.simple_of(x));
-    case cbor::type::text_string: return e.text_string_encode(b.text_of(x));
-    case cbor::type::byte_string: return e.byte_string_encode(b.bytes_of(x));
-    case cbor::type::array: {
-        std::uint64_t const n = b.array_size(x);
-        if (auto const r = e.head_encode(cbor::major_type::array, n); !r) return r;
-        for (std::uint64_t i = 0; i < n; ++i)
-            if (auto const r = push_walk(e, b.array_at(x, i)); !r) return r;
-        return {};
-    }
-    case cbor::type::map: {
-        if (auto const r = e.head_encode(cbor::major_type::map, b.map_size(x)); !r) return r;
-        std::expected<void, std::errc> r;
-        b.map_for_each(x, [&](bench::value const &k, bench::value const &v) {
-            if (r) r = push_walk(e, k);
-            if (r) r = push_walk(e, v);
-        });
-        return r;
-    }
-    case cbor::type::tag:
-        if (auto const r = e.head_encode(cbor::major_type::tag, b.registered_tag(x)); !r) return r;
-        return push_walk(e, b.before_encode(x));
-    default: std::abort();
-    }
-}
-#endif
 static std::string const *bytes = &doc;
 #if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
 static bench::value tree;
@@ -1015,25 +981,6 @@ static std::uint64_t op()
     benchmark::DoNotOptimize(pieces.data());
     benchmark::ClobberMemory();
     return std::ranges::fold_left(pieces | std::views::transform(&std::string_view::size), std::size_t{0}, std::plus<>{});
-#elif defined(ARM_S_PUSH_IOV)
-    cbor::iov_writer w;
-    cbor::encoding::encoder<cbor::iov_writer> e{w};
-    if (!push_walk(e, tree))
-        std::abort();
-    auto const r = e.release();
-    std::span<std::string_view const> const pieces = *r;
-    static bool const same = [&] {
-        std::string plain;
-        std::string joined;
-        for (std::string_view const piece : pieces)
-            joined.append(piece);
-        return bench::encode(plain, tree).has_value() && plain == joined;
-    }();
-    if (!same)
-        std::abort();
-    benchmark::DoNotOptimize(pieces.data());
-    benchmark::ClobberMemory();
-    return pieces.size();
 #elif defined(ARM_S_STRING_REUSE)
     reused.clear();
     if (!bench::encode(reused, tree))

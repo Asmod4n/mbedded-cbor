@@ -2,6 +2,8 @@
 #include "owned_copy.hpp"
 
 #include <cstddef>
+#include <cstdint>
+#include <expected>
 #include <memory>
 #include <numeric>
 #include <ranges>
@@ -9,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 using namespace std::string_view_literals;
@@ -16,7 +19,7 @@ using namespace std::string_view_literals;
 namespace
 {
 
-using iov_encoder = cbor::encoding::encoder<cbor::iov_writer>;
+using iov_encoder = cbor::encoder<cbor::iov_writer>;
 using pieces = cbor::ref<std::span<std::string_view const>>;
 
 std::string joined(pieces const &p)
@@ -41,11 +44,18 @@ bool points_into(pieces const &p, char const *const data)
 template <class F>
 std::string copied(F const &f)
 {
-    string_writer w;
-    cbor::encoding::encoder<string_writer> e{w};
+    std::string out;
+    cbor::encoder e{out};
     REQUIRE(f(e).has_value());
-    REQUIRE(e.flush().has_value());
-    return w.encoded;
+    REQUIRE(e.finish().has_value());
+    return out;
+}
+
+pieces finished(iov_encoder &e)
+{
+    auto r = e.finish();
+    REQUIRE(r.has_value());
+    return std::move(*r);
 }
 
 std::vector<std::byte> bytes_of(std::string_view const s)
@@ -57,7 +67,7 @@ std::vector<std::byte> bytes_of(std::string_view const s)
 
 std::string text_item(std::string_view const text)
 {
-    return copied([text](auto &e) { return e.text_string_encode(text); });
+    return copied([text](auto &e) { return e.text_string(text); });
 }
 
 } // namespace
@@ -70,46 +80,46 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
     for (std::size_t const size : {0uz, 31uz, 32uz, 33uz, 16383uz, 16384uz, 16385uz, 20000uz}) {
         CAPTURE(size);
         std::string const text(size, 'a');
-        std::string const expected = copied([&](auto &e) { return e.text_string_encode(std::string_view(text)); });
+        std::string const expected = copied([&](auto &e) { return e.text_string(std::string_view(text)); });
 
         {
             cbor::iov_writer w;
             iov_encoder e{w};
-            REQUIRE(e.text_string_encode(std::string_view(text)).has_value());
-            pieces const p = e.release();
+            REQUIRE(e.text_string(std::string_view(text)).has_value());
+            pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), e.written);
+            CHECK_EQ(sum_of(p), expected.size());
         }
         {
             cbor::iov_writer w;
             iov_encoder e{w};
-            REQUIRE(e.text_string_encode(std::string(text)).has_value());
-            pieces const p = e.release();
+            REQUIRE(e.text_string(std::string(text)).has_value());
+            pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), e.written);
-            if (size >= iov_encoder::ref_size)
+            CHECK_EQ(sum_of(p), expected.size());
+            if (size >= cbor::encoding::ref_size)
                 CHECK(std::ranges::any_of(*p, [&](std::string_view const piece) { return piece == text; }));
         }
         {
             auto const owner = std::make_shared<std::string const>(text);
             cbor::iov_writer w;
             iov_encoder e{w};
-            REQUIRE(e.text_string_encode(owner).has_value());
-            pieces const p = e.release();
+            REQUIRE(e.text_string(owner).has_value());
+            pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), e.written);
-            CHECK_EQ(points_into(p, owner->data()), size >= iov_encoder::ref_size && size > 0);
+            CHECK_EQ(sum_of(p), expected.size());
+            CHECK_EQ(points_into(p, owner->data()), size >= cbor::encoding::ref_size && size > 0);
         }
         {
             auto const read = test::lazy_of_copy(expected)->get<std::string_view>();
             REQUIRE(read.has_value());
             cbor::iov_writer w;
             iov_encoder e{w};
-            REQUIRE(e.text_string_encode(*read).has_value());
-            pieces const p = e.release();
+            REQUIRE(e.text_string(*read).has_value());
+            pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), e.written);
-            CHECK_EQ(points_into(p, (**read).data()), size >= iov_encoder::ref_size && size > 0);
+            CHECK_EQ(sum_of(p), expected.size());
+            CHECK_EQ(points_into(p, (**read).data()), size >= cbor::encoding::ref_size && size > 0);
         }
     }
 }
@@ -120,37 +130,36 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
     for (std::size_t const size : {0uz, 31uz, 32uz, 33uz, 16384uz, 20000uz}) {
         CAPTURE(size);
         std::vector<std::byte> const bytes = bytes_of(std::string(size, 'b'));
-        std::string const expected = copied([&](auto &e) {
-            return e.byte_string_encode(std::string_view(reinterpret_cast<char const *>(bytes.data()), size));
-        });
+        std::string const expected =
+            copied([&](auto &e) { return e.byte_string(std::span<std::byte const>(bytes)); });
         {
             cbor::iov_writer w;
             iov_encoder e{w};
-            REQUIRE(e.byte_string_encode(std::vector<std::byte>(bytes)).has_value());
-            pieces const p = e.release();
+            REQUIRE(e.byte_string(std::vector<std::byte>(bytes)).has_value());
+            pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), e.written);
+            CHECK_EQ(sum_of(p), expected.size());
         }
         {
             auto const owner = std::make_shared<std::vector<std::byte> const>(bytes);
             cbor::iov_writer w;
             iov_encoder e{w};
-            REQUIRE(e.byte_string_encode(owner).has_value());
-            pieces const p = e.release();
+            REQUIRE(e.byte_string(owner).has_value());
+            pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(points_into(p, reinterpret_cast<char const *>(owner->data())),
-                     size >= iov_encoder::ref_size && size > 0);
+                     size >= cbor::encoding::ref_size && size > 0);
         }
         {
             auto const read = test::lazy_of_copy(expected)->get<std::span<std::byte const>>();
             REQUIRE(read.has_value());
             cbor::iov_writer w;
             iov_encoder e{w};
-            REQUIRE(e.byte_string_encode(*read).has_value());
-            pieces const p = e.release();
+            REQUIRE(e.byte_string(*read).has_value());
+            pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(points_into(p, reinterpret_cast<char const *>((**read).data())),
-                     size >= iov_encoder::ref_size && size > 0);
+                     size >= cbor::encoding::ref_size && size > 0);
         }
     }
 }
@@ -164,74 +173,60 @@ TEST_CASE("encode_iov: the pieces outlive the caller's owner")
     cbor::iov_writer w;
     iov_encoder e{w};
     {
-        auto owner = std::make_shared<std::string const>(text);
-        REQUIRE(e.text_string_encode(std::move(owner)).has_value());
+        auto const owner = std::make_shared<std::string const>(text);
+        REQUIRE(e.text_string(owner).has_value());
     }
     std::string moved = text;
-    REQUIRE(e.text_string_encode(std::move(moved)).has_value());
+    REQUIRE(e.text_string(std::move(moved)).has_value());
     moved.assign(200, 'x');
-    pieces const p = e.release();
+    pieces const p = finished(e);
     CHECK_EQ(joined(p), expected + expected);
 }
 
-// A flush in the middle of a block must hand over only what came after the last flush, so that no byte
-// enters the list twice.
-TEST_CASE("encode_iov: write, flush, write, flush in one block")
-{
-    cbor::iov_writer w;
-    iov_encoder e{w};
-    REQUIRE(e.head_encode(cbor::major_type::unsigned_integer, 1).has_value());
-    REQUIRE(e.flush().has_value());
-    REQUIRE(e.head_encode(cbor::major_type::unsigned_integer, 2).has_value());
-    REQUIRE(e.flush().has_value());
-    REQUIRE(e.flush().has_value());
-    pieces const p = e.release();
-    CHECK_EQ(joined(p), "\x01\x02"sv);
-    CHECK_EQ(e.written, 2);
-    CHECK_EQ((*p).size(), 1);
-}
-
-// Two encoders on one writer close parts of two blocks one after the other. A part joins the piece before it
-// only where its bytes follow that piece in memory, so each part of another block stays a piece of its own.
-TEST_CASE("encode_iov: two encoders on one writer close parts of two blocks")
+// Two encoders can share one writer. When the first finishes, the writer hands its pieces over. A later write
+// of the second through that writer would change the result of the first, so it is a wrong use.
+TEST_CASE("encode_iov: the second encoder on a writer that has finished is a wrong use")
 {
     cbor::iov_writer w;
     iov_encoder first{w};
     iov_encoder second{w};
-    REQUIRE(first.head_encode(cbor::major_type::unsigned_integer, 1).has_value());
-    REQUIRE(first.flush().has_value());
-    REQUIRE(second.head_encode(cbor::major_type::unsigned_integer, 2).has_value());
-    REQUIRE(second.flush().has_value());
-    pieces const p = second.release();
-    REQUIRE_EQ((*p).size(), 2);
-    CHECK_EQ((*p)[0], "\x01"sv);
-    CHECK_EQ((*p)[1], "\x02"sv);
+    REQUIRE(first.unsigned_integer(std::uint8_t{1}).has_value());
+    REQUIRE(second.unsigned_integer(std::uint8_t{2}).has_value());
+    pieces const p = finished(first);
+    CHECK_THROWS_AS(std::ignore = second.finish(), std::logic_error);
+    CHECK_EQ(joined(p), "\x18\x01"sv);
 }
 
 // A head and a float write nine bytes before they count their own size. At each of the nine offsets
-// before the end of a block, the encoder must take a new block in time and lose no byte.
+// before the end of a block, the encoder must take a new block in time and lose no byte. A tag takes the
+// shortest head and an integer the fixed width; each form tests the space left on its own path.
 TEST_CASE("encode_iov: a head and a float at each offset before the end of a block")
 {
-    for (std::size_t left = 1; left <= iov_encoder::item_size_max; ++left) {
-        CAPTURE(left);
-        std::size_t const fill = iov_encoder::block_size - left - 3;
-        std::string const text(fill, 'f');
-        auto const write = [&](auto &e) -> std::expected<void, std::errc> {
-            if (auto const r = e.text_string_encode(std::string_view(text)); !r)
-                return r;
-            if (auto const r = e.head_encode(cbor::major_type::unsigned_integer, std::uint64_t{1} << 40); !r)
-                return r;
-            if (auto const r = e.text_string_encode(std::string_view(text)); !r)
-                return r;
-            return e.float_encode(0.1);
-        };
-        std::string const expected = copied(write);
-        cbor::iov_writer w;
-        iov_encoder e{w};
-        REQUIRE(write(e).has_value());
-        pieces const p = e.release();
-        CHECK_EQ(joined(p), expected);
-        CHECK_EQ(sum_of(p), e.written);
+    for (bool const fixed : {false, true}) {
+        for (std::size_t left = 1; left <= cbor::encoding::item_size_max; ++left) {
+            CAPTURE(fixed);
+            CAPTURE(left);
+            std::size_t const fill = cbor::encoding::block_size - left - 3;
+            std::string const text(fill, 'f');
+            auto const write = [&](auto &e) -> std::expected<void, cbor::error> {
+                if (auto const r = e.text_string(std::string_view(text)); !r)
+                    return r;
+                if (auto const r =
+                        fixed ? e.unsigned_integer(std::uint64_t{1} << 40) : e.tag(std::uint64_t{1} << 40);
+                    !r)
+                    return r;
+                if (auto const r = e.text_string(std::string_view(text)); !r)
+                    return r;
+                return e.floating_point(0.1);
+            };
+            std::string const expected = copied(write);
+            cbor::iov_writer w;
+            iov_encoder e{w};
+            REQUIRE(write(e).has_value());
+            pieces const p = finished(e);
+            CHECK_EQ(joined(p), expected);
+            CHECK_EQ(sum_of(p), expected.size());
+        }
     }
 }
 
@@ -239,22 +234,22 @@ TEST_CASE("encode_iov: a head and a float at each offset before the end of a blo
 // the copy splits across two blocks.
 TEST_CASE("encode_iov: texts at the free space of a block")
 {
-    std::size_t const free = iov_encoder::block_size - 3;
+    std::size_t const free = cbor::encoding::block_size - 3;
     for (std::size_t const size : {free - 1, free, free + 1}) {
         CAPTURE(size);
         std::string const text(size, 's');
-        std::string const expected = copied([&](auto &e) {
-            if (auto const r = e.text_string_encode(std::string_view(text)); !r)
+        auto const write = [&](auto &e) -> std::expected<void, cbor::error> {
+            if (auto const r = e.text_string(std::string_view(text)); !r)
                 return r;
-            return e.head_encode(cbor::major_type::unsigned_integer, 7);
-        });
+            return e.tag(7);
+        };
+        std::string const expected = copied(write);
         cbor::iov_writer w;
         iov_encoder e{w};
-        REQUIRE(e.text_string_encode(std::string_view(text)).has_value());
-        REQUIRE(e.head_encode(cbor::major_type::unsigned_integer, 7).has_value());
-        pieces const p = e.release();
+        REQUIRE(write(e).has_value());
+        pieces const p = finished(e);
         CHECK_EQ(joined(p), expected);
-        CHECK_EQ(sum_of(p), e.written);
+        CHECK_EQ(sum_of(p), expected.size());
     }
 }
 
@@ -263,56 +258,56 @@ TEST_CASE("encode_iov: texts at the free space of a block")
 TEST_CASE("encode_iov: the order of blocks and references")
 {
     auto const owner = std::make_shared<std::string const>(64, 'r');
-    std::string const fill(iov_encoder::block_size - 3, 'f');
-    auto const write = [&](auto &e) -> std::expected<void, std::errc> {
-        if (auto const r = e.text_string_encode(std::string_view(fill)); !r)
+    std::string const fill(cbor::encoding::block_size - 3, 'f');
+    auto const write = [&](auto &e) -> std::expected<void, cbor::error> {
+        if (auto const r = e.text_string(std::string_view(fill)); !r)
             return r;
-        if (auto const r = e.text_string_encode(owner); !r)
+        if (auto const r = e.text_string(owner); !r)
             return r;
-        if (auto const r = e.head_encode(cbor::major_type::unsigned_integer, 9); !r)
+        if (auto const r = e.tag(9); !r)
             return r;
-        if (auto const r = e.text_string_encode(owner); !r)
+        if (auto const r = e.text_string(owner); !r)
             return r;
-        return e.text_string_encode(std::string_view(fill));
+        return e.text_string(std::string_view(fill));
     };
     std::string const expected = copied(write);
     cbor::iov_writer w;
     iov_encoder e{w};
     REQUIRE(write(e).has_value());
-    pieces const p = e.release();
+    pieces const p = finished(e);
     CHECK_EQ(joined(p), expected);
-    CHECK_EQ(sum_of(p), e.written);
+    CHECK_EQ(sum_of(p), expected.size());
 }
 
-// release must hand over the open part of the block itself, so a caller who did not flush loses
-// nothing. Nothing written gives no piece at all.
-TEST_CASE("encode_iov: release without a flush, and an empty result")
+// finish must hand over the open part of the block, so the last item is not lost. Nothing written gives
+// no piece at all.
+TEST_CASE("encode_iov: finish after one item, and after none")
 {
     {
         cbor::iov_writer w;
         iov_encoder e{w};
-        REQUIRE(e.head_encode(cbor::major_type::unsigned_integer, 5).has_value());
-        CHECK_EQ(joined(e.release()), "\x05"sv);
+        REQUIRE(e.unsigned_integer(std::uint8_t{5}).has_value());
+        CHECK_EQ(joined(finished(e)), "\x18\x05"sv);
     }
     {
         cbor::iov_writer w;
         iov_encoder e{w};
-        pieces const p = e.release();
+        pieces const p = finished(e);
         CHECK(p->empty());
     }
 }
 
-// After release the result belongs to the caller. A further write or a second release would change
+// After finish the result belongs to the caller. A further write or a second finish would change
 // or lose it, so both are a wrong use.
-TEST_CASE("encode_iov: a write after release and a second release are a wrong use")
+TEST_CASE("encode_iov: a write after finish and a second finish are a wrong use")
 {
     cbor::iov_writer w;
     iov_encoder e{w};
-    REQUIRE(e.head_encode(cbor::major_type::unsigned_integer, 5).has_value());
-    pieces const p = e.release();
-    CHECK_THROWS_AS(std::ignore = e.head_encode(cbor::major_type::unsigned_integer, 6), std::logic_error);
-    CHECK_THROWS_AS(std::ignore = e.release(), std::logic_error);
-    CHECK_EQ(joined(p), "\x05"sv);
+    REQUIRE(e.unsigned_integer(std::uint8_t{5}).has_value());
+    pieces const p = finished(e);
+    CHECK_THROWS_AS(std::ignore = e.unsigned_integer(std::uint8_t{6}), std::logic_error);
+    CHECK_THROWS_AS(std::ignore = e.finish(), std::logic_error);
+    CHECK_EQ(joined(p), "\x18\x05"sv);
 }
 
 // The forms that carry an owner must still copy with every other writer, and give the same bytes.
@@ -321,8 +316,8 @@ TEST_CASE("encode_iov: the owner forms copy with the other writers")
     std::string const text(64, 'o');
     std::string const expected = text_item(text);
     auto const owner = std::make_shared<std::string const>(text);
-    CHECK_EQ(copied([&](auto &e) { return e.text_string_encode(owner); }), expected);
-    CHECK_EQ(copied([&](auto &e) { return e.text_string_encode(std::string(text)); }), expected);
+    CHECK_EQ(copied([&](auto &e) { return e.text_string(owner); }), expected);
+    CHECK_EQ(copied([&](auto &e) { return e.text_string(std::string(text)); }), expected);
     std::string span_out(expected.size(), '\0');
     REQUIRE(test::encode(std::span<char>(span_out), value{std::string(text)}).has_value());
     CHECK_EQ(span_out, expected);
