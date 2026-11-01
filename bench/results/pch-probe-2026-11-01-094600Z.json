@@ -1,0 +1,87 @@
+{
+ "what": "Wall time of one compile of test/error.cpp to an object file with a precompiled header, and wall time of the build of that header. Arm std: a header of the standard library headers that include/cbor includes directly, and doctest. Arm cbor: <cbor/cbor.hpp> and doctest, as the PCH list of CMakeLists.txt. Arm cbor_aa: a copy of arm cbor in its own directory, for the A/A noise floor.",
+ "how": "One container, one compile at a time, each arm in its own build directory, 2 rounds, order std cbor cbor_aa in round 1 and cbor_aa cbor std in round 2. Direct g++ calls with the flags and defines of the gcc-asan iter build (the form that CMake gives a target with a PCH: -include cmake_pch.hxx -Winvalid-pch). No ccache (CCACHE_DISABLE=1). The probe script lies outside the tree; it is not committed.",
+ "unit": "milliseconds, wall clock",
+ "runs": {
+  "std": [
+   {
+    "round": 1,
+    "pch_build_ms": 6207,
+    "error_cpp_compile_ms": 5855
+   },
+   {
+    "round": 2,
+    "pch_build_ms": 6197,
+    "error_cpp_compile_ms": 5625
+   }
+  ],
+  "cbor": [
+   {
+    "round": 1,
+    "pch_build_ms": 10942,
+    "error_cpp_compile_ms": 4001
+   },
+   {
+    "round": 2,
+    "pch_build_ms": 11175,
+    "error_cpp_compile_ms": 4325
+   }
+  ],
+  "cbor_aa": [
+   {
+    "round": 1,
+    "pch_build_ms": 10486,
+    "error_cpp_compile_ms": 4013
+   },
+   {
+    "round": 2,
+    "pch_build_ms": 11109,
+    "error_cpp_compile_ms": 3814
+   }
+  ]
+ },
+ "summary": {
+  "std": {
+   "error_cpp_compile_ms_median": 5740.0,
+   "error_cpp_compile_ms_spread": 230,
+   "pch_build_ms_median": 6202.0,
+   "pch_build_ms_spread": 10
+  },
+  "cbor": {
+   "error_cpp_compile_ms_median": 4163.0,
+   "error_cpp_compile_ms_spread": 324,
+   "pch_build_ms_median": 11058.5,
+   "pch_build_ms_spread": 233
+  },
+  "cbor_aa": {
+   "error_cpp_compile_ms_median": 3913.5,
+   "error_cpp_compile_ms_spread": 199,
+   "pch_build_ms_median": 10797.5,
+   "pch_build_ms_spread": 623
+  }
+ },
+ "aa_noise_ms": 249.5,
+ "result": "Arm cbor compiles test/error.cpp in less time than arm std; the difference of the medians is greater than the A/A difference. Arm std builds its header in less time.",
+ "context": {
+  "commit": "b953c6f5e1dc5d49bfd1ad05389dbb70f53769bf",
+  "dirty": false,
+  "flags": "-Og -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -g -std=gnu++26 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -freflection -g -fno-var-tracking -D_GLIBCXX_ASSERTIONS -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST -DDOCTEST_COUNTER=__COUNTER__",
+  "instruction_set": "-march=x86-64 -mtune=generic (g++-16 -Q --help=target)",
+  "compiler": "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "cxx_library": "libstdc++ __GLIBCXX__ 20260929",
+  "c_library": "GNU libc 2.44",
+  "kernel": "6.18.44-fc-v185",
+  "scheduler": "EEVDF, the fair class of Linux 6.18; not read from sysfs",
+  "virtual_machine": "kernel build fc (Firecracker); systemd-detect-virt reports docker",
+  "container": "podman 4.9.3, image mbedded-cbor-tw bed19a635def, --network none",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz, 4 logical cpus",
+  "cpu_flags_sha256_prefix": "50b4012617c99e7c",
+  "user": "uid 65534 in the container",
+  "priority": "nice -5, read from /proc/self/stat in the container; it is above every other process of the user",
+  "threads": "1 compile at a time; 3 cpus idle",
+  "pch_size_bytes": {
+   "std": 150731667,
+   "cbor": 230484235
+  }
+ }
+}
