@@ -84,7 +84,7 @@ place target(place n)
             auto const index = t->second->get<cbor::type::unsigned_integer>();
             REQUIRE(index.has_value());
             REQUIRE(*index < marks.size());
-            n.i = marks[*index];
+            n.i = marks[static_cast<std::size_t>(*index)];
         } else if (t && t->first == 28)
             n.i = t->second;
         else
@@ -229,7 +229,7 @@ enum class marks { cycles, repeats_marked, none };
 
 // The public encoder writes an unsigned integer in the width of its type, so the writer writes the index of a tag 29
 // in one byte. The tests hold fewer than 256 marks.
-std::uint8_t index_of(std::size_t const i)
+std::uint8_t index_of(std::uint64_t const i)
 {
     REQUIRE(i <= std::numeric_limits<std::uint8_t>::max());
     return static_cast<std::uint8_t>(i);

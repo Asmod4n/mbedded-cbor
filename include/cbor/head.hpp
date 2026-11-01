@@ -336,8 +336,9 @@ class heads
         {
             if (!validity::pending_items_fit(length, encoded.size())) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            std::string_view const string{std::span(encoded).first(length)};
-            encoded.remove_prefix(length);
+            std::size_t const size = static_cast<std::size_t>(length);
+            std::string_view const string{std::span(encoded).first(size)};
+            encoded.remove_prefix(size);
             return string;
         }
 
