@@ -260,6 +260,32 @@ __attribute__((export_name("schema_encode"))) std::uint64_t schema_encode(std::u
     return packed(schema_wire);
 }
 
+__attribute__((export_name("schema_apart_encode"))) std::uint64_t schema_apart_encode(std::uint32_t const rows)
+{
+    screen s{{{"Name <user>", "Amount", "Time"}, {}}, {"/send", {}}};
+    for (std::uint32_t r = 0; r < rows; ++r)
+        s.list.rows.push_back(row{std::string(names[r % std::size(names)]) + " & co " + std::to_string(r), r * 37u % 10000u,
+                                  moment{1700000000u + r * 86400u}});
+    for (std::uint32_t f = 0; f < form_fields; ++f)
+        s.entry.fields.push_back(field{"field" + std::to_string(f), "Field " + std::to_string(f), f % 2 ? "number" : "text"});
+    schema_wire = *cbor::schema<screen>::encode<cbor::description_place::apart>(s);
+    return packed(schema_wire);
+}
+
+__attribute__((export_name("schema_description_size"))) std::uint32_t schema_description_size()
+{
+    return static_cast<std::uint32_t>(cbor::schema<screen>::description().size());
+}
+
+__attribute__((export_name("schema_apart_load"))) std::int32_t schema_apart_load(char const *const ptr, std::size_t const len)
+{
+    auto r = cbor::schema<screen>::path<cbor::description_place::apart>(std::string(ptr, len));
+    if (!r)
+        return -static_cast<std::int32_t>(r.error());
+    root.emplace(std::move(*r));
+    return 0;
+}
+
 __attribute__((export_name("schema_load"))) std::int32_t schema_load(char const *const ptr, std::size_t const len)
 {
     auto r = cbor::schema<screen>::path(std::string(ptr, len));
