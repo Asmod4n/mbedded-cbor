@@ -1,0 +1,1175 @@
+{
+ "context": {
+  "time": "2026-11-01T05:55:40.020Z",
+  "node": "v22.23.4",
+  "v8": "12.4.254.21-node.57",
+  "kernel": "6.18.44-fc-v185",
+  "cpus": 4,
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+  "reps": 10,
+  "iterations_per_process": "7, first and median of the last 5; each iteration includes JSON.parse or the copy into Wasm memory and the load",
+  "data": "nativejson-benchmark canada.json, citm_catalog.json, twitter.json (miloyip/nativejson-benchmark master); CBOR by python3-cbor2 (Debian sid) from the same JSON",
+  "jsonpath_library": "json-p3 3.0.2 (npm)",
+  "commit": "e1b130f"
+ },
+ "summary": {
+  "twitter_one:json_js": {
+   "result": 12,
+   "first_median_ms": 3.418,
+   "median_ms": 1.619,
+   "spread": 1.1
+  },
+  "twitter_one:json_p3": {
+   "result": 1,
+   "first_median_ms": 2.435,
+   "median_ms": 1.619,
+   "spread": 0.487
+  },
+  "twitter_one:wasm": {
+   "result": 12,
+   "first_median_ms": 1.521,
+   "median_ms": 0.192,
+   "spread": 0.419
+  },
+  "twitter_users:json_js": {
+   "result": 100,
+   "first_median_ms": 3.405,
+   "median_ms": 1.602,
+   "spread": 1.126
+  },
+  "twitter_users:json_p3": {
+   "result": 100,
+   "first_median_ms": 4.641,
+   "median_ms": 1.914,
+   "spread": 0.836
+  },
+  "twitter_users:wasm": {
+   "result": 100,
+   "first_median_ms": 2.355,
+   "median_ms": 0.362,
+   "spread": 0.695
+  },
+  "twitter_filter:json_js": {
+   "result": 1,
+   "first_median_ms": 3.368,
+   "median_ms": 1.603,
+   "spread": 0.097
+  },
+  "twitter_filter:json_p3": {
+   "result": 1,
+   "first_median_ms": 4.959,
+   "median_ms": 2.136,
+   "spread": 0.3
+  },
+  "twitter_filter:wasm": {
+   "result": 1,
+   "first_median_ms": 2.823,
+   "median_ms": 0.4,
+   "spread": 0.495
+  },
+  "canada_sum:json_js": {
+   "result": -4957641.118919061,
+   "first_median_ms": 30.71,
+   "median_ms": 17.767,
+   "spread": 0.928
+  },
+  "canada_sum:json_p3": {
+   "result": -4957641.118919061,
+   "first_median_ms": 108.253,
+   "median_ms": 92.954,
+   "spread": 0.218
+  },
+  "canada_sum:wasm": {
+   "result": -4957641.118919061,
+   "first_median_ms": 19.236,
+   "median_ms": 10.434,
+   "spread": 0.924
+  },
+  "citm_areas:json_js": {
+   "result": 8685,
+   "first_median_ms": 6.168,
+   "median_ms": 3.812,
+   "spread": 0.254
+  },
+  "citm_areas:json_p3": {
+   "result": 8685,
+   "first_median_ms": 27.303,
+   "median_ms": 12.122,
+   "spread": 0.783
+  },
+  "citm_areas:wasm": {
+   "result": 8685,
+   "first_median_ms": 6.567,
+   "median_ms": 2.716,
+   "spread": 0.555
+  },
+  "twitter_users:json_js_aa": {
+   "result": 100,
+   "first_median_ms": 3.337,
+   "median_ms": 1.607,
+   "spread": 0.483
+  },
+  "twitter_users:wasm_aa": {
+   "result": 100,
+   "first_median_ms": 2.443,
+   "median_ms": 0.391,
+   "spread": 0.614
+  }
+ },
+ "results": {
+  "twitter_one:json_js": [
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 3.4181540000000012,
+    "ms": 1.6637750000000011
+   },
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 3.3761599999999987,
+    "ms": 1.4640149999999963
+   },
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 3.5306759999999997,
+    "ms": 1.4962829999999983
+   },
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 3.365441000000004,
+    "ms": 1.6193719999999985
+   },
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 3.4937049999999985,
+    "ms": 1.5190490000000025
+   },
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 3.283640999999996,
+    "ms": 1.697527000000008
+   },
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 3.078744999999998,
+    "ms": 1.4570340000000002
+   },
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 3.3037449999999993,
+    "ms": 1.531289000000001
+   },
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 9.376379999999997,
+    "ms": 2.3524519999999995
+   },
+   {
+    "arm": "twitter_one:json_js",
+    "result": 12,
+    "first_ms": 6.148304000000003,
+    "ms": 3.059209999999993
+   }
+  ],
+  "twitter_one:json_p3": [
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 2.4438239999999993,
+    "ms": 1.7832899999999938
+   },
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 2.3583929999999995,
+    "ms": 1.585848999999996
+   },
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 2.327961000000002,
+    "ms": 1.618510999999991
+   },
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 2.3286609999999968,
+    "ms": 1.650379000000001
+   },
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 2.4350820000000013,
+    "ms": 1.5979539999999872
+   },
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 2.3443480000000037,
+    "ms": 1.6007060000000024
+   },
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 2.415904999999995,
+    "ms": 1.7526229999999998
+   },
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 3.257092,
+    "ms": 2.358110999999994
+   },
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 2.4648210000000006,
+    "ms": 1.6100370000000055
+   },
+   {
+    "arm": "twitter_one:json_p3",
+    "result": 1,
+    "first_ms": 2.872703999999999,
+    "ms": 1.6137939999999986
+   }
+  ],
+  "twitter_one:wasm": [
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.572583999999999,
+    "ms": 0.18933000000000533
+   },
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.5127939999999995,
+    "ms": 0.19786200000000065
+   },
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.4448369999999997,
+    "ms": 0.17106299999999663
+   },
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.982714999999999,
+    "ms": 0.24275599999999997
+   },
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.5667960000000036,
+    "ms": 0.20008599999999888
+   },
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.4456089999999975,
+    "ms": 0.2068750000000037
+   },
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.4421780000000055,
+    "ms": 0.1838820000000041
+   },
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.656380999999996,
+    "ms": 0.1855989999999963
+   },
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.3469420000000056,
+    "ms": 0.19225099999999884
+   },
+   {
+    "arm": "twitter_one:wasm",
+    "result": 12,
+    "first_ms": 1.5210849999999994,
+    "ms": 0.1819409999999948
+   }
+  ],
+  "twitter_users:json_js": [
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 5.377229,
+    "ms": 2.8991009999999875
+   },
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 3.116822000000006,
+    "ms": 1.5462289999999967
+   },
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 3.4053010000000015,
+    "ms": 1.6921549999999996
+   },
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 5.144588999999996,
+    "ms": 2.6403549999999996
+   },
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 3.337584999999997,
+    "ms": 1.4833689999999962
+   },
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 5.815694999999991,
+    "ms": 3.154135999999994
+   },
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 3.3366070000000008,
+    "ms": 1.498985999999995
+   },
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 3.270102999999999,
+    "ms": 1.5922100000000015
+   },
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 4.153478,
+    "ms": 1.6019469999999956
+   },
+   {
+    "arm": "twitter_users:json_js",
+    "result": 100,
+    "first_ms": 3.3373399999999975,
+    "ms": 1.5176519999999982
+   }
+  ],
+  "twitter_users:json_p3": [
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 4.1236180000000076,
+    "ms": 1.874553000000006
+   },
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 4.386989,
+    "ms": 1.8725140000000025
+   },
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 7.102882999999991,
+    "ms": 1.8338979999999907
+   },
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 5.280096,
+    "ms": 2.163078999999996
+   },
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 4.017927,
+    "ms": 1.8286219999999958
+   },
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 4.118106999999995,
+    "ms": 1.8507029999999958
+   },
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 4.407919999999997,
+    "ms": 2.0413800000000037
+   },
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 4.790517000000001,
+    "ms": 2.079267999999999
+   },
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 6.555839000000006,
+    "ms": 1.914297999999988
+   },
+   {
+    "arm": "twitter_users:json_p3",
+    "result": 100,
+    "first_ms": 4.640552000000007,
+    "ms": 3.3564819999999997
+   }
+  ],
+  "twitter_users:wasm": [
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 3.250700000000002,
+    "ms": 0.5387309999999985
+   },
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 2.3552250000000043,
+    "ms": 0.3442539999999994
+   },
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 2.194551000000004,
+    "ms": 0.3616489999999999
+   },
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 2.3728650000000044,
+    "ms": 0.4393170000000026
+   },
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 2.16639,
+    "ms": 0.3542369999999977
+   },
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 2.100752,
+    "ms": 0.3533600000000021
+   },
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 2.2222249999999946,
+    "ms": 0.37001800000000173
+   },
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 2.818961999999999,
+    "ms": 0.31780300000000494
+   },
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 3.195187000000004,
+    "ms": 0.44829199999999503
+   },
+   {
+    "arm": "twitter_users:wasm",
+    "result": 100,
+    "first_ms": 2.021208999999992,
+    "ms": 0.3444889999999958
+   }
+  ],
+  "twitter_filter:json_js": [
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.328878000000003,
+    "ms": 1.520899
+   },
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.496040999999998,
+    "ms": 1.484496
+   },
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.078013999999996,
+    "ms": 1.5485899999999972
+   },
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.287885999999993,
+    "ms": 1.5114700000000028
+   },
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.367702999999999,
+    "ms": 1.6032670000000024
+   },
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.5607180000000014,
+    "ms": 1.6068260000000052
+   },
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.1248199999999997,
+    "ms": 1.617406999999993
+   },
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.6347430000000003,
+    "ms": 1.5676600000000036
+   },
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.6474660000000014,
+    "ms": 1.6290600000000097
+   },
+   {
+    "arm": "twitter_filter:json_js",
+    "result": 1,
+    "first_ms": 3.1431869999999975,
+    "ms": 1.6055100000000024
+   }
+  ],
+  "twitter_filter:json_p3": [
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 4.960233000000002,
+    "ms": 1.9800989999999956
+   },
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 4.958705999999999,
+    "ms": 2.1358359999999976
+   },
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 4.699159999999999,
+    "ms": 2.1331130000000087
+   },
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 4.620306999999997,
+    "ms": 2.2832360000000023
+   },
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 4.749012999999998,
+    "ms": 2.188732999999999
+   },
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 4.816673999999992,
+    "ms": 2.5665110000000055
+   },
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 5.220433,
+    "ms": 1.9743249999999932
+   },
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 5.181249000000008,
+    "ms": 1.9976719999999943
+   },
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 5.008168999999995,
+    "ms": 2.1193719999999985
+   },
+   {
+    "arm": "twitter_filter:json_p3",
+    "result": 1,
+    "first_ms": 4.270603000000001,
+    "ms": 2.489497
+   }
+  ],
+  "twitter_filter:wasm": [
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 2.6722249999999974,
+    "ms": 0.40410199999999463
+   },
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 2.616182000000002,
+    "ms": 0.39782900000000154
+   },
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 2.710599000000002,
+    "ms": 0.37004800000000415
+   },
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 2.9726289999999977,
+    "ms": 0.4002100000000013
+   },
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 2.8227640000000065,
+    "ms": 0.39899300000000437
+   },
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 2.9128809999999987,
+    "ms": 0.3764329999999987
+   },
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 2.6529330000000044,
+    "ms": 0.5532180000000011
+   },
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 3.102691000000007,
+    "ms": 0.5383530000000007
+   },
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 2.733411000000004,
+    "ms": 0.38788100000000014
+   },
+   {
+    "arm": "twitter_filter:wasm",
+    "result": 1,
+    "first_ms": 3.2015579999999986,
+    "ms": 0.41249000000000535
+   }
+  ],
+  "canada_sum:json_js": [
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 30.610411999999997,
+    "ms": 17.880213999999995
+   },
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 29.213061999999994,
+    "ms": 17.17679799999999
+   },
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 29.949543999999996,
+    "ms": 17.767011999999994
+   },
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 30.710310000000007,
+    "ms": 17.90763100000001
+   },
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 33.536591,
+    "ms": 17.106584999999995
+   },
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 34.859103,
+    "ms": 18.270747999999998
+   },
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 30.128156000000004,
+    "ms": 17.653437999999994
+   },
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 45.47359,
+    "ms": 32.974828
+   },
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 28.445729999999998,
+    "ms": 17.380494999999996
+   },
+   {
+    "arm": "canada_sum:json_js",
+    "result": -4957641.118919061,
+    "first_ms": 31.461543000000006,
+    "ms": 17.245524999999986
+   }
+  ],
+  "canada_sum:json_p3": [
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 106.54468299999999,
+    "ms": 94.19710200000003
+   },
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 108.69607900000001,
+    "ms": 87.46451300000001
+   },
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 104.439314,
+    "ms": 99.67224800000008
+   },
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 172.86258700000002,
+    "ms": 92.95394400000009
+   },
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 136.240181,
+    "ms": 91.23171200000002
+   },
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 108.07881699999999,
+    "ms": 92.81536
+   },
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 108.25304899999999,
+    "ms": 94.78598700000003
+   },
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 151.703303,
+    "ms": 103.22738099999998
+   },
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 106.86915599999999,
+    "ms": 84.75325199999997
+   },
+   {
+    "arm": "canada_sum:json_p3",
+    "result": -4957641.118919061,
+    "first_ms": 106.761346,
+    "ms": 90.53567200000009
+   }
+  ],
+  "canada_sum:wasm": [
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 19.235946999999996,
+    "ms": 10.845863000000008
+   },
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 29.541392000000002,
+    "ms": 9.45193500000002
+   },
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 19.049289999999992,
+    "ms": 18.188581999999997
+   },
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 18.210561999999996,
+    "ms": 10.107958999999994
+   },
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 18.05685400000001,
+    "ms": 9.632672
+   },
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 19.693473000000004,
+    "ms": 10.434077000000002
+   },
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 17.787164999999995,
+    "ms": 9.71382100000001
+   },
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 19.672155000000004,
+    "ms": 10.495283999999984
+   },
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 23.550531999999997,
+    "ms": 11.746314999999996
+   },
+   {
+    "arm": "canada_sum:wasm",
+    "result": -4957641.118919061,
+    "first_ms": 19.164696000000006,
+    "ms": 9.58295299999999
+   }
+  ],
+  "citm_areas:json_js": [
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 6.2799850000000035,
+    "ms": 3.5334940000000046
+   },
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 6.143241000000003,
+    "ms": 3.762833999999998
+   },
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 5.891201000000002,
+    "ms": 3.7713290000000086
+   },
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 6.218256000000004,
+    "ms": 3.814223999999996
+   },
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 5.765035000000005,
+    "ms": 3.6239610000000084
+   },
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 6.008753000000006,
+    "ms": 4.429650999999993
+   },
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 5.771362000000003,
+    "ms": 3.811677000000003
+   },
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 6.167681000000002,
+    "ms": 3.9731040000000064
+   },
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 6.192052999999994,
+    "ms": 3.803533999999999
+   },
+   {
+    "arm": "citm_areas:json_js",
+    "result": 8685,
+    "first_ms": 6.326354000000009,
+    "ms": 3.9686129999999906
+   }
+  ],
+  "citm_areas:json_p3": [
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 27.30346800000001,
+    "ms": 14.334536999999997
+   },
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 26.695809999999994,
+    "ms": 11.980325999999991
+   },
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 26.152817,
+    "ms": 12.129901999999987
+   },
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 25.745213999999997,
+    "ms": 12.009249000000011
+   },
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 25.978838000000003,
+    "ms": 12.121600999999998
+   },
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 29.711775000000003,
+    "ms": 11.255169999999993
+   },
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 36.070737,
+    "ms": 19.317571000000015
+   },
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 31.234057000000007,
+    "ms": 13.894252999999992
+   },
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 26.105443000000008,
+    "ms": 10.834267000000011
+   },
+   {
+    "arm": "citm_areas:json_p3",
+    "result": 8685,
+    "first_ms": 28.617063,
+    "ms": 11.489549999999994
+   }
+  ],
+  "citm_areas:wasm": [
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 7.458468000000003,
+    "ms": 2.5730199999999996
+   },
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 6.567001000000005,
+    "ms": 2.505914000000004
+   },
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 6.615051999999999,
+    "ms": 2.771175999999997
+   },
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 6.287514999999999,
+    "ms": 2.379260000000002
+   },
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 6.128272000000003,
+    "ms": 3.3088259999999963
+   },
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 9.615083999999996,
+    "ms": 3.70080999999999
+   },
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 6.176337000000004,
+    "ms": 2.554262999999999
+   },
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 6.138740000000006,
+    "ms": 2.715873000000002
+   },
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 6.659236,
+    "ms": 2.8848409999999944
+   },
+   {
+    "arm": "citm_areas:wasm",
+    "result": 8685,
+    "first_ms": 6.196238000000001,
+    "ms": 2.5261799999999965
+   }
+  ],
+  "twitter_users:json_js_aa": [
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 3.3942990000000037,
+    "ms": 1.4880810000000082
+   },
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 4.255874999999996,
+    "ms": 1.5991530000000012
+   },
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 3.187856999999994,
+    "ms": 1.8548210000000012
+   },
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 3.1645400000000024,
+    "ms": 1.612172000000001
+   },
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 3.325519,
+    "ms": 1.6066280000000006
+   },
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 3.21828,
+    "ms": 1.4917799999999986
+   },
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 4.152028999999999,
+    "ms": 1.8509730000000104
+   },
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 3.336533000000003,
+    "ms": 1.6073060000000012
+   },
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 4.900666000000001,
+    "ms": 2.206162000000006
+   },
+   {
+    "arm": "twitter_users:json_js_aa",
+    "result": 100,
+    "first_ms": 3.0559980000000024,
+    "ms": 1.5273269999999997
+   }
+  ],
+  "twitter_users:wasm_aa": [
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 2.341445,
+    "ms": 0.3358610000000013
+   },
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 2.2664219999999986,
+    "ms": 0.362950000000005
+   },
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 2.4429149999999993,
+    "ms": 0.541948000000005
+   },
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 3.1254379999999884,
+    "ms": 0.4841299999999933
+   },
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 2.517388000000004,
+    "ms": 0.37787600000000054
+   },
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 2.3631790000000024,
+    "ms": 0.3731920000000031
+   },
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 3.170638000000004,
+    "ms": 0.4812429999999992
+   },
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 2.4917119999999997,
+    "ms": 0.3906260000000117
+   },
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 2.0963719999999952,
+    "ms": 0.4423829999999995
+   },
+   {
+    "arm": "twitter_users:wasm_aa",
+    "result": 100,
+    "first_ms": 2.2128160000000037,
+    "ms": 0.3665140000000022
+   }
+  ]
+ }
+}
