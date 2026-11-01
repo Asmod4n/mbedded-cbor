@@ -285,10 +285,8 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | `encoder::head_encode(major, argument)` | O(1) | O(1) | |
 | `encoder::byte_string_encode` | O(len) | O(1); writer may allocate | |
 | `encoder::text_string_encode` | O(len) | O(1); writer may allocate | |
-| `encoder::float_encode` | O(1) | O(1) | |
 | `encoder::fixed_width_head_encode<T>` | O(1) | O(1) | |
-| `encoder::simple_value_encode` | O(1) | O(1) | |
-| `encoder::fixed_width_unsigned_encode`, `signed`, `float` | O(1) | O(1) | |
+| `encoder::fixed_width_float_encode` | O(1) | O(1) | |
 | `cbor::encoder<Target>` calls | O(1) per head; O(len) per string | O(1); a container target grows; a span target allocates nothing | Each call checks that no earlier call failed. |
 | `cbor::encoder::finish` | O(1) plus one flush | O(1); an iov_writer gives its storage | |
 | `encoding::item_encode(encoder&, item const&, size_t, size_t)` | O(items + string bytes) | stack O(d) | Recursive, bounded by the nesting depth. A tag 29 is written as stored and not followed. |
