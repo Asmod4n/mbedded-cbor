@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cbor/cbor.hpp>
+#include <cbor/describe.hpp>
 
 #include <cstdint>
 #include <optional>

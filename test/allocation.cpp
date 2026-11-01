@@ -1,6 +1,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
+#include <cbor/sequence_reader.hpp>
 
 #include <array>
 #include <cstddef>
