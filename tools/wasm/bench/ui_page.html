@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<div id="out"></div>
+<script type="module">
+const params = new URLSearchParams(location.search);
+const arm = params.get("arm").replace(/_aa$/, "");
+const [html_text, json_text, cbor, module_bytes] = await Promise.all([
+  fetch("/data/screen.html").then((r) => r.text()),
+  fetch("/data/screen.json").then((r) => r.text()),
+  fetch("/data/screen.cbor").then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b)),
+  fetch("/wasm/ui.wasm").then((r) => r.arrayBuffer()),
+]);
+const out = document.getElementById("out");
+const escape = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const node = (v) => {
+  if (typeof v === "string") return escape(v);
+  if (typeof v === "number") return String(v);
+  if (Array.isArray(v)) return v.map(node).join("");
+  if (v.type === "time") { const d = new Date(v.epoch * 1000).toISOString().slice(0, 10); return `<time datetime="${d}">${d}</time>`; }
+  if (v.type === "table") return `<table><thead><tr>${v.head.map((h) => `<th>${node(h)}</th>`).join("")}</tr></thead><tbody>${v.rows.map((r) => `<tr>${r.map((c) => `<td>${node(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  if (v.type === "form") return `<form action="${node(v.action)}">${v.fields.map(node).join("")}<button>Send</button></form>`;
+  if (v.type === "field") return `<label>${node(v.label)} <input name="${node(v.name)}" type="${node(v.input)}"></label>`;
+  return "";
+};
+let render, init_ms = 0;
+const t_init = performance.now();
+if (arm === "htmx") render = () => html_text;
+else if (arm === "json_ui") render = () => node(JSON.parse(json_text));
+else {
+  const memory = new WebAssembly.Memory({ initial: 2, maximum: 16384 });
+  const x = (await WebAssembly.instantiate(await WebAssembly.compile(module_bytes), { env: { memory }, wasi_snapshot_preview1: new Proxy({}, { get: () => () => 0 }) })).exports;
+  const decoder = new TextDecoder();
+  render = () => {
+    const p = x.alloc(cbor.length); new Uint8Array(memory.buffer).set(cbor, p); x.ui_load(p, cbor.length); x.release(p);
+    const q = x.ui_html();
+    return decoder.decode(new Uint8Array(memory.buffer, Number(q >> 32n), Number(q & 0xffffffffn)));
+  };
+}
+init_ms = performance.now() - t_init;
+const times = [];
+let hash = 0;
+for (let it = 0; it < 7; ++it) {
+  out.innerHTML = "";
+  out.offsetHeight;
+  const t0 = performance.now();
+  out.innerHTML = render();
+  out.offsetHeight;
+  times.push(performance.now() - t0);
+  if (it === 0) hash = [...out.innerHTML].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+}
+const median = (a) => { const s = [...a].sort((p, q) => p - q); return s[s.length >> 1]; };
+window.result = { arm: params.get("arm"), init_ms, first_ms: times[0], warm_ms: median(times.slice(2)), dom_hash: hash };
+</script>
