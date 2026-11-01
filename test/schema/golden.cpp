@@ -242,11 +242,13 @@ TEST_CASE("golden bytes: badge encodes as before")
     CHECK_EQ(golden_line<badge>("badge"), golden_expected_line("badge"));
 }
 
+#if defined(__STDCPP_FLOAT16_T__)
 TEST_CASE("golden bytes: numbers encodes as before")
 {
     CHECK_FALSE(golden_expected_line("numbers").empty());
     CHECK_EQ(golden_line<numbers>("numbers"), golden_expected_line("numbers"));
 }
+#endif
 
 TEST_CASE("golden bytes: doubles encodes as before")
 {

@@ -1633,8 +1633,6 @@ std::string golden_hex(std::string_view const bytes)
 
 
 
-#if defined(__STDCPP_FLOAT16_T__)
-#endif
 
 
 
