@@ -1,5 +1,5 @@
-// Gives the major types, the simple values and cbor::type, the types of
-// a cbor::item. Gives the values of the additional information and the
+// Gives the major types, the simple values, cbor::tag and cbor::type, the
+// types of a cbor::item. Gives the values of the additional information and the
 // tag numbers that the library reads and writes.
 // https://www.rfc-editor.org/rfc/rfc8949#section-3
 #pragma once
@@ -37,6 +37,10 @@ enum class major_type : std::uint8_t {
 };
 
 enum class simple_value : std::uint8_t { false_value = 20, true_value, null, undefined };
+
+struct tag {
+    std::uint64_t number;
+};
 
 enum class type : std::uint8_t {
     unsigned_integer,

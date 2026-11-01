@@ -54,10 +54,6 @@
 namespace cbor
 {
 
-struct tag {
-    std::uint64_t number;
-};
-
 template <std::uint64_t Number, class T>
 struct tagged_item {
     static_assert(!has_describe_members<T> && !(std::is_class_v<T> && std::is_aggregate_v<T> && !std::ranges::range<T>),
