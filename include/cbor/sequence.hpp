@@ -30,11 +30,35 @@ namespace cbor
  *
  * The sequence retains its owner; iterators and item views do not. Keep the
  * storage alive, at the same address and size, and its bytes unchanged.
- * A size error is yielded once, then iteration ends. Construction and
+ * A size error is yielded once, then iteration ends. The input range has no
+ * size; each begin() scans the first item again. Construction and
  * iteration allocate nothing on the normal path; storage is O(1).
  * Invalid ownership throws std::logic_error, or terminates without exceptions.
  * Releasing the last owner can run its deleter.
  *
+ * @par Call sequence
+ * @verbatim
+ * cbor::sequence(owner) → sequence
+ * s.begin()             → sequence::iterator
+ * *it                   → std::expected<std::string_view, error>
+ * s.empty()             → bool
+ * @endverbatim
+ * @par Interactive example
+ * @verbatim
+ * bytes: 01 02 03
+ * call: auto const owner = std::make_shared<std::string const>(bytes)
+ * result: shared_ptr to 3 bytes: 01 02 03
+ * call: auto const s = cbor::sequence(owner)
+ * result: sequence of 3 items: 1, 2, 3
+ * call: s.empty()
+ * result: false
+ * call: cbor::at_path<"$", std::int64_t>(**s.begin())
+ * result: 1
+ * @endverbatim
+ * @par See also
+ * @verbatim
+ * [item_size](item_size.md) · [../lazy/index.md](../lazy/index.md) · [../../advanced/basics.md](../../advanced/basics.md), section 8
+ * @endverbatim
  * @include sequence-example.cpp
  */
 class sequence

@@ -3,17 +3,21 @@ name: man
 on:
   push:
     paths:
+      - 'include/**'
       - 'doc/reference/**'
       - 'doc/man/**'
       - 'tools/man/**'
+      - 'tools/doxygen/**'
       - 'containers/man.Containerfile'
       - 'CMakeLists.txt'
       - '.github/workflows/man.yml'
   pull_request:
     paths:
+      - 'include/**'
       - 'doc/reference/**'
       - 'doc/man/**'
       - 'tools/man/**'
+      - 'tools/doxygen/**'
       - 'containers/man.Containerfile'
       - 'CMakeLists.txt'
       - '.github/workflows/man.yml'

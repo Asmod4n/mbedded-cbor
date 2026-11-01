@@ -12,12 +12,16 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
   site=/src/tools/site
   work=/tmp/work
   mkdir -p $work
+  cp -a /src/doc/reference $work/reference
+  cd /src
+  CBOR_DOXYGEN_OUTPUT=$work/doxygen doxygen $site/../doxygen/sequence.Doxyfile
+  python3 $site/../doxygen/sequence-reference.py $work/doxygen/xml $work/reference/tools/sequence.md
   flags="-std=c++23 -O1 -Wall -Wextra -Werror -I/src/include -I/src/third_party/boost_pfr/include -I/usr/lib/llvm-23/include"
   g++-16 $flags $site/tokens.cpp -L/usr/lib/llvm-23/lib -lclang -Wl,-rpath,/usr/lib/llvm-23/lib -o /tmp/tokens
   g++-16 $flags $site/check.cpp -o /tmp/check
-  groups=$(sed -n "s/^| \[\([a-z]*\)\](\1\/index.md) |.*/\1/p" /src/doc/reference/index.md)
+  groups=$(sed -n "s/^| \[\([a-z]*\)\](\1\/index.md) |.*/\1/p" $work/reference/index.md)
   for g in $groups; do
-    for page in /src/doc/reference/$g/*.md; do
+    for page in $work/reference/$g/*.md; do
       file=$(basename $page .md)
       [ $file = index ] && continue
       sed -n "1s/^# //p" $page | awk -v page="$g/$file" "{
@@ -45,11 +49,11 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
   cp $site/style.css $site/site.js $site/examples.mjs /out/
   reference() {
     pandoc -f gfm -t html5 --template $site/reference.html --lua-filter $site/reference.lua \
-      -M tree=/src -M impl=$work/impl -M types=$work/types -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json "$2" -o /out/$1.html
+      -M tree=/src -M references=$work/reference -M impl=$work/impl -M types=$work/types -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json "$2" -o /out/$1.html
   }
-  reference index /src/doc/reference/index.md
+  reference index $work/reference/index.md
   for g in ${SITE_GROUPS:-$groups}; do
-    reference $g /src/doc/reference/$g/index.md
+    reference $g $work/reference/$g/index.md
     lynx -dump -nolist /out/$g.html > $work/$g.txt
   done
   node $site/check_examples.mjs /out/examples.wasm $work /src/include/cbor/error.hpp'

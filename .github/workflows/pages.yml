@@ -7,6 +7,7 @@ on:
       - 'include/**'
       - 'doc/reference/**'
       - 'tools/site/**'
+      - 'tools/doxygen/**'
       - 'test/doc_types.hpp'
       - 'containers/site.Containerfile'
       - '.github/workflows/pages.yml'

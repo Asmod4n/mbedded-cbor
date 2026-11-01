@@ -23,12 +23,12 @@ def listing(node):
     return '\n'.join(collect(line) for line in node.findall('codeline'))
 
 
-def output_page(source, target, related):
+def output_page(source, target, related, version, today):
     root = ET.parse(source).getroot().find('compounddef')
     supported = {'briefdescription', 'detaileddescription', 'para', 'simplesect',
                  'title', 'codeline', 'computeroutput', 'highlight',
                  'parameterdescription', 'parameteritem', 'parameterlist',
-                 'parametername', 'parameternamelist', 'programlisting', 'ref', 'sp'}
+                 'parametername', 'parameternamelist', 'programlisting', 'ref', 'sp', 'verbatim'}
     for section in root.findall('.//briefdescription') + root.findall('.//detaileddescription'):
         for node in section.iter():
             if node.tag not in supported:
@@ -42,13 +42,27 @@ def output_page(source, target, related):
     description = [text(p) for p in brief_paras[1:] if text(p)]
     example = []
     for para in desc.findall('para'):
-        listing_node = para.find('programlisting')
-        if listing_node is not None:
-            if len(para) != 1 or (para.text or '').strip() or (listing_node.tail or '').strip():
-                raise ValueError('unsupported mixed example paragraph')
-            example.append(listing(listing_node))
-        elif text(para):
+        if not len(para):
+            if text(para):
+                description.append(text(para))
+            continue
+        if all(child.tag in ('ref', 'computeroutput') for child in para):
             description.append(text(para))
+            continue
+        if (para.text or '').strip():
+            raise ValueError('unsupported mixed class paragraph')
+        for child in para:
+            if child.tag == 'programlisting':
+                example.append(listing(child))
+            elif child.tag == 'simplesect':
+                if child.get('kind') != 'par' or text(child.find('title')) not in ('Call sequence', 'Interactive example', 'See also'):
+                    raise ValueError('unsupported class section')
+                for program in child.iter('programlisting'):
+                    example.append(listing(program))
+            else:
+                raise ValueError('unsupported class element: ' + child.tag)
+            if (child.tail or '').strip():
+                raise ValueError('unsupported class paragraph tail')
     if not description:
         description.append(intro)
     kind = 'struct sequence::iterator' if name.endswith('::iterator') else 'class sequence'
@@ -103,8 +117,8 @@ def output_page(source, target, related):
         if any('`' in k for k, _ in items):
             raise ValueError('backtick in signature')
         return '\n\n'.join('`' + k + '`  \n' + html.escape(v) for k, v in items)
-    date = datetime.datetime.now(datetime.timezone.utc).strftime('%B %d, %Y')
-    md = '% ' + name + '(3)\n% mbedded-cbor\n% ' + date + '\n\n'
+    date = datetime.date.fromisoformat(today).strftime('%B %d, %Y')
+    md = '% ' + name + '(3)\n%\n% ' + date + '\n\n'
     md += section('NAME', html.escape(name) + ' - ' + html.escape(intro))
     md += section('SYNOPSIS', '```cpp\n' + '\n'.join(synopsis) + '\n```')
     md += section('DESCRIPTION', '\n\n'.join(html.escape(p) for p in description) + ('\n\n' + pairs(details) if details else ''))
@@ -120,8 +134,22 @@ def output_page(source, target, related):
         if any('```' in e for e in example):
             raise ValueError('code fence in example')
         md += section('EXAMPLES', '\n\n'.join('```cpp\n' + e + '\n```' for e in example))
-    md += section('SEE ALSO', related + '(3)')
-    result = subprocess.run(['pandoc', '-s', '-f', 'markdown', '-t', 'man'], input=md, text=True, capture_output=True, check=True)
+    links = [related + '(3)']
+    for node in root.findall('./detaileddescription/para/simplesect'):
+        if text(node.find('title')) != 'See also':
+            continue
+        value = node.find('./para/verbatim')
+        if value is None:
+            raise ValueError('See also has no verbatim content')
+        targets = re.findall(r'\[[^\]]+\]\(([^)]+)\)', value.text or '')
+        mapping = {'item_size.md': 'cbor::item_size(3)', '../lazy/index.md': 'cbor::lazy(3)',
+                   '../../advanced/basics.md': 'advanced/basics.md, section 8'}
+        for target_name in targets:
+            if target_name not in mapping:
+                raise ValueError('unsupported cross-reference: ' + target_name)
+            links.append(mapping[target_name])
+    md += section('SEE ALSO', ', '.join(links))
+    result = subprocess.run(['pandoc', '-s', '-f', 'markdown', '-t', 'man', '-V', 'footer=mbedded-cbor ' + version, '-V', 'header=mbedded-cbor'], input=md, text=True, capture_output=True, check=True)
     target.write_text(result.stdout)
 
 
@@ -129,13 +157,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('xml', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--version', default='sequence-pilot')
+    parser.add_argument('--date', default=datetime.datetime.now(datetime.timezone.utc).date().isoformat())
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     pages = [('classcbor_1_1sequence.xml', 'cbor::sequence.3', 'cbor::sequence::iterator'),
              ('structcbor_1_1sequence_1_1iterator.xml', 'cbor::sequence::iterator.3', 'cbor::sequence')]
     with tempfile.TemporaryDirectory(dir=args.output) as tmp:
         for xml, name, other in pages:
-            output_page(args.xml / xml, Path(tmp) / name, other)
+            output_page(args.xml / xml, Path(tmp) / name, other, args.version, args.date)
         for _, name, _ in pages:
             (Path(tmp) / name).replace(args.output / name)
 
