@@ -8,6 +8,20 @@
 #include <string_view>
 #include <vector>
 
+struct series {
+    std::uint32_t id;
+    std::vector<std::int32_t> values;
+};
+
+CBOR_DEFINE_TYPE_MEMBERS(series, cbor::tag{1990}, id, values);
+
+struct plain_series {
+    std::uint32_t id;
+    std::vector<std::int32_t> values;
+};
+
+CBOR_DEFINE_TYPE_MEMBERS(plain_series, cbor::untagged, id, values);
+
 namespace
 {
 
@@ -131,6 +145,34 @@ __attribute__((export_name("ints_iterate"))) std::uint32_t ints_iterate(std::uin
     for (auto const e : *root->elements())
         out[i++] = static_cast<std::int32_t>(*e->get<std::int64_t>());
     return i;
+}
+
+__attribute__((export_name("series_make"))) std::uint32_t series_make(std::uint32_t const n, std::int32_t const packed)
+{
+    std::vector<std::int32_t> values(n);
+    for (std::uint32_t i = 0; i < n; ++i)
+        values[i] = static_cast<std::int32_t>(1000 + i % 1000);
+    auto const bytes = packed ? cbor::schema<series>::encode(series{7, std::move(values)})
+                              : cbor::structs<plain_series>::encode(plain_series{7, std::move(values)});
+    return doc_load(bytes->data(), bytes->size());
+}
+
+__attribute__((export_name("schema_id"))) std::int32_t schema_id(std::uint32_t const doc)
+{
+    return static_cast<std::int32_t>(*cbor::schema<series>::at_path<"$.id">(bytes_of(doc)));
+}
+
+__attribute__((export_name("lazy_id"))) std::int32_t lazy_id(std::uint32_t const doc)
+{
+    auto const root = cbor::lazy::view(documents[doc].bytes);
+    return static_cast<std::int32_t>(*root->at_path<"$.id", std::int64_t>());
+}
+
+__attribute__((export_name("lazy_values"))) std::uint64_t lazy_values(std::uint32_t const doc)
+{
+    auto const root = cbor::lazy::view(documents[doc].bytes);
+    auto const t = root->at_path<"$.values", cbor::typed_array>();
+    return (static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>((**t).bytes.data())) << 32) | (**t).bytes.size();
 }
 
 __attribute__((export_name("h_new"))) std::uint32_t h_new(std::uint32_t const doc, std::uint32_t const offset)

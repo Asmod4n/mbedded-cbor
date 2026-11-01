@@ -46,7 +46,40 @@ function json_of(kind) {
   return JSON.stringify(values);
 }
 
+function series_json() {
+  const values = new Array(count);
+  for (let i = 0; i < count; ++i) values[i] = 1000 + (i % 1000);
+  return JSON.stringify({ id: 7, values });
+}
+
 const arms = {
+  json_id_load() {
+    const text = series_json();
+    return () => JSON.parse(text).id;
+  },
+  schema_id(x) {
+    const doc = x.series_make(count, 1);
+    return () => x.schema_id(doc);
+  },
+  lazy_id(x) {
+    const doc = x.series_make(count, 0);
+    return () => x.lazy_id(doc);
+  },
+  json_values_load() {
+    const text = series_json();
+    return () => { const v = JSON.parse(text).values; let sum = 0; for (let i = 0; i < v.length; ++i) sum += v[i]; return sum; };
+  },
+  lazy_values_view(x, memory) {
+    const doc = x.series_make(count, 0);
+    return () => {
+      const packed = x.lazy_values(doc);
+      const p = Number(packed >> 32n), n = Number(packed & 0xffffffffn);
+      const v = p % 4 === 0 ? new Int32Array(memory.buffer, p, n / 4) : new Int32Array(memory.buffer.slice(p, p + n));
+      let sum = 0;
+      for (let i = 0; i < v.length; ++i) sum += v[i];
+      return sum;
+    };
+  },
   json_int_access() {
     const values = JSON.parse(json_of("int"));
     return () => { let sum = 0; for (let i = 0; i < count; ++i) sum += values[i]; return sum; };
@@ -175,10 +208,10 @@ if (mode === "facts") {
   const run = arms[arm.replace(/_aa$/, "")](x, memory);
   const times = [];
   for (let k = 0; k < 7; ++k) { const t0 = performance.now(); run(); times.push(performance.now() - t0); }
-  console.log(JSON.stringify({ arm, ms: median(times.slice(2)), rss_mib: +(process.memoryUsage().rss / 1048576).toFixed(1) }));
+  console.log(JSON.stringify({ arm, ms: median(times.slice(2)), first_ms: times[0], rss_mib: +(process.memoryUsage().rss / 1048576).toFixed(1) }));
 } else if (mode === "run") {
   const reps = Number(extra ?? 10);
-  const names = ["offsets_int", "offsets_int_aa", "handles_int", "text_global", "text_global_aa", "text_new", "json_int_access", "json_int_load", "json_text_access", "offsets_int_load", "batch_int", "iterate_int"];
+  const names = process.env.ARMS ? process.env.ARMS.split(",") : ["offsets_int", "offsets_int_aa", "handles_int", "text_global", "text_global_aa", "text_new", "json_int_access", "json_int_load", "json_text_access", "offsets_int_load", "batch_int", "iterate_int"];
   const results = Object.fromEntries(names.map((n) => [n, []]));
   for (let r = 0; r < reps; ++r) {
     const order = r % 2 ? [...names].reverse() : names;
@@ -190,7 +223,7 @@ if (mode === "facts") {
   const facts = JSON.parse(execFileSync(process.execPath, [process.argv[1], wasm_file, "facts"], { encoding: "utf8" }));
   const summary = Object.fromEntries(names.map((n) => {
     const ms = results[n].map((o) => o.ms);
-    return [n, { median_ms: +median(ms).toFixed(2), spread: +(Math.max(...ms) / Math.min(...ms) - 1).toFixed(3), rss_mib: median(results[n].map((o) => o.rss_mib)) }];
+    return [n, { first_median_ms: +median(results[n].map((o) => o.first_ms)).toFixed(3), median_ms: +median(ms).toFixed(3), spread: +(Math.max(...ms) / Math.min(...ms) - 1).toFixed(3), rss_mib: median(results[n].map((o) => o.rss_mib)) }];
   }));
   const context = {
     time: new Date().toISOString(), node: process.version, v8: process.versions.v8, kernel: os.release(), cpus: os.cpus().length,
