@@ -16,6 +16,8 @@
 #   full also runs test/interop/run.sh, which decodes the output of the library with other decoders.
 #   iter <target>...: builds only the named targets of gcc-asan with CBOR_TEST_GROUPS=ON in $CBOR_BUILD_ROOT/iter/gcc-asan,
 #   in a container that stays up between runs, and runs each test program among them.
+#   iter check-changed: builds the test programs that a change touches and runs each program whose program or data
+#   changed since its last run that passed. CBOR_TEST_PATTERN selects the test cases of these runs.
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
 # The builds run one after the other, and each runs as many jobs as there are processors.
@@ -32,7 +34,7 @@ interop=0
 pattern=
 iter_targets=
 case ${1:-check} in
-iter) shift; iter_targets="${*:?iter takes targets}"; set -- iter ;;
+iter) shift; iter_targets="${*:?iter takes targets}"; pattern=${CBOR_TEST_PATTERN:-}; set -- iter ;;
 check) set -- check ;;
 one) pattern=${2:?one takes a pattern}; set -- check ;;
 fast) set -- gcc-release clang-asan ;;
@@ -113,12 +115,13 @@ iter() {
 			-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 			"$image" sleep infinity >/dev/null || return 1
 	fi
-	podman exec "$name" bash -c '
+	podman exec -e CBOR_TEST_PATTERN="$pattern" "$name" bash -c '
 		s=${EPOCHREALTIME/./}
-		if [ ! -f /b/build.ninja ] || ! grep -q "^CBOR_TEST_GROUPS:BOOL=ON$" /b/CMakeCache.txt; then
+		if [ ! -f /b/build.ninja ] || ! grep -q "^CBOR_TEST_GROUPS:BOOL=ON$" /b/CMakeCache.txt ||
+			! grep -qxF "CBOR_TEST_PATTERN:STRING=$CBOR_TEST_PATTERN" /b/CMakeCache.txt; then
 			cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE=Debug \
 				-DCMAKE_CXX_COMPILER=g++-16 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-				-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$asan"'" -DCBOR_COMPILE_FAIL=OFF -DCBOR_TEST_GROUPS=ON >/b/configure.log 2>&1 ||
+				-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$asan"'" -DCBOR_COMPILE_FAIL=OFF -DCBOR_TEST_GROUPS=ON "-DCBOR_TEST_PATTERN=$CBOR_TEST_PATTERN" >/b/configure.log 2>&1 ||
 				{ tail -n 30 /b/configure.log; exit 1; }
 		fi
 		ccache -z >/dev/null
@@ -126,6 +129,7 @@ iter() {
 		r=$?; b=${EPOCHREALTIME/./}
 		ccache -s
 		printf "iter build rc=%s build=%ds\n" $r $(((b - s) / 1000000))
+		grep -o "Running [^ ]*$" /b/build.log | sort | uniq -c
 		[ $r = 0 ] || { tail -n 30 /b/build.log; exit $r; }
 		for t in '"$iter_targets"'; do
 			[ -f /b/$t ] && [ -x /b/$t ] || continue
