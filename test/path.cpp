@@ -676,7 +676,7 @@ TEST_CASE("path: a typed read holds the owner of the bytes")
 // A null owner is a wrong use that the compiler cannot see.
 TEST_CASE("path: a typed read with a null owner throws std::logic_error")
 {
-    auto const read = [] { return cbor::at_path<"$.a", std::string_view>(std::shared_ptr<void const>{}, ""sv); };
+    [[maybe_unused]] auto const read = [] { return cbor::at_path<"$.a", std::string_view>(std::shared_ptr<void const>{}, ""sv); };
     CHECK_THROWS_AS((void)read(), std::logic_error);
 }
 
