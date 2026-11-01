@@ -180,6 +180,9 @@ class jsonpath
             auto const next = extended_diagnostic_notation::quoted_parse(text, at, name);
             if (!next) [[unlikely]]
                 return next;
+            for (char const c : std::span(text).subspan(at + 1, *next - at - 2))
+                if (static_cast<unsigned char>(c) < extended_diagnostic_notation::unescaped_first) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
             if (auto const r = extended_diagnostic_notation::head_append(keys, major_type::text_string, name.size(), extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             keys += name;
