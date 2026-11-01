@@ -5,6 +5,10 @@
 
 #include "reference.hpp"
 #include "schema_golden.hpp"
+#include <cbor/describe.hpp>
+#include <cbor/encode.hpp>
+#include <cbor/rfc9535.hpp>
+#include <cbor/schema.hpp>
 
 
 #include <algorithm>

@@ -1,5 +1,6 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
+#include <cbor/sequence_reader.hpp>
 
 #include <cstdint>
 #include <expected>

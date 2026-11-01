@@ -1,6 +1,8 @@
 #include "../owned_copy.hpp"
 #include "../reference.hpp"
 #include "../sequence_reader.hpp"
+#include <cbor/describe.hpp>
+#include <cbor/schema.hpp>
 
 #include <cstddef>
 #include <cstdint>
