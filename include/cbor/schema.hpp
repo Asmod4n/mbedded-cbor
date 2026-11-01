@@ -66,10 +66,15 @@ struct tagged_item {
     T content;
 };
 
+namespace detail
+{
+
 template <class T>
 consteval std::size_t no_fixed_size()
 {
     std::unreachable();
+}
+
 }
 
 template <class Root>
@@ -84,10 +89,15 @@ class typed_array_view;
 template <class S>
 struct fixed_element {};
 
+namespace detail
+{
+
 struct directory {
     std::size_t at;
     std::size_t count;
 };
+
+}
 
 enum class description_place { inside, apart };
 
@@ -1526,7 +1536,7 @@ class reflection
         std::size_t value = 0;
         auto const [end, ec] = std::from_chars(digits.data(), std::to_address(digits.end()), value);
         if (ec != std::errc{} || end != std::to_address(digits.end())) [[unlikely]]
-            return no_fixed_size<T>();
+            return detail::no_fixed_size<T>();
         return value;
     }
 
@@ -1750,7 +1760,7 @@ class reflection
         }
     }
 
-    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, cbor::directory const dir, std::size_t const j)
+    CBOR_ALWAYS_INLINE static std::size_t directory_entry(std::string_view const encoded, detail::directory const dir, std::size_t const j)
     {
         return heads::unsigned_read<std::uint32_t>(
             std::span<char const>(encoded).subspan(dir.at + sizeof(std::uint32_t) * j).template first<sizeof(std::uint32_t)>());
@@ -1759,7 +1769,7 @@ class reflection
     template <class Root, major_type Major, class E = void, bool Verified = true>
     CBOR_ALWAYS_INLINE static std::expected<reference, error>
     reference_read(std::string_view const encoded, std::span<char const, dynamic_type_sizes> const field,
-                   cbor::directory const dir, std::size_t const element)
+                   detail::directory const dir, std::size_t const element)
     {
         auto const j = shared_index_read<Root, Verified>(field);
         if (!j) [[unlikely]]
@@ -1769,7 +1779,7 @@ class reflection
 
     template <class Root, major_type Major, class E = void, bool Verified = true>
     CBOR_ALWAYS_INLINE static std::expected<reference, error>
-    item_read(std::string_view const encoded, cbor::directory const dir, std::size_t const j,
+    item_read(std::string_view const encoded, detail::directory const dir, std::size_t const j,
               std::size_t const element)
     {
         if (!validity::check_index(j, dir.count)) [[unlikely]]
@@ -1811,7 +1821,7 @@ class reflection
     }
 
     template <class T, bool Verified, description_place D>
-    static std::expected<cbor::directory, error> directory_read(std::string_view const encoded)
+    static std::expected<detail::directory, error> directory_read(std::string_view const encoded)
     {
         static constexpr auto prefix = packing_prefix_of<T, D>();
         constexpr std::size_t fillers = fillers_of<T>();
@@ -1848,7 +1858,7 @@ class reflection
         if constexpr (Verified)
             if (!std::ranges::equal(std::span(encoded).subspan(directory_at<T, D>() + length).template first<fillers>(), undefined)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-        return cbor::directory{directory_at<T, D>(), count};
+        return detail::directory{directory_at<T, D>(), count};
     }
 
     static consteval std::size_t count_index_arguments(std::string_view const path)
@@ -1973,7 +1983,7 @@ class reflection
     }
 
     template <class Root, class S, fixed_string Path, std::size_t At, bool Verified = true>
-    CBOR_ALWAYS_INLINE static auto fixed_walk(std::string_view const encoded, std::size_t const at, cbor::directory const floor,
+    CBOR_ALWAYS_INLINE static auto fixed_walk(std::string_view const encoded, std::size_t const at, detail::directory const floor,
                                               std::array<std::size_t, index_arguments<Path>()> const &indexes)
         -> std::expected<typename decltype(fixed_path_result<Root, S, Path, At, Verified>())::type, error>
     {
@@ -2009,7 +2019,7 @@ class reflection
     template <class Root, class T, fixed_string Path, std::size_t At, bool Verified = true>
     CBOR_ALWAYS_INLINE static auto
     path_walk(std::string_view const encoded, std::span<char const, fixed_size<T, Root>()> const field,
-              cbor::directory const floor, std::array<std::size_t, index_arguments<Path>()> const &indexes)
+              detail::directory const floor, std::array<std::size_t, index_arguments<Path>()> const &indexes)
         -> std::expected<typename decltype(path_result<Root, T, Path, At, Verified>())::type, error>
     {
         using U = std::remove_cv_t<T>;
@@ -2205,7 +2215,7 @@ class reflection
     template <bool Verified>
     struct decode_cursor {
         std::string_view encoded;
-        cbor::directory dir;
+        detail::directory dir;
         std::size_t index;
         std::size_t at;
         std::size_t end;
@@ -2894,7 +2904,7 @@ consteval std::size_t reflection::fixed_size()
                    heads::head_size(sizeof(std::float128_t)) + sizeof(std::float128_t);
 #endif
         else
-            return no_fixed_size<T>();
+            return detail::no_fixed_size<T>();
     } else if constexpr (requires { reflection::fixed_length<U>::value; }) {
         using E = typename reflection::fixed_length<U>::element;
         constexpr std::size_t n = reflection::fixed_length<U>::value;
@@ -2921,7 +2931,7 @@ consteval std::size_t reflection::fixed_size()
             fits = fits && sum.has_value();
             size = sum.value_or(size);
         });
-        return fits ? size : no_fixed_size<U>();
+        return fits ? size : detail::no_fixed_size<U>();
     } else if constexpr (reflection::is_inline_optional<U>) {
         constexpr std::size_t value = fixed_size<typename U::value_type, Root>();
         constexpr auto size = validity::checked_add(reflection::inline_optional_head, value);
@@ -2937,7 +2947,7 @@ consteval std::size_t reflection::fixed_size()
     else if constexpr (std::ranges::sized_range<U>)
         return reflection::dynamic_type_sizes;
     else
-        return no_fixed_size<T>();
+        return detail::no_fixed_size<T>();
 }
 
 template <class T, std::size_t Member, class Root>
@@ -2952,7 +2962,7 @@ consteval std::size_t reflection::member_offset()
         if (before)
             offset += fixed_size<describe::member_t<U, decltype(i)::value>, Root>();
     });
-    return Member < describe::members_count<U> ? offset : no_fixed_size<T>();
+    return Member < describe::members_count<U> ? offset : detail::no_fixed_size<T>();
 }
 
 template <class T>
@@ -2999,16 +3009,16 @@ public:
         std::shared_ptr<void const> owner;
         std::string_view encoded;
         std::span<char const, reflection::fixed_size<U, T>()> field;
-        cbor::directory dir;
+        detail::directory dir;
         [[no_unique_address]] std::conditional_t<listed, reflection::reference, std::monostate> items;
 
-        accessor(std::string_view const b, std::span<char const, reflection::fixed_size<U, T>()> const f, cbor::directory const d)
+        accessor(std::string_view const b, std::span<char const, reflection::fixed_size<U, T>()> const f, detail::directory const d)
             requires(!listed)
             : encoded(b), field(f), dir(d)
         {
         }
 
-        accessor(std::string_view const b, std::span<char const, reflection::fixed_size<U, T>()> const f, cbor::directory const d,
+        accessor(std::string_view const b, std::span<char const, reflection::fixed_size<U, T>()> const f, detail::directory const d,
                  reflection::reference const r)
             requires(listed)
             : encoded(b), field(f), dir(d), items(r)
@@ -3016,7 +3026,7 @@ public:
         }
 
         accessor(std::shared_ptr<void const> o, std::string_view const b, std::span<char const, reflection::fixed_size<U, T>()> const f,
-                 cbor::directory const d)
+                 detail::directory const d)
             requires(!listed)
             : owner(std::move(o)), encoded(b), field(f), dir(d)
         {
@@ -3139,9 +3149,9 @@ public:
             std::shared_ptr<void const> owner;
             std::string_view encoded;
             std::size_t at = 0;
-            cbor::directory dir{};
+            detail::directory dir{};
 
-            iterator(std::shared_ptr<void const> o, std::string_view const b, std::size_t const a, cbor::directory const d)
+            iterator(std::shared_ptr<void const> o, std::string_view const b, std::size_t const a, detail::directory const d)
                 : owner(std::move(o)), encoded(b), at(a), dir(d)
             {
             }
@@ -3254,9 +3264,9 @@ public:
         std::shared_ptr<void const> owner;
         std::string_view encoded;
         std::size_t at;
-        cbor::directory dir;
+        detail::directory dir;
 
-        accessor(std::string_view const b, std::size_t const a, cbor::directory const d) : encoded(b), at(a), dir(d)
+        accessor(std::string_view const b, std::size_t const a, detail::directory const d) : encoded(b), at(a), dir(d)
         {
         }
 

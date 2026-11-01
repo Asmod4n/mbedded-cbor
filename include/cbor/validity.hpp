@@ -69,8 +69,13 @@ struct item;
 template <class>
 class owning;
 
+namespace detail
+{
+
 template <bool>
 struct tree_decoder;
+
+}
 
 struct limits {
     static constexpr std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
@@ -511,7 +516,7 @@ public:
     friend struct lazy;
 
     template <bool>
-    friend struct tree_decoder;
+    friend struct detail::tree_decoder;
 
     friend std::expected<owning<item>, error> decode(std::string_view encoded);
 
