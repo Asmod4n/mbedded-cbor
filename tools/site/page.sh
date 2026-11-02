@@ -16,7 +16,8 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
   cd /src
   CBOR_DOXYGEN_OUTPUT=$work/doxygen doxygen $site/../doxygen/sequence.Doxyfile
   python3 $site/../doxygen/sequence-reference.py $work/doxygen/xml $work/reference/tools/sequence.md
-  python3 $site/../doxygen/item-size-reference.py $work/doxygen/xml $work/reference/tools/item_size.md
+  python3 $site/../doxygen/free-function-reference.py $work/doxygen/xml cbor::item_size $work/reference/tools/item_size.md
+  python3 $site/../doxygen/free-function-reference.py $work/doxygen/xml cbor::diagnostic_notation $work/reference/tools/diagnostic_notation.md
   flags="-std=c++23 -O1 -Wall -Wextra -Werror -I/src/include -I/src/third_party/boost_pfr/include -I/usr/lib/llvm-23/include"
   g++-16 $flags $site/tokens.cpp -L/usr/lib/llvm-23/lib -lclang -Wl,-rpath,/usr/lib/llvm-23/lib -o /tmp/tokens
   g++-16 $flags $site/check.cpp -o /tmp/check

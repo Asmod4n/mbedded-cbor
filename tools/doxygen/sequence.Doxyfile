@@ -1,7 +1,7 @@
 PROJECT_NAME = mbedded-cbor
 PROJECT_NUMBER = sequence-pilot
 OUTPUT_DIRECTORY = $(CBOR_DOXYGEN_OUTPUT)
-INPUT = include/cbor/sequence.hpp include/cbor/item_size.hpp
+INPUT = include/cbor/sequence.hpp include/cbor/item_size.hpp include/cbor/diagnostic_notation.hpp
 FILE_PATTERNS = *.hpp
 RECURSIVE = NO
 EXTRACT_ALL = NO
