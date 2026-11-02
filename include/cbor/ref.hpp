@@ -70,6 +70,8 @@ void copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
 
 }
 
+/// Holds a value and shared ownership of the bytes its views refer to.
+/// Views copied out do not keep the bytes alive.
 template <class T>
 class CBOR_OWNER ref
 {
@@ -95,9 +97,15 @@ class CBOR_OWNER ref
     friend class iov_writer;
 
 public:
+    /// Copies the value and shares the owner.
+    /// Its cost includes the copy of T.
     ref(ref const &) = default;
+    /// Copies the value and shares the owner.
+    /// Its cost includes assignment of T and release of the previous owner.
     ref &operator=(ref const &) = default;
 
+    /// Moves the owner and value, leaving the source value default-initialized.
+    /// Its cost includes the operations of T.
     ref(ref &&o) noexcept(std::is_nothrow_move_constructible_v<T> &&
                                         std::is_nothrow_default_constructible_v<T>)
         requires std::is_default_constructible_v<T>
@@ -105,6 +113,8 @@ public:
     {
     }
 
+    /// Moves the owner and value, leaving the source value default-initialized.
+    /// Its cost includes the operations of T and release of the previous owner.
     ref &operator=(ref &&o) noexcept(std::is_nothrow_move_assignable_v<T> &&
                                                    std::is_nothrow_default_constructible_v<T>)
         requires std::is_default_constructible_v<T>
@@ -114,6 +124,8 @@ public:
         return *this;
     }
 
+    /// Returns a view by value or another T by const reference.
+    /// Its cost includes copying T when T is a view.
     std::conditional_t<is_view<T>, T, T const &> operator*() const & CBOR_LIFETIMEBOUND
     {
         return value;
@@ -121,6 +133,9 @@ public:
 
     void operator*() const && = delete;
 
+    /// Returns a pointer to the value. The ref must outlive its use.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     T const *operator->() const & CBOR_LIFETIMEBOUND
     {
         return &value;
@@ -128,18 +143,26 @@ public:
 
     void operator->() const && = delete;
 
+    /// Copies a text view into an owning string.
+    /// @par Complexity
+    /// O(n), where n is the number of bytes; may allocate.
     std::string clone() const
         requires std::same_as<T, std::string_view>
     {
         return std::string(value);
     }
 
+    /// Copies a byte view into an owning vector.
+    /// @par Complexity
+    /// O(n), where n is the number of bytes; may allocate.
     std::vector<std::byte> clone() const
         requires std::same_as<T, std::span<std::byte const>>
     {
         return std::vector<std::byte>(value.begin(), value.end());
     }
 
+    /// Copies the value and the bytes of its views into owned storage.
+    /// The cost includes copying T, traversing its views and copying their bytes.
     owning<T> clone() const
         requires(!std::same_as<T, std::string_view> && !std::same_as<T, std::span<std::byte const>>)
     {
@@ -156,12 +179,14 @@ public:
         return owning<T>(std::shared_ptr<T const>(h, &h->value));
     }
 
+    /// Compares the values using T's equality operator.
     friend bool operator==(ref const &a, ref const &b)
         requires std::equality_comparable<T>
     {
         return a.value == b.value;
     }
 
+    /// Compares the value with b using T's equality operator.
     friend bool operator==(ref const &a, T const &b)
         requires std::equality_comparable<T>
     {
@@ -176,6 +201,8 @@ struct zone_owner;
 
 }
 
+/// Shares a const value and owned storage for the bytes of its views.
+/// A copy shares that storage. Views remain valid while an owner lives.
 template <class T>
 class CBOR_OWNER owning
 {
@@ -191,6 +218,9 @@ class CBOR_OWNER owning
     friend class ref;
 
 public:
+    /// Returns the value by const reference. The owner must outlive its use.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     T const &operator*() const & CBOR_LIFETIMEBOUND
     {
         return *held;
