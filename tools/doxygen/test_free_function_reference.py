@@ -131,6 +131,15 @@ class FreeFunctionReferenceTest(unittest.TestCase):
         self.write_namespace(xml([function(detail='<para>' + interactive() + example + '</para>')]))
         self.assertIn('```cpp\nint answer = 42;\n```', self.render())
 
+    def test_cpp_qualified_name_is_not_an_error_label(self):
+        error_section = ('<simplesect kind="par"><title>Limits and errors</title>'
+                         '<para>depth_error: exceeds limits::nesting_depth. '
+                         'syntax_error: invalid input.</para></simplesect>')
+        self.write_namespace(xml([function(detail='<para>' + interactive() + error_section + '</para>')]))
+        output = self.render()
+        self.assertIn('`depth_error`: exceeds limits::nesting_depth.', output)
+        self.assertNotIn('`limits`:', output)
+
     def test_namespace_underscores_use_doxygen_filename_encoding(self):
         fn = function(name='f', refid='f', brief='<para>Brief.</para>',
                       detail='<para>' + interactive() + '</para>')

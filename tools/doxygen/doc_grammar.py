@@ -16,6 +16,22 @@ def text(node):
     return ' '.join(''.join(node.itertext()).split()) if node is not None else ''
 
 
+def named_errors(value):
+    """Split documented error labels without treating C++ `::` as a label."""
+    label = r'(?<![\w`:])([A-Za-z_][A-Za-z_0-9]*):(?!:)\s+'
+    matches = list(re.finditer(label, value))
+    if not matches or value[:matches[0].start()].strip():
+        raise ValueError('error section must start with a named error')
+    result = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(value)
+        message = value[match.end():end].strip()
+        if not message:
+            raise ValueError('error has no description: ' + match.group(1))
+        result.append((match.group(1), message))
+    return result
+
+
 def verbatim(section, *, preserve_blank_lines=False):
     node = section.find('./para/verbatim')
     if node is None:

@@ -1,10 +1,10 @@
 # Header documentation tools
 
 The sequence and item-size website references and their man pages now use
-header comments. `api_model.py` reads the shared Doxygen XML model for both
-website references and for the item-size man page; the sequence man pages
-still use the earlier class renderer. The remaining API reference and the
-guides still depend on `doc/`. The notes below record how the pilot was
+header comments. `api_model.py` reads the shared Doxygen XML model for the
+website references and for the item-size and diagnostic-notation man pages;
+the sequence man pages still use the earlier class renderer. The remaining API
+reference and the guides still depend on `doc/`. The notes below record how the pilot was
 evaluated; they do not describe the full current build.
 
 The model tests run without Doxygen or a compiler:

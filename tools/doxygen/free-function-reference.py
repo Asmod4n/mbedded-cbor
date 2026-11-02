@@ -6,6 +6,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from api_model import parse_compound
+from doc_grammar import named_errors
 
 
 def _inline_markdown(records):
@@ -195,9 +196,7 @@ def _render_function(function, qualified_symbol, source_member=None):
     if 'Limits and errors' in named:
         error_section = named['Limits and errors']
         error_text = _section_text(error_section)
-        errors = re.findall(r'(?<![\w`])([A-Za-z_][A-Za-z_0-9]*):\s*(.*?)(?=(?<![\w`])[A-Za-z_][A-Za-z_0-9]*:\s*|$)', error_text)
-        if not errors:
-            raise ValueError('Limits and errors section contains no named errors')
+        errors = named_errors(error_text)
         output += '## Errors\n\n' + '\n'.join(
             '- `' + name + '`: ' + message.strip() for name, message in errors) + '\n\n'
     if 'Complexity' in named:

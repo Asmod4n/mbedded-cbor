@@ -1,0 +1,71 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.17.0" xml:lang="en-US">
+  <compounddef id="namespacecbor" kind="namespace" language="C++">
+    <compoundname>cbor</compoundname>
+    <innerclass refid="classcbor_1_1well__formedness" prot="public">cbor::well_formedness</innerclass>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="item__size_8hpp_1acd1369af0b49d757b4ebbca467d85388" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>std::expected&lt; std::size_t, error &gt;</type>
+        <definition>std::expected&lt; std::size_t, error &gt; cbor::item_size</definition>
+        <argsstring>(std::string_view const encoded)</argsstring>
+        <name>item_size</name>
+        <qualifiedname>cbor::item_size</qualifiedname>
+        <param>
+          <type>std::string_view const</type>
+          <declname>encoded</declname>
+        </param>
+        <briefdescription>
+<para>Return the encoded size of the first CBOR data item. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>The item must be well-formed. Bytes after it are ignored. This function does not check nesting depth, UTF-8, tag content, or duplicate map keys. <parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>encoded</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Bytes that begin with the item. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>The item&apos;s size in bytes, or an error if it is incomplete, malformed, indefinite-length, or exceeds an active size limit. </para>
+</simplesect>
+<simplesect kind="par"><title>Limits and errors</title><para>too_little_data: input ends before the item or its claimed children. syntax_error: an invalid head or reserved simple value. indefinite_length: a head uses indefinite length. string_length_exceeded: a string exceeds an active limit. container_elements_exceeded: a container exceeds an active limit. </para>
+</simplesect>
+<simplesect kind="par"><title>Complexity</title><para>O(i), where i is the number of item heads examined, bounded by O(n) for n bytes in the item. Uses O(1) auxiliary memory and allocates nothing. </para>
+</simplesect>
+<simplesect kind="par"><title>Interactive example</title><para><verbatim>* bytes: 82 01 02 07
+* call: cbor::item_size(bytes)
+* result: 3
+* call: cbor::item_size(bytes.substr(3))
+* result: 1
+* </verbatim> </para>
+</simplesect>
+<simplesect kind="par"><title>Interactive example 2</title><para><verbatim>* bytes: 83 01 02 03
+* call: cbor::item_size(bytes)
+* result: 4
+* </verbatim> </para>
+</simplesect>
+<simplesect kind="par"><title>Example</title><para><verbatim>* // bytes: [1, 2] followed by 7, 4 bytes
+* cbor::item_size(bytes);                    // 3
+* cbor::item_size(bytes.substr(0, 2));       // too_little_data
+* // bytes: [_ 1]
+* cbor::item_size(bytes);                    // indefinite_length
+* </verbatim> </para>
+</simplesect>
+<simplesect kind="par"><title>See also</title><para><verbatim>* [sequence](sequence.md) · [limits](../errors/limits.md) · [basics](../../advanced/basics.md), section 5
+* </verbatim> </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/cbor/item_size.hpp" line="254" column="22" bodyfile="include/cbor/item_size.hpp" bodystart="254" bodyend="261"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="include/cbor/item_size.hpp" line="20" column="1"/>
+  </compounddef>
+</doxygen>

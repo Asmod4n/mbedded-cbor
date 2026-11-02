@@ -1297,13 +1297,13 @@ class extended_diagnostic_notation
  * content; tag content is not interpreted and tag 29 is not resolved. The function does not check
  * UTF-8 or duplicate map keys.
  * @param encoded The encoded item.
- * @return Its diagnostic notation, or an error. too_little_data means the
- * input ends before the item ends. syntax_error means an invalid head, an
- * invalid chunk in an indefinite-length string, or bytes follow the item.
- * nesting_depth_exceeded means the item exceeds limits::nesting_depth.
- * string_length_exceeded and
- * container_elements_exceeded mean the corresponding active limit was
- * exceeded.
+ * @return Its diagnostic notation, or an error.
+ * @par Limits and errors
+ * too_little_data: input ends before the item ends.
+ * syntax_error: an invalid head or chunk, or bytes follow the item.
+ * nesting_depth_exceeded: the item exceeds limits::nesting_depth.
+ * string_length_exceeded: a string exceeds an active limit.
+ * container_elements_exceeded: a container exceeds an active limit.
  * @par Complexity
  * O(n), where n is the number of input bytes. The result uses O(n) memory
  * and allocates. The recursive call stack uses O(d) memory, where d is the

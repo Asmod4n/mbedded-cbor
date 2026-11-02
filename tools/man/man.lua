@@ -144,8 +144,11 @@ for _, row in ipairs(rows(text_of(reference .. 'index.md'))) do
   local entries = rows(group_text)
   if group == 'tools' then
     for _, e in ipairs(entries) do
+      -- These pages are replaced by the header-based generator in man.sh.
+      local paths = (e.label == 'item_size' or e.label == 'diagnostic_notation')
+          and {} or {reference .. group .. '/' .. e.file}
       pages[#pages + 1] = {file = e.label, name = 'cbor::' .. e.label, lead = e.rest,
-        intro = pandoc.Blocks{}, paths = {reference .. group .. '/' .. e.file}}
+        intro = pandoc.Blocks{}, paths = paths}
     end
   else
     local first = row.rest:match('`([^`]+)`')
