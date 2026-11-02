@@ -1,4 +1,19 @@
-# Sequence documentation pilot
+# Header documentation tools
+
+The sequence and item-size website references and their man pages now use
+header comments. `api_model.py` reads the shared Doxygen XML model for both
+website references and for the item-size man page; the sequence man pages
+still use the earlier class renderer. The remaining API reference and the
+guides still depend on `doc/`. The notes below record how the pilot was
+evaluated; they do not describe the full current build.
+
+The model tests run without Doxygen or a compiler:
+
+```sh
+PYTHONPATH=tools/doxygen python3 -m unittest tools/doxygen/test_api_model.py
+```
+
+## Sequence documentation pilot
 
 This pilot generates a reference from the API comments in
 `include/cbor/sequence.hpp`. It does not replace the existing website,

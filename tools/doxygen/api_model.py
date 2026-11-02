@@ -184,14 +184,23 @@ def _inline_content(node):
 def _description(node):
     if node is None:
         return '', ()
-    paragraphs, sections = [], []
+    sections = []
     for child in node:
         if child.tag == 'para':
             inline_records = []
+
+            def flush_prose():
+                text = ''.join(record.text for record in inline_records).strip()
+                if text:
+                    sections.append(DocSection('description', '', text,
+                                                inline=tuple(inline_records)))
+                inline_records.clear()
+
             if child.text:
                 inline_records.append(InlineContent('text', child.text))
             for part in child:
                 if part.tag == 'parameterlist':
+                    flush_prose()
                     if part.get('kind') not in ('param', 'exception'):
                         raise DoxygenError(f"unsupported parameter list kind {part.get('kind')!r}")
                     if part.attrib.keys() != {'kind'} or any(c.tag != 'parameteritem' for c in part):
@@ -210,14 +219,13 @@ def _description(node):
                         sections.append(DocSection(section_kind, ', '.join(names), desc,
                                                    tuple(names), inline=desc_inline))
                 elif part.tag == 'simplesect':
+                    flush_prose()
                     sections.append(_simple_section(part))
                 else:
                     inline_records.extend(_inline_content(part)[0])
                 if part.tail:
                     inline_records.append(InlineContent('text', part.tail))
-            inline = ''.join(record.text for record in inline_records).strip()
-            if inline:
-                sections.append(DocSection('description', '', inline, inline=tuple(inline_records)))
+            flush_prose()
         elif child.tag == 'simplesect':
             sections.append(_simple_section(child))
         else:

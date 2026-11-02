@@ -8,6 +8,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from doc_grammar import text, verbatim
+from api_model import parse_compound
 
 
 def listing(node):
@@ -21,56 +22,48 @@ def listing(node):
 
 
 def output_item_size(source, target, version, today):
-    root = ET.parse(source).getroot().find('compounddef')
-    member = next((m for m in root.findall('.//memberdef[@kind="function"]')
-                   if m.findtext('qualifiedname') == 'cbor::item_size'), None)
+    compound = parse_compound(source, kind='namespace', name='cbor')
+    member = next((fn for fn in compound.functions
+                   if fn.qualified_name == 'cbor::item_size'), None)
     if member is None:
         raise ValueError('missing cbor::item_size documentation')
-    brief = text(member.find('briefdescription'))
-    params = member.findall('./param')
-    args = []
-    for p in params:
-        arg = text(p.find('type'))
-        if p.findtext('declname'):
-            arg += ' ' + p.findtext('declname')
-        args.append(arg)
-    signature = text(member.find('type')) + ' item_size(' + ', '.join(args) + ');'
+    brief = member.brief
+    args = [p.type + (' ' + p.name if p.name else '') for p in member.parameters]
+    signature = member.return_type + ' item_size(' + ', '.join(args) + ');'
     description, errors, notes, examples, see_also = [], [], [], [], []
     required = {'RETURN VALUE': False, 'ERRORS': False, 'NOTES': False,
                 'EXAMPLES': False, 'SEE ALSO': False}
-    detail = member.find('detaileddescription')
     returns = ''
-    for para in detail.findall('para'):
-        # Only paragraph text before nested Doxygen blocks is DESCRIPTION.
-        direct = ' '.join((para.text or '').split())
-        if direct:
-            description.append(direct)
-        for simple in para.findall('simplesect'):
-            title = text(simple.find('title'))
-            body = simple.find('para')
-            value = text(body)
-            if simple.get('kind') == 'return':
-                returns = value
-                required['RETURN VALUE'] = bool(returns)
-            elif title == 'Limits and errors':
-                errors.extend(re.findall(r'(too_little_data|syntax_error|indefinite_length|string_length_exceeded|container_elements_exceeded):\s*(.*?)(?=(?:too_little_data|syntax_error|indefinite_length|string_length_exceeded|container_elements_exceeded):|$)', value))
-                required['ERRORS'] = len(errors) == 5
-            elif title == 'Complexity':
-                notes.append(value)
-                required['NOTES'] = bool(value)
-            elif title == 'Example':
-                code = verbatim(simple, preserve_blank_lines=True)
-                if code:
-                    examples.append(code)
-                    required['EXAMPLES'] = True
-            elif title == 'See also':
-                for path in re.findall(r'\[[^\]]+\]\(([^)]+)\)', verbatim(simple)):
-                    mapping = {'sequence.md': 'cbor::sequence(3)', '../errors/limits.md': 'cbor::error(3)',
-                               '../../advanced/basics.md': 'advanced/basics.md, section 5'}
-                    if path not in mapping:
-                        raise ValueError('unsupported cross-reference: ' + path)
-                    see_also.append(mapping[path])
-                required['SEE ALSO'] = bool(see_also)
+    for section_record in member.sections:
+        if section_record.kind == 'description':
+            # The legacy renderer used direct paragraph text only; API sections
+            # already exclude nested Doxygen blocks and normalize whitespace.
+            direct = ' '.join(section_record.text.split())
+            if direct:
+                description.append(direct)
+            continue
+        if section_record.kind == 'return':
+            returns = section_record.text
+            required['RETURN VALUE'] = bool(returns)
+        elif section_record.title == 'Limits and errors':
+            errors.extend(re.findall(r'(too_little_data|syntax_error|indefinite_length|string_length_exceeded|container_elements_exceeded):\s*(.*?)(?=(?:too_little_data|syntax_error|indefinite_length|string_length_exceeded|container_elements_exceeded):|$)', section_record.text))
+            required['ERRORS'] = len(errors) == 5
+        elif section_record.title == 'Complexity':
+            notes.append(section_record.text)
+            required['NOTES'] = bool(section_record.text)
+        elif section_record.title == 'Example':
+            code = section_record.verbatim
+            if code:
+                examples.append(code)
+                required['EXAMPLES'] = True
+        elif section_record.title == 'See also':
+            for path in re.findall(r'\[[^\]]+\]\(([^)]+)\)', section_record.verbatim or ''):
+                mapping = {'sequence.md': 'cbor::sequence(3)', '../errors/limits.md': 'cbor::error(3)',
+                           '../../advanced/basics.md': 'advanced/basics.md, section 5'}
+                if path not in mapping:
+                    raise ValueError('unsupported cross-reference: ' + path)
+                see_also.append(mapping[path])
+            required['SEE ALSO'] = bool(see_also)
     missing = [name for name, found in required.items() if not found]
     if not description:
         missing.insert(0, 'DESCRIPTION')

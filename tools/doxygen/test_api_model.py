@@ -21,9 +21,24 @@ class ApiModelTest(unittest.TestCase):
           </memberdef></sectiondef></compounddef></doxygen>'''
         fn = parse_compound(xml).functions[0]
         self.assertEqual(fn.brief, 'Brief link tail.')
-        prose = next(section for section in fn.sections if section.kind == 'description')
-        self.assertEqual(prose.text, 'Before linked words, after.\n              \n              More inline tail.')
+        prose = [section.text for section in fn.sections if section.kind == 'description']
+        self.assertEqual(prose, ['Before linked words, after.', 'More inline tail.'])
         self.assertEqual(fn.sections[-1].verbatim, ' first line\n   indented line')
+
+    def test_description_sections_follow_source_order(self):
+        xml = '''<doxygen><compounddef kind="namespace"><compoundname>demo</compoundname>
+          <sectiondef><memberdef kind="function" prot="public"><type>void</type><name>f</name>
+          <qualifiedname>demo::f</qualifiedname><argsstring>()</argsstring><detaileddescription>
+          <para>Before.<parameterlist kind="param"><parameteritem><parameternamelist>
+          <parametername>x</parametername></parameternamelist><parameterdescription><para>Value.</para>
+          </parameterdescription></parameteritem></parameterlist>Between.<simplesect kind="return">
+          <para>Result.</para></simplesect>After.</para></detaileddescription>
+          </memberdef></sectiondef></compounddef></doxygen>'''
+        sections = parse_compound(xml).functions[0].sections
+        self.assertEqual([(section.kind, section.title or section.text) for section in sections],
+                         [('description', 'Before.'), ('param', 'x'),
+                          ('description', 'Between.'), ('return', 'Result.'),
+                          ('description', 'After.')])
 
     def test_class_documentation_and_template_metadata(self):
         xml = '''<doxygen><compounddef kind="class"><compoundname>demo::Range</compoundname>

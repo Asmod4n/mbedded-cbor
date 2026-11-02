@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
+"""Render the cbor::sequence reference from the shared Doxygen model."""
 import argparse
-import xml.etree.ElementTree as ET
 from pathlib import Path
-from doc_grammar import par_sections, text
+
+from api_model import parse_compound
 
 
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument('xml', type=Path)
-    p.add_argument('output', type=Path)
-    args = p.parse_args()
-    root = ET.parse(args.xml / 'classcbor_1_1sequence.xml').getroot().find('compounddef')
-    if root.findtext('compoundname') != 'cbor::sequence':
-        raise ValueError('unexpected class')
+def _reference_sections(compound):
     metadata = {}
-    for section in par_sections(root.findall('./detaileddescription/para/simplesect')):
-        title = section.title
-        if title in metadata:
-            raise ValueError('duplicate reference section: ' + title)
-        if section.kind != 'par' or title not in ('Call sequence', 'Interactive example', 'See also'):
-            raise ValueError('unsupported reference section: ' + title)
-        if section.verbatim is None:
-            raise ValueError('reference section has no verbatim content')
-        metadata[title] = section.verbatim
+    details = []
+    for section in compound.sections:
+        if section.kind == 'description':
+            details.append(' '.join(section.text.split()))
+        elif section.kind == 'par':
+            if section.title in metadata:
+                raise ValueError('duplicate reference section: ' + section.title)
+            if section.title not in ('Call sequence', 'Interactive example', 'See also'):
+                raise ValueError('unsupported reference section: ' + section.title)
+            if section.verbatim is None:
+                raise ValueError('reference section has no verbatim content')
+            metadata[section.title] = section.verbatim
+        else:
+            raise ValueError('unsupported class description section: ' + section.kind)
     if set(metadata) != {'Call sequence', 'Interactive example', 'See also'}:
         raise ValueError('incomplete reference metadata')
     example = metadata['Interactive example'].splitlines()
@@ -30,51 +29,47 @@ def main():
         raise ValueError('example has no input')
     if not any(line.startswith('call: ') for line in example):
         raise ValueError('example has no call')
-    details = [text(root.find('./briefdescription/para'))]
-    for para in root.findall('./detaileddescription/para'):
-        if not len(para):
-            if text(para):
-                details.append(text(para))
-        elif all(child.tag in ('ref', 'computeroutput') for child in para):
-            details.append(text(para))
-        elif (para.text or '').strip() or any(child.tag != 'simplesect' or (child.tail or '').strip() for child in para):
-            raise ValueError('unsupported mixed class description')
-    if not details:
+    if not compound.brief:
         raise ValueError('class has no description')
-    comments = []
-    for filename in ('classcbor_1_1sequence.xml', 'structcbor_1_1sequence_1_1iterator.xml'):
-        cls = ET.parse(args.xml / filename).getroot().find('compounddef')
-        if filename.startswith('struct'):
-            iterator_text = [text(p) for block in ('briefdescription', 'detaileddescription')
-                             for p in cls.findall('./' + block + '/para') if text(p)]
-            if not iterator_text:
-                raise ValueError('missing iterator description')
-            comments.append('**`cbor::sequence::iterator`**\n\n' + ' '.join(iterator_text))
-        for member in cls.findall('./sectiondef/memberdef[@kind="function"][@prot="public"]'):
-            name = member.findtext('qualifiedname') + member.findtext('argsstring')
-            paragraphs = member.findall('detaileddescription/para')
-            if len(paragraphs) != 1:
-                raise ValueError('expected exactly one function paragraph: ' + name)
-            para = paragraphs[0]
-            if para is None:
-                raise ValueError('missing function description: ' + name)
-            out = [para.text.strip()] if para.text and para.text.strip() else []
-            for child in para:
-                if child.tag == 'parameterlist':
-                    for item in child.findall('parameteritem'):
-                        out.append(text(item.find('parameternamelist')) + ': ' + text(item.find('parameterdescription')))
-                elif child.tag == 'simplesect':
-                    if child.get('kind') == 'return':
-                        out.append('Returns: ' + text(child.find('para')))
-                    elif child.get('kind') == 'par' and text(child.find('title')) == 'Complexity':
-                        out.append('Complexity: ' + text(child.find('para')))
-                    else:
-                        raise ValueError('unsupported function section: ' + name)
-                else:
-                    raise ValueError('unsupported function element: ' + child.tag)
-                if (child.tail or '').strip():
-                    raise ValueError('unsupported function paragraph tail: ' + name)
-            comments.append('**`' + name + '`**\n\n' + ' '.join(out))
+    return metadata, [compound.brief] + details
+
+
+def _function_comment(function):
+    name = function.qualified_name + function.signature.partition(function.qualified_name)[2]
+    out = []
+    for section in function.sections:
+        if section.kind == 'description':
+            out.append(section.text)
+        elif section.kind == 'param':
+            out.append(section.title + ': ' + section.text)
+        elif section.kind == 'return':
+            out.append('Returns: ' + section.text)
+        elif section.kind == 'par' and section.title == 'Complexity':
+            out.append('Complexity: ' + section.text)
+        else:
+            raise ValueError('unsupported function section: ' + name)
+    if not out:
+        raise ValueError('missing function description: ' + name)
+    return '**`' + name + '`**\n\n' + ' '.join(out)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('xml', type=Path)
+    parser.add_argument('output', type=Path)
+    args = parser.parse_args()
+    sequence = parse_compound(args.xml / 'classcbor_1_1sequence.xml',
+                              kind='class', name='cbor::sequence')
+    iterator = parse_compound(args.xml / 'structcbor_1_1sequence_1_1iterator.xml',
+                              kind='struct', name='cbor::sequence::iterator')
+    metadata, details = _reference_sections(sequence)
+    iterator_text = [c.brief for c in (iterator,) if c.brief]
+    iterator_text.extend(s.text for s in iterator.sections if s.kind == 'description' and s.text)
+    if not iterator_text:
+        raise ValueError('missing iterator description')
+    comments = [_function_comment(fn) for fn in sequence.functions]
+    comments.append('**`cbor::sequence::iterator`**\n\n' + ' '.join(iterator_text))
+    comments.extend(_function_comment(fn) for fn in iterator.functions)
     if len(comments) != 10:
         raise ValueError('unexpected number of sequence operations')
     output = '# cbor::sequence\n\n'
