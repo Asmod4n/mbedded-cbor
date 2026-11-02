@@ -29,6 +29,87 @@
 namespace cbor
 {
 
+/**
+ * @brief Read a CBOR Sequence whose bytes arrive in pieces.
+ * @headerfile sequence_reader.hpp cbor/sequence_reader.hpp
+ *
+ * Reads a CBOR Sequence (RFC 8742) whose bytes arrive in pieces.
+ * feed gives the reader the next piece. next returns a lazy for a complete
+ * item, or too_little_data while it waits. empty is true when the reader
+ * holds no unread byte.
+ *
+ * A moved owning range and a shared owner keep a piece without a byte copy.
+ * A borrowed range or an owning lvalue copies the bytes. An item whole in
+ * a held piece is a view into that piece. An item that spans pieces is
+ * copied into the reader's buffer. Each returned item keeps its bytes alive
+ * after later feeds and after the reader is destroyed. Keep shared bytes
+ * unchanged while the reader or a returned item uses them.
+ *
+ * The reader cannot be copied. A char array does not compile, because it
+ * includes its terminating NUL. A shared pointer to non-const bytes does
+ * not compile. A null shared owner or a call of feed, next or empty on a
+ * moved-from reader throws std::logic_error, or terminates without exceptions.
+ * After an error other than too_little_data, next returns that error and
+ * feed retains no further bytes.
+ *
+ * The reader checks item heads and nesting depth. It does not check UTF-8,
+ * duplicate keys, tag content, or the string-length and element-count limits.
+ * Later reads through the returned lazy apply their own checks.
+ *
+ * @par Call sequence
+ * @verbatim
+ * cbor::sequence_reader r  → sequence_reader
+ * r.feed(std::move(piece)) → void
+ * r.next()                 → std::expected<lazy, error>
+ * r.empty()                → bool
+ * @endverbatim
+ * @par Interactive example
+ * @verbatim
+ * bytes: 82 01 02 03
+ * call: cbor::sequence_reader r
+ * result: sequence_reader that holds no unread byte
+ * call: auto first = bytes.substr(0, 2)
+ * result: 2 bytes: 82 01
+ * call: r.feed(std::move(first))
+ * result: void
+ * call: r.empty()
+ * result: false
+ * call: auto second = bytes.substr(2)
+ * result: 2 bytes: 02 03
+ * call: r.feed(std::move(second))
+ * result: void
+ * call: r.next()->size()
+ * result: 2
+ * call: r.next()->get<std::int64_t>()
+ * result: 3
+ * call: r.empty()
+ * result: true
+ * @endverbatim
+ * @par Limits and errors
+ * too_little_data: the item is not complete; feed more bytes.
+ * syntax_error: an invalid head or reserved simple value.
+ * indefinite_length: a head uses indefinite length.
+ * nesting_depth_exceeded: the item exceeds limits::nesting_depth.
+ * @par Complexity
+ * The reader scans item heads and skips string content by its length.
+ * Construction allocates the shared buffer. feed can
+ * allocate buffer storage or piece records; moving an owning range allocates
+ * its shared owner. next can allocate when it joins an item across pieces.
+ * @par Example
+ * @verbatim
+ * cbor::sequence_reader r;
+ * r.feed(std::move(first));     // 82 01: the start of [1, 2]
+ * r.next();                     // too_little_data
+ * r.feed(std::move(second));    // 02 03
+ * r.next()->size();             // 2
+ * r.next()->get<std::int64_t>(); // 3
+ * r.empty();                    // true
+ * @endverbatim
+ * @par See also
+ * @verbatim
+ * [sequence](sequence.md) · [../lazy/index.md](../lazy/index.md) · [../../runtime.md](../../runtime.md), section 7
+ * @endverbatim
+ */
 class sequence_reader
 {
     enum class phase { head, argument, string_content, elements };
@@ -226,16 +307,24 @@ class sequence_reader
     }
 
 public:
+    /// Constructs an empty reader.
     sequence_reader() = default;
 
+    /// Copy construction is disabled.
     sequence_reader(sequence_reader const &) = delete;
 
+    /// Copy assignment is disabled.
     sequence_reader &operator=(sequence_reader const &) = delete;
 
+    /// Moves the reader and its unread bytes.
     sequence_reader(sequence_reader &&) = default;
 
+    /// Moves the reader and replaces its unread bytes.
+    /// @return This reader.
     sequence_reader &operator=(sequence_reader &&) = default;
 
+    /// Copies a borrowed piece.
+    /// @param piece The next bytes of the sequence.
     template <borrowed_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const piece)
@@ -243,6 +332,8 @@ public:
         bytes_feed(std::string_view(std::ranges::data(piece), std::ranges::size(piece)));
     }
 
+    /// Copies an owning lvalue.
+    /// @param piece The next bytes of the sequence.
     template <owning_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const &piece)
@@ -250,12 +341,16 @@ public:
         bytes_feed(std::string_view(std::ranges::data(piece), std::ranges::size(piece)));
     }
 
+    /// Moves an owning piece into shared storage.
+    /// @param piece The next bytes of the sequence.
     template <owning_range_of_chars Piece>
     void feed(Piece &&piece)
     {
         feed(std::make_shared<Piece const>(std::move(piece)));
     }
 
+    /// Shares a non-null owner of a piece.
+    /// @param piece The next bytes of the sequence.
     template <owning_range_of_chars Piece>
     void feed(std::shared_ptr<Piece const> piece)
     {
@@ -267,12 +362,18 @@ public:
         piece_push(held_piece{std::move(piece), bytes});
     }
 
+    /// @return Whether the reader holds no unread byte.
+    /// @par Complexity
+    /// O(1).
     bool empty() const
     {
         throw_logic_error_if_moved_from();
         return buffer->size() == item_begin && piece_first == pieces.size();
     }
 
+    /// Returns the next complete item and consumes its bytes.
+    /// @return A lazy that owns its bytes, or an error.
+    /// too_little_data retains the partial item for a later feed.
     std::expected<lazy, error> next()
     {
         throw_logic_error_if_moved_from();
@@ -324,3 +425,4 @@ public:
 };
 
 } // namespace cbor
+
