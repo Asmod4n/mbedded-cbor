@@ -2,6 +2,11 @@
 
 #include "common.hpp"
 
+#include <cbor/describe.hpp>
+#include <cbor/error.hpp>
+#include <cbor/item_size.hpp>
+#include <cbor/schema.hpp>
+
 #ifdef __cpp_impl_reflection
 
 #include <array>

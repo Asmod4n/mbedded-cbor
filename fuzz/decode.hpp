@@ -3,6 +3,10 @@
 #include "common.hpp"
 #include "../test/owned_copy.hpp"
 
+#include <cbor/encode.hpp>
+#include <cbor/error.hpp>
+#include <cbor/item_size.hpp>
+
 namespace fuzz
 {
 
