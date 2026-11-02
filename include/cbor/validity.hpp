@@ -82,9 +82,14 @@ struct tree_decoder;
 
 }
 
+/// Build-time limits set by the CBOR_*_DEFAULT macros.
+/// Use the same values in every translation unit of a program.
 struct limits {
+    /// Maximum nesting depth; defaults to 128 and cannot exceed 512.
     static constexpr std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
+    /// Maximum bytes in one text or byte string; SIZE_MAX sets no limit.
     static constexpr std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
+    /// Maximum array elements or map pairs; SIZE_MAX sets no limit.
     static constexpr std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
 };
 
