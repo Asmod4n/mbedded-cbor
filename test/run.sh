@@ -14,7 +14,7 @@
 #   libc++ of Debian for wasm32 has no std::basic_fstream, which the runner of doctest needs.
 #   The compile_fail tests run in check, gcc-release, clang-release, gcc15-release and gcc-describe only.
 #   full also runs test/interop/run.sh, which decodes the output of the library with other decoders.
-#   iter <target>...: builds only the named targets of gcc-asan with CBOR_TEST_GROUPS=ON in $CBOR_BUILD_ROOT/iter/gcc-asan,
+#   iter <target>...: builds only the named targets of gcc-asan with CBOR_TEST_GROUPS=ON in $CBOR_BUILD_ROOT/<branch>/iter,
 #   in a container that stays up between runs, and runs each test program among them.
 #   iter check-changed: builds the test programs that a change touches and runs each program whose program or data
 #   changed since its last run that passed. CBOR_TEST_PATTERN selects the test cases of these runs.
@@ -107,7 +107,7 @@ one() {
 }
 
 iter() {
-	local dir=$root/iter/gcc-asan name=mbedded-cbor-iter-gcc-asan jobs=$((parallel_level - 1)) user
+	local dir=$root/$branch/iter name=mbedded-cbor-iter-gcc-asan jobs=$((parallel_level - 1)) user
 	[ $jobs -ge 1 ] || jobs=1
 	mkdir -p "$dir" "$cache" "$root/$branch"
 	if [ "$(id -u)" = 0 ]; then
@@ -117,13 +117,13 @@ iter() {
 		user="--userns=keep-id --user $(id -u):$(id -g)"
 	fi
 	if ! podman container exists "$name" ||
-		[ "$(podman container inspect -f '{{.Image}} {{.State.Running}}' "$name")" != "$(podman image inspect -f '{{.Id}}' "$image") true" ]; then
+		[ "$(podman container inspect -f '{{.Image}} {{.State.Running}} {{range .Mounts}}{{if eq .Destination "/src"}}{{.Source}}{{end}}{{end}} {{range .Mounts}}{{if eq .Destination "/b"}}{{.Source}}{{end}}{{end}}' "$name")" != "$(podman image inspect -f '{{.Id}}' "$image") true $src $dir" ]; then
 		podman container exists "$name" && { podman rm -f "$name" >/dev/null || return 1; }
 		podman run -d --name "$name" --network none $user \
 			-v "$src":/src:ro -v "$dir":/b -v "$cache":/ccache \
 			-e HOME=/tmp -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=9G ${CCACHE_DISABLE:+-e CCACHE_DISABLE=$CCACHE_DISABLE} -e CMAKE_BUILD_PARALLEL_LEVEL="$jobs" -e CBOR_TEST_PATTERN="$pattern" \
 			-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
-			"$image" sleep infinity >/dev/null || return 1
+			"$image" sleep infinity >/dev/null 9>&- || return 1
 	fi
 	podman exec -e CBOR_TEST_PATTERN="$pattern" "$name" bash -c '
 		s=${EPOCHREALTIME/./}
