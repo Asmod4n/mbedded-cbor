@@ -2,6 +2,9 @@
 
 #include "common.hpp"
 
+#include <cbor/encode.hpp>
+#include <cbor/item_size.hpp>
+
 #include <bit>
 #include <cstdint>
 #include <optional>

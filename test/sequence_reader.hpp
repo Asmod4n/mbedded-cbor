@@ -103,8 +103,10 @@ inline sequence_outcome sequence_outcome_of(std::string_view const bytes)
     return out;
 }
 
-// The forms in which a piece reaches the reader: a view that the reader copies, a std::string that the reader
-// takes without a copy, a std::shared_ptr that the reader holds, and the three in turn, one per piece.
+// The forms in which a piece reaches the reader: a view that the reader copies, a std::vector<char> that the
+// reader takes without a copy, a std::shared_ptr that the reader holds, and the three in turn, one per piece.
+// The owned forms are a std::vector<char> of the exact size of the piece and not a std::string, because the
+// inline buffer and the closing zero of a std::string hide a read of up to 16 bytes past the piece from ASan.
 enum class feed_form { view, rvalue, shared, each_in_turn };
 
 inline constexpr std::array<feed_form, 4> feed_forms{feed_form::view, feed_form::rvalue, feed_form::shared,
@@ -120,10 +122,10 @@ inline void piece_feed(cbor::sequence_reader &r, std::string_view const piece, f
         r.feed(piece);
         break;
     case feed_form::rvalue:
-        r.feed(std::string(piece));
+        r.feed(std::vector<char>(piece.begin(), piece.end()));
         break;
     default:
-        r.feed(std::make_shared<std::string const>(piece));
+        r.feed(std::make_shared<std::vector<char> const>(piece.begin(), piece.end()));
         break;
     }
 }

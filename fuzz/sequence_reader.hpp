@@ -3,6 +3,9 @@
 #include "../test/sequence_reader.hpp"
 #include "common.hpp"
 
+#include <cbor/error.hpp>
+#include <cbor/sequence.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <random>

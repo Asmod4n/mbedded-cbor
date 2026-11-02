@@ -2,6 +2,9 @@
 
 #include "common.hpp"
 
+#include <cbor/item_size.hpp>
+#include <cbor/structs.hpp>
+
 #include <array>
 #include <cstdint>
 #include <map>

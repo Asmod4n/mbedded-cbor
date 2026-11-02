@@ -3,6 +3,9 @@
 #include "common.hpp"
 #include "../test/owned_copy.hpp"
 
+#include <cbor/item_size.hpp>
+#include <cbor/lazy.hpp>
+
 namespace fuzz
 {
 

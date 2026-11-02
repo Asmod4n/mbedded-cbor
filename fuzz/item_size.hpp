@@ -2,6 +2,9 @@
 
 #include "common.hpp"
 
+#include <cbor/error.hpp>
+#include <cbor/item_size.hpp>
+
 namespace fuzz
 {
 
