@@ -9,6 +9,10 @@
 // https://datatracker.ietf.org/doc/html/draft-ietf-cbor-packed-19
 #pragma once
 
+#ifndef CBOR_BUMP_CHUNK_SIZE
+#define CBOR_BUMP_CHUNK_SIZE (std::size_t{1} << 13)
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -113,7 +117,8 @@ public:
     static constexpr std::size_t size_limit = std::numeric_limits<std::size_t>::max();
 
     static constexpr std::size_t initial_size_limit = std::size_t{1} << 20;
-    static constexpr std::size_t bump_chunk_size = std::size_t{1} << 13;
+    static constexpr std::size_t bump_chunk_size = CBOR_BUMP_CHUNK_SIZE;
+    static_assert(bump_chunk_size > 0, "A chunk of the zone must hold at least one byte.");
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_limit(std::uint64_t const value,
                                                                                std::size_t const limit,
