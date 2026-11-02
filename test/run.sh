@@ -117,7 +117,7 @@ iter() {
 		user="--userns=keep-id --user $(id -u):$(id -g)"
 	fi
 	if ! podman container exists "$name" ||
-		[ "$(podman container inspect -f '{{.Image}} {{.State.Running}}' "$name")" != "$(podman image inspect -f '{{.Id}}' "$image") true" ]; then
+		[ "$(podman container inspect -f '{{.Image}} {{.State.Running}} {{range .Mounts}}{{if eq .Destination "/src"}}{{.Source}}{{end}}{{end}}' "$name")" != "$(podman image inspect -f '{{.Id}}' "$image") true $src" ]; then
 		podman container exists "$name" && { podman rm -f "$name" >/dev/null || return 1; }
 		podman run -d --name "$name" --network none $user \
 			-v "$src":/src:ro -v "$dir":/b -v "$cache":/ccache \
