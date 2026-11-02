@@ -123,7 +123,7 @@ iter() {
 			-v "$src":/src:ro -v "$dir":/b -v "$cache":/ccache \
 			-e HOME=/tmp -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=9G ${CCACHE_DISABLE:+-e CCACHE_DISABLE=$CCACHE_DISABLE} -e CMAKE_BUILD_PARALLEL_LEVEL="$jobs" -e CBOR_TEST_PATTERN="$pattern" \
 			-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
-			"$image" sleep infinity >/dev/null || return 1
+			"$image" sleep infinity >/dev/null 9>&- || return 1
 	fi
 	podman exec -e CBOR_TEST_PATTERN="$pattern" "$name" bash -c '
 		s=${EPOCHREALTIME/./}
