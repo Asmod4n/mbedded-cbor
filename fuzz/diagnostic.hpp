@@ -2,6 +2,10 @@
 
 #include "common.hpp"
 
+#include <cbor/decode.hpp>
+#include <cbor/diagnostic_notation.hpp>
+#include <cbor/item_size.hpp>
+
 namespace fuzz
 {
 

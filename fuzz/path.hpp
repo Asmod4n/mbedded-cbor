@@ -3,6 +3,10 @@
 #include "common.hpp"
 #include "../test/owned_copy.hpp"
 
+#include <cbor/error.hpp>
+#include <cbor/lazy.hpp>
+#include <cbor/query.hpp>
+
 #include <bit>
 #include <cmath>
 #include <limits>
