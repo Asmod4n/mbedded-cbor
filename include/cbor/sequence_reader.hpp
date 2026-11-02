@@ -231,7 +231,7 @@ public:
     /// feed, next and empty on a moved-from reader throw std::logic_error,
     /// or terminate without exceptions.
     /// @par Complexity
-    /// O(1), with an allocation for the buffer.
+    /// O(d), where d is the nesting-depth limit, plus one allocation.
     sequence_reader() = default;
 
     /// Copy construction is disabled.
@@ -249,13 +249,15 @@ public:
     /// @return This reader.
     /// @par Complexity
     /// O(p + d), where p is the number of held pieces and d is the nesting-depth limit.
+    /// Releasing an owner can also run its deleter.
     sequence_reader &operator=(sequence_reader &&) = default;
 
     /// Copies a borrowed piece.
     /// @param piece The next bytes of the sequence.
     /// @par Complexity
-    /// O(n + p), where n is the data processed and p is the number of held pieces.
-    /// A range operation adds its own cost.
+    /// O(b + p), where b is the number of bytes copied or moved by buffer
+    /// operations and p is the number of held pieces moved by the vector.
+    /// Allocation, range operations and owner deleters add their own costs.
     template <borrowed_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const piece)
@@ -266,8 +268,9 @@ public:
     /// Copies an owning lvalue.
     /// @param piece The next bytes of the sequence.
     /// @par Complexity
-    /// O(n + p), where n is the data processed and p is the number of held pieces.
-    /// A range operation adds its own cost.
+    /// O(b + p), where b is the number of bytes copied or moved by buffer
+    /// operations and p is the number of held pieces moved by the vector.
+    /// Allocation, range operations and owner deleters add their own costs.
     template <owning_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const &piece)
@@ -278,8 +281,9 @@ public:
     /// Moves an owning piece into shared storage.
     /// @param piece The next bytes of the sequence.
     /// @par Complexity
-    /// O(n + p), where n is the data processed and p is the number of held pieces.
-    /// A range operation adds its own cost.
+    /// O(b + p), where b is the number of bytes copied or moved by buffer
+    /// operations and p is the number of held pieces moved by the vector.
+    /// Allocation, range operations and owner deleters add their own costs.
     template <owning_range_of_chars Piece>
     void feed(Piece &&piece)
     {
@@ -291,8 +295,9 @@ public:
     /// A null owner throws std::logic_error, or terminates without exceptions.
     /// @param piece The next bytes of the sequence.
     /// @par Complexity
-    /// O(n + p), where n is the data processed and p is the number of held pieces.
-    /// A range operation adds its own cost.
+    /// O(b + p), where b is the number of bytes copied or moved by buffer
+    /// operations and p is the number of held pieces moved by the vector.
+    /// Allocation, range operations and owner deleters add their own costs.
     template <owning_range_of_chars Piece>
     void feed(std::shared_ptr<Piece const> piece)
     {
@@ -322,8 +327,10 @@ public:
     /// @return A lazy that owns its bytes, or an error.
     /// too_little_data retains the partial item for a later feed.
     /// @par Complexity
-    /// O(n + p), where n is the bytes scanned or copied and p is the pieces
-    /// consumed or released after an error.
+    /// O(h + b + p), where h is the number of heads visited, b is the total
+    /// bytes copied or moved by buffer operations, and p is the number of
+    /// pieces consumed or released. A head may be visited more than once.
+    /// Allocation and owner deleters add their own costs.
     std::expected<lazy, error> next()
     {
         throw_logic_error_if_moved_from();
