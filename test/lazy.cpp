@@ -1747,6 +1747,16 @@ TEST_CASE("lazy: a decode checks a container count that does not fit 32 bits")
     CHECK_EQ(test::lazy_of_copy(map_count)->clone().error(), error::too_little_data);
 }
 
+// A lazy over empty input holds no data item. Its clone must give the error that cbor::decode gives for the same
+// input, and must not stop the process.
+TEST_CASE("lazy: the clone of empty input gives the error of decode")
+{
+    auto const empty = test::lazy_of_copy(""s);
+    REQUIRE(empty.has_value());
+    CHECK_EQ(empty->clone().error(), error::too_little_data);
+    CHECK_EQ(empty->clone().error(), cbor::decode(std::string_view{}).error());
+}
+
 // RFC 8746 2.1 (refs/rfc8746.txt:143): the content of a typed array tag is a byte string. A typed array tag whose
 // content is not one is refused the same way by every reader, whether the reader reads the content or only the tag.
 TEST_CASE("lazy: a typed array tag with content that is no byte string is refused by every reader")

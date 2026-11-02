@@ -304,7 +304,7 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
 {
     auto decoded = std::make_unique<zone>(
         validity::checked_mul(encoded.size(), sizeof(item) + 1)
-            .transform([](std::size_t const size) { return std::min(size, validity::initial_size_limit); })
+            .transform([](std::size_t const size) { return std::clamp(size, std::size_t{1}, validity::initial_size_limit); })
             .value_or(validity::initial_size_limit));
     tree_decoder<Checked> tree{*decoded, {encoded}, depth_max};
     auto const built = tree.item_decode(std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0);

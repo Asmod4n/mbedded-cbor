@@ -167,6 +167,14 @@ TEST_CASE("decode: a string length larger than the input is too_little_data")
     }
 }
 
+// RFC 8949 3: a data item has at least one byte, its initial byte. Empty input holds no data item. The decode of
+// empty input must give an error value and must not stop the process.
+TEST_CASE("decode: empty input is too_little_data")
+{
+    CHECK_EQ(cbor::decode(std::string_view{}).error(), cbor::error::too_little_data);
+    CHECK_EQ(cbor::decode(""s).error(), cbor::error::too_little_data);
+}
+
 // Owner decision 2026-10-20: cbor::decode reads the first data item and no byte after it, as a lazy does, so a
 // CBOR sequence (RFC 8742) can be decoded item by item. The bytes 01 02 are the sequence 1, 2.
 TEST_CASE("decode: bytes after the data item are not read")
