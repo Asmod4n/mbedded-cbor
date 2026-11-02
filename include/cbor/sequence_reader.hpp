@@ -255,7 +255,7 @@ public:
     /// Copies a borrowed piece.
     /// @param piece The next bytes of the sequence.
     /// @par Complexity
-    /// O(b + p), where b is the number of bytes copied or moved by buffer
+    /// O(1 + b + p), where b is the number of bytes copied or moved by buffer
     /// operations and p is the number of held pieces moved by the vector.
     /// Allocation, range operations and owner deleters add their own costs.
     template <borrowed_range_of_chars Piece>
@@ -268,7 +268,7 @@ public:
     /// Copies an owning lvalue.
     /// @param piece The next bytes of the sequence.
     /// @par Complexity
-    /// O(b + p), where b is the number of bytes copied or moved by buffer
+    /// O(1 + b + p), where b is the number of bytes copied or moved by buffer
     /// operations and p is the number of held pieces moved by the vector.
     /// Allocation, range operations and owner deleters add their own costs.
     template <owning_range_of_chars Piece>
@@ -281,7 +281,7 @@ public:
     /// Moves an owning piece into shared storage.
     /// @param piece The next bytes of the sequence.
     /// @par Complexity
-    /// O(b + p), where b is the number of bytes copied or moved by buffer
+    /// O(1 + b + p), where b is the number of bytes copied or moved by buffer
     /// operations and p is the number of held pieces moved by the vector.
     /// Allocation, range operations and owner deleters add their own costs.
     template <owning_range_of_chars Piece>
@@ -295,7 +295,7 @@ public:
     /// A null owner throws std::logic_error, or terminates without exceptions.
     /// @param piece The next bytes of the sequence.
     /// @par Complexity
-    /// O(b + p), where b is the number of bytes copied or moved by buffer
+    /// O(1 + b + p), where b is the number of bytes copied or moved by buffer
     /// operations and p is the number of held pieces moved by the vector.
     /// Allocation, range operations and owner deleters add their own costs.
     template <owning_range_of_chars Piece>
@@ -327,7 +327,7 @@ public:
     /// @return A lazy that owns its bytes, or an error.
     /// too_little_data retains the partial item for a later feed.
     /// @par Complexity
-    /// O(h + b + p), where h is the number of heads visited, b is the total
+    /// O(1 + h + b + p), where h is the number of heads visited, b is the total
     /// bytes copied or moved by buffer operations, and p is the number of
     /// pieces consumed or released. A head may be visited more than once.
     /// Allocation and owner deleters add their own costs.
