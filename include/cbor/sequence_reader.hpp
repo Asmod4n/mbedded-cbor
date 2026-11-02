@@ -97,6 +97,8 @@ namespace cbor
  * its shared owner. next can allocate when it joins an item across pieces.
  * @par Example
  * @verbatim
+ * std::string first{"\x82\x01", 2};
+ * std::string second{"\x02\x03", 2};
  * cbor::sequence_reader r;
  * r.feed(std::move(first));     // 82 01: the start of [1, 2]
  * r.next();                     // too_little_data
@@ -308,6 +310,8 @@ class sequence_reader
 
 public:
     /// Constructs an empty reader.
+    /// @par Complexity
+    /// O(1), with an allocation for the buffer.
     sequence_reader() = default;
 
     /// Copy construction is disabled.
@@ -317,14 +321,21 @@ public:
     sequence_reader &operator=(sequence_reader const &) = delete;
 
     /// Moves the reader and its unread bytes.
+    /// @par Complexity
+    /// O(d), where d is the nesting-depth limit.
     sequence_reader(sequence_reader &&) = default;
 
     /// Moves the reader and replaces its unread bytes.
     /// @return This reader.
+    /// @par Complexity
+    /// O(p + d), where p is the number of held pieces and d is the nesting-depth limit.
     sequence_reader &operator=(sequence_reader &&) = default;
 
     /// Copies a borrowed piece.
     /// @param piece The next bytes of the sequence.
+    /// @par Complexity
+    /// O(n + p), where n is the data processed and p is the number of held pieces.
+    /// A range operation adds its own cost.
     template <borrowed_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const piece)
@@ -334,6 +345,9 @@ public:
 
     /// Copies an owning lvalue.
     /// @param piece The next bytes of the sequence.
+    /// @par Complexity
+    /// O(n + p), where n is the data processed and p is the number of held pieces.
+    /// A range operation adds its own cost.
     template <owning_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const &piece)
@@ -343,6 +357,9 @@ public:
 
     /// Moves an owning piece into shared storage.
     /// @param piece The next bytes of the sequence.
+    /// @par Complexity
+    /// O(n + p), where n is the data processed and p is the number of held pieces.
+    /// A range operation adds its own cost.
     template <owning_range_of_chars Piece>
     void feed(Piece &&piece)
     {
@@ -351,6 +368,9 @@ public:
 
     /// Shares a non-null owner of a piece.
     /// @param piece The next bytes of the sequence.
+    /// @par Complexity
+    /// O(n + p), where n is the data processed and p is the number of held pieces.
+    /// A range operation adds its own cost.
     template <owning_range_of_chars Piece>
     void feed(std::shared_ptr<Piece const> piece)
     {
@@ -374,6 +394,9 @@ public:
     /// Returns the next complete item and consumes its bytes.
     /// @return A lazy that owns its bytes, or an error.
     /// too_little_data retains the partial item for a later feed.
+    /// @par Complexity
+    /// O(n + p), where n is the bytes scanned or copied and p is the pieces
+    /// consumed or released after an error.
     std::expected<lazy, error> next()
     {
         throw_logic_error_if_moved_from();
