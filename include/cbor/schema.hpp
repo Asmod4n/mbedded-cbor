@@ -3510,7 +3510,9 @@ public:
 
     /// Creates an accessor for the encoded message, or returns an error.
     /// Checks the message length, table, directory and root tag; reads no field.
-    /// A null or empty owner is a wrong use. Borrowed bytes must stay alive.
+    /// A short message gives too_little_data; a wrong layout or root tag gives
+    /// incorrect_type. A null or empty owner is a wrong use. Borrowed bytes
+    /// must remain alive and unchanged.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
@@ -3520,7 +3522,9 @@ public:
 
     /// Creates an accessor for the encoded message, or returns an error.
     /// Checks the message length, table, directory and root tag; reads no field.
-    /// A null or empty owner is a wrong use. Borrowed bytes must stay alive.
+    /// A short message gives too_little_data; a wrong layout or root tag gives
+    /// incorrect_type. A null or empty owner is a wrong use. Borrowed bytes
+    /// must remain alive and unchanged.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
@@ -3530,7 +3534,9 @@ public:
 
     /// Creates an accessor for the encoded message, or returns an error.
     /// Checks the message length, table, directory and root tag; reads no field.
-    /// A null or empty owner is a wrong use. Borrowed bytes must stay alive.
+    /// A short message gives too_little_data; a wrong layout or root tag gives
+    /// incorrect_type. A null or empty owner is a wrong use. Borrowed bytes
+    /// must remain alive and unchanged.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3551,8 +3557,9 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
-    /// Text views refer to the message. A target supplies the initial value.
-    /// Null or empty owners are a wrong use.
+    /// Text views refer to the message. A target supplies the initial value,
+    /// including container allocators. Null or empty owners are a wrong use.
+    /// A malformed message, wrong layout or failed allocation returns an error.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
@@ -3561,8 +3568,9 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
-    /// Text views refer to the message. A target supplies the initial value.
-    /// Null or empty owners are a wrong use.
+    /// Text views refer to the message. A target supplies the initial value,
+    /// including container allocators. Null or empty owners are a wrong use.
+    /// A malformed message, wrong layout or failed allocation returns an error.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
@@ -3571,8 +3579,9 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
-    /// Text views refer to the message. A target supplies the initial value.
-    /// Null or empty owners are a wrong use.
+    /// Text views refer to the message. A target supplies the initial value,
+    /// including container allocators. Null or empty owners are a wrong use.
+    /// A malformed message, wrong layout or failed allocation returns an error.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -3581,8 +3590,9 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
-    /// Text views refer to the message. A target supplies the initial value.
-    /// Null or empty owners are a wrong use.
+    /// Text views refer to the message. A target supplies the initial value,
+    /// including container allocators. Null or empty owners are a wrong use.
+    /// A malformed message, wrong layout or failed allocation returns an error.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3591,8 +3601,9 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
-    /// Text views refer to the message. A target supplies the initial value.
-    /// Null or empty owners are a wrong use.
+    /// Text views refer to the message. A target supplies the initial value,
+    /// including container allocators. Null or empty owners are a wrong use.
+    /// A malformed message, wrong layout or failed allocation returns an error.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
