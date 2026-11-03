@@ -96,12 +96,16 @@ public:
     /// An empty owner is a wrong use.
     /// @param owner Keeps the encoded bytes alive.
     /// @param encoded The borrowed bytes of the item.
+    /// @par Complexity
+    /// O(1), excluding the range's data and size operations; no allocation.
     template <borrowed_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
     /// Views the bytes of a non-null shared owner without copying them.
     /// This does not check that the bytes contain a complete item.
     /// A null owner is a wrong use.
     /// @param owner Owns the immutable bytes of the item.
+    /// @par Complexity
+    /// O(1), excluding the range's data and size operations; no allocation.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
     /// Moves the encoded range into shared ownership.
@@ -109,6 +113,9 @@ public:
     /// A later read reports malformed input; construction does not check
     /// that the bytes contain a complete item.
     /// @param encoded The owned bytes to move into storage.
+    /// @par Complexity
+    /// O(1), excluding the range's move, data and size operations and the
+    /// allocation of its shared owner.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> take_ownership(Encoded &&encoded);
 
