@@ -3275,7 +3275,8 @@ public:
         ~accessor() = default;
 
         /// Reads the field at Path, or returns an error.
-        /// An empty index in Path takes the next index argument.
+        /// A returned text view borrows the message bytes; keep their owner
+        /// alive while using the view. An empty index takes the next argument.
         /// An invalid path or a call on a temporary does not compile.
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(((Path.view().starts_with('@') && reflection::path_valid<U, Path, 1>()) ||
@@ -3503,7 +3504,8 @@ public:
 
     public:
         /// Reads the field at Path, or returns an error.
-        /// An empty index in Path takes the next index argument.
+        /// A returned text view borrows the message bytes; keep their owner
+        /// alive while using the view. An empty index takes the next argument.
         /// An invalid path or a call on a temporary does not compile.
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(((Path.view().starts_with('@') && reflection::path_valid<S, Path, 1>()) ||
