@@ -199,8 +199,8 @@ public:
 
     /// Returns the item kind, or an error if its head cannot be read.
     /// A bignum that fits 64 bits is reported as an integer; a larger one
-    /// retains its bignum kind. Typed arrays have their own kind. Other tags
-    /// are reported as tags without reading through them.
+    /// retains its bignum kind. Typed arrays have their own kind. Self-described
+    /// CBOR tags are skipped; other tags are reported without reading through them.
     /// @par Complexity
     /// O(1 + t + m), where t is the self-described CBOR tags passed and m
     /// is the number of bytes examined in a bignum magnitude. Allocates nothing.
