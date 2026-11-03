@@ -21,7 +21,7 @@ namespace cbor
 
 /// A text or integer map key for lookup.
 struct key {
-    /// Text key when non-null; the characters must remain valid.
+    /// Null-terminated text key when non-null; the characters must remain valid.
     char const *text = nullptr;
     /// Integer key when text is null.
     std::int64_t number = 0;
