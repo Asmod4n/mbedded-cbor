@@ -1312,8 +1312,9 @@ class structs
 public:
     /// Moves encoded bytes into shared storage and decodes the first item.
     /// Bytes after the item are not read. A result ref keeps the bytes of
-    /// its views alive. A variant selects the first alternative accepting the
-    /// head. Tag 28 is accepted; tag 29 references return an error.
+    /// its views alive; owning string members have their own storage. A variant
+    /// selects the first alternative accepting the head. Tag 28 is accepted;
+    /// tag 29 references return an error.
     /// Input errors include incorrect_type, number_out_of_range,
     /// key_not_found, duplicate_key and too_little_data. A refused
     /// allocation gives not_enough_memory.
@@ -1376,9 +1377,11 @@ public:
 
     /// Encodes value as one CBOR item into a string, or returns an error.
     /// Structs and maps become CBOR maps; numeric vectors and arrays become
-    /// typed arrays. Empty optional members are omitted. Sets use tag 258;
+    /// typed arrays. Empty optional members are omitted; other empty optionals
+    /// become null. Multimaps become maps to arrays. Sets use tag 258;
     /// sys_seconds uses tag 1 and year_month_day uses tag 100. A variant
-    /// uses its selected alternative. Encode writes no value-sharing tags.
+    /// uses its selected alternative. Floating values use their shortest
+    /// representation. Encode writes no value-sharing tags.
     /// Struct map keys use the order of RFC 8949 section 4.2.1.
     /// An invalid date is a wrong use. An allocation can throw bad_alloc.
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
