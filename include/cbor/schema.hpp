@@ -3154,8 +3154,10 @@ class schema
                                                 !std::same_as<X, std::optional<std::string_view>>;
 
 public:
-    /// Returns the fixed layout size of U at compile time.
-    /// The size includes the fixed-width heads of its fields.
+    /// Returns the size in bytes of a field of U in the layout of T.
+    /// The default U is T, whose root record ends the message. Numbers
+    /// include their fixed-width heads; variable fields use references.
+    /// A type without a fixed layout does not compile.
     template <class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static consteval std::size_t fixed_size()
@@ -3173,8 +3175,10 @@ public:
         return reflection::description_of<U>();
     }
 
-    /// Returns the fixed-layout offset of Member at compile time.
-    /// A member absent from the description does not compile.
+    /// Returns the offset of Member's head from the start of U's record.
+    /// Fields follow CBOR key order, not declaration order. Member is a
+    /// pointer to a described member, or a reflection when supported.
+    /// A member of another type or absent from the description does not compile.
     template <auto Member, class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static consteval std::size_t member_offset()
