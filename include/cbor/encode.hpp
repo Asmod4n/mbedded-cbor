@@ -50,7 +50,7 @@ class iov_writer;
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
-std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+std::expected<ref<std::span<std::span<std::byte const> const>>, error> encode_iov(item const &root);
 
 class encoding
 {
@@ -171,7 +171,7 @@ private:
     template <class Target>
     friend std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
-    friend std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+    friend std::expected<ref<std::span<std::span<std::byte const> const>>, error> encode_iov(item const &root);
 
     template <class>
     friend class cbor::encoder;
@@ -440,7 +440,7 @@ struct encoding::encoder {
         if constexpr (blocks)
             if (text.size() >= ref_size) {
                 auto const owner = std::make_shared<std::string const>(std::move(text));
-                return piece_encode(major_type::text_string, *owner, owner);
+                return piece_encode(major_type::text_string, std::as_bytes(std::span(*owner)), owner);
             }
         return text_string_encode(std::string_view(text));
     }
@@ -450,7 +450,7 @@ struct encoding::encoder {
         validity::throw_logic_error_if_null(text, "cbor::encoder::text_string_encode: the string is null");
         if constexpr (blocks)
             if (text->size() >= ref_size)
-                return piece_encode(major_type::text_string, *text, text);
+                return piece_encode(major_type::text_string, std::as_bytes(std::span(*text)), text);
         return text_string_encode(std::string_view(*text));
     }
 
@@ -458,7 +458,7 @@ struct encoding::encoder {
     {
         if constexpr (blocks)
             if ((*text).size() >= ref_size)
-                return piece_encode(major_type::text_string, *text, text.owner);
+                return piece_encode(major_type::text_string, std::as_bytes(std::span(*text)), text.owner);
         return text_string_encode(*text);
     }
 
@@ -466,21 +466,32 @@ struct encoding::encoder {
         requires std::same_as<V, std::vector<std::byte>>
     std::expected<void, std::errc> byte_string_encode(V &&bytes)
     {
+        if constexpr (blocks)
+            if (bytes.size() >= ref_size) {
+                auto const owner = std::make_shared<std::vector<std::byte> const>(std::move(bytes));
+                return piece_encode(major_type::byte_string, std::span(*owner), owner);
+            }
         return byte_string_encode(std::span<std::byte const>(bytes));
     }
 
     std::expected<void, std::errc> byte_string_encode(std::shared_ptr<std::vector<std::byte> const> const bytes)
     {
         validity::throw_logic_error_if_null(bytes, "cbor::encoder::byte_string_encode: the bytes are null");
+        if constexpr (blocks)
+            if (bytes->size() >= ref_size)
+                return piece_encode(major_type::byte_string, std::span(*bytes), bytes);
         return byte_string_encode(std::span<std::byte const>(*bytes));
     }
 
     std::expected<void, std::errc> byte_string_encode(ref<std::span<std::byte const>> const bytes)
     {
+        if constexpr (blocks)
+            if ((*bytes).size() >= ref_size)
+                return piece_encode(major_type::byte_string, *bytes, bytes.owner);
         return byte_string_encode(*bytes);
     }
 
-    std::expected<void, std::errc> piece_encode(major_type const major, std::string_view const piece,
+    std::expected<void, std::errc> piece_encode(major_type const major, std::span<std::byte const> const piece,
                                                 std::shared_ptr<void const> owner)
         requires blocks
     {
@@ -493,7 +504,7 @@ struct encoding::encoder {
         return {};
     }
 
-    ref<std::span<std::string_view const>> release()
+    ref<std::span<std::span<std::byte const> const>> release()
         requires blocks
     {
         std::ignore = flush();
@@ -534,9 +545,9 @@ struct encoding::encoder {
 class iov_writer
 {
     struct storage {
-        std::vector<std::unique_ptr<char[]>> blocks;
+        std::vector<std::vector<char>> blocks;
         std::vector<std::shared_ptr<void const>> owners;
-        std::vector<std::string_view> pieces;
+        std::vector<std::span<std::byte const>> pieces;
     };
 
     std::shared_ptr<storage> kept = std::make_shared<storage>();
@@ -545,8 +556,8 @@ class iov_writer
     std::span<char> block_next(std::size_t const size)
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
-        kept->blocks.push_back(std::make_unique_for_overwrite<char[]>(size));
-        return {kept->blocks.back().get(), size};
+        kept->blocks.emplace_back(size);
+        return std::span(kept->blocks.back());
     }
 
     void block_close(std::string_view const part)
@@ -554,21 +565,21 @@ class iov_writer
         validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         if (part.empty())
             return;
-        kept->pieces.push_back(part);
+        kept->pieces.push_back(std::as_bytes(std::span(part)));
     }
 
-    void piece_reference(std::string_view const piece, std::shared_ptr<void const> owner)
+    void piece_reference(std::span<std::byte const> const piece, std::shared_ptr<void const> owner)
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         kept->owners.push_back(std::move(owner));
         kept->pieces.push_back(piece);
     }
 
-    ref<std::span<std::string_view const>> release()
+    ref<std::span<std::span<std::byte const> const>> release()
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a second release");
         released = true;
-        std::span<std::string_view const> const pieces = kept->pieces;
+        std::span<std::span<std::byte const> const> const pieces = kept->pieces;
         return {std::move(kept), pieces};
     }
 
@@ -771,7 +782,7 @@ public:
     }
 
     auto finish()
-        -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>
+        -> std::expected<std::conditional_t<pieces, ref<std::span<std::span<std::byte const> const>>, std::size_t>, error>
     {
         throw_logic_error_if_unusable();
         usable = false;
@@ -903,7 +914,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
     return out.written;
 }
 
-inline std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root)
+inline std::expected<ref<std::span<std::span<std::byte const> const>>, error> encode_iov(item const &root)
 {
     iov_writer writer;
     encoding::encoder<iov_writer> out(writer);

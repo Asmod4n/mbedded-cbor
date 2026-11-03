@@ -26,9 +26,8 @@ result: 2
 
 A target of [encoder](encoder.md) that collects pieces, not one buffer.
 The encoder writes heads and short strings into blocks of 16 KiB. A text
-string of 32 bytes or more that the program hands over with its owner
-becomes a piece of its own, with no copy. A byte string is copied into the
-blocks.
+or a byte string of 32 bytes or more that the program hands over with
+its owner becomes a piece of its own, with no copy.
 [finish](encoder_finish.md) gives the pieces, as a `ref` that holds the
 blocks and the owners.
 

@@ -353,14 +353,14 @@ cbor::lazy::view(owner)->clone();                      // an array that holds th
 
 `cbor::encode_iov(item)` writes a decoded item into a list of pieces, not
 into one buffer. It gives
-`std::expected<cbor::ref<std::span<std::string_view const>>, error>`:
+`std::expected<cbor::ref<std::span<std::span<std::byte const> const>>, error>`:
 the pieces in order, and their storage, which lives as long as the
 result. Use the pieces with `writev` or a socket, or join them.
 
 ```cpp
 auto const tree = cbor::decode(bytes);
 auto const pieces = cbor::encode_iov(**tree);
-for (std::string_view const piece : **pieces)
+for (std::span<std::byte const> const piece : **pieces)
     send(piece);
 ```
 
