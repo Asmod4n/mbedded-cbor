@@ -98,7 +98,8 @@ struct zone_owner {
 /// A tagged item outside the tree is a wrong use and throws std::logic_error,
 /// or terminates without exceptions.
 /// @par Complexity
-/// O(log t), where t is the number of tag 24 items in the tree; allocates nothing.
+/// O(1 + log(1 + t)), where t is the number of tag 24 items in the tree.
+/// Allocates nothing.
 inline std::expected<std::reference_wrapper<item const>, error>
 encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
 {
