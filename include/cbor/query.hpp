@@ -38,8 +38,10 @@ namespace cbor
 
 struct lazy;
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a scalar selected by a singular compile-time JSONPath.
+/// The walk checks the data it visits; bytes after the target are not
+/// necessarily validated. Invalid input or an incompatible value returns
+/// an error. Use item_size to check the complete item.
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
@@ -1797,8 +1799,10 @@ class is_singular_query
 {
 };
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a scalar selected by a singular compile-time JSONPath.
+/// The walk checks the data it visits; bytes after the target are not
+/// necessarily validated. Invalid input or an incompatible value returns
+/// an error. Use item_size to check the complete item.
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
