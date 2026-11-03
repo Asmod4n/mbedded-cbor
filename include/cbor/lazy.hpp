@@ -138,13 +138,16 @@ public:
     /// Finds an array element by index, or returns an error.
     std::expected<lazy, error> operator[](std::size_t index) const;
 
-    /// Finds one item using a compile-time JSONPath.
+    /// Finds one item using a compile-time JSONPath rooted at this item.
     /// The path must be valid and singular; an invalid path does not compile.
+    /// Missing keys, invalid indexes and incompatible nodes give errors.
     template <fixed_string Path>
         requires is_valid_path_v<Path>
     std::expected<lazy, error> at_path() const;
 
     /// Reads the scalar selected by a singular compile-time path.
+    /// An incompatible item gives incorrect_type; a number outside T gives
+    /// number_out_of_range.
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> &&
                  ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
@@ -156,6 +159,7 @@ public:
     std::expected<T, error> at_path() const;
 
     /// Reads a view selected by a singular path and retains its byte owner.
+    /// Text, byte and typed-array views do not copy the encoded bytes.
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
@@ -163,6 +167,7 @@ public:
     std::expected<ref<T>, error> at_path() const;
 
     /// Returns the items selected by the compile-time path.
+    /// A path that selects no items returns an empty list.
     template <fixed_string Path, std::same_as<nodelist> T>
         requires is_valid_path_v<Path>
     std::expected<nodelist, error> at_path() const;
