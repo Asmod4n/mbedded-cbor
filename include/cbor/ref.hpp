@@ -232,6 +232,9 @@ public:
     /// Dereferencing a temporary is disabled to prevent dangling views.
     void operator*() const && = delete;
 
+    /// Returns a pointer to the value. Keep an owner alive while using it.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     T const *operator->() const & CBOR_LIFETIMEBOUND
     {
         return held.get();
