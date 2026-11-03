@@ -3334,9 +3334,9 @@ public:
             return result;
         }
 
-        /// Reads the field at Path, or returns an error.
-        /// An empty index in Path takes the next index argument.
-        /// An invalid path or a call on a temporary does not compile.
+        /// Returns a view of the typed array selected by Path, or an error.
+        /// This is available on the root accessor. An empty index in Path
+        /// takes the next index argument. An invalid path does not compile.
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(std::same_as<U, T> && Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>() &&
                      sizeof...(Index) == reflection::index_arguments<Path>())
