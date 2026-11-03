@@ -604,8 +604,8 @@ public:
     {
     }
 
-    /// Creates an encoder that writes through a span.
-    /// The span's storage must remain valid while the encoder uses it.
+    /// Creates an encoder from a target with an element_type, such as a span.
+    /// Any referenced storage must remain valid while the encoder uses it.
     explicit encoder(Target const target)
         requires requires { typename Target::element_type; }
         : message(encoding::message_of(target, 0)), out(message)
