@@ -70,6 +70,7 @@ template <fixed_string Path, copied_value T>
     requires is_singular_query_v<Path>
 std::expected<T, error> at_path(std::string_view encoded);
 
+/// Compiles and evaluates JSONPath queries on CBOR data.
 class jsonpath
 {
     struct selector {
@@ -996,6 +997,7 @@ class jsonpath
     friend struct lazy;
 
 public:
+    /// A compiled path with result type T.
     template <class T>
         requires path_result<T>
     class query
@@ -1010,7 +1012,9 @@ public:
         query() = default;
 
     public:
+        /// The requested result type.
         using value_type = T;
+        /// The returned type; view results retain their byte owner.
         using result_type = std::conditional_t<view_result<T>, ref<T>, T>;
 
         query(query const &) = default;
@@ -1040,6 +1044,8 @@ public:
         friend class jsonpath;
     };
 
+    /// Compiles path for result type T, or returns an error.
+    /// A result other than nodelist requires a singular path.
     template <class T>
         requires path_result<T>
     static std::expected<query<T>, error> compile(std::string_view const path)
