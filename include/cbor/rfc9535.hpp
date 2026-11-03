@@ -45,12 +45,16 @@ struct fixed_string {
     std::array<char, N> value;
 
     /// Copies the array into the compile-time value.
+    /// @par Complexity
+    /// O(N) at compile time; no run-time operation.
     consteval fixed_string(char const (&text)[N])
     {
         std::ranges::copy(text, value.begin());
     }
 
     /// Returns the stored characters except the final array element.
+    /// @par Complexity
+    /// O(1) at compile time; no run-time operation.
     consteval std::string_view view() const
     {
         return std::string_view(std::span(value).first(N - 1));
