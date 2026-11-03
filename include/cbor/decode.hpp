@@ -327,7 +327,8 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
 
 /// Decodes the first CBOR item into an owned tree and copies its strings.
 /// Bytes after the first item are left unread. Tag 24 byte strings are decoded
-/// as one embedded item. Bignums that fit in 64 bits become integers.
+/// as exactly one embedded item. Tags 28, 29 and 55799 remain tag nodes.
+/// Bignums that fit in 64 bits become integers.
 /// @param encoded The bytes beginning with the item.
 /// @return The owned tree or an error from decoding.
 /// Allocation failure can throw std::bad_alloc.
