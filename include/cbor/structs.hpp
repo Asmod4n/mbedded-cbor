@@ -1305,7 +1305,9 @@ class generic
 };
 
 /// Reads and writes CBOR values of T. Described types use their member
-/// description; other aggregates use reflection or Boost.PFR.
+/// description; other aggregates use reflection or Boost.PFR. Supported
+/// values include integers, floats, strings, byte views, containers, tuples,
+/// optionals, variants, fixed-underlying-type enums and described structs.
 template <class T>
 class structs
 {
