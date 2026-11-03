@@ -249,7 +249,8 @@ public:
     /// @par Complexity
     /// O(1 + h + b + t log t), where h is the heads scanned, b the bytes
     /// copied, and t the tag 24 items sorted while decoding. Nested tag 24
-    /// content can be copied more than once. The tree allocates storage.
+    /// content can be copied more than once. The tree allocates storage;
+    /// allocator costs are not included.
     std::expected<owning<item>, error> clone() const;
 
 private:
