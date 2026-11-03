@@ -122,6 +122,7 @@ public:
         requires is_valid_path_v<Path>
     std::expected<lazy, error> at_path() const;
 
+    /// Reads the scalar selected by a singular compile-time path.
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> &&
                  ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
@@ -132,16 +133,19 @@ public:
                   ))
     std::expected<T, error> at_path() const;
 
+    /// Reads a view selected by a singular path and retains its byte owner.
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> &&
                  (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
                   std::is_same_v<T, typed_array>))
     std::expected<ref<T>, error> at_path() const;
 
+    /// Returns the items selected by the compile-time path.
     template <fixed_string Path, std::same_as<nodelist> T>
         requires is_valid_path_v<Path>
     std::expected<nodelist, error> at_path() const;
 
+    /// Evaluates a compiled path and returns its declared result type.
     template <class E>
         requires is_path_query_v<E>
     std::expected<typename E::result_type, error> at_path(E const &e) const;
@@ -155,6 +159,8 @@ public:
     /// Returns the item kind, or an error.
     std::expected<cbor::type, error> type() const;
 
+    /// Reads this item as T, or returns an error.
+    /// A view result retains the owner of its bytes in a ref.
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
@@ -235,6 +241,7 @@ private:
 
 /// A range of lazy array or typed-array elements that retains their owner.
 struct lazy_elements : std::ranges::view_interface<lazy_elements> {
+    /// A forward iterator that returns a value or an error.
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
         using value_type = std::expected<lazy, error>;
@@ -242,8 +249,10 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
 
         iterator() = default;
 
+        /// Returns the current value or the error encountered while reading it.
         value_type operator*() const;
 
+        /// Advances to the next value, or to the end after an error.
         iterator &operator++();
 
         iterator operator++(int)
@@ -276,16 +285,19 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         friend struct lazy_elements;
     };
 
+    /// Returns an iterator to the first value.
     iterator begin() const
     {
         return iterator{top_level, offset, count, typed_array_tag};
     }
 
+    /// Returns the end sentinel.
     std::default_sentinel_t end() const
     {
         return {};
     }
 
+    /// Returns the number of values in the range.
     std::uint64_t size() const
     {
         return count;
@@ -310,6 +322,7 @@ private:
 
 /// A range of lazy map key and value pairs that retains their owner.
 struct lazy_entries : std::ranges::view_interface<lazy_entries> {
+    /// A forward iterator that returns a value or an error.
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
         using value_type = std::expected<std::pair<lazy, lazy>, error>;
@@ -317,8 +330,10 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
 
         iterator() = default;
 
+        /// Returns the current value or the error encountered while reading it.
         value_type operator*() const;
 
+        /// Advances to the next value, or to the end after an error.
         iterator &operator++();
 
         iterator operator++(int)
@@ -355,16 +370,19 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         friend struct lazy;
     };
 
+    /// Returns an iterator to the first value.
     iterator begin() const
     {
         return iterator{top_level, offset, count};
     }
 
+    /// Returns the end sentinel.
     std::default_sentinel_t end() const
     {
         return {};
     }
 
+    /// Returns the number of values in the range.
     std::uint64_t size() const
     {
         return count;
