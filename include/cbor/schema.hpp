@@ -3534,7 +3534,7 @@ public:
     /// @par Complexity
     /// O(1 + q) on success, where q is the schema prefix size. If the root
     /// tag is wrong, the truncation check may also visit h item heads, making
-    /// the cost O(1 + q + h). Moving a range and allocating an owner add
+    /// the cost O(1 + q + h). Range operations and owner allocation add
     /// their own costs.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
@@ -3551,7 +3551,7 @@ public:
     /// @par Complexity
     /// O(1 + q) on success, where q is the schema prefix size. If the root
     /// tag is wrong, the truncation check may also visit h item heads, making
-    /// the cost O(1 + q + h). Moving a range and allocating an owner add
+    /// the cost O(1 + q + h). Range operations and owner allocation add
     /// their own costs.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
@@ -3568,7 +3568,7 @@ public:
     /// @par Complexity
     /// O(1 + q) on success, where q is the schema prefix size. If the root
     /// tag is wrong, the truncation check may also visit h item heads, making
-    /// the cost O(1 + q + h). Moving a range and allocating an owner add
+    /// the cost O(1 + q + h). Range operations and owner allocation add
     /// their own costs.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
