@@ -3150,7 +3150,8 @@ consteval std::size_t reflection::member_offset()
 /// variable-size parts. Each record uses its class tag and a reference to
 /// its tag 114 record function; variable fields reference the table.
 /// Fixed-width field heads let the compiler compute
-/// field offsets. Numeric lists use little-endian RFC 8746 typed arrays.
+/// field offsets. Floating fields retain their C++ width and bits. Numeric
+/// lists use little-endian RFC 8746 typed arrays.
 /// Fixed-size struct lists use provisional tag 32873 and store elements
 /// without padding. The root and nested structs need descriptions with
 /// distinct tags and text member keys.
