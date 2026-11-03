@@ -8,6 +8,8 @@
 #   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release
 #   gcc15-release builds with g++ 15, the floor of the library, in the image of containers/tumbleweed-gcc15.Containerfile.
 #   tsan, gcc-describe, gcc-describe-bundled and wasm are run by name and not in fast or full.
+#   sid-asan, alma-release and alpine-release build in the images of containers/debian-sid, almalinux and alpine.Containerfile:
+#   g++ 16 on Debian sid, g++ 15 of gcc-toolset-15 on AlmaLinux and g++ 15 on Alpine with musl. They are run by name.
 #   gcc-describe-bundled is gcc-describe with CMake told not to find Boost, so the tests take the copy in third_party.
 #   gcc-describe builds with g++ and no reflection, so the tests take the path of the descriptions and Boost.PFR.
 #   wasm compiles test/describe.cpp for wasm32-wasip1 in the image mbedded-cbor-wasm and does not run it: the
@@ -23,14 +25,17 @@
 # The builds run one after the other. Each build compiles as many jobs at once as its share of the memory
 # allows (cmake/job_pools.cmake). CBOR_CONCURRENT_BUILDS is the number of runs of this script at the same time;
 # a second run without it stops.
+# A build runs (processors - CBOR_RESERVED_PROCESSORS) / CBOR_CONCURRENT_BUILDS jobs in all, at least one (cmake/job_pools.cmake).
+# CBOR_TIME_LIMIT, in seconds, stops a build of a name and its container when it runs longer. CCACHE_MAXSIZE sets the cache size.
 set -u
 src=$(cd "$(dirname "$0")/.." && pwd)
 root=${CBOR_BUILD_ROOT:-/home/user/mbedded-cbor-build}
 cache=${CCACHE_HOST_DIR:-/home/user/.ccache}
 image=${CBOR_IMAGE:-mbedded-cbor-tw}
 branch=$(git -C "$src" rev-parse --abbrev-ref HEAD | tr / -)
-parallel_level=$(nproc)
 concurrent_builds=${CBOR_CONCURRENT_BUILDS:-1}
+reserved_option=${CBOR_RESERVED_PROCESSORS:+-DCBOR_RESERVED_PROCESSORS=$CBOR_RESERVED_PROCESSORS}
+ccache_limit=${CCACHE_MAXSIZE:-9G}
 mkdir -p "$root"
 exec 9>"$root/run.lock"
 if ! flock -n 9 && [ -z "${CBOR_CONCURRENT_BUILDS:-}" ]; then
@@ -62,6 +67,9 @@ one() {
 	gcc-release) cxx=g++-16 type=Release flags= options=-DCBOR_TEST_GROUPS=ON ;;
 	gcc-describe) cxx=g++-16 type=Release flags= options=-DCBOR_HAS_FREFLECTION=OFF ;;
 	gcc15-release) cxx=g++-15 type=Release flags= img=mbedded-cbor-gcc15 file=tumbleweed-gcc15 ;;
+	sid-asan) cxx=g++-16 type=Debug flags=$asan compile_fail=OFF img=mbedded-cbor-sid file=debian-sid ;;
+	alma-release) cxx=g++ type=Release flags= img=mbedded-cbor-alma file=almalinux ;;
+	alpine-release) cxx=g++ type=Release flags= img=mbedded-cbor-alpine file=alpine ;;
 	gcc-describe-bundled) cxx=g++-16 type=Release flags= options="-DCBOR_HAS_FREFLECTION=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Boost=ON" compile_fail=OFF ;;
 	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" compile_fail=OFF ;;
 	clang-release) cxx=clang++-23 type=Release flags=$pch_clang ;;
@@ -86,16 +94,17 @@ one() {
 	if [ -n "$file" ] && ! podman image exists "$img"; then
 		podman build -q -t "$img" -f "$src/containers/$file.Containerfile" "$src/containers" >/dev/null || return 1
 	fi
-	podman run --rm --network none \
+	podman run --rm --network none ${CBOR_TIME_LIMIT:+--timeout=$CBOR_TIME_LIMIT --init} \
 		-v "$src":/src:ro -v "$root/$branch/$n":/b -v "$cache":/ccache \
-		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=9G ${CCACHE_DISABLE:+-e CCACHE_DISABLE=$CCACHE_DISABLE} -e CMAKE_BUILD_PARALLEL_LEVEL="$parallel_level" -e CBOR_TEST_PATTERN="$pattern" \
+		-e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE="$ccache_limit" ${CCACHE_DISABLE:+-e CCACHE_DISABLE=$CCACHE_DISABLE} -e CBOR_TEST_PATTERN="$pattern" \
 		-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 		"$img" bash -c '
 		s=${EPOCHREALTIME/./}
 		cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE='"$type"' \
 			-DCMAKE_CXX_COMPILER='"$cxx"' -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" -DCBOR_COMPILE_FAIL='"$compile_fail"' -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' '"$options"' >/b/configure.log 2>&1 &&
-		cmake --build /b >/b/build.log 2>&1
+			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" -DCBOR_COMPILE_FAIL='"$compile_fail"' -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' '"$reserved_option $options"' >/b/configure.log 2>&1 &&
+		export CMAKE_BUILD_PARALLEL_LEVEL=$(sed -n "s/^CBOR_PARALLEL_JOBS:INTERNAL=//p" /b/CMakeCache.txt) &&
+		cmake --build /b -j"$CMAKE_BUILD_PARALLEL_LEVEL" >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
 		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test ${CBOR_TEST_PATTERN:+"-tc=*$CBOR_TEST_PATTERN*"} >/b/test.log 2>&1; r=$?; }
 		jobs=$(sed -n "s/^CBOR_PARALLEL_COMPILE_JOBS:INTERNAL=//p" /b/CMakeCache.txt)
@@ -107,8 +116,7 @@ one() {
 }
 
 iter() {
-	local dir=$root/$branch/iter name=mbedded-cbor-iter-gcc-asan jobs=$((parallel_level - 1)) user
-	[ $jobs -ge 1 ] || jobs=1
+	local dir=$root/$branch/iter name=mbedded-cbor-iter-gcc-asan user
 	mkdir -p "$dir" "$cache" "$root/$branch"
 	if [ "$(id -u)" = 0 ]; then
 		user="--user 65534:65534"
@@ -121,7 +129,7 @@ iter() {
 		podman container exists "$name" && { podman rm -f "$name" >/dev/null || return 1; }
 		podman run -d --name "$name" --network none $user \
 			-v "$src":/src:ro -v "$dir":/b -v "$cache":/ccache \
-			-e HOME=/tmp -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=9G ${CCACHE_DISABLE:+-e CCACHE_DISABLE=$CCACHE_DISABLE} -e CMAKE_BUILD_PARALLEL_LEVEL="$jobs" -e CBOR_TEST_PATTERN="$pattern" \
+			-e HOME=/tmp -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE="$ccache_limit" ${CCACHE_DISABLE:+-e CCACHE_DISABLE=$CCACHE_DISABLE} -e CBOR_TEST_PATTERN="$pattern" \
 			-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 			"$image" sleep infinity >/dev/null 9>&- || return 1
 	fi
@@ -129,14 +137,16 @@ iter() {
 		s=${EPOCHREALTIME/./}
 		if [ ! -f /b/build.ninja ] || ! grep -q "^CBOR_TEST_GROUPS:BOOL=ON$" /b/CMakeCache.txt ||
 			! grep -qxF "CBOR_TEST_PATTERN:STRING=$CBOR_TEST_PATTERN" /b/CMakeCache.txt ||
-			! grep -qxF "CBOR_CONCURRENT_BUILDS:STRING='"$concurrent_builds"'" /b/CMakeCache.txt; then
+			! grep -qxF "CBOR_CONCURRENT_BUILDS:STRING='"$concurrent_builds"'" /b/CMakeCache.txt ||
+			{ [ -n "'"${CBOR_RESERVED_PROCESSORS:-}"'" ] && ! grep -qxF "CBOR_RESERVED_PROCESSORS:STRING='"${CBOR_RESERVED_PROCESSORS:-}"'" /b/CMakeCache.txt; }; then
 			cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE=Debug \
 				-DCMAKE_CXX_COMPILER=g++-16 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-				-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$asan"'" -DCBOR_COMPILE_FAIL=OFF -DCBOR_TEST_GROUPS=ON -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' "-DCBOR_TEST_PATTERN=$CBOR_TEST_PATTERN" >/b/configure.log 2>&1 ||
+				-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$asan"'" -DCBOR_COMPILE_FAIL=OFF -DCBOR_TEST_GROUPS=ON -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' '"$reserved_option"' "-DCBOR_TEST_PATTERN=$CBOR_TEST_PATTERN" >/b/configure.log 2>&1 ||
 				{ tail -n 30 /b/configure.log; exit 1; }
 		fi
+		export CMAKE_BUILD_PARALLEL_LEVEL=$(sed -n "s/^CBOR_PARALLEL_JOBS:INTERNAL=//p" /b/CMakeCache.txt)
 		ccache -z >/dev/null
-		cmake --build /b --target '"$iter_targets"' -j'"$jobs"' >/b/build.log 2>&1
+		cmake --build /b --target '"$iter_targets"' -j"$CMAKE_BUILD_PARALLEL_LEVEL" >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
 		ccache -s
 		printf "iter build rc=%s build=%ds\n" $r $(((b - s) / 1000000))
