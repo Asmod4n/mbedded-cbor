@@ -200,7 +200,8 @@ class heads
         requires std::same_as<E, char> || std::same_as<E, std::byte>
     static std::span<E const> magnitude_without_leading_zeros(std::span<E const> const magnitude)
     {
-        return {std::ranges::find_if(magnitude, [](E const digit) { return digit != E{}; }), magnitude.end()};
+        return std::span<E const>(
+            std::ranges::subrange(std::ranges::find_if(magnitude, [](E const digit) { return digit != E{}; }), magnitude.end()));
     }
 
     template <class E>
