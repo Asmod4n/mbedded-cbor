@@ -325,7 +325,7 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(test::lazy_of_copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::not_indexable);
 }
 
-// The section "Tag 55799" shows that only a leading tag 55799 is read as its content, and only by a lazy.
+// The section "Tag 55799" shows that one leading tag 55799 is read as its content, by a lazy and by decode.
 TEST_CASE("doc advanced runtime: tag 55799")
 {
     auto const owner = std::make_shared<std::string const>("\xd9\xd9\xf7\x82\x01\x02"s);
@@ -333,10 +333,9 @@ TEST_CASE("doc advanced runtime: tag 55799")
     auto const content = cbor::lazy::view(owner)->clone();
     REQUIRE(content.has_value());
     CHECK_EQ((*content)->type, cbor::type::array);
-    auto const kept = cbor::decode(*owner);
-    REQUIRE(kept.has_value());
-    CHECK_EQ((*kept)->type, cbor::type::tag);
-    CHECK_EQ((*kept)->get<cbor::type::tag>()->first, 55799u);
+    auto const decoded = cbor::decode(*owner);
+    REQUIRE(decoded.has_value());
+    CHECK_EQ((*decoded)->type, cbor::type::array);
     auto const tree = test::lazy_of_copy("\x81\xd9\xd9\xf7\x01"s)->clone();
     REQUIRE(tree.has_value());
     cbor::item const *const inner = children_of(*(*tree))[0];
