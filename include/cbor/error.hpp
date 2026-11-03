@@ -71,6 +71,7 @@ enum class error {
     string_length_exceeded,
     /// A container exceeds the configured element limit.
     container_elements_exceeded,
+    /// A query that can select multiple nodes was compiled for a singular result.
     not_singular_query
 };
 
