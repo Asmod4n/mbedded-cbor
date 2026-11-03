@@ -34,9 +34,10 @@ enum class error {
     sharedref_index_out_of_range,
     /// A shared reference names a skipped value during struct decoding.
     sharedref_not_complete,
-    /// An encoded simple value is reserved.
+    /// An encode was asked to write a reserved simple value from 24 to 31.
     reserved_simple_value,
-    /// The operation does not support this value.
+    /// The encoder received an unsupported typed-array tag, or struct
+    /// decoding received an unsupported map key.
     unsupported_value,
     /// A key or index is applied to a non-indexable item.
     not_indexable,
@@ -50,7 +51,7 @@ enum class error {
     incorrect_type,
     /// The number does not fit the requested type.
     number_out_of_range,
-    /// A writer can return this for a cycle.
+    /// A writer can return this for a cycle; the library does not return it.
     cyclic_data_structure,
     /// A schema reference names an absent table entry.
     unpopulated_table_index,
