@@ -206,6 +206,9 @@ public:
     /// of a map. It does not read the children. A non-container gives
     /// not_indexable; a count that cannot fit in the remaining input gives
     /// too_little_data.
+    /// @par Complexity
+    /// O(1 + t), where t is the tags passed before the container.
+    /// Allocates nothing on valid use.
     std::expected<std::uint64_t, error> size() const;
 
     /// Returns whether an array, typed array or map has no elements.
