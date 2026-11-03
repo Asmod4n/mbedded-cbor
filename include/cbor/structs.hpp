@@ -1305,6 +1305,9 @@ class generic
 };
 
 /// Reads and writes CBOR values of T using its member description.
+/// A decoded ref retains the owner of bytes used by views in T. Decoding
+/// reads the first item; bytes after it are left unread. A target value
+/// supplies its containers and allocators.
 template <class T>
 class structs
 {
@@ -1360,7 +1363,9 @@ public:
                             std::move(target));
     }
 
-    /// Encodes value into a string, or returns an error.
+    /// Encodes value as one CBOR item into a string, or returns an error.
+    /// Struct map keys use the order of RFC 8949 section 4.2.1.
+    /// An invalid date is a wrong use. An allocation can throw bad_alloc.
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
         auto const counted = generic::generic_size(value, 0);
@@ -1377,7 +1382,9 @@ public:
         return out;
     }
 
-    /// Encodes value to target and returns the byte count, or an error.
+    /// Encodes value as one CBOR item to target and returns the byte count.
+    /// A short span gives no_buffer_space; writer failures are returned.
+    /// An invalid date is a wrong use. An allocation can throw bad_alloc.
     template <class Target>
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
