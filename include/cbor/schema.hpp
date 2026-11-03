@@ -2943,7 +2943,7 @@ public:
 
     /// Returns the first element. An empty view is a wrong use.
     /// @par Complexity
-    /// O(sizeof(E)); allocates nothing.
+    /// O(sizeof(E)) on success; allocates nothing on that path.
     CBOR_ALWAYS_INLINE E front() const
     {
         auto const element = reflection::typed_array_element_at<E>(bytes, size(), 0);
@@ -2953,7 +2953,7 @@ public:
 
     /// Returns the last element. An empty view is a wrong use.
     /// @par Complexity
-    /// O(sizeof(E)); allocates nothing.
+    /// O(sizeof(E)) on success; allocates nothing on that path.
     CBOR_ALWAYS_INLINE E back() const
     {
         auto const element = reflection::typed_array_element_at<E>(bytes, size(), size() - 1);
@@ -3013,7 +3013,7 @@ public:
 
     /// Returns element i. An out-of-range index is a wrong use.
     /// @par Complexity
-    /// O(sizeof(E)); allocates nothing.
+    /// O(sizeof(E)) on success; allocates nothing on that path.
     CBOR_ALWAYS_INLINE E operator[](std::size_t const i) const
     {
         auto const element = reflection::typed_array_element_at<E>(bytes, size(), i);
@@ -3390,7 +3390,7 @@ public:
         /// Returns an iterator to the first element of a fixed-size list.
         /// The accessor must be an lvalue. The iterator retains the owner.
         /// @par Complexity
-        /// O(1); allocates nothing.
+        /// O(1) on success; allocates nothing on that path.
         template <class Self>
             requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
         iterator begin(this Self &&self)
@@ -3403,7 +3403,7 @@ public:
         /// Returns an iterator to the end of a fixed-size list.
         /// The accessor must be an lvalue. The iterator retains the owner.
         /// @par Complexity
-        /// O(1); allocates nothing.
+        /// O(1) on success; allocates nothing on that path.
         template <class Self>
             requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
         iterator end(this Self &&self)
@@ -3415,7 +3415,7 @@ public:
         /// Returns an iterator to the first element of a fixed-size list.
         /// The accessor must be an lvalue. The iterator retains the owner.
         /// @par Complexity
-        /// O(1); allocates nothing.
+        /// O(1) on success; allocates nothing on that path.
         template <class Self>
             requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
         iterator cbegin(this Self &&self)
@@ -3426,7 +3426,7 @@ public:
         /// Returns an iterator to the end of a fixed-size list.
         /// The accessor must be an lvalue. The iterator retains the owner.
         /// @par Complexity
-        /// O(1); allocates nothing.
+        /// O(1) on success; allocates nothing on that path.
         template <class Self>
             requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
         iterator cend(this Self &&self)
@@ -3437,7 +3437,7 @@ public:
         /// Returns an iterator to the first element in reverse order of a fixed-size list.
         /// The accessor must be an lvalue. The iterator retains the owner.
         /// @par Complexity
-        /// O(1); allocates nothing.
+        /// O(1) on success; allocates nothing on that path.
         template <class Self>
             requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
         std::reverse_iterator<iterator> rbegin(this Self &&self)
@@ -3448,7 +3448,7 @@ public:
         /// Returns an iterator to the reverse end of a fixed-size list.
         /// The accessor must be an lvalue. The iterator retains the owner.
         /// @par Complexity
-        /// O(1); allocates nothing.
+        /// O(1) on success; allocates nothing on that path.
         template <class Self>
             requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
         std::reverse_iterator<iterator> rend(this Self &&self)
@@ -3459,7 +3459,7 @@ public:
         /// Returns an iterator to the first element in reverse order of a fixed-size list.
         /// The accessor must be an lvalue. The iterator retains the owner.
         /// @par Complexity
-        /// O(1); allocates nothing.
+        /// O(1) on success; allocates nothing on that path.
         template <class Self>
             requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
         std::reverse_iterator<iterator> crbegin(this Self &&self)
@@ -3470,7 +3470,7 @@ public:
         /// Returns an iterator to the reverse end of a fixed-size list.
         /// The accessor must be an lvalue. The iterator retains the owner.
         /// @par Complexity
-        /// O(1); allocates nothing.
+        /// O(1) on success; allocates nothing on that path.
         template <class Self>
             requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
         std::reverse_iterator<iterator> crend(this Self &&self)
