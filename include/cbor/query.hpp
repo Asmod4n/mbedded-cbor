@@ -1057,9 +1057,10 @@ public:
     /// Parses a JSONPath into an owned query for result type T.
     /// The query owns its path data and can be reused without parsing again.
     /// A result other than nodelist requires a singular path.
-    /// Invalid syntax gives invalid_path; a non-singular path for a scalar
-    /// result gives not_singular_query. Excessive nesting gives
-    /// nesting_depth_exceeded. This operation allocates.
+    /// Invalid syntax or a call to match or search gives invalid_path.
+    /// A non-singular path for a result other than nodelist gives
+    /// not_singular_query. Excessive nesting gives nesting_depth_exceeded.
+    /// This operation allocates and does not read CBOR.
     template <class T>
         requires path_result<T>
     static std::expected<query<T>, error> compile(std::string_view const path)
