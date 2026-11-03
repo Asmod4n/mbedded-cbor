@@ -77,7 +77,8 @@ template <class E>
 inline constexpr bool is_path_query_v = false;
 
 /// Reads one CBOR item in place and keeps its byte owner alive.
-/// Each thread creates its own lazy for shared immutable bytes.
+/// Each thread creates its own lazy for shared immutable bytes. A wrong use
+/// throws std::logic_error, or terminates when exceptions are disabled.
 struct lazy {
 private:
     struct top_level_item {
