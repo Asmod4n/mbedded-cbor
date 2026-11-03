@@ -1350,6 +1350,8 @@ public:
 
     /// Decodes the first item from shared bytes into target.
     /// A null owner is a wrong use. The result retains the owner.
+    /// Target containers supply their allocators; a refused allocation during
+    /// decoding gives not_enough_memory. Keep allocator resources alive.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
@@ -1370,7 +1372,8 @@ public:
 
     /// Decodes the first item into target and retains owner.
     /// The caller ensures owner keeps encoded alive and the bytes unchanged.
-    /// An owner without a control block is a wrong use.
+    /// An owner without a control block is a wrong use. Target containers
+    /// supply their allocators; keep their resources alive.
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
