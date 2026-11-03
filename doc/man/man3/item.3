@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::item" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::item" "3" "2026-11-03" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::item, cbor::item::get, cbor::decode, cbor::encoded_cbor_data_item, cbor::encode, cbor::encode_iov, cbor::encoder, cbor::encoder::unsigned_integer, cbor::encoder::negative_integer, cbor::encoder::byte_string, cbor::encoder::text_string, cbor::encoder::array, cbor::encoder::map, cbor::encoder::tag, cbor::encoder::simple_value, cbor::encoder::floating_point, cbor::encoder::typed_array, cbor::encoder::finish, cbor::iov_writer \- a decoded tree and the encoder
 .SH SYNOPSIS
@@ -215,7 +215,9 @@ A bignum whose magnitude fits 64 bits becomes an integer node.
 A tag 24 is a tag node, and encoded_cbor_data_item gives its decoded
 content.
 Tags 28 and 29 stay tag nodes.
-A leading tag 55799 stays a tag node.
+One leading tag 55799 is read as its content, so the root is that
+content.
+A second tag 55799 and a tag 55799 inside an item stay tag nodes.
 .SS cbor::encoded_cbor_data_item
 Gives the root of the item that a tag 24 (RFC 8949 3.4.5.1) holds in its
 byte string.

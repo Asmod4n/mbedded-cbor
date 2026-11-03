@@ -33,8 +33,9 @@ Decodes the one top-level item in `encoded` into a tree of
 text and byte string, so it stays valid after `encoded` ends. A bignum
 whose magnitude fits 64 bits becomes an integer node. A tag 24 is a tag
 node, and [encoded_cbor_data_item](encoded_cbor_data_item.md) gives its
-decoded content. Tags 28 and 29 stay tag nodes. A leading tag 55799
-stays a tag node.
+decoded content. Tags 28 and 29 stay tag nodes. One leading tag 55799
+is read as its content, so the root is that content. A second tag 55799
+and a tag 55799 inside an item stay tag nodes.
 
 ## Errors
 
