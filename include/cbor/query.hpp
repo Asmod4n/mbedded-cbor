@@ -1007,7 +1007,9 @@ class jsonpath
     friend struct lazy;
 
 public:
-    /// A compiled path with result type T.
+    /// A compiled path with result type T. The query owns its parsed data
+    /// and can be reused. Applying a moved-from query is a wrong use.
+    /// Copying the query copies its data; moving it transfers ownership.
     template <class T>
         requires path_result<T>
     class query
