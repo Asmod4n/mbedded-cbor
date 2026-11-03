@@ -193,7 +193,7 @@ class pfr
     friend class structs;
 
     template <class T>
-    friend void detail::copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
+    friend void detail::copy_views_into_zone(T &value, detail::bump &zone);
 };
 
 class generic
@@ -202,7 +202,7 @@ class generic
     friend class structs;
 
     template <class T>
-    friend void detail::copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
+    friend void detail::copy_views_into_zone(T &value, detail::bump &zone);
 
     template <class U>
     static constexpr bool is_std_tuple = false;
@@ -1451,17 +1451,12 @@ namespace detail
 {
 
 template <class T>
-void copy_views_into_zone(T &value, std::pmr::memory_resource &zone)
+void copy_views_into_zone(T &value, bump &zone)
 {
     if constexpr (std::is_same_v<T, std::string_view>) {
-        std::span<char> const owned(std::pmr::polymorphic_allocator<char>(&zone).allocate(value.size()), value.size());
-        std::ranges::copy(value, owned.begin());
-        value = std::string_view(owned);
+        value = zone.alloc_str(value, validity::bump_chunk_size);
     } else if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
-        std::span<std::byte> const owned(std::pmr::polymorphic_allocator<std::byte>(&zone).allocate(value.size()),
-                                         value.size());
-        std::ranges::copy(value, owned.begin());
-        value = owned;
+        value = zone.alloc_slice_copy(value, validity::bump_chunk_size);
     } else if constexpr (std::is_same_v<T, typed_array>) {
         detail::copy_views_into_zone(value.bytes, zone);
     } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || generic::is_sys_time<T> ||

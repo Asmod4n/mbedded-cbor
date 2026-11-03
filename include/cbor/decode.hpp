@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "bump.hpp"
 #include "error.hpp"
 #include "head.hpp"
 #include "item.hpp"
@@ -40,22 +41,11 @@ struct zone {
     using link = std::pair<item const *, item const *>;
 
     std::pmr::monotonic_buffer_resource memory;
+    bump strings{memory};
     std::vector<link> encoded_cbor_data_items;
-    std::span<char> free{};
 
     explicit zone(std::size_t const initial_size) : memory(initial_size)
     {
-    }
-
-    std::span<char> bump_allocate(std::size_t const size, std::size_t const bytes_left)
-    {
-        if (size > free.size()) [[unlikely]] {
-            std::size_t const chunk = size + std::min(validity::bump_chunk_size, bytes_left);
-            free = std::span<char>(std::pmr::polymorphic_allocator<char>(&memory).allocate(chunk), chunk);
-        }
-        std::span<char> const taken = free.first(size);
-        free = free.subspan(size);
-        return taken;
     }
 };
 
@@ -136,12 +126,12 @@ std::expected<void, error> tree_decoder<Checked>::scalar_decode(item &node, head
         auto const string = d.byte_string_decode(h.argument);
         if (!string) [[unlikely]]
             return std::unexpected(string.error());
-        std::span<char> const own = decoded.bump_allocate(string->size(), d.encoded.size());
-        std::ranges::copy(*string, own.begin());
+        std::string_view const own = decoded.strings.alloc_str(
+            *string, string->size() + std::min(validity::bump_chunk_size, d.encoded.size()));
         if (h.major == major_type::text_string)
-            node.via.str = std::string_view(own);
+            node.via.str = own;
         else
-            node.via.bin = std::as_bytes(own);
+            node.via.bin = std::as_bytes(std::span(own));
         return {};
     }
     case major_type::simple_float:
