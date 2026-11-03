@@ -30,6 +30,7 @@ class encoding;
 
 struct item;
 
+/// Maps a CBOR item kind to the C++ type returned by item::get.
 template <cbor::type K>
 struct item_alternative;
 
@@ -75,13 +76,23 @@ struct item_alternative<K> {
     using type = cbor::simple_value;
 };
 
+/// The C++ type returned for item kind K.
 template <cbor::type K>
 using item_alternative_t = typename item_alternative<K>::type;
 
+/// A node of a decoded CBOR tree. The tree owns the referenced storage.
 struct item {
+    /// The node's CBOR kind.
     cbor::type const type;
+    /// Additional-information bits from the encoded head.
     std::uint8_t const additional_information;
 
+    /// Returns the node value for K, or incorrect_type if its kind differs.
+    /// Views and item pointers remain valid while the decoded tree lives.
+    /// Negative integers return the CBOR argument, not the signed value.
+    /// Map spans alternate keys and values.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     template <cbor::type K>
     std::expected<item_alternative_t<K>, error> get() const
     {
