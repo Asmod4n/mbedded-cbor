@@ -3568,6 +3568,7 @@ public:
                                      std::move(target));
     }
 
+    /// Encodes value using the schema layout.
     template <description_place D = description_place::inside>
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
