@@ -84,7 +84,8 @@ using item_alternative_t = typename item_alternative<K>::type;
 struct item {
     /// The node's CBOR kind.
     cbor::type const type;
-    /// Additional-information bits from the encoded head.
+    /// Additional-information bits of the item head. A bignum converted
+    /// to an integer uses the preferred width of the integer argument.
     std::uint8_t const additional_information;
 
     /// Returns the node value for K, or incorrect_type if its kind differs.
