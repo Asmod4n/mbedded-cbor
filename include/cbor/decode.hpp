@@ -329,6 +329,7 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
 /// as one embedded item. Bignums that fit in 64 bits become integers.
 /// @param encoded The bytes beginning with the item.
 /// @return The owned tree or an error from decoding.
+/// Allocation failure can throw std::bad_alloc.
 /// @par Complexity
 /// O(h + b + t log t), where h is the number of decoded heads, b is the
 /// total bytes copied, and t is the number of tag 24 items. Nested tag 24
