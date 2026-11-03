@@ -102,6 +102,9 @@ public:
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
     /// Moves the encoded range into shared ownership.
+    /// An lvalue, borrowed view or string literal does not compile.
+    /// A later read reports malformed input; construction does not check
+    /// that the bytes contain a complete item.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> take_ownership(Encoded &&encoded);
 
@@ -163,8 +166,9 @@ public:
     std::expected<typename E::result_type, error> at_path(E const &e) const;
 
     /// Returns the element count of an array or typed array, or the pair count
-    /// of a map. A non-container gives not_indexable; a count that cannot fit
-    /// in the remaining input gives too_little_data.
+    /// of a map. It does not read the children. A non-container gives
+    /// not_indexable; a count that cannot fit in the remaining input gives
+    /// too_little_data.
     std::expected<std::uint64_t, error> size() const;
 
     /// Returns whether an array, typed array or map has no elements.
@@ -172,7 +176,9 @@ public:
     std::expected<bool, error> empty() const;
 
     /// Returns the item kind, or an error if its head cannot be read.
-    /// A bignum that fits 64 bits is reported as an integer.
+    /// A bignum that fits 64 bits is reported as an integer; a larger one
+    /// retains its bignum kind. Typed arrays have their own kind. Other tags
+    /// are reported as tags without reading through them.
     std::expected<cbor::type, error> type() const;
 
     /// Reads this item as T, or returns an error.
