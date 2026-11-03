@@ -655,6 +655,9 @@ public:
     }
 
     /// Writes bytes as a CBOR byte string with a shortest-length head.
+    /// @par Complexity
+    /// O(1 + n), where n is the input byte count, excluding target,
+    /// allocation and owner release costs.
     std::expected<void, error> byte_string(std::span<std::byte const> const bytes)
     {
         throw_logic_error_if_unusable();
@@ -675,6 +678,9 @@ public:
     /// Writes bytes retained by a shared owner as a CBOR byte string.
     /// A null owner is a wrong use. An iov_writer can retain the owner and
     /// reference a piece of at least 32 bytes instead of copying it.
+    /// @par Complexity
+    /// O(1 + n), where n is the input byte count, excluding target,
+    /// allocation and owner release costs.
     std::expected<void, error> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes)
     {
         throw_logic_error_if_unusable();
@@ -684,6 +690,9 @@ public:
     /// Writes the bytes in an owning ref as a CBOR byte string.
     /// An iov_writer can retain the owner and reference a piece of at least
     /// 32 bytes instead of copying it.
+    /// @par Complexity
+    /// O(1 + n), where n is the input byte count, excluding target,
+    /// allocation and owner release costs.
     std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes)
     {
         throw_logic_error_if_unusable();
@@ -692,6 +701,9 @@ public:
 
     /// Writes text as a CBOR text string with a shortest-length head.
     /// Does not validate UTF-8.
+    /// @par Complexity
+    /// O(1 + n), where n is the input byte count, excluding target,
+    /// allocation and owner release costs.
     std::expected<void, error> text_string(std::string_view const text)
     {
         throw_logic_error_if_unusable();
@@ -713,6 +725,9 @@ public:
     /// Does not validate UTF-8.
     /// A null owner is a wrong use. An iov_writer can retain the owner and
     /// reference text of at least 32 bytes instead of copying it.
+    /// @par Complexity
+    /// O(1 + n), where n is the input byte count, excluding target,
+    /// allocation and owner release costs.
     std::expected<void, error> text_string(std::shared_ptr<std::string const> const &text)
     {
         throw_logic_error_if_unusable();
@@ -723,6 +738,9 @@ public:
     /// Does not validate UTF-8.
     /// An iov_writer can retain the owner and reference text of at least
     /// 32 bytes instead of copying it.
+    /// @par Complexity
+    /// O(1 + n), where n is the input byte count, excluding target,
+    /// allocation and owner release costs.
     std::expected<void, error> text_string(ref<std::string_view> const &text)
     {
         throw_logic_error_if_unusable();
@@ -807,6 +825,8 @@ public:
     /// The bytes are written in the byte order named by the tag.
     /// An unsupported tag gives unsupported_value; a byte count that is not
     /// a multiple of the element size gives inadmissible_type_for_tag_content.
+    /// @par Complexity
+    /// O(1 + n), where n is the byte count, excluding target and allocation costs.
     std::expected<void, error> typed_array(cbor::typed_array const value)
     {
         throw_logic_error_if_unusable();
