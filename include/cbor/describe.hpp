@@ -69,14 +69,14 @@ struct member {
     P pointer;
 };
 
-/// Specialize for T to provide tag as std::optional<cbor::tag> and members
+/// Specialize for T to provide tag as `std::optional<cbor::tag>` and members
 /// as a tuple of cbor::member entries. cbor::untagged selects no tag.
 /// Duplicate members or keys, a missing tag, and members of another class
 /// are rejected when the description is used.
 template <class T>
 struct describe_members;
 
-/// True when describe_members<T> provides members.
+/// True when `describe_members<T>` provides members.
 template <class T>
 concept has_describe_members = requires { describe_members<T>::members; };
 
@@ -108,7 +108,7 @@ class describe
 /// Creates a member description with its name as the text key.
 #define CBOR_MEMBER(T, m) cbor::member{cbor::map_key(std::string_view{#m}), &T::m}
 
-/// Defines describe_members<T> from a tag and member descriptions.
+/// Defines `describe_members<T>` from a tag and member descriptions.
 /// Write the specialization at global scope; use an alias for a type name
 /// that contains a comma.
 #define CBOR_DEFINE_TYPE(T, TAG, ...)                                                                                  \
@@ -130,7 +130,7 @@ class describe
 #define CBOR_MEMBERS_HELPER(T, m, ...) CBOR_MEMBER(T, m) __VA_OPT__(, CBOR_MEMBERS_AGAIN CBOR_PARENS(T, __VA_ARGS__))
 #define CBOR_MEMBERS_AGAIN() CBOR_MEMBERS_HELPER
 
-/// Defines describe_members<T> from a tag and member names.
+/// Defines `describe_members<T>` from a tag and member names.
 /// Each member name is also its text key. Write the macro at global scope.
 /// The expansion supports up to 343 member names.
 #define CBOR_DEFINE_TYPE_MEMBERS(T, TAG, ...) CBOR_DEFINE_TYPE(T, TAG, CBOR_MEMBERS(T, __VA_ARGS__))
