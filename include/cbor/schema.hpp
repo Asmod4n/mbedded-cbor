@@ -3436,6 +3436,7 @@ public:
         }
     };
 
+    /// Creates an accessor for the encoded message, or returns an error.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
@@ -3443,6 +3444,7 @@ public:
         return path_with_owner<true, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
+    /// Creates an accessor for the encoded message, or returns an error.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
@@ -3450,6 +3452,7 @@ public:
         return path_with_owner<true, D>(std::move(encoded));
     }
 
+    /// Creates an accessor for the encoded message, or returns an error.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3457,6 +3460,7 @@ public:
         return path_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
 
+    /// Reads the value selected by a compile-time path, or returns an error.
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
@@ -3466,6 +3470,7 @@ public:
         return at_path_with_directory<Path, true, D>(encoded, indexes...);
     }
 
+    /// Decodes a schema message into T and retains the byte owner.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
@@ -3473,6 +3478,7 @@ public:
         return decode_with_owner<true, D>(std::move(encoded));
     }
 
+    /// Decodes a schema message into T and retains the byte owner.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
@@ -3480,6 +3486,7 @@ public:
         return decode_with_owner<true, D>(std::move(encoded));
     }
 
+    /// Decodes a schema message into T and retains the byte owner.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -3487,6 +3494,7 @@ public:
         return decode_with_owner<true, D>(std::move(encoded), std::move(target));
     }
 
+    /// Decodes a schema message into T and retains the byte owner.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3494,6 +3502,7 @@ public:
         return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
 
+    /// Decodes a schema message into T and retains the byte owner.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
@@ -3502,6 +3511,7 @@ public:
                                      std::move(target));
     }
 
+    /// Creates an accessor without checking the data; bounds checks remain.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
@@ -3509,6 +3519,7 @@ public:
         return path_with_owner<false, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
+    /// Creates an accessor without checking the data; bounds checks remain.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<Encoded const> encoded)
@@ -3516,6 +3527,7 @@ public:
         return path_with_owner<false, D>(std::move(encoded));
     }
 
+    /// Creates an accessor without checking the data; bounds checks remain.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3523,6 +3535,7 @@ public:
         return path_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
 
+    /// Reads a path without checking the data; bounds checks remain.
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
@@ -3532,6 +3545,7 @@ public:
         return at_path_with_directory<Path, false, D>(encoded, indexes...);
     }
 
+    /// Decodes T without checking the data; bounds checks remain.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(Encoded &&encoded)
@@ -3539,6 +3553,7 @@ public:
         return decode_with_owner<false, D>(std::move(encoded));
     }
 
+    /// Decodes T without checking the data; bounds checks remain.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded)
@@ -3546,6 +3561,7 @@ public:
         return decode_with_owner<false, D>(std::move(encoded));
     }
 
+    /// Decodes T without checking the data; bounds checks remain.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -3553,6 +3569,7 @@ public:
         return decode_with_owner<false, D>(std::move(encoded), std::move(target));
     }
 
+    /// Decodes T without checking the data; bounds checks remain.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3560,6 +3577,7 @@ public:
         return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
     }
 
+    /// Decodes T without checking the data; bounds checks remain.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
@@ -3589,6 +3607,7 @@ public:
         return out;
     }
 
+    /// Encodes value using the schema layout, or returns an error.
     template <description_place D = description_place::inside, class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
