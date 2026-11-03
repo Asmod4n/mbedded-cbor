@@ -86,8 +86,9 @@ struct tree_decoder;
 /// Use the same values in every translation unit of a program. These limits
 /// do not bound the total input size; the caller must bound it before reading.
 struct limits {
-    /// Maximum nesting depth; defaults to 128 and cannot exceed 512.
-    /// On WebAssembly, a low remaining stack also gives nesting_depth_exceeded.
+    /// Maximum nesting depth for operations that check nesting; defaults to
+    /// 128 and cannot exceed 512. On WebAssembly, a low remaining stack
+    /// also gives nesting_depth_exceeded.
     static constexpr std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
     /// Maximum bytes in one text or byte string; SIZE_MAX sets no limit
     /// and removes this check from the build.
