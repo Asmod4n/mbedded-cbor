@@ -2,14 +2,7 @@ name: man
 
 on:
   push:
-    paths:
-      - 'doc/reference/**'
-      - 'doc/man/**'
-      - 'tools/man/**'
-      - 'containers/man.Containerfile'
-      - 'CMakeLists.txt'
-      - '.github/workflows/man.yml'
-  pull_request:
+    branches: [main]
     paths:
       - 'doc/reference/**'
       - 'doc/man/**'
