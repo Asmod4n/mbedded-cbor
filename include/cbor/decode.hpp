@@ -256,6 +256,7 @@ std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const s
         if (heads::is_bignum(head.major, head.argument))
             if (auto const r = bignum_decode(node, head.argument, depth); !r || *r != nullptr)
                 return r;
+        std::string_view const tagged = d.encoded;
         auto const content =
             item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1);
         if (!content) [[unlikely]]
@@ -274,9 +275,9 @@ std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const s
             decoded.encoded_cbor_data_items.emplace_back(&node, nullptr);
             return &node;
         }
-        std::span<std::byte const> const encoded = bytes_item->via.bin;
+        std::string_view const content_encoded = tagged.substr(0, tagged.size() - d.encoded.size());
         tree_decoder inner{decoded,
-                           {heads::as_string_view(encoded)},
+                           {content_encoded.substr(content_encoded.size() - bytes_item->via.bin.size())},
                            depth_max};
         auto const data_item =
             inner.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 2);

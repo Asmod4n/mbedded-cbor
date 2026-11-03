@@ -62,11 +62,6 @@ std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
 class heads
 {
-    static std::string_view as_string_view(std::span<std::byte const> const bytes)
-    {
-        return {reinterpret_cast<char const *>(bytes.data()), bytes.size()};
-    }
-
     template <class V>
     static V unsigned_read(std::span<char const, sizeof(V)> const field)
     {
@@ -201,16 +196,19 @@ class heads
     }
 #endif
 
-    static std::string_view magnitude_without_leading_zeros(std::string_view const magnitude)
+    template <class E>
+        requires std::same_as<E, char> || std::same_as<E, std::byte>
+    static std::span<E const> magnitude_without_leading_zeros(std::span<E const> const magnitude)
     {
-        std::size_t const first = magnitude.find_first_not_of('\0');
-        return first == std::string_view::npos ? std::string_view{} : std::string_view(std::span(magnitude).subspan(first));
+        return {std::ranges::find_if(magnitude, [](E const digit) { return digit != E{}; }), magnitude.end()};
     }
 
-    static std::uint64_t magnitude_value(std::string_view const magnitude)
+    template <class E>
+        requires std::same_as<E, char> || std::same_as<E, std::byte>
+    static std::uint64_t magnitude_value(std::span<E const> const magnitude)
     {
         std::uint64_t n = 0;
-        for (char const c : magnitude)
+        for (E const c : magnitude)
             n = n << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
         return n;
     }
@@ -224,7 +222,7 @@ class heads
             if (*digit != '\0')
                 break;
         }
-        return std::string(magnitude_without_leading_zeros(sum));
+        return std::string(std::string_view(magnitude_without_leading_zeros(std::span<char const>(sum))));
     }
 
     static std::string magnitude_minus_one(std::string_view const magnitude)
@@ -235,7 +233,7 @@ class heads
             if (*digit != static_cast<char>(std::numeric_limits<unsigned char>::max()))
                 break;
         }
-        return std::string(magnitude_without_leading_zeros(difference));
+        return std::string(std::string_view(magnitude_without_leading_zeros(std::span<char const>(difference))));
     }
 
     struct head {
@@ -356,7 +354,7 @@ class heads
             auto const bytes = byte_string_decode(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            std::string_view const magnitude = magnitude_without_leading_zeros(*bytes);
+            std::span<char const> const magnitude = magnitude_without_leading_zeros(std::span(*bytes));
             if (!validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t)))
                 return std::nullopt;
             return magnitude_value(magnitude);
