@@ -71,8 +71,9 @@ struct member {
 
 /// Specialize for T to provide tag as `std::optional<cbor::tag>` and members
 /// as a tuple of cbor::member entries. cbor::untagged selects no tag.
-/// Duplicate members or keys, a missing tag, and members of another class
-/// are rejected when the description is used.
+/// Duplicate members or keys, a missing tag, and members of an unrelated
+/// class are rejected when the description is used. Struct decoding also
+/// accepts members of a public base; schema descriptions have stricter rules.
 template <class T>
 struct describe_members;
 
