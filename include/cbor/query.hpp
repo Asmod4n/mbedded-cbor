@@ -52,8 +52,9 @@ template <fixed_string Path, class T>
               ))
 std::expected<T, error> at_path(std::string_view encoded);
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a view selected by a singular compile-time path.
+/// The result retains owner; the caller must ensure owner keeps encoded alive
+/// and unchanged. An empty owner is a wrong use. Invalid input returns an error.
 template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
@@ -76,8 +77,9 @@ template <fixed_string Path, class T, owning_range_of_chars Encoded>
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(Encoded &&encoded);
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a text or byte string selected by a singular compile-time path.
+/// The result owns a copy of the selected value and does not borrow encoded.
+/// Invalid input or an incompatible value returns an error.
 template <fixed_string Path, copied_value T>
     requires is_singular_query_v<Path>
 std::expected<T, error> at_path(std::string_view encoded);
@@ -1180,8 +1182,8 @@ private:
 template <class T>
 inline constexpr bool is_path_query_v<jsonpath::query<T>> = true;
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Applies a compiled path to encoded CBOR and returns a scalar or an error.
+/// A moved-from query is a wrong use. The input bytes are borrowed for this call.
 template <scalar_result T>
 std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e)
 {
@@ -1816,8 +1818,9 @@ std::expected<T, error> at_path(std::string_view const encoded)
     return jsonpath::query_walk<Path, T>(encoded);
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a view selected by a singular compile-time path.
+/// The result retains owner; the caller must ensure owner keeps encoded alive
+/// and unchanged. An empty owner is a wrong use. Invalid input returns an error.
 template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
@@ -1853,8 +1856,9 @@ std::expected<ref<T>, error> at_path(Encoded &&encoded)
     return at_path<Path, T>(std::make_shared<Encoded const>(std::move(encoded)));
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a text or byte string selected by a singular compile-time path.
+/// The result owns a copy of the selected value and does not borrow encoded.
+/// Invalid input or an incompatible value returns an error.
 template <fixed_string Path, copied_value T>
     requires is_singular_query_v<Path>
 std::expected<T, error> at_path(std::string_view const encoded)
