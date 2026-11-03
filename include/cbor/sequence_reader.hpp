@@ -181,7 +181,10 @@ class sequence_reader
     {
         if (p.bytes.empty())
             return;
-        pieces.erase(pieces.begin(), pieces.begin() + static_cast<std::ptrdiff_t>(piece_first));
+        if (piece_first == pieces.size())
+            pieces.clear();
+        else
+            pieces.erase(pieces.begin(), pieces.begin() + static_cast<std::ptrdiff_t>(piece_first));
         piece_first = 0;
         pieces.push_back(std::move(p));
     }
