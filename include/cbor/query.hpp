@@ -1190,8 +1190,9 @@ std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<
     return jsonpath::query_apply(e, encoded);
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Applies a compiled path and returns a view retaining owner, or an error.
+/// The caller keeps encoded alive and unchanged through owner. An empty
+/// owner or moved-from query is a wrong use.
 template <view_result T, borrowed_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                             jsonpath::query<T> const &e)
@@ -1201,8 +1202,9 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
                                  std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Applies a compiled path and returns lazy values retaining owner, or an error.
+/// The caller keeps encoded alive and unchanged through owner. An empty
+/// owner or moved-from query is a wrong use.
 template <class T, borrowed_range_of_chars Encoded>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
