@@ -41,6 +41,8 @@ enum class major_type : std::uint8_t {
 enum class simple_value : std::uint8_t { false_value = 20, true_value, null, undefined };
 
 /// A CBOR tag number used to describe a type.
+/// schema requires each described struct to have a distinct tag. Tags of
+/// standard types and numbers reserved as invalid are rejected at compile time.
 struct tag {
     /// The tag number.
     std::uint64_t number;
