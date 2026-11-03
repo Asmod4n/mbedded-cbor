@@ -1038,9 +1038,14 @@ public:
         using result_type = std::conditional_t<view_result<T>, ref<T>, T>;
 
         /// Copies the parsed path and may allocate.
+        /// @par Complexity
+        /// O(1 + p + k), where p is the stored segments, selectors and
+        /// expressions, and k is the stored key bytes. Allocator costs are
+        /// not included.
         query(query const &) = default;
 
         /// Replaces this query with a copy of the parsed path and may allocate.
+        /// Its cost includes copying the new path and releasing the old data.
         query &operator=(query const &) = default;
 
         /// Moves the parsed path; applying the moved-from query is a wrong use.
