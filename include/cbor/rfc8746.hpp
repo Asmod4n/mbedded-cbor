@@ -10,8 +10,12 @@
 namespace cbor
 {
 
+/// An RFC 8746 typed-array tag and a view of its encoded bytes.
+/// The caller keeps the bytes alive while the view is used.
 struct typed_array {
+    /// RFC 8746 tag number identifying the element type and byte order.
     std::uint64_t tag;
+    /// Encoded element bytes; does not own the storage.
     std::span<std::byte const> bytes;
 };
 
