@@ -1316,7 +1316,9 @@ public:
     /// selects the first alternative accepting the head; a later error does
     /// not try another alternative. Tag 28 is accepted; tag 29 references
     /// return an error. Unknown struct members are skipped; missing required
-    /// members and repeated known members are errors.
+    /// members and repeated known members are errors. Numeric vectors and
+    /// arrays require their matching little-endian typed-array tag; a plain
+    /// CBOR array does not match them.
     /// Input errors include incorrect_type, number_out_of_range,
     /// key_not_found, duplicate_key and too_little_data. A refused
     /// allocation gives not_enough_memory.
