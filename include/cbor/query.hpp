@@ -61,16 +61,16 @@ template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a view selected by a singular compile-time path from shared bytes.
+/// The result retains the owner. A null owner is a wrong use.
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a view selected by a singular compile-time path from moved bytes.
+/// The bytes move into shared storage retained by the result.
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
@@ -1834,8 +1834,8 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
                                          std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a view selected by a singular compile-time path from shared bytes.
+/// The result retains the owner. A null owner is a wrong use.
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
@@ -1847,8 +1847,8 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
     return at_path<Path, T>(std::move(owner), bytes);
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
+/// Reads a view selected by a singular compile-time path from moved bytes.
+/// The bytes move into shared storage retained by the result.
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
