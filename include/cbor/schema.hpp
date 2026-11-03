@@ -2838,11 +2838,17 @@ public:
 
     using iterator = detail::indexing_iterator<E, std::monostate, &reflection::typed_array_element_at<E>>;
 
+    /// Returns the number of elements.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     CBOR_ALWAYS_INLINE std::size_t size() const
     {
         return bytes.size() / sizeof(E);
     }
 
+    /// Returns whether the view has no elements.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     CBOR_ALWAYS_INLINE bool empty() const
     {
         return bytes.empty();
@@ -2904,6 +2910,9 @@ public:
         return self.rend();
     }
 
+    /// Returns the first element. An empty view is a wrong use.
+    /// @par Complexity
+    /// O(sizeof(E)); allocates nothing.
     CBOR_ALWAYS_INLINE E front() const
     {
         auto const element = reflection::typed_array_element_at<E>(bytes, size(), 0);
@@ -2911,6 +2920,9 @@ public:
         return *element;
     }
 
+    /// Returns the last element. An empty view is a wrong use.
+    /// @par Complexity
+    /// O(sizeof(E)); allocates nothing.
     CBOR_ALWAYS_INLINE E back() const
     {
         auto const element = reflection::typed_array_element_at<E>(bytes, size(), size() - 1);
@@ -2918,6 +2930,9 @@ public:
         return *element;
     }
 
+    /// Returns a view of the first n elements, or index_out_of_bounds.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) const &
     {
         if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
@@ -2925,6 +2940,9 @@ public:
         return typed_array_view(owner, bytes.first(n * sizeof(E)));
     }
 
+    /// Returns a view of the first n elements, or index_out_of_bounds.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) &&
     {
         if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
@@ -2932,6 +2950,9 @@ public:
         return typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).first(n * sizeof(E)));
     }
 
+    /// Returns a view of the last n elements, or index_out_of_bounds.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) const &
     {
         if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
@@ -2939,6 +2960,9 @@ public:
         return typed_array_view(owner, bytes.last(n * sizeof(E)));
     }
 
+    /// Returns a view of the last n elements, or index_out_of_bounds.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) &&
     {
         if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
@@ -2946,11 +2970,17 @@ public:
         return typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).last(n * sizeof(E)));
     }
 
+    /// Returns element i, or index_out_of_bounds.
+    /// @par Complexity
+    /// O(sizeof(E)); allocates nothing.
     CBOR_ALWAYS_INLINE std::expected<E, error> at(std::size_t const i) const
     {
         return reflection::typed_array_element_at<E>(bytes, size(), i);
     }
 
+    /// Returns element i. An out-of-range index is a wrong use.
+    /// @par Complexity
+    /// O(sizeof(E)); allocates nothing.
     CBOR_ALWAYS_INLINE E operator[](std::size_t const i) const
     {
         auto const element = reflection::typed_array_element_at<E>(bytes, size(), i);
