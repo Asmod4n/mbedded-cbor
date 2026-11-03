@@ -1313,7 +1313,10 @@ class generic
 /// other arrays use arrays; maps use maps and multimaps map to arrays.
 /// sys_seconds uses tag 1 and year_month_day uses tag 100. A variant uses
 /// the selected alternative. Described tags and supported standard types
-/// determine the tags written and accepted.
+/// determine the tags written and accepted. A variant decode chooses the
+/// first alternative that accepts the item head; a read error is returned.
+/// Decode accepts a tag 28 but returns an error for a tag 29 reference.
+/// Encode writes no value-sharing tags.
 /// A decoded ref retains the owner of bytes used by views in T. String
 /// views refer to those bytes; owning string members have their own storage.
 /// Decoding reads the first item; bytes after it are left unread. A target
