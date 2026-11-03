@@ -93,17 +93,19 @@ private:
     struct container_message {
         C &container;
 
-        template <std::ranges::sized_range Part>
-        std::expected<void, std::errc> append(Part const part)
+        template <class E>
+            requires std::same_as<E, char> || std::same_as<E, std::byte>
+        std::expected<void, std::errc> append(std::span<E const> const part)
         {
-            auto const at = std::ranges::ssize(container);
-            container.resize(std::ranges::size(container) + std::ranges::size(part));
-            if constexpr (std::same_as<std::ranges::range_value_t<C>, char>)
-                std::ranges::copy(part, std::ranges::next(std::ranges::begin(container), at));
-            else
-                std::ranges::transform(part, std::ranges::next(std::ranges::begin(container), at),
-                                       [](char const c) { return static_cast<std::ranges::range_value_t<C>>(c); });
+            std::size_t const at = std::ranges::size(container);
+            container.resize(at + part.size());
+            std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(std::span(container).subspan(at)).begin());
             return {};
+        }
+
+        std::expected<void, std::errc> append(std::string_view const part)
+        {
+            return append(std::span(part));
         }
 
         std::expected<void, std::errc> done(std::size_t)
@@ -117,23 +119,20 @@ private:
         std::span<B> out;
         std::size_t used;
 
-        template <std::ranges::sized_range Part>
-        std::expected<void, std::errc> append(Part const part)
+        template <class E>
+            requires std::same_as<E, char> || std::same_as<E, std::byte>
+        std::expected<void, std::errc> append(std::span<E const> const part)
         {
-            std::size_t const size = std::ranges::size(part);
-            if (size > out.size() - used) [[unlikely]]
+            if (part.size() > out.size() - used) [[unlikely]]
                 return std::unexpected(std::errc::no_buffer_space);
-            if constexpr (std::same_as<B, char>)
-                std::ranges::copy(part, out.subspan(used).begin());
-            else
-                std::ranges::transform(part, out.subspan(used).begin(), [](char const c) {
-                    if constexpr (std::same_as<B, std::byte>)
-                        return std::byte(static_cast<unsigned char>(c));
-                    else
-                        return static_cast<B>(c);
-                });
-            used += size;
+            std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(out.subspan(used)).begin());
+            used += part.size();
             return {};
+        }
+
+        std::expected<void, std::errc> append(std::string_view const part)
+        {
+            return append(std::span(part));
         }
 
         std::expected<void, std::errc> done(std::size_t)
@@ -345,12 +344,9 @@ struct encoding::encoder {
     }
 
     template <class E>
-    static auto chars_of(std::span<E const> const bytes)
+    static void copy_into(std::span<E const> const from, std::span<char> const to)
     {
-        if constexpr (std::same_as<E, char>)
-            return bytes;
-        else
-            return bytes | std::views::transform([](std::byte const b) { return std::to_integer<char>(b); });
+        std::ranges::copy(std::as_bytes(from), std::as_writable_bytes(to).begin());
     }
 
     std::expected<void, std::errc> byte_string_encode(std::span<std::byte const> const bytes)
@@ -367,7 +363,7 @@ struct encoding::encoder {
         std::span<char> const out = block;
         std::size_t const at = used;
         if (bytes.size() <= out.size() - at) {
-            std::ranges::copy(chars_of(bytes), out.subspan(at).begin());
+            copy_into(bytes, out.subspan(at));
             used = at + bytes.size();
             return {};
         }
@@ -375,12 +371,12 @@ struct encoding::encoder {
             return std::unexpected(std::errc::no_buffer_space);
         } else if constexpr (blocks) {
             std::size_t const first = out.size() - at;
-            std::ranges::copy(chars_of(bytes.first(first)), out.subspan(at).begin());
+            copy_into(bytes.first(first), out.subspan(at));
             used = out.size();
             std::span<E const> const rest = bytes.subspan(first);
             if (auto const r = refill(rest.size()); !r) [[unlikely]]
                 return r;
-            std::ranges::copy(chars_of(rest), block.begin());
+            copy_into(rest, block);
             used = rest.size();
             return {};
         } else if constexpr (std::same_as<E, char>) {
@@ -388,13 +384,18 @@ struct encoding::encoder {
                 return r;
             written += bytes.size();
             return writer.append(std::string_view(bytes));
+        } else if constexpr (requires { writer.append(bytes); }) {
+            if (auto const r = flush(); !r) [[unlikely]]
+                return r;
+            written += bytes.size();
+            return writer.append(bytes);
         } else {
             std::span<E const> rest = bytes;
             while (!rest.empty()) {
                 if (auto const r = flush(); !r) [[unlikely]]
                     return r;
                 std::size_t const part = std::min(rest.size(), block.size());
-                std::ranges::copy(chars_of(rest.first(part)), std::span(block).begin());
+                copy_into(rest.first(part), block);
                 used = part;
                 rest = rest.subspan(part);
             }
