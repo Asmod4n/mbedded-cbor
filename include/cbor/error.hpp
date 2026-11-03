@@ -150,7 +150,8 @@ public:
         return "unknown cbor error";
     }
 
-    /// Maps four error values to std::errc; other values keep this category.
+    /// Maps no_buffer_space, value_too_large, not_enough_memory and io_error
+    /// to the corresponding std::errc. Other values keep this category.
     /// @param condition The numeric error code.
     /// @par Complexity
     /// O(1); allocates nothing.
