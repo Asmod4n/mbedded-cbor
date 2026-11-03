@@ -1037,10 +1037,13 @@ public:
         /// The returned type; view results retain their byte owner.
         using result_type = std::conditional_t<view_result<T>, ref<T>, T>;
 
+        /// Copies the parsed path and may allocate.
         query(query const &) = default;
 
+        /// Replaces this query with a copy of the parsed path and may allocate.
         query &operator=(query const &) = default;
 
+        /// Moves the parsed path; applying the moved-from query is a wrong use.
         query(query &&other) noexcept
             : segments(std::move(other.segments)), selectors(std::move(other.selectors)),
               filters(std::move(other.filters)), keys(std::move(other.keys)),
@@ -1048,6 +1051,8 @@ public:
         {
         }
 
+        /// Replaces this query with the moved path.
+        /// Applying the moved-from query is a wrong use.
         query &operator=(query &&other) noexcept
         {
             segments = std::move(other.segments);
