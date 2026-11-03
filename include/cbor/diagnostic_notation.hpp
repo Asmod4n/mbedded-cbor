@@ -1288,58 +1288,13 @@ class extended_diagnostic_notation
     friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 };
 
-/**
- * @brief Return the diagnostic notation of one CBOR data item.
- *
- * Writes the item in the diagnostic notation of RFC 8949 section 8. Heads
- * that are not in preferred form retain an encoding indicator, and
- * indefinite-length form is retained. Tags are written by number with their
- * content; tag content is not interpreted and tag 29 is not resolved. The function does not check
- * UTF-8 or duplicate map keys.
- * @param encoded The encoded item.
- * @return Its diagnostic notation, or an error.
- * @par Limits and errors
- * too_little_data: input ends before the item ends.
- * syntax_error: an invalid head or chunk, or bytes follow the item.
- * nesting_depth_exceeded: the item exceeds limits::nesting_depth.
- * string_length_exceeded: a string exceeds an active limit.
- * container_elements_exceeded: a container exceeds an active limit.
- * @par Complexity
- * O(n), where n is the number of input bytes. The result uses O(n) memory
- * and allocates. The recursive call stack uses O(d) memory, where d is the
- * item nesting depth.
- * @par Interactive example
- * @verbatim
- * bytes: a1 61 61 83 01 f9 41 00 41 01
- * call: cbor::diagnostic_notation(bytes)
- * result: "{\"a\": [1, 2.5, h'01']}"
- * @endverbatim
- * @par Interactive example 2
- * @verbatim
- * bytes: 9f 01 ff
- * call: cbor::diagnostic_notation(bytes)
- * result: "[_ 1]"
- * @endverbatim
- * @par Interactive example 3
- * @verbatim
- * bytes: c1 00
- * call: cbor::diagnostic_notation(bytes)
- * result: "1(0)"
- * @endverbatim
- * @par Example
- * @verbatim
- * // bytes: a1 61 61 83 01 f9 41 00 41 01
- * cbor::diagnostic_notation(bytes); // "{\"a\": [1, 2.5, h'01']}"
- * // bytes: 9f 01 ff
- * cbor::diagnostic_notation(bytes); // "[_ 1]"
- * // bytes: 01 02
- * cbor::diagnostic_notation(bytes); // syntax_error
- * @endverbatim
- * @par See also
- * @verbatim
- * [item_size](item_size.md) · [limits](../errors/limits.md) · [basics](../../advanced/basics.md), section 5 · [RFC 8949 section 8](https://www.rfc-editor.org/rfc/rfc8949#section-8) · [EDN literals draft](https://datatracker.ietf.org/doc/html/draft-ietf-cbor-edn-literals-28)
- * @endverbatim
- */
+/// Writes one complete CBOR item in RFC 8949 diagnostic notation.
+/// Non-preferred heads retain encoding indicators; indefinite lengths are
+/// printed. Tags are not interpreted, and tag 29 is not resolved. UTF-8 and
+/// duplicate map keys are not checked. Trailing bytes give syntax_error.
+/// @param encoded The encoded item.
+/// @return The notation, or an error for invalid input or an exceeded limit.
+/// The output allocates; allocation failure can throw std::bad_alloc.
 inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
 {
     heads::decoder<true> d{encoded};
