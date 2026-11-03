@@ -1087,7 +1087,9 @@ public:
     /// A non-singular path for a result other than nodelist gives
     /// not_singular_query. Excessive nesting gives nesting_depth_exceeded.
     /// Filters support comparisons, logical operators, length, count and
-    /// value. match, search and other function extensions are not supported.
+    /// value. Two integers compare exactly; a comparison between an integer
+    /// and a float converts the integer to double. Text ordering compares
+    /// unsigned bytes. match, search and other extensions are not supported.
     /// A nodelist holds matched values, not normalized paths.
     /// This operation allocates and does not read CBOR.
     /// @param path JSONPath text. The compiled query does not borrow it.
