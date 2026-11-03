@@ -628,6 +628,8 @@ public:
     template <class T>
         requires integer_argument<T>
     /// Writes an unsigned integer with the width of T.
+    /// @par Complexity
+    /// O(1), excluding target and allocation costs.
     std::expected<void, error> unsigned_integer(T const value)
     {
         throw_logic_error_if_unusable();
@@ -639,6 +641,8 @@ public:
     /// Writes a negative integer from its CBOR argument, -1 minus argument.
     /// The head uses the width of T. T excludes bool and character types.
     /// A short span gives no_buffer_space; a writer can return an error.
+    /// @par Complexity
+    /// O(1), excluding target and allocation costs.
     std::expected<void, error> negative_integer(T const argument)
     {
         throw_logic_error_if_unusable();
@@ -718,6 +722,8 @@ public:
     }
 
     /// Writes an array head for count elements.
+    /// @par Complexity
+    /// O(1), excluding target and allocation costs.
     std::expected<void, error> array(std::uint64_t const count)
     {
         throw_logic_error_if_unusable();
@@ -725,6 +731,8 @@ public:
     }
 
     /// Writes a map head for count key and value pairs.
+    /// @par Complexity
+    /// O(1), excluding target and allocation costs.
     std::expected<void, error> map(std::uint64_t const count)
     {
         throw_logic_error_if_unusable();
@@ -732,6 +740,8 @@ public:
     }
 
     /// Writes a tag head; the caller writes its content next.
+    /// @par Complexity
+    /// O(1), excluding target and allocation costs.
     std::expected<void, error> tag(std::uint64_t const number)
     {
         throw_logic_error_if_unusable();
@@ -757,6 +767,8 @@ private:
 public:
 
     /// Writes a simple value or returns reserved_simple_value.
+    /// @par Complexity
+    /// O(1), excluding target and allocation costs.
     std::expected<void, error> simple_value(cbor::simple_value const value)
     {
         throw_logic_error_if_unusable();
@@ -772,6 +784,8 @@ public:
                   (sizeof(T) == sizeof(std::uint16_t) &&
                    std::numeric_limits<T>::digits == heads::half_precision.significand_bits + 1)))
     /// Writes a floating-point value with the width of T.
+    /// @par Complexity
+    /// O(1), excluding target and allocation costs.
     std::expected<void, error> floating_point(T const value)
     {
         throw_logic_error_if_unusable();
