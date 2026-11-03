@@ -94,32 +94,39 @@ public:
     /// The owner must keep the entire encoded range alive and have a control block.
     /// This does not check that the bytes contain a complete item.
     /// An empty owner is a wrong use.
+    /// @param owner Keeps the encoded bytes alive.
+    /// @param encoded The borrowed bytes of the item.
     template <borrowed_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
     /// Views the bytes of a non-null shared owner without copying them.
     /// This does not check that the bytes contain a complete item.
     /// A null owner is a wrong use.
+    /// @param owner Owns the immutable bytes of the item.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
     /// Moves the encoded range into shared ownership.
     /// An lvalue, borrowed view or string literal does not compile.
     /// A later read reports malformed input; construction does not check
     /// that the bytes contain a complete item.
+    /// @param encoded The owned bytes to move into storage.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> take_ownership(Encoded &&encoded);
 
     /// Finds the first map value with the text key, or returns an error.
     /// A text key does not match a byte string with the same bytes.
     /// A missing key gives key_not_found. The result retains the byte owner.
+    /// @param key The text key to find.
     std::expected<lazy, error> at(std::string_view key) const;
 
     /// Finds the first map value with key k, or returns an error.
     /// An integer key also matches a bignum holding that integer.
     /// A missing key gives key_not_found.
+    /// @param k The map key to find.
     std::expected<lazy, error> at(key k) const;
 
     /// Finds the zero-based element of an array or typed array.
     /// An index outside the array gives index_out_of_bounds.
+    /// @param index The zero-based element index.
     std::expected<lazy, error> at(std::size_t index) const;
 
     /// Finds a map value by text key, or returns an error.
@@ -161,6 +168,7 @@ public:
     std::expected<nodelist, error> at_path() const;
 
     /// Evaluates a compiled path and returns its declared result type.
+    /// @param e The query produced by jsonpath::compile.
     template <class E>
         requires is_path_query_v<E>
     std::expected<typename E::result_type, error> at_path(E const &e) const;
