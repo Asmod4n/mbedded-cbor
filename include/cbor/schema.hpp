@@ -3170,8 +3170,9 @@ public:
     }
 
     /// Returns the compile-time CBOR sequence of description entries for U.
-    /// The returned span refers to static storage. It can be stored apart
-    /// from data written with description_place::apart.
+    /// It includes each struct's record function and the descriptions of
+    /// fixed-size struct list elements. The span refers to static storage.
+    /// Store it apart from data written with description_place::apart.
     template <class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static constexpr std::span<char const> description()
