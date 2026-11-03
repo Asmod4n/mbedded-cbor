@@ -54,6 +54,7 @@ struct lazy_entries;
 struct lazy;
 
 /// A list of lazy values selected by a path. Each retains the byte owner.
+/// The list contains values, not their locations or normalized paths.
 /// A path that selects no values returns an empty list. A step that selects
 /// more nodes than the top-level item has bytes gives nodelist_too_long.
 using nodelist = std::vector<lazy>;
