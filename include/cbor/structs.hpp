@@ -1306,26 +1306,14 @@ class generic
 
 /// Reads and writes CBOR values of T. Described types use their member
 /// description; other aggregates use reflection or Boost.PFR.
-/// Structs map to CBOR maps; text and byte views map to strings. Floating
-/// values use the shortest representation that holds them. Numeric vectors
-/// and arrays use typed arrays; sets use tag 258. An empty
-/// optional is null, or omitted when it is a struct member. Tuples and
-/// other arrays use arrays; maps use maps and multimaps map to arrays.
-/// sys_seconds uses tag 1 and year_month_day uses tag 100. A variant uses
-/// the selected alternative. Described tags and supported standard types
-/// determine the tags written and accepted. A variant decode chooses the
-/// first alternative that accepts the item head; a read error is returned.
-/// Decode accepts a tag 28 but returns an error for a tag 29 reference.
-/// Encode writes no value-sharing tags.
-/// A decoded ref retains the owner of bytes used by views in T. String
-/// views refer to those bytes; owning string members have their own storage.
-/// Decoding reads the first item; bytes after it are left unread. A target
-/// value supplies its containers and allocators.
 template <class T>
 class structs
 {
 public:
     /// Moves encoded bytes into shared storage and decodes the first item.
+    /// Bytes after the item are not read. A result ref keeps the bytes of
+    /// its views alive. A variant selects the first alternative accepting the
+    /// head. Tag 28 is accepted; tag 29 references return an error.
     /// Input errors include incorrect_type, number_out_of_range,
     /// key_not_found, duplicate_key and too_little_data. A refused
     /// allocation gives not_enough_memory.
@@ -1387,6 +1375,10 @@ public:
     }
 
     /// Encodes value as one CBOR item into a string, or returns an error.
+    /// Structs and maps become CBOR maps; numeric vectors and arrays become
+    /// typed arrays. Empty optional members are omitted. Sets use tag 258;
+    /// sys_seconds uses tag 1 and year_month_day uses tag 100. A variant
+    /// uses its selected alternative. Encode writes no value-sharing tags.
     /// Struct map keys use the order of RFC 8949 section 4.2.1.
     /// An invalid date is a wrong use. An allocation can throw bad_alloc.
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
