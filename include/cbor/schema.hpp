@@ -75,6 +75,7 @@ consteval std::size_t no_fixed_size()
 
 }
 
+/// Checks at compile time that described types in Root have distinct tags.
 template <class Root>
 consteval bool tags_registered();
 
@@ -84,6 +85,7 @@ class schema;
 template <class E>
 class typed_array_view;
 
+/// Identifies an element of a fixed-size struct list in a schema accessor.
 template <class S>
 struct fixed_element {};
 
@@ -3423,6 +3425,7 @@ public:
         }
     };
 
+    /// Reads one fixed-size struct element and retains its byte owner.
     template <class S, bool Verified>
     class accessor<fixed_element<S>, Verified>
     {
