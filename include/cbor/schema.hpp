@@ -3370,6 +3370,8 @@ public:
         }
 
         /// Returns the number of elements or map pairs.
+        /// @par Complexity
+        /// O(1); allocates nothing.
         std::size_t size() const
             requires(listed)
         {
