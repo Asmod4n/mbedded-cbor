@@ -1313,6 +1313,9 @@ class structs
 {
 public:
     /// Moves encoded bytes into shared storage and decodes the first item.
+    /// Input errors include incorrect_type, number_out_of_range,
+    /// key_not_found, duplicate_key and too_little_data. A refused
+    /// allocation gives not_enough_memory.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
@@ -1328,6 +1331,7 @@ public:
     }
 
     /// Decodes the first item from shared immutable bytes into a default value.
+    /// A null owner is a wrong use. The result retains the owner.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
@@ -1336,6 +1340,7 @@ public:
     }
 
     /// Decodes the first item from shared bytes into target.
+    /// A null owner is a wrong use. The result retains the owner.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
@@ -1345,7 +1350,8 @@ public:
     }
 
     /// Decodes the first item into a default value and retains owner.
-    /// The caller ensures owner keeps encoded alive.
+    /// The caller ensures owner keeps encoded alive and the bytes unchanged.
+    /// An owner without a control block is a wrong use.
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
@@ -1354,7 +1360,8 @@ public:
     }
 
     /// Decodes the first item into target and retains owner.
-    /// The caller ensures owner keeps encoded alive.
+    /// The caller ensures owner keeps encoded alive and the bytes unchanged.
+    /// An owner without a control block is a wrong use.
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
