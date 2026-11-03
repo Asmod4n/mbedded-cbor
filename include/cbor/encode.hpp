@@ -667,6 +667,9 @@ public:
     /// Writes an owned byte vector as a CBOR byte string.
     /// An iov_writer can retain a moved vector of at least 32 bytes without
     /// copying its bytes.
+    /// @par Complexity
+    /// O(1 + n), where n is the input byte count, excluding target and
+    /// allocation costs.
     template <class V>
         requires std::same_as<V, std::vector<std::byte>>
     std::expected<void, error> byte_string(V &&bytes)
@@ -713,6 +716,9 @@ public:
     /// Writes an owned string as a CBOR text string. Does not validate UTF-8.
     /// An iov_writer can retain a moved string of at least 32 bytes without
     /// copying its bytes.
+    /// @par Complexity
+    /// O(1 + n), where n is the input byte count, excluding target and
+    /// allocation costs.
     template <class S>
         requires std::same_as<S, std::string>
     std::expected<void, error> text_string(S &&text)
