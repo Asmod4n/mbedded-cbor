@@ -846,6 +846,9 @@ public:
     /// Finishes the output and returns its byte count or owned pieces.
     /// Flushes buffered bytes and calls done on a writer. A second call is
     /// a wrong use. A writer error is returned as a cbor::error.
+    /// @par Complexity
+    /// O(1 + b), where b is the bytes flushed, excluding target and
+    /// allocation costs.
     auto finish()
         -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>
     {
