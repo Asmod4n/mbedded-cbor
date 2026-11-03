@@ -43,6 +43,8 @@ enum class simple_value : std::uint8_t { false_value = 20, true_value, null, und
 /// A CBOR tag number used to describe a type.
 /// schema requires each described struct to have a distinct tag. Tags of
 /// standard types and numbers reserved as invalid are rejected at compile time.
+/// These include 0, 1, 2, 3, 24, 64-87, 100, 258, 1004, 21334, 32873,
+/// 65535, 4294967295 and 18446744073709551615.
 struct tag {
     /// The tag number.
     std::uint64_t number;
