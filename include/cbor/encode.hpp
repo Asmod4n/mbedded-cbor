@@ -510,6 +510,8 @@ struct encoding::encoder {
 };
 
 /// Holds blocks and referenced pieces written by an encoder.
+/// encoder::finish returns a ref to the ordered pieces and their owners.
+/// The writer cannot be used again after its pieces are released.
 class iov_writer
 {
     struct storage {
