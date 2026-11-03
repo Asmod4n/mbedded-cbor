@@ -333,15 +333,16 @@ cbor::diagnostic_notation(*owner);                           // "[28(1), 29(0)]"
 Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR. `lazy::take_ownership`
 and `lazy::view` read one leading tag 55799 as its content, in every
 width of the argument. So `clone` of that lazy gives the content.
-`cbor::decode` keeps a leading tag 55799 as a tag item. A second tag
-55799, and a tag 55799 inside an item, stay tags.
+`cbor::decode` also reads one leading tag 55799 as its content, so the
+root of its tree is the content. A second tag 55799, and a tag 55799
+inside an item, stay tags.
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
 // 55799([1, 2])
 cbor::lazy::view(owner)->at(1)->get<std::int64_t>();   // 2
 cbor::lazy::view(owner)->clone();                      // the array item [1, 2]
-cbor::decode(*owner);                                  // the tag item 55799([1, 2])
+cbor::decode(*owner);                                  // the array item [1, 2]
 // [55799(1)]
 cbor::lazy::view(owner)->clone();                      // an array that holds the tag item 55799(1)
 ```

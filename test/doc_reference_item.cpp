@@ -97,7 +97,13 @@ TEST_CASE("doc reference item: decode")
     CHECK_EQ((*tree)->get<cbor::type::array>()->size(), 2u);
     CHECK(cbor::decode("\x01\x02"s).has_value());
     auto const self_described = cbor::decode("\xd9\xd9\xf7\x01"s);
-    CHECK_EQ((*self_described)->type, cbor::type::tag);
+    CHECK_EQ((*self_described)->type, cbor::type::unsigned_integer);
+    auto const second = cbor::decode("\xd9\xd9\xf7\xd9\xd9\xf7\x01"s);
+    REQUIRE(second);
+    CHECK_EQ((*second)->get<cbor::type::tag>()->first, 55799u);
+    auto const inside = cbor::decode("\x81\xd9\xd9\xf7\x01"s);
+    REQUIRE(inside);
+    CHECK_EQ((*inside)->get<cbor::type::array>().value()[0].type, cbor::type::tag);
     CHECK_EQ(cbor::decode("\x9f\xff"s).error(), cbor::error::indefinite_length);
     CHECK_EQ(cbor::decode("\x82\x01"s).error(), cbor::error::too_little_data);
 
