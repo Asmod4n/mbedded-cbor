@@ -637,7 +637,7 @@ public:
         return written(out.fixed_width_head_encode(major_type::negative_integer, argument));
     }
 
-    /// Writes bytes as a CBOR byte string.
+    /// Writes bytes as a CBOR byte string with a shortest-length head.
     std::expected<void, error> byte_string(std::span<std::byte const> const bytes)
     {
         throw_logic_error_if_unusable();
@@ -645,6 +645,8 @@ public:
     }
 
     /// Writes an owned byte vector as a CBOR byte string.
+    /// An iov_writer can retain a moved vector of at least 32 bytes without
+    /// copying its bytes.
     template <class V>
         requires std::same_as<V, std::vector<std::byte>>
     std::expected<void, error> byte_string(V &&bytes)
@@ -654,6 +656,8 @@ public:
     }
 
     /// Writes bytes retained by a shared owner as a CBOR byte string.
+    /// A null owner is a wrong use. An iov_writer can retain the owner and
+    /// reference a piece of at least 32 bytes instead of copying it.
     std::expected<void, error> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes)
     {
         throw_logic_error_if_unusable();
@@ -661,13 +665,15 @@ public:
     }
 
     /// Writes the bytes in an owning ref as a CBOR byte string.
+    /// An iov_writer can retain the owner and reference a piece of at least
+    /// 32 bytes instead of copying it.
     std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(bytes));
     }
 
-    /// Writes text as a CBOR text string.
+    /// Writes text as a CBOR text string with a shortest-length head.
     std::expected<void, error> text_string(std::string_view const text)
     {
         throw_logic_error_if_unusable();
