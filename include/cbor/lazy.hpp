@@ -147,12 +147,15 @@ public:
     std::expected<lazy, error> at(std::size_t index) const;
 
     /// Finds a map value by text key, or returns an error.
+    /// Equivalent to at(key), including its errors and cost.
     std::expected<lazy, error> operator[](std::string_view key) const;
 
     /// Finds a map value by key, or returns an error.
+    /// Equivalent to at(k), including its errors and cost.
     std::expected<lazy, error> operator[](key k) const;
 
     /// Finds an array element by index, or returns an error.
+    /// Equivalent to at(index), including its errors and cost.
     std::expected<lazy, error> operator[](std::size_t index) const;
 
     /// Finds one item using a compile-time JSONPath rooted at this item.
