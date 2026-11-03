@@ -162,7 +162,8 @@ public:
     }
 
     /// Copies the value and the bytes of its views into owned storage.
-    /// The cost includes copying T, traversing its views and copying their bytes.
+    /// The cost includes copying T, traversing its views and copying their
+    /// bytes. Maps and sets are rebuilt with their allocator. This allocates.
     owning<T> clone() const
         requires(!std::same_as<T, std::string_view> && !std::same_as<T, std::span<std::byte const>>)
     {
