@@ -630,12 +630,14 @@ public:
         return written(out.fixed_width_head_encode(major_type::negative_integer, argument));
     }
 
+    /// Writes bytes as a CBOR byte string.
     std::expected<void, error> byte_string(std::span<std::byte const> const bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(heads::as_string_view(bytes)));
     }
 
+    /// Writes an owned byte vector as a CBOR byte string.
     template <class V>
         requires std::same_as<V, std::vector<std::byte>>
     std::expected<void, error> byte_string(V &&bytes)
@@ -644,24 +646,28 @@ public:
         return written(out.byte_string_encode(std::move(bytes)));
     }
 
+    /// Writes bytes retained by a shared owner as a CBOR byte string.
     std::expected<void, error> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(bytes));
     }
 
+    /// Writes the bytes in an owning ref as a CBOR byte string.
     std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes)
     {
         throw_logic_error_if_unusable();
         return written(out.byte_string_encode(bytes));
     }
 
+    /// Writes text as a CBOR text string.
     std::expected<void, error> text_string(std::string_view const text)
     {
         throw_logic_error_if_unusable();
         return written(out.text_string_encode(text));
     }
 
+    /// Writes an owned string as a CBOR text string.
     template <class S>
         requires std::same_as<S, std::string>
     std::expected<void, error> text_string(S &&text)
@@ -670,12 +676,14 @@ public:
         return written(out.text_string_encode(std::move(text)));
     }
 
+    /// Writes text retained by a shared owner as a CBOR text string.
     std::expected<void, error> text_string(std::shared_ptr<std::string const> const &text)
     {
         throw_logic_error_if_unusable();
         return written(out.text_string_encode(text));
     }
 
+    /// Writes the text in an owning ref as a CBOR text string.
     std::expected<void, error> text_string(ref<std::string_view> const &text)
     {
         throw_logic_error_if_unusable();
