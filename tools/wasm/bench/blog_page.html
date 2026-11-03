@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<div id="out"></div>
+<script type="module">
+import Mustache from "/lib/mustache.mjs";
+const params = new URLSearchParams(location.search);
+const arm = params.get("arm").replace(/_aa$/, ""), per_page = 10;
+const [json_text, cbor, blog_module, mus_module] = await Promise.all([
+  fetch("/data/feed.json").then((r) => r.text()),
+  fetch("/data/feed.cbor").then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b)),
+  fetch("/wasm/blog.wasm").then((r) => r.arrayBuffer()),
+  fetch("/wasm/mus.wasm").then((r) => r.arrayBuffer()),
+]);
+const out = document.getElementById("out");
+const template = '{{#posts}}<article data-id="{{id}}"><h2>{{title}}</h2><p class="by">{{author}} {{published}}</p><p>{{summary}}</p></article>{{/posts}}';
+const escape = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const article = (p) => `<article data-id="${p.id}"><h2>${escape(p.title)}</h2><p class="by">${escape(p.author)} ${p.published}</p><p>${escape(p.summary)}</p></article>`;
+const wasi = new Proxy({}, { get: () => () => 0 });
+let app, init_ms = 0;
+const t_init = performance.now();
+if (arm === "json_literal" || arm === "json_mustachejs") {
+  let posts;
+  app = {
+    load: () => { posts = JSON.parse(json_text).posts; },
+    page: (k) => { const slice = posts.slice(k * per_page, (k + 1) * per_page); return arm === "json_literal" ? slice.map(article).join("") : Mustache.render(template, { posts: slice }); },
+  };
+} else {
+  const memory = new WebAssembly.Memory({ initial: 2, maximum: 16384 });
+  const x = (await WebAssembly.instantiate(await WebAssembly.compile(arm === "wasm_html" ? blog_module : mus_module), { env: { memory }, wasi_snapshot_preview1: wasi })).exports;
+  if (arm === "wasm_mustache") x.setup();
+  const decoder = new TextDecoder();
+  const text = (q) => decoder.decode(new Uint8Array(memory.buffer, Number(q >> 32n), Number(q & 0xffffffffn)));
+  app = {
+    load: () => { const p = x.alloc(cbor.length); new Uint8Array(memory.buffer).set(cbor, p); x.feed_load(p, cbor.length); x.release(p); },
+    page: (k) => text(x.page_html(k, per_page)),
+  };
+}
+init_ms = performance.now() - t_init;
+const pages = Number(params.get("pages"));
+const initial = [], clicks = [];
+let hash = 0;
+for (let it = 0; it < 7; ++it) {
+  let t0 = performance.now();
+  app.load();
+  out.innerHTML = app.page(0);
+  out.offsetHeight;
+  initial.push(performance.now() - t0);
+  const c = [];
+  let all = out.innerHTML;
+  for (let k = 1; k < pages; ++k) {
+    t0 = performance.now();
+    out.innerHTML = app.page(k);
+    out.offsetHeight;
+    c.push(performance.now() - t0);
+    all += out.innerHTML;
+  }
+  clicks.push(c);
+  if (it === 0) hash = [...all].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+}
+const median = (a) => { const s = [...a].sort((p, q) => p - q); return s[s.length >> 1]; };
+window.result = { arm: params.get("arm"), init_ms, initial_first_ms: initial[0], initial_ms: median(initial.slice(2)), click_first_ms: clicks[0][0] ?? 0, click_ms: clicks.length && clicks[0].length ? median(clicks.slice(2).flat()) : 0, dom_hash: hash };
+</script>
