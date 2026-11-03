@@ -1309,8 +1309,10 @@ class generic
 /// values use the shortest representation that holds them. Numeric vectors
 /// and arrays use typed arrays; sets use tag 258. An empty
 /// optional is null, or omitted when it is a struct member. Tuples and
-/// other arrays use arrays; maps use maps. Described tags and
-/// supported standard types determine the tags written and accepted.
+/// other arrays use arrays; maps use maps and multimaps map to arrays.
+/// sys_seconds uses tag 1 and year_month_day uses tag 100. A variant uses
+/// the selected alternative. Described tags and supported standard types
+/// determine the tags written and accepted.
 /// A decoded ref retains the owner of bytes used by views in T. Decoding
 /// reads the first item; bytes after it are left unread. A target value
 /// supplies its containers and allocators.
