@@ -25,6 +25,7 @@ struct fixed_string;
 template <fixed_string Path>
 class is_singular_query;
 
+/// The eight CBOR major types defined by RFC 8949.
 enum class major_type : std::uint8_t {
     unsigned_integer,
     negative_integer,
@@ -36,12 +37,16 @@ enum class major_type : std::uint8_t {
     simple_float
 };
 
+/// The named CBOR simple values false, true, null and undefined.
 enum class simple_value : std::uint8_t { false_value = 20, true_value, null, undefined };
 
+/// A CBOR tag number used to describe a type.
 struct tag {
+    /// The tag number.
     std::uint64_t number;
 };
 
+/// The kind of a decoded item, including recognized simple values and tags.
 enum class type : std::uint8_t {
     unsigned_integer,
     negative_integer,
