@@ -3670,7 +3670,8 @@ public:
                                      std::move(target));
     }
 
-    /// Encodes value using the schema layout.
+    /// Encodes value as a Packed CBOR message into a new string.
+    /// D selects whether the description is inside the message or apart.
     template <description_place D = description_place::inside>
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
@@ -3691,9 +3692,9 @@ public:
         return out;
     }
 
-    /// Encodes value as a Packed CBOR message, or returns an error.
-    /// The target overload returns the number of bytes written.
-    /// Description placement is selected by D.
+    /// Encodes value as a Packed CBOR message into target.
+    /// Returns the byte count, or an error from the target or the size check.
+    /// D selects whether the description is inside the message or apart.
     template <description_place D = description_place::inside, class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
