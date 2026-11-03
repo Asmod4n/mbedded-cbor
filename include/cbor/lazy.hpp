@@ -89,23 +89,32 @@ public:
     std::uint64_t typed_array_tag{};
 
     /// Views bytes retained by owner; the caller keeps the bytes unchanged.
-    /// The owner must keep the entire encoded range alive.
+    /// The owner must keep the entire encoded range alive and have a control block.
+    /// This does not check that the bytes contain a complete item.
+    /// An empty owner is a wrong use.
     template <borrowed_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
     /// Views the bytes of a non-null shared owner without copying them.
+    /// This does not check that the bytes contain a complete item.
+    /// A null owner is a wrong use.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
     /// Moves the encoded range into shared ownership.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> take_ownership(Encoded &&encoded);
 
-    /// Finds a map value by text key, or returns an error.
+    /// Finds the first map value with the text key, or returns an error.
+    /// A text key does not match a byte string with the same bytes.
+    /// A missing key gives key_not_found. The result retains the byte owner.
     std::expected<lazy, error> at(std::string_view key) const;
 
-    /// Finds a map value by key, or returns an error.
+    /// Finds the first map value with key k, or returns an error.
+    /// An integer key also matches a bignum holding that integer.
+    /// A missing key gives key_not_found.
     std::expected<lazy, error> at(key k) const;
 
-    /// Finds an array element by index, or returns an error.
+    /// Finds the zero-based element of an array or typed array.
+    /// An index outside the array gives index_out_of_bounds.
     std::expected<lazy, error> at(std::size_t index) const;
 
     /// Finds a map value by text key, or returns an error.
@@ -117,7 +126,8 @@ public:
     /// Finds an array element by index, or returns an error.
     std::expected<lazy, error> operator[](std::size_t index) const;
 
-    /// Finds one item using a compile-time path.
+    /// Finds one item using a compile-time JSONPath.
+    /// The path must be valid and singular; an invalid path does not compile.
     template <fixed_string Path>
         requires is_valid_path_v<Path>
     std::expected<lazy, error> at_path() const;
@@ -160,7 +170,11 @@ public:
     std::expected<cbor::type, error> type() const;
 
     /// Reads this item as T, or returns an error.
-    /// A view result retains the owner of its bytes in a ref.
+    /// Integer reads accept integers and bignums that fit T; a double read
+    /// also accepts an exactly representable integer. Text, byte and typed
+    /// array views retain the owner of their bytes in a ref.
+    /// A mismatched kind gives incorrect_type; a number outside T gives
+    /// number_out_of_range. No string bytes are copied.
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
@@ -173,10 +187,12 @@ public:
                                    std::is_same_v<T, typed_array>,
                                ref<T>, T>, error> get() const;
 
-    /// Returns a range over the elements, or an error.
+    /// Returns a range over array or typed-array elements, or an error.
+    /// Each iterator result contains a lazy or an error.
     std::expected<lazy_elements, error> elements() const;
 
-    /// Returns a range over map key and value pairs, or an error.
+    /// Returns map key and value pairs in encoded order, including duplicates.
+    /// Each iterator result contains a pair of lazy values or an error.
     std::expected<lazy_entries, error> entries() const;
 
     /// Decodes this item into an owned tree, or returns an error.
