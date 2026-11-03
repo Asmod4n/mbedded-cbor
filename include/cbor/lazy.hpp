@@ -193,8 +193,8 @@ public:
     /// retains its bignum kind. Typed arrays have their own kind. Other tags
     /// are reported as tags without reading through them.
     /// @par Complexity
-    /// O(1 + m), where m is the number of bytes examined in a bignum
-    /// magnitude. Allocates nothing.
+    /// O(1 + t + m), where t is the self-described CBOR tags passed and m
+    /// is the number of bytes examined in a bignum magnitude. Allocates nothing.
     std::expected<cbor::type, error> type() const;
 
     /// Reads this item as T, or returns an error.
