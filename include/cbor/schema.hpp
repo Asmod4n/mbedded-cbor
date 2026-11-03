@@ -3760,6 +3760,7 @@ public:
     }
 
     /// Encodes value as a Packed CBOR message into a new string.
+    /// Fields use fixed-width heads so their offsets are known at compile time.
     /// D selects whether the description is inside the message or apart.
     template <description_place D = description_place::inside>
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
@@ -3782,6 +3783,7 @@ public:
     }
 
     /// Encodes value as a Packed CBOR message into target.
+    /// Fields use fixed-width heads so their offsets are known at compile time.
     /// Returns the byte count, or an error from the target or the size check.
     /// D selects whether the description is inside the message or apart.
     template <description_place D = description_place::inside, class Target>
