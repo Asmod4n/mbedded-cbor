@@ -259,7 +259,7 @@ public:
     /// Bytes following this item are not part of the result. Allocation
     /// failure can throw std::bad_alloc.
     /// @par Complexity
-    /// O(1 + h + b + t log t), where h is the heads scanned, b the bytes
+    /// O(1 + h + b + t log(1 + t)), where h is the heads scanned, b the bytes
     /// copied, and t the tag 24 items sorted while decoding. Nested tag 24
     /// content can be copied more than once. The tree allocates storage;
     /// allocator costs are not included.
