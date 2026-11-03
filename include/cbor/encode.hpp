@@ -562,8 +562,9 @@ class iov_writer
 };
 
 /// Writes CBOR values and heads to a target one call at a time.
-/// The caller supplies array and map counts. Targets include byte containers,
-/// byte spans, iov_writer, and writers obtained from target.allocate(size).
+/// The caller supplies array and map counts; the encoder does not count
+/// their elements. Targets include byte containers, byte spans, iov_writer,
+/// and writers obtained from target.allocate(size).
 /// After an error or finish, another call is a wrong use and throws
 /// std::logic_error, or terminates without exceptions.
 template <class Target>
