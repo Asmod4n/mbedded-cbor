@@ -54,7 +54,7 @@ enum class type : std::uint8_t {
     negative_integer,
     /// A byte string.
     byte_string,
-    /// A UTF-8 text string.
+    /// A CBOR text string. The library does not validate UTF-8.
     text_string,
     /// An array of items.
     array,
