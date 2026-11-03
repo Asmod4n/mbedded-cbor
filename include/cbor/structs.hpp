@@ -422,7 +422,7 @@ class generic
             auto const bytes = d.byte_string_decode(b->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            std::string_view const digits = heads::magnitude_without_leading_zeros(*bytes);
+            std::span<char const> const digits = heads::magnitude_without_leading_zeros(std::span(*bytes));
             if (error const c =
                     validity::check_magnitude_size(digits.size(), sizeof(uint128)).error_or(error{});
                 c != error{}) [[unlikely]]

@@ -832,8 +832,8 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
         if (node.via.tag.content->type == cbor::type::byte_string) {
-            std::string_view const magnitude =
-                heads::magnitude_without_leading_zeros(heads::as_string_view(node.via.tag.content->via.bin));
+            std::span<std::byte const> const magnitude =
+                heads::magnitude_without_leading_zeros(node.via.tag.content->via.bin);
             if (validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
                 std::expected<void, std::errc> const fits =
                     out.head_encode(node.type == cbor::type::negative_bignum ? major_type::negative_integer
