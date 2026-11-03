@@ -49,6 +49,10 @@ class iov_writer;
 /// A byte container is appended to; a span is written from its start.
 /// A short span gives no_buffer_space; excess nesting gives
 /// nesting_depth_exceeded. A writer can return its own error.
+/// @par Complexity
+/// O(1 + h + b), where h is the nodes visited and b is the string and
+/// magnitude bytes read. Target operations and allocation add their own
+/// costs. The traversal uses a call stack proportional to nesting depth.
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
