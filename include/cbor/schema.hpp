@@ -219,6 +219,8 @@ public:
 }
 
 /// Selects whether the schema description is included in the message.
+/// inside is the default. apart writes or reads the data form without it;
+/// use schema<T>::description() to obtain the separate description.
 enum class description_place { inside, apart };
 
 class reflection
@@ -3130,7 +3132,8 @@ public:
         return reflection::fixed_size<U, T>();
     }
 
-    /// Returns the encoded schema description for U.
+    /// Returns the compile-time CBOR sequence of description entries for U.
+    /// The returned span refers to static storage.
     template <class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static constexpr std::span<char const> description()
@@ -3152,6 +3155,8 @@ public:
     }
 
     /// Reads fields of U from a schema message and retains its byte owner.
+    /// A path starting with @ is relative to U; $ starts at the root.
+    /// A moved-from accessor cannot be used.
     template <class U = T, bool Verified = true>
     class accessor
     {
@@ -3223,6 +3228,9 @@ public:
 
         ~accessor() = default;
 
+        /// Reads the field at Path, or returns an error.
+        /// An empty index in Path takes the next index argument.
+        /// An invalid path or a call on a temporary does not compile.
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(((Path.view().starts_with('@') && reflection::path_valid<U, Path, 1>()) ||
                       (Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>())) &&
@@ -3302,6 +3310,9 @@ public:
             return result;
         }
 
+        /// Reads the field at Path, or returns an error.
+        /// An empty index in Path takes the next index argument.
+        /// An invalid path or a call on a temporary does not compile.
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(std::same_as<U, T> && Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>() &&
                      sizeof...(Index) == reflection::index_arguments<Path>())
@@ -3319,6 +3330,7 @@ public:
                 typed_array_view<E>(std::forward_like<Self>(self.owner), reflection::list_span(self.encoded, list->items, sizeof(E))));
         }
 
+        /// Returns the number of elements or map pairs.
         std::size_t size() const
             requires(listed)
         {
@@ -3408,6 +3420,9 @@ public:
         friend class accessor;
 
     public:
+        /// Reads the field at Path, or returns an error.
+        /// An empty index in Path takes the next index argument.
+        /// An invalid path or a call on a temporary does not compile.
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
             requires(((Path.view().starts_with('@') && reflection::path_valid<S, Path, 1>()) ||
                       (Path.view().starts_with('$') && reflection::path_valid<T, Path, 1>())) &&
