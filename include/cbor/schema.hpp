@@ -3569,8 +3569,9 @@ public:
     }
 
     /// Creates an accessor without checking the data; bounds checks remain.
-    /// Use for trusted data. Tags, field heads and typed-array lengths are
-    /// not verified. Indexes and message bounds are checked.
+    /// Use for trusted data. Tags and field heads are not verified. The
+    /// typed-array length is not checked for a whole number of elements.
+    /// Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
@@ -3579,8 +3580,9 @@ public:
     }
 
     /// Creates an accessor without checking the data; bounds checks remain.
-    /// Use for trusted data. Tags, field heads and typed-array lengths are
-    /// not verified. Indexes and message bounds are checked.
+    /// Use for trusted data. Tags and field heads are not verified. The
+    /// typed-array length is not checked for a whole number of elements.
+    /// Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<Encoded const> encoded)
@@ -3589,8 +3591,9 @@ public:
     }
 
     /// Creates an accessor without checking the data; bounds checks remain.
-    /// Use for trusted data. Tags, field heads and typed-array lengths are
-    /// not verified. Indexes and message bounds are checked.
+    /// Use for trusted data. Tags and field heads are not verified. The
+    /// typed-array length is not checked for a whole number of elements.
+    /// Indexes and message bounds are checked.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3599,8 +3602,9 @@ public:
     }
 
     /// Reads a path without checking the data; bounds checks remain.
-    /// Use for trusted data. Tags, field heads and typed-array lengths are
-    /// not verified. Indexes and message bounds are checked.
+    /// Use for trusted data. Tags and field heads are not verified. The
+    /// typed-array length is not checked for a whole number of elements.
+    /// Indexes and message bounds are checked.
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
@@ -3611,8 +3615,9 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
-    /// Use for trusted data. Tags, field heads and typed-array lengths are
-    /// not verified. Indexes and message bounds are checked.
+    /// Use for trusted data. Tags and field heads are not verified. The
+    /// typed-array length is not checked for a whole number of elements.
+    /// Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(Encoded &&encoded)
@@ -3621,8 +3626,9 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
-    /// Use for trusted data. Tags, field heads and typed-array lengths are
-    /// not verified. Indexes and message bounds are checked.
+    /// Use for trusted data. Tags and field heads are not verified. The
+    /// typed-array length is not checked for a whole number of elements.
+    /// Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded)
@@ -3631,8 +3637,9 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
-    /// Use for trusted data. Tags, field heads and typed-array lengths are
-    /// not verified. Indexes and message bounds are checked.
+    /// Use for trusted data. Tags and field heads are not verified. The
+    /// typed-array length is not checked for a whole number of elements.
+    /// Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -3641,8 +3648,9 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
-    /// Use for trusted data. Tags, field heads and typed-array lengths are
-    /// not verified. Indexes and message bounds are checked.
+    /// Use for trusted data. Tags and field heads are not verified. The
+    /// typed-array length is not checked for a whole number of elements.
+    /// Indexes and message bounds are checked.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3651,8 +3659,9 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
-    /// Use for trusted data. Tags, field heads and typed-array lengths are
-    /// not verified. Indexes and message bounds are checked.
+    /// Use for trusted data. Tags and field heads are not verified. The
+    /// typed-array length is not checked for a whole number of elements.
+    /// Indexes and message bounds are checked.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
