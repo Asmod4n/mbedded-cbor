@@ -95,8 +95,8 @@ struct zone_owner {
 /// @param tree The tree returned by decode.
 /// @param tagged A tag 24 item in tree.
 /// @return The embedded item, or an error if the tag content is not a byte string.
-/// A tagged item outside the tree is a wrong use and throws std::logic_error,
-/// or terminates without exceptions.
+/// An item that is not a tag 24 of this tree is a wrong use and throws
+/// std::logic_error, or terminates without exceptions.
 /// @par Complexity
 /// O(1 + log(1 + t)), where t is the number of tag 24 items in the tree.
 /// Allocates nothing.
