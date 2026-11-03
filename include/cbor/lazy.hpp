@@ -99,7 +99,7 @@ public:
     /// @param owner Keeps the encoded bytes alive.
     /// @param encoded The borrowed bytes of the item.
     /// @par Complexity
-    /// O(1), excluding the range's data and size operations; no allocation.
+    /// O(1), excluding the range's data and size operations; no allocation on success.
     template <borrowed_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
     /// Views the bytes of a non-null shared owner without copying them.
@@ -107,7 +107,7 @@ public:
     /// A null owner is a wrong use.
     /// @param owner Owns the immutable bytes of the item.
     /// @par Complexity
-    /// O(1), excluding the range's data and size operations; no allocation.
+    /// O(1), excluding the range's data and size operations; no allocation on success.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
     /// Moves the encoded range into shared ownership.
@@ -127,7 +127,7 @@ public:
     /// @param key The text key to find.
     /// @par Complexity
     /// O(1 + h + b), with h heads visited and b key bytes compared.
-    /// The scan stops at the first match. Allocates nothing.
+    /// The scan stops at the first match. No allocation on valid use.
     std::expected<lazy, error> at(std::string_view key) const;
 
     /// Finds the first map value with key k, or returns an error.
@@ -136,7 +136,7 @@ public:
     /// @param k The map key to find.
     /// @par Complexity
     /// O(1 + h + b), with h heads visited and b key or magnitude bytes
-    /// examined, including the input text key. Allocates nothing.
+    /// examined, including the input text key. No allocation on valid use.
     std::expected<lazy, error> at(key k) const;
 
     /// Finds the zero-based element of an array or typed array.
@@ -144,7 +144,7 @@ public:
     /// @param index The zero-based element index.
     /// @par Complexity
     /// O(1 + h), with h heads visited in tags and preceding array elements.
-    /// A typed array needs no scan of preceding elements. Allocates nothing.
+    /// A typed array needs no scan of preceding elements. No allocation on valid use.
     std::expected<lazy, error> at(std::size_t index) const;
 
     /// Finds a map value by text key, or returns an error.
@@ -215,7 +215,8 @@ public:
     /// CBOR tags are skipped; other tags are reported without reading through them.
     /// @par Complexity
     /// O(1 + t + m), where t is the self-described CBOR tags passed and m
-    /// is the number of bytes examined in a bignum magnitude. Allocates nothing.
+    /// is the number of bytes examined in a bignum magnitude. No allocation
+    /// on valid use.
     std::expected<cbor::type, error> type() const;
 
     /// Reads this item as T, or returns an error.
@@ -228,7 +229,7 @@ public:
     /// No string bytes are copied.
     /// @par Complexity
     /// O(1 + t + m), where t is the tags passed and m is the bignum
-    /// magnitude bytes examined. Allocates nothing.
+    /// magnitude bytes examined. No allocation on valid use.
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
@@ -245,14 +246,16 @@ public:
     /// Each iterator result contains a lazy or an error. A non-array gives
     /// not_indexable; indefinite length gives indefinite_length.
     /// @par Complexity
-    /// O(1 + t), where t is the tags passed before the array. Allocates nothing.
+    /// O(1 + t), where t is the tags passed before the array. No allocation
+    /// on valid use.
     std::expected<lazy_elements, error> elements() const;
 
     /// Returns map key and value pairs in encoded order, including duplicates.
     /// Each iterator result contains a pair of lazy values or an error.
     /// A non-map gives not_indexable; indefinite length gives indefinite_length.
     /// @par Complexity
-    /// O(1 + t), where t is the tags passed before the map. Allocates nothing.
+    /// O(1 + t), where t is the tags passed before the map. No allocation
+    /// on valid use.
     std::expected<lazy_entries, error> entries() const;
 
     /// Decodes this item into an owned tree, or returns an error.
