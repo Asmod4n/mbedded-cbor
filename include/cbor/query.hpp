@@ -1842,8 +1842,6 @@ inline std::expected<lazy, error> lazy::operator[](std::size_t const index) cons
     return at(index);
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
 template <fixed_string Path>
     requires is_valid_path_v<Path>
 std::expected<lazy, error> lazy::at_path() const
@@ -1857,8 +1855,6 @@ std::expected<lazy, error> lazy::at_path() const
         });
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
 template <fixed_string Path, std::same_as<nodelist> T>
     requires is_valid_path_v<Path>
 std::expected<nodelist, error> lazy::at_path() const
@@ -1869,8 +1865,6 @@ std::expected<nodelist, error> lazy::at_path() const
         });
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
@@ -1884,8 +1878,6 @@ std::expected<T, error> lazy::at_path() const
     return jsonpath::query_walk<Path, T>(*this);
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
@@ -1895,8 +1887,6 @@ std::expected<ref<T>, error> lazy::at_path() const
     return jsonpath::owned_query_walk<Path, T>(*this);
 }
 
-/// Reads the result selected by a JSONPath from encoded CBOR.
-/// View results retain their byte owner. Invalid input returns an error.
 template <class E>
     requires is_path_query_v<E>
 std::expected<typename E::result_type, error> lazy::at_path(E const &e) const
