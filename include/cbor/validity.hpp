@@ -85,6 +85,8 @@ struct tree_decoder;
 /// Build-time limits set by the CBOR_*_DEFAULT macros.
 /// Use the same values in every translation unit of a program. These limits
 /// do not bound the total input size; the caller must bound it before reading.
+/// Limits are checked by operations that read an item. A lazy walk can skip
+/// an item without checking its string length or container element count.
 struct limits {
     /// Maximum nesting depth for operations that check nesting; defaults to
     /// 128 and cannot exceed 512. On WebAssembly, a low remaining stack
