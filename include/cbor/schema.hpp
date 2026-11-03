@@ -3203,7 +3203,8 @@ public:
     /// Reads fields of U from a schema message and retains its byte owner.
     /// A path starting with @ is relative to U; $ starts at the root.
     /// Accessors obtained from an unverified path keep the unverified mode,
-    /// including accessors for fixed-size list elements.
+    /// including accessors for fixed-size list elements. In that mode a
+    /// boolean byte other than zero is read as true without checking its value.
     /// A copy shares the owner. Reading a path or beginning iteration on a
     /// moved-from accessor is a wrong use.
     template <class U = T, bool Verified = true>
