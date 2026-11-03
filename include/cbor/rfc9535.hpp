@@ -66,6 +66,8 @@ class is_valid_path;
 
 /// True when Path is a supported JSONPath within the nesting limit.
 /// The grammar includes EDN literals; match and search are not supported.
+/// Array indexes have at most 16 digits and lie between -(2^53 - 1) and
+/// 2^53 - 1. Whitespace before the root or after the final segment is invalid.
 template <fixed_string Path>
 inline constexpr bool is_valid_path_v = is_valid_path<Path>::value;
 
