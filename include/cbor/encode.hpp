@@ -48,6 +48,8 @@ template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
 /// Writes an item tree as owned pieces and returns a view of those pieces.
+/// The result retains their storage. A tree deeper than the nesting limit
+/// returns nesting_depth_exceeded.
 std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
 
 class encoding
@@ -553,7 +555,10 @@ class iov_writer
 };
 
 /// Writes CBOR values and heads to a target one call at a time.
-/// After an error or finish, another call is a wrong use.
+/// The caller supplies array and map counts. Targets include byte containers,
+/// byte spans, iov_writer, and writers obtained from target.allocate(size).
+/// After an error or finish, another call is a wrong use and throws
+/// std::logic_error, or terminates without exceptions.
 template <class Target>
 class encoder
 {
@@ -624,6 +629,8 @@ public:
     template <class T>
         requires integer_argument<T>
     /// Writes a negative integer from its CBOR argument, -1 minus argument.
+    /// The head uses the width of T. T excludes bool and character types.
+    /// A short span gives no_buffer_space; a writer can return an error.
     std::expected<void, error> negative_integer(T const argument)
     {
         throw_logic_error_if_unusable();
@@ -755,6 +762,9 @@ public:
     }
 
     /// Writes an RFC 8746 typed array after checking its tag and byte count.
+    /// The bytes are written in the byte order named by the tag.
+    /// An unsupported tag gives unsupported_value; a byte count that is not
+    /// a multiple of the element size gives inadmissible_type_for_tag_content.
     std::expected<void, error> typed_array(cbor::typed_array const value)
     {
         throw_logic_error_if_unusable();
@@ -766,6 +776,8 @@ public:
     }
 
     /// Finishes the output and returns its byte count or owned pieces.
+    /// Flushes buffered bytes and calls done on a writer. A second call is
+    /// a wrong use. A writer error is returned as a cbor::error.
     auto finish()
         -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>
     {
