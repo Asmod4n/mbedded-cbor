@@ -38,7 +38,7 @@ public:
     /// Shares ownership of the encoded bytes.
     /// @param e Non-null owner of the encoded bytes.
     /// @par Complexity
-    /// O(1); reads no bytes.
+    /// O(1), excluding the range's data and size operations; reads no bytes.
     template <owning_range_of_chars Encoded>
     explicit sequence(std::shared_ptr<Encoded const> e)
     {
@@ -51,7 +51,7 @@ public:
     /// @param o Owner with a control block that keeps the bytes of @p e alive.
     /// @param e Borrowed encoded bytes.
     /// @par Complexity
-    /// O(1); reads no bytes.
+    /// O(1), excluding the range's data and size operations; reads no bytes.
     template <borrowed_range_of_chars Encoded>
     sequence(std::shared_ptr<void const> o, Encoded const &e)
         : owner(std::move(o)), encoded(std::ranges::data(e), std::ranges::size(e))
