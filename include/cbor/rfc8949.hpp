@@ -48,23 +48,41 @@ struct tag {
 
 /// The kind of a decoded item, including recognized simple values and tags.
 enum class type : std::uint8_t {
+    /// An unsigned integer, including a bignum that fits in 64 bits.
     unsigned_integer,
+    /// A negative integer, including a bignum that fits in 64 bits.
     negative_integer,
+    /// A byte string.
     byte_string,
+    /// A UTF-8 text string.
     text_string,
+    /// An array of items.
     array,
+    /// A map of key and value pairs.
     map,
+    /// A tagged item.
     tag,
+    /// The false simple value.
     false_value,
+    /// The true simple value.
     true_value,
+    /// The null simple value.
     null,
+    /// The undefined simple value.
     undefined,
+    /// A simple value other than false, true, null or undefined.
     simple_value,
+    /// A binary16 floating-point value.
     half_float,
+    /// A binary32 floating-point value.
     single_float,
+    /// A binary64 floating-point value.
     double_float,
+    /// A positive bignum represented by tag 2.
     unsigned_bignum,
+    /// A negative bignum represented by tag 3.
     negative_bignum,
+    /// A typed array represented by an RFC 8746 tag.
     typed_array
 };
 
