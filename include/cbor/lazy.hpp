@@ -321,6 +321,8 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         iterator() = default;
 
         /// Returns the current value or the error encountered while reading it.
+        /// @par Complexity
+        /// O(1); allocates nothing.
         value_type operator*() const;
 
         /// Advances to the next position. A read error persists at later positions.
@@ -368,12 +370,16 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     }
 
     /// Returns the end sentinel.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     std::default_sentinel_t end() const
     {
         return {};
     }
 
     /// Returns the number of values in the range.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     std::uint64_t size() const
     {
         return count;
@@ -408,6 +414,8 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         iterator() = default;
 
         /// Returns the current value or the error encountered while reading it.
+        /// @par Complexity
+        /// O(1); allocates nothing.
         value_type operator*() const;
 
         /// Advances to the next position. A read error persists at later positions.
@@ -460,12 +468,16 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     }
 
     /// Returns the end sentinel.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     std::default_sentinel_t end() const
     {
         return {};
     }
 
     /// Returns the number of values in the range.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     std::uint64_t size() const
     {
         return count;
