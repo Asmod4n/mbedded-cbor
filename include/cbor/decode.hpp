@@ -196,7 +196,7 @@ std::expected<void, error> tree_decoder<Checked>::item_decode(std::pmr::vector<i
 }
 
 template <bool Checked>
-std::expected<void, error> tree_decoder<Checked>::content_decode(std::pmr::vector<item> &into,
+CBOR_FLATTEN std::expected<void, error> tree_decoder<Checked>::content_decode(std::pmr::vector<item> &into,
                                                                  heads::head const head, std::size_t const depth)
 {
     if (heads::is_bignum(head.major, head.argument))

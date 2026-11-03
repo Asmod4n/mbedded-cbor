@@ -15,6 +15,8 @@
 #include <string_view>
 #include <vector>
 
+#include "validity.hpp"
+
 namespace cbor::detail
 {
 
@@ -22,12 +24,18 @@ class bump {
     std::pmr::forward_list<std::pmr::string> chars;
     std::pmr::forward_list<std::pmr::vector<std::byte>> bytes;
 
+    template <class Chunk>
+    CBOR_NEVER_INLINE static void chunk_added(std::pmr::forward_list<Chunk> &chunks, std::size_t const size)
+    {
+        chunks.emplace_front().reserve(size);
+    }
+
     template <class Chunk, class E>
-    static std::span<E const> appended(std::pmr::forward_list<Chunk> &chunks, std::span<E const> const part,
-                                       std::size_t const chunk_size)
+    CBOR_ALWAYS_INLINE static std::span<E const> appended(std::pmr::forward_list<Chunk> &chunks,
+                                                          std::span<E const> const part, std::size_t const chunk_size)
     {
         if (chunks.empty() || part.size() > chunks.front().capacity() - chunks.front().size()) [[unlikely]]
-            chunks.emplace_front().reserve(std::max(part.size(), chunk_size));
+            chunk_added(chunks, std::max(part.size(), chunk_size));
         Chunk &chunk = chunks.front();
         std::size_t const at = chunk.size();
         chunk.append_range(part);
@@ -39,7 +47,7 @@ public:
     {
     }
 
-    std::string_view alloc_str(std::string_view const text, std::size_t const chunk_size)
+    CBOR_ALWAYS_INLINE std::string_view alloc_str(std::string_view const text, std::size_t const chunk_size)
     {
         return std::string_view(appended(chars, std::span(text), chunk_size));
     }
