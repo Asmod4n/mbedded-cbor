@@ -1306,8 +1306,9 @@ class generic
 
 /// Reads and writes CBOR values of T using its member description.
 /// Structs map to CBOR maps; text and byte views map to strings. Numeric
-/// vectors use typed arrays, sets use tag 258, and optionals use their value
-/// or null. Tuples and arrays use arrays; maps use maps. Described tags and
+/// vectors use typed arrays and sets use tag 258. An empty optional is null,
+/// or omitted when it is a struct member. Tuples and arrays use arrays;
+/// maps use maps. Described tags and
 /// supported standard types determine the tags written and accepted.
 /// A decoded ref retains the owner of bytes used by views in T. Decoding
 /// reads the first item; bytes after it are left unread. A target value
