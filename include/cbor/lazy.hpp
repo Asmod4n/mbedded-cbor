@@ -387,6 +387,7 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         return count;
     }
 
+    /// front is unavailable; use an iterator and inspect its result.
     void front() const = delete;
 
 private:
@@ -485,6 +486,7 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         return count;
     }
 
+    /// front is unavailable; use an iterator and inspect its result.
     void front() const = delete;
 
 private:
