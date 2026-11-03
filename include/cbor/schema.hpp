@@ -2809,8 +2809,8 @@ class reflection
 };
 
 /// A random-access view of typed-array elements that retains their byte owner.
-/// Elements are returned by value. A wrong use throws std::logic_error, or
-/// terminates when exceptions are disabled.
+/// Elements are read from little-endian bytes and returned by value.
+/// A wrong use throws std::logic_error, or terminates when exceptions are disabled.
 template <class E>
 class typed_array_view
 {
