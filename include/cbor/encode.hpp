@@ -686,13 +686,14 @@ public:
     }
 
     /// Writes text as a CBOR text string with a shortest-length head.
+    /// Does not validate UTF-8.
     std::expected<void, error> text_string(std::string_view const text)
     {
         throw_logic_error_if_unusable();
         return written(out.text_string_encode(text));
     }
 
-    /// Writes an owned string as a CBOR text string.
+    /// Writes an owned string as a CBOR text string. Does not validate UTF-8.
     /// An iov_writer can retain a moved string of at least 32 bytes without
     /// copying its bytes.
     template <class S>
@@ -704,6 +705,7 @@ public:
     }
 
     /// Writes text retained by a shared owner as a CBOR text string.
+    /// Does not validate UTF-8.
     /// A null owner is a wrong use. An iov_writer can retain the owner and
     /// reference text of at least 32 bytes instead of copying it.
     std::expected<void, error> text_string(std::shared_ptr<std::string const> const &text)
@@ -713,6 +715,7 @@ public:
     }
 
     /// Writes the text in an owning ref as a CBOR text string.
+    /// Does not validate UTF-8.
     /// An iov_writer can retain the owner and reference text of at least
     /// 32 bytes instead of copying it.
     std::expected<void, error> text_string(ref<std::string_view> const &text)
