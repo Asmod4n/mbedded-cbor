@@ -89,8 +89,11 @@ struct item {
 
     /// Returns the node value for K, or incorrect_type if its kind differs.
     /// Views and item pointers remain valid while the decoded tree lives.
-    /// Negative integers return the CBOR argument, not the signed value.
-    /// Map spans alternate keys and values.
+    /// Integers return their unsigned argument; a negative value is -1 minus
+    /// that argument. Floats return double. Text and bytes return views.
+    /// Arrays return a span of elements; map spans alternate keys and values.
+    /// Tags, bignums and typed arrays return the tag number and content item.
+    /// Simple values return cbor::simple_value.
     /// @par Complexity
     /// O(1); allocates nothing.
     template <cbor::type K>
