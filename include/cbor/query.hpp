@@ -87,7 +87,8 @@ std::expected<T, error> at_path(std::string_view encoded);
 /// first matching pair. A step passes tags it does not interpret and reads
 /// into tag 24. Bignums and typed arrays have special handling; tag 29 is
 /// not resolved. length, count and value are supported; match and search are
-/// not supported.
+/// not supported. For text, length counts bytes that are not UTF-8
+/// continuation bytes; it does not validate the text.
 class jsonpath
 {
     struct selector {
