@@ -11,6 +11,7 @@
 #include <forward_list>
 #include <memory_resource>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -18,16 +19,16 @@ namespace cbor::detail
 {
 
 class bump {
-    std::pmr::forward_list<std::pmr::vector<char>> chars;
+    std::pmr::forward_list<std::pmr::string> chars;
     std::pmr::forward_list<std::pmr::vector<std::byte>> bytes;
 
-    template <class E>
-    static std::span<E const> appended(std::pmr::forward_list<std::pmr::vector<E>> &chunks, std::span<E const> const part,
+    template <class Chunk, class E>
+    static std::span<E const> appended(std::pmr::forward_list<Chunk> &chunks, std::span<E const> const part,
                                        std::size_t const chunk_size)
     {
         if (chunks.empty() || part.size() > chunks.front().capacity() - chunks.front().size()) [[unlikely]]
             chunks.emplace_front().reserve(std::max(part.size(), chunk_size));
-        std::pmr::vector<E> &chunk = chunks.front();
+        Chunk &chunk = chunks.front();
         std::size_t const at = chunk.size();
         chunk.append_range(part);
         return std::span<E const>(chunk).subspan(at);
