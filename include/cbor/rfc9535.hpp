@@ -60,14 +60,16 @@ struct fixed_string {
 template <fixed_string Path>
 class is_valid_path;
 
-/// True when Path is a valid supported JSONPath.
+/// True when Path is a supported JSONPath within the nesting limit.
+/// The grammar includes EDN literals; match and search are not supported.
 template <fixed_string Path>
 inline constexpr bool is_valid_path_v = is_valid_path<Path>::value;
 
 template <fixed_string Path>
 class is_singular_query;
 
-/// True when Path is a valid singular query.
+/// True when Path is a valid singular query. Each segment selects one
+/// name or index, and no segment is a descendant segment.
 template <fixed_string Path>
 inline constexpr bool is_singular_query_v = is_singular_query<Path>::value;
 
