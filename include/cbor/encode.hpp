@@ -681,6 +681,8 @@ public:
     }
 
     /// Writes an owned string as a CBOR text string.
+    /// An iov_writer can retain a moved string of at least 32 bytes without
+    /// copying its bytes.
     template <class S>
         requires std::same_as<S, std::string>
     std::expected<void, error> text_string(S &&text)
@@ -690,6 +692,8 @@ public:
     }
 
     /// Writes text retained by a shared owner as a CBOR text string.
+    /// A null owner is a wrong use. An iov_writer can retain the owner and
+    /// reference text of at least 32 bytes instead of copying it.
     std::expected<void, error> text_string(std::shared_ptr<std::string const> const &text)
     {
         throw_logic_error_if_unusable();
@@ -697,6 +701,8 @@ public:
     }
 
     /// Writes the text in an owning ref as a CBOR text string.
+    /// An iov_writer can retain the owner and reference text of at least
+    /// 32 bytes instead of copying it.
     std::expected<void, error> text_string(ref<std::string_view> const &text)
     {
         throw_logic_error_if_unusable();
