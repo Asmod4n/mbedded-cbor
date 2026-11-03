@@ -596,18 +596,24 @@ class encoder
         !std::same_as<T, char8_t> && !std::same_as<T, char16_t> && !std::same_as<T, char32_t>;
 
 public:
+    /// Creates an encoder that writes to the supplied container or writer.
+    /// The target must remain valid while the encoder uses it.
     explicit encoder(Target &target)
         requires(!pieces && !requires { typename Target::element_type; })
         : message(encoding::message_of(target, 0)), out(message)
     {
     }
 
+    /// Creates an encoder that writes through a span.
+    /// The span's storage must remain valid while the encoder uses it.
     explicit encoder(Target const target)
         requires requires { typename Target::element_type; }
         : message(encoding::message_of(target, 0)), out(message)
     {
     }
 
+    /// Creates an encoder that writes owned pieces to an iov_writer.
+    /// The writer must remain valid while the encoder uses it.
     explicit encoder(Target &target)
         requires pieces
         : message(encoding::message_of(target, 0)), out(message)
