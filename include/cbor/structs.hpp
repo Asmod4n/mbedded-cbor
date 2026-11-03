@@ -1318,6 +1318,7 @@ public:
     /// Input errors include incorrect_type, number_out_of_range,
     /// key_not_found, duplicate_key and too_little_data. A refused
     /// allocation gives not_enough_memory.
+    /// @param encoded The owned bytes to move.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
@@ -1334,6 +1335,7 @@ public:
 
     /// Decodes the first item from shared immutable bytes into a default value.
     /// A null owner is a wrong use. The result retains the owner.
+    /// @param encoded The shared immutable bytes.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
@@ -1345,6 +1347,8 @@ public:
     /// A null owner is a wrong use. The result retains the owner.
     /// Target containers supply their allocators; a refused allocation during
     /// decoding gives not_enough_memory. Keep allocator resources alive.
+    /// @param encoded The shared immutable bytes.
+    /// @param target The initial value and its allocators.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
@@ -1356,6 +1360,8 @@ public:
     /// Decodes the first item into a default value and retains owner.
     /// The caller ensures owner keeps encoded alive and the bytes unchanged.
     /// An owner without a control block is a wrong use.
+    /// @param owner Keeps the borrowed bytes alive.
+    /// @param encoded The borrowed bytes.
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
@@ -1367,6 +1373,9 @@ public:
     /// The caller ensures owner keeps encoded alive and the bytes unchanged.
     /// An owner without a control block is a wrong use. Target containers
     /// supply their allocators; keep their resources alive.
+    /// @param owner Keeps the borrowed bytes alive.
+    /// @param encoded The borrowed bytes.
+    /// @param target The initial value and its allocators.
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
@@ -1384,6 +1393,7 @@ public:
     /// representation. Encode does not generate value-sharing references.
     /// Struct map keys use the order of RFC 8949 section 4.2.1.
     /// An invalid date is a wrong use. An allocation can throw bad_alloc.
+    /// @param value The value to encode.
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
         auto const counted = generic::generic_size(value, 0);
@@ -1403,6 +1413,8 @@ public:
     /// Encodes value as one CBOR item to target and returns the byte count.
     /// A short span gives no_buffer_space; writer failures are returned.
     /// An invalid date is a wrong use. An allocation can throw bad_alloc.
+    /// @param value The value to encode.
+    /// @param target The output container, span or writer.
     template <class Target>
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
