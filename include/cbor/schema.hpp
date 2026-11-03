@@ -2969,6 +2969,7 @@ public:
     }
 
     /// Returns a view of the first n elements, or index_out_of_bounds.
+    /// On success, moves the byte owner from this view into the result.
     /// @par Complexity
     /// O(1); allocates nothing.
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) &&
@@ -2989,6 +2990,7 @@ public:
     }
 
     /// Returns a view of the last n elements, or index_out_of_bounds.
+    /// On success, moves the byte owner from this view into the result.
     /// @par Complexity
     /// O(1); allocates nothing.
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) &&
