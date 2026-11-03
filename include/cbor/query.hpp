@@ -1078,8 +1078,11 @@ public:
     /// The query owns its path data and can be reused without parsing again.
     /// Bracket selectors and filters accept EDN literals. A name selects
     /// from maps; an index selects an array element or an integer map key.
-    /// Negative array indexes count from the end. A result other than
-    /// nodelist requires a singular path.
+    /// Negative array indexes count from the end. Wildcards, slices,
+    /// descendants and filters can select multiple values. A result other
+    /// than nodelist requires a singular path.
+    /// A singular selector finds the first matching map entry; multi-value
+    /// selectors can return values from repeated keys.
     /// Invalid syntax or a call to match or search gives invalid_path.
     /// A non-singular path for a result other than nodelist gives
     /// not_singular_query. Excessive nesting gives nesting_depth_exceeded.
