@@ -19,8 +19,11 @@
 namespace cbor
 {
 
+/// A text or integer map key for lookup.
 struct key {
+    /// Text key when non-null; the characters must remain valid.
     char const *text = nullptr;
+    /// Integer key when text is null.
     std::int64_t number = 0;
 
 #ifdef __cpp_impl_reflection
@@ -30,20 +33,24 @@ struct key {
     }
 #endif
 
+    /// Creates an integer map key.
     constexpr explicit key(std::int64_t const n) : number(n)
     {
     }
 };
 
+/// Stores a character array as a compile-time template argument.
 template <std::size_t N>
 struct fixed_string {
     std::array<char, N> value;
 
+    /// Copies the array into the compile-time value.
     consteval fixed_string(char const (&text)[N])
     {
         std::ranges::copy(text, value.begin());
     }
 
+    /// Returns the stored characters except the final array element.
     consteval std::string_view view() const
     {
         return std::string_view(std::span(value).first(N - 1));
@@ -53,12 +60,14 @@ struct fixed_string {
 template <fixed_string Path>
 class is_valid_path;
 
+/// True when Path is a valid supported JSONPath.
 template <fixed_string Path>
 inline constexpr bool is_valid_path_v = is_valid_path<Path>::value;
 
 template <fixed_string Path>
 class is_singular_query;
 
+/// True when Path is a valid singular query.
 template <fixed_string Path>
 inline constexpr bool is_singular_query_v = is_singular_query<Path>::value;
 
