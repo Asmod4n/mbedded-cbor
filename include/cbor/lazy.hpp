@@ -185,13 +185,16 @@ public:
     std::expected<std::uint64_t, error> size() const;
 
     /// Returns whether an array, typed array or map has no elements.
-    /// Returns the same errors as size().
+    /// Returns the same errors and has the same cost as size().
     std::expected<bool, error> empty() const;
 
     /// Returns the item kind, or an error if its head cannot be read.
     /// A bignum that fits 64 bits is reported as an integer; a larger one
     /// retains its bignum kind. Typed arrays have their own kind. Other tags
     /// are reported as tags without reading through them.
+    /// @par Complexity
+    /// O(1 + m), where m is the number of bytes examined in a bignum
+    /// magnitude. Allocates nothing.
     std::expected<cbor::type, error> type() const;
 
     /// Reads this item as T, or returns an error.
@@ -202,6 +205,9 @@ public:
     /// number_out_of_range. A string beyond the remaining input gives
     /// too_little_data. The read passes tags it does not interpret.
     /// No string bytes are copied.
+    /// @par Complexity
+    /// O(1 + t + m), where t is the tags passed and m is the bignum
+    /// magnitude bytes examined. Allocates nothing.
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
@@ -217,11 +223,15 @@ public:
     /// Returns a range over array or typed-array elements, or an error.
     /// Each iterator result contains a lazy or an error. A non-array gives
     /// not_indexable; indefinite length gives indefinite_length.
+    /// @par Complexity
+    /// O(1 + t), where t is the tags passed before the array. Allocates nothing.
     std::expected<lazy_elements, error> elements() const;
 
     /// Returns map key and value pairs in encoded order, including duplicates.
     /// Each iterator result contains a pair of lazy values or an error.
     /// A non-map gives not_indexable; indefinite length gives indefinite_length.
+    /// @par Complexity
+    /// O(1 + t), where t is the tags passed before the map. Allocates nothing.
     std::expected<lazy_entries, error> entries() const;
 
     /// Decodes this item into an owned tree, or returns an error.
