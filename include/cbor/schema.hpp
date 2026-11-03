@@ -3201,7 +3201,8 @@ public:
 
     /// Reads fields of U from a schema message and retains its byte owner.
     /// A path starting with @ is relative to U; $ starts at the root.
-    /// A copy shares the owner. A moved-from accessor cannot be used.
+    /// A copy shares the owner. Reading a path or beginning iteration on a
+    /// moved-from accessor is a wrong use.
     template <class U = T, bool Verified = true>
     class accessor
     {
