@@ -1313,8 +1313,10 @@ public:
     /// Moves encoded bytes into shared storage and decodes the first item.
     /// Bytes after the item are not read. A result ref keeps the bytes of
     /// its views alive; owning string members have their own storage. A variant
-    /// selects the first alternative accepting the head. Tag 28 is accepted;
-    /// tag 29 references return an error.
+    /// selects the first alternative accepting the head; a later error does
+    /// not try another alternative. Tag 28 is accepted; tag 29 references
+    /// return an error. Unknown struct members are skipped; missing required
+    /// members and repeated known members are errors.
     /// Input errors include incorrect_type, number_out_of_range,
     /// key_not_found, duplicate_key and too_little_data. A refused
     /// allocation gives not_enough_memory.
