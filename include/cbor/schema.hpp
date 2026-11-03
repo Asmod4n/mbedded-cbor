@@ -2805,7 +2805,7 @@ class reflection
 };
 
 /// A random-access view of typed-array elements that retains their byte owner.
-/// Elements are returned by value. A view must outlive use of its references.
+/// Elements are returned by value.
 template <class E>
 class typed_array_view
 {
