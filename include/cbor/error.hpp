@@ -61,11 +61,11 @@ enum class error {
     duplicate_key,
     /// The writer has no buffer space.
     no_buffer_space,
-    /// The value is too large for the writer.
+    /// An encoded value or writer size exceeds its supported range.
     value_too_large,
     /// An allocation or writer operation has insufficient memory.
     not_enough_memory,
-    /// The writer reports an input or output error.
+    /// A writer reports an input or output error.
     io_error,
     /// A string exceeds the configured limit.
     string_length_exceeded,
