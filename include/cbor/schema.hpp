@@ -2856,6 +2856,9 @@ public:
         return bytes.empty();
     }
 
+    /// Returns an iterator to the first element. The view must be an lvalue.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     template <class Self>
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE iterator begin(this Self &&self)
@@ -2863,6 +2866,9 @@ public:
         return iterator(self.owner, std::string_view(), self.bytes, 0, self.size(), {});
     }
 
+    /// Returns an iterator to the end. The view must be an lvalue.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     template <class Self>
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE iterator end(this Self &&self)
@@ -2870,6 +2876,9 @@ public:
         return iterator(self.owner, std::string_view(), self.bytes, self.size(), self.size(), {});
     }
 
+    /// Returns an iterator to the first element. The view must be an lvalue.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     template <class Self>
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE iterator cbegin(this Self &&self)
@@ -2877,6 +2886,9 @@ public:
         return self.begin();
     }
 
+    /// Returns an iterator to the end. The view must be an lvalue.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     template <class Self>
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE iterator cend(this Self &&self)
@@ -2884,6 +2896,9 @@ public:
         return self.end();
     }
 
+    /// Returns an iterator to the first element in reverse order. The view must be an lvalue.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     template <class Self>
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> rbegin(this Self &&self)
@@ -2891,6 +2906,9 @@ public:
         return std::reverse_iterator<iterator>(self.end());
     }
 
+    /// Returns an iterator to the reverse end. The view must be an lvalue.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     template <class Self>
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> rend(this Self &&self)
@@ -2898,6 +2916,9 @@ public:
         return std::reverse_iterator<iterator>(self.begin());
     }
 
+    /// Returns an iterator to the first element in reverse order. The view must be an lvalue.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     template <class Self>
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> crbegin(this Self &&self)
@@ -2905,6 +2926,9 @@ public:
         return self.rbegin();
     }
 
+    /// Returns an iterator to the reverse end. The view must be an lvalue.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     template <class Self>
         requires std::is_lvalue_reference_v<Self>
     CBOR_ALWAYS_INLINE std::reverse_iterator<iterator> crend(this Self &&self)
