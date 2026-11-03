@@ -84,9 +84,10 @@ std::expected<T, error> at_path(std::string_view encoded);
 /// Paths support names, indexes, wildcards, slices, descendants and filters.
 /// EDN literals can name non-text CBOR map keys and appear in filters.
 /// Integer selectors on maps find integer keys; singular lookups return the
-/// first matching pair. Paths pass tags and read into tag 24, but do not
-/// resolve tag 29. length, count and value are supported; match and search
-/// are not supported.
+/// first matching pair. A step passes tags it does not interpret and reads
+/// into tag 24. Bignums and typed arrays have special handling; tag 29 is
+/// not resolved. length, count and value are supported; match and search are
+/// not supported.
 class jsonpath
 {
     struct selector {
