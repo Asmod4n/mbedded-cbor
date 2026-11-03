@@ -1304,10 +1304,12 @@ class generic
     }
 };
 
+/// Reads and writes CBOR values of T using its member description.
 template <class T>
 class structs
 {
 public:
+    /// Moves encoded bytes into shared storage and decodes the first item.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
@@ -1322,6 +1324,7 @@ public:
 #endif
     }
 
+    /// Decodes the first item from shared immutable bytes into a default value.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
@@ -1329,6 +1332,7 @@ public:
         return decode(std::move(encoded), T{});
     }
 
+    /// Decodes the first item from shared bytes into target.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
@@ -1337,6 +1341,8 @@ public:
         return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
 
+    /// Decodes the first item into a default value and retains owner.
+    /// The caller ensures owner keeps encoded alive.
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
@@ -1344,6 +1350,8 @@ public:
         return decode(std::move(owner), encoded, T{});
     }
 
+    /// Decodes the first item into target and retains owner.
+    /// The caller ensures owner keeps encoded alive.
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
@@ -1352,6 +1360,7 @@ public:
                             std::move(target));
     }
 
+    /// Encodes value into a string, or returns an error.
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
         auto const counted = generic::generic_size(value, 0);
@@ -1368,6 +1377,7 @@ public:
         return out;
     }
 
+    /// Encodes value to target and returns the byte count, or an error.
     template <class Target>
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
