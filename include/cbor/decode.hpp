@@ -332,7 +332,8 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
 /// @par Complexity
 /// O(h + b + t log t), where h is the number of decoded heads, b is the
 /// total bytes copied, and t is the number of tag 24 items. Nested tag 24
-/// content can be copied more than once. Allocates storage for the tree.
+/// content can be copied more than once. The tree allocates storage; allocator
+/// costs are not included.
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
     auto const decoded = detail::decode_tree<true>(encoded, limits::nesting_depth);
