@@ -3140,6 +3140,10 @@ consteval std::size_t reflection::member_offset()
 }
 
 /// Encodes and reads a described type using the Packed CBOR layout.
+/// The message is tag 113 over a table and a root record. The table holds
+/// descriptions and variable-size parts. Fixed-width field heads let the
+/// compiler compute field offsets. Numeric lists use little-endian RFC 8746
+/// typed arrays; fixed-size struct lists use provisional tag 32873.
 template <class T>
 class schema
 {
