@@ -160,13 +160,17 @@ public:
         requires is_path_query_v<E>
     std::expected<typename E::result_type, error> at_path(E const &e) const;
 
-    /// Returns the number of elements or pairs, or an error.
+    /// Returns the element count of an array or typed array, or the pair count
+    /// of a map. A non-container gives not_indexable; a count that cannot fit
+    /// in the remaining input gives too_little_data.
     std::expected<std::uint64_t, error> size() const;
 
-    /// Returns whether the container is empty, or an error.
+    /// Returns whether an array, typed array or map has no elements.
+    /// Returns the same errors as size().
     std::expected<bool, error> empty() const;
 
-    /// Returns the item kind, or an error.
+    /// Returns the item kind, or an error if its head cannot be read.
+    /// A bignum that fits 64 bits is reported as an integer.
     std::expected<cbor::type, error> type() const;
 
     /// Reads this item as T, or returns an error.
@@ -196,6 +200,8 @@ public:
     std::expected<lazy_entries, error> entries() const;
 
     /// Decodes this item into an owned tree, or returns an error.
+    /// The tree copies string bytes and does not depend on the original owner.
+    /// Bytes following this item are not part of the result.
     std::expected<owning<item>, error> clone() const;
 
 private:
