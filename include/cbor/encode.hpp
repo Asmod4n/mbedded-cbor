@@ -43,9 +43,11 @@ class encoder;
 
 class iov_writer;
 
+/// Writes an item tree to target and returns its encoded byte count or an error.
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
+/// Writes an item tree as owned pieces and returns a view of those pieces.
 std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
 
 class encoding
@@ -505,6 +507,7 @@ struct encoding::encoder {
     }
 };
 
+/// Holds blocks and referenced pieces written by an encoder.
 class iov_writer
 {
     struct storage {
@@ -549,6 +552,8 @@ class iov_writer
     friend class encoding;
 };
 
+/// Writes CBOR values and heads to a target one call at a time.
+/// After an error or finish, another call is a wrong use.
 template <class Target>
 class encoder
 {
@@ -609,6 +614,7 @@ public:
 
     template <class T>
         requires integer_argument<T>
+    /// Writes an unsigned integer with the width of T.
     std::expected<void, error> unsigned_integer(T const value)
     {
         throw_logic_error_if_unusable();
@@ -617,6 +623,7 @@ public:
 
     template <class T>
         requires integer_argument<T>
+    /// Writes a negative integer from its CBOR argument, -1 minus argument.
     std::expected<void, error> negative_integer(T const argument)
     {
         throw_logic_error_if_unusable();
@@ -675,18 +682,21 @@ public:
         return written(out.text_string_encode(text));
     }
 
+    /// Writes an array head for count elements.
     std::expected<void, error> array(std::uint64_t const count)
     {
         throw_logic_error_if_unusable();
         return written(out.head_encode(major_type::array, count));
     }
 
+    /// Writes a map head for count key and value pairs.
     std::expected<void, error> map(std::uint64_t const count)
     {
         throw_logic_error_if_unusable();
         return written(out.head_encode(major_type::map, count));
     }
 
+    /// Writes a tag head; the caller writes its content next.
     std::expected<void, error> tag(std::uint64_t const number)
     {
         throw_logic_error_if_unusable();
@@ -711,6 +721,7 @@ private:
 
 public:
 
+    /// Writes a simple value or returns reserved_simple_value.
     std::expected<void, error> simple_value(cbor::simple_value const value)
     {
         throw_logic_error_if_unusable();
@@ -725,6 +736,7 @@ public:
                  (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
                   (sizeof(T) == sizeof(std::uint16_t) &&
                    std::numeric_limits<T>::digits == heads::half_precision.significand_bits + 1)))
+    /// Writes a floating-point value with the width of T.
     std::expected<void, error> floating_point(T const value)
     {
         throw_logic_error_if_unusable();
@@ -734,6 +746,7 @@ public:
             return written(out.fixed_width_float_encode(value));
     }
 
+    /// Writes an RFC 8746 typed array after checking its tag and byte count.
     std::expected<void, error> typed_array(cbor::typed_array const value)
     {
         throw_logic_error_if_unusable();
@@ -744,6 +757,7 @@ public:
         return byte_string(value.bytes);
     }
 
+    /// Finishes the output and returns its byte count or owned pieces.
     auto finish()
         -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>
     {
