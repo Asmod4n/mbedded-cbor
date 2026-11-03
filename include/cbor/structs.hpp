@@ -1398,7 +1398,8 @@ public:
     /// become null. Multimaps become maps to arrays. Sets use tag 258;
     /// sys_seconds uses tag 1 and year_month_day uses tag 100. A variant
     /// uses its selected alternative. Floating values use their shortest
-    /// representation. Encode does not generate value-sharing references.
+    /// exact representation; NaN sign and payload are preserved. Encode does
+    /// not generate value-sharing references.
     /// Struct map keys use the order of RFC 8949 section 4.2.1.
     /// An invalid date is a wrong use. An allocation can throw bad_alloc.
     /// @param value The value to encode.
