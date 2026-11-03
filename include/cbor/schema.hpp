@@ -55,6 +55,7 @@
 namespace cbor
 {
 
+/// Wraps non-struct content with CBOR tag Number.
 template <std::uint64_t Number, class T>
 struct tagged_item {
     static_assert(!has_describe_members<T> && !(std::is_class_v<T> && std::is_aggregate_v<T> && !std::ranges::range<T>),
@@ -217,6 +218,7 @@ public:
 
 }
 
+/// Selects whether the schema description is included in the message.
 enum class description_place { inside, apart };
 
 class reflection
@@ -2800,6 +2802,8 @@ class reflection
     friend class pfr;
 };
 
+/// A random-access view of typed-array elements that retains their byte owner.
+/// Elements are returned by value. A view must outlive use of its references.
 template <class E>
 class typed_array_view
 {
@@ -3077,6 +3081,7 @@ consteval std::size_t reflection::member_offset()
     return Member < describe::members_count<U> ? offset : detail::no_fixed_size<T>();
 }
 
+/// Encodes and reads a described type using the Packed CBOR layout.
 template <class T>
 class schema
 {
@@ -3087,6 +3092,7 @@ class schema
                                                 !std::same_as<X, std::optional<std::string_view>>;
 
 public:
+    /// Returns the fixed layout size of U at compile time.
     template <class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static consteval std::size_t fixed_size()
@@ -3094,6 +3100,7 @@ public:
         return reflection::fixed_size<U, T>();
     }
 
+    /// Returns the encoded schema description for U.
     template <class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static constexpr std::span<char const> description()
@@ -3101,6 +3108,7 @@ public:
         return reflection::description_of<U>();
     }
 
+    /// Returns the fixed-layout offset of Member at compile time.
     template <auto Member, class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static consteval std::size_t member_offset()
@@ -3113,6 +3121,7 @@ public:
             return reflection::member_offset<U, reflection::member_index_of<std::remove_cv_t<U>>(Member), T>();
     }
 
+    /// Reads fields of U from a schema message and retains its byte owner.
     template <class U = T, bool Verified = true>
     class accessor
     {
