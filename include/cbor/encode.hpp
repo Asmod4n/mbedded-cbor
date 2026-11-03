@@ -44,6 +44,11 @@ class encoder;
 class iov_writer;
 
 /// Writes an item tree to target and returns its encoded byte count or an error.
+/// Integer, length and tag heads retain their additional-information width;
+/// floats retain their width. Tags 28 and 29 are written as tag nodes.
+/// A byte container is appended to; a span is written from its start.
+/// A short span gives no_buffer_space; excess nesting gives
+/// nesting_depth_exceeded. A writer can return its own error.
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
