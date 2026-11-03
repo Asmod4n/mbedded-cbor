@@ -224,8 +224,10 @@ public:
 
     /// Reads this item as T, or returns an error.
     /// Integer reads accept integers and bignums that fit T; a double read
-    /// also accepts an exactly representable integer. Text, byte and typed
-    /// array views retain the owner of their bytes in a ref.
+    /// also accepts an exactly representable integer. bool reads a CBOR
+    /// boolean, nullptr_t reads null, and simple_value reads a simple value.
+    /// Text, byte and typed-array views retain their byte owner in a ref.
+    /// When available, float128_t reads a 128-bit typed-array element.
     /// A mismatched kind gives incorrect_type; a number outside T gives
     /// number_out_of_range. A string beyond the remaining input gives
     /// too_little_data. The read passes tags it does not interpret.
