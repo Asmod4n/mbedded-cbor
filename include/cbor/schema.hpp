@@ -1408,7 +1408,7 @@ class reflection
     {
         constexpr std::size_t n = fixed_size<E, Root>();
         static_assert(zero_initialized<Root, E>().size() >= n, "The zero-initialized encoding must hold the whole field.");
-        std::span<char const, n> const from{zero_initialized<Root, E>().data(), n};
+        std::span<char const, n> const from = zero_initialized<Root, E>().template first<n>();
         std::copy(from.begin(), from.end(), field.begin());
     }
 
@@ -1756,7 +1756,7 @@ class reflection
     {
         constexpr std::size_t n = heads::head_size(*tag_number_of<U>());
         static_assert(zero_initialized<Root, U>().size() >= n, "The zero-initialized encoding must hold the whole tag head.");
-        std::span<char const, n> const expected{zero_initialized<Root, U>().data(), n};
+        std::span<char const, n> const expected = zero_initialized<Root, U>().template first<n>();
         return std::ranges::equal(field.template first<n>(), expected);
     }
 
@@ -1765,7 +1765,7 @@ class reflection
     {
         constexpr std::size_t head = heads::head_size(fixed_length<U>::value);
         static_assert(zero_initialized<Root, U>().size() >= head, "The zero-initialized encoding must hold the whole head.");
-        std::span<char const, head> const expected{zero_initialized<Root, U>().data(), head};
+        std::span<char const, head> const expected = zero_initialized<Root, U>().template first<head>();
         return std::ranges::equal(field.template first<head>(), expected);
     }
 

@@ -234,7 +234,7 @@ struct encoding::encoder {
             std::size_t const size = used;
             used = 0;
             written += size;
-            return writer.append(std::string_view(block.data(), size));
+            return writer.append(std::string_view(std::span(block).first(size)));
         }
     }
 
