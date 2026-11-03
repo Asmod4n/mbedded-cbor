@@ -222,7 +222,9 @@ public:
 
 /// Selects whether the schema description is included in the message.
 /// inside is the default. apart writes or reads the data form without it;
-/// use schema<T>::description() to obtain the separate description.
+/// use schema<T>::description() to obtain the separate description. The data
+/// form keeps the indexes of the full message and requires schema<T> with
+/// apart to interpret them.
 enum class description_place { inside, apart };
 
 class reflection
