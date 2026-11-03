@@ -1381,7 +1381,7 @@ public:
     /// become null. Multimaps become maps to arrays. Sets use tag 258;
     /// sys_seconds uses tag 1 and year_month_day uses tag 100. A variant
     /// uses its selected alternative. Floating values use their shortest
-    /// representation. Encode writes no value-sharing tags.
+    /// representation. Encode does not generate value-sharing references.
     /// Struct map keys use the order of RFC 8949 section 4.2.1.
     /// An invalid date is a wrong use. An allocation can throw bad_alloc.
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
