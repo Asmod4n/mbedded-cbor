@@ -515,6 +515,8 @@ struct encoding::encoder {
 };
 
 /// Holds blocks and referenced pieces written by an encoder.
+/// Copied output uses blocks of 16 KiB. Suitable owned strings and byte
+/// vectors of at least 32 bytes can be retained as separate pieces.
 /// encoder::finish returns a ref to the ordered pieces and their owners.
 /// The writer cannot be used again after its pieces are released.
 class iov_writer
