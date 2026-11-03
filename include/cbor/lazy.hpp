@@ -53,6 +53,7 @@ struct lazy_entries;
 
 struct lazy;
 
+/// A list of lazy values selected by a path.
 using nodelist = std::vector<lazy>;
 
 template <class T>
@@ -73,6 +74,8 @@ concept path_result = scalar_result<T> || view_result<T> || std::is_same_v<T, la
 template <class E>
 inline constexpr bool is_path_query_v = false;
 
+/// Reads one CBOR item in place and keeps its byte owner alive.
+/// Each thread creates its own lazy for shared immutable bytes.
 struct lazy {
 private:
     struct top_level_item {
@@ -85,25 +88,36 @@ public:
     validity::offset offset;
     std::uint64_t typed_array_tag{};
 
+    /// Views bytes retained by owner; the caller keeps the bytes unchanged.
+    /// The owner must keep the entire encoded range alive.
     template <borrowed_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
+    /// Views the bytes of a non-null shared owner without copying them.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
+    /// Moves the encoded range into shared ownership.
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> take_ownership(Encoded &&encoded);
 
+    /// Finds a map value by text key, or returns an error.
     std::expected<lazy, error> at(std::string_view key) const;
 
+    /// Finds a map value by key, or returns an error.
     std::expected<lazy, error> at(key k) const;
 
+    /// Finds an array element by index, or returns an error.
     std::expected<lazy, error> at(std::size_t index) const;
 
+    /// Finds a map value by text key, or returns an error.
     std::expected<lazy, error> operator[](std::string_view key) const;
 
+    /// Finds a map value by key, or returns an error.
     std::expected<lazy, error> operator[](key k) const;
 
+    /// Finds an array element by index, or returns an error.
     std::expected<lazy, error> operator[](std::size_t index) const;
 
+    /// Finds one item using a compile-time path.
     template <fixed_string Path>
         requires is_valid_path_v<Path>
     std::expected<lazy, error> at_path() const;
@@ -132,10 +146,13 @@ public:
         requires is_path_query_v<E>
     std::expected<typename E::result_type, error> at_path(E const &e) const;
 
+    /// Returns the number of elements or pairs, or an error.
     std::expected<std::uint64_t, error> size() const;
 
+    /// Returns whether the container is empty, or an error.
     std::expected<bool, error> empty() const;
 
+    /// Returns the item kind, or an error.
     std::expected<cbor::type, error> type() const;
 
     template <class T>
@@ -150,10 +167,13 @@ public:
                                    std::is_same_v<T, typed_array>,
                                ref<T>, T>, error> get() const;
 
+    /// Returns a range over the elements, or an error.
     std::expected<lazy_elements, error> elements() const;
 
+    /// Returns a range over map key and value pairs, or an error.
     std::expected<lazy_entries, error> entries() const;
 
+    /// Decodes this item into an owned tree, or returns an error.
     std::expected<owning<item>, error> clone() const;
 
 private:
@@ -213,6 +233,7 @@ private:
 };
 
 
+/// A range of lazy array or typed-array elements that retains their owner.
 struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
@@ -287,6 +308,7 @@ private:
     friend struct lazy;
 };
 
+/// A range of lazy map key and value pairs that retains their owner.
 struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
