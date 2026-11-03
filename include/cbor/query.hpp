@@ -81,6 +81,12 @@ template <fixed_string Path, copied_value T>
 std::expected<T, error> at_path(std::string_view encoded);
 
 /// Compiles and evaluates JSONPath queries on CBOR data.
+/// Paths support names, indexes, wildcards, slices, descendants and filters.
+/// EDN literals can name non-text CBOR map keys and appear in filters.
+/// Integer selectors on maps find integer keys; singular lookups return the
+/// first matching pair. Paths pass tags and read into tag 24, but do not
+/// resolve tag 29. length, count and value are supported; match and search
+/// are not supported.
 class jsonpath
 {
     struct selector {
