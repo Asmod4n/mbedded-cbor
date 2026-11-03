@@ -286,9 +286,8 @@ The head takes the width of \f[CR]T\f[R].
 .SS cbor::encoder::byte_string
 Writes \f[CR]bytes\f[R] as a byte string, with the shortest head for the
 length.
-Over an iov_writer, the last three forms do not copy 32 bytes or more:
-the result keeps the moved vector or the owner.
-Over any other target, each form copies the bytes.
+Each form copies the bytes, also over an iov_writer: the encoder reads
+\f[CR]std::byte\f[R] only by value.
 .SS cbor::encoder::text_string
 Writes \f[CR]text\f[R] as a text string, with the shortest head for the
 length.
@@ -341,8 +340,9 @@ After the call, each call of the encoder throws
 .SS cbor::iov_writer
 A target of encoder that collects pieces, not one buffer.
 The encoder writes heads and short strings into blocks of 16 KiB.
-A text or a byte string of 32 bytes or more that the program hands over
-with its owner becomes a piece of its own, with no copy.
+A text string of 32 bytes or more that the program hands over with its
+owner becomes a piece of its own, with no copy.
+A byte string is copied into the blocks.
 finish gives the pieces, as a \f[CR]ref\f[R] that holds the blocks and
 the owners.
 .PP
