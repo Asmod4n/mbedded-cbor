@@ -327,10 +327,11 @@ public:
     /// @return A lazy that owns its bytes, or an error.
     /// too_little_data retains the partial item for a later feed.
     /// @par Complexity
-    /// O(1 + h + b + p), where h is the number of heads visited, b is the total
-    /// bytes copied or moved by buffer operations, and p is the number of
-    /// pieces consumed or released. A head may be visited more than once.
-    /// Allocation and owner deleters add their own costs.
+    /// O(1 + h + b + p + d), where h is the number of heads visited, b is
+    /// the total bytes copied or moved by buffer operations, p is the pieces
+    /// consumed or released, and d is the nesting depth unwound in this call.
+    /// A head may be visited more than once. Allocation and owner deleters add
+    /// their own costs.
     std::expected<lazy, error> next()
     {
         throw_logic_error_if_moved_from();
