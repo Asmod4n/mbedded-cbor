@@ -325,7 +325,9 @@ public:
     /// tag content, string-length limits or element-count limits.
     /// Later reads through the lazy apply their own checks.
     /// @return A lazy that owns its bytes, or an error.
-    /// too_little_data retains the partial item for a later feed.
+    /// too_little_data retains the partial item for a later feed. An invalid
+    /// head gives syntax_error, an indefinite-length head gives
+    /// indefinite_length, and excessive nesting gives nesting_depth_exceeded.
     /// @par Complexity
     /// O(1 + h + b + p + d), where h is the number of heads visited, b is
     /// the total bytes copied or moved by buffer operations, p is the pieces
