@@ -3437,6 +3437,8 @@ public:
     };
 
     /// Creates an accessor for the encoded message, or returns an error.
+    /// Checks the message length, table, directory and root tag; reads no field.
+    /// A null or empty owner is a wrong use. Borrowed bytes must stay alive.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
@@ -3445,6 +3447,8 @@ public:
     }
 
     /// Creates an accessor for the encoded message, or returns an error.
+    /// Checks the message length, table, directory and root tag; reads no field.
+    /// A null or empty owner is a wrong use. Borrowed bytes must stay alive.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
@@ -3453,6 +3457,8 @@ public:
     }
 
     /// Creates an accessor for the encoded message, or returns an error.
+    /// Checks the message length, table, directory and root tag; reads no field.
+    /// A null or empty owner is a wrong use. Borrowed bytes must stay alive.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3461,6 +3467,8 @@ public:
     }
 
     /// Reads the value selected by a compile-time path, or returns an error.
+    /// The result must hold no view. Paths use member names and indexes;
+    /// each empty index takes an argument. An invalid path does not compile.
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
@@ -3471,6 +3479,8 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
+    /// Text views refer to the message. A target supplies the initial value.
+    /// Null or empty owners are a wrong use.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
@@ -3479,6 +3489,8 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
+    /// Text views refer to the message. A target supplies the initial value.
+    /// Null or empty owners are a wrong use.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
@@ -3487,6 +3499,8 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
+    /// Text views refer to the message. A target supplies the initial value.
+    /// Null or empty owners are a wrong use.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -3495,6 +3509,8 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
+    /// Text views refer to the message. A target supplies the initial value.
+    /// Null or empty owners are a wrong use.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3503,6 +3519,8 @@ public:
     }
 
     /// Decodes a schema message into T and retains the byte owner.
+    /// Text views refer to the message. A target supplies the initial value.
+    /// Null or empty owners are a wrong use.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
@@ -3512,6 +3530,8 @@ public:
     }
 
     /// Creates an accessor without checking the data; bounds checks remain.
+    /// Use for trusted data. Tags, field heads and typed-array lengths are
+    /// not verified. Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
@@ -3520,6 +3540,8 @@ public:
     }
 
     /// Creates an accessor without checking the data; bounds checks remain.
+    /// Use for trusted data. Tags, field heads and typed-array lengths are
+    /// not verified. Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<Encoded const> encoded)
@@ -3528,6 +3550,8 @@ public:
     }
 
     /// Creates an accessor without checking the data; bounds checks remain.
+    /// Use for trusted data. Tags, field heads and typed-array lengths are
+    /// not verified. Indexes and message bounds are checked.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3536,6 +3560,8 @@ public:
     }
 
     /// Reads a path without checking the data; bounds checks remain.
+    /// Use for trusted data. Tags, field heads and typed-array lengths are
+    /// not verified. Indexes and message bounds are checked.
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
@@ -3546,6 +3572,8 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
+    /// Use for trusted data. Tags, field heads and typed-array lengths are
+    /// not verified. Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(Encoded &&encoded)
@@ -3554,6 +3582,8 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
+    /// Use for trusted data. Tags, field heads and typed-array lengths are
+    /// not verified. Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded)
@@ -3562,6 +3592,8 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
+    /// Use for trusted data. Tags, field heads and typed-array lengths are
+    /// not verified. Indexes and message bounds are checked.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -3570,6 +3602,8 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
+    /// Use for trusted data. Tags, field heads and typed-array lengths are
+    /// not verified. Indexes and message bounds are checked.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3578,6 +3612,8 @@ public:
     }
 
     /// Decodes T without checking the data; bounds checks remain.
+    /// Use for trusted data. Tags, field heads and typed-array lengths are
+    /// not verified. Indexes and message bounds are checked.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
@@ -3607,7 +3643,9 @@ public:
         return out;
     }
 
-    /// Encodes value using the schema layout, or returns an error.
+    /// Encodes value as a Packed CBOR message, or returns an error.
+    /// The target overload returns the number of bytes written.
+    /// Description placement is selected by D.
     template <description_place D = description_place::inside, class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
