@@ -93,10 +93,11 @@ private:
     struct container_message {
         C &container;
 
-        std::expected<void, std::errc> append(std::string_view const part)
+        template <std::ranges::sized_range Part>
+        std::expected<void, std::errc> append(Part const part)
         {
             auto const at = std::ranges::ssize(container);
-            container.resize(std::ranges::size(container) + part.size());
+            container.resize(std::ranges::size(container) + std::ranges::size(part));
             if constexpr (std::same_as<std::ranges::range_value_t<C>, char>)
                 std::ranges::copy(part, std::ranges::next(std::ranges::begin(container), at));
             else
@@ -116,12 +117,22 @@ private:
         std::span<B> out;
         std::size_t used;
 
-        std::expected<void, std::errc> append(std::string_view const part)
+        template <std::ranges::sized_range Part>
+        std::expected<void, std::errc> append(Part const part)
         {
-            if (part.size() > out.size() - used) [[unlikely]]
+            std::size_t const size = std::ranges::size(part);
+            if (size > out.size() - used) [[unlikely]]
                 return std::unexpected(std::errc::no_buffer_space);
-            std::ranges::copy(std::as_bytes(std::span(part)), std::as_writable_bytes(out.subspan(used)).begin());
-            used += part.size();
+            if constexpr (std::same_as<B, char>)
+                std::ranges::copy(part, out.subspan(used).begin());
+            else
+                std::ranges::transform(part, out.subspan(used).begin(), [](char const c) {
+                    if constexpr (std::same_as<B, std::byte>)
+                        return std::byte(static_cast<unsigned char>(c));
+                    else
+                        return static_cast<B>(c);
+                });
+            used += size;
             return {};
         }
 
@@ -333,19 +344,30 @@ struct encoding::encoder {
         return head_encode(major, heads::preferred_argument_info(argument), argument);
     }
 
-    std::expected<void, std::errc> byte_string_encode(std::string_view const bytes)
+    template <class E>
+    static auto chars_of(std::span<E const> const bytes)
+    {
+        if constexpr (std::same_as<E, char>)
+            return bytes;
+        else
+            return bytes | std::views::transform([](std::byte const b) { return std::to_integer<char>(b); });
+    }
+
+    std::expected<void, std::errc> byte_string_encode(std::span<std::byte const> const bytes)
     {
         if (auto const r = head_encode(major_type::byte_string, bytes.size()); !r) [[unlikely]]
             return r;
         return payload_encode(bytes);
     }
 
-    std::expected<void, std::errc> payload_encode(std::string_view const bytes)
+    template <class E>
+        requires std::same_as<E, char> || std::same_as<E, std::byte>
+    std::expected<void, std::errc> payload_encode(std::span<E const> const bytes)
     {
         std::span<char> const out = block;
         std::size_t const at = used;
         if (bytes.size() <= out.size() - at) {
-            std::ranges::copy(bytes, out.subspan(at).begin());
+            std::ranges::copy(chars_of(bytes), out.subspan(at).begin());
             used = at + bytes.size();
             return {};
         }
@@ -353,19 +375,30 @@ struct encoding::encoder {
             return std::unexpected(std::errc::no_buffer_space);
         } else if constexpr (blocks) {
             std::size_t const first = out.size() - at;
-            std::ranges::copy(bytes.substr(0, first), out.subspan(at).begin());
+            std::ranges::copy(chars_of(bytes.first(first)), out.subspan(at).begin());
             used = out.size();
-            std::string_view const rest = bytes.substr(first);
+            std::span<E const> const rest = bytes.subspan(first);
             if (auto const r = refill(rest.size()); !r) [[unlikely]]
                 return r;
-            std::ranges::copy(rest, block.begin());
+            std::ranges::copy(chars_of(rest), block.begin());
             used = rest.size();
             return {};
-        } else {
+        } else if constexpr (std::same_as<E, char>) {
             if (auto const r = flush(); !r) [[unlikely]]
                 return r;
             written += bytes.size();
-            return writer.append(bytes);
+            return writer.append(std::string_view(bytes));
+        } else {
+            std::span<E const> rest = bytes;
+            while (!rest.empty()) {
+                if (auto const r = flush(); !r) [[unlikely]]
+                    return r;
+                std::size_t const part = std::min(rest.size(), block.size());
+                std::ranges::copy(chars_of(rest.first(part)), std::span(block).begin());
+                used = part;
+                rest = rest.subspan(part);
+            }
+            return {};
         }
     }
 
@@ -433,29 +466,18 @@ struct encoding::encoder {
         requires std::same_as<V, std::vector<std::byte>>
     std::expected<void, std::errc> byte_string_encode(V &&bytes)
     {
-        if constexpr (blocks)
-            if (bytes.size() >= ref_size) {
-                auto const owner = std::make_shared<std::vector<std::byte> const>(std::move(bytes));
-                return piece_encode(major_type::byte_string, heads::as_string_view(*owner), owner);
-            }
-        return byte_string_encode(heads::as_string_view(bytes));
+        return byte_string_encode(std::span<std::byte const>(bytes));
     }
 
     std::expected<void, std::errc> byte_string_encode(std::shared_ptr<std::vector<std::byte> const> const bytes)
     {
         validity::throw_logic_error_if_null(bytes, "cbor::encoder::byte_string_encode: the bytes are null");
-        if constexpr (blocks)
-            if (bytes->size() >= ref_size)
-                return piece_encode(major_type::byte_string, heads::as_string_view(*bytes), bytes);
-        return byte_string_encode(heads::as_string_view(*bytes));
+        return byte_string_encode(std::span<std::byte const>(*bytes));
     }
 
     std::expected<void, std::errc> byte_string_encode(ref<std::span<std::byte const>> const bytes)
     {
-        if constexpr (blocks)
-            if ((*bytes).size() >= ref_size)
-                return piece_encode(major_type::byte_string, heads::as_string_view(*bytes), bytes.owner);
-        return byte_string_encode(heads::as_string_view(*bytes));
+        return byte_string_encode(*bytes);
     }
 
     std::expected<void, std::errc> piece_encode(major_type const major, std::string_view const piece,
@@ -630,7 +652,7 @@ public:
     std::expected<void, error> byte_string(std::span<std::byte const> const bytes)
     {
         throw_logic_error_if_unusable();
-        return written(out.byte_string_encode(heads::as_string_view(bytes)));
+        return written(out.byte_string_encode(bytes));
     }
 
     template <class V>
@@ -844,10 +866,10 @@ std::expected<void, error> encoding::item_encode(encoder<Writer> &out, item cons
         return std::unexpected(validity::writer_error(written.error()));
     switch (major) {
     case major_type::byte_string:
-        written = out.payload_encode(heads::as_string_view(node.via.bin));
+        written = out.payload_encode(node.via.bin);
         break;
     case major_type::text_string:
-        written = out.payload_encode(node.via.str);
+        written = out.payload_encode(std::span(node.via.str));
         break;
     case major_type::array:
     case major_type::map:

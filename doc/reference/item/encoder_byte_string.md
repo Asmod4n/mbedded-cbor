@@ -30,9 +30,8 @@ result: owning item of h'6162'
 ```
 
 Writes `bytes` as a byte string, with the shortest head for the length.
-Over an [iov_writer](iov_writer.md), the last three forms do not copy 32
-bytes or more: the result keeps the moved vector or the owner. Over any
-other target, each form copies the bytes.
+Each form copies the bytes, also over an [iov_writer](iov_writer.md): the
+encoder reads `std::byte` only by value.
 
 ## Errors
 

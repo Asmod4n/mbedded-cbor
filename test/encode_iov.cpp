@@ -124,7 +124,8 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
     }
 }
 
-// The byte string forms follow the same rule as the text forms, through their own overloads.
+// Every form of a byte string gives the bytes of the copying form, and none refers to the bytes of the caller: the
+// encoder reads std::byte only by value, so it copies them into its own block.
 TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copying form")
 {
     for (std::size_t const size : {0uz, 31uz, 32uz, 33uz, 16384uz, 20000uz}) {
@@ -147,8 +148,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(e.byte_string(owner).has_value());
             pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(points_into(p, reinterpret_cast<char const *>(owner->data())),
-                     size >= cbor::encoding::ref_size && size > 0);
+            CHECK_FALSE(points_into(p, reinterpret_cast<char const *>(owner->data())));
         }
         {
             auto const read = test::lazy_of_copy(expected)->get<std::span<std::byte const>>();
@@ -158,8 +158,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(e.byte_string(*read).has_value());
             pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(points_into(p, reinterpret_cast<char const *>((**read).data())),
-                     size >= cbor::encoding::ref_size && size > 0);
+            CHECK_FALSE(points_into(p, reinterpret_cast<char const *>((**read).data())));
         }
     }
 }
