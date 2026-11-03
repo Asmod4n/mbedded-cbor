@@ -324,6 +324,9 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         value_type operator*() const;
 
         /// Advances to the next position. A read error persists at later positions.
+        /// @par Complexity
+        /// O(1 + h), where h is the heads visited while skipping the element.
+        /// Allocates nothing.
         iterator &operator++();
 
         iterator operator++(int)
@@ -357,6 +360,8 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     };
 
     /// Returns an iterator to the first value.
+    /// @par Complexity
+    /// O(1); allocates nothing.
     iterator begin() const
     {
         return iterator{top_level, offset, count, typed_array_tag};
@@ -406,6 +411,9 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         value_type operator*() const;
 
         /// Advances to the next position. A read error persists at later positions.
+        /// @par Complexity
+        /// O(1 + h), where h is the heads visited while skipping the current
+        /// value and next key. Allocates nothing.
         iterator &operator++();
 
         iterator operator++(int)
@@ -443,6 +451,9 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     };
 
     /// Returns an iterator to the first value.
+    /// @par Complexity
+    /// O(1 + h), where h is the heads visited while skipping the first key.
+    /// Allocates nothing.
     iterator begin() const
     {
         return iterator{top_level, offset, count};
