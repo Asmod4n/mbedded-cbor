@@ -1313,9 +1313,10 @@ class generic
 /// sys_seconds uses tag 1 and year_month_day uses tag 100. A variant uses
 /// the selected alternative. Described tags and supported standard types
 /// determine the tags written and accepted.
-/// A decoded ref retains the owner of bytes used by views in T. Decoding
-/// reads the first item; bytes after it are left unread. A target value
-/// supplies its containers and allocators.
+/// A decoded ref retains the owner of bytes used by views in T. String
+/// views refer to those bytes; owning string members have their own storage.
+/// Decoding reads the first item; bytes after it are left unread. A target
+/// value supplies its containers and allocators.
 template <class T>
 class structs
 {
