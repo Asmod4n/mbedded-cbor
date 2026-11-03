@@ -3531,6 +3531,11 @@ public:
     /// A short message gives too_little_data; a wrong layout or root tag gives
     /// incorrect_type. A null or empty owner is a wrong use. Borrowed bytes
     /// must remain alive and unchanged.
+    /// @par Complexity
+    /// O(1 + q) on success, where q is the schema prefix size. If the root
+    /// tag is wrong, the truncation check may also visit h item heads, making
+    /// the cost O(1 + q + h). Moving a range and allocating an owner add
+    /// their own costs.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
@@ -3543,6 +3548,11 @@ public:
     /// A short message gives too_little_data; a wrong layout or root tag gives
     /// incorrect_type. A null or empty owner is a wrong use. Borrowed bytes
     /// must remain alive and unchanged.
+    /// @par Complexity
+    /// O(1 + q) on success, where q is the schema prefix size. If the root
+    /// tag is wrong, the truncation check may also visit h item heads, making
+    /// the cost O(1 + q + h). Moving a range and allocating an owner add
+    /// their own costs.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
@@ -3555,6 +3565,11 @@ public:
     /// A short message gives too_little_data; a wrong layout or root tag gives
     /// incorrect_type. A null or empty owner is a wrong use. Borrowed bytes
     /// must remain alive and unchanged.
+    /// @par Complexity
+    /// O(1 + q) on success, where q is the schema prefix size. If the root
+    /// tag is wrong, the truncation check may also visit h item heads, making
+    /// the cost O(1 + q + h). Moving a range and allocating an owner add
+    /// their own costs.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
