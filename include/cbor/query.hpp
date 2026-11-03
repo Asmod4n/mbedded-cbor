@@ -1066,7 +1066,10 @@ public:
 
     /// Parses a JSONPath into an owned query for result type T.
     /// The query owns its path data and can be reused without parsing again.
-    /// A result other than nodelist requires a singular path.
+    /// Bracket selectors and filters accept EDN literals. A name selects
+    /// from maps; an index selects an array element or an integer map key.
+    /// Negative array indexes count from the end. A result other than
+    /// nodelist requires a singular path.
     /// Invalid syntax or a call to match or search gives invalid_path.
     /// A non-singular path for a result other than nodelist gives
     /// not_singular_query. Excessive nesting gives nesting_depth_exceeded.
