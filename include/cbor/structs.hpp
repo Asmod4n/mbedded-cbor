@@ -1323,7 +1323,9 @@ public:
     /// CBOR array does not match them.
     /// Input errors include incorrect_type, number_out_of_range,
     /// key_not_found, duplicate_key and too_little_data. A refused
-    /// allocation gives not_enough_memory.
+    /// allocation gives not_enough_memory. A map key that is an array, map
+    /// or tag gives unsupported_value. Input counts do not reserve the result
+    /// containers in advance.
     /// @param encoded The owned bytes to move.
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
