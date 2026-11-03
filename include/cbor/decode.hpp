@@ -91,6 +91,14 @@ struct zone_owner {
 
 }
 
+/// Finds the item decoded from a tag 24 in this tree.
+/// @param tree The tree returned by decode.
+/// @param tagged A tag 24 item in tree.
+/// @return The embedded item, or an error if the tag content is not a byte string.
+/// A tagged item outside the tree is a wrong use and throws std::logic_error,
+/// or terminates without exceptions.
+/// @par Complexity
+/// O(log t), where t is the number of tag 24 items in the tree; allocates nothing.
 inline std::expected<std::reference_wrapper<item const>, error>
 encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
 {
@@ -316,6 +324,15 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
 
 }
 
+/// Decodes the first CBOR item into an owned tree and copies its strings.
+/// Bytes after the first item are left unread. Tag 24 byte strings are decoded
+/// as one embedded item. Bignums that fit in 64 bits become integers.
+/// @param encoded The bytes beginning with the item.
+/// @return The owned tree or an error from decoding.
+/// @par Complexity
+/// O(h + b + t log t), where h is the number of decoded heads, b is the
+/// total bytes copied, and t is the number of tag 24 items. Nested tag 24
+/// content can be copied more than once. Allocates storage for the tree.
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
     auto const decoded = detail::decode_tree<true>(encoded, limits::nesting_depth);
