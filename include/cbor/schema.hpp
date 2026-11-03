@@ -3634,7 +3634,7 @@ public:
     /// A malformed message or wrong layout returns an error. An allocation
     /// failure during decoding can give not_enough_memory.
     /// @param encoded The encoded message.
-    /// @param target The initial value or output target.
+    /// @param target The initial value and its allocators.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -3663,7 +3663,7 @@ public:
     /// failure during decoding can give not_enough_memory.
     /// @param owner Keeps the encoded bytes alive.
     /// @param encoded The encoded message.
-    /// @param target The initial value or output target.
+    /// @param target The initial value and its allocators.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
@@ -3753,7 +3753,7 @@ public:
     /// typed-array length is not checked for a whole number of elements.
     /// Indexes and message bounds are checked.
     /// @param encoded The encoded message.
-    /// @param target The initial value or output target.
+    /// @param target The initial value and its allocators.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -3780,7 +3780,7 @@ public:
     /// Indexes and message bounds are checked.
     /// @param owner Keeps the encoded bytes alive.
     /// @param encoded The encoded message.
-    /// @param target The initial value or output target.
+    /// @param target The initial value and its allocators.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
@@ -3818,7 +3818,7 @@ public:
     /// Returns the byte count, or an error from the target or the size check.
     /// D selects whether the description is inside the message or apart.
     /// @param value The value to encode.
-    /// @param target The initial value or output target.
+    /// @param target The output container, span or writer.
     template <description_place D = description_place::inside, class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
