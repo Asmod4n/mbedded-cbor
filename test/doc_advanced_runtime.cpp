@@ -1,3 +1,4 @@
+#include "pieces.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
@@ -358,9 +359,7 @@ TEST_CASE("doc advanced runtime: encode_iov")
     REQUIRE(tree.has_value());
     auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces.has_value());
-    std::string joined;
-    for (std::string_view const piece : **pieces)
-        joined.append(piece);
+    std::string const joined = test::joined(**pieces);
     CHECK_EQ(joined, wire);
 
     std::string text(40, 'x');
