@@ -194,7 +194,9 @@ public:
     /// also accepts an exactly representable integer. Text, byte and typed
     /// array views retain the owner of their bytes in a ref.
     /// A mismatched kind gives incorrect_type; a number outside T gives
-    /// number_out_of_range. No string bytes are copied.
+    /// number_out_of_range. A string beyond the remaining input gives
+    /// too_little_data. The read passes tags it does not interpret.
+    /// No string bytes are copied.
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
@@ -208,11 +210,13 @@ public:
                                ref<T>, T>, error> get() const;
 
     /// Returns a range over array or typed-array elements, or an error.
-    /// Each iterator result contains a lazy or an error.
+    /// Each iterator result contains a lazy or an error. A non-array gives
+    /// not_indexable; indefinite length gives indefinite_length.
     std::expected<lazy_elements, error> elements() const;
 
     /// Returns map key and value pairs in encoded order, including duplicates.
     /// Each iterator result contains a pair of lazy values or an error.
+    /// A non-map gives not_indexable; indefinite length gives indefinite_length.
     std::expected<lazy_entries, error> entries() const;
 
     /// Decodes this item into an owned tree, or returns an error.
