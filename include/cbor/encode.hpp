@@ -829,7 +829,8 @@ public:
     }
 
     /// Writes an RFC 8746 typed array after checking its tag and byte count.
-    /// The bytes are written in the byte order named by the tag.
+    /// Bytes are written unchanged; the caller supplies them in the byte
+    /// order named by the tag.
     /// An unsupported tag gives unsupported_value; a byte count that is not
     /// a multiple of the element size gives inadmissible_type_for_tag_content.
     /// @par Complexity
