@@ -318,7 +318,7 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
 
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
-    auto const decoded = detail::decode_tree<true>(encoded, limits::nesting_depth);
+    auto const decoded = detail::decode_tree<true>(heads::self_described_cbor_content(encoded), limits::nesting_depth);
     if (!decoded) [[unlikely]]
         return std::unexpected(decoded.error());
     return decoded->tree;
