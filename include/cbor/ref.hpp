@@ -131,6 +131,7 @@ public:
         return value;
     }
 
+    /// Dereferencing a temporary is disabled to prevent dangling views.
     void operator*() const && = delete;
 
     /// Returns a pointer to the value. The ref must outlive its use.
@@ -141,6 +142,7 @@ public:
         return &value;
     }
 
+    /// Access through a temporary is disabled to prevent dangling references.
     void operator->() const && = delete;
 
     /// Copies a text view into an owning string.
@@ -227,6 +229,7 @@ public:
         return *held;
     }
 
+    /// Dereferencing a temporary is disabled to prevent dangling views.
     void operator*() const && = delete;
 
     T const *operator->() const & CBOR_LIFETIMEBOUND
@@ -234,6 +237,7 @@ public:
         return held.get();
     }
 
+    /// Access through a temporary is disabled to prevent dangling references.
     void operator->() const && = delete;
 };
 
