@@ -3540,8 +3540,8 @@ public:
     /// @par Complexity
     /// O(1 + q) on success, where q is the schema prefix size. If the root
     /// tag is wrong, the truncation check may also visit h item heads, making
-    /// the cost O(1 + q + h). Range operations and owner allocation add
-    /// their own costs.
+    /// the cost O(1 + q + h). Range operations, owner allocation and a
+    /// deleter run when the last owner is released add their own costs.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
@@ -3557,8 +3557,8 @@ public:
     /// @par Complexity
     /// O(1 + q) on success, where q is the schema prefix size. If the root
     /// tag is wrong, the truncation check may also visit h item heads, making
-    /// the cost O(1 + q + h). Range operations and owner allocation add
-    /// their own costs.
+    /// the cost O(1 + q + h). Range operations, owner allocation and a
+    /// deleter run when the last owner is released add their own costs.
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
@@ -3574,8 +3574,8 @@ public:
     /// @par Complexity
     /// O(1 + q) on success, where q is the schema prefix size. If the root
     /// tag is wrong, the truncation check may also visit h item heads, making
-    /// the cost O(1 + q + h). Range operations and owner allocation add
-    /// their own costs.
+    /// the cost O(1 + q + h). Range operations, owner allocation and a
+    /// deleter run when the last owner is released add their own costs.
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
