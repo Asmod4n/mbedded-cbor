@@ -245,7 +245,8 @@ public:
 
     /// Decodes this item into an owned tree, or returns an error.
     /// The tree copies string bytes and does not depend on the original owner.
-    /// Bytes following this item are not part of the result.
+    /// Bytes following this item are not part of the result. Allocation
+    /// failure can throw std::bad_alloc.
     /// @par Complexity
     /// O(1 + h + b + t log t), where h is the heads scanned, b the bytes
     /// copied, and t the tag 24 items sorted while decoding. Nested tag 24
