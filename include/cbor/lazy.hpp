@@ -261,7 +261,8 @@ private:
 };
 
 
-/// A range of lazy array or typed-array elements that retains their owner.
+/// A sized, borrowed forward range of array or typed-array elements.
+/// Each iterator retains the byte owner and can outlive this range.
 struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     /// A forward iterator that returns a value or an error.
     struct iterator {
@@ -274,7 +275,7 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         /// Returns the current value or the error encountered while reading it.
         value_type operator*() const;
 
-        /// Advances to the next value, or to the end after an error.
+        /// Advances to the next position. A read error persists at later positions.
         iterator &operator++();
 
         iterator operator++(int)
@@ -342,7 +343,8 @@ private:
     friend struct lazy;
 };
 
-/// A range of lazy map key and value pairs that retains their owner.
+/// A sized, borrowed forward range of map key and value pairs.
+/// Each iterator retains the byte owner and can outlive this range.
 struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     /// A forward iterator that returns a value or an error.
     struct iterator {
@@ -355,7 +357,7 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         /// Returns the current value or the error encountered while reading it.
         value_type operator*() const;
 
-        /// Advances to the next value, or to the end after an error.
+        /// Advances to the next position. A read error persists at later positions.
         iterator &operator++();
 
         iterator operator++(int)
