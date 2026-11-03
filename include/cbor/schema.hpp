@@ -3800,6 +3800,9 @@ public:
 
     /// Encodes value as a Packed CBOR message into a new string.
     /// Fields use fixed-width heads so their offsets are known at compile time.
+    /// A fixed-size struct list can be copied as a block when its in-memory
+    /// layout matches the encoded little-endian layout; otherwise fields are
+    /// written individually.
     /// D selects whether the description is inside the message or apart.
     /// @param value The value to encode.
     template <description_place D = description_place::inside>
@@ -3824,6 +3827,9 @@ public:
 
     /// Encodes value as a Packed CBOR message into target.
     /// Fields use fixed-width heads so their offsets are known at compile time.
+    /// A fixed-size struct list can be copied as a block when its in-memory
+    /// layout matches the encoded little-endian layout; otherwise fields are
+    /// written individually.
     /// Returns the byte count, or an error from the target or the size check.
     /// D selects whether the description is inside the message or apart.
     /// @param value The value to encode.
