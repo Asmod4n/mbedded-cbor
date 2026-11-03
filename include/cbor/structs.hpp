@@ -1304,7 +1304,8 @@ class generic
     }
 };
 
-/// Reads and writes CBOR values of T using its member description.
+/// Reads and writes CBOR values of T. Described types use their member
+/// description; other aggregates use reflection or Boost.PFR.
 /// Structs map to CBOR maps; text and byte views map to strings. Floating
 /// values use the shortest representation that holds them. Numeric vectors
 /// and arrays use typed arrays; sets use tag 258. An empty
