@@ -19,7 +19,7 @@ call: std::string out;
 result: ""
 call: cbor::encoder e(out);
 result: encoder over a std::string
-call: e.byte_string(std::as_bytes(std::span("ab", 2)))
+call: e.byte_string(std::as_bytes(std::span("ab").first(2)))
 result: void
 call: e.finish()
 result: 3
@@ -49,7 +49,7 @@ O(bytes). A container target can grow.
 ```cpp
 std::string out;
 cbor::encoder e(out);
-e.byte_string(std::as_bytes(std::span("ab", 2)));
+e.byte_string(std::as_bytes(std::span("ab").first(2)));
 e.finish();   // out holds 42 61 62
 ```
 

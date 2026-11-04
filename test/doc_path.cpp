@@ -78,7 +78,7 @@ TEST_CASE("doc path: read a text")
         use(**name);
     CHECK_EQ(used, "ann"sv);
     CHECK_GE(used.data(), owner->data());
-    CHECK_LT(used.data(), owner->data() + owner->size());
+    CHECK_LT(used.data(), std::to_address(owner->end()));
     auto const key = cbor::at_path<"$.user.key", std::span<std::byte const>>(owner);
     REQUIRE(key.has_value());
     CHECK_EQ((*key)->size(), 2u);

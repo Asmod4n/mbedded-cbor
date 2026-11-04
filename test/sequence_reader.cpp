@@ -36,7 +36,7 @@ bool view_of(cbor::lazy const &item, std::string const &piece)
 {
     std::less_equal<char const *> const not_after;
     return not_after(piece.data(), item.top_level.encoded.data()) &&
-           not_after(item.top_level.encoded.data() + item.top_level.encoded.size(), piece.data() + piece.size());
+           not_after(std::to_address(item.top_level.encoded.end()), std::to_address(piece.end()));
 }
 
 } // namespace

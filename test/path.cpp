@@ -611,7 +611,7 @@ std::vector<std::byte> byte_vector(std::string_view const s)
 bool inside(std::string const &doc, void const *const p)
 {
     auto const *const at = static_cast<char const *>(p);
-    return std::less_equal<>{}(doc.data(), at) && std::less<>{}(at, doc.data() + doc.size());
+    return std::less_equal<>{}(doc.data(), at) && std::less<>{}(at, std::to_address(doc.end()));
 }
 
 } // namespace
