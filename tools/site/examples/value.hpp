@@ -5,6 +5,7 @@
 #include <charconv>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -87,10 +88,16 @@ struct call {
 
 using function = result (*)(call const &);
 
+using candidate_taken = std::function<bool(std::string const &)>;
+
+using candidates_written = void (*)(value const &self, std::string_view partial, candidate_taken const &taken);
+
 struct entry {
     std::string_view name;
     function run;
     bool changes = false;
+    candidates_written candidates = nullptr;
+    bool runnable = false;
 };
 
 template <class T>

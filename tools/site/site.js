@@ -72,15 +72,15 @@ if (consoleBox) {
   const listed = async () => {
     let bytes;
     try { bytes = b.bytes(); } catch { shut(); return; }
-    const found = await (await module).completed(bytes, [...history, entry.value].join("\n"), group);
+    const { head, found } = await (await module).completed(bytes, [...history, entry.value].join("\n"), group);
     shut();
     if (!found.length || (found.length === 1 && found[0] === entry.value)) return;
-    options = found.slice(0, 40).map((text, i) => {
+    options = found.map((text, i) => {
       const o = document.createElement("button");
       o.type = "button";
       o.id = "co-option-" + i;
       o.setAttribute("role", "option");
-      o.textContent = text.slice(entry.value.length - entry.value.match(/[A-Za-z0-9_:]*$/)[0].length);
+      o.textContent = text.slice(head.length);
       o.addEventListener("click", () => take(text));
       list.append(o);
       return Object.assign(o, { full: text });
@@ -89,7 +89,7 @@ if (consoleBox) {
     entry.setAttribute("aria-expanded", "true");
   };
   entry.addEventListener("input", () => {
-    if (/(->|\.|::)$/.test(entry.value) || !list.hidden) listed(); else shut();
+    if (/(->|\.|::|\(|\[|<|")$/.test(entry.value) || !list.hidden) listed(); else shut();
   });
   entry.addEventListener("keydown", e => {
     if (e.key === "Tab" && !e.shiftKey) {

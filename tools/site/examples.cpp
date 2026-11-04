@@ -90,8 +90,9 @@ std::string line_completions(std::string_view const encoded, std::string_view co
     if (cut != std::string_view::npos)
         for (std::string_view const line : lines_of(lines.substr(0, cut)))
             (void)site::line_run(s, line);
-    std::string out;
-    for (std::string const &c : site::completions(s, last)) {
+    site::completion_list const found = site::completions(s, last);
+    std::string out = found.head + '\n';
+    for (std::string const &c : found.lines) {
         out += c;
         out += '\n';
     }

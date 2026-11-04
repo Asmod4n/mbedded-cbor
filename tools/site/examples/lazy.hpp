@@ -1,5 +1,6 @@
 #pragma once
 
+#include "candidates.hpp"
 #include "kinds/kinds.hpp"
 
 #include <cstdint>
@@ -257,22 +258,22 @@ inline constexpr entry lazy_functions[] = {
     {"cbor::key()", key_made},
     {"cbor::lazy::take_ownership()", take_ownership},
     {"cbor::lazy::view()", lazy_view},
-    {"cbor::lazy.at()", lazy_at},
-    {"cbor::lazy.operator[]()", lazy_at},
-    {"cbor::lazy.get()", lazy_get},
-    {"cbor::lazy.at_path()", lazy_at_path},
-    {"cbor::lazy.size()", lazy_member<&cbor::lazy::size>},
-    {"cbor::lazy.empty()", lazy_member<&cbor::lazy::empty>},
-    {"cbor::lazy.type()", lazy_member<&cbor::lazy::type>},
-    {"cbor::lazy.elements()", lazy_member<&cbor::lazy::elements>},
-    {"cbor::lazy.entries()", lazy_member<&cbor::lazy::entries>},
-    {"cbor::lazy.clone()", lazy_member<&cbor::lazy::clone>},
-    {"cbor::lazy_elements.size()", view_size<cbor::lazy_elements>},
-    {"cbor::lazy_entries.size()", view_size<cbor::lazy_entries>},
-    {"cbor::nodelist.size()", view_size<cbor::nodelist>},
-    {"cbor::nodelist.operator[]()", nodelist_index},
-    {"cbor::owning<cbor::item>.operator->()", owning_item_arrow},
-    {"cbor::item const *.type", item_type},
+    {.name = "cbor::lazy.at()", .run = lazy_at, .candidates = lazy_index_candidates<false>, .runnable = true},
+    {.name = "cbor::lazy.operator[]()", .run = lazy_at, .candidates = lazy_index_candidates<true>, .runnable = true},
+    {.name = "cbor::lazy.get()", .run = lazy_get, .candidates = lazy_get_candidates, .runnable = true},
+    {.name = "cbor::lazy.at_path()", .run = lazy_at_path, .candidates = lazy_at_path_candidates, .runnable = true},
+    {.name = "cbor::lazy.size()", .run = lazy_member<&cbor::lazy::size>, .runnable = true},
+    {.name = "cbor::lazy.empty()", .run = lazy_member<&cbor::lazy::empty>, .runnable = true},
+    {.name = "cbor::lazy.type()", .run = lazy_member<&cbor::lazy::type>, .runnable = true},
+    {.name = "cbor::lazy.elements()", .run = lazy_member<&cbor::lazy::elements>, .runnable = true},
+    {.name = "cbor::lazy.entries()", .run = lazy_member<&cbor::lazy::entries>, .runnable = true},
+    {.name = "cbor::lazy.clone()", .run = lazy_member<&cbor::lazy::clone>, .runnable = true},
+    {.name = "cbor::lazy_elements.size()", .run = view_size<cbor::lazy_elements>, .runnable = true},
+    {.name = "cbor::lazy_entries.size()", .run = view_size<cbor::lazy_entries>, .runnable = true},
+    {.name = "cbor::nodelist.size()", .run = view_size<cbor::nodelist>, .runnable = true},
+    {.name = "cbor::nodelist.operator[]()", .run = nodelist_index, .candidates = indexes_candidates<cbor::nodelist>, .runnable = true},
+    {.name = "cbor::owning<cbor::item>.operator->()", .run = owning_item_arrow, .runnable = true},
+    {.name = "cbor::item const *.type", .run = item_type, .runnable = true},
     {"cbor::ref<std::string_view>.operator*()", ref_star<std::string_view>},
     {"cbor::ref<std::span<std::byte const>>.operator*()", ref_star<std::span<std::byte const>>},
 };
