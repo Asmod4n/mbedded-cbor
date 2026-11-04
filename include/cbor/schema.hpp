@@ -1115,7 +1115,7 @@ class reflection
             straight_reference_encode<Root, U>(encoded);
             fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
             auto const count = heads::big_endian(static_cast<std::uint32_t>(describe::members_count<U>));
-            std::ranges::copy(count, encoded.end() - sizeof(std::uint32_t));
+            std::ranges::copy(count, std::span(encoded).template last<sizeof(std::uint32_t)>().begin());
             for_each_field<U>([&](auto i) { zero_initialized_encode<Root, describe::member_t<U, decltype(i)::value>>(encoded); });
         } else if constexpr (is_inline_optional<U>) {
             heads::head_append(encoded, major_type::array, 2);
@@ -3415,7 +3415,7 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return path_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+        return path_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
@@ -3452,14 +3452,14 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
     {
-        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)),
                                      std::move(target));
     }
 
@@ -3481,7 +3481,7 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return path_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+        return path_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
@@ -3518,14 +3518,14 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
     {
-        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)),
                                      std::move(target));
     }
 
@@ -3623,7 +3623,7 @@ private:
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<Encoded const> encoded)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::schema::path: the encoded data item is null");
-        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
+        std::string_view const bytes{std::span<char const>(*encoded)};
         return path_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
 
@@ -3660,7 +3660,7 @@ private:
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<Encoded const> encoded)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::schema::decode: the encoded data item is null");
-        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
+        std::string_view const bytes{std::span<char const>(*encoded)};
         return decode_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
 
@@ -3690,7 +3690,7 @@ private:
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::schema::decode: the encoded data item is null");
-        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
+        std::string_view const bytes{std::span<char const>(*encoded)};
         return decode_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
 

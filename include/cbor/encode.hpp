@@ -100,7 +100,7 @@ private:
         {
             if (part.size() > out.size() - used) [[unlikely]]
                 return std::unexpected(std::errc::no_buffer_space);
-            std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(out.subspan(used)).begin());
+            std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(out.subspan(used).first(part.size())).begin());
             used += part.size();
             return {};
         }
@@ -321,7 +321,7 @@ struct encoding::encoder {
     template <class E>
     static void copy_into(std::span<E const> const from, std::span<char> const to)
     {
-        std::ranges::copy(std::as_bytes(from), std::as_writable_bytes(to).begin());
+        std::ranges::copy(std::as_bytes(from), std::as_writable_bytes(to.first(from.size())).begin());
     }
 
     std::expected<void, std::errc> byte_string_encode(std::span<std::byte const> const bytes)

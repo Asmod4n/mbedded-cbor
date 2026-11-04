@@ -126,7 +126,7 @@ class heads
             if (out.size() - at < initial_byte_size + sizeof(std::uint64_t)) [[unlikely]] {
                 auto const field = out.subspan(at, initial_byte_size + width);
                 field.front() = initial_byte(major, info);
-                std::copy_n(bytes.begin(), width, field.subspan(initial_byte_size).begin());
+                std::ranges::copy(std::span(bytes).first(width), field.subspan(initial_byte_size).begin());
                 return initial_byte_size + width;
             }
         }
