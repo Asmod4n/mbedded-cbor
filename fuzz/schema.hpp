@@ -383,7 +383,7 @@ void consume(R const &read, std::string_view const message)
         std::string_view const part = read;
         std::less<char const *> const before;
         require(part.empty() || (!before(part.data(), message.data()) &&
-                                 !before(message.data() + message.size(), part.data() + part.size())));
+                                 !before(std::to_address(message.end()), std::to_address(part.end()))));
     }
 }
 
@@ -504,12 +504,12 @@ void round_trip(source &in)
     std::vector<char> chars(in.byte() % 4);
     std::size_t const used = chars.size();
     require(cbor::schema<T>::encode(native, chars).has_value() &&
-            std::string_view(chars.data(), chars.size()).substr(used) == w.encoded);
+            std::string_view(std::span<char const>(chars)).substr(used) == w.encoded);
     std::vector<char> room(in.number() % (w.encoded.size() + 16));
     auto const placed = cbor::schema<T>::encode(native, std::span(room));
     require(placed.has_value() == (room.size() >= w.encoded.size()));
     if (placed)
-        require(std::string_view(room.data(), *placed) == w.encoded);
+        require(std::string_view(std::span<char const>(room).first(*placed)) == w.encoded);
     else
         require(placed.error() == cbor::error::no_buffer_space);
     auto const back = cbor::schema<T>::decode(std::string(w.encoded));
