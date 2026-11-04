@@ -99,11 +99,13 @@ auto encode(Target &&target, value const &v)
     return e.finish();
 }
 
-inline std::expected<cbor::ref<std::span<std::span<std::byte const> const>>, error> encode_iov(value const &v)
+#if __has_include(<sys/uio.h>)
+inline std::expected<cbor::ref<std::span<iovec const>>, error> encode_iov(value const &v)
 {
     cbor::iov_writer w;
     return encode(w, v);
 }
+#endif
 
 struct string_writer {
     std::string encoded;

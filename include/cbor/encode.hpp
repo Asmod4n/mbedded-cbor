@@ -30,6 +30,10 @@
 #include <utility>
 #include <vector>
 
+#if __has_include(<sys/uio.h>)
+#include <sys/uio.h>
+#endif
+
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
@@ -50,7 +54,9 @@ class iov_writer;
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
-std::expected<ref<std::span<std::span<std::byte const> const>>, error> encode_iov(item const &root);
+#if __has_include(<sys/uio.h>)
+std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
+#endif
 
 class encoding
 {
@@ -145,7 +151,9 @@ private:
     template <class Target>
     friend std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
-    friend std::expected<ref<std::span<std::span<std::byte const> const>>, error> encode_iov(item const &root);
+#if __has_include(<sys/uio.h>)
+    friend std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
+#endif
 
     template <class>
     friend class cbor::encoder;
@@ -210,7 +218,7 @@ struct encoding::encoder {
             return {};
         } else if constexpr (blocks) {
             std::size_t const size = used - closed;
-            std::string_view const part(block.subspan(closed).first(size));
+            std::span<char> const part = block.subspan(closed).first(size);
             closed = used;
             written += size;
             writer.block_close(part);
@@ -480,7 +488,7 @@ struct encoding::encoder {
         return {};
     }
 
-    ref<std::span<std::span<std::byte const> const>> release()
+    auto release()
         requires blocks
     {
         std::ignore = flush();
@@ -518,12 +526,13 @@ struct encoding::encoder {
     }
 };
 
+#if __has_include(<sys/uio.h>)
 class iov_writer
 {
     struct storage {
         std::vector<std::vector<char>> blocks;
         std::vector<std::shared_ptr<void const>> owners;
-        std::vector<std::span<std::byte const>> pieces;
+        std::vector<iovec> pieces;
     };
 
     std::shared_ptr<storage> kept = std::make_shared<storage>();
@@ -536,31 +545,40 @@ class iov_writer
         return std::span(kept->blocks.back());
     }
 
-    void block_close(std::string_view const part)
+    void piece_push(void *const base, std::size_t const size)
+    {
+        iovec piece{};
+        piece.iov_base = base;
+        piece.iov_len = size;
+        kept->pieces.push_back(piece);
+    }
+
+    void block_close(std::span<char> const part)
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         if (part.empty())
             return;
-        kept->pieces.push_back(std::as_bytes(std::span(part)));
+        piece_push(part.data(), part.size());
     }
 
     void piece_reference(std::span<std::byte const> const piece, std::shared_ptr<void const> owner)
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         kept->owners.push_back(std::move(owner));
-        kept->pieces.push_back(piece);
+        piece_push(const_cast<std::byte *>(piece.data()), piece.size());
     }
 
-    ref<std::span<std::span<std::byte const> const>> release()
+    ref<std::span<iovec const>> release()
     {
         validity::throw_logic_error_if(released, "cbor::iov_writer: a second release");
         released = true;
-        std::span<std::span<std::byte const> const> const pieces = kept->pieces;
+        std::span<iovec const> const pieces = kept->pieces;
         return {std::move(kept), pieces};
     }
 
     friend class encoding;
 };
+#endif
 
 template <class Target>
 class encoder
@@ -758,18 +776,17 @@ public:
     }
 
     auto finish()
-        -> std::expected<std::conditional_t<pieces, ref<std::span<std::span<std::byte const> const>>, std::size_t>, error>
     {
         throw_logic_error_if_unusable();
         usable = false;
         if constexpr (pieces) {
-            return out.release();
+            return std::expected<decltype(out.release()), error>(out.release());
         } else {
             if (auto const r = written(out.flush()); !r) [[unlikely]]
-                return std::unexpected(r.error());
+                return std::expected<std::size_t, error>(std::unexpected(r.error()));
             if (auto const r = written(message.done(out.written)); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            return out.written;
+                return std::expected<std::size_t, error>(std::unexpected(r.error()));
+            return std::expected<std::size_t, error>(out.written);
         }
     }
 };
@@ -890,7 +907,8 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
     return out.written;
 }
 
-inline std::expected<ref<std::span<std::span<std::byte const> const>>, error> encode_iov(item const &root)
+#if __has_include(<sys/uio.h>)
+inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root)
 {
     iov_writer writer;
     encoding::encoder<iov_writer> out(writer);
@@ -898,4 +916,5 @@ inline std::expected<ref<std::span<std::span<std::byte const> const>>, error> en
         return std::unexpected(r.error());
     return out.release();
 }
+#endif
 }

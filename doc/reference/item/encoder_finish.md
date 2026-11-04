@@ -1,13 +1,12 @@
 # cbor::encoder::finish
 
 ```cpp
-auto finish()
-    -> std::expected<std::conditional_t<pieces, ref<std::span<std::span<std::byte const> const>>, std::size_t>, error>;
+auto finish();
 ```
 
 ```call-seq
 e.finish() → std::expected<std::size_t, error>
-e.finish() → std::expected<ref<std::span<std::span<std::byte const> const>>, error>
+e.finish() → std::expected<ref<std::span<iovec const>>, error>
 ```
 
 ```example
