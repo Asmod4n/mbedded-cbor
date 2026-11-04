@@ -1,4 +1,5 @@
 #include <cbor/cbor.hpp>
+#include "pieces.hpp"
 #include "owned_copy.hpp"
 #include <doctest/doctest.h>
 
@@ -663,8 +664,7 @@ TEST_CASE("encode: a tree is written with the head widths of its input, also wit
         auto const pieces = cbor::encode_iov(*root);
         REQUIRE(pieces.has_value());
         std::string joined;
-        for (std::string_view const piece : **pieces)
-            joined.append(piece);
+        joined = test::joined(**pieces);
         CHECK_EQ(joined, r.own);
     }
 }

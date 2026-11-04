@@ -67,7 +67,7 @@ struct kind<std::span<std::byte const>> {
     static std::string text(std::span<std::byte const> const v)
     {
         return number_text(v.size()) + " bytes: " +
-               hex_text({reinterpret_cast<char const *>(v.data()), v.size()});
+               hex_text(v);
     }
 };
 

@@ -10,16 +10,17 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <forward_list>
 #include <functional>
 #include <memory>
 #include <memory_resource>
-#include <new>
 #include <span>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
+#include "bump.hpp"
 #include "error.hpp"
 #include "head.hpp"
 #include "item.hpp"
@@ -40,22 +41,19 @@ struct zone {
     using link = std::pair<item const *, item const *>;
 
     std::pmr::monotonic_buffer_resource memory;
+    bump strings{memory};
+    std::pmr::forward_list<std::pmr::vector<item>> items{&memory};
     std::vector<link> encoded_cbor_data_items;
-    std::span<char> free{};
+
+    std::pmr::vector<item> &items_reserved(std::size_t const count)
+    {
+        std::pmr::vector<item> &reserved = items.emplace_front();
+        reserved.reserve(count);
+        return reserved;
+    }
 
     explicit zone(std::size_t const initial_size) : memory(initial_size)
     {
-    }
-
-    std::span<char> bump_allocate(std::size_t const size, std::size_t const bytes_left)
-    {
-        if (size > free.size()) [[unlikely]] {
-            std::size_t const chunk = size + std::min(validity::bump_chunk_size, bytes_left);
-            free = std::span<char>(std::pmr::polymorphic_allocator<char>(&memory).allocate(chunk), chunk);
-        }
-        std::span<char> const taken = free.first(size);
-        free = free.subspan(size);
-        return taken;
     }
 };
 
@@ -104,9 +102,6 @@ encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
     return std::cref(*embedded);
 }
 
-static_assert(std::is_trivially_destructible_v<item>,
-              "The zone runs no destructor of an item, so an item must have no destructor to run.");
-
 namespace detail
 {
 
@@ -117,13 +112,14 @@ struct tree_decoder {
     std::size_t depth_max;
     std::size_t open = 0;
 
-    std::expected<item *, error> item_decode(item *storage, std::size_t depth);
+    std::expected<void, error> item_decode(std::pmr::vector<item> &into, std::size_t depth);
 
-    std::expected<item *, error> content_decode(item *storage, heads::head h, std::size_t depth);
+    std::expected<void, error> content_decode(std::pmr::vector<item> &into, heads::head h, std::size_t depth);
 
     CBOR_ALWAYS_INLINE inline std::expected<void, error> scalar_decode(item &node, heads::head h);
 
-    CBOR_NEVER_INLINE std::expected<item *, error> bignum_decode(item &node, std::uint64_t tag, std::size_t depth);
+    CBOR_NEVER_INLINE std::expected<bool, error> bignum_decode(std::pmr::vector<item> &into, std::uint64_t tag,
+                                                               std::size_t depth);
 };
 
 
@@ -136,12 +132,12 @@ std::expected<void, error> tree_decoder<Checked>::scalar_decode(item &node, head
         auto const string = d.byte_string_decode(h.argument);
         if (!string) [[unlikely]]
             return std::unexpected(string.error());
-        std::span<char> const own = decoded.bump_allocate(string->size(), d.encoded.size());
-        std::ranges::copy(*string, own.begin());
+        std::string_view const own = decoded.strings.alloc_str(
+            *string, string->size() + std::min(validity::bump_chunk_size, d.encoded.size()));
         if (h.major == major_type::text_string)
-            node.via.str = std::string_view(own);
+            node.via.str = own;
         else
-            node.via.bin = std::as_bytes(own);
+            node.via.bin = std::as_bytes(std::span(own));
         return {};
     }
     case major_type::simple_float:
@@ -164,13 +160,13 @@ std::expected<void, error> tree_decoder<Checked>::scalar_decode(item &node, head
 }
 
 template <bool Checked>
-std::expected<item *, error> tree_decoder<Checked>::bignum_decode(item &node, std::uint64_t const tag,
-                                                                               std::size_t const depth)
+std::expected<bool, error> tree_decoder<Checked>::bignum_decode(std::pmr::vector<item> &into, std::uint64_t const tag,
+                                                                std::size_t const depth)
 {
     auto const next = heads::raw_head_read<Checked>(d.encoded, validity::offset{});
     if (!next || next->major != major_type::byte_string ||
         !validity::check_definite_length(next->major, next->info).has_value())
-        return nullptr;
+        return false;
     if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
         return std::unexpected(r.error());
     heads::decoder<Checked> const before = d;
@@ -179,42 +175,43 @@ std::expected<item *, error> tree_decoder<Checked>::bignum_decode(item &node, st
         return std::unexpected(read.error());
     if (!*read) {
         d = before;
-        return nullptr;
+        return false;
     }
-    return ::new (&node) item{tag == std::to_underlying(rfc8949::tag_number::negative_bignum)
-                                  ? cbor::type::negative_integer
-                                  : cbor::type::unsigned_integer,
-                              heads::preferred_argument_info(**read), {.u64 = **read}};
+    into.emplace_back(item{tag == std::to_underlying(rfc8949::tag_number::negative_bignum)
+                               ? cbor::type::negative_integer
+                               : cbor::type::unsigned_integer,
+                           heads::preferred_argument_info(**read), {.u64 = **read}});
+    return true;
 }
 
 template <bool Checked>
-std::expected<item *, error> tree_decoder<Checked>::item_decode(item *const storage,
-                                                                               std::size_t const depth)
+std::expected<void, error> tree_decoder<Checked>::item_decode(std::pmr::vector<item> &into, std::size_t const depth)
 {
     if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
         return std::unexpected(r.error());
     auto const h = d.head_decode();
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    return content_decode(storage, *h, depth);
+    return content_decode(into, *h, depth);
 }
 
 template <bool Checked>
-std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const storage,
-                                                                                  heads::head const head,
-                                                                                  std::size_t const depth)
+CBOR_FLATTEN std::expected<void, error> tree_decoder<Checked>::content_decode(std::pmr::vector<item> &into,
+                                                                 heads::head const head, std::size_t const depth)
 {
-    item &node = *::new (storage) item{heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}};
+    if (heads::is_bignum(head.major, head.argument))
+        if (auto const r = bignum_decode(into, head.argument, depth); !r || *r)
+            return r.transform([](bool) {});
+    item &node = into.emplace_back(
+        item{heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}});
     switch (head.major) {
     case major_type::unsigned_integer:
     case major_type::negative_integer:
-        return &node;
+        return {};
     case major_type::byte_string:
     case major_type::text_string:
     case major_type::simple_float:
-        if (auto const r = scalar_decode(node, head); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        return &node;
+        return scalar_decode(node, head);
     case major_type::array:
     case major_type::map: {
         auto const count = validity::checked_mul(
@@ -227,68 +224,61 @@ std::expected<item *, error> tree_decoder<Checked>::content_decode(item *const s
         if (auto const r = validity::check_pending_items(*reserved, d.encoded.size()); !r) [[unlikely]]
             return std::unexpected(r.error());
         std::size_t const n = static_cast<std::size_t>(*count);
-        std::span<item> const nodes(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(n), n);
+        std::pmr::vector<item> &nodes = decoded.items_reserved(n);
         open = static_cast<std::size_t>(*reserved);
         if (n != 0)
             if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
-        for (item &child : nodes) {
+        for (std::size_t left = n; left != 0; --left) {
             --open;
             auto const c = d.head_decode();
             if (!c) [[unlikely]]
                 return std::unexpected(c.error());
             if (c->major == major_type::array || c->major == major_type::map || c->major == major_type::tag) {
-                if (auto const r = content_decode(&child, *c, depth + 1); !r) [[unlikely]]
+                if (auto const r = content_decode(nodes, *c, depth + 1); !r) [[unlikely]]
                     return r;
                 continue;
             }
-            ::new (&child) item{heads::type_of(c->major, c->info, c->argument), c->info, {.u64 = c->argument}};
+            item &child = nodes.emplace_back(item{heads::type_of(c->major, c->info, c->argument), c->info, {.u64 = c->argument}});
             if (auto const r = scalar_decode(child, *c); !r) [[unlikely]]
                 return std::unexpected(r.error());
         }
         if (head.major == major_type::map)
-            node.via.map = nodes;
+            node.via.map = std::span<item const>(nodes);
         else
-            node.via.array = nodes;
-        return &node;
+            node.via.array = std::span<item const>(nodes);
+        return {};
     }
-    case major_type::tag: {
-        if (heads::is_bignum(head.major, head.argument))
-            if (auto const r = bignum_decode(node, head.argument, depth); !r || *r != nullptr)
-                return r;
-        auto const content =
-            item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 1);
-        if (!content) [[unlikely]]
-            return content;
-        node.via.tag = {head.argument, *content};
+    default: {
+        std::string_view const tagged = d.encoded;
+        std::pmr::vector<item> &held = decoded.items_reserved(1);
+        if (auto const r = item_decode(held, depth + 1); !r) [[unlikely]]
+            return r;
+        item const &content = held.front();
+        node.via.tag = {head.argument, &content};
         if (node.type == cbor::type::typed_array)
             if (auto const r = validity::check_typed_array_content(
-                    head.argument, heads::major_type_of((*content)->type),
-                    (*content)->type == cbor::type::byte_string ? (*content)->via.bin.size() : std::size_t{});
+                    head.argument, heads::major_type_of(content.type),
+                    content.type == cbor::type::byte_string ? content.via.bin.size() : std::size_t{});
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
         if (head.argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
-            return &node;
-        item const *const bytes_item = *content;
-        if (bytes_item->type != cbor::type::byte_string) {
+            return {};
+        if (content.type != cbor::type::byte_string) {
             decoded.encoded_cbor_data_items.emplace_back(&node, nullptr);
-            return &node;
+            return {};
         }
-        std::span<std::byte const> const encoded = bytes_item->via.bin;
-        tree_decoder inner{decoded,
-                           {heads::as_string_view(encoded)},
-                           depth_max};
-        auto const data_item =
-            inner.item_decode(std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(1), depth + 2);
-        if (!data_item) [[unlikely]]
-            return data_item;
+        std::string_view const content_encoded = tagged.substr(0, tagged.size() - d.encoded.size());
+        tree_decoder inner{decoded, {content_encoded.substr(content_encoded.size() - content.via.bin.size())}, depth_max};
+        std::pmr::vector<item> &embedded = decoded.items_reserved(1);
+        if (auto const r = inner.item_decode(embedded, depth + 2); !r) [[unlikely]]
+            return r;
         if (auto const one = validity::check_one_data_item(inner.d.encoded); !one) [[unlikely]]
             return std::unexpected(one.error());
-        decoded.encoded_cbor_data_items.emplace_back(&node, *data_item);
-        return &node;
+        decoded.encoded_cbor_data_items.emplace_back(&node, &embedded.front());
+        return {};
     }
     }
-    std::unreachable();
 }
 
 
@@ -307,11 +297,12 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
             .transform([](std::size_t const size) { return std::clamp(size, std::size_t{1}, validity::initial_size_limit); })
             .value_or(validity::initial_size_limit));
     tree_decoder<Checked> tree{*decoded, {encoded}, depth_max};
-    auto const built = tree.item_decode(std::pmr::polymorphic_allocator<item>(&decoded->memory).allocate(1), 0);
-    if (!built) [[unlikely]]
+    std::pmr::vector<item> &root = decoded->items_reserved(1);
+    if (auto const built = tree.item_decode(root, 0); !built) [[unlikely]]
         return std::unexpected(built.error());
     std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &zone::link::first);
-    return decoded_tree<Checked>{zone_owner::tree_owned(*built, std::move(decoded)), tree.d.encoded};
+    item const &top = root.front();
+    return decoded_tree<Checked>{zone_owner::tree_owned(&top, std::move(decoded)), tree.d.encoded};
 }
 
 }

@@ -255,17 +255,7 @@ inline result span_made(call const &c)
             return std::unexpected("std::span takes a std::array<std::uint8_t, 2> here");
         return view_of(c.arguments.front(), std::span(*octets));
     }
-    if (auto const ok = arguments_counted(c, 2); !ok) [[unlikely]]
-        return std::unexpected(ok.error());
-    auto const text = argument_of<std::string>(c, 0, "a text");
-    if (!text) [[unlikely]]
-        return std::unexpected(text.error());
-    auto const count = unsigned_argument(c, 1);
-    if (!count) [[unlikely]]
-        return std::unexpected(count.error());
-    if (*count > (*text)->size()) [[unlikely]]
-        return std::unexpected("the count is larger than the text");
-    return view_of(c.arguments.front(), std::span((*text)->data(), static_cast<std::size_t>(*count)));
+    return std::unexpected("std::span takes one std::array here");
 }
 
 inline result as_bytes_made(call const &c)
@@ -511,9 +501,9 @@ inline constexpr entry item_functions[] = {
     {.name = "std::reference_wrapper<cbor::item const>.get()", .run = reference_get, .runnable = true},
     {.name = "std::pair<std::uint64_t, cbor::item const *>.first", .run = tag_number_of, .runnable = true},
     {.name = "std::pair<std::uint64_t, cbor::item const *>.second", .run = tag_content_of, .runnable = true},
-    {"cbor::ref<std::span<std::string_view const>>.operator*()", span_star<std::span<std::string_view const>>},
-    {"cbor::ref<std::span<std::string_view const>>.operator->()", span_star<std::span<std::string_view const>>},
-    {"std::span<std::string_view const>.size()", view_size<std::span<std::string_view const>>},
+    {"cbor::ref<std::span<std::span<std::byte const> const>>.operator*()", span_star<std::span<std::span<std::byte const> const>>},
+    {"cbor::ref<std::span<std::span<std::byte const> const>>.operator->()", span_star<std::span<std::span<std::byte const> const>>},
+    {"std::span<std::span<std::byte const> const>.size()", view_size<std::span<std::span<std::byte const> const>>},
     {"std::string{}", string_made},
     {"std::array<char, 16>{}", chars_made},
     {"std::array<std::uint8_t, 2>{}", octets_made},

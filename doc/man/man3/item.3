@@ -41,7 +41,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
 .EE
 .IP
 .EX
-std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+std::expected<ref<std::span<std::span<std::byte const> const>>, error> encode_iov(item const &root);
 .EE
 .IP
 .EX
@@ -126,7 +126,7 @@ std::expected<void, error> typed_array(cbor::typed_array const value);
 .IP
 .EX
 \f[B]auto\f[R] finish()
-    \-> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>;
+    \-> std::expected<std::conditional_t<pieces, ref<std::span<std::span<std::byte const> const>>, std::size_t>, error>;
 .EE
 .IP
 .EX
@@ -582,10 +582,10 @@ out == bytes;                \f[I]// true\f[R]
 \f[I]// bytes: a std::string with [1, \(dqa\(dq]\f[R]
 \f[B]auto\f[R] const tree = cbor::decode(bytes);
 \f[B]auto\f[R] const pieces = cbor::encode_iov(**tree);
-std::string joined;
-\f[B]for\f[R] (std::string_view const piece : **pieces)
-    joined += piece;
-joined == bytes;   \f[I]// true\f[R]
+std::vector<std::byte> joined;
+\f[B]for\f[R] (std::span<std::byte const> const piece : **pieces)
+    joined.append_range(piece);
+std::ranges::equal(joined, std::as_bytes(std::span(bytes)));   \f[I]// true\f[R]
 .EE
 .SS cbor::encoder
 .IP

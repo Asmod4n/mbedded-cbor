@@ -2,12 +2,12 @@
 
 ```cpp
 auto finish()
-    -> std::expected<std::conditional_t<pieces, ref<std::span<std::string_view const>>, std::size_t>, error>;
+    -> std::expected<std::conditional_t<pieces, ref<std::span<std::span<std::byte const> const>>, std::size_t>, error>;
 ```
 
 ```call-seq
 e.finish() → std::expected<std::size_t, error>
-e.finish() → std::expected<ref<std::span<std::string_view const>>, error>
+e.finish() → std::expected<ref<std::span<std::span<std::byte const> const>>, error>
 ```
 
 ```example

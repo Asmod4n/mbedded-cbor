@@ -15,6 +15,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "bump.hpp"
 #include "rfc8746.hpp"
 
 #if defined(__clang__)
@@ -66,7 +67,7 @@ namespace detail
 {
 
 template <class T>
-void copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
+void copy_views_into_zone(T &value, bump &zone);
 
 }
 
@@ -144,7 +145,8 @@ public:
         requires(!std::same_as<T, std::string_view> && !std::same_as<T, std::span<std::byte const>>)
     {
         struct held {
-            std::pmr::monotonic_buffer_resource zone;
+            std::pmr::monotonic_buffer_resource memory;
+            detail::bump zone{memory};
             T value;
 
             explicit held(T const &v) : value(v)

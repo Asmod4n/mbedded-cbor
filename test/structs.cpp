@@ -239,11 +239,11 @@ TEST_CASE("structs: a COSE_Sign1 under tag 18 reads as views into the message")
     CHECK_EQ(static_cast<char>(unprotected.kid->front()), '1');
     CHECK_EQ(payload.size(), 1u);
     CHECK_EQ(signature.size(), 2u);
-    CHECK_NE(reinterpret_cast<char const *>(payload.data()), message.data() + 12);
+    CHECK_NE(static_cast<void const *>(payload.data()), static_cast<void const *>(std::span(message).subspan(12).data()));
     auto const owner = std::make_shared<std::string const>(message);
     auto const held = cbor::structs<cose_sign1>::decode(owner);
     REQUIRE(held.has_value());
-    CHECK_EQ(reinterpret_cast<char const *>(std::get<2>((*held)->content).data()), owner->data() + 12);
+    CHECK_EQ(static_cast<void const *>(std::get<2>((*held)->content).data()), static_cast<void const *>(std::span(*owner).subspan(12).data()));
     CHECK_EQ(*cbor::structs<cose_sign1>::encode(**sign1), message);
 }
 
@@ -255,7 +255,7 @@ TEST_CASE("structs: the view form reads the bytes of the owner")
         "\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s);
     auto const held = cbor::structs<cose_sign1>::decode(owner);
     REQUIRE(held.has_value());
-    CHECK_EQ(reinterpret_cast<char const *>(std::get<2>((*held)->content).data()), owner->data() + 12);
+    CHECK_EQ(static_cast<void const *>(std::get<2>((*held)->content).data()), static_cast<void const *>(std::span(*owner).subspan(12).data()));
     CHECK_THROWS_AS((void)cbor::structs<cose_sign1>::decode(std::shared_ptr<std::string const>()), std::logic_error);
 }
 
@@ -275,7 +275,7 @@ TEST_CASE("structs: decode checks that the owner holds an object")
     std::shared_ptr<std::string const> const holds_bytes(std::shared_ptr<void const>(bytes), bytes.get());
     auto const held = cbor::structs<cose_sign1>::decode(holds_bytes);
     REQUIRE(held.has_value());
-    CHECK_EQ(reinterpret_cast<char const *>(std::get<2>((*held)->content).data()), bytes->data() + 12);
+    CHECK_EQ(static_cast<void const *>(std::get<2>((*held)->content).data()), static_cast<void const *>(std::span(*bytes).subspan(12).data()));
 }
 
 // CTAP 2.1 6.2.2: a nested struct under an integer key, text keys inside it, and an absent optional user.
@@ -495,10 +495,10 @@ TEST_CASE("structs: decode takes a moved string as the owner and takes no other 
     std::string const text(40, 'x');
     std::string const message = "\x78\x28"s + text;
     auto buffer = std::make_unique<std::string>(message);
-    char const *const data = buffer->data();
+    std::span<char const> const data(*buffer);
     auto const moved = cbor::structs<std::string_view>::decode(std::move(*buffer));
     REQUIRE(moved.has_value());
-    CHECK_EQ(static_cast<void const *>((*moved)->data()), static_cast<void const *>(data + 2));
+    CHECK_EQ(static_cast<void const *>((*moved)->data()), static_cast<void const *>(data.subspan(2).data()));
     buffer->assign(message.size(), '\0');
     buffer.reset();
     CHECK_EQ(**moved, text);
@@ -513,14 +513,14 @@ TEST_CASE("structs: decode takes a moved string as the owner and takes no other 
     std::string lvalue = message;
     auto const copied = cbor::structs<std::string_view>::decode(std::string(lvalue));
     REQUIRE(copied.has_value());
-    CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(lvalue.data() + 2));
+    CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(std::span(lvalue).subspan(2).data()));
     lvalue.assign(message.size(), '\0');
     CHECK_EQ(**copied, text);
 
     auto const owner = std::make_shared<std::string const>(message);
     auto const held = cbor::structs<std::string_view>::decode(owner);
     REQUIRE(held.has_value());
-    CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(owner->data() + 2));
+    CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(std::span(*owner).subspan(2).data()));
 }
 
 struct float_member {

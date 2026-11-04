@@ -1,3 +1,4 @@
+#include "pieces.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
@@ -190,7 +191,7 @@ TEST_CASE("doc advanced runtime: the tree copies its strings")
     REQUIRE(tree.has_value());
     auto const text = (*(*tree)->get<cbor::type::array>())[0].get<cbor::type::text_string>();
     REQUIRE(text.has_value());
-    CHECK_NE(static_cast<void const *>(text->data()), static_cast<void const *>(input.data() + 2));
+    CHECK_NE(static_cast<void const *>(text->data()), static_cast<void const *>(std::span(input).subspan(2).data()));
     auto const big = (*(*tree)->get<cbor::type::array>())[1].get<cbor::type::unsigned_bignum>();
     REQUIRE(big.has_value());
     auto const magnitude = big->second->get<cbor::type::byte_string>();
@@ -198,7 +199,7 @@ TEST_CASE("doc advanced runtime: the tree copies its strings")
     CHECK_EQ(magnitude->size(), 9u);
     std::less<void const *> const before;
     void const *const held = magnitude->data();
-    CHECK((before(held, input.data()) || !before(held, input.data() + input.size())));
+    CHECK((before(held, input.data()) || !before(held, std::to_address(input.end()))));
     input.assign(input.size(), '\0');
     CHECK_EQ(*text, "abc"sv);
     CHECK(cbor::decode("\x01\x02"sv).has_value());
@@ -358,9 +359,7 @@ TEST_CASE("doc advanced runtime: encode_iov")
     REQUIRE(tree.has_value());
     auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces.has_value());
-    std::string joined;
-    for (std::string_view const piece : **pieces)
-        joined.append(piece);
+    std::string const joined = test::joined(**pieces);
     CHECK_EQ(joined, wire);
 
     std::string text(40, 'x');

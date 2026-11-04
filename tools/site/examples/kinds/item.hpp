@@ -23,7 +23,7 @@ struct encoder_over {
 
 inline std::string bytes_text(std::span<std::byte const> const bytes)
 {
-    return number_text(bytes.size()) + " bytes: " + hex_text({reinterpret_cast<char const *>(bytes.data()), bytes.size()});
+    return number_text(bytes.size()) + " bytes: " + hex_text(bytes);
 }
 
 template <>
@@ -88,13 +88,13 @@ struct kind<cbor::simple_value> {
 };
 
 template <>
-struct kind<std::span<std::string_view const>> {
-    static constexpr std::string_view name = "std::span<std::string_view const>";
-    static std::string text(std::span<std::string_view const> const v)
+struct kind<std::span<std::span<std::byte const> const>> {
+    static constexpr std::string_view name = "std::span<std::span<std::byte const> const>";
+    static std::string text(std::span<std::span<std::byte const> const> const v)
     {
         std::string out = "span of " + number_text(v.size()) + (v.size() == 1 ? " piece" : " pieces");
         char const *separator = ": ";
-        for (std::string_view const piece : v) {
+        for (std::span<std::byte const> const piece : v) {
             out += separator + hex_text(piece);
             separator = ", ";
         }
@@ -103,11 +103,11 @@ struct kind<std::span<std::string_view const>> {
 };
 
 template <>
-struct kind<cbor::ref<std::span<std::string_view const>>> {
-    static constexpr std::string_view name = "cbor::ref<std::span<std::string_view const>>";
-    static std::string text(cbor::ref<std::span<std::string_view const>> const &v)
+struct kind<cbor::ref<std::span<std::span<std::byte const> const>>> {
+    static constexpr std::string_view name = "cbor::ref<std::span<std::span<std::byte const> const>>";
+    static std::string text(cbor::ref<std::span<std::span<std::byte const> const>> const &v)
     {
-        return "ref to " + kind<std::span<std::string_view const>>::text(*v);
+        return "ref to " + kind<std::span<std::span<std::byte const> const>>::text(*v);
     }
 };
 
@@ -152,7 +152,7 @@ struct kind<std::array<char, 16>> {
     static constexpr std::string_view name = "std::array<char, 16>";
     static std::string text(std::array<char, 16> const &v)
     {
-        return string_text({v.data(), v.size()});
+        return string_text(std::string_view{std::span<char const>(v)});
     }
 };
 

@@ -147,7 +147,7 @@ struct parser {
         while (!text.empty() && (text.back() == 'f' || text.back() == 'u' || text.back() == 'U') && !text.starts_with("0x"))
             text.pop_back();
         char const *const first = text.data();
-        char const *const last = text.data() + text.size();
+        char const *const last = std::to_address(text.end());
         bool const hex = text.starts_with("0x");
         if (!single && text.find_first_of(".eE") == std::string::npos) {
             if (hex) {

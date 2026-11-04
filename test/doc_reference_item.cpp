@@ -1,6 +1,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include "pieces.hpp"
 #include "reference.hpp"
 
 #include <array>
@@ -161,9 +162,7 @@ TEST_CASE("doc reference item: encode_iov")
     REQUIRE(tree);
     auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces);
-    std::string joined;
-    for (std::string_view const piece : **pieces)
-        joined += piece;
+    std::string const joined = test::joined(**pieces);
     CHECK_EQ(joined, bytes);
 }
 
@@ -205,9 +204,10 @@ TEST_CASE("doc reference item: encoder::negative_integer")
 // encoder_byte_string.md: a span of two bytes; a null owner is a wrong use.
 TEST_CASE("doc reference item: encoder::byte_string")
 {
+    std::array<std::uint8_t, 2> const ab{97, 98};
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.byte_string(std::as_bytes(std::span("ab", 2))));
+    REQUIRE(e.byte_string(std::as_bytes(std::span(ab))));
     REQUIRE(e.finish());
     CHECK_EQ(out, "\x42\x61\x62"s);
 
@@ -340,6 +340,6 @@ TEST_CASE("doc reference item: iov_writer")
     auto const pieces = e.finish();
     REQUIRE(pieces);
     REQUIRE_EQ((*pieces)->size(), 2u);
-    CHECK_EQ((**pieces)[0], "\x78\x28"sv);
-    CHECK_EQ((**pieces)[1].data(), text->data());
+    CHECK(std::ranges::equal((**pieces)[0], std::as_bytes(std::span("\x78\x28"sv))));
+    CHECK_EQ(static_cast<void const *>((**pieces)[1].data()), static_cast<void const *>(text->data()));
 }

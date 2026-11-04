@@ -10,6 +10,7 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -927,8 +928,35 @@ static std::vector<std::uint8_t> jcbuf;
 static vg_out vo;
 #endif
 
+#if defined(ARM_S_BYTES_STRING) || defined(ARM_S_BYTES_SPAN) || defined(ARM_S_IOV_BYTES_REF)
+// The byte string arms encode the document as one byte string, given to the encoder as std::span<std::byte const>:
+// into a new std::string, into a span of the right size, and by ref<> into an iov_writer.
+static std::vector<char> bytes_out;
+#endif
+#if defined(ARM_S_IOV_BYTES_REF)
+static std::optional<cbor::ref<std::span<std::byte const>>> bytes_ref;
+#endif
+
 static void setup()
 {
+#if defined(ARM_S_BYTES_SPAN)
+    bytes_out.resize(doc.size() + cbor::encoding::item_size_max);
+#endif
+#if defined(ARM_S_IOV_BYTES_REF)
+    {
+        std::string encoded;
+        cbor::encoder e(encoded);
+        if (!e.byte_string(std::as_bytes(std::span(doc))) || !e.finish())
+            std::abort();
+        auto const l = cbor::lazy::take_ownership(std::move(encoded));
+        if (!l)
+            std::abort();
+        auto r = l->get<std::span<std::byte const>>();
+        if (!r)
+            std::abort();
+        bytes_ref.emplace(std::move(*r));
+    }
+#endif
 #if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
     auto t = bench::value_of(*test::lazy_of_copy(std::string_view(doc)));
     if (!t)
@@ -977,10 +1005,10 @@ static std::uint64_t op()
     auto const r = bench::encode(w, tree);
     if (!r)
         std::abort();
-    std::span<std::string_view const> const pieces = **r;
+    std::span<std::span<std::byte const> const> const pieces = **r;
     benchmark::DoNotOptimize(pieces.data());
     benchmark::ClobberMemory();
-    return std::ranges::fold_left(pieces | std::views::transform(&std::string_view::size), std::size_t{0}, std::plus<>{});
+    return std::ranges::fold_left(pieces | std::views::transform(&std::span<std::byte const>::size), std::size_t{0}, std::plus<>{});
 #elif defined(ARM_S_STRING_REUSE)
     reused.clear();
     if (!bench::encode(reused, tree))
@@ -988,6 +1016,34 @@ static std::uint64_t op()
     benchmark::DoNotOptimize(reused.data());
     benchmark::ClobberMemory();
     return reused.size();
+#elif defined(ARM_S_BYTES_STRING)
+    std::string out;
+    cbor::encoder e(out);
+    if (!e.byte_string(std::as_bytes(std::span(in))) || !e.finish())
+        std::abort();
+    benchmark::DoNotOptimize(out.data());
+    benchmark::ClobberMemory();
+    return out.size();
+#elif defined(ARM_S_BYTES_SPAN)
+    cbor::encoder e{std::span<char>(bytes_out)};
+    if (!e.byte_string(std::as_bytes(std::span(in))))
+        std::abort();
+    auto const n = e.finish();
+    if (!n)
+        std::abort();
+    benchmark::ClobberMemory();
+    return *n;
+#elif defined(ARM_S_IOV_BYTES_REF)
+    cbor::iov_writer w;
+    cbor::encoder<cbor::iov_writer> e(w);
+    if (!e.byte_string(*bytes_ref))
+        std::abort();
+    auto pieces = e.finish();
+    if (!pieces)
+        std::abort();
+    benchmark::DoNotOptimize(pieces);
+    benchmark::ClobberMemory();
+    return (**pieces).size();
 #elif defined(ARM_S_STRING)
     std::string out;
     if (!bench::encode(out, tree))

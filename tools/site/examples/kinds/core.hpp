@@ -161,11 +161,13 @@ struct kind<std::nullptr_t> {
     }
 };
 
-inline std::string hex_text(std::string_view const bytes)
+template <class E>
+    requires std::same_as<E, char> || std::same_as<E, std::byte>
+std::string hex_text(std::span<E const> const bytes)
 {
     constexpr std::string_view digits = "0123456789abcdef";
     std::string out;
-    for (char const c : bytes) {
+    for (E const c : bytes) {
         auto const b = static_cast<unsigned char>(c);
         if (!out.empty())
             out += ' ';
@@ -184,7 +186,7 @@ inline std::string string_text(std::string_view const text)
 {
     if (printable(text))
         return std::format("{:?}", text);
-    return number_text(text.size()) + " bytes: " + hex_text(text);
+    return number_text(text.size()) + " bytes: " + hex_text(std::span(text));
 }
 
 template <>
@@ -210,7 +212,7 @@ struct kind<std::span<char const>> {
     static constexpr std::string_view name = "std::span<char const>";
     static std::string text(std::span<char const> const v)
     {
-        return number_text(v.size()) + " bytes: " + hex_text({v.data(), v.size()});
+        return number_text(v.size()) + " bytes: " + hex_text(v);
     }
 };
 
@@ -223,7 +225,7 @@ struct joined_name {
         std::ranges::copy(Third, at);
         return out;
     }();
-    static constexpr std::string_view value{chars.data(), chars.size()};
+    static constexpr std::string_view value{std::span<char const>(chars)};
 };
 
 }

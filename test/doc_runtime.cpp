@@ -77,7 +77,7 @@ TEST_CASE("doc runtime: read step by step")
     CHECK_EQ(viewed->top_level.encoded.data(), owner->data());
     auto const part = cbor::lazy::view(owner, std::string_view(*owner).substr(1));
     REQUIRE(part.has_value());
-    CHECK_EQ(part->top_level.encoded.data(), owner->data() + 1);
+    CHECK_EQ(part->top_level.encoded.data(), std::span(*owner).subspan(1).data());
     auto const key = part->get<std::string_view>();
     REQUIRE(key.has_value());
     CHECK_EQ(**key, "cars"sv);

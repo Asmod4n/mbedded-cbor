@@ -224,11 +224,11 @@ TEST_CASE("doc advanced basics: owners")
     auto const aliased = cbor::lazy::view(owner)->get<std::string_view>();
     REQUIRE(aliased.has_value());
     CHECK_EQ(**aliased, "xyz"sv);
-    CHECK_EQ((**aliased).data(), p->bytes.data() + 1);
+    CHECK_EQ((**aliased).data(), std::span(p->bytes).subspan(1).data());
     auto const view = cbor::lazy::view(p, std::string_view(p->bytes))->get<std::string_view>();
     REQUIRE(view.has_value());
     CHECK_EQ(**view, "xyz"sv);
-    CHECK_EQ((**view).data(), p->bytes.data() + 1);
+    CHECK_EQ((**view).data(), std::span(p->bytes).subspan(1).data());
     CHECK_FALSE(([]<class S>(S const &s) {
         return requires(std::shared_ptr<void const> o) { cbor::lazy::view(o, s); };
     }(p->bytes)));
@@ -255,11 +255,11 @@ TEST_CASE("doc advanced basics: no form copies the bytes")
     auto const shared = std::make_shared<std::string const>(message());
     auto const a = cbor::lazy::view(shared).value();
     auto const va = a.get<std::string_view>().value();
-    CHECK_EQ((*va).data(), shared->data() + 1);
+    CHECK_EQ((*va).data(), std::span(*shared).subspan(1).data());
 
     std::string bytes = preferred(V(std::string(40, 'x')));
-    char const *const data = bytes.data();
+    std::span<char const> const data(bytes);
     auto const b = cbor::lazy::take_ownership(std::move(bytes)).value();
     auto const vb = b.get<std::string_view>().value();
-    CHECK_EQ((*vb).data(), data + 2);
+    CHECK_EQ((*vb).data(), data.subspan(2).data());
 }

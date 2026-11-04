@@ -114,14 +114,14 @@ TEST_CASE("doc advanced path: every form of the table")
     std::shared_ptr<void const> const any = owner;
     auto const beside = cbor::at_path<"$.name", std::string_view>(any, std::string_view(*owner));
     REQUIRE(beside.has_value());
-    CHECK_EQ((**beside).data(), owner->data() + 8);
+    CHECK_EQ((**beside).data(), std::span(*owner).subspan(8).data());
     CHECK_FALSE(([]<class S>(S const &s) {
         return requires(std::shared_ptr<void const> o) { cbor::at_path<"$.name", std::string_view>(o, s); };
     }(encoded)));
-    char const *const data = encoded.data();
+    std::span<char const> const data(encoded);
     auto const moved = cbor::at_path<"$.name", std::string_view>(std::move(encoded));
     REQUIRE(moved.has_value());
-    CHECK_EQ((**moved).data(), data + 8);
+    CHECK_EQ((**moved).data(), data.subspan(8).data());
 
     auto const n = cbor::jsonpath::compile<std::int64_t>("$.n");
     REQUIRE(n.has_value());
@@ -130,10 +130,10 @@ TEST_CASE("doc advanced path: every form of the table")
     REQUIRE(name.has_value());
     auto const a = cbor::at_path(any, std::string_view(*owner), *name);
     REQUIRE(a.has_value());
-    CHECK_EQ((**a).data(), owner->data() + 8);
+    CHECK_EQ((**a).data(), std::span(*owner).subspan(8).data());
     auto const b = cbor::at_path(owner, *name);
     REQUIRE(b.has_value());
-    CHECK_EQ((**b).data(), owner->data() + 8);
+    CHECK_EQ((**b).data(), std::span(*owner).subspan(8).data());
     auto const c = cbor::at_path(std::string(*owner), *name);
     REQUIRE(c.has_value());
     CHECK_EQ(**c, std::string(40, 'a'));

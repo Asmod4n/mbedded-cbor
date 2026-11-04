@@ -124,18 +124,18 @@ TEST_CASE("doc advanced structs: the forms of decode")
     auto const copied = cbor::structs<std::string_view>::decode(std::string(bytes));
     REQUIRE(copied.has_value());
     CHECK_EQ(**copied, "abc"sv);
-    CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(bytes.data() + 1));
+    CHECK_NE(static_cast<void const *>((*copied)->data()), static_cast<void const *>(std::span(bytes).subspan(1).data()));
 
     auto const owner = std::make_shared<std::string const>(bytes);
     auto const held = cbor::structs<std::string_view>::decode(owner);
     REQUIRE(held.has_value());
-    CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(owner->data() + 1));
+    CHECK_EQ(static_cast<void const *>((*held)->data()), static_cast<void const *>(std::span(*owner).subspan(1).data()));
 
     std::string moved = "\x78\x28"s + std::string(40, 'x');
-    char const *const data = moved.data();
+    std::span<char const> const data(moved);
     auto const taken = cbor::structs<std::string_view>::decode(std::move(moved));
     REQUIRE(taken.has_value());
-    CHECK_EQ(static_cast<void const *>((*taken)->data()), static_cast<void const *>(data + 2));
+    CHECK_EQ(static_cast<void const *>((*taken)->data()), static_cast<void const *>(data.subspan(2).data()));
 
     CHECK_THROWS_AS((void)cbor::structs<std::string_view>::decode(std::shared_ptr<std::string const>{}),
                     std::logic_error);
@@ -143,7 +143,7 @@ TEST_CASE("doc advanced structs: the forms of decode")
     std::string_view const part(*owner);
     auto const beside = cbor::structs<std::string_view>::decode(owner, part);
     REQUIRE(beside.has_value());
-    CHECK_EQ(static_cast<void const *>((*beside)->data()), static_cast<void const *>(owner->data() + 1));
+    CHECK_EQ(static_cast<void const *>((*beside)->data()), static_cast<void const *>(std::span(*owner).subspan(1).data()));
     auto const into = cbor::structs<std::string>::decode(owner, part, std::string());
     REQUIRE(into.has_value());
     CHECK_EQ(**into, "abc");

@@ -269,9 +269,6 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `encode` decl | see `encode(item const&, Target&&)` | see `encode(item const&, Target&&)` | |
-| `encoding::string_sink::append` | O(len(part)) amortized | O(len(part)) amortized | std::string growth. |
-| `string_sink::done` | O(1) | O(1) | |
-| `string_sink::resize_and_overwrite<Op>` | O(size + op) amortized | O(size) amortized | Not checked line by line. |
 | `container_message<C>::append` | O(len(part)) amortized | O(len(part)) amortized | |
 | `container_message<C>::done` | O(1) | O(1) | |
 | `span_message<B>::append` | O(len(part)) | O(1) | Checks bytes left. |
@@ -468,5 +465,5 @@ Allocation on a success path:
 - `value_sharing::sharing_decoder::mark`, `detail::tree_decoder::item_decode`.
 - `lazy::take_ownership`, `at_path(Encoded&&)`, `schema::path(Encoded&&)`, `schema::decode`, `structs::decode`, `lazy::clone`, `decode`, `ref::clone`.
 - jsonpath: every parser, `compile`, a `nodelist` read, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
-- `string_sink`, `container_message`.
+- `container_message`.
 - diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.

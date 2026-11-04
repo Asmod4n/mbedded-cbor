@@ -76,7 +76,7 @@ TEST_CASE("doc internals: a text of the item tree is a copy")
     auto const text = (*tree)->get<cbor::type::text_string>();
     REQUIRE(text.has_value());
     CHECK_EQ(*text, std::string(40, 'a'));
-    CHECK((text->data() < owner->data() || text->data() >= owner->data() + owner->size()));
+    CHECK((text->data() < owner->data() || text->data() >= std::to_address(owner->end())));
 }
 
 // The section "A compile-time path" states that the compiler parses the path.
