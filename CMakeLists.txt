@@ -52,6 +52,9 @@ if(CBOR_INSTALL)
 endif()
 
 set(CBOR_WARNINGS_ALWAYS -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+	list(APPEND CBOR_WARNINGS_ALWAYS -Wunsafe-buffer-usage)
+endif()
 set(CBOR_WARNINGS ${CBOR_WARNINGS_ALWAYS} $<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-Wnull-dereference>)
 
 if(PROJECT_IS_TOP_LEVEL)
