@@ -2580,17 +2580,21 @@ class reflection
                     return std::unexpected(r.error());
                 if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
                     return std::unexpected(c.error());
-                auto const from = list_span(encoded, *r, sizeof(E));
-                if constexpr (std::endian::native == std::endian::little && std::ranges::contiguous_range<U> &&
-                              requires { out.resize(std::size_t{}); }) {
-                    out.resize(r->length);
-                    std::ranges::copy(std::as_bytes(from), std::as_writable_bytes(std::span(out)).begin());
+                std::span<char const> const all = list_span(encoded, *r, sizeof(E)).first(r->length * sizeof(E));
+                auto const elements =
+                    std::views::iota(std::size_t{0}, r->length) | std::views::transform([all](std::size_t const i) {
+                        std::array<char, sizeof(E)> bytes;
+                        std::ranges::copy_n(std::ranges::next(all.begin(), static_cast<std::ptrdiff_t>(i * sizeof(E))),
+                                            sizeof(E), bytes.begin());
+                        return typed_array_element_read<E>(bytes);
+                    });
+                if constexpr (requires { out.assign_range(elements); }) {
+                    out.assign_range(elements);
                 } else {
                     out.clear();
                     out.reserve(r->length);
-                    for (std::size_t i = 0; i < r->length; ++i)
-                        out.push_back(typed_array_element_read<E>(
-                            validity::element_span(from, *validity::check_index(i, r->length), sizeof(E)).template first<sizeof(E)>()));
+                    for (E const e : elements)
+                        out.push_back(e);
                 }
                 return {};
             } else if constexpr (is_fixed_vector<U>) {
