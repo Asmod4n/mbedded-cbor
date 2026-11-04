@@ -99,10 +99,11 @@ export const instantiated = async source => {
   };
   const completed = async (bytes, lines, group) => {
     try {
-      return call("complete", bytes, lines, group);
+      const [head, ...found] = call("complete", bytes, lines, group);
+      return { head, found, trapped: false };
     } catch {
       x = await made();
-      return [];
+      return { head: lines.split("\n").at(-1), found: [], trapped: true };
     }
   };
   return { run, completed };
