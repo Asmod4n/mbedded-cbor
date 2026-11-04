@@ -9,6 +9,7 @@
 
 #ifdef __cpp_impl_reflection
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstddef>
@@ -341,12 +342,6 @@ bool same_scalar(T const a, T const b)
     }
 }
 
-template <class N>
-std::string_view native_bytes(N const &n)
-{
-    auto const s = std::as_bytes(std::span(n));
-    return {reinterpret_cast<char const *>(s.data()), s.size()};
-}
 
 // The reader's answer at a path against the native value at the same path.
 template <class N, class R>
@@ -362,11 +357,11 @@ void compare(N const *native, R const &read)
     } else {
         require(native != nullptr);
         if constexpr (std::is_same_v<R, std::string_view>) {
-            require(read == native_bytes(*native));
+            require(std::ranges::equal(std::as_bytes(std::span(read)), std::as_bytes(std::span(*native))));
         } else if constexpr (std::is_same_v<R, std::optional<std::string_view>>) {
             require(read.has_value() == native->has_value());
             if (read)
-                require(*read == native_bytes(**native));
+                require(std::ranges::equal(std::as_bytes(std::span(*read)), std::as_bytes(std::span(**native))));
         } else if constexpr (optional_type<R>) {
             require(read.has_value() == native->has_value());
             if (read)

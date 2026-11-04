@@ -7,6 +7,11 @@
 #include <cbor/error.hpp>
 #include <cbor/item_size.hpp>
 
+#include <algorithm>
+#include <cstddef>
+#include <span>
+#include <vector>
+
 namespace fuzz
 {
 
@@ -62,10 +67,10 @@ inline void tree_encode(std::string_view const input)
     require(cbor::encode(**tree_again, twice).has_value() && twice == out);
     auto const pieces = cbor::encode_iov(**tree);
     require(pieces.has_value());
-    std::string joined;
-    for (std::string_view const piece : **pieces)
-        joined.append(piece);
-    require(joined == out);
+    std::vector<std::byte> joined;
+    for (std::span<std::byte const> const piece : **pieces)
+        joined.insert(joined.end(), piece.begin(), piece.end());
+    require(std::ranges::equal(joined, std::as_bytes(std::span(out))));
 }
 
 inline void decode_target(std::string_view const input)
