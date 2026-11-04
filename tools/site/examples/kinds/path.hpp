@@ -15,7 +15,7 @@ struct name_joined {
         ((at = std::ranges::copy(Parts, at).out), ...);
         return out;
     }();
-    static constexpr std::string_view value{characters.data(), characters.size()};
+    static constexpr std::string_view value{std::span<char const>(characters)};
 };
 
 constexpr std::string_view query_name_start = "cbor::jsonpath::query<";
