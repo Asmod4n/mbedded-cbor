@@ -64,31 +64,6 @@ private:
     template <class Writer>
     struct encoder;
 
-    struct string_sink {
-        std::string encoded;
-
-        std::expected<void, std::errc> append(std::string_view const part)
-        {
-            encoded.append(part);
-            return {};
-        }
-
-        std::expected<void, std::errc> done(std::size_t)
-        {
-            return {};
-        }
-
-        template <class Op>
-        std::expected<void, std::errc> resize_and_overwrite(std::size_t const size, Op op)
-        {
-            std::size_t const at = encoded.size();
-            encoded.resize_and_overwrite(at + size, [&](char *const p, std::size_t const n) {
-                return at + op(std::span<char>(p, n).subspan(at, size));
-            });
-            return {};
-        }
-    };
-
     template <class C>
     struct container_message {
         C &container;
