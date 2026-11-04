@@ -1333,7 +1333,7 @@ public:
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::structs::decode: the encoded data item is null");
-        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
+        std::string_view const bytes{std::span<char const>(*encoded)};
         return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
 
@@ -1348,7 +1348,7 @@ public:
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
     {
-        return decode_with_owner(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+        return decode_with_owner(std::move(owner), std::string_view(std::span<char const>(encoded)),
                             std::move(target));
     }
 

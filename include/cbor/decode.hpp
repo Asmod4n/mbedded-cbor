@@ -249,7 +249,7 @@ CBOR_FLATTEN std::expected<void, error> tree_decoder<Checked>::content_decode(st
             node.via.array = std::span<item const>(nodes);
         return {};
     }
-    case major_type::tag: {
+    default: {
         std::string_view const tagged = d.encoded;
         std::pmr::vector<item> &held = decoded.items_reserved(1);
         if (auto const r = item_decode(held, depth + 1); !r) [[unlikely]]
@@ -279,7 +279,6 @@ CBOR_FLATTEN std::expected<void, error> tree_decoder<Checked>::content_decode(st
         return {};
     }
     }
-    std::unreachable();
 }
 
 
