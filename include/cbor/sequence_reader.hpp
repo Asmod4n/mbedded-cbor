@@ -184,7 +184,7 @@ class sequence_reader
         if (piece_first == pieces.size())
             pieces.clear();
         else
-            pieces.erase(pieces.begin(), pieces.begin() + static_cast<std::ptrdiff_t>(piece_first));
+            pieces.erase(pieces.begin(), std::ranges::next(pieces.begin(), static_cast<std::ptrdiff_t>(piece_first), pieces.end()));
         piece_first = 0;
         pieces.push_back(std::move(p));
     }
@@ -243,14 +243,14 @@ public:
         requires(!std::is_array_v<Piece>)
     void feed(Piece const piece)
     {
-        bytes_feed(std::string_view(std::ranges::data(piece), std::ranges::size(piece)));
+        bytes_feed(std::string_view(std::span<char const>(piece)));
     }
 
     template <owning_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const &piece)
     {
-        bytes_feed(std::string_view(std::ranges::data(piece), std::ranges::size(piece)));
+        bytes_feed(std::string_view(std::span<char const>(piece)));
     }
 
     template <owning_range_of_chars Piece>
@@ -266,7 +266,7 @@ public:
         validity::throw_logic_error_if_null(piece, "cbor::sequence_reader::feed: the piece is null");
         if (failure != error{}) [[unlikely]]
             return;
-        std::string_view const bytes(std::ranges::data(*piece), std::ranges::size(*piece));
+        std::string_view const bytes{std::span<char const>(*piece)};
         piece_push(held_piece{std::move(piece), bytes});
     }
 

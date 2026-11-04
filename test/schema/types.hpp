@@ -1174,7 +1174,7 @@ bool lies_inside(std::string_view const part, std::string_view const message)
 {
     std::less<char const *> const before;
     return part.empty() || (!before(part.data(), message.data()) &&
-                            !before(message.data() + message.size(), part.data() + part.size()));
+                            !before(std::to_address(message.end()), std::to_address(part.end())));
 }
 
 

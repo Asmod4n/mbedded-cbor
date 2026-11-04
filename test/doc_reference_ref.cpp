@@ -46,7 +46,7 @@ TEST_CASE("doc reference ref: a view by value")
     REQUIRE(r.has_value());
     std::string_view const v = **r;
     CHECK_EQ(v, "abc");
-    CHECK_EQ(v.data(), owner->data() + 1);
+    CHECK_EQ(v.data(), std::span(*owner).subspan(1).data());
     CHECK(*r == "abc");
 }
 

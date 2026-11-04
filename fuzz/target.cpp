@@ -1,13 +1,4 @@
-#include "decode.hpp"
-#include "diagnostic.hpp"
-#include "item_size.hpp"
-#include "encode.hpp"
-#include "encoder.hpp"
-#include "lazy.hpp"
-#include "path.hpp"
-#include "sequence_reader.hpp"
-#include "schema.hpp"
-#include "structs.hpp"
+#include FUZZ_HEADER
 
 #include <cstddef>
 #include <cstdint>

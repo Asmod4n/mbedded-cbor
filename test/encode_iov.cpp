@@ -1,5 +1,6 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
+#include "pieces.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -20,25 +21,24 @@ namespace
 {
 
 using iov_encoder = cbor::encoder<cbor::iov_writer>;
-using pieces = cbor::ref<std::span<std::string_view const>>;
+using pieces = cbor::ref<std::span<std::span<std::byte const> const>>;
 
 std::string joined(pieces const &p)
 {
-    std::string out;
-    for (std::string_view const piece : *p)
-        out.append(piece);
-    return out;
+    return test::joined(*p);
 }
 
 std::size_t sum_of(pieces const &p)
 {
-    return std::ranges::fold_left(*p | std::views::transform(&std::string_view::size), std::size_t{0},
+    return std::ranges::fold_left(*p | std::views::transform(&std::span<std::byte const>::size), std::size_t{0},
                                   std::plus<>{});
 }
 
-bool points_into(pieces const &p, char const *const data)
+bool points_into(pieces const &p, void const *const data)
 {
-    return std::ranges::any_of(*p, [data](std::string_view const piece) { return piece.data() == data; });
+    return std::ranges::any_of(*p, [data](std::span<std::byte const> const piece) {
+        return static_cast<void const *>(piece.data()) == data;
+    });
 }
 
 template <class F>
@@ -98,7 +98,9 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
             if (size >= cbor::encoding::ref_size)
-                CHECK(std::ranges::any_of(*p, [&](std::string_view const piece) { return piece == text; }));
+                CHECK(std::ranges::any_of(*p, [&](std::span<std::byte const> const piece) {
+                    return std::ranges::equal(piece, std::as_bytes(std::span(text)));
+                }));
         }
         {
             auto const owner = std::make_shared<std::string const>(text);
@@ -147,8 +149,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(e.byte_string(owner).has_value());
             pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(points_into(p, reinterpret_cast<char const *>(owner->data())),
-                     size >= cbor::encoding::ref_size && size > 0);
+            CHECK_EQ(points_into(p, owner->data()), size >= cbor::encoding::ref_size && size > 0);
         }
         {
             auto const read = test::lazy_of_copy(expected)->get<std::span<std::byte const>>();
@@ -158,8 +159,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(e.byte_string(*read).has_value());
             pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(points_into(p, reinterpret_cast<char const *>((**read).data())),
-                     size >= cbor::encoding::ref_size && size > 0);
+            CHECK_EQ(points_into(p, (**read).data()), size >= cbor::encoding::ref_size && size > 0);
         }
     }
 }

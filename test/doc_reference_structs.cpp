@@ -75,7 +75,7 @@ TEST_CASE("doc reference structs: decode with an owner")
     auto const shared = cbor::structs<std::string_view>::decode(owner);
     REQUIRE(shared.has_value());
     CHECK_EQ(**shared, "abc");
-    CHECK_EQ((**shared).data(), owner->data() + 1);
+    CHECK_EQ((**shared).data(), std::span(*owner).subspan(1).data());
 
     std::string_view const part(*owner);
     auto const viewed = cbor::structs<std::string_view>::decode(std::shared_ptr<void const>(owner), part);

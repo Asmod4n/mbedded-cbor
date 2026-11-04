@@ -36,7 +36,7 @@ std::vector<std::expected<std::string_view, error>> elements_of(std::shared_ptr<
 bool inside(std::string const &bytes, char const *const p)
 {
     return !std::less<char const *>{}(p, bytes.data()) &&
-           std::less<char const *>{}(p, bytes.data() + bytes.size());
+           std::less<char const *>{}(p, std::to_address(bytes.end()));
 }
 
 } // namespace

@@ -1,11 +1,11 @@
 # cbor::encode_iov
 
 ```cpp
-std::expected<ref<std::span<std::string_view const>>, error> encode_iov(item const &root);
+std::expected<ref<std::span<std::span<std::byte const> const>>, error> encode_iov(item const &root);
 ```
 
 ```call-seq
-cbor::encode_iov(**tree) → std::expected<ref<std::span<std::string_view const>>, error>
+cbor::encode_iov(**tree) → std::expected<ref<std::span<std::span<std::byte const> const>>, error>
 ```
 
 ```example
@@ -41,10 +41,10 @@ storage.
 // bytes: a std::string with [1, "a"]
 auto const tree = cbor::decode(bytes);
 auto const pieces = cbor::encode_iov(**tree);
-std::string joined;
-for (std::string_view const piece : **pieces)
-    joined += piece;
-joined == bytes;   // true
+std::vector<std::byte> joined;
+for (std::span<std::byte const> const piece : **pieces)
+    joined.append_range(piece);
+std::ranges::equal(joined, std::as_bytes(std::span(bytes)));   // true
 ```
 
 ## See also

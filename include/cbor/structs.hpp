@@ -193,7 +193,7 @@ class pfr
     friend class structs;
 
     template <class T>
-    friend void detail::copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
+    friend void detail::copy_views_into_zone(T &value, detail::bump &zone);
 };
 
 class generic
@@ -202,7 +202,7 @@ class generic
     friend class structs;
 
     template <class T>
-    friend void detail::copy_views_into_zone(T &value, std::pmr::memory_resource &zone);
+    friend void detail::copy_views_into_zone(T &value, detail::bump &zone);
 
     template <class U>
     static constexpr bool is_std_tuple = false;
@@ -422,7 +422,7 @@ class generic
             auto const bytes = d.byte_string_decode(b->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            std::string_view const digits = heads::magnitude_without_leading_zeros(*bytes);
+            std::span<char const> const digits = heads::magnitude_without_leading_zeros(std::span(*bytes));
             if (error const c =
                     validity::check_magnitude_size(digits.size(), sizeof(uint128)).error_or(error{});
                 c != error{}) [[unlikely]]
@@ -1333,7 +1333,7 @@ public:
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::structs::decode: the encoded data item is null");
-        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
+        std::string_view const bytes{std::span<char const>(*encoded)};
         return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
 
@@ -1348,7 +1348,7 @@ public:
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
     {
-        return decode_with_owner(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+        return decode_with_owner(std::move(owner), std::string_view(std::span<char const>(encoded)),
                             std::move(target));
     }
 
@@ -1361,10 +1361,8 @@ public:
         if (!sum) [[unlikely]]
             return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
-        std::string out;
-        out.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
-            return generic::generic_write(std::span<char>(p, n), 0, value);
-        });
+        std::string out(padded, '\0');
+        out.resize(generic::generic_write(std::span<char>(out), 0, value));
         return out;
     }
 
@@ -1380,16 +1378,7 @@ public:
             return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::size_t const size = *counted;
-        if constexpr (std::same_as<U, std::string>) {
-            std::size_t const at = target.size();
-            auto const total = validity::checked_add(at, padded);
-            if (!total) [[unlikely]]
-                return std::unexpected(validity::writer_error(total.error()));
-            target.resize_and_overwrite(*total, [&](char *const p, std::size_t const n) {
-                return generic::generic_write(std::span<char>(p, n), at, value);
-            });
-            return size;
-        } else if constexpr (encoding::byte_container<U> &&
+        if constexpr (encoding::byte_container<U> &&
                              requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
             auto const total = validity::checked_add(at, padded);
@@ -1451,17 +1440,12 @@ namespace detail
 {
 
 template <class T>
-void copy_views_into_zone(T &value, std::pmr::memory_resource &zone)
+void copy_views_into_zone(T &value, bump &zone)
 {
     if constexpr (std::is_same_v<T, std::string_view>) {
-        std::span<char> const owned(std::pmr::polymorphic_allocator<char>(&zone).allocate(value.size()), value.size());
-        std::ranges::copy(value, owned.begin());
-        value = std::string_view(owned);
+        value = zone.alloc_str(value, validity::bump_chunk_size);
     } else if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
-        std::span<std::byte> const owned(std::pmr::polymorphic_allocator<std::byte>(&zone).allocate(value.size()),
-                                         value.size());
-        std::ranges::copy(value, owned.begin());
-        value = owned;
+        value = zone.alloc_slice_copy(value, validity::bump_chunk_size);
     } else if constexpr (std::is_same_v<T, typed_array>) {
         detail::copy_views_into_zone(value.bytes, zone);
     } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || generic::is_sys_time<T> ||

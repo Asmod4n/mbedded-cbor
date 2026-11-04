@@ -1019,13 +1019,6 @@ class extended_diagnostic_notation
                                   std::to_underlying(rfc8949::additional_information::one_byte_argument))};
     }
 
-    static std::string decimal_of(std::uint64_t const n)
-    {
-        std::array<char, std::numeric_limits<std::uint64_t>::digits10 + 1> text;
-        auto const end = std::to_chars(text.data(), std::to_address(text.end()), n).ptr;
-        return std::string(text.data(), end);
-    }
-
     static std::string hex_of(std::string_view const bytes)
     {
         constexpr std::string_view digits = "0123456789abcdef";
@@ -1084,13 +1077,12 @@ class extended_diagnostic_notation
     {
         if (std::isinf(value))
             return value > 0 ? "Infinity" : "-Infinity";
-        std::array<char, 400> text;
+        std::array<char, 400> text{};
         double const magnitude = std::fabs(value);
-        auto const end = std::to_chars(text.data(), std::to_address(text.end()), value,
-                                       magnitude == 0 || (magnitude >= 1e-7 && magnitude < 1e21) ? std::chars_format::fixed
-                                                                                               : std::chars_format::scientific)
-                             .ptr;
-        std::string out(text.data(), end);
+        std::to_chars(text.data(), std::to_address(text.end()), value,
+                      magnitude == 0 || (magnitude >= 1e-7 && magnitude < 1e21) ? std::chars_format::fixed
+                                                                              : std::chars_format::scientific);
+        std::string out(text.begin(), std::ranges::find(text, '\0'));
         std::size_t const e = out.find('e');
         auto const before_exponent = out | std::views::take(e);
         std::string mantissa(before_exponent.begin(), before_exponent.end());
@@ -1177,11 +1169,11 @@ class extended_diagnostic_notation
             h->info == std::to_underlying(rfc8949::additional_information::indefinite_length);
         switch (h->major) {
         case major_type::unsigned_integer:
-            out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument);
+            out += std::to_string(h->argument) + encoding_indicator(h->info, h->argument);
             return {};
         case major_type::negative_integer:
             out += h->argument == std::numeric_limits<std::uint64_t>::max() ? std::string("-18446744073709551616")
-                                                                            : "-" + decimal_of(h->argument + 1);
+                                                                            : "-" + std::to_string(h->argument + 1);
             out += encoding_indicator(h->info, h->argument);
             return {};
         case major_type::byte_string:
@@ -1242,7 +1234,7 @@ class extended_diagnostic_notation
             return {};
         }
         case major_type::tag: {
-            out += decimal_of(h->argument) + encoding_indicator(h->info, h->argument) + "(";
+            out += std::to_string(h->argument) + encoding_indicator(h->info, h->argument) + "(";
             if (auto const r = diagnostic_write(out, d, encoded, depth + 1, depth_max); !r) [[unlikely]]
                 return r;
             out += ")";
@@ -1268,7 +1260,7 @@ class extended_diagnostic_notation
             if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
-            out += "simple(" + decimal_of(h->argument) + ")";
+            out += "simple(" + std::to_string(h->argument) + ")";
             return {};
         case std::to_underlying(rfc8949::simple_float_information::half_precision_float):
         case std::to_underlying(rfc8949::simple_float_information::single_precision_float):
@@ -1278,7 +1270,7 @@ class extended_diagnostic_notation
         [[unlikely]] case std::to_underlying(rfc8949::additional_information::indefinite_length):
             return std::unexpected(error::syntax_error);
         default:
-            out += "simple(" + decimal_of(h->argument) + ")";
+            out += "simple(" + std::to_string(h->argument) + ")";
             return {};
         }
     }

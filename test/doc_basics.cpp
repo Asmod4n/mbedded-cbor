@@ -73,20 +73,20 @@ TEST_CASE("doc basics: bytes go in as a copy or as a view")
     std::string const kept = preferred(M("name"s, std::string(40, 'a')));
     auto const copied = cbor::at_path<"$.name", std::string_view>(std::string(kept));
     REQUIRE(copied.has_value());
-    CHECK_NE((**copied).data(), kept.data() + 8);
+    CHECK_NE((**copied).data(), std::span(kept).subspan(8).data());
     std::string moved = kept;
-    char const *const data = moved.data();
+    std::span<char const> const data(moved);
     auto const taken = cbor::at_path<"$.name", std::string_view>(std::move(moved));
     REQUIRE(taken.has_value());
-    CHECK_EQ((**taken).data(), data + 8);
+    CHECK_EQ((**taken).data(), data.subspan(8).data());
     auto const owner = std::make_shared<std::string const>(kept);
     auto const viewed = cbor::at_path<"$.name", std::string_view>(owner);
     REQUIRE(viewed.has_value());
-    CHECK_EQ((**viewed).data(), owner->data() + 8);
+    CHECK_EQ((**viewed).data(), std::span(*owner).subspan(8).data());
     std::shared_ptr<void const> const any_owner = owner;
     auto const beside = cbor::at_path<"$.name", std::string_view>(any_owner, std::string_view(*owner));
     REQUIRE(beside.has_value());
-    CHECK_EQ((**beside).data(), owner->data() + 8);
+    CHECK_EQ((**beside).data(), std::span(*owner).subspan(8).data());
     CHECK_FALSE(([]<class S>(S const &s) {
         return requires(std::shared_ptr<void const> o) { cbor::at_path<"$.name", std::string_view>(o, s); };
     }(kept)));
@@ -100,7 +100,7 @@ TEST_CASE("doc basics: std::string as the type copies the text")
     auto const name = cbor::at_path<"$.name", std::string>(bytes);
     REQUIRE(name.has_value());
     CHECK_EQ(*name, std::string(40, 'a'));
-    CHECK_NE(name->data(), bytes.data() + 8);
+    CHECK_NE(name->data(), std::span(bytes).subspan(8).data());
     auto const raw = cbor::at_path<"$.key", std::vector<std::byte>>(preferred(M("key"s, test::bytes{"\x01\x02"})));
     REQUIRE(raw.has_value());
     CHECK_EQ(*raw, std::vector{std::byte{1}, std::byte{2}});

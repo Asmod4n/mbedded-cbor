@@ -1115,7 +1115,7 @@ class reflection
             straight_reference_encode<Root, U>(encoded);
             fixed_width_head_encode(encoded, major_type::array, sizeof(std::uint32_t));
             auto const count = heads::big_endian(static_cast<std::uint32_t>(describe::members_count<U>));
-            std::ranges::copy(count, encoded.end() - sizeof(std::uint32_t));
+            std::ranges::copy(count, std::span(encoded).template last<sizeof(std::uint32_t)>().begin());
             for_each_field<U>([&](auto i) { zero_initialized_encode<Root, describe::member_t<U, decltype(i)::value>>(encoded); });
         } else if constexpr (is_inline_optional<U>) {
             heads::head_append(encoded, major_type::array, 2);
@@ -1408,7 +1408,7 @@ class reflection
     {
         constexpr std::size_t n = fixed_size<E, Root>();
         static_assert(zero_initialized<Root, E>().size() >= n, "The zero-initialized encoding must hold the whole field.");
-        std::span<char const, n> const from{zero_initialized<Root, E>().data(), n};
+        std::span<char const, n> const from = zero_initialized<Root, E>().template first<n>();
         std::copy(from.begin(), from.end(), field.begin());
     }
 
@@ -1756,7 +1756,7 @@ class reflection
     {
         constexpr std::size_t n = heads::head_size(*tag_number_of<U>());
         static_assert(zero_initialized<Root, U>().size() >= n, "The zero-initialized encoding must hold the whole tag head.");
-        std::span<char const, n> const expected{zero_initialized<Root, U>().data(), n};
+        std::span<char const, n> const expected = zero_initialized<Root, U>().template first<n>();
         return std::ranges::equal(field.template first<n>(), expected);
     }
 
@@ -1765,7 +1765,7 @@ class reflection
     {
         constexpr std::size_t head = heads::head_size(fixed_length<U>::value);
         static_assert(zero_initialized<Root, U>().size() >= head, "The zero-initialized encoding must hold the whole head.");
-        std::span<char const, head> const expected{zero_initialized<Root, U>().data(), head};
+        std::span<char const, head> const expected = zero_initialized<Root, U>().template first<head>();
         return std::ranges::equal(field.template first<head>(), expected);
     }
 
@@ -3415,7 +3415,7 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return path_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+        return path_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
@@ -3452,14 +3452,14 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
     {
-        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+        return decode_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)),
                                      std::move(target));
     }
 
@@ -3481,7 +3481,7 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return path_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+        return path_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
@@ -3518,14 +3518,14 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
     {
-        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)),
+        return decode_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)),
                                      std::move(target));
     }
 
@@ -3542,10 +3542,8 @@ public:
         if (!sum) [[unlikely]]
             return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
-        std::string out;
-        out.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
-            return reflection::encoded_write<false, D>(std::span<char>(p, n), value, second);
-        });
+        std::string out(padded, '\0');
+        out.resize(reflection::encoded_write<false, D>(std::span<char>(out), value, second));
         return out;
     }
 
@@ -3563,18 +3561,7 @@ public:
         if (!sum) [[unlikely]]
             return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
-        constexpr std::size_t least = fixed_size();
-        CBOR_ASSUME(padded >= least);
-        if constexpr (std::same_as<U, std::string>) {
-            std::size_t const at = target.size();
-            auto const total = validity::checked_add(at, padded);
-            if (!total) [[unlikely]]
-                return std::unexpected(validity::writer_error(total.error()));
-            target.resize_and_overwrite(*total, [&](char *const p, std::size_t const n) {
-                return at + reflection::encoded_write<false, D>(std::span<char>(p, n).subspan(at), value, second);
-            });
-            return *size;
-        } else if constexpr (encoding::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
+        if constexpr (encoding::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
             auto const total = validity::checked_add(at, padded);
             if (!total) [[unlikely]]
@@ -3636,7 +3623,7 @@ private:
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<Encoded const> encoded)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::schema::path: the encoded data item is null");
-        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
+        std::string_view const bytes{std::span<char const>(*encoded)};
         return path_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
 
@@ -3673,7 +3660,7 @@ private:
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<Encoded const> encoded)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::schema::decode: the encoded data item is null");
-        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
+        std::string_view const bytes{std::span<char const>(*encoded)};
         return decode_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
 
@@ -3703,7 +3690,7 @@ private:
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         validity::throw_logic_error_if_null(encoded, "cbor::schema::decode: the encoded data item is null");
-        std::string_view const bytes(std::ranges::data(*encoded), std::ranges::size(*encoded));
+        std::string_view const bytes{std::span<char const>(*encoded)};
         return decode_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
 

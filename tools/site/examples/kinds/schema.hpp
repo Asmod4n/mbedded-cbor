@@ -114,7 +114,7 @@ struct kind<char> {
     {
         if (v >= ' ' && v <= '~')
             return std::format("{:?}", v);
-        return "'\\x" + hex_text(std::string_view(&v, 1)) + "'";
+        return "'\\x" + hex_text(std::span<char const>(std::array<char, 1>{v})) + "'";
     }
 };
 

@@ -728,14 +728,14 @@ inline void lazy::throw_logic_error_if_no_top_level() const
 template <borrowed_range_of_chars Encoded>
 std::expected<lazy, error> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
-    return from(std::move(owner), std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+    return from(std::move(owner), std::string_view(std::span<char const>(encoded)));
 }
 
 template <owning_range_of_chars Encoded>
 std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
 {
     validity::throw_logic_error_if_null(owner, "cbor::lazy::view: the encoded data item is null");
-    std::string_view const bytes(std::ranges::data(*owner), std::ranges::size(*owner));
+    std::string_view const bytes{std::span<char const>(*owner)};
     return from(std::move(owner), bytes);
 }
 

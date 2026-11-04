@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "pieces.hpp"
 #include "owned_copy.hpp"
 #include <array>
 #include <cstdint>
@@ -590,8 +591,7 @@ TEST_CASE("application tag: the iov target with shared references gives the byte
     auto const pieces = e.finish();
     REQUIRE(pieces.has_value());
     std::string joined;
-    for (std::string_view const piece : **pieces)
-        joined.append(piece);
+    joined = test::joined(**pieces);
     CHECK_EQ(joined, encoded_shared(v));
 }
 

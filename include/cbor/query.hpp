@@ -1137,7 +1137,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
 {
     validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
     return jsonpath::query_apply(e, std::move(owner),
-                                 std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+                                 std::string_view(std::span<char const>(encoded)));
 }
 
 template <class T, borrowed_range_of_chars Encoded>
@@ -1154,7 +1154,7 @@ std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shar
                                                                        jsonpath::query<T> const &e)
 {
     validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
-    std::string_view const bytes(std::ranges::data(*owner), std::ranges::size(*owner));
+    std::string_view const bytes{std::span<char const>(*owner)};
     return at_path(std::move(owner), bytes, e);
 }
 
@@ -1755,7 +1755,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
 {
     validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
     return jsonpath::query_walk<Path, T>(std::move(owner),
-                                         std::string_view(std::ranges::data(encoded), std::ranges::size(encoded)));
+                                         std::string_view(std::span<char const>(encoded)));
 }
 
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
@@ -1765,7 +1765,7 @@ template <fixed_string Path, class T, owning_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
 {
     validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
-    std::string_view const bytes(std::ranges::data(*owner), std::ranges::size(*owner));
+    std::string_view const bytes{std::span<char const>(*owner)};
     return at_path<Path, T>(std::move(owner), bytes);
 }
 
