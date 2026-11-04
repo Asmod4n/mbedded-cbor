@@ -663,8 +663,9 @@ TEST_CASE("encode: a tree is written with the head widths of its input, also wit
         CHECK(same_value(out, r.wire));
         auto const pieces = cbor::encode_iov(*root);
         REQUIRE(pieces.has_value());
-        std::string joined;
-        joined = test::joined(**pieces);
+        auto const read = test::joined(**pieces);
+        REQUIRE(read.has_value());
+        std::string const joined = *read;
         CHECK_EQ(joined, r.own);
     }
 }

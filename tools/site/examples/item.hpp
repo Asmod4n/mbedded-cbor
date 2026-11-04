@@ -165,16 +165,6 @@ inline result encode_made(call const &c)
     return std::unexpected("the argument 2 is not a std::string or a std::span<char>");
 }
 
-inline result encode_iov_made(call const &c)
-{
-    if (auto const ok = arguments_counted(c, 1); !ok) [[unlikely]]
-        return std::unexpected(ok.error());
-    auto const root = argument_of<cbor::item>(c, 0, "a cbor::item");
-    if (!root) [[unlikely]]
-        return std::unexpected(root.error());
-    return value_of(cbor::encode_iov(**root));
-}
-
 template <class T>
 result span_star(call const &c)
 {
@@ -303,13 +293,6 @@ inline result simple_value_made(call const &c)
     return value_of(cbor::simple_value{*n});
 }
 
-inline result iov_writer_made(call const &c)
-{
-    if (auto const ok = arguments_counted(c, 0); !ok) [[unlikely]]
-        return std::unexpected(ok.error());
-    return value_of(cbor::iov_writer{});
-}
-
 template <class Target, class Argument>
 value encoder_value(std::shared_ptr<void> owner, Argument &&argument)
 {
@@ -327,9 +310,7 @@ inline result encoder_made(call const &c)
         return encoder_value<std::string>(a.held, *target);
     if (auto const *const target = held_if<std::span<char>>(a))
         return encoder_value<std::span<char>>(a.held, *target);
-    if (auto *const target = changed_if<cbor::iov_writer>(a))
-        return encoder_value<cbor::iov_writer>(a.held, *target);
-    return std::unexpected("cbor::encoder takes a std::string, a std::span<char> or a cbor::iov_writer here");
+    return std::unexpected("cbor::encoder takes a std::string or a std::span<char> here");
 }
 
 template <class Target>
@@ -482,13 +463,11 @@ result encoder_finish(call const &c)
 
 using string_encoder = cbor::encoder<std::string>;
 using chars_encoder = cbor::encoder<std::span<char>>;
-using pieces_encoder = cbor::encoder<cbor::iov_writer>;
 
 inline constexpr entry item_functions[] = {
     {"cbor::decode()", decode_made},
     {"cbor::encoded_cbor_data_item()", encoded_cbor_data_item_found},
     {"cbor::encode()", encode_made},
-    {"cbor::encode_iov()", encode_iov_made},
     {.name = "cbor::owning<cbor::item>.operator*()", .run = owning_item_star, .runnable = true},
     {.name = "cbor::item const *.operator*()", .run = item_pointer_star, .runnable = true},
     {.name = "cbor::item const *.get()", .run = item_get, .candidates = item_get_candidates, .runnable = true},
@@ -501,9 +480,6 @@ inline constexpr entry item_functions[] = {
     {.name = "std::reference_wrapper<cbor::item const>.get()", .run = reference_get, .runnable = true},
     {.name = "std::pair<std::uint64_t, cbor::item const *>.first", .run = tag_number_of, .runnable = true},
     {.name = "std::pair<std::uint64_t, cbor::item const *>.second", .run = tag_content_of, .runnable = true},
-    {"cbor::ref<std::span<std::span<std::byte const> const>>.operator*()", span_star<std::span<std::span<std::byte const> const>>},
-    {"cbor::ref<std::span<std::span<std::byte const> const>>.operator->()", span_star<std::span<std::span<std::byte const> const>>},
-    {"std::span<std::span<std::byte const> const>.size()", view_size<std::span<std::span<std::byte const> const>>},
     {"std::string{}", string_made},
     {"std::array<char, 16>{}", chars_made},
     {"std::array<std::uint8_t, 2>{}", octets_made},
@@ -519,7 +495,6 @@ inline constexpr entry item_functions[] = {
     {"cbor::simple_value::null", simple_value_named<cbor::simple_value::null>},
     {"cbor::simple_value::undefined", simple_value_named<cbor::simple_value::undefined>},
     {"cbor::simple_value{}", simple_value_made},
-    {"cbor::iov_writer{}", iov_writer_made},
     {"cbor::encoder{}", encoder_made},
     {"cbor::encoder<std::string>.unsigned_integer()", encoder_unsigned_integer<std::string>, true},
     {"cbor::encoder<std::string>.negative_integer()", encoder_negative_integer<std::string>, true},
@@ -543,17 +518,6 @@ inline constexpr entry item_functions[] = {
     {"cbor::encoder<std::span<char>>.floating_point()", encoder_floating_point<std::span<char>>, true},
     {"cbor::encoder<std::span<char>>.typed_array()", encoder_typed_array<std::span<char>>, true},
     {"cbor::encoder<std::span<char>>.finish()", encoder_finish<std::span<char>>, true},
-    {"cbor::encoder<cbor::iov_writer>.unsigned_integer()", encoder_unsigned_integer<cbor::iov_writer>, true},
-    {"cbor::encoder<cbor::iov_writer>.negative_integer()", encoder_negative_integer<cbor::iov_writer>, true},
-    {"cbor::encoder<cbor::iov_writer>.byte_string()", encoder_byte_string<cbor::iov_writer>, true},
-    {"cbor::encoder<cbor::iov_writer>.text_string()", encoder_text_string<cbor::iov_writer>, true},
-    {"cbor::encoder<cbor::iov_writer>.array()", encoder_head<cbor::iov_writer, &pieces_encoder::array>, true},
-    {"cbor::encoder<cbor::iov_writer>.map()", encoder_head<cbor::iov_writer, &pieces_encoder::map>, true},
-    {"cbor::encoder<cbor::iov_writer>.tag()", encoder_head<cbor::iov_writer, &pieces_encoder::tag>, true},
-    {"cbor::encoder<cbor::iov_writer>.simple_value()", encoder_simple_value<cbor::iov_writer>, true},
-    {"cbor::encoder<cbor::iov_writer>.floating_point()", encoder_floating_point<cbor::iov_writer>, true},
-    {"cbor::encoder<cbor::iov_writer>.typed_array()", encoder_typed_array<cbor::iov_writer>, true},
-    {"cbor::encoder<cbor::iov_writer>.finish()", encoder_finish<cbor::iov_writer>, true},
 };
 
 }
