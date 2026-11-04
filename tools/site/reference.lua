@@ -189,6 +189,10 @@ local function page_blocks(file, title, does)
     elseif b.t == "CodeBlock" and b.classes[1] == "call-seq" then
       callseq = true
       out[#out + 1] = pandoc.RawBlock("html", callseq_html(b.text))
+    elseif b.t == "CodeBlock" and b.classes[1] == "output" then
+      example = true
+      plays[#plays + 1] = pandoc.RawBlock("html", '<div class="play">\n<div class="bar"><span class="label">Example</span></div>\n'
+        .. '<pre class="out">' .. html_escaped(b.text) .. "</pre>\n</div>")
     elseif b.t == "CodeBlock" and b.classes[1] == "example" then
       example = true
       local spec = example_read(b.text, where)

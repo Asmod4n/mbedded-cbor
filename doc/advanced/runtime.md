@@ -353,15 +353,16 @@ cbor::lazy::view(owner)->clone();                      // an array that holds th
 
 `cbor::encode_iov(item)` writes a decoded item into a list of pieces, not
 into one buffer. It gives
-`std::expected<cbor::ref<std::span<std::span<std::byte const> const>>, error>`:
-the pieces in order, and their storage, which lives as long as the
-result. Use the pieces with `writev` or a socket, or join them.
+`std::expected<cbor::ref<std::span<iovec const>>, error>`: the pieces in
+order as `struct iovec`, and their storage, which lives as long as the
+result. The pieces are for sending only: `writev`, `sendmsg`,
+`IORING_OP_WRITEV`, `IORING_OP_SENDMSG`. Hold the result until the call
+returns or the last completion of the request comes.
 
 ```cpp
 auto const tree = cbor::decode(bytes);
 auto const pieces = cbor::encode_iov(**tree);
-for (std::span<std::byte const> const piece : **pieces)
-    send(piece);
+writev(fd, (*pieces)->data(), static_cast<int>((*pieces)->size()));
 ```
 
 The encoder writes into blocks of 16 KiB and copies each byte once; a

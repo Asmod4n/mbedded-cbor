@@ -190,12 +190,13 @@ TEST_CASE("encoder: the iov target gives the bytes of the string target in piece
     REQUIRE(e.unsigned_integer(std::uint8_t{7}).has_value());
     auto const pieces = e.finish();
     REQUIRE(pieces.has_value());
-    std::string const joined = test::joined(**pieces);
-    bool const referenced = std::ranges::any_of(**pieces, [&](std::span<std::byte const> const piece) {
-        return static_cast<void const *>(piece.data()) == static_cast<void const *>(text->data());
+    auto const joined = test::joined(**pieces);
+    REQUIRE(joined.has_value());
+    bool const referenced = std::ranges::any_of(**pieces, [&](iovec const &piece) {
+        return static_cast<void const *>(piece.iov_base) == static_cast<void const *>(text->data());
     });
     CHECK(referenced);
-    CHECK_EQ(joined, "\x82\x78\x28"s + *text + "\x18\x07"s);
+    CHECK_EQ(*joined, "\x82\x78\x28"s + *text + "\x18\x07"s);
 }
 
 }

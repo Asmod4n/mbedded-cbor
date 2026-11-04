@@ -359,7 +359,9 @@ TEST_CASE("doc advanced runtime: encode_iov")
     REQUIRE(tree.has_value());
     auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces.has_value());
-    std::string const joined = test::joined(**pieces);
+    auto const read = test::joined(**pieces);
+    REQUIRE(read.has_value());
+    std::string const joined = *read;
     CHECK_EQ(joined, wire);
 
     std::string text(40, 'x');

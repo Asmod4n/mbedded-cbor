@@ -590,8 +590,9 @@ TEST_CASE("application tag: the iov target with shared references gives the byte
     REQUIRE(w.write(e, v, false).has_value());
     auto const pieces = e.finish();
     REQUIRE(pieces.has_value());
-    std::string joined;
-    joined = test::joined(**pieces);
+    auto const read = test::joined(**pieces);
+    REQUIRE(read.has_value());
+    std::string const joined = *read;
     CHECK_EQ(joined, encoded_shared(v));
 }
 
