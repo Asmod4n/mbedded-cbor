@@ -3542,10 +3542,8 @@ public:
         if (!sum) [[unlikely]]
             return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
-        std::string out;
-        out.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
-            return reflection::encoded_write<false, D>(std::span<char>(p, n), value, second);
-        });
+        std::string out(padded, '\0');
+        out.resize(reflection::encoded_write<false, D>(std::span<char>(out), value, second));
         return out;
     }
 
@@ -3563,18 +3561,7 @@ public:
         if (!sum) [[unlikely]]
             return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
-        constexpr std::size_t least = fixed_size();
-        CBOR_ASSUME(padded >= least);
-        if constexpr (std::same_as<U, std::string>) {
-            std::size_t const at = target.size();
-            auto const total = validity::checked_add(at, padded);
-            if (!total) [[unlikely]]
-                return std::unexpected(validity::writer_error(total.error()));
-            target.resize_and_overwrite(*total, [&](char *const p, std::size_t const n) {
-                return at + reflection::encoded_write<false, D>(std::span<char>(p, n).subspan(at), value, second);
-            });
-            return *size;
-        } else if constexpr (encoding::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
+        if constexpr (encoding::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
             auto const total = validity::checked_add(at, padded);
             if (!total) [[unlikely]]

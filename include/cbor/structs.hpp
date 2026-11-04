@@ -1361,10 +1361,8 @@ public:
         if (!sum) [[unlikely]]
             return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
-        std::string out;
-        out.resize_and_overwrite(padded, [&](char *const p, std::size_t const n) {
-            return generic::generic_write(std::span<char>(p, n), 0, value);
-        });
+        std::string out(padded, '\0');
+        out.resize(generic::generic_write(std::span<char>(out), 0, value));
         return out;
     }
 
@@ -1380,16 +1378,7 @@ public:
             return std::unexpected(validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::size_t const size = *counted;
-        if constexpr (std::same_as<U, std::string>) {
-            std::size_t const at = target.size();
-            auto const total = validity::checked_add(at, padded);
-            if (!total) [[unlikely]]
-                return std::unexpected(validity::writer_error(total.error()));
-            target.resize_and_overwrite(*total, [&](char *const p, std::size_t const n) {
-                return generic::generic_write(std::span<char>(p, n), at, value);
-            });
-            return size;
-        } else if constexpr (encoding::byte_container<U> &&
+        if constexpr (encoding::byte_container<U> &&
                              requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
             auto const total = validity::checked_add(at, padded);
