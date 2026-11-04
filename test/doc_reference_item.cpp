@@ -204,9 +204,10 @@ TEST_CASE("doc reference item: encoder::negative_integer")
 // encoder_byte_string.md: a span of two bytes; a null owner is a wrong use.
 TEST_CASE("doc reference item: encoder::byte_string")
 {
+    std::array<std::uint8_t, 2> const ab{97, 98};
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.byte_string(std::as_bytes(std::span("ab").first(2))));
+    REQUIRE(e.byte_string(std::as_bytes(std::span(ab))));
     REQUIRE(e.finish());
     CHECK_EQ(out, "\x42\x61\x62"s);
 

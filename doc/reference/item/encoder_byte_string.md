@@ -15,11 +15,13 @@ e.byte_string(bytes) → std::expected<void, error>
 
 ```example
 bytes: 42 61 62
+call: std::array<std::uint8_t, 2> ab{97, 98};
+result: {97, 98}
 call: std::string out;
 result: ""
 call: cbor::encoder e(out);
 result: encoder over a std::string
-call: e.byte_string(std::as_bytes(std::span("ab").first(2)))
+call: e.byte_string(std::as_bytes(std::span(ab)))
 result: void
 call: e.finish()
 result: 3
@@ -47,9 +49,10 @@ O(bytes). A container target can grow.
 ## Example
 
 ```cpp
+std::array<std::uint8_t, 2> const ab{97, 98};
 std::string out;
 cbor::encoder e(out);
-e.byte_string(std::as_bytes(std::span("ab").first(2)));
+e.byte_string(std::as_bytes(std::span(ab)));
 e.finish();   // out holds 42 61 62
 ```
 
