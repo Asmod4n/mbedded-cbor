@@ -1,0 +1,59 @@
+{
+ "what": "writev of one piece into a memfd, A: iovec over the owner's bytes with no copy, B: a copy into a new std::vector<char> first (bench/iov_copy.cpp, ARM_COPY); decides whether iov_writer copies const pieces (owner 2026-11-04: no copy)",
+ "commit": "bench/iov_copy.cpp as committed with this file; run from a scratch copy before the commit",
+ "unit": "ns per send (google benchmark real_time)",
+ "build": "g++-16 (SUSE 16.2.1 20260929) -std=c++23 -O2 -march=native -DNDEBUG -D_GLIBCXX_ASSERTIONS, libstdc++, image mbedded-cbor-bench-desktop",
+ "runs": "2 rounds, A twice and B once per round, min_time 0.5 s, not pinned, nice 0",
+ "machine": "Intel Xeon @ 2.80GHz, 4 cpus, L1d 32 KiB, L2 1 MiB per core, L3 33 MiB; kernel 6.18.44-fc-v233; Firecracker VM, podman",
+ "results": {
+  "32768": {
+   "A": [
+    1950.85,
+    2276.12,
+    1930.89,
+    2086.0
+   ],
+   "B": [
+    3945.5,
+    3122.08
+   ]
+  },
+  "1048576": {
+   "A": [
+    103097,
+    132240,
+    96921,
+    92645.8
+   ],
+   "B": [
+    185256,
+    178535
+   ]
+  },
+  "34603008": {
+   "A": [
+    9597330,
+    10111600,
+    10478000,
+    10242600
+   ],
+   "B": [
+    35114900,
+    37242900
+   ]
+  },
+  "107053056": {
+   "A": [
+    29846800,
+    30743400,
+    28308100,
+    28235500
+   ],
+   "B": [
+    117050000,
+    113262000
+   ]
+  }
+ },
+ "context_of_the_iov_runs": {}
+}

@@ -1,33 +1,34 @@
 # cbor::encode_iov
 
 ```cpp
-std::expected<ref<std::span<std::span<std::byte const> const>>, error> encode_iov(item const &root);
+std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
 ```
 
 ```call-seq
-cbor::encode_iov(**tree) → std::expected<ref<std::span<std::span<std::byte const> const>>, error>
+cbor::encode_iov(**tree) → std::expected<ref<std::span<iovec const>>, error>
 ```
 
-```example
-message: [1, "a"]
-call: auto const tree = cbor::decode(bytes)
-result: owning item of [1, "a"]
-call: auto const pieces = cbor::encode_iov(**tree)
-result: ref to span of 1 piece: 82 01 61 61
-call: (*pieces)->size()
-result: 1
-call: bytes
-result: 4 bytes: 82 01 61 61
+```output
+bytes: 82 01 61 61
+call: auto const pieces = cbor::encode_iov(**cbor::decode(bytes))
+(*pieces)->size(): 1
+sent with writev: [1, "a"]
 ```
 
-Writes the tree at `root` into a list of pieces, not into one buffer.
-The result gives the pieces in order and holds their storage. A
-program gives the pieces to `writev` or to a socket, or joins them. The
-bytes are those of [encode](encode.md).
+Writes the tree at `root` into a list of `struct iovec` pieces, not into
+one buffer. The result gives the pieces in order and holds their storage
+and the owners of the pieces that refer to strings. The pieces are for
+sending only: `writev`, `sendmsg`, `IORING_OP_WRITEV` and
+`IORING_OP_SENDMSG`. The program holds the `ref` until the call returns or
+until the last completion of the request. The bytes are those of
+[encode](encode.md). The function exists where `<sys/uio.h>` exists.
 
 ## Errors
 
-`nesting_depth_exceeded`: the tree is deeper than the limit.
+`nesting_depth_exceeded`: the tree is deeper than the limit. A piece that
+refers to the string of an owner points into memory that the owner holds
+as const; a call that writes into the pieces, such as `readv`, is a wrong
+use.
 
 ## Cost
 
@@ -41,10 +42,9 @@ storage.
 // bytes: a std::string with [1, "a"]
 auto const tree = cbor::decode(bytes);
 auto const pieces = cbor::encode_iov(**tree);
-std::vector<std::byte> joined;
-for (std::span<std::byte const> const piece : **pieces)
-    joined.append_range(piece);
-std::ranges::equal(joined, std::as_bytes(std::span(bytes)));   // true
+(*pieces)->size();   // 1
+writev(fd, (*pieces)->data(), static_cast<int>((*pieces)->size()));
+// fd holds [1, "a"], the 4 bytes 82 01 61 61
 ```
 
 ## See also

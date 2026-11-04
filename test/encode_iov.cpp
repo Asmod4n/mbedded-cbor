@@ -2,6 +2,10 @@
 #include "owned_copy.hpp"
 #include "pieces.hpp"
 
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -21,24 +25,23 @@ namespace
 {
 
 using iov_encoder = cbor::encoder<cbor::iov_writer>;
-using pieces = cbor::ref<std::span<std::span<std::byte const> const>>;
+using pieces = cbor::ref<std::span<iovec const>>;
 
 std::string joined(pieces const &p)
 {
-    return test::joined(*p);
+    auto const bytes = test::joined(*p);
+    REQUIRE(bytes.has_value());
+    return *bytes;
 }
 
 std::size_t sum_of(pieces const &p)
 {
-    return std::ranges::fold_left(*p | std::views::transform(&std::span<std::byte const>::size), std::size_t{0},
-                                  std::plus<>{});
+    return test::sum_of(*p);
 }
 
 bool points_into(pieces const &p, void const *const data)
 {
-    return std::ranges::any_of(*p, [data](std::span<std::byte const> const piece) {
-        return static_cast<void const *>(piece.data()) == data;
-    });
+    return std::ranges::any_of(*p, [data](iovec const &piece) { return static_cast<void const *>(piece.iov_base) == data; });
 }
 
 template <class F>
@@ -98,9 +101,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
             if (size >= cbor::encoding::ref_size)
-                CHECK(std::ranges::any_of(*p, [&](std::span<std::byte const> const piece) {
-                    return std::ranges::equal(piece, std::as_bytes(std::span(text)));
-                }));
+                CHECK(std::ranges::any_of(*p, [&](iovec const &piece) { return piece.iov_len == text.size(); }));
         }
         {
             auto const owner = std::make_shared<std::string const>(text);
@@ -353,4 +354,56 @@ TEST_CASE("encode: a float is a double unless preferred serialization is on")
     string_writer p;
     REQUIRE(test::encode(p, value{1.0}).has_value());
     CHECK_EQ(p.encoded, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv);
+}
+
+// writev takes at most IOV_MAX pieces in one call. An encoding with more pieces is read back in turns by
+// test::joined, the one place that splits; 1100 long strings with owners give more than the 1024 of Linux.
+TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")
+{
+    constexpr std::size_t strings = 1100;
+    auto const text = std::make_shared<std::string const>(std::string(cbor::encoding::ref_size, 'x'));
+    cbor::iov_writer w;
+    iov_encoder e{w};
+    std::string expected;
+    cbor::encoder copy{expected};
+    REQUIRE(e.array(strings).has_value());
+    REQUIRE(copy.array(strings).has_value());
+    for (std::size_t i = 0; i < strings; ++i) {
+        REQUIRE(e.text_string(text).has_value());
+        REQUIRE(copy.text_string(*text).has_value());
+    }
+    REQUIRE(copy.finish().has_value());
+    pieces const p = finished(e);
+    CHECK_GT(p->size(), strings);
+    CHECK_EQ(joined(p), expected);
+}
+
+// The pieces are made for sending: sendmsg over a pair of Unix sockets carries the bytes of encode. The message
+// stays below the 4 KiB that one socket buffer holds at least, so the single thread does not block.
+TEST_CASE("encode_iov: sendmsg sends the bytes of encode")
+{
+    constexpr std::size_t socket_buffer_least = 4096;
+    auto const text = std::make_shared<std::string const>(std::string(100, 'y'));
+    cbor::iov_writer w;
+    iov_encoder e{w};
+    REQUIRE(e.array(2).has_value());
+    REQUIRE(e.text_string(text).has_value());
+    REQUIRE(e.unsigned_integer(std::uint8_t{7}).has_value());
+    pieces const p = finished(e);
+    std::string const expected = joined(p);
+    REQUIRE_LT(expected.size(), socket_buffer_least);
+    std::array<int, 2> ends{};
+    REQUIRE_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, ends.data()), 0);
+    msghdr message{};
+    message.msg_iov = const_cast<iovec *>(p->data());
+    auto const count = test::count_of<decltype(message.msg_iovlen)>(p->size());
+    REQUIRE(count.has_value());
+    message.msg_iovlen = *count;
+    ssize_t const sent = sendmsg(ends[0], &message, 0);
+    REQUIRE_EQ(sent, static_cast<ssize_t>(expected.size()));
+    std::string received(expected.size(), '\0');
+    REQUIRE_EQ(read(ends[1], received.data(), received.size()), static_cast<ssize_t>(expected.size()));
+    CHECK_EQ(received, expected);
+    close(ends[0]);
+    close(ends[1]);
 }

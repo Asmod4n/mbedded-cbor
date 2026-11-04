@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "../test/owned_copy.hpp"
+#include "../test/pieces.hpp"
 
 #include <cbor/encode.hpp>
 #include <cbor/error.hpp>
@@ -67,10 +68,8 @@ inline void tree_encode(std::string_view const input)
     require(cbor::encode(**tree_again, twice).has_value() && twice == out);
     auto const pieces = cbor::encode_iov(**tree);
     require(pieces.has_value());
-    std::vector<std::byte> joined;
-    for (std::span<std::byte const> const piece : **pieces)
-        joined.insert(joined.end(), piece.begin(), piece.end());
-    require(std::ranges::equal(joined, std::as_bytes(std::span(out))));
+    auto const joined = test::joined(**pieces);
+    require(joined.has_value() && *joined == out);
 }
 
 inline void decode_target(std::string_view const input)

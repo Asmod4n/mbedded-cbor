@@ -1005,10 +1005,10 @@ static std::uint64_t op()
     auto const r = bench::encode(w, tree);
     if (!r)
         std::abort();
-    std::span<std::span<std::byte const> const> const pieces = **r;
+    std::span<iovec const> const pieces = **r;
     benchmark::DoNotOptimize(pieces.data());
     benchmark::ClobberMemory();
-    return std::ranges::fold_left(pieces | std::views::transform(&std::span<std::byte const>::size), std::size_t{0}, std::plus<>{});
+    return std::ranges::fold_left(pieces | std::views::transform(&iovec::iov_len), std::size_t{0}, std::plus<>{});
 #elif defined(ARM_S_STRING_REUSE)
     reused.clear();
     if (!bench::encode(reused, tree))

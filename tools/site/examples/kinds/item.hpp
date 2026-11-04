@@ -88,39 +88,6 @@ struct kind<cbor::simple_value> {
 };
 
 template <>
-struct kind<std::span<std::span<std::byte const> const>> {
-    static constexpr std::string_view name = "std::span<std::span<std::byte const> const>";
-    static std::string text(std::span<std::span<std::byte const> const> const v)
-    {
-        std::string out = "span of " + number_text(v.size()) + (v.size() == 1 ? " piece" : " pieces");
-        char const *separator = ": ";
-        for (std::span<std::byte const> const piece : v) {
-            out += separator + hex_text(piece);
-            separator = ", ";
-        }
-        return out;
-    }
-};
-
-template <>
-struct kind<cbor::ref<std::span<std::span<std::byte const> const>>> {
-    static constexpr std::string_view name = "cbor::ref<std::span<std::span<std::byte const> const>>";
-    static std::string text(cbor::ref<std::span<std::span<std::byte const> const>> const &v)
-    {
-        return "ref to " + kind<std::span<std::span<std::byte const> const>>::text(*v);
-    }
-};
-
-template <>
-struct kind<cbor::iov_writer> {
-    static constexpr std::string_view name = "cbor::iov_writer";
-    static std::string text(cbor::iov_writer const &)
-    {
-        return "iov_writer";
-    }
-};
-
-template <>
 struct kind<encoder_over<std::string>> {
     static constexpr std::string_view name = "cbor::encoder<std::string>";
     static std::string text(encoder_over<std::string> const &)
@@ -135,15 +102,6 @@ struct kind<encoder_over<std::span<char>>> {
     static std::string text(encoder_over<std::span<char>> const &)
     {
         return "encoder over a std::span<char>";
-    }
-};
-
-template <>
-struct kind<encoder_over<cbor::iov_writer>> {
-    static constexpr std::string_view name = "cbor::encoder<cbor::iov_writer>";
-    static std::string text(encoder_over<cbor::iov_writer> const &)
-    {
-        return "encoder over a cbor::iov_writer";
     }
 };
 

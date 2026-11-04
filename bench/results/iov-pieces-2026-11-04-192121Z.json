@@ -1,0 +1,244 @@
+{
+ "time": "2026-11-04-192121Z",
+ "commit_a": {
+  "given": "db8a6a5af53e555e1370b468f2e4e1e10219d8a5",
+  "id": "db8a6a5af53e555e1370b468f2e4e1e10219d8a5"
+ },
+ "commit_b": {
+  "given": "1859cf1459d9850242f81a921c68af73b91e83ca",
+  "id": "1859cf1459d9850242f81a921c68af73b91e83ca"
+ },
+ "bench_sources_commit": "unknown",
+ "what": "iovec pieces: db8a6a5 (std::span<std::byte const> pieces) against 1859cf1 (struct iovec pieces), S_IOV and S_IOV_BYTES_REF on twitter; a = commit a, aa = commit a built again, b = commit b",
+ "documents": "twitter; MB_STRUCT on twitter only",
+ "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -D_GLIBCXX_ASSERTIONS -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST",
+ "pie": "-fPIE -pie",
+ "elf_type_count": {
+  "Type: DYN": 12
+ },
+ "rounds": 2,
+ "min_time": "0.5s",
+ "resolved_march": "cascadelake",
+ "compilers": [
+  "g++-16 (SUSE Linux) 16.2.1 20260929",
+  "clang version 23.1.4"
+ ],
+ "gxx_binary": {
+  "binary": "a.gxx.twitter.S_IOV",
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (SUSE Linux) 16.2.1 20260929",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang.twitter.S_IOV",
+  "comment": "String dump of section '.comment':\n  [     0]  clang version 23.1.4",
+  "libraries": {
+   "libstdc++.so.6": "/usr/lib64/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib64/libm.so.6",
+   "libc.so.6": "/usr/lib64/libc.so.6"
+  }
+ },
+ "libc": "ldd (GNU libc) 2.44",
+ "kernel": "6.18.44-fc-v233",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "unknown",
+ "container": "yes",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+  "flags_sha256": "7927e346002fece28656315e9687eb28a16fd9384218033745c7c71a35f0d5c9",
+  "cpus": 4,
+  "l3": "33792K"
+ },
+ "uid": 65534,
+ "priority": "nice 0 (nice -10 refused)",
+ "threads": 1,
+ "pinned": false,
+ "cpus_in_machine": 4,
+ "cpu_left_to_the_machine": "each bench process is single-threaded; builds used 3 of 4 cpus",
+ "gate": [
+  "gate: vmstat 1 5",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 13830496 278924 1939132 0    0   484   297  465    0 16  2 81  1  0  0",
+  " 0  0      0 13830148 278924 1939288 0    0     0   280  297  291  0  0 100 0  0  0",
+  " 0  0      0 13828672 278928 1940320 0    0     4  2464  327  497  0  0 99  0  0  0",
+  " 0  0      0 13831000 278928 1940320 0    0     0     0  233  248  0  0 100 0  0  0",
+  " 0  0      0 13833256 278928 1940320 0    0     0     0  171  182  0  0 100 0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "    PID USER     %CPU  NI COMMAND",
+  "      1 nobody    1.4   0 bash",
+  "      7 nobody    0.0   0 bash",
+  "     16 nobody    0.0   0 bash",
+  "     17 nobody    0.0   0 ps",
+  "     18 nobody    0.0   0 head",
+  "gate: busy 0.2% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 30.30935029043502
+ },
+ "rounds_detail": [
+  {
+   "round": 1,
+   "wall_s": 13.2213294506073,
+   "steal_ticks": 16,
+   "steal_percent_of_cpu_time": 0.3026863412788498
+  },
+  {
+   "round": 2,
+   "wall_s": 13.051315307617188,
+   "steal_ticks": 16,
+   "steal_percent_of_cpu_time": 0.30663089306247604
+  }
+ ],
+ "steal_percent_of_cpu_time_max": 0.30663089306247604,
+ "failed": [],
+ "cells": {
+  "clang.twitter.S_IOV": {
+   "a": {
+    "repetitions_ns": [
+     296272.7489518064,
+     299912.3081688492
+    ],
+    "median_ns": 298092.52856032783,
+    "spread": 0.012284488633933943,
+    "check": "415576",
+    "copies": "172"
+   },
+   "aa": {
+    "repetitions_ns": [
+     499179.53801850084,
+     277705.3364440845
+    ],
+    "median_ns": 388442.43723129266,
+    "spread": 0.7975151086771062,
+    "check": "415576",
+    "copies": "172"
+   },
+   "b": {
+    "repetitions_ns": [
+     317248.837094813,
+     286143.6469396004
+    ],
+    "median_ns": 301696.24201720674,
+    "spread": 0.10870480784002279,
+    "check": "415576",
+    "copies": "172"
+   },
+   "a_over_a_ratio": 1.3030935029043502,
+   "b_over_a_ratio": 1.01208924448487,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "clang.twitter.S_IOV_BYTES_REF": {
+   "a": {
+    "repetitions_ns": [
+     222.57082861843753,
+     235.24792207606723
+    ],
+    "median_ns": 228.90937534725236,
+    "spread": 0.05695756958052467,
+    "check": "2",
+    "copies": "172"
+   },
+   "aa": {
+    "repetitions_ns": [
+     213.54211635610383,
+     212.64927864066308
+    ],
+    "median_ns": 213.09569749838346,
+    "spread": 0.004198639756260336,
+    "check": "2",
+    "copies": "172"
+   },
+   "b": {
+    "repetitions_ns": [
+     249.87032804272138,
+     212.1201789379295
+    ],
+    "median_ns": 230.99525349032544,
+    "spread": 0.17796585545893917,
+    "check": "2",
+    "copies": "172"
+   },
+   "a_over_a_ratio": 0.9309172993684519,
+   "b_over_a_ratio": 1.009112244266574,
+   "same_check": true,
+   "difference_over_noise": false
+  },
+  "gxx.twitter.S_IOV": {
+   "a": {
+    "repetitions_ns": [
+     264312.38522247825,
+     303690.24904739094
+    ],
+    "median_ns": 284001.3171349346,
+    "spread": 0.1489822877265754,
+    "check": "415576",
+    "copies": "172"
+   },
+   "aa": {
+    "repetitions_ns": [
+     269388.6481935089,
+     244447.13693695914
+    ],
+    "median_ns": 256917.89256523404,
+    "spread": 0.10203233128061528,
+    "check": "415576",
+    "copies": "172"
+   },
+   "b": {
+    "repetitions_ns": [
+     379707.4806359152,
+     299404.33161576453
+    ],
+    "median_ns": 339555.90612583986,
+    "spread": 0.2682097102162382,
+    "check": "415576",
+    "copies": "172"
+   },
+   "a_over_a_ratio": 0.9046362712577397,
+   "b_over_a_ratio": 1.1956138427502792,
+   "same_check": true,
+   "difference_over_noise": true
+  },
+  "gxx.twitter.S_IOV_BYTES_REF": {
+   "a": {
+    "repetitions_ns": [
+     270.1092388438033,
+     251.57651777667763
+    ],
+    "median_ns": 260.8428783102405,
+    "spread": 0.0736663390959924,
+    "check": "2",
+    "copies": "172"
+   },
+   "aa": {
+    "repetitions_ns": [
+     227.58690878513912,
+     309.2494087946243
+    ],
+    "median_ns": 268.4181587898817,
+    "spread": 0.3588189691814889,
+    "check": "2",
+    "copies": "172"
+   },
+   "b": {
+    "repetitions_ns": [
+     219.03625562514407,
+     276.8579687987368
+    ],
+    "median_ns": 247.94711221194044,
+    "spread": 0.2639823850556873,
+    "check": "2",
+    "copies": "172"
+   },
+   "a_over_a_ratio": 1.0290415461166293,
+   "b_over_a_ratio": 0.9505611723738068,
+   "same_check": true,
+   "difference_over_noise": true
+  }
+ }
+}

@@ -154,7 +154,7 @@ TEST_CASE("doc reference item: encode")
     CHECK_EQ(cbor::encode(**tree, writer_target{&written, true}).error(), cbor::error::io_error);
 }
 
-// encode_iov.md: the joined pieces are the bytes of encode.
+// encode_iov.md: one piece; written with writev, the pieces are the bytes of encode, shown as EDN on the page.
 TEST_CASE("doc reference item: encode_iov")
 {
     std::string const bytes = test::preferred(test::A(1, "a"s));
@@ -162,8 +162,11 @@ TEST_CASE("doc reference item: encode_iov")
     REQUIRE(tree);
     auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces);
-    std::string const joined = test::joined(**pieces);
-    CHECK_EQ(joined, bytes);
+    CHECK_EQ((*pieces)->size(), 1u);
+    auto const joined = test::joined(**pieces);
+    REQUIRE(joined.has_value());
+    CHECK_EQ(*joined, bytes);
+    CHECK_EQ(cbor::diagnostic_notation(*joined), "[1, \"a\"]");
 }
 
 // encoder.md: a map written call by call; a copy does not compile.
@@ -340,6 +343,12 @@ TEST_CASE("doc reference item: iov_writer")
     auto const pieces = e.finish();
     REQUIRE(pieces);
     REQUIRE_EQ((*pieces)->size(), 2u);
-    CHECK(std::ranges::equal((**pieces)[0], std::as_bytes(std::span("\x78\x28"sv))));
-    CHECK_EQ(static_cast<void const *>((**pieces)[1].data()), static_cast<void const *>(text->data()));
+    auto const head = test::joined((*pieces)->first(1));
+    REQUIRE(head.has_value());
+    CHECK_EQ(*head, "\x78\x28"sv);
+    CHECK_EQ(static_cast<void const *>((**pieces)[1].iov_base), static_cast<void const *>(text->data()));
+    CHECK_EQ((**pieces)[1].iov_len, text->size());
+    auto const sent = test::joined(**pieces);
+    REQUIRE(sent.has_value());
+    CHECK_EQ(cbor::diagnostic_notation(*sent), "\"" + *text + "\"");
 }

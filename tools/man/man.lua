@@ -74,7 +74,7 @@ local function page_parts(path)
       current = section
       leading = false
       if current == 'DESCRIPTION' then p.sections[current]:insert(pandoc.Para{pandoc.Strong(name)}) end
-    elseif b.t == 'CodeBlock' and (b.classes[1] == 'call-seq' or b.classes[1] == 'example') then
+    elseif b.t == 'CodeBlock' and (b.classes[1] == 'call-seq' or b.classes[1] == 'example' or b.classes[1] == 'output') then
     elseif leading and b.t == 'CodeBlock' and b.classes[1] == 'cpp' then
       p.sections['SYNOPSIS']:insert(b)
     elseif current then
