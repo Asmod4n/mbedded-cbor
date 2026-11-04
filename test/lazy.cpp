@@ -733,7 +733,7 @@ TEST_CASE("lazy: view of an aliasing owner holds the owner until the last lazy e
 TEST_CASE("lazy: copy, at and get as a chain")
 {
     std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
-    char const *const data = bytes.data();
+    std::span<char const> const data(bytes);
     cbor::lazy const doc = *cbor::lazy::take_ownership(std::move(bytes));
     auto const name = doc.at("statuses")
                           .and_then([](cbor::lazy const &s) { return s.at(1); })
@@ -742,7 +742,7 @@ TEST_CASE("lazy: copy, at and get as a chain")
                           .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "bob"sv);
-    CHECK_EQ(static_cast<void const *>(doc.top_level.encoded.data()), static_cast<void const *>(data));
+    CHECK_EQ(static_cast<void const *>(doc.top_level.encoded.data()), static_cast<void const *>(data.data()));
     auto const missing = doc.at("statuses")
                              .and_then([](cbor::lazy const &s) { return s.at(5); })
                              .and_then([](cbor::lazy const &s) { return s.at("user"); })
@@ -837,10 +837,10 @@ TEST_CASE("lazy::take: only an owning rvalue range compiles")
     CHECK_FALSE(takeable("\x01"));
     CHECK_FALSE(takeable(std::string_view("\x01")));
     CHECK_FALSE(takeable(std::span<char const>(constant)));
-    char const *const data = named.data();
+    std::span<char const> const data(named);
     auto const l = cbor::lazy::take_ownership(std::move(named));
     REQUIRE(l.has_value());
-    CHECK_EQ(l->top_level.encoded.data(), data);
+    CHECK_EQ(l->top_level.encoded.data(), data.data());
 }
 
 // cbor::lazy is an aggregate, so cbor::lazy{} holds no top-level item, and so does the lazy inside a cache
@@ -882,10 +882,10 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     std::string const text(40, 't');
     std::string const message = encoded(M("k"s, text));
     auto buffer = std::make_unique<std::string>(message);
-    char const *const data = buffer->data();
+    std::span<char const> const data(*buffer);
     auto const moved = cbor::lazy::take_ownership(std::move(*buffer));
     REQUIRE(moved.has_value());
-    CHECK_EQ(static_cast<void const *>(moved->top_level.encoded.data()), static_cast<void const *>(data));
+    CHECK_EQ(static_cast<void const *>(moved->top_level.encoded.data()), static_cast<void const *>(data.data()));
     buffer->assign(message.size(), '\0');
     buffer.reset();
     CHECK_EQ(text_of(*moved->at("k")), text);
@@ -1271,7 +1271,7 @@ TEST_CASE("lazy::copy: an lvalue std::string is copied")
     std::string const bytes = two_forms::long_text();
     auto const l = test::lazy_of_copy(bytes);
     REQUIRE(l.has_value());
-    CHECK_NE(two_forms::text_data(l), bytes.data() + 2);
+    CHECK_NE(two_forms::text_data(l), std::span(bytes).subspan(2).data());
     CHECK_EQ(bytes, two_forms::long_text());
 }
 
@@ -1279,20 +1279,20 @@ TEST_CASE("lazy::copy: an lvalue std::string is copied")
 TEST_CASE("lazy::copy: an rvalue std::string is moved")
 {
     std::string bytes = two_forms::long_text();
-    char const *const data = bytes.data();
+    std::span<char const> const data(bytes);
     auto const l = cbor::lazy::take_ownership(std::move(bytes));
     REQUIRE(l.has_value());
-    CHECK_EQ(two_forms::text_data(l), data + 2);
+    CHECK_EQ(two_forms::text_data(l), data.subspan(2).data());
 }
 
 // view copies nothing and keeps the owner alive after the caller drops it.
 TEST_CASE("lazy::view: the lazy reads the bytes of the owner and keeps it")
 {
     auto owner = std::make_shared<std::string const>(two_forms::long_text());
-    char const *const data = owner->data();
+    std::span<char const> const data(*owner);
     auto const l = cbor::lazy::view(owner);
     REQUIRE(l.has_value());
-    CHECK_EQ(two_forms::text_data(l), data + 2);
+    CHECK_EQ(two_forms::text_data(l), data.subspan(2).data());
     CHECK_GT(owner.use_count(), 1);
     owner.reset();
     auto const text = l->get<std::string_view>();
@@ -1305,16 +1305,16 @@ TEST_CASE("at_path: the copy form and the view form of a text")
     auto const owner = std::make_shared<std::string const>("\x81"s + two_forms::long_text());
     auto const viewed = cbor::at_path<"$[0]", std::string_view>(owner);
     REQUIRE(viewed.has_value());
-    CHECK_EQ((**viewed).data(), owner->data() + 3);
+    CHECK_EQ((**viewed).data(), std::span(*owner).subspan(3).data());
     auto const copied = cbor::at_path<"$[0]", std::string_view>(std::string(*owner));
     REQUIRE(copied.has_value());
-    CHECK_NE((**copied).data(), owner->data() + 3);
+    CHECK_NE((**copied).data(), std::span(*owner).subspan(3).data());
     CHECK_EQ(**copied, **viewed);
     std::string moved = *owner;
-    char const *const data = moved.data();
+    std::span<char const> const data(moved);
     auto const taken = cbor::at_path<"$[0]", std::string_view>(std::move(moved));
     REQUIRE(taken.has_value());
-    CHECK_EQ((**taken).data(), data + 3);
+    CHECK_EQ((**taken).data(), data.subspan(3).data());
 }
 
 // RFC 8949 3: each data item has at least its initial byte. A step into an array or a map whose count is larger than
@@ -1454,7 +1454,7 @@ TEST_CASE("lazy: an element of each typed array gives its raw bytes")
         CHECK(std::ranges::equal(view, std::as_bytes(std::span(bytes).subspan(size))));
         auto const &encoded = l.top_level.encoded;
         CHECK(std::ranges::distance(std::as_bytes(std::span(encoded)).data(), view.data()) >= 0);
-        CHECK(std::ranges::distance(view.data(), std::as_bytes(std::span(encoded)).data() + encoded.size()) >= 0);
+        CHECK(std::ranges::distance(view.data(), std::to_address(std::as_bytes(std::span(encoded)).end())) >= 0);
     }
 }
 

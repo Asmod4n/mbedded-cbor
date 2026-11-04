@@ -206,7 +206,7 @@ TEST_CASE("doc reference item: encoder::byte_string")
 {
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.byte_string(std::as_bytes(std::span("ab", 2))));
+    REQUIRE(e.byte_string(std::as_bytes(std::span("ab").first(2))));
     REQUIRE(e.finish());
     CHECK_EQ(out, "\x42\x61\x62"s);
 

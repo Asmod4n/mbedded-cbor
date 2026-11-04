@@ -138,8 +138,11 @@ TEST_CASE("path edn literals: every character of both base64 alphabets")
         bits.push_back(static_cast<char>(group & 0xff));
     }
     std::string key_hex = "5830";
-    for (char const c : bits)
-        key_hex += std::array{"0123456789abcdef"[static_cast<unsigned char>(c) >> 4], "0123456789abcdef"[static_cast<unsigned char>(c) & 0xf], '\0'}.data();
+    constexpr std::string_view digits = "0123456789abcdef";
+    for (char const c : bits) {
+        key_hex += digits[static_cast<unsigned char>(c) >> 4];
+        key_hex += digits[static_cast<unsigned char>(c) & 0xf];
+    }
     selects("b64'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'", key_hex);
     selects("b64'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'", key_hex);
 }

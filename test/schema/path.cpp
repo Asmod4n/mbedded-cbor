@@ -233,17 +233,18 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
 {
     std::string const name(40, 'n');
     std::string const message = schema_bytes(login{7, true, name});
-    auto range = [](std::string_view const inner, char const *const begin, std::size_t const size) {
-        return std::less_equal<>{}(begin, inner.data()) && std::less_equal<>{}(inner.data() + inner.size(), begin + size);
+    auto range = [](std::string_view const inner, std::span<char const> const outer) {
+        return std::less_equal<>{}(outer.data(), inner.data()) &&
+               std::less_equal<>{}(std::to_address(inner.end()), std::to_address(outer.end()));
     };
 
     auto buffer = std::make_unique<std::string>(message);
-    char const *data = buffer->data();
+    std::span<char const> const data(*buffer);
     auto const moved = form<login>::path(std::move(*buffer));
     REQUIRE(moved.has_value());
     auto const moved_name = moved->at_path<"$.name">();
     REQUIRE(moved_name.has_value());
-    CHECK(range(*moved_name, data, message.size()));
+    CHECK(range(*moved_name, data));
     buffer->assign(message.size(), '\0');
     buffer.reset();
     CHECK_EQ(*moved_name, name);
@@ -253,7 +254,7 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     REQUIRE(copied.has_value());
     auto const copied_name = copied->at_path<"$.name">();
     REQUIRE(copied_name.has_value());
-    CHECK_FALSE(range(*copied_name, lvalue.data(), lvalue.size()));
+    CHECK_FALSE(range(*copied_name, lvalue));
     CHECK_EQ(lvalue, message);
     lvalue.assign(message.size(), '\0');
     CHECK_EQ(*copied_name, name);

@@ -183,7 +183,7 @@ struct doctest::StringMaker<test::sequence_outcome> {
         for (std::string const &item : o.items) {
             text += ' ';
             for (char const c : item) {
-                constexpr char digits[] = "0123456789abcdef";
+                constexpr std::string_view digits = "0123456789abcdef";
                 auto const byte = static_cast<unsigned char>(c);
                 text += digits[byte >> 4];
                 text += digits[byte & 0xf];
