@@ -270,14 +270,14 @@ class jsonpath
             std::vector<selector> chosen;
             for (;;) {
                 at = extended_diagnostic_notation::blank_end(text, at + 1);
-                if (at >= text.size()) [[unlikely]]
-                    return std::unexpected(error::invalid_path);
+                if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+                    return std::unexpected(left.error());
                 auto const s = parse_selector(text, at, depth);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
                 chosen.push_back(s->second);
                 at = extended_diagnostic_notation::blank_end(text, s->first);
-                if (at >= text.size() || (text[at] != ',' && text[at] != ']')) [[unlikely]]
+                if (!validity::check_text_left(text, at, 1) || (text[at] != ',' && text[at] != ']')) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 if (text[at] == ']')
                     return std::pair{at + 1, std::move(chosen)};
@@ -294,7 +294,7 @@ class jsonpath
             bool singular = true;
             for (;;) {
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, at);
-                if (next >= text.size() || (text[next] != '.' && text[next] != '['))
+                if (!validity::check_text_left(text, next, 1) || (text[next] != '.' && text[next] != '['))
                     break;
                 at = next;
                 segment s{false, found_selectors.size(), 0};
@@ -372,7 +372,7 @@ class jsonpath
                         return a;
                     arguments.push_back(a->index);
                     next = extended_diagnostic_notation::blank_end(text, a->at);
-                    if (next >= text.size() || (text[next] != ',' && text[next] != ')')) [[unlikely]]
+                    if (!validity::check_text_left(text, next, 1) || (text[next] != ',' && text[next] != ')')) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     if (text[next++] == ')')
                         break;
@@ -396,8 +396,8 @@ class jsonpath
             if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
             depth_reached = std::max(depth_reached, depth);
-            if (at >= text.size()) [[unlikely]]
-                return std::unexpected(error::invalid_path);
+            if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+                return std::unexpected(left.error());
             char const c = text[at];
             if (c == '@' || c == '$') {
                 auto const q = parse_segments(text, at + 1, depth + 1);
@@ -456,15 +456,15 @@ class jsonpath
             if (!inner) [[unlikely]]
                 return inner;
             std::size_t const close = extended_diagnostic_notation::blank_end(text, inner->at);
-            if (close >= text.size() || text[close] != ')') [[unlikely]]
+            if (!validity::check_text_left(text, close, 1) || text[close] != ')') [[unlikely]]
                 return std::unexpected(error::invalid_path);
             return parsed_expression{close + 1, inner->index};
         }
 
         constexpr std::expected<parsed_expression, error> parse_basic(std::string_view const text, std::size_t const at, std::size_t const depth)
         {
-            if (at >= text.size()) [[unlikely]]
-                return std::unexpected(error::invalid_path);
+            if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+                return std::unexpected(left.error());
             if (text[at] == '!') {
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, at + 1);
                 bool const paren = next < text.size() && text[next] == '(';

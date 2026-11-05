@@ -1800,15 +1800,15 @@ class reflection
     {
         static constexpr auto head = fixed_array_head<Root, S>();
         constexpr std::size_t data = head.size() + sizeof(std::uint32_t);
-        if (!validity::pending_items_fit(item + data, end)) [[unlikely]]
-            return std::unexpected(error::too_little_data);
+        if (auto const fits = validity::check_bytes_left(item + data, end); !fits) [[unlikely]]
+            return std::unexpected(fits.error());
         if constexpr (Verified)
             if (!std::ranges::equal(std::span<char const>(encoded).subspan(item).template first<head.size()>(), head)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
         std::size_t const length = heads::read_unsigned<std::uint32_t>(
             std::span<char const>(encoded).subspan(item + head.size()).template first<sizeof(std::uint32_t)>());
-        if (!validity::pending_items_fit(length, end - item - data)) [[unlikely]]
-            return std::unexpected(error::too_little_data);
+        if (auto const fits = validity::check_bytes_left(length, end - item - data); !fits) [[unlikely]]
+            return std::unexpected(fits.error());
         if constexpr (Verified)
             if (error const r = validity::check_whole_elements(length, fixed_width<S>()).error_or(error{}); r != error{}) [[unlikely]]
                 return std::unexpected(r);
@@ -1843,8 +1843,8 @@ class reflection
         } else if constexpr (is_typed_array_element<E>) {
             static_assert(validity::typed_array_element_size(typed_array_tag<E>()) == sizeof(E),
                           "The elements of the typed array tag of E are sizeof(E) bytes.");
-            if (!validity::pending_items_fit(item + typed_array_head, end)) [[unlikely]]
-                return std::unexpected(error::too_little_data);
+            if (auto const fits = validity::check_bytes_left(item + typed_array_head, end); !fits) [[unlikely]]
+                return std::unexpected(fits.error());
             static constexpr std::array head{
                 heads::initial_byte(major_type::tag,
                                     std::to_underlying(rfc8949::additional_information::one_byte_argument)),
@@ -1856,8 +1856,8 @@ class reflection
                     return std::unexpected(error::incorrect_type);
             std::size_t const size =
                 heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded).subspan(item + head.size()).template first<sizeof(std::uint32_t)>());
-            if (!validity::pending_items_fit(size, end - item - typed_array_head)) [[unlikely]]
-                return std::unexpected(error::too_little_data);
+            if (auto const fits = validity::check_bytes_left(size, end - item - typed_array_head); !fits) [[unlikely]]
+                return std::unexpected(fits.error());
             if constexpr (Verified)
                 if (!validity::check_typed_array(typed_array_tag<E>(), size)) [[unlikely]]
                     return std::unexpected(error::inadmissible_type_for_tag_content);
@@ -1867,8 +1867,8 @@ class reflection
                 return std::unexpected(r);
             return reference{item + typed_array_head, size / sizeof(E)};
         } else {
-            if (!validity::pending_items_fit(item + item_head, end)) [[unlikely]]
-                return std::unexpected(error::too_little_data);
+            if (auto const fits = validity::check_bytes_left(item + item_head, end); !fits) [[unlikely]]
+                return std::unexpected(fits.error());
             if constexpr (Verified)
                 if (encoded[item] !=
                     heads::initial_byte(Major,
@@ -1878,7 +1878,7 @@ class reflection
             std::size_t const length =
                 heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded).subspan(item + 1).template first<sizeof(std::uint32_t)>());
             auto const size = validity::checked_mul(length, element);
-            if (!size || !validity::pending_items_fit(*size, end - item - item_head)) [[unlikely]]
+            if (!size || !validity::bytes_fit(*size, end - item - item_head)) [[unlikely]]
                 return std::unexpected(error::too_little_data);
             if (error const r = validity::check_argument<true>(Major, length).error_or(error{}); r != error{})
                 [[unlikely]]
@@ -1916,8 +1916,8 @@ class reflection
         std::size_t const items_end = encoded.size() - fixed_size<Root, Root>();
         std::size_t const item = directory_entry(encoded, dir, j);
         std::size_t const end = j + 1 < dir.count ? directory_entry(encoded, dir, j + 1) : items_end;
-        if (item < items_at || end > items_end || item > end) [[unlikely]]
-            return std::unexpected(error::syntax_error);
+        if (auto const inside = validity::check_subrange(item, end, items_at, items_end); !inside) [[unlikely]]
+            return std::unexpected(inside.error());
         return read_item_reference<Root, Major, E, Verified>(encoded, item, end, element);
     }
 
@@ -1925,7 +1925,7 @@ class reflection
     static bool packing_prefix_valid(std::string_view const encoded)
     {
         static constexpr auto prefix = packing_prefix_of<T, D>();
-        return encoded.size() > prefix.size() &&
+        return validity::bytes_fit(prefix.size() + heads::initial_byte_size, encoded.size()) &&
                std::ranges::equal(std::span(encoded).template first<4>(), std::span(prefix).template first<4>()) &&
                std::ranges::equal(std::span(encoded).template subspan<8, prefix.size() - 8>(),
                                   std::span(prefix).template subspan<8>()) &&
@@ -1937,7 +1937,7 @@ class reflection
     template <class T, description_place D>
     static error too_little_data_if_truncated(std::string_view const encoded, error const e)
     {
-        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded) || encoded.size() < fixed_size<T, T>())
+        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded) || !validity::bytes_fit(fixed_size<T, T>(), encoded.size()))
             return e;
         if (class_tag_valid<T, T>(std::span<char const>(encoded).subspan(encoded.size() - fixed_size<T, T>()).template first<fixed_size<T, T>()>()))
             return e;
@@ -1958,8 +1958,8 @@ class reflection
         });
         static_assert(least_size.has_value(), "The least size of an encoded item must fit in std::size_t.");
         constexpr std::size_t least = *least_size;
-        if (!validity::pending_items_fit(least, encoded.size())) [[unlikely]]
-            return std::unexpected(error::too_little_data);
+        if (auto const fits = validity::check_bytes_left(least, encoded.size()); !fits) [[unlikely]]
+            return std::unexpected(fits.error());
         if constexpr (Verified)
             if (!packing_prefix_valid<T, D>(encoded)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
@@ -1975,8 +1975,8 @@ class reflection
                                                         .template first<sizeof(std::uint32_t)>()) !=
                     table_first_of<T, D>() + count) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-        if (!validity::pending_items_fit(length, encoded.size() - least)) [[unlikely]]
-            return std::unexpected(error::too_little_data);
+        if (auto const fits = validity::check_bytes_left(length, encoded.size() - least); !fits) [[unlikely]]
+            return std::unexpected(fits.error());
         static constexpr auto undefined = [] {
             std::array<char, fillers> a{};
             a.fill(static_cast<char>(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined))));
@@ -3577,7 +3577,7 @@ public:
             return *size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
-            if (out.size() >= padded) {
+            if (validity::bytes_fit(padded, out.size())) {
                 reflection::write_encoded<false, D>(out.first(padded), value, second);
                 return *size;
             }
@@ -3585,7 +3585,7 @@ public:
         decltype(auto) message = encoding::message_of(target, *size);
         if constexpr (requires { std::span<char>(message); }) {
             std::span<char> const out(message);
-            if (out.size() < *size) [[unlikely]]
+            if (!validity::bytes_fit(*size, out.size())) [[unlikely]]
                 return std::unexpected(error::no_buffer_space);
             reflection::write_encoded<true, D>(out.first(*size), value, second);
             if (auto const r = message.done(*size); !r) [[unlikely]]

@@ -268,7 +268,7 @@ CBOR_FLATTEN std::expected<void, error> tree_decoder<Checked>::decode_content(st
             decoded.encoded_cbor_data_items.emplace_back(&node, nullptr);
             return {};
         }
-        std::string_view const content_encoded = tagged.substr(0, tagged.size() - d.encoded.size());
+        std::string_view const content_encoded = tagged.substr(0, std::to_underlying(validity::distance(tagged, d.encoded)));
         tree_decoder inner{decoded, {content_encoded.substr(content_encoded.size() - content.via.bin.size())}, depth_max};
         std::pmr::vector<item> &embedded = decoded.items_reserved(1);
         if (auto const r = inner.decode_item(embedded, depth + 2); !r) [[unlikely]]

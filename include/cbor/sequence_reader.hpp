@@ -72,8 +72,8 @@ class sequence_reader
     {
         for (;;) {
             if (at == phase::string_content) {
-                if (item.size() < phase_end) [[unlikely]]
-                    return std::unexpected(error::too_little_data);
+                if (auto const fits = validity::check_bytes_left(phase_end, item.size()); !fits) [[unlikely]]
+                    return std::unexpected(fits.error());
                 scanned = static_cast<std::size_t>(phase_end);
                 at = phase::head;
                 if (item_completed())
@@ -85,12 +85,13 @@ class sequence_reader
                     return r;
                 at = phase::head;
             }
-            if (at == phase::argument && item.size() < phase_end) [[unlikely]]
-                return std::unexpected(error::too_little_data);
+            if (at == phase::argument)
+                if (auto const fits = validity::check_bytes_left(phase_end, item.size()); !fits) [[unlikely]]
+                    return std::unexpected(fits.error());
             heads::decoder<false> d{std::string_view{std::span(item).subspan(scanned)}};
             auto const h = d.decode_head();
             if (!h) [[unlikely]] {
-                if (h.error() == error::too_little_data && !d.encoded.empty()) {
+                if (h.error() == error::too_little_data && validity::bytes_fit(heads::initial_byte_size, d.encoded.size())) {
                     auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                     std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
                     at = phase::argument;
@@ -99,7 +100,7 @@ class sequence_reader
                 return std::unexpected(h.error());
             }
             at = phase::head;
-            scanned = item.size() - d.encoded.size();
+            scanned = std::to_underlying(validity::distance(std::string_view(std::span(item)), d.encoded));
             --left[level];
             --pending;
             std::uint64_t children = 0;
@@ -164,7 +165,7 @@ class sequence_reader
                 buffer->erase(0, item_begin);
                 item_begin = 0;
             }
-        } else if (buffer->capacity() - buffer->size() < bytes.size()) {
+        } else if (!validity::bytes_fit(bytes.size(), buffer->capacity() - buffer->size())) {
             std::string_view const rest{std::span(std::as_const(*buffer)).subspan(item_begin)};
             auto block = std::make_shared<std::string>();
             block->reserve(

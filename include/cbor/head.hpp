@@ -123,7 +123,7 @@ class heads
                                                     std::numeric_limits<std::uint8_t>::digits * width) &
                                                    (std::numeric_limits<std::uint64_t>::digits - 1)));
         if constexpr (Exact) {
-            if (out.size() - at < initial_byte_size + sizeof(std::uint64_t)) [[unlikely]] {
+            if (!validity::bytes_fit(initial_byte_size + sizeof(std::uint64_t), out.size() - at)) [[unlikely]] {
                 auto const field = out.subspan(at, initial_byte_size + width);
                 field.front() = initial_byte(major, info);
                 std::ranges::copy(std::span(bytes).first(width), field.subspan(initial_byte_size).begin());
@@ -249,8 +249,8 @@ class heads
 
         CBOR_ALWAYS_INLINE std::expected<head, error> decode_head()
         {
-            if (!validity::pending_items_fit(initial_byte_size, encoded.size())) [[unlikely]]
-                return std::unexpected(error::too_little_data);
+            if (auto const fits = validity::check_bytes_left(initial_byte_size, encoded.size()); !fits) [[unlikely]]
+                return std::unexpected(fits.error());
             auto const initial = static_cast<std::uint8_t>(encoded.front());
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
@@ -274,8 +274,8 @@ class heads
                               rfc8949::additional_information::eight_byte_argument)) >= sizeof(std::uint64_t),
                           "An eight-byte argument must cover the bytes of one std::uint64_t.");
             std::size_t const size = argument_size(info);
-            if (!validity::pending_items_fit(initial_byte_size + size, encoded.size())) [[unlikely]]
-                return std::unexpected(error::too_little_data);
+            if (auto const fits = validity::check_bytes_left(initial_byte_size + size, encoded.size()); !fits) [[unlikely]]
+                return std::unexpected(fits.error());
             std::span<char const> const rest = std::span(encoded).subspan(initial_byte_size, size);
             std::uint64_t argument;
             switch (static_cast<rfc8949::additional_information>(info)) {
@@ -301,10 +301,11 @@ class heads
 
         CBOR_ALWAYS_INLINE std::optional<head> try_decode_head()
         {
-            std::uint8_t const initial = encoded.empty() ? 0xff : static_cast<std::uint8_t>(encoded.front());
+            std::uint8_t const initial =
+                validity::bytes_fit(initial_byte_size, encoded.size()) ? static_cast<std::uint8_t>(encoded.front()) : 0xff;
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
-            if (encoded.size() >= initial_byte_size + sizeof(std::uint64_t) &&
+            if (validity::bytes_fit(initial_byte_size + sizeof(std::uint64_t), encoded.size()) &&
                 info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument) &&
                 major != major_type::tag &&
                 (major != major_type::simple_float ||
@@ -333,8 +334,8 @@ class heads
 
         constexpr std::expected<std::string_view, error> decode_byte_string(std::uint64_t const length)
         {
-            if (!validity::pending_items_fit(length, encoded.size())) [[unlikely]]
-                return std::unexpected(error::too_little_data);
+            if (auto const fits = validity::check_bytes_left(length, encoded.size()); !fits) [[unlikely]]
+                return std::unexpected(fits.error());
             std::size_t const size = static_cast<std::size_t>(length);
             std::string_view const string{std::span(encoded).first(size)};
             encoded.remove_prefix(size);
@@ -753,8 +754,8 @@ class heads
     read_raw_head(std::string_view const encoded, validity::offset const at)
     {
         std::string_view const rest = validity::subspan(encoded, at);
-        if (rest.empty()) [[unlikely]]
-            return std::unexpected(error::too_little_data);
+        if (auto const fits = validity::check_bytes_left(initial_byte_size, rest.size()); !fits) [[unlikely]]
+            return std::unexpected(fits.error());
         auto const initial = static_cast<std::uint8_t>(rest.front());
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
         std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
@@ -770,8 +771,8 @@ class heads
         if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
             return raw_head{major, info, info, validity::next(at, initial_byte_size)};
         std::size_t const size = argument_size(info);
-        if (!validity::pending_items_fit(size, rest.size() - initial_byte_size)) [[unlikely]]
-            return std::unexpected(error::too_little_data);
+        if (auto const fits = validity::check_bytes_left(size, rest.size() - initial_byte_size); !fits) [[unlikely]]
+            return std::unexpected(fits.error());
         std::uint64_t argument = 0;
         for (char const c : validity::subspan(encoded, validity::next(at, initial_byte_size)).substr(0, size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
@@ -804,7 +805,7 @@ class heads
     static constexpr bool break_at(std::string_view const encoded, validity::offset const at)
     {
         std::string_view const rest = validity::subspan(encoded, at);
-        return !rest.empty() &&
+        return validity::bytes_fit(initial_byte_size, rest.size()) &&
                rest.front() ==
                    initial_byte(major_type::simple_float,
                                 std::to_underlying(rfc8949::simple_float_information::break_stop_code));
