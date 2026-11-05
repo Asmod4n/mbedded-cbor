@@ -3,7 +3,7 @@
 `cbor::schema<T>` writes a struct as Packed CBOR and reads each field of
 fixed size at an offset that the compiler computes. It reads only the
 description of each struct and builds on every compiler. With
-reflection it also checks each description against the members.
+reflection it also checks each description against the members. `path` opens a message in O(1) of its size, and a read of a field of fixed size is one jump that checks only the bytes it reads. `at_path` with no accessor allocates nothing. `encode` is O(bytes), and a list of fixed-size structs is one copy.
 
 The examples use the types in [test/doc_types.hpp](../../../test/doc_types.hpp), namespace `doc_reference_schema`.
 

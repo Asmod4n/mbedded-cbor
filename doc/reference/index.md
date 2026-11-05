@@ -1,80 +1,76 @@
 # API reference
 
-mbedded-cbor is a header-only C++ library for CBOR (RFC 8949). Its goal:
-a read touches only the bytes that it needs, and copies none of them. A
-read goes to one value and skips every other item by its length. A text
-comes back as a view into the message. A struct that you describe is
-written as Packed CBOR, so a read of a field is one jump to an offset
-that the compiler knows. Every message that the library writes is
-standard CBOR, and every other CBOR decoder reads it. Bad input comes
-back as a `cbor::error` value, and no read goes outside the message.
+mbedded-cbor is a header-only C++ library for CBOR (RFC 8949).
 
-One page per function and type. Each page gives the declaration, what
-the call does, its errors, its cost, one example and links. The guides in
-[doc/](..) show the common cases first.
+## Highlights
 
-| Group | Contents |
-|---|---|
-| [lazy](lazy/index.md) | `cbor::lazy`: read a message in place, step by step |
-| [path](path/index.md) | `cbor::at_path`: read one value by its JSONPath |
-| [item](item/index.md) | `cbor::item`, `decode`, `encode`: a decoded tree and the encoder |
-| [structs](structs/index.md) | `cbor::structs<T>`: any CBOR into a C++ struct and back |
-| [schema](schema/index.md) | `cbor::schema<T>`: structs as Packed CBOR, fields at fixed offsets |
-| [ref](ref/index.md) | `cbor::ref<T>`, `cbor::owning<T>`: results that hold the bytes |
-| [tools](tools/index.md) | `item_size`, `sequence`, `sequence_reader`, `diagnostic_notation` |
-| [errors](errors/index.md) | `cbor::error`, `std::error_code`, the limits of a build |
+- **Fast.** `cbor::schema` reads one field of the carsales message of
+  1000 cars in 11.6 ns. FlatBuffers with its Verifier takes 34.6 µs and
+  Cap'n Proto 144 ns. Every library checks its input. AMD Ryzen 9 5950X,
+  g++ 16.2 `-O2 -march=native`, median of 7 runs:
+  [the run and its context](https://github.com/Asmod4n/mbedded-cbor/blob/main/bench/results/readme-2026-10-19-183938Z.json).
+- **Standard CBOR.** Every message that the library writes is standard
+  CBOR, and every other CBOR decoder reads it.
+- **Safe on foreign input.** Bad input comes back as a `cbor::error`
+  value. No read goes outside the message. Nesting depth, string length
+  and element count are constants of the build.
+- **JSONPath at compile time.** The compiler checks the path in
+  `at_path<"$.user.id">`. A path also takes CBOR keys that are not text,
+  goes through tags and reads typed arrays: [path](path/index.md).
 
-## Which class to use
+## Example
 
-### lazy
+```cpp
+// bytes: a std::string with {"user": {"id": 42, "name": "ann"}}
+auto const id = cbor::at_path<"$.user.id", int>(bytes);     // 42
+auto const age = cbor::at_path<"$.user.age", int>(bytes);   // cbor::error::key_not_found
 
-Use it to walk a message whose shape you learn while you read it: a
-map, then a key, then an element. Cost: a step by key or index reads the
-heads up to the child, O(bytes before the child). No allocation. A text
-is a view into the message.
+auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+auto const name = doc->at_path<"$.user.name", std::string_view>();  // "ann", a view into the message
+```
 
-### path
+## Installation
 
-Use it to read one value when you know its path, for example
-`$.user.id`. The path is checked at compile time. Cost: O(bytes up to
-the value). No allocation for a number, a `bool` or a view. A path that
-selects many nodes allocates its list.
+```sh
+cmake -S mbedded-cbor -B build -DBUILD_TESTING=OFF
+cmake --install build --prefix /usr/local
+```
 
-### item
+```cmake
+find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
+target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
+```
 
-Use it when you need the whole message as a tree that lives on after the
-bytes are gone, or to write CBOR item by item with the encoder. Cost:
-`decode` is O(bytes) and copies every string into one memory zone. The
-encoder is O(1) per head and allocates nothing over a `std::span<char>`.
+Or with FetchContent:
 
-### structs
+```cmake
+include(FetchContent)
+FetchContent_Declare(mbedded-cbor
+    GIT_REPOSITORY https://github.com/Asmod4n/mbedded-cbor
+    GIT_TAG main)
+FetchContent_MakeAvailable(mbedded-cbor)
+```
 
-Use it to read CBOR that any program wrote into the members of a struct,
-and to write it back. Cost: O(bytes) for a read and a write. The result
-allocates its strings and containers.
+It builds with g++ 16 in C++26 with `-freflection`, and with g++ 15,
+clang 23 and the AppleClang of Xcode 16 and 26 in C++23. These compilers
+need Boost.PFR 1.84 or later; CMake takes it from the system, else from
+its own copy.
 
-### schema
+## Classes
 
-Use it for messages that your own programs write and read. Cost: `path`
-opens a message in O(1) of its size, and a read of a field of fixed size
-is one jump that checks only the bytes it reads. `at_path` with no accessor allocates nothing.
-`encode` is O(bytes), and a list of fixed-size structs is one copy.
+| Group | Contents | Use it for |
+|---|---|---|
+| [lazy](lazy/index.md) | `cbor::lazy`: read a message in place, step by step | a message whose shape you learn while you read it |
+| [path](path/index.md) | `cbor::at_path`: read a value by its JSONPath (RFC 9535), with CBOR keys that are not text, tags and typed arrays | one value whose path you know |
+| [item](item/index.md) | `cbor::item`, `decode`, `encode`: a decoded tree and the encoder | a tree that lives on after the bytes are gone, and CBOR written item by item |
+| [structs](structs/index.md) | `cbor::structs<T>`: any CBOR into a C++ struct and back | CBOR that any program wrote, read into the members of a struct |
+| [schema](schema/index.md) | `cbor::schema<T>`: structs as Packed CBOR, fields at fixed offsets | messages that your own programs write and read |
+| [ref](ref/index.md) | `cbor::ref<T>`, `cbor::owning<T>`: results that hold the bytes | a result that points into the message and stays valid |
+| [tools](tools/index.md) | `item_size`, `sequence`, `sequence_reader`, `diagnostic_notation` | the end of an item, many items in a row, an item as text |
+| [errors](errors/index.md) | `cbor::error`, `std::error_code`, the limits of a build | the reason why a call failed |
 
-### ref
+## More
 
-Use it to keep a result that points into the message valid: it holds the
-owner of the bytes. Cost: O(1) for each access; a copy changes one
-atomic count. `clone` copies, O(bytes).
-
-### tools
-
-Use `item_size` to find where an item ends, `sequence` and
-`sequence_reader` to read many items one after the other, and
-`diagnostic_notation` to print an item as text. Cost: `item_size` is
-O(items) with no allocation. `sequence_reader` keeps only the bytes not
-yet read. `diagnostic_notation` is O(bytes) and allocates its text.
-
-### errors
-
-Use it to read why a call failed: each failure is one `cbor::error`, and
-it converts to `std::error_code`. Cost: none; an error is a small value.
+- [Console](console.md): calls on a message of your own, in the browser.
+- [GitHub](https://github.com/Asmod4n/mbedded-cbor): the source, the
+  tests and the benchmarks.
