@@ -34,6 +34,8 @@ local function link_target(target)
   if g and file then return (g == group and "" or g .. ".html") .. "#" .. page_id(file) end
   g = path:match("^(%w+)/index%.md$")
   if g then return g .. ".html" end
+  g, file = path:match("^(%w+)/([%w_]+)%.md$")
+  if g then return g .. ".html#" .. page_id(file) end
   local guide = path:match("^%.%./%.%./([%w_/]+%.md)$") or path:match("^%.%./([%w_/]+%.md)$")
   if guide then
     return "https://github.com/Asmod4n/mbedded-cbor/blob/" .. commit .. "/doc/" .. guide .. anchor
@@ -213,6 +215,55 @@ local function page_blocks(file, title, does)
   return out, pandoc.utils.stringify(does)
 end
 
+local function sample_html(spec)
+  local c = spec.calls[1]
+  return '<div class="play" data-sample>\n<div class="bar"><span class="label">Example</span>'
+    .. '<button class="run" type="button" data-load data-load-message="' .. html_escaped(spec.message)
+    .. '" data-load-call="' .. html_escaped(c.call) .. '">Load</button></div>\n'
+    .. '<div class="out"><span class="call">' .. html_escaped(spec.message) .. '</span>\n'
+    .. '<span class="call">» ' .. html_escaped(c.call) .. '</span>\n'
+    .. '<span class="' .. ((c.result:match("^fault") or c.result:match("^unexpected")) and "err" or "ok") .. '">'
+    .. html_escaped(c.result) .. "</span></div>\n</div>"
+end
+
+local function console_blocks(doc)
+  local blocks, samples = {}, {}
+  local open = false
+  local function close()
+    if open then blocks[#blocks + 1] = pandoc.RawBlock("html", "</section>") end
+    open = false
+  end
+  for _, b in ipairs(doc:walk(links).blocks) do
+    if b.t == "Header" and b.level == 1 then
+      doc.meta.pagetitle = pandoc.utils.stringify(b)
+    elseif b.t == "Header" and b.level == 2 then
+      close()
+      local name = pandoc.utils.stringify(b)
+      local id = "e-" .. (#samples + 1)
+      open = true
+      blocks[#blocks + 1] = pandoc.RawBlock("html", '<section class="method" id="' .. id .. '">\n<h2>'
+        .. html_escaped(name) .. "</h2>")
+      samples[#samples + 1] = pandoc.MetaMap({ name = pandoc.MetaString(name), id = pandoc.MetaString(id) })
+    elseif b.t == "CodeBlock" and b.classes[1] == "example" then
+      local spec = example_read(b.text, "console.md")
+      if #spec.calls ~= 1 or spec.message == nil then
+        error("reference.lua: console.md: an example has one message and one call")
+      end
+      spec.page = "console.md"
+      examples[#examples + 1] = spec
+      blocks[#blocks + 1] = pandoc.RawBlock("html", sample_html(spec))
+    elseif b.t == "Para" and not open and doc.meta.lead == nil then
+      doc.meta.lead = pandoc.MetaInlines(b.content)
+    else
+      blocks[#blocks + 1] = b
+    end
+  end
+  close()
+  doc.meta.samples = pandoc.MetaList(samples)
+  doc.meta.console = pandoc.MetaBool(true)
+  return blocks
+end
+
 local function examples_write()
   local rows = {}
   for _, s in ipairs(examples) do
@@ -251,6 +302,11 @@ function Pandoc(doc)
   if group == "index" then
     doc.meta.pagetitle = "mbedded-cbor"
     return doc:walk(links)
+  end
+  if group == "console" then
+    local blocks = console_blocks(doc)
+    examples_write()
+    return pandoc.Pandoc(blocks, doc.meta)
   end
   local blocks, methods = {}, {}
   for _, b in ipairs(doc.blocks) do
