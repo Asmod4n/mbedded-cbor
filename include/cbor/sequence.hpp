@@ -46,28 +46,41 @@ public:
     }
 
 
-    struct iterator {
+    class iterator
+    {
+        friend class sequence;
+
+        std::string_view bytes;
+        std::expected<std::size_t, error> size;
+
+        iterator(std::string_view const b, std::expected<std::size_t, error> const s) : bytes(b), size(s) {}
+
+    public:
         using value_type = std::expected<std::string_view, error>;
         using difference_type = std::ptrdiff_t;
 
-        std::string_view encoded;
-        std::expected<std::size_t, error> size;
+        iterator() = default;
+
+        std::string_view encoded() const
+        {
+            return bytes;
+        }
 
         value_type operator*() const
         {
             if (!size) [[unlikely]]
                 return std::unexpected(size.error());
-            return std::string_view(std::span(encoded).first(*size));
+            return std::string_view(std::span(bytes).first(*size));
         }
 
         iterator &operator++()
         {
             if (!size) [[unlikely]] {
-                encoded = std::string_view(std::span(encoded).last(0));
+                bytes = std::string_view(std::span(bytes).last(0));
                 return *this;
             }
-            encoded = std::string_view(std::span(encoded).subspan(*size));
-            size = item_size(encoded);
+            bytes = std::string_view(std::span(bytes).subspan(*size));
+            size = item_size(bytes);
             return *this;
         }
 
@@ -78,7 +91,7 @@ public:
 
         bool operator==(std::default_sentinel_t) const
         {
-            return encoded.empty();
+            return bytes.empty();
         }
     };
 
