@@ -558,7 +558,7 @@ std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vect
         return std::unexpected(root.error());
     cbor::lazy node = *root;
     for (step const &s : steps) {
-        auto const child = std::holds_alternative<std::int64_t>(s) ? test::index_select(node, std::get<std::int64_t>(s))
+        auto const child = std::holds_alternative<std::int64_t>(s) ? test::select_index(node, std::get<std::int64_t>(s))
                                                                    : node.at(std::get<std::string_view>(s));
         if (!child)
             return std::unexpected(child.error());
@@ -1249,7 +1249,7 @@ TEST_CASE("at_path: a path from a held lazy")
 }
 
 // A tag literal in a filter is parsed at run time as at compile time. g++-16 -O3 made the recursion over a tag in
-// canonical_append loop until memory ran out, so this test runs a tag, two tags and a tag inside an array.
+// append_canonical loop until memory ran out, so this test runs a tag, two tags and a tag inside an array.
 TEST_CASE("path: a tag literal in a run-time filter")
 {
     auto const doc = *test::lazy_of_copy(encoded(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));

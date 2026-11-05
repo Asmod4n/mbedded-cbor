@@ -43,41 +43,41 @@ compared again.
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `diagnostic_notation(string_view)` friend decl | not given here | not given here | Body in diagnostic_notation.hpp. |
-| `heads::unsigned_read<V>(span<char const, sizeof(V)>)` | O(1); sizeof(V) <= 8 | O(1) | No allocation. Confirmed. |
+| `heads::read_unsigned<V>(span<char const, sizeof(V)>)` | O(1); sizeof(V) <= 8 | O(1) | No allocation. Confirmed. |
 | `heads::initial_byte(major_type, uint64_t)` | O(1) | O(1) | constexpr. Confirmed. |
 | `heads::preferred_argument_info(uint64_t)` | O(1) | O(1) | Confirmed. |
 | `heads::argument_size(uint8_t)` | O(1) | O(1) | Result is 0, 1, 2, 4 or 8. |
 | `heads::head_size(uint64_t)` | O(1) | O(1) | |
 | `heads::big_endian<V>(V)` | O(1) | O(1) | |
-| `heads::head_write<Exact>(span<char>, size_t, major_type, uint8_t, uint64_t)` | O(1); at most 9 bytes | O(1) | No allocation. head_padding is 8 bytes. Exact checks bytes left. |
-| `heads::head_write<Exact>(span<char>, size_t, major_type, uint64_t)` | O(1) | O(1) | |
-| `heads::head_append<Container>(Container&, major_type, uint8_t, uint64_t)` | O(1) amortized; O(size of out) on growth | O(1) amortized | The container allocates when it grows. |
-| `heads::head_append<Container>(Container&, major_type, uint64_t)` | O(1) amortized | O(1) amortized | As above. |
+| `heads::write_head<Exact>(span<char>, size_t, major_type, uint8_t, uint64_t)` | O(1); at most 9 bytes | O(1) | No allocation. head_padding is 8 bytes. Exact checks bytes left. |
+| `heads::write_head<Exact>(span<char>, size_t, major_type, uint64_t)` | O(1) | O(1) | |
+| `heads::append_head<Container>(Container&, major_type, uint8_t, uint64_t)` | O(1) amortized; O(size of out) on growth | O(1) amortized | The container allocates when it grows. |
+| `heads::append_head<Container>(Container&, major_type, uint64_t)` | O(1) amortized | O(1) amortized | As above. |
 | `heads::big_endian(uint128)` | O(1) | O(1) | int128 only. |
-| `heads::u32_write(span<char>, size_t, size_t)` | O(1) | O(1) | Copies 4 bytes. |
-| `heads::item_head_write(span<char>, size_t, major_type, size_t)` | O(1) | O(1) | Writes 5 bytes. |
-| `heads::unsigned128_read(span<char const, 16>)` | O(1) | O(1) | Confirmed. |
+| `heads::write_u32(span<char>, size_t, size_t)` | O(1) | O(1) | Copies 4 bytes. |
+| `heads::write_item_head(span<char>, size_t, major_type, size_t)` | O(1) | O(1) | Writes 5 bytes. |
+| `heads::read_unsigned128(span<char const, 16>)` | O(1) | O(1) | Confirmed. |
 | `heads::magnitude_without_leading_zeros(string_view)` | O(L) worst; O(1) common | O(1), a view | find_first_not_of. Confirmed. |
 | `heads::magnitude_value(string_view)` | O(L) | O(1) | The caller bounds L with check_magnitude_size. |
 | `heads::magnitude_plus_one(string_view)` | O(L) | O(L) | Allocates two std::string. Carry loop O(L) worst, O(1) common. Confirmed. |
 | `heads::magnitude_minus_one(string_view)` | O(L) | O(L) | Allocates two std::string. Borrow loop O(L) worst, O(1) common. Confirmed. |
-| `heads::decoder::head_decode()` | O(1) | O(1) | Checks bytes left and check_definite_length. Changes encoded. |
-| `heads::decoder::byte_string_decode(uint64_t)` | O(1) | O(1), a view | Checks bytes left. Copies nothing. |
+| `heads::decoder::decode_head()` | O(1) | O(1) | Checks bytes left and check_definite_length. Changes encoded. |
+| `heads::decoder::decode_byte_string(uint64_t)` | O(1) | O(1), a view | Checks bytes left. Copies nothing. |
 | `heads::float_decode_binary16(uint16_t)` | O(1) | O(1) | |
 | `heads::float_encode_binary16(float)` | O(1) | O(1) | |
 | `heads::preferred_float_info(double)`, `preferred_float_info(float)` | O(1) | O(1) | A NaN goes to preferred_nan_info. |
 | `heads::preferred_nan_info(uint64_t)` | O(1) | O(1) | The shortest width that keeps the bits. |
-| `heads::nan_encode(simple_float_information, uint64_t)` | O(1) | O(1) | |
-| `heads::float_encode(simple_float_information, double)`, `float_encode(simple_float_information, float)` | O(1) | O(1) | |
+| `heads::encode_nan(simple_float_information, uint64_t)` | O(1) | O(1) | |
+| `heads::encode_float(simple_float_information, double)`, `encode_float(simple_float_information, float)` | O(1) | O(1) | |
 | `heads::is_nan(precision, uint64_t)` | O(1) | O(1) | |
 | `heads::significand_zero_pad(precision, uint64_t)` | O(1) | O(1) | |
-| `heads::nan_decode(precision, uint64_t)` | O(1) | O(1) | |
-| `heads::float_decode(uint8_t, uint64_t)` | O(1) | O(1) | |
+| `heads::decode_nan(precision, uint64_t)` | O(1) | O(1) | |
+| `heads::decode_float(uint8_t, uint64_t)` | O(1) | O(1) | |
 | `heads::float_key_of(uint8_t, uint64_t)` | O(1) | O(1) | |
 | `heads::is_boolean(head const&)` | O(1) | O(1) | |
 | `heads::is_simple_value(head const&)` | O(1) | O(1) | |
 | `heads::is_null(head const&)` | O(1) | O(1) | |
-| `heads::raw_head_read(string_view, size_t)` | O(1); at most 8 argument bytes | O(1) | Checks bytes left and check_additional_information. |
+| `heads::read_raw_head(string_view, size_t)` | O(1); at most 8 argument bytes | O(1) | Checks bytes left and check_additional_information. |
 | `heads::self_described_cbor_content(string_view)` | O(1) | O(1), a view | Removes one tag 55799 head. |
 | `heads::break_at(string_view, size_t)` | O(1) | O(1) | Checks at < size. |
 
@@ -108,7 +108,7 @@ compared again.
 | `check_simple_value(uint8_t, uint64_t)` | O(1) | O(1) | |
 | `check_tag_content(uint64_t, major_type, uint8_t)` | O(1) | O(1) | One switch. |
 | `typed_array_element_size(uint64_t)` | O(1) | O(1) | |
-| `typed_array_check(uint64_t, size_t)` | O(1) | O(1) | |
+| `check_typed_array(uint64_t, size_t)` | O(1) | O(1) | |
 | `check_sharedref_index(uint64_t, size_t)` | O(1) | O(1) | Bounds a tag 29 index by s. |
 | `check_index<I>(I, uint64_t)` | O(1) | O(1) | A negative index counts from the end. |
 | `check_count(size_t, size_t)` | O(1) | O(1) | Confirmed. |
@@ -127,9 +127,9 @@ Enums and constants only. No function found by grep.
 | Function | Time | Memory | Notes |
 |---|---|---|---|
 | `well_formedness::no_marks::mark(decoder const&)` | O(1) | O(1) | Empty body. Confirmed. |
-| `well_formedness::item_skip<Marks>(decoder&, Marks&)` | O(i) heads, so O(n) | O(1): one count of the items still to read. No allocation. | Iterative. No depth check: nothing recurses. Each add to the count goes through checked_add, and a count larger than the bytes left is too_little_data at once (check_pending_items). Used with no_marks and with value_sharing::sharing_decoder. |
-| `well_formedness::item_skip<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n) | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 1 counts of 8 bytes, about 4 KiB. No allocation. | Iterative. Only for marks that record a depth. check_nesting_depth on every item. |
-| `item_size(string_view)` | O(i), bounded by O(n) | O(1). No allocation. | One item_skip with no_marks. No depth check. |
+| `well_formedness::skip_item<Marks>(decoder&, Marks&)` | O(i) heads, so O(n) | O(1): one count of the items still to read. No allocation. | Iterative. No depth check: nothing recurses. Each add to the count goes through checked_add, and a count larger than the bytes left is too_little_data at once (check_pending_items). Used with no_marks and with value_sharing::sharing_decoder. |
+| `well_formedness::skip_item<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n) | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 1 counts of 8 bytes, about 4 KiB. No allocation. | Iterative. Only for marks that record a depth. check_nesting_depth on every item. |
+| `item_size(string_view)` | O(i), bounded by O(n) | O(1). No allocation. | One skip_item with no_marks. No depth check. |
 
 ## item.hpp
 
@@ -159,7 +159,7 @@ Enums and constants only. No function found by grep.
 
 ## lazy.hpp
 
-Assumption, not checked: item_skip is O(bytes skipped).
+Assumption, not checked: skip_item is O(bytes skipped).
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
@@ -169,7 +169,7 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | `lazy_elements::iterator::operator==` | O(1) | O(1) | |
 | `lazy_elements::begin()`, `end()` | O(1) | O(1) | |
 | `lazy_elements::size()`, `empty()` (view_interface) | O(1) | O(1) | The count of the head. |
-| `lazy_entries::iterator::value_find()` | O(bytes of the key) | O(1) | |
+| `lazy_entries::iterator::find_value()` | O(bytes of the key) | O(1) | |
 | `lazy_entries::iterator::operator*() const` | O(1) | O(1) | Two shared_ptr copies. |
 | `lazy_entries::iterator::operator++()` | O(value + next key); full walk O(n_map) | O(1) | |
 | `lazy_entries::iterator::operator++(int)` | as prefix | O(1) | |
@@ -180,29 +180,29 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | `lazy::view(shared_ptr<Encoded const>)` | O(1) | O(1) | No allocation. Reads a leading tag 55799 head at most. |
 | `lazy::take_ownership<Encoded>(Encoded&&)` | O(1) | O(1) | Moves the string. One allocation: the make_shared that holds it. |
 | `lazy::view(shared_ptr<void const>, Encoded const&)` | O(1) | O(1) | No allocation. |
-| `lazy::container_resolve(top_level_item, offset)` (private) | Common O(1); worst O(t), t = tag 24 levels <= n/2 | O(1) | No allocation. The nesting depth does not bound tag 24 nesting. |
+| `lazy::resolve_container(top_level_item, offset)` (private) | Common O(1); worst O(t), t = tag 24 levels <= n/2 | O(1) | No allocation. The nesting depth does not bound tag 24 nesting. |
 | `validity::keys_equivalent<Checked>` | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | Defined in lazy.hpp. check_nesting_depth bounds d. Not checked again. |
-| `lazy::clone()` | as `detail::tree_decoder::item_decode` | as `detail::tree_decoder::item_decode` | Returns `owning<item>`. |
+| `lazy::clone()` | as `detail::tree_decoder::decode_item` | as `detail::tree_decoder::decode_item` | Returns `owning<item>`. |
 | `lazy::type()` | O(1) | O(1) | |
-| `lazy::key_find<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
-| `lazy::key_find<Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to the end) | O(1) | No allocation. |
-| `lazy::find(string_view)`, `find(int64_t)` (private) | container_resolve + O(n_map) | O(1) | |
+| `lazy::find_key<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
+| `lazy::find_key<Last, Key>(iterator, Last, Key)` | O(bytes from first up to the pair or to the end) | O(1) | No allocation. |
+| `lazy::find(string_view)`, `find(int64_t)` (private) | resolve_container + O(n_map) | O(1) | |
 | `lazy::value_of(expected<...>)` | O(1) | O(1) | |
-| `lazy::size()`, `empty()` | container_resolve | O(1) | The count of the head of an array or a map. |
+| `lazy::size()`, `empty()` | resolve_container | O(1) | The count of the head of an array or a map. |
 | `lazy::at(string_view)` | as find | O(1) | |
 | `lazy::at(size_t)` | O(n_array) worst | O(1) | Array only; check_index. A map gives not_indexable. |
 | `lazy::at(key)` | as find | O(1) | Map only. A key with text reads as at(string_view). |
 | `lazy::operator[]` three forms | as the at of the same argument | O(1) | Calls at. |
-| `lazy::index_select(resolved, Index)` (private) | array O(n_array) worst; map linear key_find | O(1) | The index selector of a path: negative counts from the end; on a map the integer key. |
-| `lazy::get<T>() const` | container_resolve + O(1); bignum + O(len) | O(1) | |
-| `lazy::elements()`, `entries()` | container_resolve | O(1) | |
+| `lazy::select_index(resolved, Index)` (private) | array O(n_array) worst; map linear find_key | O(1) | The index selector of a path: negative counts from the end; on a map the integer key. |
+| `lazy::get<T>() const` | resolve_container + O(1); bignum + O(len) | O(1) | |
+| `lazy::elements()`, `entries()` | resolve_container | O(1) | |
 
 ## decode.hpp
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `detail::tree_decoder::item_decode` | O(n) heads; O(len) for each string | one `item` per data item in a `std::pmr::monotonic_buffer_resource`; the children of a container in one block; each text and byte string copied into the resource; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. |
-| `decode(string_view)` | as item_decode, plus O(t log t), t = tag 24 items | as item_decode, plus one sorted vector of the tag 24 items | Returns `owning<item>`. |
+| `detail::tree_decoder::decode_item` | O(n) heads; O(len) for each string | one `item` per data item in a `std::pmr::monotonic_buffer_resource`; the children of a container in one block; each text and byte string copied into the resource; stack O(d) | Recursive, bounded by the nesting depth. A count is checked against the bytes left before a child is read, so no count reserves memory. |
+| `decode(string_view)` | as decode_item, plus O(t log t), t = tag 24 items | as decode_item, plus one sorted vector of the tag 24 items | Returns `owning<item>`. |
 | `encoded_cbor_data_item(owning<item> const&, item const&)` | O(log t) | O(1) | Binary search in the sorted vector. |
 
 ## ref.hpp
@@ -222,46 +222,46 @@ Assumption, not checked: item_skip is O(bytes skipped).
 |---|---|---|---|
 | `jsonpath::name_first(char)` | O(1) | O(1) | |
 | `jsonpath::function_name_char(char)` | O(1) | O(1) | |
-| `jsonpath::int_read(string_view, size_t)` | O(t), t = digits | O(1) | The digit scan has no bound; the 16-digit check comes after it. |
-| `query::string_parse` | O(t) | O(t) | Allocates. |
-| `query::literal_parse` | O(t) expected | O(t) | Inner cost not checked. |
-| `query::selector_parse` | O(t) | O(t) through callees | Filter depth bounded by depth_max. |
-| `query::bracketed_parse` | O(t) | O(c) | vector push_back. |
-| `query::segments_parse` | O(t) | O(p + c) | Copies a chosen vector. |
+| `jsonpath::read_int(string_view, size_t)` | O(t), t = digits | O(1) | The digit scan has no bound; the 16-digit check comes after it. |
+| `query::parse_string` | O(t) | O(t) | Allocates. |
+| `query::parse_literal` | O(t) expected | O(t) | Inner cost not checked. |
+| `query::parse_selector` | O(t) | O(t) through callees | Filter depth bounded by depth_max. |
+| `query::parse_bracketed` | O(t) | O(c) | vector push_back. |
+| `query::parse_segments` | O(t) | O(p + c) | Copies a chosen vector. |
 | `query::comparable(size_t) const` | O(1) | O(1) | |
-| `query::expression_add(expression)` | O(1) amortized | O(1) amortized | |
-| `query::function_parse` | O(t) | O(a), a = 1 | |
-| `query::primary_parse` | O(t) | O(t) | |
-| `query::comparison_op_read` | O(1) | O(1) | |
-| `query::paren_parse` | O(t) | O(t) | |
-| `query::basic_parse` | O(t) | O(t) | |
-| `query::logical_and_parse` | O(t) | O(t) | A loop. |
-| `query::logical_or_parse` | O(t) | O(t) | Depth checked. |
-| `jsonpath::query_parse(string_view, bool, size_t)` | O(t) | O(t) | Compile time in the fixed_string forms. |
-| `query_walk<T>(query_view const&, parsed_query const&, string_view)` | O(n) worst; common O(bytes before the target) | O(1) | No allocation. Not checked again. |
-| `query_walk<T>(..., lazy const&)` | O(n·p) worst; common O(n) | O(1); O(n) per tag 24 level | |
-| `query_walk<Path, T>(string_view)` | O(n); fallback O(n·p) | O(1) | When the walk over bytes fails, a walk over a lazy with no owner runs. A typed read of a scalar allocates nothing, also with a key that is not a text. |
-| `query_walk<Path, T>(shared_ptr<void const>, string_view)` | as `query_walk<Path, T>(string_view)` | as `query_walk<Path, T>(string_view)` | |
-| `jsonpath::key_find(lazy const&, string_view)` | text key O(n_map); other key O(k·(n_map + value_equal)) | O(1); tag 24 allocates | |
+| `query::add_expression(expression)` | O(1) amortized | O(1) amortized | |
+| `query::parse_function` | O(t) | O(a), a = 1 | |
+| `query::parse_primary` | O(t) | O(t) | |
+| `query::read_comparison_op` | O(1) | O(1) | |
+| `query::parse_paren` | O(t) | O(t) | |
+| `query::parse_basic` | O(t) | O(t) | |
+| `query::parse_logical_and` | O(t) | O(t) | A loop. |
+| `query::parse_logical_or` | O(t) | O(t) | Depth checked. |
+| `jsonpath::parse_query(string_view, bool, size_t)` | O(t) | O(t) | Compile time in the fixed_string forms. |
+| `walk_query<T>(query_view const&, parsed_query const&, string_view)` | O(n) worst; common O(bytes before the target) | O(1) | No allocation. Not checked again. |
+| `walk_query<T>(..., lazy const&)` | O(n·p) worst; common O(n) | O(1); O(n) per tag 24 level | |
+| `walk_query<Path, T>(string_view)` | O(n); fallback O(n·p) | O(1) | When the walk over bytes fails, a walk over a lazy with no owner runs. A typed read of a scalar allocates nothing, also with a key that is not a text. |
+| `walk_query<Path, T>(shared_ptr<void const>, string_view)` | as `walk_query<Path, T>(string_view)` | as `walk_query<Path, T>(string_view)` | |
+| `jsonpath::find_key(lazy const&, string_view)` | text key O(n_map); other key O(k·(n_map + value_equal)) | O(1); tag 24 allocates | |
 | `jsonpath::value_equal` | map: 2k² key compares + O(k·n_map) per level; product over d levels worst | O(d) stack | |
 | `jsonpath::value_less` | O(1) or O(min len) | O(1) | |
-| `jsonpath::comparable_value` | literal O(size); query: segments_apply | allocates per count, length or literal | |
-| `jsonpath::expression_test` | sum of subexpressions | O(e) stack | |
-| `jsonpath::selector_apply` | O(bytes of the node); filter adds one expression_test per child | O(m) or O(k) | Changes nodelist. nodelist bounded by root bytes. |
-| `jsonpath::segment_apply` | child: sum of selector_apply; descendant: O(c·n·d) | O(i) children vectors; O(d) frames | |
-| `jsonpath::segments_apply` | worst O(p·N·c·n·d); common O(p·n) | O(N), N <= n | |
-| `compiled_apply<Path, Walk>(Walk const&)` | O(1) at run time | O(1) | Compiles the path into arrays at compile time and calls the walk. |
+| `jsonpath::comparable_value` | literal O(size); query: apply_segments | allocates per count, length or literal | |
+| `jsonpath::test_expression` | sum of subexpressions | O(e) stack | |
+| `jsonpath::apply_selector` | O(bytes of the node); filter adds one test_expression per child | O(m) or O(k) | Changes nodelist. nodelist bounded by root bytes. |
+| `jsonpath::apply_segment` | child: sum of apply_selector; descendant: O(c·n·d) | O(i) children vectors; O(d) frames | |
+| `jsonpath::apply_segments` | worst O(p·N·c·n·d); common O(p·n) | O(N), N <= n | |
+| `apply_compiled<Path, Walk>(Walk const&)` | O(1) at run time | O(1) | Compiles the path into arrays at compile time and calls the walk. |
 | `is_valid_path<Path>`, `is_valid_path_v<Path>` | O(t) compile time | none at run time | |
 | `is_singular_query<Path>`, `is_singular_query_v<Path>` | O(t + c) compile time | none at run time | |
 | `at_path<Path, T>(string_view)` | O(n); fallback O(n·p) | O(1) | No allocation. |
 | `at_path<Path, T>(shared_ptr<string const>)`, `at_path<Path, T>(shared_ptr<void const>, Encoded const&)` | as `at_path<Path, T>(string_view)` | O(1) | A copy of the owner. |
 | `at_path<Path, T>(Encoded&&)` | as `at_path<Path, T>(string_view)` | O(1) | One make_shared: the moved string. |
 | `at_path<Path, copied_value T>(string_view)` | as `at_path<Path, T>(string_view)` plus O(len) | O(len) | Copies the text or the bytes of the value into the result. |
-| `jsonpath::compile<T>(string_view path)` | query_parse | O(t) | Allocates the parsed path. Once for many applies. |
+| `jsonpath::compile<T>(string_view path)` | parse_query | O(t) | Allocates the parsed path. Once for many applies. |
 | `lazy::at_path(query<T> const&)`, `at_path(string_view, query<T> const&)`, `at_path(shared_ptr<void const>, Encoded const&, query<T> const&)`, `at_path(shared_ptr<Encoded const>, query<T> const&)`, `at_path(Encoded&&, query<T> const&)` | as the compiled form with the same T | as the compiled form with the same T | No parse. |
-| `lazy::at_path<Path>()` | singular_query_walk | O(1) | The path is compiled. |
-| `lazy::at_path<Path, T>()` | as `query_walk<T>(..., lazy const&)` | as `query_walk<T>(..., lazy const&)` | |
-| `lazy::at_path<Path, nodelist>()`, `lazy::at_path(query<nodelist> const&)` | query_walk | O(N) nodelist | Allocates the nodelist. |
+| `lazy::at_path<Path>()` | walk_singular_query | O(1) | The path is compiled. |
+| `lazy::at_path<Path, T>()` | as `walk_query<T>(..., lazy const&)` | as `walk_query<T>(..., lazy const&)` | |
+| `lazy::at_path<Path, nodelist>()`, `lazy::at_path(query<nodelist> const&)` | walk_query | O(N) nodelist | Allocates the nodelist. |
 | local lambdas | O(digits) or O(1) amortized | O(1) | Included in the rows above. |
 
 ## encode.hpp
@@ -277,17 +277,17 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | `message_of<Target>` | O(1) or Target::allocate | O(1) or Target::allocate | Not confirmed. |
 | `encoding::encoder<Writer>::encoder` | O(1) | O(1) direct; 16384-byte member otherwise | No heap. |
 | `encoder::flush` | O(1) direct; O(16384) + append otherwise | O(1); writer may allocate | |
-| `encoder::item_write` | O(1) plus one flush | O(1) | |
-| `encoder::head_encode(major, info, argument)` | O(1) plus one flush | O(1) | |
-| `encoder::head_encode(major, argument)` | O(1) | O(1) | |
-| `encoder::byte_string_encode` | O(len) | O(1); writer may allocate | |
-| `encoder::text_string_encode` | O(len) | O(1); writer may allocate | |
-| `encoder::fixed_width_head_encode<T>` | O(1) | O(1) | |
-| `encoder::fixed_width_float_encode` | O(1) | O(1) | |
+| `encoder::write_item` | O(1) plus one flush | O(1) | |
+| `encoder::encode_head(major, info, argument)` | O(1) plus one flush | O(1) | |
+| `encoder::encode_head(major, argument)` | O(1) | O(1) | |
+| `encoder::encode_byte_string` | O(len) | O(1); writer may allocate | |
+| `encoder::encode_text_string` | O(len) | O(1); writer may allocate | |
+| `encoder::encode_fixed_width_head<T>` | O(1) | O(1) | |
+| `encoder::encode_fixed_width_float` | O(1) | O(1) | |
 | `cbor::encoder<Target>` calls | O(1) per head; O(len) per string | O(1); a container target grows; a span target allocates nothing | Each call checks that no earlier call failed. |
 | `cbor::encoder::finish` | O(1) plus one flush | O(1); an iov_writer gives its storage | |
-| `encoding::item_encode(encoder&, item const&, size_t, size_t)` | O(items + string bytes) | stack O(d) | Recursive, bounded by the nesting depth. A tag 29 is written as stored and not followed. |
-| `encode(item const&, Target&&)`, `encode_iov(item const&)` | as item_encode | the target | |
+| `encoding::encode_item(encoder&, item const&, size_t, size_t)` | O(items + string bytes) | stack O(d) | Recursive, bounded by the nesting depth. A tag 29 is written as stored and not followed. |
+| `encode(item const&, Target&&)`, `encode_iov(item const&)` | as encode_item | the target | |
 
 ## diagnostic_notation.hpp
 
@@ -296,29 +296,29 @@ Assumption, not checked: item_skip is O(bytes skipped).
 | `extended_diagnostic_notation::blank` | O(1) | O(1) | |
 | `blank_end` | O(b) | O(1) | |
 | `digit`, `hex_digit_value` | O(1) | O(1) | |
-| `head_append` | O(1) amortized | O(1) amortized | Not confirmed. |
-| `indicator_parse` | O(1) | O(1) | Not confirmed. |
-| `utf8_append` | O(1) amortized | O(1) amortized | Not confirmed. |
-| `hex4_parse` | O(1) | O(1) | Not confirmed. |
-| `quoted_parse` | O(q) amortized | O(q) | Not confirmed. |
-| `hex_string_parse` | O(q) | O(q/2) | Not confirmed. |
-| `base64_string_parse` | O(q) | O(3q/4) | Not confirmed. |
-| `float_append` | O(1) | O(1) amortized | Not confirmed. |
-| `number_parse` | decimal O(t); hex float O(t) plus up to about 10^6 steps | O(1) plus <= 9 bytes | Exponent <= 999999. |
-| `separator_parse` | O(b) | O(1) | Not confirmed. |
-| `container_parse` | O(t·d) worst; O(t) flat | O(t·d) worst | Children copied at each level. |
+| `append_head` | O(1) amortized | O(1) amortized | Not confirmed. |
+| `parse_indicator` | O(1) | O(1) | Not confirmed. |
+| `append_utf8` | O(1) amortized | O(1) amortized | Not confirmed. |
+| `parse_hex4` | O(1) | O(1) | Not confirmed. |
+| `parse_quoted` | O(q) amortized | O(q) | Not confirmed. |
+| `parse_hex_string` | O(q) | O(q/2) | Not confirmed. |
+| `parse_base64_string` | O(q) | O(3q/4) | Not confirmed. |
+| `append_float` | O(1) | O(1) amortized | Not confirmed. |
+| `parse_number` | decimal O(t); hex float O(t) plus up to about 10^6 steps | O(1) plus <= 9 bytes | Exponent <= 999999. |
+| `parse_separator` | O(b) | O(1) | Not confirmed. |
+| `parse_container` | O(t·d) worst; O(t) flat | O(t·d) worst | Children copied at each level. |
 | `string_finish` | O(len) | O(len) | Not confirmed. |
-| `literal_parse` | O(t) scalar; O(t·d) worst for containers | O(t); O(d) frames | Not confirmed. |
-| `canonical_append` | scalar O(1); containers O(n·d) worst; maps + O(k log k) compares | O(n·d) worst | Vector of string pairs per level. |
+| `parse_literal` | O(t) scalar; O(t·d) worst for containers | O(t); O(d) frames | Not confirmed. |
+| `append_canonical` | scalar O(1); containers O(n·d) worst; maps + O(k log k) compares | O(n·d) worst | Vector of string pairs per level. |
 | `encoding_indicator` | O(1) | std::string of 0 or 2 chars | |
 | `decimal_of` | O(1) | std::string <= 20 chars | |
 | `hex_of` | O(len) | O(len) | |
 | `quoted_of` | O(len) amortized | O(len), up to 6x | |
 | `number_of` | O(1) | 400-byte stack buffer | |
 | `float_of` | O(1) | O(1) | |
-| `diagnostic_head_decode` | O(1) | O(1) | Changes d. |
+| `decode_diagnostic_head` | O(1) | O(1) | Changes d. |
 | `break_found` | O(1) | O(1) | Changes d. |
-| `diagnostic_write` | O(n) common; worst depends on check_tag_content | O(n) output; O(d) frames | |
+| `write_diagnostic` | O(n) common; worst depends on check_tag_content | O(n) output; O(d) frames | |
 | `diagnostic_notation` | O(n) common | O(n) string; O(s); O(d) | |
 
 ## describe.hpp
@@ -349,56 +349,56 @@ the struct types in a message.
 | `reflection::annotations_absent`, `annotated` | O(c·a) compile time | O(1) | Reflection only. True without reflection. |
 | `reflection::key_of(info)`, `data_members<U>()` | O(len), O(c log c·len) compile time | O(len), O(c) static | Reflection only. |
 | `reflection::member_index_of` | O(c) compile time | O(1) | |
-| `reflection::uses_allocator_aggregate`, `element_make` | O(c) compile time; element_make O(c) | O(1) | With reflection or Boost.PFR; else make_obj_using_allocator. |
-| `reflection::arguments_make` | O(c) | O(c) stack | A class with no default constructor. |
+| `reflection::uses_allocator_aggregate`, `make_element` | O(c) compile time; make_element O(c) | O(1) | With reflection or Boost.PFR; else make_obj_using_allocator. |
+| `reflection::make_arguments` | O(c) | O(c) stack | A class with no default constructor. |
 | `reflection::for_each_field<U>` | O(c) | O(1) | In key order. |
 | `reflection::typed_array_tag<E>()` | O(1) compile time | O(1) | |
-| `reflection::typed_array_element_read<E>`, `typed_array_element_write<E>` | O(1) | O(1) stack | |
+| `reflection::read_typed_array_element<E>`, `write_typed_array_element<E>` | O(1) | O(1) stack | |
 | `reflection::fixed_member_valid`, `fixed_struct_valid`, `fixed_width`, `fixed_offset` | O(c) compile time per struct | O(1) | |
 | `reflection::fixed_layout_native<S>()` | O(c·sizeof(S)) compile time | O(sizeof(S)) | One std::bit_cast probe per member. |
-| `reflection::description_encode`, `description_types_collect`, `description_members_collect` | O(t + Σc) compile time | O(t) | |
+| `reflection::encode_description`, `collect_description_types`, `collect_description_members` | O(t + Σc) compile time | O(t) | |
 | `reflection::description_of<Root>()` | O(t·c·len) compile time | O(t·c·len) static | |
-| `reflection::fixed_width_head_encode` | O(1) amortized | O(1) | Compile time only. |
-| `reflection::zero_initialized_encode<Root, T>` | O(fixed_size) compile time | O(fixed_size) | |
+| `reflection::encode_fixed_width_head` | O(1) amortized | O(1) | Compile time only. |
+| `reflection::encode_zero_initialized<Root, T>` | O(fixed_size) compile time | O(fixed_size) | |
 | `reflection::zero_initialized<Root, T>()` | O(fixed_size) compile time; O(1) at run time | O(fixed_size) static | |
 | `reflection::record_keys<U>()` | O(c·len) compile time | O(c·len) static | |
-| `reflection::record_types_collect<T>`, `record_members_collect` | O(t² + Σc) compile time | O(t) | |
+| `reflection::collect_record_types<T>`, `collect_record_members` | O(t² + Σc) compile time | O(t) | |
 | `reflection::packing_table_of<Root>` | O(t² + Σc) compile time | O(t) static | |
 | `reflection::shared_first_of`, `fillers_of`, `argument_index_of`, `table_first_of` | O(1), O(1), O(t), O(1) compile time | O(1) | |
 | `reflection::fixed_array_head<Root, S>()` | O(t) compile time | O(1) static | |
-| `reflection::straight_reference_encode`, `straight_reference_size` | O(t) compile time | O(1) | |
+| `reflection::encode_straight_reference`, `straight_reference_size` | O(t) compile time | O(1) | |
 | `reflection::packing_prefix_of<Root, D>()` | O(q) compile time | O(q) static | With apart, no description. |
 | `reflection::float_bits<U>(U)` | O(1) | O(1) | Copies the bits. |
-| `second_item::bytes_add`, `block_add` | O(1) | O(1) | checked_add, checked_mul. |
-| `second_item::elements_add<E, R>` | O(1) for numbers, enums and fixed-size structs; else O(m) | O(1) heap; O(d) stack | |
+| `second_item::add_bytes`, `add_block` | O(1) | O(1) | checked_add, checked_mul. |
+| `second_item::add_elements<E, R>` | O(1) for numbers, enums and fixed-size structs; else O(m) | O(1) heap; O(d) stack | |
 | `second_item::add<T>` | O(v); common O(i) | O(1) heap; O(d) stack | Depth follows the value. |
-| `reflection::zero_initialized_copy<Root, E>` | O(fixed_size<E>) | O(1) | |
+| `reflection::copy_zero_initialized<Root, E>` | O(fixed_size<E>) | O(1) | |
 | `reflection::directory_at<Root, D>()` | O(1) | O(1) | |
-| `reflection::elements_encode` | O(m·fixed_size + dynamic) | O(1) heap | |
-| `reflection::reference_encode` | O(len), O(m) or O(k) plus content | O(1) heap | No allocation. A list of fixed-size structs is one copy of O(m·b) where fixed_layout_native holds. |
-| `reflection::fixed_struct_write<S>` | O(fixed_width<S>) | O(1) | |
-| `reflection::value_encode` | whole value O(n) | O(1) heap | |
+| `reflection::encode_elements` | O(m·fixed_size + dynamic) | O(1) heap | |
+| `reflection::encode_reference` | O(len), O(m) or O(k) plus content | O(1) heap | No allocation. A list of fixed-size structs is one copy of O(m·b) where fixed_layout_native holds. |
+| `reflection::write_fixed_struct<S>` | O(fixed_width<S>) | O(1) | |
+| `reflection::encode_value` | whole value O(n) | O(1) heap | |
 | `reflection::member_named`, `step_end`, `index_end`, `index_of`, `count_index_arguments` | O(c·len), O(L), O(L), O(digits), O(L) compile time | O(1) | |
-| `reflection::fixed_value_read<T>`, `fixed_head_valid<T>`, `class_tag_valid`, `fixed_length_head_valid` | O(1) | O(1) | |
-| `reflection::fixed_leaf_read<M>` | O(1) | O(1) | |
-| `reflection::shared_index_read` | O(1) | O(1) | |
-| `reflection::fixed_array_read<Root, S>` | O(1) | O(1) | check_whole_elements. |
-| `reflection::item_reference_read` | O(1) | O(1) | checked_mul. |
+| `reflection::read_fixed_value<T>`, `fixed_head_valid<T>`, `class_tag_valid`, `fixed_length_head_valid` | O(1) | O(1) | |
+| `reflection::read_fixed_leaf<M>` | O(1) | O(1) | |
+| `reflection::read_shared_index` | O(1) | O(1) | |
+| `reflection::read_fixed_array<Root, S>` | O(1) | O(1) | check_whole_elements. |
+| `reflection::read_item_reference` | O(1) | O(1) | checked_mul. |
 | `reflection::directory_entry` | O(1) | O(1) | |
-| `reflection::reference_read`, `item_read` | O(1) | O(1) | check_index. |
+| `reflection::read_reference`, `read_item` | O(1) | O(1) | check_index. |
 | `reflection::packing_prefix_valid<T, D>` | O(q) | O(1) | |
-| `reflection::directory_read<T, Verified, D>` | O(q) | O(1) | |
-| `reflection::too_little_data_if_truncated<T, D>` | O(n) | O(1) | Error path only: one items_skip. |
+| `reflection::read_directory<T, Verified, D>` | O(q) | O(1) | |
+| `reflection::too_little_data_if_truncated<T, D>` | O(n) | O(1) | Error path only: one skip_items. |
 | `reflection::index_arguments`, `index_argument` | O(L) compile time | O(1) | |
 | `reflection::path_valid`, `path_result`, `fixed_path_result` | O(p·(L + c·len)) compile time | O(p) instantiations | |
-| `reflection::path_walk`, `fixed_walk` | O(p) | O(1) | check_index. |
-| `decode_cursor::reference_take` | O(1) | O(1) | Changes the cursor. |
-| `decode_cursor::value_read<Root, T>` | O(n); O(n + k log k) with an ordered map | O(n) output; O(d) stack | Allocates per string, list and node. |
-| `decode_cursor::constructed_read`, `element_read` | as value_read | as value_read | |
-| `decode_cursor::fixed_struct_read<S>` | O(fixed_width<S>) | O(1) | |
-| `reflection::root_read<T>` | as value_read | as value_read | |
+| `reflection::walk_path`, `walk_fixed` | O(p) | O(1) | check_index. |
+| `decode_cursor::take_reference` | O(1) | O(1) | Changes the cursor. |
+| `decode_cursor::read_value<Root, T>` | O(n); O(n + k log k) with an ordered map | O(n) output; O(d) stack | Allocates per string, list and node. |
+| `decode_cursor::read_constructed`, `read_element` | as read_value | as read_value | |
+| `decode_cursor::read_fixed_struct<S>` | O(fixed_width<S>) | O(1) | |
+| `reflection::read_root<T>` | as read_value | as read_value | |
 | `reflection::encoded_size<T, D>` | O(1) | O(1) | |
-| `reflection::encoded_write<Exact, D, T>` | O(n) | O(1) heap | |
+| `reflection::write_encoded<Exact, D, T>` | O(n) | O(1) heap | |
 | `typed_array_view<E>` constructor | O(1) | O(1) | |
 | `typed_array_view::iterator` members | O(1) | O(1) | |
 | `typed_array_view::size`, `empty`, `begin`, `end` | O(1) | O(1) | |
@@ -429,18 +429,18 @@ the struct types in a message.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `generic::integer_read<U, V>` | O(1) | O(1) | |
+| `generic::read_integer<U, V>` | O(1) | O(1) | |
 | `generic::head_accepted<U>` | O(1) | O(1) | |
-| `generic::wide_integer_read<U>` | O(len), at most 16 steps | O(1) | |
-| `generic::variant_read` | O(alternatives) + read | output | |
-| `generic::generic_read<U>` | common O(n); worst O((n/d)^d) with tag 29 | output; O(s) | Each tag 29 adds 1 to depth. |
-| `generic::generic_value_read` | scalar O(1); string O(len); array O(m); std::map O(k log k); unordered_map O(k) | output; O(d) stack | Duplicate key dropped by try_emplace. |
+| `generic::read_wide_integer<U>` | O(len), at most 16 steps | O(1) | |
+| `generic::read_variant` | O(alternatives) + read | output | |
+| `generic::read_generic<U>` | common O(n); worst O((n/d)^d) with tag 29 | output; O(s) | Each tag 29 adds 1 to depth. |
+| `generic::read_generic_value` | scalar O(1); string O(len); array O(m); std::map O(k log k); unordered_map O(k) | output; O(d) stack | Duplicate key dropped by try_emplace. |
 | `generic::key_matches<U, I>` | O(1) or O(len) | O(1) | |
-| `generic::struct_read` | O(k·c·len) + members + skipped | bitset; O(1) | |
+| `generic::read_struct` | O(k·c·len) + members + skipped | bitset; O(1) | |
 | `generic::member_present`, `float_size` | O(1) | O(1) | |
 | `generic::generic_size<U>` | O(i) | O(1) heap | |
-| `generic::bytes_write` | O(len) | O(1) | |
-| `generic::generic_write<U>` | O(n) | O(1) heap | |
+| `generic::write_bytes` | O(len) | O(1) | |
+| `generic::write_generic<U>` | O(n) | O(1) heap | |
 | `structs::decode<Encoded>(Encoded&&)` | as read | one make_shared + read | |
 | `structs::decode(shared_ptr<string const>)`, `structs::decode(shared_ptr<void const>, Encoded const&)` | as read | as read | |
 | `structs::encode(T const&)` | O(i + n) | O(n) | |
@@ -453,17 +453,17 @@ Above linear in the input:
 
 - `validity::keys_equivalent` (shared.hpp): map keys O(k²) per level, exponential in d worst.
 - `jsonpath::value_equal`: O(k²) key compares per map level.
-- `jsonpath::key_find`, non-text key: O(k·n_map).
-- `jsonpath::segment_apply`, `segments_apply`: O(c·n·d), O(p·N·c·n·d).
-- `query_walk` lazy forms and the fallback of `at_path` to a lazy walk: O(n·p).
-- `container_parse`, `literal_parse`, `canonical_append` (diagnostic_notation.hpp): O(t·d), O(n·d); maps add O(k log k).
-- `generic_read`, `structs::read`: O((n/d)^d) with tag 29.
+- `jsonpath::find_key`, non-text key: O(k·n_map).
+- `jsonpath::apply_segment`, `apply_segments`: O(c·n·d), O(p·N·c·n·d).
+- `walk_query` lazy forms and the fallback of `at_path` to a lazy walk: O(n·p).
+- `parse_container`, `parse_literal`, `append_canonical` (diagnostic_notation.hpp): O(t·d), O(n·d); maps add O(k log k).
+- `read_generic`, `structs::read`: O((n/d)^d) with tag 29.
 - `std::map` targets in schema and structs: O(n + k log k).
 
 Allocation on a success path:
 
-- `value_sharing::sharing_decoder::mark`, `detail::tree_decoder::item_decode`.
+- `value_sharing::sharing_decoder::mark`, `detail::tree_decoder::decode_item`.
 - `lazy::take_ownership`, `at_path(Encoded&&)`, `schema::path(Encoded&&)`, `schema::decode`, `structs::decode`, `lazy::clone`, `decode`, `ref::clone`.
-- jsonpath: every parser, `compile`, a `nodelist` read, `comparable_value`, `selector_apply`, `segment_apply`, `segments_apply`.
+- jsonpath: every parser, `compile`, a `nodelist` read, `comparable_value`, `apply_selector`, `apply_segment`, `apply_segments`.
 - `container_message`.
-- diagnostic_notation.hpp: `canonical_append`, `container_parse`, `diagnostic_notation`, the `*_of` functions.
+- diagnostic_notation.hpp: `append_canonical`, `parse_container`, `diagnostic_notation`, the `*_of` functions.

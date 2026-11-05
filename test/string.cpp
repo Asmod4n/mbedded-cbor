@@ -41,7 +41,7 @@ std::string decoded_text_string(std::string_view wire)
 
 // Ported from test.rb: 'major 2: non-UTF-8 string encodes as major 2'.
 // Which major a String gets is the choice of the application; the encoder writes what it is told.
-TEST_CASE("major 2: byte_string_encode writes major 2")
+TEST_CASE("major 2: encode_byte_string writes major 2")
 {
     CHECK_EQ(encoded_byte_string("\x00\xff\xfe\xfa"sv), "\x44\x00\xff\xfe\xfa"sv);
 }
@@ -54,7 +54,7 @@ TEST_CASE("major 2: every length width survives encode and decode")
 }
 
 // Ported from test.rb: 'major 3: UTF-8 text encodes as major 3'.
-TEST_CASE("major 3: text_string_encode writes major 3")
+TEST_CASE("major 3: encode_text_string writes major 3")
 {
     CHECK_EQ(encoded_text_string("hello"sv), "\x65hello"sv);
 }

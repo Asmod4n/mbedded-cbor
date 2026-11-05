@@ -63,7 +63,7 @@ std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 class heads
 {
     template <class V>
-    static V unsigned_read(std::span<char const, sizeof(V)> const field)
+    static V read_unsigned(std::span<char const, sizeof(V)> const field)
     {
         std::array<char, sizeof(V)> big;
         std::copy(field.begin(), field.end(), big.begin());
@@ -110,7 +110,7 @@ class heads
     static constexpr std::size_t head_padding = sizeof(std::uint64_t);
 
     template <bool Exact = false>
-    CBOR_ALWAYS_INLINE static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
+    CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
                                                      std::uint8_t const info, std::uint64_t const argument)
     {
         static_assert(argument_size(std::to_underlying(
@@ -137,14 +137,14 @@ class heads
     }
 
     template <bool Exact = false>
-    CBOR_ALWAYS_INLINE static std::size_t head_write(std::span<char> const out, std::size_t const at, major_type const major,
+    CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
                                                      std::uint64_t const argument)
     {
-        return head_write<Exact>(out, at, major, preferred_argument_info(argument), argument);
+        return write_head<Exact>(out, at, major, preferred_argument_info(argument), argument);
     }
 
     template <class Container>
-    static constexpr void head_append(Container &out, major_type const major, std::uint8_t const info,
+    static constexpr void append_head(Container &out, major_type const major, std::uint8_t const info,
                                       std::uint64_t const argument)
     {
         out.push_back(initial_byte(major, info));
@@ -153,9 +153,9 @@ class heads
     }
 
     template <class Container>
-    static constexpr void head_append(Container &out, major_type const major, std::uint64_t const argument)
+    static constexpr void append_head(Container &out, major_type const major, std::uint64_t const argument)
     {
-        head_append(out, major, preferred_argument_info(argument), argument);
+        append_head(out, major, preferred_argument_info(argument), argument);
     }
 
 #ifdef __SIZEOF_INT128__
@@ -173,25 +173,25 @@ class heads
 
     static constexpr int extended_precision_digits = std::numeric_limits<std::uint64_t>::digits;
 
-    CBOR_ALWAYS_INLINE static void u32_write(std::span<char> const out, std::size_t const at, std::size_t const value)
+    CBOR_ALWAYS_INLINE static void write_u32(std::span<char> const out, std::size_t const at, std::size_t const value)
     {
         auto const b = big_endian(static_cast<std::uint32_t>(value));
         std::ranges::copy(b, out.subspan(at).template first<sizeof(std::uint32_t)>().begin());
     }
 
-    CBOR_ALWAYS_INLINE static void item_head_write(std::span<char> const out, std::size_t const at, major_type const major,
+    CBOR_ALWAYS_INLINE static void write_item_head(std::span<char> const out, std::size_t const at, major_type const major,
                                                   std::size_t const length)
     {
         out[at] =
             initial_byte(major, std::to_underlying(rfc8949::additional_information::four_byte_argument));
-        u32_write(out, at + initial_byte_size, length);
+        write_u32(out, at + initial_byte_size, length);
     }
 
 #ifdef __SIZEOF_INT128__
-    static uint128 unsigned128_read(std::span<char const, sizeof(uint128)> const field)
+    static uint128 read_unsigned128(std::span<char const, sizeof(uint128)> const field)
     {
-        auto const high = static_cast<uint128>(unsigned_read<std::uint64_t>(field.first<sizeof(std::uint64_t)>()));
-        auto const low = static_cast<uint128>(unsigned_read<std::uint64_t>(field.last<sizeof(std::uint64_t)>()));
+        auto const high = static_cast<uint128>(read_unsigned<std::uint64_t>(field.first<sizeof(std::uint64_t)>()));
+        auto const low = static_cast<uint128>(read_unsigned<std::uint64_t>(field.last<sizeof(std::uint64_t)>()));
         return high << std::numeric_limits<std::uint64_t>::digits | low;
     }
 #endif
@@ -247,7 +247,7 @@ class heads
     struct decoder {
         std::string_view encoded;
 
-        CBOR_ALWAYS_INLINE std::expected<head, error> head_decode()
+        CBOR_ALWAYS_INLINE std::expected<head, error> decode_head()
         {
             if (!validity::pending_items_fit(initial_byte_size, encoded.size())) [[unlikely]]
                 return std::unexpected(error::too_little_data);
@@ -283,13 +283,13 @@ class heads
                 argument = static_cast<std::uint8_t>(rest.front());
                 break;
             case rfc8949::additional_information::two_byte_argument:
-                argument = unsigned_read<std::uint16_t>(rest.first<sizeof(std::uint16_t)>());
+                argument = read_unsigned<std::uint16_t>(rest.first<sizeof(std::uint16_t)>());
                 break;
             case rfc8949::additional_information::four_byte_argument:
-                argument = unsigned_read<std::uint32_t>(rest.first<sizeof(std::uint32_t)>());
+                argument = read_unsigned<std::uint32_t>(rest.first<sizeof(std::uint32_t)>());
                 break;
             default:
-                argument = unsigned_read<std::uint64_t>(rest.first<sizeof(std::uint64_t)>());
+                argument = read_unsigned<std::uint64_t>(rest.first<sizeof(std::uint64_t)>());
                 break;
             }
             if (error const r = validity::check_argument<Checked>(major, argument).error_or(error{});
@@ -299,7 +299,7 @@ class heads
             return head{major, info, argument};
         }
 
-        CBOR_ALWAYS_INLINE std::optional<head> head_decode_where_no_check_is_needed()
+        CBOR_ALWAYS_INLINE std::optional<head> try_decode_head()
         {
             std::uint8_t const initial = encoded.empty() ? 0xff : static_cast<std::uint8_t>(encoded.front());
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
@@ -316,7 +316,7 @@ class heads
                 if (info == std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
                     argument = static_cast<std::uint8_t>(encoded[initial_byte_size]);
                 } else if (!immediate) {
-                    argument = unsigned_read<std::uint64_t>(
+                    argument = read_unsigned<std::uint64_t>(
                                    std::span<char const>(encoded)
                                        .subspan<initial_byte_size, sizeof(std::uint64_t)>()) >>
                                ((std::numeric_limits<std::uint64_t>::digits -
@@ -331,7 +331,7 @@ class heads
             return std::nullopt;
         }
 
-        constexpr std::expected<std::string_view, error> byte_string_decode(std::uint64_t const length)
+        constexpr std::expected<std::string_view, error> decode_byte_string(std::uint64_t const length)
         {
             if (!validity::pending_items_fit(length, encoded.size())) [[unlikely]]
                 return std::unexpected(error::too_little_data);
@@ -341,9 +341,9 @@ class heads
             return string;
         }
 
-        std::expected<std::optional<std::uint64_t>, error> bignum_decode(std::uint64_t const tag)
+        std::expected<std::optional<std::uint64_t>, error> decode_bignum(std::uint64_t const tag)
         {
-            auto const r = head_decode();
+            auto const r = decode_head();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
             if (error const c = validity::check_tag_content(tag, r->major).error_or(error{}); c != error{})
@@ -352,7 +352,7 @@ class heads
             if (error const c = validity::check_definite_length(r->major, r->info).error_or(error{}); c != error{})
                 [[unlikely]]
                 return std::unexpected(c);
-            auto const bytes = byte_string_decode(r->argument);
+            auto const bytes = decode_byte_string(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             std::span<char const> const magnitude = magnitude_without_leading_zeros(std::span(*bytes));
@@ -364,7 +364,7 @@ class heads
 
     static constexpr bool is_typed_array(head const h)
     {
-        return h.major == major_type::tag && validity::typed_array_check(h.argument, 0).has_value();
+        return h.major == major_type::tag && validity::check_typed_array(h.argument, 0).has_value();
     }
 
     static constexpr bool is_bignum(major_type const major, std::uint64_t const argument)
@@ -494,7 +494,7 @@ class heads
     {
         std::uint32_t const bits = std::bit_cast<std::uint32_t>(value);
         if (is_nan(single_precision, bits)) [[unlikely]]
-            return preferred_nan_info(std::bit_cast<std::uint64_t>(nan_decode(single_precision, bits)));
+            return preferred_nan_info(std::bit_cast<std::uint64_t>(decode_nan(single_precision, bits)));
         return preferred_float_info(static_cast<double>(value));
     }
 
@@ -511,7 +511,7 @@ class heads
         return rfc8949::simple_float_information::double_precision_float;
     }
 
-    static constexpr std::uint64_t nan_encode(rfc8949::simple_float_information const info, std::uint64_t const bits)
+    static constexpr std::uint64_t encode_nan(rfc8949::simple_float_information const info, std::uint64_t const bits)
     {
         constexpr precision d = double_precision;
         if (info == rfc8949::simple_float_information::double_precision_float)
@@ -524,22 +524,22 @@ class heads
                (bits & ((std::uint64_t{1} << d.significand_bits) - 1u)) >> (d.significand_bits - p.significand_bits);
     }
 
-    static constexpr std::uint64_t float_encode(rfc8949::simple_float_information const info,
+    static constexpr std::uint64_t encode_float(rfc8949::simple_float_information const info,
                                                 float const value)
     {
         std::uint32_t const bits = std::bit_cast<std::uint32_t>(value);
         if (is_nan(single_precision, bits)) [[unlikely]]
-            return nan_encode(info, std::bit_cast<std::uint64_t>(nan_decode(single_precision, bits)));
-        return float_encode(info, static_cast<double>(value));
+            return encode_nan(info, std::bit_cast<std::uint64_t>(decode_nan(single_precision, bits)));
+        return encode_float(info, static_cast<double>(value));
     }
 
-    static constexpr std::uint64_t float_encode(rfc8949::simple_float_information const info,
+    static constexpr std::uint64_t encode_float(rfc8949::simple_float_information const info,
                                                 double const value)
     {
         constexpr precision d = double_precision;
         std::uint64_t const bits = std::bit_cast<std::uint64_t>(value);
         if (is_nan(d, bits)) [[unlikely]]
-            return nan_encode(info, bits);
+            return encode_nan(info, bits);
         switch (info) {
         case rfc8949::simple_float_information::half_precision_float:
             return float_encode_binary16(static_cast<float>(value));
@@ -565,23 +565,23 @@ class heads
                    << (d.significand_bits - p.significand_bits);
     }
 
-    static constexpr double nan_decode(precision const p, std::uint64_t const argument)
+    static constexpr double decode_nan(precision const p, std::uint64_t const argument)
     {
         constexpr precision d = double_precision;
         constexpr std::uint64_t exponent = std::uint64_t{d.exponent_max} << d.significand_bits;
         return std::bit_cast<double>(significand_zero_pad(p, argument) | exponent);
     }
 
-    static constexpr double float_decode(std::uint8_t const info, std::uint64_t const argument)
+    static constexpr double decode_float(std::uint8_t const info, std::uint64_t const argument)
     {
         if (info == std::to_underlying(rfc8949::simple_float_information::half_precision_float)) {
             if (is_nan(half_precision, argument)) [[unlikely]]
-                return nan_decode(half_precision, argument);
+                return decode_nan(half_precision, argument);
             return static_cast<double>(float_decode_binary16(static_cast<std::uint16_t>(argument)));
         }
         if (info == std::to_underlying(rfc8949::simple_float_information::single_precision_float)) {
             if (is_nan(single_precision, argument)) [[unlikely]]
-                return nan_decode(single_precision, argument);
+                return decode_nan(single_precision, argument);
             return static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(argument)));
         }
         return std::bit_cast<double>(argument);
@@ -601,7 +601,7 @@ class heads
             : info == std::to_underlying(rfc8949::simple_float_information::single_precision_float)
                 ? single_precision
                 : double_precision;
-        return {is_nan(p, argument), significand_zero_pad(p, argument), float_decode(info, argument)};
+        return {is_nan(p, argument), significand_zero_pad(p, argument), decode_float(info, argument)};
     }
 
     static constexpr bool is_boolean(head const &h)
@@ -707,10 +707,10 @@ class heads
         return tag != std::to_underlying(rfc8949::tag_number::unsigned_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::negative_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item) &&
-               !validity::typed_array_check(tag, 0).has_value();
+               !validity::check_typed_array(tag, 0).has_value();
     }
 
-    static constexpr std::expected<head, error> typed_array_element_decode(std::uint64_t const tag,
+    static constexpr std::expected<head, error> decode_typed_array_element(std::uint64_t const tag,
                                                                            std::string_view const elements,
                                                                            validity::index const position)
     {
@@ -750,7 +750,7 @@ class heads
 
     template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<raw_head, error>
-    raw_head_read(std::string_view const encoded, validity::offset const at)
+    read_raw_head(std::string_view const encoded, validity::offset const at)
     {
         std::string_view const rest = validity::subspan(encoded, at);
         if (rest.empty()) [[unlikely]]
@@ -783,7 +783,7 @@ class heads
 
     static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
-        auto const h = raw_head_read<false>(encoded, validity::offset{});
+        auto const h = read_raw_head<false>(encoded, validity::offset{});
         if (h && h->major == major_type::tag &&
             h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))
             return validity::subspan(encoded, h->at);
@@ -793,7 +793,7 @@ class heads
     static constexpr validity::offset self_described_cbor_content_at(std::string_view const encoded, validity::offset at)
     {
         for (;;) {
-            auto const h = raw_head_read<false>(encoded, at);
+            auto const h = read_raw_head<false>(encoded, at);
             if (!h || h->major != major_type::tag ||
                 h->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))
                 return at;

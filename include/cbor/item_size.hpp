@@ -38,15 +38,15 @@ class well_formedness
     };
 
     template <bool Checked, class Marks>
-    static std::expected<void, error> item_skip(heads::decoder<Checked> &d, Marks &marks)
+    static std::expected<void, error> skip_item(heads::decoder<Checked> &d, Marks &marks)
     {
         std::uint64_t pending = 1;
         while (pending != 0) {
             --pending;
             std::uint64_t added = 0;
-            if (auto const h = d.head_decode_where_no_check_is_needed()) [[likely]] {
+            if (auto const h = d.try_decode_head()) [[likely]] {
                 if (h->major == major_type::byte_string || h->major == major_type::text_string) [[likely]] {
-                    if (auto const s = d.byte_string_decode(h->argument); !s) [[unlikely]]
+                    if (auto const s = d.decode_byte_string(h->argument); !s) [[unlikely]]
                         return std::unexpected(s.error());
                     continue;
                 }
@@ -58,13 +58,13 @@ class well_formedness
                 else
                     continue;
             } else {
-                auto const slow = d.head_decode();
+                auto const slow = d.decode_head();
                 if (!slow) [[unlikely]]
                     return std::unexpected(slow.error());
                 switch (slow->major) {
                 case major_type::byte_string:
                 case major_type::text_string:
-                    if (auto const s = d.byte_string_decode(slow->argument); !s) [[unlikely]]
+                    if (auto const s = d.decode_byte_string(slow->argument); !s) [[unlikely]]
                         return std::unexpected(s.error());
                     continue;
                 case major_type::array:
@@ -98,19 +98,19 @@ class well_formedness
     }
 
     template <bool Checked>
-    CBOR_ALWAYS_INLINE static std::expected<void, error> items_skip(heads::decoder<Checked> &d,
+    CBOR_ALWAYS_INLINE static std::expected<void, error> skip_items(heads::decoder<Checked> &d,
                                                                     std::uint64_t const count)
     {
         no_marks none;
         if constexpr (!Checked) {
             for (std::uint64_t i = 0; i < count; ++i)
-                if (auto const r = item_skip(d, none); !r) [[unlikely]]
+                if (auto const r = skip_item(d, none); !r) [[unlikely]]
                     return r;
             return {};
         }
         heads::decoder<false> unlimited{d.encoded};
         for (std::uint64_t i = 0; i < count; ++i)
-            if (auto const r = item_skip(unlimited, none); !r) [[unlikely]]
+            if (auto const r = skip_item(unlimited, none); !r) [[unlikely]]
                 return r;
         d.encoded = unlimited.encoded;
         return {};
@@ -120,7 +120,7 @@ class well_formedness
         requires requires(Marks &m, heads::decoder<Checked> const &at, std::size_t depth) {
             m.mark(at, depth);
         }
-    static std::expected<void, error> item_skip(heads::decoder<Checked> &d, Marks &marks,
+    static std::expected<void, error> skip_item(heads::decoder<Checked> &d, Marks &marks,
                                                 std::size_t const depth, std::size_t const depth_max)
     {
         std::array<std::uint64_t, validity::nesting_depth_limit + 1> left;
@@ -139,9 +139,9 @@ class well_formedness
             }
             --left[level];
             std::uint64_t children = 0;
-            if (auto const h = d.head_decode_where_no_check_is_needed()) [[likely]] {
+            if (auto const h = d.try_decode_head()) [[likely]] {
                 if (h->major == major_type::byte_string || h->major == major_type::text_string) {
-                    if (auto const s = d.byte_string_decode(h->argument); !s) [[unlikely]]
+                    if (auto const s = d.decode_byte_string(h->argument); !s) [[unlikely]]
                         return std::unexpected(s.error());
                 } else if (h->major == major_type::array) {
                     children = h->argument;
@@ -150,13 +150,13 @@ class well_formedness
                                    .value_or(std::numeric_limits<std::uint64_t>::max());
                 }
             } else {
-                auto const slow = d.head_decode();
+                auto const slow = d.decode_head();
                 if (!slow) [[unlikely]]
                     return std::unexpected(slow.error());
                 switch (slow->major) {
                 case major_type::byte_string:
                 case major_type::text_string:
-                    if (auto const s = d.byte_string_decode(slow->argument); !s) [[unlikely]]
+                    if (auto const s = d.decode_byte_string(slow->argument); !s) [[unlikely]]
                         return std::unexpected(s.error());
                     break;
                 case major_type::array:
@@ -211,7 +211,7 @@ inline std::expected<std::size_t, error> item_size(std::string_view const encode
 {
     heads::decoder<true> d{encoded};
     well_formedness::no_marks none;
-    if (auto const r = well_formedness::item_skip(d, none); !r) [[unlikely]]
+    if (auto const r = well_formedness::skip_item(d, none); !r) [[unlikely]]
         return std::unexpected(r.error());
     return encoded.size() - d.encoded.size();
 }

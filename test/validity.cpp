@@ -335,11 +335,11 @@ TEST_CASE("validity: typed_array_element_size for every typed array tag")
 // A typed array tag must lie in 64 to 87 and must not be the reserved tag 76, and its byte string must hold a
 // whole number of elements (RFC 8746 2). The tags around the range and every length up to two elements of the
 // widest type are checked, so that every remainder of every element size is met.
-TEST_CASE("validity: typed_array_check for the tags around 64 to 87 and the lengths 0 to 32")
+TEST_CASE("validity: check_typed_array for the tags around 64 to 87 and the lengths 0 to 32")
 {
     for (std::uint64_t tag = 60; tag <= 90; ++tag)
         for (std::size_t size = 0; size <= 32; ++size) {
-            auto const r = validity::typed_array_check(tag, size);
+            auto const r = validity::check_typed_array(tag, size);
             if (tag < 64 || tag > 87 || tag == 76)
                 CHECK_EQ(r.error(), error::incorrect_type);
             else if (size % element_bytes[static_cast<std::size_t>(tag - 64)] != 0)
