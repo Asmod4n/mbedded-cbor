@@ -213,7 +213,7 @@ inline std::expected<std::size_t, error> item_size(std::string_view const encode
     well_formedness::no_marks none;
     if (auto const r = well_formedness::skip_item(d, none); !r) [[unlikely]]
         return std::unexpected(r.error());
-    return encoded.size() - d.encoded.size();
+    return std::to_underlying(validity::distance(encoded, d.encoded));
 }
 
 } // namespace cbor

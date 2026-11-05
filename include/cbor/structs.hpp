@@ -605,7 +605,7 @@ class generic
                 return std::unexpected(error::incorrect_type);
             return read_tag_content(d, out, *t, depth, depth_max);
         } else if constexpr (reflection::is_optional<U>) {
-            if (!d.encoded.empty() &&
+            if (validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) &&
                 d.encoded.front() == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null))) {
                 d.encoded.remove_prefix(1);
                 out.reset();
@@ -1390,7 +1390,7 @@ public:
             return size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
-            if (out.size() >= padded) {
+            if (validity::bytes_fit(padded, out.size())) {
                 generic::write_generic(out.first(padded), 0, value);
                 return size;
             }

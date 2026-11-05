@@ -671,8 +671,8 @@ inline void lazy_entries::iterator::find_value()
         failure = r.error();
         return;
     }
-    if (d.encoded.empty()) [[unlikely]] {
-        failure = error::too_little_data;
+    if (auto const fits = validity::check_bytes_left(heads::initial_byte_size, d.encoded.size()); !fits) [[unlikely]] {
+        failure = fits.error();
         return;
     }
     value = validity::distance(top_level.encoded, d.encoded);

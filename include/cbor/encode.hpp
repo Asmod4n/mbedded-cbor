@@ -104,8 +104,8 @@ private:
             requires std::same_as<E, char> || std::same_as<E, std::byte>
         std::expected<void, std::errc> append(std::span<E const> const part)
         {
-            if (part.size() > out.size() - used) [[unlikely]]
-                return std::unexpected(std::errc::no_buffer_space);
+            if (auto const fits = validity::check_space_left(part.size(), out.size() - used); !fits) [[unlikely]]
+                return fits;
             std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(out.subspan(used).first(part.size())).begin());
             used += part.size();
             return {};
@@ -235,9 +235,9 @@ struct encoding::encoder {
     write_item(std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> const &item,
                std::size_t const size)
     {
-        if (block.size() - used < item.size()) [[unlikely]] {
+        if (!validity::bytes_fit(item.size(), block.size() - used)) [[unlikely]] {
             if constexpr (direct) {
-                if (block.size() - used < size) [[unlikely]]
+                if (!validity::bytes_fit(size, block.size() - used)) [[unlikely]]
                     return std::unexpected(std::errc::no_buffer_space);
                 std::ranges::copy(std::span(item).first(size), block.subspan(used).begin());
                 used += size;
@@ -259,7 +259,7 @@ struct encoding::encoder {
                                         std::numeric_limits<std::uint8_t>::digits * bytes) &
                                        (std::numeric_limits<std::uint64_t>::digits - 1)));
         if constexpr (!direct) {
-            if (block.size() - used < heads::initial_byte_size + sizeof(std::uint64_t)) [[unlikely]]
+            if (!validity::bytes_fit(heads::initial_byte_size + sizeof(std::uint64_t), block.size() - used)) [[unlikely]]
                 if (auto const r = refill(item_size_max); !r) [[unlikely]]
                     return r;
             std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> head;
@@ -277,7 +277,7 @@ struct encoding::encoder {
             std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
             static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(tail)>,
                           "A head must hold the initial byte and the eight argument bytes.");
-            bool const near_end = out.size() - at < tail.size();
+            bool const near_end = !validity::bytes_fit(tail.size(), out.size() - at);
             std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const item =
                 near_end ? std::span(tail)
                          : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
@@ -304,7 +304,7 @@ struct encoding::encoder {
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_head(major_type const major, std::uint64_t const argument)
     {
         using info = rfc8949::additional_information;
-        if (block.size() - used >= item_size_max) [[likely]] {
+        if (validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
             if (argument < std::to_underlying(info::one_byte_argument)) {
                 std::span<char> const out = block;
                 out[used] = heads::initial_byte(major, static_cast<std::uint8_t>(argument));
@@ -502,7 +502,7 @@ struct encoding::encoder {
         requires(sizeof(T) <= sizeof(std::uint64_t))
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_fixed_width_head(major_type const major, T const argument)
     {
-        if (block.size() - used >= item_size_max) [[likely]] {
+        if (validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
             put_item(heads::initial_byte(major, static_cast<std::uint8_t>(
                                                     std::to_underlying(rfc8949::additional_information::one_byte_argument) +
                                                     std::countr_zero(sizeof(T)))),

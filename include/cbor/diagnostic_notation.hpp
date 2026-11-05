@@ -111,7 +111,7 @@ class extended_diagnostic_notation
     {
         for (;;) {
             at = blank_end(text, at);
-            if (at >= text.size() || (text[at] != '/' && text[at] != '#'))
+            if (!validity::check_text_left(text, at, 1) || (text[at] != '/' && text[at] != '#'))
                 return at;
             auto const end = comment_end(text, at);
             if (!end) [[unlikely]]
@@ -174,7 +174,7 @@ class extended_diagnostic_notation
 
     static constexpr std::expected<indicated, error> parse_indicator(std::string_view const text, std::size_t const at)
     {
-        if (at >= text.size() || text[at] != '_')
+        if (!validity::check_text_left(text, at, 1) || text[at] != '_')
             return indicated{at, no_indicator};
         if (at + 1 < text.size() && text[at + 1] == 'i')
             return indicated{at + std::string_view("_i").size(), immediate_indicator};
@@ -205,6 +205,9 @@ class extended_diagnostic_notation
         }
     }
 
+    static constexpr std::size_t hex4_digits = 4;
+    static constexpr std::string_view escape_prefix = "\\u";
+
     struct code_unit {
         std::size_t at;
         std::uint32_t value;
@@ -212,10 +215,10 @@ class extended_diagnostic_notation
 
     static constexpr std::expected<code_unit, error> parse_hex4(std::string_view const text, std::size_t const at)
     {
-        if (at + 4 > text.size()) [[unlikely]]
-            return std::unexpected(error::invalid_path);
+        if (auto const left = validity::check_text_left(text, at, hex4_digits); !left) [[unlikely]]
+            return std::unexpected(left.error());
         std::uint32_t value = 0;
-        for (char const c : std::span(text).subspan(at, 4)) {
+        for (char const c : std::span(text).subspan(at, hex4_digits)) {
             int const v = hex_digit_value(c);
             if (v < 0) [[unlikely]]
                 return std::unexpected(error::invalid_path);
@@ -229,8 +232,8 @@ class extended_diagnostic_notation
     {
         char const quote = text[at++];
         for (;;) {
-            if (at >= text.size()) [[unlikely]]
-                return std::unexpected(error::invalid_path);
+            if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+                return std::unexpected(left.error());
             char const c = text[at++];
             if (c == quote)
                 return at;
@@ -242,8 +245,8 @@ class extended_diagnostic_notation
                 out.push_back(c);
                 continue;
             }
-            if (at >= text.size()) [[unlikely]]
-                return std::unexpected(error::invalid_path);
+            if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+                return std::unexpected(left.error());
             char const e = text[at++];
             switch (e) {
             case 'b':
@@ -293,9 +296,9 @@ class extended_diagnostic_notation
                 if (c1 >= low_surrogate_first && c1 <= low_surrogate_last) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 if (c1 >= high_surrogate_first && c1 < low_surrogate_first) {
-                    if (at + 2 > text.size() || text[at] != '\\' || text[at + 1] != 'u') [[unlikely]]
+                    if (!validity::check_text_left(text, at, escape_prefix.size()) || !text.substr(at).starts_with(escape_prefix)) [[unlikely]]
                         return std::unexpected(error::invalid_path);
-                    auto const low = parse_hex4(text, at + 2);
+                    auto const low = parse_hex4(text, at + escape_prefix.size());
                     if (!low || low->value < low_surrogate_first || low->value > low_surrogate_last) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     std::uint32_t const c2 = low->value;
@@ -635,7 +638,7 @@ class extended_diagnostic_notation
                 auto const colon = optional_space_end(text, *next);
                 if (!colon) [[unlikely]]
                     return colon;
-                if (*colon >= text.size() || text[*colon] != ':') [[unlikely]]
+                if (!validity::check_text_left(text, *colon, 1) || text[*colon] != ':') [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 auto const value = optional_space_end(text, *colon + 1);
                 if (!value) [[unlikely]]
@@ -651,8 +654,8 @@ class extended_diagnostic_notation
             at = s->at;
             separated = s->separated;
         }
-        if (at >= text.size()) [[unlikely]]
-            return std::unexpected(error::invalid_path);
+        if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+            return std::unexpected(left.error());
         major_type const major = map ? major_type::map : major_type::array;
         if (indicator == std::to_underlying(rfc8949::additional_information::indefinite_length)) {
             out.push_back(heads::initial_byte(major, static_cast<std::uint64_t>(indicator)));
@@ -729,7 +732,7 @@ class extended_diagnostic_notation
         std::size_t next = *first;
         bool separated = true;
         while (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view(">>"))) {
-            if (!separated || next >= text.size()) [[unlikely]]
+            if (!separated || !validity::check_text_left(text, next, 1)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             auto const item = parse_literal({text, next}, string.content, {n.depth + 1, n.depth_max});
             if (!item) [[unlikely]]
@@ -781,7 +784,7 @@ class extended_diagnostic_notation
             at = s->at;
             separated = s->separated;
         }
-        if (at >= text.size() || empty) [[unlikely]]
+        if (!validity::check_text_left(text, at, 1) || empty) [[unlikely]]
             return std::unexpected(error::invalid_path);
         out.push_back(heads::initial_byte(major, std::to_underlying(rfc8949::additional_information::indefinite_length)));
         out += chunks;
@@ -796,8 +799,8 @@ class extended_diagnostic_notation
             return std::unexpected(r.error());
         std::string_view const text = cursor.text;
         std::size_t const at = cursor.at;
-        if (at >= text.size()) [[unlikely]]
-            return std::unexpected(error::invalid_path);
+        if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+            return std::unexpected(left.error());
         std::string_view const rest{std::span(text).subspan(at)};
         char const c = rest.front();
         if (c == '[' || c == '{')
@@ -831,7 +834,7 @@ class extended_diagnostic_notation
             if (!closed) [[unlikely]]
                 return closed;
             next = *closed;
-            if (next >= text.size() || text[next] != ')' ||
+            if (!validity::check_text_left(text, next, 1) || text[next] != ')' ||
                 value > std::numeric_limits<std::uint8_t>::max() ||
                 !validity::check_simple_value(heads::preferred_argument_info(value), value)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
@@ -871,7 +874,7 @@ class extended_diagnostic_notation
             auto const close = optional_space_end(text, *content);
             if (!close) [[unlikely]]
                 return close;
-            if (*close >= text.size() || text[*close] != ')') [[unlikely]]
+            if (!validity::check_text_left(text, *close, 1) || text[*close] != ')') [[unlikely]]
                 return std::unexpected(error::invalid_path);
             return *close + 1;
         }
@@ -1146,7 +1149,7 @@ class extended_diagnostic_notation
     template <bool Checked>
     static bool break_found(heads::decoder<Checked> &d)
     {
-        if (d.encoded.empty() ||
+        if (!validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) ||
             d.encoded.front() !=
                 heads::initial_byte(major_type::simple_float,
                                     std::to_underlying(rfc8949::simple_float_information::break_stop_code)))
@@ -1288,8 +1291,8 @@ inline std::expected<std::string, error> diagnostic_notation(std::string_view co
             extended_diagnostic_notation::write_diagnostic(out, d, encoded, 0, limits::nesting_depth);
         !r) [[unlikely]]
         return std::unexpected(r.error());
-    if (!d.encoded.empty()) [[unlikely]]
-        return std::unexpected(error::syntax_error);
+    if (auto const one = validity::check_one_data_item(d.encoded); !one) [[unlikely]]
+        return std::unexpected(one.error());
     return out;
 }
 

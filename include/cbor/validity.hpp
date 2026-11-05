@@ -163,9 +163,47 @@ public:
         return {};
     }
 
+    static constexpr bool bytes_fit(std::uint64_t const size, std::size_t const bytes_left)
+    {
+        return size <= bytes_left;
+    }
+
     static constexpr bool pending_items_fit(std::uint64_t const pending, std::size_t const bytes_left)
     {
-        return pending <= bytes_left;
+        return bytes_fit(pending, bytes_left);
+    }
+
+    static constexpr std::expected<void, error> check_bytes_left(std::uint64_t const size,
+                                                                 std::size_t const bytes_left)
+    {
+        if (!bytes_fit(size, bytes_left)) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return {};
+    }
+
+    static constexpr std::expected<void, std::errc> check_space_left(std::uint64_t const size,
+                                                                     std::size_t const space_left)
+    {
+        if (!bytes_fit(size, space_left)) [[unlikely]]
+            return std::unexpected(std::errc::no_buffer_space);
+        return {};
+    }
+
+    static constexpr std::expected<void, error> check_text_left(std::string_view const text, std::size_t const at,
+                                                                std::size_t const count)
+    {
+        if (!bytes_fit(at, text.size()) || !bytes_fit(count, text.size() - at)) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        return {};
+    }
+
+    static constexpr std::expected<void, error> check_subrange(std::size_t const first, std::size_t const last,
+                                                               std::size_t const whole_first,
+                                                               std::size_t const whole_last)
+    {
+        if (first < whole_first || last > whole_last || first > last) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return {};
     }
 
     static constexpr std::expected<void, error> check_pending_items(std::uint64_t const pending,
@@ -275,6 +313,7 @@ public:
             return std::unexpected(std::errc::value_too_large);
         return a + b;
     }
+
 
     template <std::ranges::forward_range R, class Projection = std::identity>
     static constexpr bool keys_unique(R const &sorted, Projection const projection = {})
@@ -454,15 +493,29 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::span<char const> element_span(std::span<char const> const elements,
                                                                            index const i, std::size_t const size)
     {
-        return elements.subspan(static_cast<std::size_t>(std::to_underlying(i)) * size, size);
+        auto const end = checked_mul(static_cast<std::size_t>(std::to_underlying(i)) + 1, size);
+        if (!end || !bytes_fit(*end, elements.size())) [[unlikely]]
+            throw_logic_error("cbor::validity: the element is after the end of its elements");
+        return elements.subspan(*end - size, size);
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<std::string_view, error>
     substr(std::string_view const encoded, offset const at, std::size_t const size)
     {
-        if (std::to_underlying(at) > encoded.size() || encoded.size() - std::to_underlying(at) < size) [[unlikely]]
+        if (!bytes_fit(std::to_underlying(at), encoded.size()) ||
+            !bytes_fit(size, encoded.size() - std::to_underlying(at))) [[unlikely]]
             return std::unexpected(error::too_little_data);
         return encoded.substr(std::to_underlying(at), size);
+    }
+
+    template <class T>
+    CBOR_ALWAYS_INLINE static constexpr std::expected<std::span<T const>, error>
+    substr(std::span<T const> const encoded, offset const at, std::size_t const size)
+    {
+        if (!bytes_fit(std::to_underlying(at), encoded.size()) ||
+            !bytes_fit(size, encoded.size() - std::to_underlying(at))) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return encoded.subspan(std::to_underlying(at), size);
     }
 
     template <std::integral I>
