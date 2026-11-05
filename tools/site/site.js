@@ -30,7 +30,7 @@ const boxOf = box => {
   return { message, hex, bytes, fromMessage };
 };
 
-document.querySelectorAll(".play:not([data-console])").forEach(box => {
+document.querySelectorAll(".play:has([data-calls])").forEach(box => {
   const b = boxOf(box), calls = box.querySelector("[data-calls]"), out = box.querySelector("[data-out]");
   const button = box.querySelector("button.run");
   const go = async () => {
@@ -110,4 +110,12 @@ if (consoleBox) {
     else if (e.key === "Escape") shut();
   });
   consoleBox.querySelector("[data-complete]").addEventListener("click", () => { entry.focus(); listed(); });
+  document.querySelectorAll("[data-load]").forEach(button => button.addEventListener("click", () => {
+    b.message.value = button.dataset.loadMessage;
+    b.message.dispatchEvent(new Event("input"));
+    log.replaceChildren();
+    entry.value = button.dataset.loadCall;
+    form.requestSubmit();
+    consoleBox.scrollIntoView();
+  }));
 }
