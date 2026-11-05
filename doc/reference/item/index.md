@@ -1,6 +1,6 @@
 # item
 
-`cbor::item` is a decoded tree, and `cbor::encoder` writes CBOR one data item per call.
+`cbor::item` is a decoded tree, and `cbor::encoder` writes CBOR one data item per call. `decode` is O(bytes) and copies every string into one memory zone. The encoder is O(1) per head and allocates nothing over a `std::span<char>`.
 
 | Function | Does |
 |---|---|

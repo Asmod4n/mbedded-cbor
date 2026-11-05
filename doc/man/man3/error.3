@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::error" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::error" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::error, cbor::category, cbor::error_category, cbor::make_error_code, std::is_error_code_enum<cbor::error>, cbor::limits \- the error values of the library, their conversion to std::error_code, and the limits of a build
 .SH SYNOPSIS
@@ -85,6 +85,7 @@ std::error_code make_error_code(error const e) \f[B]noexcept\f[R];
 .SH DESCRIPTION
 The error values of the library, their conversion to
 \f[CR]std::error_code\f[R], and the limits of a build.
+An error is a small value and costs nothing to pass.
 .SS cbor::error
 The fault that a call returns in its
 \f[CR]std::expected<T, cbor::error>\f[R].

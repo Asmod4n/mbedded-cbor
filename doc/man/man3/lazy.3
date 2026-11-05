@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::lazy" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::lazy" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::lazy, cbor::lazy::take_ownership, cbor::lazy::view, cbor::lazy::at, cbor::lazy::operator[], cbor::lazy::at_path, cbor::lazy::get, cbor::lazy::type, cbor::lazy::size, cbor::lazy::empty, cbor::lazy::elements, cbor::lazy::entries, cbor::lazy::clone, cbor::lazy_elements, cbor::lazy_entries \- read a message in place, step by step
 .SH SYNOPSIS
@@ -152,6 +152,8 @@ std::expected<owning<item>, error> clone() const;
 .SH DESCRIPTION
 \f[CR]cbor::lazy\f[R] reads a message in place, one step at a time, and
 copies no byte.
+A step by key or index reads the heads up to the child, O(bytes before
+the child), and allocates nothing.
 .SS cbor::lazy
 A lazy is a position in one top\-level item.
 It holds the owner of the bytes, the bytes and an offset.

@@ -1,6 +1,6 @@
 # ref
 
-`cbor::ref<T>` and `cbor::owning<T>` hold a result together with the owner of the bytes that its views point into.
+`cbor::ref<T>` and `cbor::owning<T>` hold a result together with the owner of the bytes that its views point into. Each access is O(1); a copy changes one atomic count. `clone` copies, O(bytes).
 
 The examples use the types in [test/doc_types.hpp](../../../test/doc_types.hpp), namespace `reference_ref`.
 

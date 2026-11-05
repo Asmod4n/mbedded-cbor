@@ -117,20 +117,35 @@ end
 local pages = {}
 
 local index = pandoc.read(text_of(reference .. 'index.md'), 'gfm')
-local goal, choice, in_choice = pandoc.Blocks{}, pandoc.Blocks{}, false
+local goal, highlights, in_highlights = pandoc.Blocks{}, pandoc.Blocks{}, false
 for i, b in ipairs(index.blocks) do
   if b.t == 'Header' and b.level == 2 then
-    in_choice = pandoc.utils.stringify(b) == 'Which class to use'
-  elseif in_choice then
-    choice:insert(b.t == 'Header' and pandoc.Header(2, b.content) or b)
+    in_highlights = pandoc.utils.stringify(b) == 'Highlights'
+  elseif in_highlights then
+    highlights:insert(b)
   elseif b.t == 'Para' and #goal == 0 then
     goal:insert(b)
   end
 end
 local library_lead = first_sentence(goal):gsub('^mbedded%-cbor is ', '')
 
+local function cells_of(rest)
+  local contents, use = rest:match('^(.-) | (.*)$')
+  return contents or rest, use
+end
+
+local choice = pandoc.Blocks{}
+for _, row in ipairs(rows(text_of(reference .. 'index.md'))) do
+  local _, use = cells_of(row.rest)
+  if use then
+    choice:insert(pandoc.Header(2, row.label))
+    choice:insert(pandoc.Para(pandoc.read('Use it for ' .. use .. '.', 'gfm').blocks[1].content))
+  end
+end
+
 for _, row in ipairs(rows(text_of(reference .. 'index.md'))) do
   local group = row.label
+  row.rest = cells_of(row.rest)
   local group_text = text_of(reference .. group .. '/index.md')
   local group_doc = pandoc.read(group_text, 'gfm')
   local intro = pandoc.Blocks{}
@@ -174,6 +189,11 @@ end
 local library = pandoc.Blocks{pandoc.Header(1, 'NAME'), pandoc.Para{pandoc.Str('mbedded-cbor - ' .. library_lead)},
   pandoc.Header(1, 'DESCRIPTION')}
 library:extend(unlinked(goal))
+if #highlights > 0 then
+  library:insert(pandoc.Header(2, 'Highlights'))
+  library:extend(unlinked(highlights))
+end
+library:insert(pandoc.Header(2, 'Classes'))
 library:extend(unlinked(choice))
 library:extend(see_also('mbedded-cbor'))
 page_written('mbedded-cbor', 'mbedded-cbor', library)

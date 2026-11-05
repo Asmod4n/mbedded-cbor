@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::schema" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::schema" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::schema, cbor::schema::encode, cbor::schema::decode, cbor::schema::path, cbor::schema::at_path, cbor::schema::unverified_path, cbor::schema::unverified_at_path, cbor::schema::unverified_decode, cbor::schema::description, cbor::schema::description_place, cbor::schema::fixed_size, cbor::schema::member_offset, cbor::schema::accessor, cbor::schema::accessor<fixed_element<S>>, cbor::typed_array_view, cbor::tag \- structs as Packed CBOR, fields at fixed offsets
 .SH SYNOPSIS
@@ -179,6 +179,11 @@ field of fixed size at an offset that the compiler computes.
 It reads only the description of each struct and builds on every
 compiler.
 With reflection it also checks each description against the members.
+\f[CR]path\f[R] opens a message in O(1) of its size, and a read of a
+field of fixed size is one jump that checks only the bytes it reads.
+\f[CR]at_path\f[R] with no accessor allocates nothing.
+\f[CR]encode\f[R] is O(bytes), and a list of fixed\-size structs is one
+copy.
 .PP
 The examples use the types in test/doc_types.hpp, namespace
 \f[CR]doc_reference_schema\f[R].
